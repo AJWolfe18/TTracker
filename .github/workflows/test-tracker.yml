@@ -23,7 +23,10 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: node test-tracker.js
-      
+    - name: Copy data to public folder
+      run: |
+        cp master-tracker-log.json public/master-tracker-log.json
+        
     - name: Commit results
       run: |
         git config --local user.email "action@github.com"
