@@ -1,6 +1,6 @@
 // daily-tracker.js
-const fetch = require('node-fetch');
-const fs = require('fs');
+const fetch = import('node-fetch');
+const fs = import('fs');
 
 async function fetchPoliticalUpdates() {
     const apiKey = process.env.OPENAI_API_KEY;
