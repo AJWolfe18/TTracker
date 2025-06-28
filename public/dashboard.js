@@ -5,6 +5,7 @@ const PoliticalDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedSeverity, setSelectedSeverity] = useState('all'); // Add severity filter state
   const [sortBy, setSortBy] = useState('date'); // New state for sorting
   const [sortOrder, setSortOrder] = useState('desc'); // New state for sort direction
 
@@ -93,7 +94,8 @@ const PoliticalDashboard = () => {
                          entry.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          entry.actor?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || entry.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesSeverity = selectedSeverity === 'all' || entry.severity === selectedSeverity;
+    return matchesSearch && matchesCategory && matchesSeverity;
   });
 
   // Sort the filtered entries
@@ -128,9 +130,14 @@ const PoliticalDashboard = () => {
   };
 
   const categories = [...new Set(entries.map(e => e.category))].filter(Boolean);
-  const highSeverityCount = filteredEntries.filter(e => e.severity === 'high').length;
-  const mediumSeverityCount = filteredEntries.filter(e => e.severity === 'medium').length;
-  const lowSeverityCount = filteredEntries.filter(e => e.severity === 'low').length;
+  const allHighSeverityCount = entries.filter(e => e.severity === 'high').length;
+  const allMediumSeverityCount = entries.filter(e => e.severity === 'medium').length;
+  const allLowSeverityCount = entries.filter(e => e.severity === 'low').length;
+  const allTotalEntries = entries.length;
+  
+  const filteredHighSeverityCount = filteredEntries.filter(e => e.severity === 'high').length;
+  const filteredMediumSeverityCount = filteredEntries.filter(e => e.severity === 'medium').length;
+  const filteredLowSeverityCount = filteredEntries.filter(e => e.severity === 'low').length;
   const totalEntries = filteredEntries.length;
 
   if (loading) {
@@ -156,23 +163,51 @@ const PoliticalDashboard = () => {
     ),
 
     React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-6' },
-      // Stats
+      // Stats - Now clickable filters
       React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-6 mb-8' },
-        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+        React.createElement('button', { 
+          onClick: () => setSelectedSeverity('all'),
+          className: `bg-gray-800 rounded-lg shadow-lg border-2 p-6 text-left transition-all hover:bg-gray-700 ${
+            selectedSeverity === 'all' ? 'border-blue-400' : 'border-gray-700'
+          }`
+        },
           React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Total Entries'),
-          React.createElement('p', { className: 'text-3xl font-bold text-blue-400' }, totalEntries)
+          React.createElement('p', { className: 'text-3xl font-bold text-blue-400' }, 
+            selectedSeverity === 'all' ? totalEntries : allTotalEntries
+          )
         ),
-        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+        React.createElement('button', { 
+          onClick: () => setSelectedSeverity('high'),
+          className: `bg-gray-800 rounded-lg shadow-lg border-2 p-6 text-left transition-all hover:bg-gray-700 ${
+            selectedSeverity === 'high' ? 'border-red-400' : 'border-gray-700'
+          }`
+        },
           React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'High Severity'),
-          React.createElement('p', { className: 'text-3xl font-bold text-red-400' }, highSeverityCount)
+          React.createElement('p', { className: 'text-3xl font-bold text-red-400' }, 
+            selectedSeverity === 'high' ? totalEntries : allHighSeverityCount
+          )
         ),
-        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+        React.createElement('button', { 
+          onClick: () => setSelectedSeverity('medium'),
+          className: `bg-gray-800 rounded-lg shadow-lg border-2 p-6 text-left transition-all hover:bg-gray-700 ${
+            selectedSeverity === 'medium' ? 'border-yellow-400' : 'border-gray-700'
+          }`
+        },
           React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Medium Severity'),
-          React.createElement('p', { className: 'text-3xl font-bold text-yellow-400' }, mediumSeverityCount)
+          React.createElement('p', { className: 'text-3xl font-bold text-yellow-400' }, 
+            selectedSeverity === 'medium' ? totalEntries : allMediumSeverityCount
+          )
         ),
-        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+        React.createElement('button', { 
+          onClick: () => setSelectedSeverity('low'),
+          className: `bg-gray-800 rounded-lg shadow-lg border-2 p-6 text-left transition-all hover:bg-gray-700 ${
+            selectedSeverity === 'low' ? 'border-green-400' : 'border-gray-700'
+          }`
+        },
           React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Low Severity'),
-          React.createElement('p', { className: 'text-3xl font-bold text-green-400' }, lowSeverityCount)
+          React.createElement('p', { className: 'text-3xl font-bold text-green-400' }, 
+            selectedSeverity === 'low' ? totalEntries : allLowSeverityCount
+          )
         )
       ),
 
