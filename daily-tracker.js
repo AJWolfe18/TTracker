@@ -123,6 +123,10 @@ async function saveToFile(entries) {
         if (entry.title) {
             entry.title = entry.title.replace(/"/g, '\\"');
         }
+        // Auto-verify reputable sources
+        if (!entry.hasOwnProperty('verified')) {
+        entry.verified = isReputableSource(entry.source_url);
+}
     });
     
     const output = {
