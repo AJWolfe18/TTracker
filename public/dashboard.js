@@ -238,39 +238,43 @@ const PoliticalDashboard = () => {
               key: entry.id, 
               className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 hover:bg-gray-750 transition-colors' 
             },
-              React.createElement('div', { className: 'flex justify-between items-start mb-4' },
+              React.createElement('div', { className: 'flex justify-between items-start mb-2' },
                 React.createElement('h3', { className: 'text-xl font-semibold text-white flex-1 mr-4' }, entry.title),
                 React.createElement('span', { 
                   className: `px-3 py-1 rounded-full text-sm font-medium ${getSeverityColor(entry.severity)}` 
                 }, entry.severity?.toUpperCase())
               ),
+              React.createElement('div', { className: 'text-xs text-gray-500 mb-3 flex items-center gap-1' },
+                React.createElement('span', {}, '📅'),
+                React.createElement('span', {}, new Date(entry.date).toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                }))
+              ),
               React.createElement('p', { className: 'text-gray-300 mb-4' }, entry.description),
-              React.createElement('div', { className: 'flex justify-between items-end' },
+              React.createElement('div', { className: 'flex justify-between items-center' },
                 React.createElement('div', { className: 'text-sm text-gray-400' },
-                  React.createElement('div', {}, `${entry.actor} • ${entry.category}`),
-                  React.createElement('div', {}, entry.date)
+                  React.createElement('span', {}, `${entry.actor} • ${entry.category}`)
                 ),
-                React.createElement('div', { className: 'flex flex-col items-end gap-2' },
-                  // Verification status with source link combined
-                  React.createElement('div', { className: 'flex items-center gap-2' },
-                    React.createElement('span', { 
-                      className: `px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${
-                        entry.verified ? 'text-green-400 bg-green-900/30' : 'text-red-400 bg-red-900/30'
-                      }`
-                    },
-                      entry.verified ? '✅' : '❌',
-                      entry.verified ? 'Verified' : 'Unverified'
-                    ),
-                    // Source link
-                    entry.source_url && entry.source_url !== 'Multiple sources' && entry.source_url.startsWith('http') ?
-                      React.createElement('a', {
-                        href: entry.source_url,
-                        target: '_blank',
-                        rel: 'noopener noreferrer',
-                        className: 'text-blue-400 hover:text-blue-300 text-xs underline flex items-center gap-1 px-2 py-1 bg-blue-900/20 rounded'
-                      }, 'Source', React.createElement('span', {}, '↗')) :
-                      entry.source_url ? React.createElement('span', { className: 'text-gray-500 text-xs px-2 py-1' }, entry.source_url) : null
-                  )
+                React.createElement('div', { className: 'flex items-center gap-2' },
+                  React.createElement('span', { 
+                    className: `px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${
+                      entry.verified ? 'text-green-400 bg-green-900/30' : 'text-red-400 bg-red-900/30'
+                    }`
+                  },
+                    entry.verified ? '✅' : '❌',
+                    entry.verified ? 'Verified' : 'Unverified'
+                  ),
+                  // Source link
+                  entry.source_url && entry.source_url !== 'Multiple sources' && entry.source_url.startsWith('http') ?
+                    React.createElement('a', {
+                      href: entry.source_url,
+                      target: '_blank',
+                      rel: 'noopener noreferrer',
+                      className: 'text-blue-400 hover:text-blue-300 text-xs underline flex items-center gap-1 px-2 py-1 bg-blue-900/20 rounded'
+                    }, 'Source', React.createElement('span', {}, '↗')) :
+                    entry.source_url ? React.createElement('span', { className: 'text-gray-500 text-xs px-2 py-1' }, entry.source_url) : null
                 )
               )
             )
