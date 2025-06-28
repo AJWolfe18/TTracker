@@ -13,19 +13,21 @@ async function fetchPoliticalUpdates() {
         process.exit(1);
     }
 
-    const prompt = `You are a political accountability researcher. Search for and analyze recent news and developments from the past 24 hours (${new Date().toDateString()}) related to:
+const prompt = `You are a political accountability researcher. Search for and analyze recent news and developments from the past 24 hours (${new Date().toDateString()}) related to:
 
-- Donald Trump: legal issues, business dealings, policy statements, social media activity, meme coins, campaign finance violations
-- Elon Musk: platform policies, government contracts, regulatory issues, content moderation, algorithm changes  
-- Federal agencies: DOJ, FBI, ICE, DHS, Department of Education actions and policy changes
-- Surveillance and privacy: new programs, court rulings, civil liberties implications
-- Election-related: voting rights, election integrity, campaign finance violations
-- Corporate accountability: conflicts of interest, lobbying, unethical practices
-- Court rulings with significant civil liberties implications
+- Donald Trump: legal issues, business dealings, policy announcements, executive orders, public statements, social media activity (especially on Truth Social or X), meme coins, campaign finance violations, and actions involving Trump family members
+- Elon Musk: platform policies (especially on X), government contracts (including with DOGE), regulatory pressure, AI initiatives, censorship or content moderation, algorithmic changes, and political entanglements
+- Federal agencies: DOJ, FBI, ICE, DHS, and Department of Education — focus on leadership actions, internal purges, prosecutions, rulemaking, enforcement priorities, whistleblower retaliation, and politically motivated decisions
+- Surveillance and privacy: new or expanding federal surveillance programs, Palantir contracts, facial recognition use, court rulings, Fourth Amendment implications, or intelligence agency overreach
+- Election-related: voting rights, ballot access changes, redistricting, election integrity claims, campaign finance violations, political violence, and state-level election interference
+- Corporate accountability: unethical lobbying, dark money networks, government-corporate entanglements, PAC funding revelations, and conflicts of interest (especially among tech, defense, and energy sectors)
+- Court rulings: especially those with significant implications for civil liberties, executive power, or election law — include dissent summaries and legal expert analysis where available
 
-Focus on verifiable reporting from reputable news sources. Include both confirmed facts and notable unverified claims (clearly flagged as unverified).
+Focus on verifiable reporting from reputable sources (e.g., AP, Reuters, ProPublica, The Guardian, Washington Post, New York Times, NPR, Politico). Include major unverified but widely reported claims — clearly flagged as unverified.
 
-Return ONLY a valid JSON array with this exact structure:
+Only return new developments from the past 24 hours. Do not repeat prior stories or re-report stale coverage. Avoid duplicates.
+
+Return ONLY a valid JSON array with this exact structure:`;
 [
   {
     "date": "YYYY-MM-DD",
