@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "date": "2025-06-28",
+    "actor": "Joe Biden",
+    "category": "Government Oversight",
+    "title": "Biden Administration Announces New Climate Policy",
+    "description": "President Biden unveiled a comprehensive climate change initiative aimed at reducing carbon emissions by 50% by 2030. The policy includes increased funding for renewable energy projects and stricter regulations on fossil fuel industries.",
+    "source_url": "https://example-news-source.com/biden-climate-policy",
+    "verified": true,
+    "severity": "high",
+    "id": 1751131480201.4792,
+    "added_at": "2025-06-28T17:24:40.200Z"
+  },
+  {
+    "date": "2025-06-28",
+    "actor": "Donald Trump",
+    "category": "Election Integrity",
+    "title": "Trump Launches Campaign for 2028 Presidential Election",
+    "description": "Former President Trump officially announced his candidacy for the 2028 presidential election, promising to 'Make America Great Again' once more. His campaign focuses on reversing Biden's policies and addressing immigration reform.",
+    "source_url": "https://example-news-source.com/trump-2028-campaign",
+    "verified": true,
+    "severity": "medium",
+    "id": 1751131480201.4607,
+    "added_at": "2025-06-28T17:24:40.200Z"
+  },
+  {
+    "date": "2025-06-28",
+    "actor": "Federal Trade Commission",
+    "category": "Corporate Ethics",
+    "title": "FTC Launches Investigation into Major Tech Companies",
+    "description": "The Federal Trade Commission announced an investigation into several major tech companies for potential anti-competitive practices. This move follows growing concerns about market monopolization and consumer rights.",
+    "source_url": "https://example-news-source.com/ftc-tech-investigation",
+    "verified": true,
+    "severity": "medium",
+    "id": 1751131480201.8118,
+    "added_at": "2025-06-28T17:24:40.200Z"
+  },
+  {
+    "date": "2025-06-28",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Musk Announces Changes to Twitter's Verification Process",
+    "description": "Elon Musk revealed a revamped verification process for Twitter, aimed at increasing transparency and reducing misinformation. The changes include stricter criteria for account verification and enhanced monitoring of flagged content.",
+    "source_url": "https://example-news-source.com/musk-twitter-verification",
+    "verified": true,
+    "severity": "low",
+    "id": 1751131480201.4756,
+    "added_at": "2025-06-28T17:24:40.200Z"
+  }
+]
