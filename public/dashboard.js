@@ -5,6 +5,8 @@ const PoliticalDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('date'); // New state for sorting
+  const [sortOrder, setSortOrder] = useState('desc'); // New state for sort direction
 
   useEffect(() => {
     loadData();
@@ -62,6 +64,25 @@ const PoliticalDashboard = () => {
     return matchesSearch && matchesCategory;
   });
 
+  // Sort the filtered entries
+  const sortedEntries = [...filteredEntries].sort((a, b) => {
+    if (sortBy === 'severity') {
+      const severityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+      const aValue = severityOrder[a.severity] || 0;
+      const bValue = severityOrder[b.severity] || 0;
+      return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
+    } else if (sortBy === 'date') {
+      const aDate = new Date(a.date);
+      const bDate = new Date(b.date);
+      return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
+    } else if (sortBy === 'added') {
+      const aDate = new Date(a.added_at || a.date);
+      const bDate = new Date(b.added_at || b.date);
+      return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
+    }
+    return 0;
+  });
+
   const getSeverityColor = (severity) => {
     switch (severity) {
       case 'high': return 'bg-red-100 text-red-800 border-red-200';
@@ -73,6 +94,8 @@ const PoliticalDashboard = () => {
 
   const categories = [...new Set(entries.map(e => e.category))].filter(Boolean);
   const highSeverityCount = filteredEntries.filter(e => e.severity === 'high').length;
+  const mediumSeverityCount = filteredEntries.filter(e => e.severity === 'medium').length;
+  const lowSeverityCount = filteredEntries.filter(e => e.severity === 'low').length;
   const totalEntries = filteredEntries.length;
 
   if (loading) {
@@ -99,7 +122,7 @@ const PoliticalDashboard = () => {
 
     React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-6' },
       // Stats
-      React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-8' },
+      React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-6 mb-8' },
         React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
           React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Total Entries'),
           React.createElement('p', { className: 'text-3xl font-bold text-blue-400' }, totalEntries)
@@ -109,14 +132,18 @@ const PoliticalDashboard = () => {
           React.createElement('p', { className: 'text-3xl font-bold text-red-400' }, highSeverityCount)
         ),
         React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
-          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Categories'),
-          React.createElement('p', { className: 'text-3xl font-bold text-green-400' }, categories.length)
+          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Medium Severity'),
+          React.createElement('p', { className: 'text-3xl font-bold text-yellow-400' }, mediumSeverityCount)
+        ),
+        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Low Severity'),
+          React.createElement('p', { className: 'text-3xl font-bold text-green-400' }, lowSeverityCount)
         )
       ),
 
       // Filters
       React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 mb-8' },
-        React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
+        React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-4 gap-4' },
           React.createElement('div', {},
             React.createElement('label', { className: 'block text-sm font-medium text-gray-300 mb-2' }, 'Search'),
             React.createElement('input', {
@@ -139,6 +166,29 @@ const PoliticalDashboard = () => {
                 React.createElement('option', { key: cat, value: cat }, cat)
               )
             )
+          ),
+          React.createElement('div', {},
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-300 mb-2' }, 'Sort By'),
+            React.createElement('select', {
+              value: sortBy,
+              onChange: (e) => setSortBy(e.target.value),
+              className: 'w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+            },
+              React.createElement('option', { value: 'date' }, 'Event Date'),
+              React.createElement('option', { value: 'added' }, 'Date Added'),
+              React.createElement('option', { value: 'severity' }, 'Severity')
+            )
+          ),
+          React.createElement('div', {},
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-300 mb-2' }, 'Order'),
+            React.createElement('select', {
+              value: sortOrder,
+              onChange: (e) => setSortOrder(e.target.value),
+              className: 'w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+            },
+              React.createElement('option', { value: 'desc' }, 'Newest First'),
+              React.createElement('option', { value: 'asc' }, 'Oldest First')
+            )
           )
         )
       ),
@@ -149,7 +199,7 @@ const PoliticalDashboard = () => {
           React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-8 text-center' },
             React.createElement('p', { className: 'text-gray-400' }, 'No entries found matching your criteria.')
           ) :
-          filteredEntries.map(entry =>
+          sortedEntries.map(entry =>
             React.createElement('div', { 
               key: entry.id, 
               className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 hover:bg-gray-750 transition-colors' 
