@@ -1,0 +1,58 @@
+# .github/workflows/daily-tracker.yml
+name: Daily Political Tracker
+
+on:
+  schedule:
+    # Runs every day at 9:00 AM EST (2:00 PM UTC)
+    - cron: '0 14 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  fetch-updates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install node-fetch
+      
+    - name: Run daily tracker
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: node daily-tracker.js
+      
+    - name: Commit and push results
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add *.json
+        git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
+        git push
+        
+    - name: Create release with daily data
+      if: github.event_name == 'schedule'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: daily-${{ github.run_number }}
+        release_name: Daily Update - ${{ github.run_number }}
+        body: |
+          Automated daily political tracker update.
+          
+          This release contains the latest political developments tracked on ${{ github.run_date }}.
+          
+          Files included:
+          - Daily JSON data file
+          - Updated master tracker log
+        draft: false
+        prerelease: false
