@@ -71,16 +71,19 @@ const PoliticalDashboard = () => {
       const aValue = severityOrder[a.severity] || 0;
       const bValue = severityOrder[b.severity] || 0;
       return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
-    } else if (sortBy === 'date') {
+    } else {
+      // Always use event date for date sorting
       const aDate = new Date(a.date);
       const bDate = new Date(b.date);
-      return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
-    } else if (sortBy === 'added') {
-      const aDate = new Date(a.added_at || a.date);
-      const bDate = new Date(b.added_at || b.date);
+      
+      // Check for invalid dates
+      if (isNaN(aDate.getTime()) || isNaN(bDate.getTime())) {
+        console.warn('Invalid date found:', a.date, b.date);
+        return 0;
+      }
+      
       return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
     }
-    return 0;
   });
 
   const getSeverityColor = (severity) => {
@@ -175,7 +178,6 @@ const PoliticalDashboard = () => {
               className: 'w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
             },
               React.createElement('option', { value: 'date' }, 'Event Date'),
-              React.createElement('option', { value: 'added' }, 'Date Added'),
               React.createElement('option', { value: 'severity' }, 'Severity')
             )
           ),
