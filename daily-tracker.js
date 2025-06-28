@@ -1,9 +1,12 @@
 // daily-tracker.js
-const fetch = import('node-fetch');
-const fs = import('fs');
+import fetch from 'node-fetch';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 
 async function fetchPoliticalUpdates() {
     const apiKey = process.env.OPENAI_API_KEY;
+    
+    console.log('API Key present:', !!apiKey);
+    console.log('API Key length:', apiKey ? apiKey.length : 0);
     
     if (!apiKey) {
         console.error('OpenAI API key not found');
@@ -40,6 +43,8 @@ If no significant developments found, return empty array [].
 Do not include explanatory text, just the JSON array.`;
 
     try {
+        console.log('Making request to OpenAI...');
+        
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -63,12 +68,22 @@ Do not include explanatory text, just the JSON array.`;
             })
         });
 
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers.raw());
+
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('OpenAI API error:', response.status, response.statusText);
+            console.error('Error details:', errorText);
             throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('OpenAI response received:', !!data);
+        console.log('Response usage:', data.usage);
+        
         const gptResponse = data.choices[0].message.content;
+        console.log('GPT response length:', gptResponse.length);
         
         // Clean the response in case GPT adds markdown formatting
         const cleanedResponse = gptResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -87,6 +102,7 @@ Do not include explanatory text, just the JSON array.`;
             return [];
         }
 
+        console.log('Successfully parsed', newEntries.length, 'entries');
         return newEntries;
 
     } catch (error) {
@@ -106,14 +122,19 @@ async function saveToFile(entries) {
         entries: entries
     };
 
+    console.log('Saving to file:', filename);
+
     // Save to file
-    fs.writeFileSync(filename, JSON.stringify(output, null, 2));
+    writeFileSync(filename, JSON.stringify(output, null, 2));
     
     // Also append to master log
     let masterLog = [];
-    if (fs.existsSync('master-tracker-log.json')) {
-        const existingData = fs.readFileSync('master-tracker-log.json', 'utf8');
+    if (existsSync('master-tracker-log.json')) {
+        console.log('Loading existing master log...');
+        const existingData = readFileSync('master-tracker-log.json', 'utf8');
         masterLog = JSON.parse(existingData);
+    } else {
+        console.log('Creating new master log...');
     }
     
     // Add new entries to master log
@@ -125,7 +146,7 @@ async function saveToFile(entries) {
         });
     });
     
-    fs.writeFileSync('master-tracker-log.json', JSON.stringify(masterLog, null, 2));
+    writeFileSync('master-tracker-log.json', JSON.stringify(masterLog, null, 2));
     
     console.log(`Saved ${entries.length} entries to ${filename}`);
     console.log(`Master log now contains ${masterLog.length} total entries`);
@@ -134,8 +155,9 @@ async function saveToFile(entries) {
 }
 
 async function main() {
-    console.log('Starting daily political tracker update...');
+    console.log('=== STARTING DAILY POLITICAL TRACKER ===');
     console.log('Date:', new Date().toDateString());
+    console.log('Time:', new Date().toISOString());
     
     const entries = await fetchPoliticalUpdates();
     
@@ -158,4 +180,8 @@ async function main() {
     console.log('====================\n');
 }
 
-main().catch(console.error);
+main().catch(error => {
+    console.error('=== FATAL ERROR ===');
+    console.error(error);
+    process.exit(1);
+});
