@@ -77,62 +77,62 @@ const PoliticalDashboard = () => {
 
   if (loading) {
     return React.createElement('div', { 
-      className: 'min-h-screen bg-gray-50 flex items-center justify-center' 
+      className: 'min-h-screen bg-gray-900 flex items-center justify-center' 
     },
       React.createElement('div', { className: 'text-center' },
         React.createElement('div', { 
-          className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4' 
+          className: 'animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4' 
         }),
-        React.createElement('p', { className: 'text-gray-600' }, 'Loading Political Tracker...')
+        React.createElement('p', { className: 'text-gray-300' }, 'Loading Political Tracker...')
       )
     );
   }
 
-  return React.createElement('div', { className: 'min-h-screen bg-gray-50' },
+  return React.createElement('div', { className: 'min-h-screen bg-gray-900' },
     // Header
-    React.createElement('div', { className: 'bg-white shadow' },
+    React.createElement('div', { className: 'bg-gray-800 shadow-lg border-b border-gray-700' },
       React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-6' },
-        React.createElement('h1', { className: 'text-3xl font-bold text-gray-900' }, 'Political Accountability Tracker'),
-        React.createElement('p', { className: 'mt-2 text-gray-600' }, 'Monitoring government actions and political developments')
+        React.createElement('h1', { className: 'text-3xl font-bold text-white' }, 'Political Accountability Tracker'),
+        React.createElement('p', { className: 'mt-2 text-gray-300' }, 'Monitoring government actions and political developments')
       )
     ),
 
     React.createElement('div', { className: 'max-w-7xl mx-auto px-4 py-6' },
       // Stats
       React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-6 mb-8' },
-        React.createElement('div', { className: 'bg-white rounded-lg shadow p-6' },
-          React.createElement('h3', { className: 'text-lg font-medium text-gray-900' }, 'Total Entries'),
-          React.createElement('p', { className: 'text-3xl font-bold text-blue-600' }, totalEntries)
+        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Total Entries'),
+          React.createElement('p', { className: 'text-3xl font-bold text-blue-400' }, totalEntries)
         ),
-        React.createElement('div', { className: 'bg-white rounded-lg shadow p-6' },
-          React.createElement('h3', { className: 'text-lg font-medium text-gray-900' }, 'High Severity'),
-          React.createElement('p', { className: 'text-3xl font-bold text-red-600' }, highSeverityCount)
+        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'High Severity'),
+          React.createElement('p', { className: 'text-3xl font-bold text-red-400' }, highSeverityCount)
         ),
-        React.createElement('div', { className: 'bg-white rounded-lg shadow p-6' },
-          React.createElement('h3', { className: 'text-lg font-medium text-gray-900' }, 'Categories'),
-          React.createElement('p', { className: 'text-3xl font-bold text-green-600' }, categories.length)
+        React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6' },
+          React.createElement('h3', { className: 'text-lg font-medium text-gray-300' }, 'Categories'),
+          React.createElement('p', { className: 'text-3xl font-bold text-green-400' }, categories.length)
         )
       ),
 
       // Filters
-      React.createElement('div', { className: 'bg-white rounded-lg shadow p-6 mb-8' },
+      React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 mb-8' },
         React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-4' },
           React.createElement('div', {},
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Search'),
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-300 mb-2' }, 'Search'),
             React.createElement('input', {
               type: 'text',
               placeholder: 'Search entries...',
               value: searchTerm,
               onChange: (e) => setSearchTerm(e.target.value),
-              className: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+              className: 'w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400'
             })
           ),
           React.createElement('div', {},
-            React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Category'),
+            React.createElement('label', { className: 'block text-sm font-medium text-gray-300 mb-2' }, 'Category'),
             React.createElement('select', {
               value: selectedCategory,
               onChange: (e) => setSelectedCategory(e.target.value),
-              className: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
+              className: 'w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
             },
               React.createElement('option', { value: 'all' }, 'All Categories'),
               categories.map(cat => 
@@ -146,22 +146,22 @@ const PoliticalDashboard = () => {
       // Entries List
       React.createElement('div', { className: 'space-y-4' },
         filteredEntries.length === 0 ?
-          React.createElement('div', { className: 'bg-white rounded-lg shadow p-8 text-center' },
-            React.createElement('p', { className: 'text-gray-500' }, 'No entries found matching your criteria.')
+          React.createElement('div', { className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-8 text-center' },
+            React.createElement('p', { className: 'text-gray-400' }, 'No entries found matching your criteria.')
           ) :
           filteredEntries.map(entry =>
             React.createElement('div', { 
               key: entry.id, 
-              className: 'bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow' 
+              className: 'bg-gray-800 rounded-lg shadow-lg border border-gray-700 p-6 hover:bg-gray-750 transition-colors' 
             },
               React.createElement('div', { className: 'flex justify-between items-start mb-4' },
-                React.createElement('h3', { className: 'text-xl font-semibold text-gray-900' }, entry.title),
+                React.createElement('h3', { className: 'text-xl font-semibold text-white' }, entry.title),
                 React.createElement('span', { 
                   className: `px-3 py-1 rounded-full text-sm font-medium ${getSeverityColor(entry.severity)}` 
                 }, entry.severity?.toUpperCase())
               ),
-              React.createElement('p', { className: 'text-gray-600 mb-4' }, entry.description),
-              React.createElement('div', { className: 'flex justify-between items-center text-sm text-gray-500' },
+              React.createElement('p', { className: 'text-gray-300 mb-4' }, entry.description),
+              React.createElement('div', { className: 'flex justify-between items-center text-sm text-gray-400' },
                 React.createElement('span', {}, `${entry.actor} • ${entry.category}`),
                 React.createElement('span', {}, entry.date)
               )
