@@ -13,8 +13,7 @@ async function fetchPoliticalUpdates() {
         process.exit(1);
     }
 
-
-const prompt = `You are a political accountability researcher. Search for and analyze recent news and developments from the past 24 hours (${new Date().toDateString()}) related to:
+    const prompt = `You are a political accountability researcher. Search for and analyze recent news and developments from the past 24 hours (${new Date().toDateString()}) related to:
 
 - Donald Trump: legal issues, business dealings, policy announcements, executive orders, public statements, social media activity (especially on Truth Social or X), meme coins, campaign finance violations, and actions involving Trump family members
 - Elon Musk: platform policies (especially on X), government contracts (including with DOGE), regulatory pressure, AI initiatives, censorship or content moderation, algorithmic changes, and political entanglements
@@ -39,7 +38,7 @@ Focus on verifiable reporting from reputable sources (e.g., AP, Reuters, ProPubl
 
 Only return new developments from the past 24 hours. Do not repeat prior stories or re-report stale coverage. Avoid duplicates.
 
-Return ONLY a valid JSON array with this exact structure:`;
+Return ONLY a valid JSON array with this exact structure:
 [
   {
     "date": "YYYY-MM-DD",
@@ -125,6 +124,19 @@ Do not include explanatory text, just the JSON array.`;
     }
 }
 
+function isReputableSource(url) {
+    if (!url || typeof url !== 'string') return false;
+    
+    const reputableDomains = [
+        'ap.org', 'reuters.com', 'propublica.org', 'theguardian.com',
+        'washingtonpost.com', 'nytimes.com', 'npr.org', 'politico.com',
+        'govexec.com', 'federalnewsnetwork.com', 'wsj.com', 'bloomberg.com',
+        'cnn.com', 'bbc.com', 'axios.com', 'thehill.com'
+    ];
+    
+    return reputableDomains.some(domain => url.includes(domain));
+}
+
 async function saveToFile(entries) {
     const timestamp = new Date().toISOString();
     const filename = `tracker-data-${new Date().toISOString().split('T')[0]}.json`;
@@ -139,8 +151,8 @@ async function saveToFile(entries) {
         }
         // Auto-verify reputable sources
         if (!entry.hasOwnProperty('verified')) {
-        entry.verified = isReputableSource(entry.source_url);
-}
+            entry.verified = isReputableSource(entry.source_url);
+        }
     });
     
     const output = {
@@ -175,6 +187,14 @@ async function saveToFile(entries) {
     });
     
     writeFileSync('master-tracker-log.json', JSON.stringify(masterLog, null, 2));
+    
+    // Copy to public folder for website
+    try {
+        writeFileSync('public/master-tracker-log.json', JSON.stringify(masterLog, null, 2));
+        console.log('Updated public master log for website');
+    } catch (error) {
+        console.log('Note: Could not update public folder (may not exist yet)');
+    }
     
     console.log(`Saved ${entries.length} entries to ${filename}`);
     console.log(`Master log now contains ${masterLog.length} total entries`);
