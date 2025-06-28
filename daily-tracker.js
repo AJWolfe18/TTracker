@@ -115,6 +115,16 @@ async function saveToFile(entries) {
     const timestamp = new Date().toISOString();
     const filename = `tracker-data-${new Date().toISOString().split('T')[0]}.json`;
     
+    // Clean quotes in entries before saving
+    entries.forEach(entry => {
+        if (entry.description) {
+            entry.description = entry.description.replace(/"/g, '\\"');
+        }
+        if (entry.title) {
+            entry.title = entry.title.replace(/"/g, '\\"');
+        }
+    });
+    
     const output = {
         generated_at: timestamp,
         date: new Date().toISOString().split('T')[0],
