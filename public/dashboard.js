@@ -17,7 +17,16 @@ const PoliticalDashboard = () => {
       const response = await fetch('/master-tracker-log.json');
       if (response.ok) {
         const data = await response.json();
-        setEntries(data);
+        
+        // Auto-verify entries with reputable sources
+        const processedData = data.map(entry => {
+          if (!entry.hasOwnProperty('verified') || entry.verified === undefined) {
+            entry.verified = isReputableSource(entry.source_url);
+          }
+          return entry;
+        });
+        
+        setEntries(processedData);
       } else {
         console.log('No data file found, using sample data');
         loadSampleData();
@@ -27,6 +36,29 @@ const PoliticalDashboard = () => {
       loadSampleData();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const isReputableSource = (url) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      return false;
+    }
+    
+    const reputableDomains = [
+      'washingtonpost.com', 'nytimes.com', 'reuters.com', 'apnews.com',
+      'npr.org', 'bbc.com', 'cnn.com', 'politico.com', 'theguardian.com',
+      'wsj.com', 'usatoday.com', 'abcnews.go.com', 'cbsnews.com',
+      'nbcnews.com', 'pbs.org', 'time.com', 'newsweek.com', 'axios.com',
+      'bloomberg.com', 'economist.com', 'businessinsider.com', 'wired.com',
+      'newyorker.com', 'theatlantic.com', 'vanityfair.com', 'aclu.org',
+      'sfgate.com', 'meidasnews.com', 'thedailybeast.com', 'newrepublic.com'
+    ];
+    
+    try {
+      const domain = new URL(url).hostname.toLowerCase().replace('www.', '');
+      return reputableDomains.some(reputable => domain.includes(reputable));
+    } catch (e) {
+      return false;
     }
   };
 
@@ -208,14 +240,34 @@ const PoliticalDashboard = () => {
             },
               React.createElement('div', { className: 'flex justify-between items-start mb-4' },
                 React.createElement('h3', { className: 'text-xl font-semibold text-white' }, entry.title),
-                React.createElement('span', { 
-                  className: `px-3 py-1 rounded-full text-sm font-medium ${getSeverityColor(entry.severity)}` 
-                }, entry.severity?.toUpperCase())
+                React.createElement('div', { className: 'flex items-center gap-3' },
+                  React.createElement('span', { 
+                    className: `px-2 py-1 rounded text-sm font-medium flex items-center gap-1 ${
+                      entry.verified ? 'text-green-400 bg-green-900/30' : 'text-red-400 bg-red-900/30'
+                    }`
+                  },
+                    entry.verified ? '✅' : '❌',
+                    entry.verified ? 'Verified' : 'Unverified'
+                  ),
+                  React.createElement('span', { 
+                    className: `px-3 py-1 rounded-full text-sm font-medium ${getSeverityColor(entry.severity)}` 
+                  }, entry.severity?.toUpperCase())
+                )
               ),
               React.createElement('p', { className: 'text-gray-300 mb-4' }, entry.description),
               React.createElement('div', { className: 'flex justify-between items-center text-sm text-gray-400' },
                 React.createElement('span', {}, `${entry.actor} • ${entry.category}`),
-                React.createElement('span', {}, entry.date)
+                React.createElement('div', { className: 'flex items-center gap-4' },
+                  entry.source_url && entry.source_url !== 'Multiple sources' && entry.source_url.startsWith('http') ?
+                    React.createElement('a', {
+                      href: entry.source_url,
+                      target: '_blank',
+                      rel: 'noopener noreferrer',
+                      className: 'text-blue-400 hover:text-blue-300 underline flex items-center gap-1'
+                    }, 'Source', React.createElement('span', {}, '↗')) :
+                    entry.source_url ? React.createElement('span', { className: 'text-gray-500' }, entry.source_url) : null,
+                  React.createElement('span', {}, entry.date)
+                )
               )
             )
           )
