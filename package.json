@@ -1,0 +1,16 @@
+{
+  "name": "political-tracker",
+  "version": "1.0.0",
+  "description": "Automated political accountability tracker",
+  "main": "daily-tracker.js",
+  "type": "module",
+  "scripts": {
+    "start": "node daily-tracker.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "keywords": ["political", "tracker", "accountability", "automation"],
+  "author": "Political Transparency Project",
+  "license": "MIT"
+}
