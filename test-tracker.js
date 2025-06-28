@@ -173,3 +173,4 @@ main().catch(error => {
     console.error('=== TEST ERROR ===');
     console.error(error);
     process.exit(1);
+});
