@@ -574,5 +574,17 @@
     "severity": "medium",
     "id": 1751237406059.2732,
     "added_at": "2025-06-29T22:50:06.058Z"
+  },
+  {
+    "date": "2025-06-29",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Test entry",
+    "description": "This is a test.",
+    "source_url": "https://example.com",
+    "verified": true,
+    "severity": "medium",
+    "id": 1751238304805.7651,
+    "added_at": "2025-06-29T23:05:04.804Z"
   }
 ]

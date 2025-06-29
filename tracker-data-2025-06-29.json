@@ -1,6 +1,17 @@
 {
-  "generated_at": "2025-06-29T22:56:25.258Z",
+  "generated_at": "2025-06-29T23:05:04.804Z",
   "date": "2025-06-29",
-  "total_entries": 0,
-  "entries": []
+  "total_entries": 1,
+  "entries": [
+    {
+      "date": "2025-06-29",
+      "actor": "Donald Trump",
+      "category": "Financial",
+      "title": "Test entry",
+      "description": "This is a test.",
+      "source_url": "https://example.com",
+      "verified": true,
+      "severity": "medium"
+    }
+  ]
 }
