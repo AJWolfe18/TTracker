@@ -1,6 +1,17 @@
 {
-  "generated_at": "2025-06-29T22:40:21.764Z",
+  "generated_at": "2025-06-29T22:50:06.058Z",
   "date": "2025-06-29",
-  "total_entries": 0,
-  "entries": []
+  "total_entries": 1,
+  "entries": [
+    {
+      "date": "2025-06-29",
+      "actor": "Donald Trump",
+      "category": "Election",
+      "title": "Trump Announces 2026 Campaign Rally Schedule",
+      "description": "Former President Donald Trump has announced a series of campaign rallies scheduled for the summer of 2026 as he prepares for a potential run in the upcoming presidential election.",
+      "source_url": "https://example.com",
+      "verified": true,
+      "severity": "medium"
+    }
+  ]
 }

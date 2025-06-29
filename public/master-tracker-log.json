@@ -540,27 +540,39 @@
     "added_at": "2025-06-28T17:30:00Z"
   },
   {
-   "date": "2025-02-07",
-   "actor": "Trump / $TRUMP",
-   "category": "Platform Manipulation",
-   "title": "$TRUMP copycat tokens flood market",
-   "description": "Over 700 spoof tokens surfaced imitating Trump's meme‑coin, misleading investors and raising fraud concerns.",
-   "source_url": "https://www.theguardian.com/us-news/2025/feb/07/trump-meme-coin-crypto-copycats",
-   "verified": true,
-   "severity": "medium",
-   "id": 146,
-   "added_at": "2025-06-28T17:35:00Z"
- },
- {
-   "date": "2025-01-17",
-   "actor": "Trump",
-   "category": "Corporate Ethics",
-   "title": "Trump launches $TRUMP meme‑coin",
-   "description": "The official $TRUMP token debuted days before inauguration; Trump-affiliated entities held 80% of supply and netted ~$350 M in sales/fees.",
-   "source_url": "https://en.wikipedia.org/wiki/%24Trump",
-   "verified": true,
-   "severity": "high",
-   "id": 147,
-   "added_at": "2025-06-28T17:40:00Z"
- }
+    "date": "2025-02-07",
+    "actor": "Trump / $TRUMP",
+    "category": "Platform Manipulation",
+    "title": "$TRUMP copycat tokens flood market",
+    "description": "Over 700 spoof tokens surfaced imitating Trump's meme‑coin, misleading investors and raising fraud concerns.",
+    "source_url": "https://www.theguardian.com/us-news/2025/feb/07/trump-meme-coin-crypto-copycats",
+    "verified": true,
+    "severity": "medium",
+    "id": 146,
+    "added_at": "2025-06-28T17:35:00Z"
+  },
+  {
+    "date": "2025-01-17",
+    "actor": "Trump",
+    "category": "Corporate Ethics",
+    "title": "Trump launches $TRUMP meme‑coin",
+    "description": "The official $TRUMP token debuted days before inauguration; Trump-affiliated entities held 80% of supply and netted ~$350 M in sales/fees.",
+    "source_url": "https://en.wikipedia.org/wiki/%24Trump",
+    "verified": true,
+    "severity": "high",
+    "id": 147,
+    "added_at": "2025-06-28T17:40:00Z"
+  },
+  {
+    "date": "2025-06-29",
+    "actor": "Donald Trump",
+    "category": "Election",
+    "title": "Trump Announces 2026 Campaign Rally Schedule",
+    "description": "Former President Donald Trump has announced a series of campaign rallies scheduled for the summer of 2026 as he prepares for a potential run in the upcoming presidential election.",
+    "source_url": "https://example.com",
+    "verified": true,
+    "severity": "medium",
+    "id": 1751237406059.2732,
+    "added_at": "2025-06-29T22:50:06.058Z"
+  }
 ]
