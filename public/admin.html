@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Political Tracker - Admin Interface</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            background: #0f0f0f; 
+            color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="admin-root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function AdminInterface() {
+            const [entries, setEntries] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [selectedEntries, setSelectedEntries] = useState(new Set());
+            const [filter, setFilter] = useState('all');
+            const [searchTerm, setSearchTerm] = useState('');
+
+            // Load data
+            useEffect(() => {
+                loadEntries();
+            }, []);
+
+            async function loadEntries() {
+                try {
+                    const response = await fetch('/master-tracker-log.json');
+                    const data = await response.json();
+                    setEntries(data);
+                } catch (error) {
+                    console.error('Error loading entries:', error);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            // Filter entries
+            const filteredEntries = entries.filter(entry => {
+                if (!entry) return false;
+                
+                // Filter by category
+                if (filter !== 'all' && entry.severity !== filter) return false;
+                
+                // Filter by search term
+                if (searchTerm) {
+                    const searchLower = searchTerm.toLowerCase();
+                    return (
+                        (entry.title || '').toLowerCase().includes(searchLower) ||
+                        (entry.description || '').toLowerCase().includes(searchLower) ||
+                        (entry.actor || '').toLowerCase().includes(searchLower)
+                    );
+                }
+                
+                return true;
+            });
+
+            // Toggle entry selection
+            function toggleEntry(entryId) {
+                const newSelected = new Set(selectedEntries);
+                if (newSelected.has(entryId)) {
+                    newSelected.delete(entryId);
+                } else {
+                    newSelected.add(entryId);
+                }
+                setSelectedEntries(newSelected);
+            }
+
+            // Select all visible entries
+            function selectAll() {
+                const allVisible = new Set(filteredEntries.map(e => e.id).filter(id => id));
+                setSelectedEntries(allVisible);
+            }
+
+            // Clear selection
+            function clearSelection() {
+                setSelectedEntries(new Set());
+            }
+
+            // Delete selected entries
+            function deleteSelected() {
+                if (selectedEntries.size === 0) return;
+                
+                const confirmed = confirm(`Delete ${selectedEntries.size} selected entries? This will generate JSON you need to manually save.`);
+                if (!confirmed) return;
+
+                const remaining = entries.filter(entry => !selectedEntries.has(entry.id));
+                
+                // Show the cleaned JSON for manual save
+                const cleanedJson = JSON.stringify(remaining, null, 2);
+                showJsonModal(cleanedJson);
+                
+                // Update local state
+                setEntries(remaining);
+                setSelectedEntries(new Set());
+            }
+
+            // Show JSON in modal for manual saving
+            function showJsonModal(jsonData) {
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.8); display: flex; align-items: center;
+                    justify-content: center; z-index: 1000; padding: 20px;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;">
+                        <h3 style="color: white; margin-bottom: 10px;">Updated master-tracker-log.json</h3>
+                        <p style="color: #ccc; margin-bottom: 15px;">Copy this content and save it as master-tracker-log.json in your repo:</p>
+                        <textarea style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${jsonData}</textarea>
+                        <div style="margin-top: 15px;">
+                            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+            }
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+                        <div className="text-white text-xl">Loading entries...</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-900 text-white">
+                    <div className="container mx-auto px-4 py-8">
+                        {/* Header */}
+                        <div className="mb-8">
+                            <h1 className="text-3xl font-bold mb-2">Political Tracker - Admin Interface</h1>
+                            <p className="text-gray-400">Review and manage tracking entries</p>
+                        </div>
+
+                        {/* Controls */}
+                        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                            <div className="flex flex-wrap gap-4 items-center">
+                                {/* Search */}
+                                <div className="flex-1 min-w-64">
+                                    <input
+                                        type="text"
+                                        placeholder="Search entries..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+
+                                {/* Filter */}
+                                <select
+                                    value={filter}
+                                    onChange={(e) => setFilter(e.target.value)}
+                                    className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500"
+                                >
+                                    <option value="all">All Severity</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
+                                </select>
+
+                                {/* Selection Controls */}
+                                <button
+                                    onClick={selectAll}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                                >
+                                    Select All ({filteredEntries.length})
+                                </button>
+
+                                <button
+                                    onClick={clearSelection}
+                                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md transition-colors"
+                                >
+                                    Clear Selection
+                                </button>
+
+                                {/* Delete Button */}
+                                {selectedEntries.size > 0 && (
+                                    <button
+                                        onClick={deleteSelected}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium"
+                                    >
+                                        Delete Selected ({selectedEntries.size})
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-2xl font-bold text-blue-400">{entries.length}</div>
+                                <div className="text-gray-400">Total Entries</div>
+                            </div>
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-2xl font-bold text-green-400">{filteredEntries.length}</div>
+                                <div className="text-gray-400">Filtered Results</div>
+                            </div>
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-2xl font-bold text-yellow-400">{selectedEntries.size}</div>
+                                <div className="text-gray-400">Selected</div>
+                            </div>
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-2xl font-bold text-red-400">{entries.filter(e => e.severity === 'high').length}</div>
+                                <div className="text-gray-400">High Severity</div>
+                            </div>
+                        </div>
+
+                        {/* Entries List */}
+                        <div className="space-y-4">
+                            {filteredEntries.map((entry, index) => {
+                                if (!entry || !entry.id) return null;
+                                
+                                const isSelected = selectedEntries.has(entry.id);
+                                const severityColors = {
+                                    high: 'bg-red-900 border-red-500',
+                                    medium: 'bg-yellow-900 border-yellow-500',
+                                    low: 'bg-green-900 border-green-500'
+                                };
+
+                                return (
+                                    <div
+                                        key={entry.id}
+                                        className={`border-l-4 p-4 rounded-lg transition-all cursor-pointer ${
+                                            isSelected 
+                                                ? 'bg-blue-900 border-blue-500' 
+                                                : `bg-gray-800 ${severityColors[entry.severity] || 'border-gray-600'}`
+                                        }`}
+                                        onClick={() => toggleEntry(entry.id)}
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className={`px-2 py-1 rounded text-xs font-medium ${
+                                                        entry.severity === 'high' ? 'bg-red-600' :
+                                                        entry.severity === 'medium' ? 'bg-yellow-600' : 'bg-green-600'
+                                                    }`}>
+                                                        {(entry.severity || 'unknown').toUpperCase()}
+                                                    </div>
+                                                    <div className="text-gray-400 text-sm">
+                                                        {entry.actor || 'Unknown Actor'}
+                                                    </div>
+                                                    <div className="text-gray-500 text-sm">
+                                                        {entry.date || 'No date'}
+                                                    </div>
+                                                    {entry.verified && <span className="text-green-400">✅</span>}
+                                                </div>
+                                                
+                                                <h3 className="text-lg font-medium mb-2 text-white">
+                                                    {entry.title || 'No title'}
+                                                </h3>
+                                                
+                                                <p className="text-gray-300 mb-3">
+                                                    {entry.description || 'No description'}
+                                                </p>
+                                                
+                                                {entry.source_url && (
+                                                    <a
+                                                        href={entry.source_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-400 hover:text-blue-300 text-sm"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {entry.source_url}
+                                                    </a>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="ml-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => toggleEntry(entry.id)}
+                                                    className="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {filteredEntries.length === 0 && (
+                            <div className="text-center py-12">
+                                <div className="text-gray-400 text-lg">No entries found matching your criteria</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<AdminInterface />, document.getElementById('admin-root'));
+    </script>
+</body>
+</html>
