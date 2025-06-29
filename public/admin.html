@@ -182,6 +182,17 @@
 
             async function loadEntries() {
                 try {
+                    // Try to load from localStorage first (for persistence)
+                    const backupData = localStorage.getItem('tracker_data_backup');
+                    if (backupData) {
+                        const data = JSON.parse(backupData);
+                        const active = data.filter(entry => !entry.archived);
+                        const archived = data.filter(entry => entry.archived);
+                        updateState({ entries: active, archivedEntries: archived, loading: false });
+                        return;
+                    }
+
+                    // Fallback to original file
                     const response = await fetch('/master-tracker-log.json');
                     const data = await response.json();
                     
@@ -269,14 +280,54 @@
                 
                 modal.innerHTML = `
                     <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;">
-                        <h3 style="color: white; margin-bottom: 10px;">Updated master-tracker-log.json (${action})</h3>
-                        <p style="color: #ccc; margin-bottom: 15px;">Copy this content and save it as master-tracker-log.json in your repo:</p>
-                        <textarea style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${cleanedJson}</textarea>
-                        <div style="margin-top: 15px;">
+                        <h3 style="color: white; margin-bottom: 10px;">Entries ${action} successfully!</h3>
+                        <p style="color: #4ade80; margin-bottom: 15px;">✅ Changes saved automatically to your browser</p>
+                        <p style="color: #ccc; margin-bottom: 15px;">To make permanent: Copy this JSON and save as master-tracker-log.json in your repo:</p>
+                        <textarea id="jsonOutput" style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${cleanedJson}</textarea>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button onclick="copyToClipboard()" style="background: #16a34a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📋 Copy JSON</button>
+                            <button onclick="downloadJson()" style="background: #2563eb; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">💾 Download File</button>
                             <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Close</button>
                         </div>
                     </div>
                 `;
+                
+                // Add helper functions to window for the modal buttons
+                window.copyToClipboard = function() {
+                    const textarea = document.getElementById('jsonOutput');
+                    textarea.select();
+                    textarea.setSelectionRange(0, 99999);
+                    navigator.clipboard.writeText(textarea.value).then(() => {
+                        const button = event.target;
+                        const originalText = button.textContent;
+                        button.textContent = '✅ Copied!';
+                        button.style.backgroundColor = '#16a34a';
+                        setTimeout(() => {
+                            button.textContent = originalText;
+                            button.style.backgroundColor = '#16a34a';
+                        }, 2000);
+                    });
+                };
+
+                window.downloadJson = function() {
+                    const textarea = document.getElementById('jsonOutput');
+                    const blob = new Blob([textarea.value], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'master-tracker-log.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    const button = event.target;
+                    const originalText = button.textContent;
+                    button.textContent = '✅ Downloaded!';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                    }, 2000);
+                };
                 
                 document.body.appendChild(modal);
             }
@@ -284,7 +335,7 @@
             function archiveSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`Archive ${state.selectedEntries.size} selected entries?`);
+                const confirmed = confirm(`Archive ${state.selectedEntries.size} selected entries? This will update your local data immediately.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
@@ -295,17 +346,20 @@
                     return entry;
                 });
                 
-                showJsonModal(updatedEntries, 'archived');
+                // Save to localStorage for persistence
+                localStorage.setItem('tracker_data_backup', JSON.stringify(updatedEntries));
                 
                 const active = updatedEntries.filter(e => !e.archived);
                 const archived = updatedEntries.filter(e => e.archived);
                 updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                
+                showJsonModal(updatedEntries, 'archived');
             }
 
             function restoreSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`Restore ${state.selectedEntries.size} selected entries?`);
+                const confirmed = confirm(`Restore ${state.selectedEntries.size} selected entries? This will update your local data immediately.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
@@ -317,27 +371,33 @@
                     return entry;
                 });
                 
-                showJsonModal(updatedEntries, 'restored');
+                // Save to localStorage for persistence
+                localStorage.setItem('tracker_data_backup', JSON.stringify(updatedEntries));
                 
                 const active = updatedEntries.filter(e => !e.archived);
                 const archived = updatedEntries.filter(e => e.archived);
                 updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                
+                showJsonModal(updatedEntries, 'restored');
             }
 
             function deleteSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`PERMANENTLY DELETE ${state.selectedEntries.size} selected entries?`);
+                const confirmed = confirm(`PERMANENTLY DELETE ${state.selectedEntries.size} selected entries? This cannot be undone and will update your local data immediately.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
                 const remaining = allEntries.filter(entry => !state.selectedEntries.has(entry.id));
                 
-                showJsonModal(remaining, 'deleted');
+                // Save to localStorage for persistence
+                localStorage.setItem('tracker_data_backup', JSON.stringify(remaining));
                 
                 const active = remaining.filter(e => !e.archived);
                 const archived = remaining.filter(e => e.archived);
                 updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                
+                showJsonModal(remaining, 'deleted');
             }
 
             // Login form
