@@ -48,6 +48,7 @@ async function callOpenAI(prompt, category) {
         const gptResponse = data.choices[0].message.content;
         
         console.log(`${category} - Response length: ${gptResponse.length}`);
+        console.log(`${category} - Raw response: "${gptResponse}"`); // Added debug line
         console.log(`${category} - Tokens used: ${data.usage.completion_tokens}`);
         
         // Clean the response
@@ -81,14 +82,7 @@ async function fetchAllPoliticalUpdates() {
     const prompts = [
         {
             category: "Trump & Family",
-            prompt: `Find political news from the past 24 hours about Donald Trump, Trump family members (Don Jr, Eric, Ivanka), Truth Social, Trump businesses, or Trump campaign activities.
-
-Focus on: legal issues, business dealings, policy statements, social media activity, meme coins, campaign finance, family member actions.
-
-Return JSON array:
-[{"date": "${today}", "actor": "Donald Trump", "category": "Financial", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
-
-If no developments, return [].`
+            prompt: `Return exactly this JSON: [{"date": "${today}", "actor": "Donald Trump", "category": "Financial", "title": "Test entry", "description": "This is a test.", "source_url": "https://example.com", "verified": true, "severity": "medium"}]`
         },
         {
             category: "Elon Musk & DOGE",
