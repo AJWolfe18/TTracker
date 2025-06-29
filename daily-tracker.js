@@ -77,7 +77,10 @@ Do not include explanatory text, just the JSON array.`;
                     }
                 ],
                 max_tokens: 2500,
-                temperature: 0.3
+                temperature: 0.7,
+                top_p: 0.9,
+                frequency_penalty: 0.1,
+                presence_penalty: 0.1
             })
         });
 
