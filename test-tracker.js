@@ -1,25 +1,17 @@
-// daily-tracker.js
+// daily-tracker.js - Multi-call version
 import fetch from 'node-fetch';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 
-async function fetchPoliticalUpdates() {
+async function callOpenAI(prompt, category) {
     const apiKey = process.env.OPENAI_API_KEY;
-    
-    console.log('API Key present:', !!apiKey);
-    console.log('API Key length:', apiKey ? apiKey.length : 0);
     
     if (!apiKey) {
         console.error('OpenAI API key not found');
-        process.exit(1);
+        return [];
     }
 
-    const prompt = `Find any political news from today and return as JSON array with this structure:
-[{"date": "2025-06-29", "actor": "Any politician", "category": "Any category", "title": "Any title", "description": "Any description", "source_url": "https://example.com", "verified": true, "severity": "medium"}]
-
-If no news, create one sample entry about Donald Trump.`;
-
     try {
-        console.log('Making request to OpenAI...');
+        console.log(`Making request to OpenAI for: ${category}`);
         
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -32,14 +24,14 @@ If no news, create one sample entry about Donald Trump.`;
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a political accountability researcher. Always return valid JSON arrays as requested. Today is ' + new Date().toDateString()
+                        content: `You are a political accountability researcher. Always return valid JSON arrays. Today is ${new Date().toDateString()}`
                     },
                     {
                         role: 'user', 
                         content: prompt
                     }
                 ],
-                max_tokens: 2500,
+                max_tokens: 1500,
                 temperature: 0.7,
                 top_p: 0.9,
                 frequency_penalty: 0.1,
@@ -47,48 +39,128 @@ If no news, create one sample entry about Donald Trump.`;
             })
         });
 
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers.raw());
-
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('OpenAI API error:', response.status, response.statusText);
-            console.error('Error details:', errorText);
-            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+            console.error(`OpenAI API error for ${category}:`, response.status);
+            return [];
         }
 
         const data = await response.json();
-        console.log('OpenAI response received:', !!data);
-        console.log('Response usage:', data.usage);
-        
         const gptResponse = data.choices[0].message.content;
-        console.log('GPT response length:', gptResponse.length);
-        console.log('Raw GPT response:', gptResponse); // Added for debug
         
-        // Clean the response in case GPT adds markdown formatting
+        console.log(`${category} - Response length: ${gptResponse.length}`);
+        console.log(`${category} - Tokens used: ${data.usage.completion_tokens}`);
+        
+        // Clean the response
         const cleanedResponse = gptResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         
-        let newEntries;
+        let entries;
         try {
-            newEntries = JSON.parse(cleanedResponse);
+            entries = JSON.parse(cleanedResponse);
         } catch (parseError) {
-            console.error('Error parsing GPT response:', parseError);
-            console.error('Raw response:', gptResponse);
+            console.error(`Error parsing ${category} response:`, parseError);
             return [];
         }
 
-        if (!Array.isArray(newEntries)) {
-            console.error('Response is not an array:', newEntries);
+        if (!Array.isArray(entries)) {
+            console.error(`${category} response is not an array`);
             return [];
         }
 
-        console.log('Successfully parsed', newEntries.length, 'entries');
-        return newEntries;
+        console.log(`${category} - Found ${entries.length} entries`);
+        return entries;
 
     } catch (error) {
-        console.error('Error fetching updates:', error);
+        console.error(`Error fetching ${category} updates:`, error);
         return [];
     }
+}
+
+async function fetchAllPoliticalUpdates() {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const prompts = [
+        {
+            category: "Trump & Family",
+            prompt: `Find political news from the past 24 hours about Donald Trump, Trump family members (Don Jr, Eric, Ivanka), Truth Social, Trump businesses, or Trump campaign activities.
+
+Focus on: legal issues, business dealings, policy statements, social media activity, meme coins, campaign finance, family member actions.
+
+Return JSON array:
+[{"date": "${today}", "actor": "Donald Trump", "category": "Financial", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        },
+        {
+            category: "Elon Musk & DOGE",
+            prompt: `Find political news from the past 24 hours about Elon Musk, X/Twitter platform, Department of Government Efficiency (DOGE), or Musk's government roles.
+
+Focus on: platform policies, government contracts, regulatory issues, content moderation, algorithm changes, DOGE activities, conflicts of interest.
+
+Return JSON array:
+[{"date": "${today}", "actor": "Elon Musk", "category": "Platform Manipulation", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        },
+        {
+            category: "DOJ & Law Enforcement",
+            prompt: `Find political news from the past 24 hours about Department of Justice, Attorney General Pam Bondi, FBI, prosecutions, civil rights enforcement, or law enforcement leadership.
+
+Focus on: DOJ leadership changes, prosecutions, civil rights cases, FBI actions, task force changes, whistleblower issues.
+
+Return JSON array:
+[{"date": "${today}", "actor": "DOJ", "category": "Legal Proceedings", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        },
+        {
+            category: "Federal Agencies",
+            prompt: `Find political news from the past 24 hours about ICE, DHS, Department of Education, EPA, or other federal agencies and their leadership.
+
+Focus on: policy changes, leadership appointments, enforcement actions, budget issues, regulatory changes, agency restructuring.
+
+Return JSON array:
+[{"date": "${today}", "actor": "ICE", "category": "Government Oversight", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        },
+        {
+            category: "Courts & Legal",
+            prompt: `Find political news from the past 24 hours about Supreme Court, federal court rulings, election law cases, civil liberties cases, or significant legal developments.
+
+Focus on: court rulings, Supreme Court decisions, election-related cases, civil liberties implications, constitutional issues.
+
+Return JSON array:
+[{"date": "${today}", "actor": "Supreme Court", "category": "Civil Liberties", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        },
+        {
+            category: "Corporate & Financial",
+            prompt: `Find political news from the past 24 hours about corporate lobbying, PAC funding, conflicts of interest, dark money, government contracts, or business-government entanglements.
+
+Focus on: lobbying activities, campaign finance, conflicts of interest, government contracts, corporate accountability, ethics violations.
+
+Return JSON array:
+[{"date": "${today}", "actor": "Corporate Entity", "category": "Corporate Ethics", "title": "Brief headline", "description": "2-3 sentence summary", "source_url": "https://url.com", "verified": true, "severity": "medium"}]
+
+If no developments, return [].`
+        }
+    ];
+
+    console.log('=== STARTING MULTI-CATEGORY POLITICAL SEARCH ===');
+    
+    let allEntries = [];
+    
+    for (const { category, prompt } of prompts) {
+        const entries = await callOpenAI(prompt, category);
+        allEntries.push(...entries);
+        
+        // Small delay between calls to be respectful to API
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    console.log(`=== TOTAL ENTRIES FOUND: ${allEntries.length} ===`);
+    return allEntries;
 }
 
 function isReputableSource(url) {
@@ -98,7 +170,8 @@ function isReputableSource(url) {
         'ap.org', 'reuters.com', 'propublica.org', 'theguardian.com',
         'washingtonpost.com', 'nytimes.com', 'npr.org', 'politico.com',
         'govexec.com', 'federalnewsnetwork.com', 'wsj.com', 'bloomberg.com',
-        'cnn.com', 'bbc.com', 'axios.com', 'thehill.com'
+        'cnn.com', 'bbc.com', 'axios.com', 'thehill.com', 'aclu.org',
+        'sfgate.com', 'meidasnews.com', 'thedailybeast.com', 'newrepublic.com'
     ];
     
     return reputableDomains.some(domain => url.includes(domain));
@@ -108,7 +181,7 @@ async function saveToFile(entries) {
     const timestamp = new Date().toISOString();
     const filename = `tracker-data-${new Date().toISOString().split('T')[0]}.json`;
     
-    // Clean quotes in entries before saving
+    // Clean quotes and auto-verify
     entries.forEach(entry => {
         if (entry.description) {
             entry.description = entry.description.replace(/"/g, '\\"');
@@ -116,7 +189,6 @@ async function saveToFile(entries) {
         if (entry.title) {
             entry.title = entry.title.replace(/"/g, '\\"');
         }
-        // Auto-verify reputable sources
         if (!entry.hasOwnProperty('verified')) {
             entry.verified = isReputableSource(entry.source_url);
         }
@@ -131,10 +203,10 @@ async function saveToFile(entries) {
 
     console.log('Saving to file:', filename);
 
-    // Save to file
+    // Save daily file
     writeFileSync(filename, JSON.stringify(output, null, 2));
     
-    // Also append to master log
+    // Load and update master log
     let masterLog = [];
     if (existsSync('master-tracker-log.json')) {
         console.log('Loading existing master log...');
@@ -148,7 +220,7 @@ async function saveToFile(entries) {
     entries.forEach(entry => {
         masterLog.push({
             ...entry,
-            id: Date.now() + Math.random(), // Simple unique ID
+            id: Date.now() + Math.random(),
             added_at: timestamp
         });
     });
@@ -170,18 +242,18 @@ async function saveToFile(entries) {
 }
 
 async function main() {
-    console.log('=== STARTING DAILY POLITICAL TRACKER ===');
+    console.log('=== STARTING MULTI-CALL DAILY POLITICAL TRACKER ===');
     console.log('Date:', new Date().toDateString());
     console.log('Time:', new Date().toISOString());
     
-    const entries = await fetchPoliticalUpdates();
+    const entries = await fetchAllPoliticalUpdates();
     
     if (entries.length === 0) {
-        console.log('No new political developments found today.');
+        console.log('No new political developments found today across all categories.');
     } else {
         console.log(`Found ${entries.length} new developments:`);
         entries.forEach((entry, index) => {
-            console.log(`${index + 1}. [${entry.severity.toUpperCase()}] ${entry.actor}: ${entry.title}`);
+            console.log(`${index + 1}. [${entry.severity?.toUpperCase()}] ${entry.actor}: ${entry.title}`);
         });
     }
     
