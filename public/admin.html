@@ -22,8 +22,8 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-  
-        const ADMIN_PASSWORD = 'YourSecurePassword123!';
+        // Simple password protection - change this password!
+        const ADMIN_PASSWORD = 'tracker2025!'; // CHANGE THIS!
 
         function AdminInterface() {
             const [entries, setEntries] = useState([]);
@@ -225,25 +225,6 @@
             }
 
             // Show JSON in modal for manual saving
-            function showJsonModal(jsonData, action) {
-                const modal = document.createElement('div');
-                modal.style.cssText = `
-                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                    background: rgba(0,0,0,0.8); display: flex; align-items: center;
-                    justify-content: center; z-index: 1000; padding: 20px;
-                `;
-                
-                modal.innerHTML = `
-                    <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;">
-                        <h3 style="color: white; margin-bottom: 10px;">Updated master-tracker-log.json</h3>
-                        <p style="color: #ccc; margin-bottom: 15px;">Copy this content and save it as master-tracker-log.json in your repo:</p>
-                        <textarea style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${jsonData}</textarea>
-                        <div style="margin-top: 15px;">
-                            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-                        </div>
-                    </div>
-                `;
-                
             function showJsonModal(jsonData, action) {
                 const cleanedJson = JSON.stringify(jsonData, null, 2);
                 const modal = document.createElement('div');
