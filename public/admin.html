@@ -22,23 +22,63 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
+        // Simple password protection - change this password!
+        const ADMIN_PASSWORD = 'tracker2025!'; // CHANGE THIS!
+
         function AdminInterface() {
             const [entries, setEntries] = useState([]);
+            const [archivedEntries, setArchivedEntries] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [authenticated, setAuthenticated] = useState(false);
+            const [password, setPassword] = useState('');
             const [selectedEntries, setSelectedEntries] = useState(new Set());
             const [filter, setFilter] = useState('all');
+            const [dateFilter, setDateFilter] = useState('all');
+            const [showArchived, setShowArchived] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
 
             // Load data
             useEffect(() => {
-                loadEntries();
+                if (authenticated) {
+                    loadEntries();
+                }
+            }, [authenticated]);
+
+            // Check if user is already authenticated
+            useEffect(() => {
+                const savedAuth = localStorage.getItem('admin_authenticated');
+                if (savedAuth === 'true') {
+                    setAuthenticated(true);
+                }
             }, []);
+
+            function handleLogin() {
+                if (password === ADMIN_PASSWORD) {
+                    setAuthenticated(true);
+                    localStorage.setItem('admin_authenticated', 'true');
+                    setPassword('');
+                } else {
+                    alert('Incorrect password');
+                    setPassword('');
+                }
+            }
+
+            function handleLogout() {
+                setAuthenticated(false);
+                localStorage.removeItem('admin_authenticated');
+            }
 
             async function loadEntries() {
                 try {
                     const response = await fetch('/master-tracker-log.json');
                     const data = await response.json();
-                    setEntries(data);
+                    
+                    // Separate active and archived entries
+                    const active = data.filter(entry => !entry.archived);
+                    const archived = data.filter(entry => entry.archived);
+                    
+                    setEntries(active);
+                    setArchivedEntries(archived);
                 } catch (error) {
                     console.error('Error loading entries:', error);
                 } finally {
@@ -47,11 +87,36 @@
             }
 
             // Filter entries
-            const filteredEntries = entries.filter(entry => {
+            const currentEntries = showArchived ? archivedEntries : entries;
+            const filteredEntries = currentEntries.filter(entry => {
                 if (!entry) return false;
                 
-                // Filter by category
+                // Filter by severity
                 if (filter !== 'all' && entry.severity !== filter) return false;
+                
+                // Filter by date
+                if (dateFilter !== 'all') {
+                    const entryDate = new Date(entry.date);
+                    const today = new Date();
+                    
+                    switch (dateFilter) {
+                        case 'today':
+                            if (entryDate.toDateString() !== today.toDateString()) return false;
+                            break;
+                        case 'week':
+                            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                            if (entryDate < weekAgo) return false;
+                            break;
+                        case 'month':
+                            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+                            if (entryDate < monthAgo) return false;
+                            break;
+                        case 'old':
+                            const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+                            if (entryDate > threeMonthsAgo) return false;
+                            break;
+                    }
+                }
                 
                 // Filter by search term
                 if (searchTerm) {
@@ -88,26 +153,79 @@
                 setSelectedEntries(new Set());
             }
 
-            // Delete selected entries
+            // Archive selected entries
+            function archiveSelected() {
+                if (selectedEntries.size === 0) return;
+                
+                const confirmed = confirm(`Archive ${selectedEntries.size} selected entries? They can be restored later.`);
+                if (!confirmed) return;
+
+                const allEntries = [...entries, ...archivedEntries];
+                const updatedEntries = allEntries.map(entry => {
+                    if (selectedEntries.has(entry.id)) {
+                        return { ...entry, archived: true, archived_at: new Date().toISOString() };
+                    }
+                    return entry;
+                });
+                
+                showJsonModal(updatedEntries, 'archived');
+                
+                // Update local state
+                const active = updatedEntries.filter(e => !e.archived);
+                const archived = updatedEntries.filter(e => e.archived);
+                setEntries(active);
+                setArchivedEntries(archived);
+                setSelectedEntries(new Set());
+            }
+
+            // Restore selected entries
+            function restoreSelected() {
+                if (selectedEntries.size === 0) return;
+                
+                const confirmed = confirm(`Restore ${selectedEntries.size} selected entries to active status?`);
+                if (!confirmed) return;
+
+                const allEntries = [...entries, ...archivedEntries];
+                const updatedEntries = allEntries.map(entry => {
+                    if (selectedEntries.has(entry.id)) {
+                        const { archived, archived_at, ...restoredEntry } = entry;
+                        return restoredEntry;
+                    }
+                    return entry;
+                });
+                
+                showJsonModal(updatedEntries, 'restored');
+                
+                // Update local state
+                const active = updatedEntries.filter(e => !e.archived);
+                const archived = updatedEntries.filter(e => e.archived);
+                setEntries(active);
+                setArchivedEntries(archived);
+                setSelectedEntries(new Set());
+            }
+
+            // Delete selected entries permanently
             function deleteSelected() {
                 if (selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`Delete ${selectedEntries.size} selected entries? This will generate JSON you need to manually save.`);
+                const confirmed = confirm(`PERMANENTLY DELETE ${selectedEntries.size} selected entries? This cannot be undone!`);
                 if (!confirmed) return;
 
-                const remaining = entries.filter(entry => !selectedEntries.has(entry.id));
+                const allEntries = [...entries, ...archivedEntries];
+                const remaining = allEntries.filter(entry => !selectedEntries.has(entry.id));
                 
-                // Show the cleaned JSON for manual save
-                const cleanedJson = JSON.stringify(remaining, null, 2);
-                showJsonModal(cleanedJson);
+                showJsonModal(remaining, 'deleted');
                 
                 // Update local state
-                setEntries(remaining);
+                const active = remaining.filter(e => !e.archived);
+                const archived = remaining.filter(e => e.archived);
+                setEntries(active);
+                setArchivedEntries(archived);
                 setSelectedEntries(new Set());
             }
 
             // Show JSON in modal for manual saving
-            function showJsonModal(jsonData) {
+            function showJsonModal(jsonData, action) {
                 const modal = document.createElement('div');
                 modal.style.cssText = `
                     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -126,7 +244,58 @@
                     </div>
                 `;
                 
+            function showJsonModal(jsonData, action) {
+                const cleanedJson = JSON.stringify(jsonData, null, 2);
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.8); display: flex; align-items: center;
+                    justify-content: center; z-index: 1000; padding: 20px;
+                `;
+                
+                modal.innerHTML = `
+                    <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;">
+                        <h3 style="color: white; margin-bottom: 10px;">Updated master-tracker-log.json (${action})</h3>
+                        <p style="color: #ccc; margin-bottom: 15px;">Copy this content and save it as master-tracker-log.json in your repo:</p>
+                        <textarea style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${cleanedJson}</textarea>
+                        <div style="margin-top: 15px;">
+                            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                        </div>
+                    </div>
+                `;
+                
                 document.body.appendChild(modal);
+            }
+
+            // Login form
+            if (!authenticated) {
+                return (
+                    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+                        <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full">
+                            <h2 className="text-2xl font-bold text-white mb-6 text-center">Admin Access</h2>
+                            <div className="space-y-4">
+                                <input
+                                    type="password"
+                                    placeholder="Enter admin password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    autoFocus
+                                />
+                                <button
+                                    onClick={handleLogin}
+                                    className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-medium transition-colors"
+                                >
+                                    Login
+                                </button>
+                            </div>
+                            <p className="text-gray-400 text-sm mt-4 text-center">
+                                Access restricted to authorized users only
+                            </p>
+                        </div>
+                    </div>
+                );
             }
 
             if (loading) {
@@ -141,14 +310,42 @@
                 <div className="min-h-screen bg-gray-900 text-white">
                     <div className="container mx-auto px-4 py-8">
                         {/* Header */}
-                        <div className="mb-8">
-                            <h1 className="text-3xl font-bold mb-2">Political Tracker - Admin Interface</h1>
-                            <p className="text-gray-400">Review and manage tracking entries</p>
+                        <div className="mb-8 flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold mb-2">Political Tracker - Admin Interface</h1>
+                                <p className="text-gray-400">Review and manage tracking entries</p>
+                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                            >
+                                Logout
+                            </button>
                         </div>
 
                         {/* Controls */}
                         <div className="bg-gray-800 rounded-lg p-6 mb-6">
-                            <div className="flex flex-wrap gap-4 items-center">
+                            <div className="flex flex-wrap gap-4 items-center mb-4">
+                                {/* Archive/Active Toggle */}
+                                <div className="flex bg-gray-700 rounded-md p-1">
+                                    <button
+                                        onClick={() => setShowArchived(false)}
+                                        className={`px-4 py-2 rounded transition-colors ${
+                                            !showArchived ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+                                        }`}
+                                    >
+                                        Active ({entries.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setShowArchived(true)}
+                                        className={`px-4 py-2 rounded transition-colors ${
+                                            showArchived ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'
+                                        }`}
+                                    >
+                                        Archived ({archivedEntries.length})
+                                    </button>
+                                </div>
+
                                 {/* Search */}
                                 <div className="flex-1 min-w-64">
                                     <input
@@ -159,8 +356,10 @@
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
                                     />
                                 </div>
+                            </div>
 
-                                {/* Filter */}
+                            <div className="flex flex-wrap gap-4 items-center">
+                                {/* Severity Filter */}
                                 <select
                                     value={filter}
                                     onChange={(e) => setFilter(e.target.value)}
@@ -170,6 +369,19 @@
                                     <option value="high">High</option>
                                     <option value="medium">Medium</option>
                                     <option value="low">Low</option>
+                                </select>
+
+                                {/* Date Filter */}
+                                <select
+                                    value={dateFilter}
+                                    onChange={(e) => setDateFilter(e.target.value)}
+                                    className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:border-blue-500"
+                                >
+                                    <option value="all">All Dates</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">Past Week</option>
+                                    <option value="month">Past Month</option>
+                                    <option value="old">Older than 3 months</option>
                                 </select>
 
                                 {/* Selection Controls */}
@@ -187,30 +399,52 @@
                                     Clear Selection
                                 </button>
 
-                                {/* Delete Button */}
+                                {/* Action Buttons */}
                                 {selectedEntries.size > 0 && (
-                                    <button
-                                        onClick={deleteSelected}
-                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium"
-                                    >
-                                        Delete Selected ({selectedEntries.size})
-                                    </button>
+                                    <div className="flex gap-2">
+                                        {!showArchived ? (
+                                            <button
+                                                onClick={archiveSelected}
+                                                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-md transition-colors font-medium"
+                                            >
+                                                Archive ({selectedEntries.size})
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={restoreSelected}
+                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors font-medium"
+                                            >
+                                                Restore ({selectedEntries.size})
+                                            </button>
+                                        )}
+                                        
+                                        <button
+                                            onClick={deleteSelected}
+                                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium"
+                                        >
+                                            Delete Forever ({selectedEntries.size})
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
 
                         {/* Stats */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                             <div className="bg-gray-800 rounded-lg p-4">
                                 <div className="text-2xl font-bold text-blue-400">{entries.length}</div>
-                                <div className="text-gray-400">Total Entries</div>
+                                <div className="text-gray-400">Active Entries</div>
+                            </div>
+                            <div className="bg-gray-800 rounded-lg p-4">
+                                <div className="text-2xl font-bold text-yellow-400">{archivedEntries.length}</div>
+                                <div className="text-gray-400">Archived</div>
                             </div>
                             <div className="bg-gray-800 rounded-lg p-4">
                                 <div className="text-2xl font-bold text-green-400">{filteredEntries.length}</div>
                                 <div className="text-gray-400">Filtered Results</div>
                             </div>
                             <div className="bg-gray-800 rounded-lg p-4">
-                                <div className="text-2xl font-bold text-yellow-400">{selectedEntries.size}</div>
+                                <div className="text-2xl font-bold text-purple-400">{selectedEntries.size}</div>
                                 <div className="text-gray-400">Selected</div>
                             </div>
                             <div className="bg-gray-800 rounded-lg p-4">
@@ -257,6 +491,7 @@
                                                         {entry.date || 'No date'}
                                                     </div>
                                                     {entry.verified && <span className="text-green-400">✅</span>}
+                                                    {entry.archived && <span className="text-yellow-400 text-xs">📁 ARCHIVED</span>}
                                                 </div>
                                                 
                                                 <h3 className="text-lg font-medium mb-2 text-white">
