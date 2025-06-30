@@ -275,7 +275,32 @@
 
                     const fileInfo = await getResponse.json();
                     const sha = fileInfo.sha;
-
+                    //added the below item for testing
+                async function testGitHubToken() {
+                    try {
+                        console.log('Testing token...');
+                        const response = await fetch('https://api.github.com/user', {
+                            headers: {
+                                'Authorization': `token ${GITHUB_TOKEN}`,
+                                'Accept': 'application/vnd.github.v3+json',
+                            },
+                        });
+                        
+                        console.log('Token test status:', response.status);
+                        
+                        if (response.ok) {
+                            const user = await response.json();
+                            console.log('Token works! User:', user.login);
+                            alert(`Token works! Logged in as: ${user.login}`);
+                        } else {
+                            console.log('Token test failed:', response.status);
+                            alert(`Token test failed: ${response.status}`);
+                        }
+                    } catch (error) {
+                        console.log('Token test error:', error);
+                        alert(`Token test error: ${error.message}`);
+                    }
+                }
                     // Update the file
                     const content = btoa(JSON.stringify(newData, null, 2));
                     const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/master-tracker-log.json`, {
