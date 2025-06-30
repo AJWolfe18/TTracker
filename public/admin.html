@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Political Tracker - Admin Interface</title>
+    <title>Political Tracker - Automated Admin</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <style>
@@ -24,14 +24,12 @@
         .text-gray-300 { color: #d1d5db; }
         .text-gray-500 { color: #6b7280; }
         .text-blue-400 { color: #60a5fa; }
-        .text-blue-300 { color: #93c5fd; }
         .text-red-400 { color: #f87171; }
         .text-green-400 { color: #4ade80; }
         .text-yellow-400 { color: #facc15; }
         .text-purple-400 { color: #c084fc; }
         .bg-blue-600 { background-color: #2563eb; }
         .bg-blue-700 { background-color: #1d4ed8; }
-        .bg-blue-900 { background-color: #1e3a8a; }
         .bg-red-600 { background-color: #dc2626; }
         .bg-red-700 { background-color: #b91c1c; }
         .bg-red-900 { background-color: #7f1d1d; }
@@ -105,10 +103,8 @@
         .hover\:bg-yellow-700:hover { background-color: #a16207; }
         .hover\:bg-green-700:hover { background-color: #15803d; }
         .hover\:text-white:hover { color: #ffffff; }
-        .hover\:text-blue-300:hover { color: #93c5fd; }
         .focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
         .focus\:border-blue-500:focus { border-color: #3b82f6; }
-        .focus\:ring-blue-500:focus { --tw-ring-color: #3b82f6; }
         input, select, button { outline: none; }
         input:focus, select:focus { border-color: #3b82f6; }
         button:hover { opacity: 0.9; }
@@ -123,14 +119,51 @@
         @media (min-width: 1280px) {
             .container { max-width: 1280px; }
         }
+
+        .loading-spinner {
+            border: 2px solid #374151;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            background-color: #14532d;
+            border: 1px solid #22c55e;
+            color: #4ade80;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .error-message {
+            background-color: #7f1d1d;
+            border: 1px solid #ef4444;
+            color: #f87171;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
     <div id="admin-root"></div>
 
     <script>
-        // Simple password protection - change this password!
+        // Configuration - UPDATE THESE VALUES
         const ADMIN_PASSWORD = 'tracker2025!'; // CHANGE THIS!
+        const GITHUB_TOKEN = ''; // Add your GitHub Personal Access Token here
+        const GITHUB_REPO = 'AJWolfe18/TTracker'; // Your GitHub username/repository
+        const GITHUB_BRANCH = 'main'; // Your default branch (usually 'main' or 'master')
 
         function AdminInterface() {
             const [state, setState] = React.useState({
@@ -143,14 +176,30 @@
                 filter: 'all',
                 dateFilter: 'all',
                 showArchived: false,
-                searchTerm: ''
+                searchTerm: '',
+                isUpdating: false,
+                message: null,
+                messageType: null,
+                setupComplete: false
             });
 
-            // Check authentication on load
+            // Check authentication and setup on load
             React.useEffect(() => {
                 const savedAuth = localStorage.getItem('admin_authenticated');
+                const hasToken = GITHUB_TOKEN && GITHUB_TOKEN.length > 0;
+                const hasRepo = GITHUB_REPO && GITHUB_REPO.length > 0;
+                
                 if (savedAuth === 'true') {
-                    setState(prev => ({ ...prev, authenticated: true }));
+                    setState(prev => ({ 
+                        ...prev, 
+                        authenticated: true, 
+                        setupComplete: hasToken && hasRepo 
+                    }));
+                } else {
+                    setState(prev => ({ 
+                        ...prev, 
+                        setupComplete: hasToken && hasRepo 
+                    }));
                 }
             }, []);
 
@@ -165,12 +214,19 @@
                 setState(prev => ({ ...prev, ...updates }));
             }
 
+            function showMessage(message, type = 'success') {
+                updateState({ message, messageType: type });
+                setTimeout(() => {
+                    updateState({ message: null, messageType: null });
+                }, 5000);
+            }
+
             function handleLogin() {
                 if (state.password === ADMIN_PASSWORD) {
                     localStorage.setItem('admin_authenticated', 'true');
                     updateState({ authenticated: true, password: '' });
                 } else {
-                    alert('Incorrect password');
+                    showMessage('Incorrect password', 'error');
                     updateState({ password: '' });
                 }
             }
@@ -182,17 +238,6 @@
 
             async function loadEntries() {
                 try {
-                    // Try to load from localStorage first (for persistence)
-                    const backupData = localStorage.getItem('tracker_data_backup');
-                    if (backupData) {
-                        const data = JSON.parse(backupData);
-                        const active = data.filter(entry => !entry.archived);
-                        const archived = data.filter(entry => entry.archived);
-                        updateState({ entries: active, archivedEntries: archived, loading: false });
-                        return;
-                    }
-
-                    // Fallback to original file
                     const response = await fetch('/master-tracker-log.json');
                     const data = await response.json();
                     
@@ -203,6 +248,90 @@
                 } catch (error) {
                     console.error('Error loading entries:', error);
                     updateState({ loading: false });
+                    showMessage('Error loading entries', 'error');
+                }
+            }
+
+            async function updateGitHubFile(newData, action) {
+                if (!GITHUB_TOKEN || !GITHUB_REPO) {
+                    showMessage('GitHub integration not configured. Update GITHUB_TOKEN and GITHUB_REPO in the code.', 'error');
+                    return false;
+                }
+
+                updateState({ isUpdating: true });
+
+                try {
+                    // Get current file SHA
+                    const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/master-tracker-log.json`, {
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                        },
+                    });
+
+                    if (!getResponse.ok) {
+                        throw new Error(`Failed to get file info: ${getResponse.statusText}`);
+                    }
+
+                    const fileInfo = await getResponse.json();
+                    const sha = fileInfo.sha;
+
+                    // Update the file
+                    const content = btoa(JSON.stringify(newData, null, 2));
+                    const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/master-tracker-log.json`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: `Admin: ${action} entries via web interface`,
+                            content: content,
+                            sha: sha,
+                            branch: GITHUB_BRANCH
+                        }),
+                    });
+
+                    if (!updateResponse.ok) {
+                        throw new Error(`Failed to update file: ${updateResponse.statusText}`);
+                    }
+
+                    // Also update the public copy
+                    const publicGetResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/public/master-tracker-log.json`, {
+                        headers: {
+                            'Authorization': `token ${GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                        },
+                    });
+
+                    if (publicGetResponse.ok) {
+                        const publicFileInfo = await publicGetResponse.json();
+                        await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/public/master-tracker-log.json`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `token ${GITHUB_TOKEN}`,
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                message: `Admin: ${action} entries via web interface (public copy)`,
+                                content: content,
+                                sha: publicFileInfo.sha,
+                                branch: GITHUB_BRANCH
+                            }),
+                        });
+                    }
+
+                    updateState({ isUpdating: false });
+                    showMessage(`Successfully ${action} entries and updated GitHub!`, 'success');
+                    return true;
+
+                } catch (error) {
+                    console.error('GitHub update error:', error);
+                    updateState({ isUpdating: false });
+                    showMessage(`Error updating GitHub: ${error.message}`, 'error');
+                    return false;
                 }
             }
 
@@ -269,73 +398,10 @@
                 });
             }
 
-            function showJsonModal(jsonData, action) {
-                const cleanedJson = JSON.stringify(jsonData, null, 2);
-                const modal = document.createElement('div');
-                modal.style.cssText = `
-                    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                    background: rgba(0,0,0,0.8); display: flex; align-items: center;
-                    justify-content: center; z-index: 1000; padding: 20px;
-                `;
-                
-                modal.innerHTML = `
-                    <div style="background: #1a1a1a; padding: 20px; border-radius: 8px; max-width: 90%; max-height: 90%; overflow: auto;">
-                        <h3 style="color: white; margin-bottom: 10px;">Entries ${action} successfully!</h3>
-                        <p style="color: #4ade80; margin-bottom: 15px;">✅ Changes saved automatically to your browser</p>
-                        <p style="color: #ccc; margin-bottom: 15px;">To make permanent: Copy this JSON and save as master-tracker-log.json in your repo:</p>
-                        <textarea id="jsonOutput" style="width: 600px; height: 400px; background: #000; color: #0f0; font-family: monospace; padding: 10px; border: 1px solid #333; border-radius: 4px;" readonly>${cleanedJson}</textarea>
-                        <div style="margin-top: 15px; display: flex; gap: 10px;">
-                            <button onclick="copyToClipboard()" style="background: #16a34a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">📋 Copy JSON</button>
-                            <button onclick="downloadJson()" style="background: #2563eb; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">💾 Download File</button>
-                            <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: #dc2626; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-                        </div>
-                    </div>
-                `;
-                
-                // Add helper functions to window for the modal buttons
-                window.copyToClipboard = function() {
-                    const textarea = document.getElementById('jsonOutput');
-                    textarea.select();
-                    textarea.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(textarea.value).then(() => {
-                        const button = event.target;
-                        const originalText = button.textContent;
-                        button.textContent = '✅ Copied!';
-                        button.style.backgroundColor = '#16a34a';
-                        setTimeout(() => {
-                            button.textContent = originalText;
-                            button.style.backgroundColor = '#16a34a';
-                        }, 2000);
-                    });
-                };
-
-                window.downloadJson = function() {
-                    const textarea = document.getElementById('jsonOutput');
-                    const blob = new Blob([textarea.value], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'master-tracker-log.json';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    const button = event.target;
-                    const originalText = button.textContent;
-                    button.textContent = '✅ Downloaded!';
-                    setTimeout(() => {
-                        button.textContent = originalText;
-                    }, 2000);
-                };
-                
-                document.body.appendChild(modal);
-            }
-
-            function archiveSelected() {
+            async function archiveSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`Archive ${state.selectedEntries.size} selected entries? This will update your local data immediately.`);
+                const confirmed = confirm(`Archive ${state.selectedEntries.size} selected entries? This will automatically update GitHub.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
@@ -346,20 +412,18 @@
                     return entry;
                 });
                 
-                // Save to localStorage for persistence
-                localStorage.setItem('tracker_data_backup', JSON.stringify(updatedEntries));
-                
-                const active = updatedEntries.filter(e => !e.archived);
-                const archived = updatedEntries.filter(e => e.archived);
-                updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
-                
-                showJsonModal(updatedEntries, 'archived');
+                const success = await updateGitHubFile(updatedEntries, 'archived');
+                if (success) {
+                    const active = updatedEntries.filter(e => !e.archived);
+                    const archived = updatedEntries.filter(e => e.archived);
+                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                }
             }
 
-            function restoreSelected() {
+            async function restoreSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`Restore ${state.selectedEntries.size} selected entries? This will update your local data immediately.`);
+                const confirmed = confirm(`Restore ${state.selectedEntries.size} selected entries? This will automatically update GitHub.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
@@ -371,33 +435,54 @@
                     return entry;
                 });
                 
-                // Save to localStorage for persistence
-                localStorage.setItem('tracker_data_backup', JSON.stringify(updatedEntries));
-                
-                const active = updatedEntries.filter(e => !e.archived);
-                const archived = updatedEntries.filter(e => e.archived);
-                updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
-                
-                showJsonModal(updatedEntries, 'restored');
+                const success = await updateGitHubFile(updatedEntries, 'restored');
+                if (success) {
+                    const active = updatedEntries.filter(e => !e.archived);
+                    const archived = updatedEntries.filter(e => e.archived);
+                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                }
             }
 
-            function deleteSelected() {
+            async function deleteSelected() {
                 if (state.selectedEntries.size === 0) return;
                 
-                const confirmed = confirm(`PERMANENTLY DELETE ${state.selectedEntries.size} selected entries? This cannot be undone and will update your local data immediately.`);
+                const confirmed = confirm(`PERMANENTLY DELETE ${state.selectedEntries.size} selected entries? This will automatically update GitHub and cannot be undone.`);
                 if (!confirmed) return;
 
                 const allEntries = [...state.entries, ...state.archivedEntries];
                 const remaining = allEntries.filter(entry => !state.selectedEntries.has(entry.id));
                 
-                // Save to localStorage for persistence
-                localStorage.setItem('tracker_data_backup', JSON.stringify(remaining));
-                
-                const active = remaining.filter(e => !e.archived);
-                const archived = remaining.filter(e => e.archived);
-                updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
-                
-                showJsonModal(remaining, 'deleted');
+                const success = await updateGitHubFile(remaining, 'deleted');
+                if (success) {
+                    const active = remaining.filter(e => !e.archived);
+                    const archived = remaining.filter(e => e.archived);
+                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+                }
+            }
+
+            // Setup screen for GitHub configuration
+            if (!state.setupComplete && state.authenticated) {
+                return React.createElement('div', { className: 'min-h-screen bg-gray-900 flex items-center justify-center' },
+                    React.createElement('div', { className: 'bg-gray-800 rounded-lg p-8 max-w-md w-full' },
+                        React.createElement('h2', { className: 'text-2xl font-bold text-white mb-6 text-center' }, 'Setup Required'),
+                        React.createElement('div', { className: 'text-gray-300 mb-4' },
+                            React.createElement('p', { className: 'mb-4' }, 'To enable automatic GitHub updates, you need to:'),
+                            React.createElement('ol', { className: 'list-decimal list-inside space-y-2 text-sm' },
+                                React.createElement('li', null, 'Create a GitHub Personal Access Token'),
+                                React.createElement('li', null, 'Add it to line 66 in the code: GITHUB_TOKEN'),
+                                React.createElement('li', null, 'Verify GITHUB_REPO is correct on line 67'),
+                                React.createElement('li', null, 'Save and refresh this page')
+                            ),
+                            React.createElement('p', { className: 'mt-4 text-yellow-400 text-sm' }, 
+                                'Without this setup, you\'ll need to manually copy/paste JSON updates.'
+                            )
+                        ),
+                        React.createElement('button', {
+                            onClick: () => updateState({ setupComplete: true }),
+                            className: 'w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-medium transition-colors'
+                        }, 'Continue Without Auto-Update')
+                    )
+                );
             }
 
             // Login form
@@ -439,8 +524,10 @@
                     // Header
                     React.createElement('div', { className: 'mb-8 flex justify-between items-center' },
                         React.createElement('div', null,
-                            React.createElement('h1', { className: 'text-3xl font-bold mb-2' }, 'Political Tracker - Admin Interface'),
-                            React.createElement('p', { className: 'text-gray-400' }, 'Review and manage tracking entries')
+                            React.createElement('h1', { className: 'text-3xl font-bold mb-2' }, 'Political Tracker - Automated Admin'),
+                            React.createElement('p', { className: 'text-gray-400' }, 
+                                GITHUB_TOKEN ? 'Fully automated - changes update GitHub instantly' : 'Manual mode - requires copy/paste to save changes'
+                            )
                         ),
                         React.createElement('button', {
                             onClick: handleLogout,
@@ -448,7 +535,18 @@
                         }, 'Logout')
                     ),
 
-                    // Controls
+                    // Status message
+                    state.message && React.createElement('div', { 
+                        className: state.messageType === 'error' ? 'error-message' : 'success-message' 
+                    }, state.message),
+
+                    // Loading indicator
+                    state.isUpdating && React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4 mb-6 flex items-center' },
+                        React.createElement('div', { className: 'loading-spinner' }),
+                        React.createElement('span', null, 'Updating GitHub repository...')
+                    ),
+
+                    // Controls (same as before but with automatic updates)
                     React.createElement('div', { className: 'bg-gray-800 rounded-lg p-6 mb-6' },
                         React.createElement('div', { className: 'flex flex-wrap gap-4 items-center mb-4' },
                             // Archive toggle
@@ -498,28 +596,27 @@
                             ),
                             // Selection controls
                             React.createElement('button', {
-                                onClick: selectAll,
-                                className: 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors'
-                            }, `Select All (${filteredEntries.length})`),
-                            React.createElement('button', {
                                 onClick: clearSelection,
                                 className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md transition-colors'
                             }, 'Clear Selection'),
-                            // Action buttons
+                            // Action buttons - now fully automated
                             state.selectedEntries.size > 0 && React.createElement('div', { className: 'flex gap-2' },
                                 !state.showArchived 
                                     ? React.createElement('button', {
                                         onClick: archiveSelected,
-                                        className: 'px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-md transition-colors font-medium'
-                                    }, `Archive (${state.selectedEntries.size})`)
+                                        disabled: state.isUpdating,
+                                        className: 'px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-md transition-colors font-medium disabled:opacity-50'
+                                    }, state.isUpdating ? 'Updating...' : `🗃️ Archive (${state.selectedEntries.size})`)
                                     : React.createElement('button', {
                                         onClick: restoreSelected,
-                                        className: 'px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors font-medium'
-                                    }, `Restore (${state.selectedEntries.size})`),
+                                        disabled: state.isUpdating,
+                                        className: 'px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors font-medium disabled:opacity-50'
+                                    }, state.isUpdating ? 'Updating...' : `↩️ Restore (${state.selectedEntries.size})`),
                                 React.createElement('button', {
                                     onClick: deleteSelected,
-                                    className: 'px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium'
-                                }, `Delete Forever (${state.selectedEntries.size})`)
+                                    disabled: state.isUpdating,
+                                    className: 'px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium disabled:opacity-50'
+                                }, state.isUpdating ? 'Updating...' : `🗑️ Delete Forever (${state.selectedEntries.size})`)
                             )
                         )
                     ),
