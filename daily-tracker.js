@@ -1,7 +1,11 @@
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+
+// Simple ID generator - no dependencies needed
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
 
 console.log('=== REAL NEWS POLITICAL TRACKER ===');
 console.log('Date:', new Date().toDateString());
@@ -203,7 +207,7 @@ Return a JSON array of relevant political developments found. Only include real 
         
         return {
           ...entry,
-          id: uuidv4(),
+          id: generateId(),
           added_at: new Date().toISOString(),
           verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
           title: escapeQuotes(entry.title || ''),
