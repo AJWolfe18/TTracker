@@ -175,10 +175,15 @@ Return a JSON array of relevant political developments found. Only include real 
       }
 
       const data = await response.json();
-      const content = data.output_text || '';
+      
+      // Debug: Log the actual response structure
+      console.log(`${category} - Full response structure:`, JSON.stringify(data, null, 2));
+      
+      const content = data.output || data.output_text || data.choices?.[0]?.message?.content || '';
       
       console.log(`${category} - Response length: ${content.length}`);
       console.log(`${category} - Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
+      console.log(`${category} - Content preview:`, content.substring(0, 200));
 
       // Extract JSON from the response
       let entries = [];
