@@ -165,7 +165,7 @@ For each relevant news story found, extract and format as JSON:
 }
 
 Return a JSON array of relevant political developments found. Only include real news from credible sources.`,
-          max_completion_tokens: 2000
+          max_output_tokens: 2000
         }),
       });
 
