@@ -1,10 +1,16 @@
-name: Test Political Tracker
+# .github/workflows/daily-tracker.yml
+name: Daily Political Tracker
 
 on:
+  schedule:
+    # Runs every day at 9:00 AM EST (2:00 PM UTC)
+    - cron: '0 14 * * *'
+  
+  # Allow manual triggering
   workflow_dispatch:
 
 jobs:
-  test:
+  fetch-updates:
     runs-on: ubuntu-latest
     
     steps:
@@ -19,18 +25,72 @@ jobs:
     - name: Install dependencies
       run: npm install
       
-    - name: Run test tracker
+    - name: Run daily tracker
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: node test-tracker.js
-    - name: Copy data to public folder
+      run: node daily-tracker.js
+
+    - name: Test file copy and sizes
       run: |
+        echo "=== BEFORE COPY ==="
+        echo "Master file size:"
+        wc -l master-tracker-log.json || echo "Master file not found!"
+        echo "Public file size:"
+        wc -l public/master-tracker-log.json || echo "Public file not found!"
+        
+        echo "=== FILE CONTENTS CHECK ==="
+        echo "Last 5 lines of master file:"
+        tail -5 master-tracker-log.json || echo "Cannot read master file"
+        echo "Last 5 lines of public file:"
+        tail -5 public/master-tracker-log.json || echo "Cannot read public file"
+        
+        echo "=== COPYING ==="
         cp master-tracker-log.json public/master-tracker-log.json
         
-    - name: Commit results
+        echo "=== AFTER COPY ==="
+        echo "Master file size:"
+        wc -l master-tracker-log.json
+        echo "Public file size:"
+        wc -l public/master-tracker-log.json
+        
+        echo "=== CONTENT VERIFICATION ==="
+        echo "Last 5 lines of public file after copy:"
+        tail -5 public/master-tracker-log.json
+        
+        echo "=== DIFF CHECK ==="
+        diff master-tracker-log.json public/master-tracker-log.json && echo "Files are identical!" 
+     
+    - name: Copy data to public folder
+      run: |
+        ls -la master-tracker-log.json
+        ls -la public/
+        cp master-tracker-log.json public/master-tracker-log.json
+        ls -la public/master-tracker-log.json
+        echo "Copy completed"
+      
+    - name: Commit and push results
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add -A
-        git diff --staged --quiet || git commit -m "Test tracker data - $(date)"
+        git add *.json
+        git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
         git push
+        
+    - name: Create release with daily data
+      if: github.event_name == 'schedule'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: daily-${{ github.run_number }}
+        release_name: Daily Update - ${{ github.run_number }}
+        body: |
+          Automated daily political tracker update.
+          
+          This release contains the latest political developments tracked on ${{ github.run_date }}.
+          
+          Files included:
+          - Daily JSON data file
+          - Updated master tracker log
+        draft: false
+        prerelease: false
