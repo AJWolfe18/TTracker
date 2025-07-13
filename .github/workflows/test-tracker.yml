@@ -1,5 +1,5 @@
 # .github/workflows/daily-tracker.yml
-name: Daily Political Tracker
+name: Test Daily Political Tracker
 
 on:
   schedule:
