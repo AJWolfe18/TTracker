@@ -325,7 +325,8 @@ async function main() {
       console.log('Could not read master log for total count');
     }
     
-    console.log('Data file:', filename);
+    // Remove this line that references undefined filename
+    // console.log('Data file:', filename);console.log('Data file:', filename);
     console.log('================================');
 
   } catch (error) {
