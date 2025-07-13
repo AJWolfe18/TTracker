@@ -13,7 +13,7 @@ console.log('Time:', new Date().toISOString());
 
 // Real news search prompts using the new Responses API
 const REAL_NEWS_PROMPTS = {
-  'Trump & Family': `Search for recent news and developments involving Donald Trump or Trump family members from the past 24-48 hours. Focus on:
+  'Trump & Family': `Search for recent news involving Donald Trump or Trump family members from the past week. Focus on:
 - Legal proceedings and court cases
 - Business dealings and financial issues  
 - Campaign activities and political statements
@@ -176,10 +176,8 @@ Return a JSON array of relevant political developments found. Only include real 
 
       const data = await response.json();
       
-      // Debug: Log the actual response structure
-      console.log(`${category} - Full response structure:`, JSON.stringify(data, null, 2));
-      
-      const content = data.output || data.output_text || data.choices?.[0]?.message?.content || '';
+      // Extract content from the correct location in response
+      const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
       
       console.log(`${category} - Response length: ${content.length}`);
       console.log(`${category} - Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
