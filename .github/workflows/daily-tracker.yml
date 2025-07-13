@@ -29,9 +29,14 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: node daily-tracker.js
+      
     - name: Copy data to public folder
       run: |
+        ls -la master-tracker-log.json
+        ls -la public/
         cp master-tracker-log.json public/master-tracker-log.json
+        ls -la public/master-tracker-log.json
+        echo "Copy completed"
       
     - name: Commit and push results
       run: |
