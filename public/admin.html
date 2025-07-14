@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Political Tracker - Secure Admin</title>
+    <title>Political Tracker - Admin</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,16 +17,12 @@
 
         function SecureAdminInterface() {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [password, setPassword] = useState('');
             const [githubToken, setGithubToken] = useState('');
             const [entries, setEntries] = useState([]);
             const [selectedEntries, setSelectedEntries] = useState(new Set());
             const [searchTerm, setSearchTerm] = useState('');
             const [isLoading, setIsLoading] = useState(false);
             const [message, setMessage] = useState('');
-            
-            // Your existing password (you can change this)
-            const ADMIN_PASSWORD = 'AdminTrump2025!';
 
             const showMessage = (text, type = 'info') => {
                 setMessage({ text, type });
@@ -34,18 +30,31 @@
             };
 
             const authenticate = () => {
-                if (password === ADMIN_PASSWORD && githubToken.trim()) {
+                if (githubToken.trim()) {
                     if (githubToken.startsWith('github_pat_') || githubToken.startsWith('ghp_')) {
                         setIsAuthenticated(true);
+                        // Store in session storage for convenience during this session
+                        sessionStorage.setItem('github_token', githubToken);
                         loadEntries();
                         showMessage('Authentication successful!', 'success');
                     } else {
                         showMessage('Invalid GitHub token format. Should start with github_pat_ or ghp_', 'error');
                     }
                 } else {
-                    showMessage('Invalid password or missing GitHub token', 'error');
+                    showMessage('Please enter your GitHub token', 'error');
                 }
             };
+
+            // Check for token in session storage on load
+            useEffect(() => {
+                const sessionToken = sessionStorage.getItem('github_token');
+                if (sessionToken) {
+                    setGithubToken(sessionToken);
+                    // Optional: auto-authenticate if token exists
+                    // setIsAuthenticated(true);
+                    // loadEntries();
+                }
+            }, []);
 
             const loadEntries = async () => {
                 try {
@@ -164,6 +173,14 @@
                 }
             };
 
+            const logout = () => {
+                setIsAuthenticated(false);
+                setGithubToken('');
+                sessionStorage.removeItem('github_token');
+                setEntries([]);
+                setSelectedEntries(new Set());
+            };
+
             const toggleSelection = (entryId) => {
                 const newSelected = new Set(selectedEntries);
                 if (newSelected.has(entryId)) {
@@ -194,29 +211,20 @@
                     <div className="min-h-screen flex items-center justify-center p-4">
                         <div className="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full">
                             <h1 className="text-2xl font-bold mb-6 text-center text-blue-400">
-                                🔐 Secure Admin Access
+                                🔐 Admin Access
                             </h1>
                             
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-2">Admin Password:</label>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
-                                        placeholder="Enter admin password"
-                                    />
-                                </div>
-                                
                                 <div>
                                     <label className="block text-sm font-medium mb-2">GitHub Personal Access Token:</label>
                                     <input
                                         type="password"
                                         value={githubToken}
                                         onChange={(e) => setGithubToken(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
                                         className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
                                         placeholder="github_pat_... or ghp_..."
+                                        autoFocus
                                     />
                                     <p className="text-xs text-gray-400 mt-1">
                                         Token needs "Contents: Write" permission for TTracker repository
@@ -227,7 +235,7 @@
                                     onClick={authenticate}
                                     className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition-colors"
                                 >
-                                    Login
+                                    Login with Token
                                 </button>
                                 
                                 {message && (
@@ -244,8 +252,8 @@
                             <div className="mt-6 p-4 bg-gray-700 rounded text-xs">
                                 <h3 className="font-medium mb-2">🛡️ Security Notes:</h3>
                                 <ul className="space-y-1 text-gray-300">
-                                    <li>• Your token is NOT stored anywhere</li>
-                                    <li>• Token is only kept in browser memory</li>
+                                    <li>• Your token is stored only for this browser session</li>
+                                    <li>• Token clears when you close the tab</li>
                                     <li>• Create token at: github.com/settings/personal-access-tokens/new</li>
                                     <li>• Required permission: "Contents: Write" for TTracker repo</li>
                                 </ul>
@@ -265,7 +273,7 @@
                                         🗂️ Tracker Admin Panel
                                     </h1>
                                     <button
-                                        onClick={() => setIsAuthenticated(false)}
+                                        onClick={logout}
                                         className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
                                     >
                                         Logout
@@ -359,6 +367,7 @@
                                                             checked={selectedEntries.has(entry.id)}
                                                             onChange={() => toggleSelection(entry.id)}
                                                             className="w-4 h-4"
+                                                            onClick={(e) => e.stopPropagation()}
                                                         />
                                                     </div>
                                                 </div>
