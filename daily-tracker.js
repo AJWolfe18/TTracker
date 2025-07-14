@@ -202,18 +202,99 @@ IMPORTANT: Each entry must be a unique development from the date range specified
 Find current financial and corporate accountability news from credible business and political sources.`
 };
 
-// Reputable news sources for verification
+// Updated reputable news sources for verification
 const REPUTABLE_SOURCES = [
-  'reuters.com', 'ap.org', 'wsj.com', 'nytimes.com', 'washingtonpost.com',
-  'politico.com', 'cnn.com', 'nbcnews.com', 'abcnews.go.com', 'cbsnews.com',
-  'npr.org', 'pbs.org', 'bloomberg.com', 'axios.com', 'thehill.com',
-  'propublica.org', 'courthousenews.com', 'lawfaremedia.org'
+  // Wire Services & News Agencies
+  'reuters.com', 
+  'ap.org',
+  'apnews.com',
+  
+  // Major Newspapers
+  'wsj.com',           // Wall Street Journal
+  'nytimes.com',       // New York Times
+  'washingtonpost.com', // Washington Post
+  'usatoday.com',      // USA Today
+  
+  // International News
+  'bbc.com',           // BBC
+  'bbc.co.uk',         // BBC UK domain
+  'guardian.com',      // The Guardian
+  'theguardian.com',   // The Guardian alternate
+  'economist.com',     // The Economist
+  'ft.com',            // Financial Times
+  
+  // Broadcast Networks
+  'cnn.com',           // CNN
+  'foxnews.com',       // Fox News (right-leaning)
+  'foxbusiness.com',   // Fox Business (right-leaning)
+  'nbcnews.com',       // NBC News
+  'abcnews.go.com',    // ABC News
+  'cbsnews.com',       // CBS News
+  'msnbc.com',         // MSNBC
+  
+  // Public Media
+  'npr.org',           // National Public Radio
+  'pbs.org',           // Public Broadcasting Service
+  
+  // Political & Policy News
+  'politico.com',      // Politico
+  'thehill.com',       // The Hill
+  'axios.com',         // Axios
+  'realclearpolitics.com', // RealClearPolitics (center-right)
+  'washingtonexaminer.com', // Washington Examiner (right-leaning)
+  'nationalreview.com', // National Review (conservative)
+  
+  // Business & Financial
+  'bloomberg.com',     // Bloomberg
+  'cnbc.com',          // CNBC
+  'marketwatch.com',   // MarketWatch
+  'forbes.com',        // Forbes
+  'businessinsider.com', // Business Insider
+  
+  // Investigative & Legal
+  'propublica.org',    // ProPublica
+  'courthousenews.com', // Courthouse News
+  'lawfaremedia.org',  // Lawfare
+  'lawfareblog.com',   // Lawfare Blog
+  
+  // Government Sources
+  '.gov',              // All government domains
+  'supremecourt.gov',  // Supreme Court
+  'justice.gov',       // Department of Justice
+  'whitehouse.gov',    // White House
+  'congress.gov',      // Congress
+  'senate.gov',        // Senate
+  'house.gov',         // House of Representatives
+  'state.gov',         // State Department
+  'defense.gov',       // Department of Defense
+  'treasury.gov',      // Treasury Department
+  'fbi.gov',           // FBI
+  'cia.gov',           // CIA
+  'dhs.gov',           // Department of Homeland Security
+  'ed.gov',            // Department of Education
+  'fec.gov',           // Federal Election Commission
+  'sec.gov',           // Securities and Exchange Commission
 ];
 
+// Enhanced verification function with better .gov handling
 function isVerifiedSource(url) {
   try {
-    const domain = new URL(url).hostname.toLowerCase();
-    return REPUTABLE_SOURCES.some(source => domain.includes(source));
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.toLowerCase();
+    
+    // Special handling for .gov domains
+    if (domain.endsWith('.gov')) {
+      return true;
+    }
+    
+    // Check against the reputable sources list
+    return REPUTABLE_SOURCES.some(source => {
+      // Handle .gov as special case (already checked above)
+      if (source === '.gov') return false;
+      
+      // For other sources, check if domain includes the source
+      return domain.includes(source) || domain.endsWith(source);
+    });
   } catch {
     return false;
   }
