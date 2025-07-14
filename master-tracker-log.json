@@ -87,18 +87,6 @@
     "date": "2025-07-14",
     "actor": "Elon Musk",
     "category": "Platform Manipulation",
-    "title": "Elon Musk Announces Formation of \\'America Party\\'",
-    "description": "Elon Musk has announced the creation of a new political party, the \\'America Party,\\' aiming to disrupt the current political system. This move has intensified tensions with former President Donald Trump and raised questions about Musk\\'s political ambitions and their potential impact on his business interests.",
-    "source_url": "https://theweek.com/politics/elon-musk-america-party",
-    "verified": false,
-    "severity": "high",
-    "id": "md36ocxbsv56qoqkcsf",
-    "added_at": "2025-07-14T14:13:13.199Z"
-  },
-  {
-    "date": "2025-07-14",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
     "title": "Tesla Shares Decline Following Musk\\'s Political Announcement",
     "description": "Tesla shares dropped 6.8% on July 7, 2025, following CEO Elon Musk\\'s announcement to form a new political party. Analysts express concern that Musk\\'s political focus may distract from Tesla\\'s business challenges and affect investor confidence.",
     "source_url": "https://www.ft.com/content/b69a2f75-9e36-4cca-b8cc-5ead166408c5",
@@ -130,30 +118,6 @@
     "severity": "medium",
     "id": "md36ocxbvk86o3dr0tb",
     "added_at": "2025-07-14T14:13:13.199Z"
-  },
-  {
-    "date": "2025-07-14",
-    "actor": "President Donald Trump and Deputy FBI Director Dan Bongino",
-    "category": "Government Oversight",
-    "title": "Trump Confirms Discussion with FBI\\'s Bongino Amid Epstein Investigation Controversy",
-    "description": "President Trump confirmed a positive conversation with Deputy FBI Director Dan Bongino regarding the handling of the Jeffrey Epstein investigation. The discussion comes amid public concern over the DOJ\\'s dismissal of conspiracy theories related to Epstein\\'s death and alleged associations, leading to internal tensions within the DOJ and FBI.",
-    "source_url": "https://www.reuters.com/world/us/trump-says-he-spoke-fbis-bongino-amid-epstein-uproar-2025-07-14/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md36ocml27bnk41h0jki",
-    "added_at": "2025-07-14T14:13:12.813Z"
-  },
-  {
-    "date": "2025-07-14",
-    "actor": "U.S. Department of Justice\\'s Federal Programs Branch",
-    "category": "Government Oversight",
-    "title": "Mass Resignations in DOJ Unit Defending Trump Policies Amid Ethical Concerns",
-    "description": "Nearly two-thirds of attorneys in the DOJ\\'s Federal Programs Branch have resigned since Trump\\'s re-election. The departures are attributed to low morale, exhaustion from defending controversial policies, and concerns over potential ethical violations in court representations.",
-    "source_url": "https://www.reuters.com/legal/litigation/two-thirds-doj-unit-defending-trump-policies-court-have-quit-2025-07-14/",
-    "verified": true,
-    "severity": "high",
-    "id": "md36ocmll54amenophi",
-    "added_at": "2025-07-14T14:13:12.813Z"
   },
   {
     "date": "2025-07-13",
@@ -190,18 +154,6 @@
     "severity": "medium",
     "id": "md375wvbovfmz1edsg",
     "added_at": "2025-07-14T14:26:52.199Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "Trump Administration",
-    "category": "Policy Shifts in Enforcement Priorities",
-    "title": "Administration Defends Immigration Tactics After California Worker Death",
-    "description": "The Trump administration defended its intensified immigration enforcement tactics following a controversial raid on a California cannabis farm that resulted in the death of a farmworker. Homeland Security Secretary Kristi Noem and Border Czar Tom Homan emphasized plans to appeal a federal judge’s ruling that blocked certain enforcement tactics.",
-    "source_url": "https://www.reuters.com/world/us/trump-administration-defends-immigration-tactics-after-california-worker-death-2025-07-13/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md36ocmltuz7f02xu6",
-    "added_at": "2025-07-14T14:13:12.813Z"
   },
   {
     "date": "2025-07-13",
@@ -254,90 +206,6 @@
   {
     "date": "2025-07-13",
     "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Federal Judge Blocks Education Department Closure Amid Legal Challenges",
-    "description": "A federal judge issued a preliminary injunction halting the Trump administration\\'s efforts to shut down the Department of Education, citing the need for congressional approval and questioning the administration\\'s justification for the closure.",
-    "source_url": "https://www.axios.com/2025/05/22/trump-education-department-closing",
-    "verified": true,
-    "severity": "high",
-    "id": "md289buw1dehy1j3bue",
-    "added_at": "2025-07-13T22:09:45.032Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Budget or Operational Changes",
-    "title": "Education Department Announces Major Workforce Reduction Amid Closure Plans",
-    "description": "The Department of Education plans to lay off over 1,300 employees as part of a reorganization, raising concerns about the agency\\'s ability to continue its operations effectively.",
-    "source_url": "https://www.koat.com/article/education-department-layoffs-federal-cuts/64153175",
-    "verified": false,
-    "severity": "medium",
-    "id": "md289buwhgxatpfmbsj",
-    "added_at": "2025-07-13T22:09:45.032Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Federal Judge Blocks Education Department Closure Amid Legal Challenges",
-    "description": "A federal judge issued a preliminary injunction halting the Trump administration\\'s efforts to shut down the Department of Education, citing the need for congressional approval and questioning the administration\\'s justification for the closure.",
-    "source_url": "https://www.axios.com/2025/05/22/trump-education-department-closing",
-    "verified": true,
-    "severity": "high",
-    "id": "md289buw62m715lfxh2",
-    "added_at": "2025-07-13T22:09:45.032Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Budget or Operational Changes",
-    "title": "Education Department Announces Major Workforce Reduction Amid Closure Plans",
-    "description": "The Department of Education plans to lay off over 1,300 employees as part of a reorganization, raising concerns about the agency\\'s ability to continue its operations effectively.",
-    "source_url": "https://www.koat.com/article/education-department-layoffs-federal-cuts/64153175",
-    "verified": false,
-    "severity": "medium",
-    "id": "md289buwl5308xws92",
-    "added_at": "2025-07-13T22:09:45.032Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "President Donald Trump",
-    "category": "Government Oversight",
-    "title": "Trump defends Bondi amid backlash over Epstein files",
-    "description": "President Trump publicly defended Attorney General Pam Bondi amid criticism over the DOJ\\'s handling of the Jeffrey Epstein case, emphasizing unity among his supporters and dismissing concerns about the case\\'s priority.",
-    "source_url": "https://www.reuters.com/world/us/trump-defends-bondi-amid-backlash-over-epstein-files-2025-07-13/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md289b1yecpfsj3fc3f",
-    "added_at": "2025-07-13T22:09:43.990Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "Department of Justice",
-    "category": "Government Oversight",
-    "title": "Justice Dept. fires more prosecutors, support staff involved in Trump prosecutions",
-    "description": "The DOJ dismissed additional lawyers and support personnel involved in Special Counsel Jack Smith\\'s prosecutions of President Trump, marking a continuation of firings targeting staff linked to cases involving Trump and his supporters.",
-    "source_url": "https://apnews.com/article/af94503d10143f5464559fb503425f4f",
-    "verified": false,
-    "severity": "medium",
-    "id": "md289b1y3m7opbosfmn",
-    "added_at": "2025-07-13T22:09:43.990Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Federal Judge Blocks Education Department Closure",
-    "description": "A federal judge issued a preliminary injunction halting the Trump administration\\'s efforts to shut down the Department of Education, citing the need for congressional approval for such actions.",
-    "source_url": "https://www.axios.com/2025/05/22/trump-education-department-closing",
-    "verified": true,
-    "severity": "high",
-    "id": "md26zg7bbmhiyu8kt25",
-    "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
     "category": "Leadership Appointments",
     "title": "Retirement of FSA Chief Operating Officer",
     "description": "Denise Carter, Chief Operating Officer of the Office of Federal Student Aid, announced her retirement after 30 years in federal service, with James Bergeron appointed as Acting COO.",
@@ -345,30 +213,6 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zg7b6k0e36vefhe",
-    "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Budget or Operational Changes",
-    "title": "Massive Layoffs Amid Department Downsizing",
-    "description": "The Department of Education plans to lay off over 1,300 employees as part of a reorganization aimed at reducing the agency\\'s size, raising concerns about its ability to continue usual operations.",
-    "source_url": "https://www.koat.com/article/education-department-layoffs-federal-cuts/64153175",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zg7bv99d5gi3b8r",
-    "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Efforts to Close Education Department Blocked",
-    "description": "A federal judge issued a preliminary injunction halting the Trump administration\\'s efforts to shut down the Department of Education, citing the need for congressional approval for such actions.",
-    "source_url": "https://www.axios.com/2025/05/22/trump-education-department-closing",
-    "verified": true,
-    "severity": "high",
-    "id": "md26zg7bsrkxsaxepmf",
     "added_at": "2025-07-13T21:34:04.487Z"
   },
   {
@@ -394,42 +238,6 @@
     "severity": "high",
     "id": "md26zg7bn7wcqnimod",
     "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Plan to Dismantle Education Department Announced",
-    "description": "President Donald Trump signed an executive order to dismantle the U.S. Education Department, aiming to reduce federal involvement in education while retaining core functions like Title I funding and Pell grants.",
-    "source_url": "https://apnews.com/article/b1d25a2e1bdcd24cfde8ad8b655b9843",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zg7b45zpleax4pr",
-    "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "U.S. Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Plan to Dismantle Education Department Announced",
-    "description": "President Donald Trump signed an executive order to dismantle the U.S. Education Department, aiming to reduce federal involvement in education while retaining core functions like Title I funding and Pell grants.",
-    "source_url": "https://apnews.com/article/b1d25a2e1bdcd24cfde8ad8b655b9843",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zg7bovdl06h1z7s",
-    "added_at": "2025-07-13T21:34:04.487Z"
-  },
-  {
-    "date": "2025-07-13",
-    "actor": "President Donald Trump",
-    "category": "Government Oversight",
-    "title": "Trump defends Bondi amid backlash over Epstein files",
-    "description": "President Trump publicly defended Attorney General Pam Bondi amid criticism over the DOJ\\'s handling of the Jeffrey Epstein case, emphasizing unity among his supporters and dismissing concerns about the case\\'s priority.",
-    "source_url": "https://www.reuters.com/world/us/trump-defends-bondi-amid-backlash-over-epstein-files-2025-07-13/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md26zenmiamrjlp41y",
-    "added_at": "2025-07-13T21:34:02.482Z"
   },
   {
     "date": "2025-07-13",
@@ -469,18 +277,6 @@
   },
   {
     "date": "2025-07-12",
-    "actor": "Department of Homeland Security (DHS)",
-    "category": "Policy Implementation Changes",
-    "title": "DHS Rescinds Enforcement Guidelines Near Sensitive Locations",
-    "description": "Acting DHS Secretary Benjamine Huffman rescinded guidelines that previously restricted enforcement actions near sensitive locations such as schools and healthcare facilities, allowing for broader enforcement discretion.",
-    "source_url": "https://www.epi.org/policywatch",
-    "verified": false,
-    "severity": "medium",
-    "id": "md37608fdrk4mw4wpo6",
-    "added_at": "2025-07-14T14:26:56.559Z"
-  },
-  {
-    "date": "2025-07-12",
     "actor": "Environmental Protection Agency (EPA)",
     "category": "Regulatory Actions or Rollbacks",
     "title": "EPA Launches Major Deregulatory Initiative",
@@ -493,18 +289,6 @@
   },
   {
     "date": "2025-07-12",
-    "actor": "Environmental Protection Agency (EPA)",
-    "category": "Regulatory Actions or Rollbacks",
-    "title": "EPA Terminates Environmental Justice and DEI Divisions",
-    "description": "The EPA announced the termination of its Environmental Justice and Diversity, Equity, and Inclusion divisions, signaling a rollback of previous initiatives focused on environmental justice and DEI within the agency.",
-    "source_url": "https://www.foleyhoag.com/election-2024/",
-    "verified": false,
-    "severity": "high",
-    "id": "md37608f2tfkb04squ5",
-    "added_at": "2025-07-14T14:26:56.559Z"
-  },
-  {
-    "date": "2025-07-12",
     "actor": "Department of Education (USED)",
     "category": "Leadership Appointments or Departures",
     "title": "Retirement of FSA Chief Operating Officer Denise Carter",
@@ -513,30 +297,6 @@
     "verified": false,
     "severity": "medium",
     "id": "md37608fhbksxlp68mv",
-    "added_at": "2025-07-14T14:26:56.559Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Department of Education (USED)",
-    "category": "Leadership Appointments or Departures",
-    "title": "James Bergeron Appointed Acting FSA COO",
-    "description": "Following Denise Carter\\'s retirement, Acting Under Secretary James Bergeron was appointed as Acting Chief Operating Officer for the Office of Federal Student Aid, effective April 2, 2025.",
-    "source_url": "https://www.educationcounsel.com/our_work/e-updates/all/e-update-for-april-14-2025",
-    "verified": false,
-    "severity": "medium",
-    "id": "md37608fydn7mdyhbiq",
-    "added_at": "2025-07-14T14:26:56.559Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Department of Education (USED)",
-    "category": "Agency Restructuring or Closures",
-    "title": "DHS Rescinds Enforcement Guidelines Near Sensitive Locations",
-    "description": "Acting DHS Secretary Benjamine Huffman rescinded guidelines that previously restricted enforcement actions near sensitive locations such as schools and healthcare facilities, allowing for broader enforcement discretion.",
-    "source_url": "https://www.epi.org/policywatch",
-    "verified": false,
-    "severity": "medium",
-    "id": "md37608f2l88lj5k9e",
     "added_at": "2025-07-14T14:26:56.559Z"
   },
   {
@@ -577,18 +337,6 @@
   },
   {
     "date": "2025-07-12",
-    "actor": "U.S. Attorney General Pam Bondi",
-    "category": "Government Oversight",
-    "title": "DOJ Fires Additional Employees from Jack Smith\\'s Team Amid Ongoing Investigations",
-    "description": "Attorney General Pam Bondi dismissed several more DOJ employees associated with Special Counsel Jack Smith\\'s investigation into former President Trump\\'s retention of classified documents and efforts to overturn the 2020 election. This adds to the total of at least 37 individuals removed since Trump\\'s inauguration.",
-    "source_url": "https://www.reuters.com/world/us/us-justice-fires-nine-more-employees-jack-smiths-team-sources-say-2025-07-12/",
-    "verified": true,
-    "severity": "high",
-    "id": "md36ocml7nf1x949i1m",
-    "added_at": "2025-07-14T14:13:12.813Z"
-  },
-  {
-    "date": "2025-07-12",
     "actor": "Attorney General Pam Bondi and FBI Deputy Director Dan Bongino",
     "category": "Government Oversight",
     "title": "Clash Between Bondi and Bongino Over Epstein Files Sparks Internal Tensions",
@@ -625,18 +373,6 @@
   },
   {
     "date": "2025-07-12",
-    "actor": "Department of Education",
-    "category": "Budget or Operational Changes",
-    "title": "Department of Education Plans to Lay Off 1,300 Employees",
-    "description": "The Department of Education plans to lay off over 1,300 employees as part of a reorganization aimed at reducing the agency\\'s size, aligning with President Trump\\'s initiative to dismantle the department. This move has raised concerns about the agency\\'s ability to continue its operations effectively.",
-    "source_url": "https://www.koat.com/article/education-department-layoffs-federal-cuts/64153175",
-    "verified": false,
-    "severity": "high",
-    "id": "md28n0shxt4f7p98jln",
-    "added_at": "2025-07-13T22:20:23.873Z"
-  },
-  {
-    "date": "2025-07-12",
     "actor": "Environmental Protection Agency (EPA)",
     "category": "Agency Restructuring or Closures",
     "title": "EPA Delays Release of Layoff and Restructuring Plan",
@@ -646,30 +382,6 @@
     "severity": "medium",
     "id": "md28n0shdkwz1hd3imv",
     "added_at": "2025-07-13T22:20:23.873Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Department of Education",
-    "category": "Policy Implementation Changes",
-    "title": "Education Department Announces Major Workforce Reduction",
-    "description": "The Department of Education plans to lay off over 1,300 employees as part of a reorganization aimed at reducing the agency\\'s size, aligning with President Trump\\'s initiative to dismantle the department. This move has raised concerns about the agency\\'s ability to continue its operations effectively.",
-    "source_url": "https://www.koat.com/article/education-department-layoffs-federal-cuts/64153175",
-    "verified": false,
-    "severity": "high",
-    "id": "md28n0sgx0svgi528jk",
-    "added_at": "2025-07-13T22:20:23.872Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Environmental Protection Agency (EPA)",
-    "category": "Regulatory Actions or Rollbacks",
-    "title": "EPA Delays Release of Layoff and Restructuring Plan",
-    "description": "The EPA has withheld its initial downsizing and reorganization plan, which was due for White House review. The agency cited internal deliberations as the reason for the delay, leaving the specifics of the plan undisclosed.",
-    "source_url": "https://www.eenews.net/articles/epa-withholds-layoff-restructuring-plan/",
-    "verified": false,
-    "severity": "medium",
-    "id": "md28n0sg1cpjsua4zaa",
-    "added_at": "2025-07-13T22:20:23.872Z"
   },
   {
     "date": "2025-07-12",
@@ -711,30 +423,6 @@
     "date": "2025-07-12",
     "actor": "Elon Musk",
     "category": "Platform Manipulation",
-    "title": "Elon Musk\\'s \\'America Party\\' formation leads to Tesla stock decline",
-    "description": "Following Elon Musk\\'s announcement of forming the \\'America Party,\\' Tesla shares dropped 6.8%, compounding a 14% decline over the past five weeks. Analysts express concerns that Musk\\'s political focus may distract from Tesla\\'s business challenges and impact regulatory credit revenue.",
-    "source_url": "https://www.ft.com/content/b69a2f75-9e36-4cca-b8cc-5ead166408c5",
-    "verified": false,
-    "severity": "medium",
-    "id": "md26zfu3e5rn7rtpfv",
-    "added_at": "2025-07-13T21:34:04.011Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
-    "title": "Elon Musk\\'s DOGE faces legal challenges over government efficiency measures",
-    "description": "The Department of Government Efficiency (DOGE), led by Elon Musk, is facing legal challenges alleging violations of privacy, security, and congressional laws. Critics argue that DOGE\\'s actions, including purging employees and controlling government payment systems, may bypass constitutional checks and balances.",
-    "source_url": "https://www.theguardian.com/us-news/2025/feb/10/elon-musk-doge-agency-illegal",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zfu3fsim5g5th3h",
-    "added_at": "2025-07-13T21:34:04.011Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
     "title": "Elon Musk\\'s DOGE given full access to US government payment system",
     "description": "Elon Musk\\'s Department of Government Efficiency (DOGE) has been granted full access to the US federal payment system by Treasury Secretary Scott Bessent. This access allows DOGE to monitor and potentially limit government spending, raising concerns about potential political interference in sensitive financial systems.",
     "source_url": "https://www.hindustantimes.com/world-news/us-news/elon-musks-government-efficiency-department-given-full-access-to-us-payments-system-report-101738454556740.html",
@@ -754,30 +442,6 @@
     "severity": "high",
     "id": "md26zfu3z5rzi3gxa2b",
     "added_at": "2025-07-13T21:34:04.011Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Obra Capital Management",
-    "category": "Corporate Ethics",
-    "title": "SEC Fines Texas Investment Adviser for Pay-to-Play Rule Breach",
-    "description": "The SEC fined Obra Capital Management $95,000 for violating the pay-to-play rule by hiring an individual who made a campaign contribution to a Michigan official with influence over a state pension fund. The firm was also censured and ordered to refrain from future violations.",
-    "source_url": "https://www.dentons.com/en/insights/newsletters/2024/september/27/political-law-playbook-political-law-playbook-september-2024",
-    "verified": false,
-    "severity": "medium",
-    "id": "md26zepbcae7u2rdz18",
-    "added_at": "2025-07-13T21:34:02.543Z"
-  },
-  {
-    "date": "2025-07-12",
-    "actor": "Attorney General Pam Bondi and FBI Deputy Director Dan Bongino",
-    "category": "Government Oversight",
-    "title": "Furor over Epstein files sparks clash between Bondi and Bongino at the Justice Department",
-    "description": "Tensions escalated within the DOJ following the decision to withhold additional records related to Jeffrey Epstein’s sex trafficking investigation, leading to a heated exchange between Attorney General Bondi and FBI Deputy Director Bongino.",
-    "source_url": "https://apnews.com/article/0f02f67b6c97fc50e4d93bc4dbf4c4d0",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zenm3l180ij2sot",
-    "added_at": "2025-07-13T21:34:02.482Z"
   },
   {
     "date": "2025-07-12",
@@ -985,18 +649,6 @@
   },
   {
     "date": "2025-07-11",
-    "actor": "Department of Justice and FBI",
-    "category": "Civil Rights Investigations or Actions",
-    "title": "How the DOJ\\'s Epstein memo led to a Dan Bongino White House blowup",
-    "description": "A DOJ and FBI memo concluded that Jeffrey Epstein died by suicide and did not possess a \\'client list\\' or blackmail material, contradicting conspiracy theories. This led to tensions between Attorney General Pam Bondi and FBI Deputy Director Dan Bongino, culminating in a heated exchange at the White House.",
-    "source_url": "https://www.axios.com/2025/07/11/trump-epstein-files-fbi-bondi-doj",
-    "verified": true,
-    "severity": "medium",
-    "id": "md28mzuyu8txnfkx0im",
-    "added_at": "2025-07-13T22:20:22.666Z"
-  },
-  {
-    "date": "2025-07-11",
     "actor": "Various Corporations and Political Action Committees",
     "category": "Corporate Ethics",
     "title": "Dark Money in U.S. Elections: An Overview",
@@ -1030,18 +682,6 @@
     "severity": "medium",
     "id": "md289b51wh70p1ld5d",
     "added_at": "2025-07-13T22:09:44.101Z"
-  },
-  {
-    "date": "2025-07-11",
-    "actor": "Department of Justice and FBI",
-    "category": "Government Oversight",
-    "title": "How the DOJ\\'s Epstein memo led to a Dan Bongino White House blowup",
-    "description": "A DOJ and FBI memo concluded that Jeffrey Epstein died by suicide and lacked a \\'client list,\\' leading to internal tensions between Attorney General Pam Bondi and FBI Deputy Director Dan Bongino, and sparking controversy among Trump supporters.",
-    "source_url": "https://www.axios.com/2025/07/11/trump-epstein-files-fbi-bondi-doj",
-    "verified": true,
-    "severity": "high",
-    "id": "md289b1yezhr0bjp1aa",
-    "added_at": "2025-07-13T22:09:43.990Z"
   },
   {
     "date": "2025-07-11",
@@ -1177,18 +817,6 @@
   },
   {
     "date": "2025-07-10",
-    "actor": "John Brennan",
-    "category": "Government Oversight",
-    "title": "Ex-CIA director John Brennan says he \\'knows nothing\\' of \\'politically based\\' DOJ investigation",
-    "description": "Former CIA Director John Brennan stated he is unaware of any DOJ investigations targeting him or former FBI Director James Comey, criticizing the probes as politically motivated and lacking official communication.",
-    "source_url": "https://www.reuters.com/world/us/ex-cia-director-john-brennan-says-he-knows-nothing-politically-based-doj-2025-07-10/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md289b1yq5atpv06lo",
-    "added_at": "2025-07-13T22:09:43.990Z"
-  },
-  {
-    "date": "2025-07-10",
     "actor": "Elon Musk",
     "category": "Corporate Ethics",
     "title": "Campaign Legal Center Files Complaint Against Elon Musk for Alleged Self-Dealing",
@@ -1210,18 +838,6 @@
     "severity": "high",
     "id": "md26zent06qzl5v9b47d",
     "added_at": "2025-07-13T21:34:02.489Z"
-  },
-  {
-    "date": "2025-07-10",
-    "actor": "Former CIA Director John Brennan",
-    "category": "Government Oversight",
-    "title": "Ex-CIA director John Brennan says he \\'knows nothing\\' of \\'politically based\\' DOJ investigation",
-    "description": "John Brennan stated he is unaware of any DOJ investigations targeting him or former FBI Director James Comey, criticizing the probes as politically motivated and emphasizing the need for non-partisan national security institutions.",
-    "source_url": "https://www.reuters.com/world/us/ex-cia-director-john-brennan-says-he-knows-nothing-politically-based-doj-2025-07-10/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md26zenmpyea9g4ludl",
-    "added_at": "2025-07-13T21:34:02.482Z"
   },
   {
     "date": "2025-07-10",
@@ -1309,18 +925,6 @@
   },
   {
     "date": "2025-07-09",
-    "actor": "Allieu Kamara",
-    "category": "Corporate Ethics",
-    "title": "DC Contractor Pleads Guilty to Bribing City Officials",
-    "description": "Allieu Kamara, a DC contractor, pleaded guilty to bribing a contract specialist at the DC Child and Family Services Agency to rig $2 million in contracts. The case has led to a broader investigation into alleged pay-to-play schemes in the DC government.",
-    "source_url": "https://www.dentons.com/en/insights/newsletters/2024/october/30/political-law-playbook-political-law-playbook-october-2024",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zepbki9ofpj3le",
-    "added_at": "2025-07-13T21:34:02.543Z"
-  },
-  {
-    "date": "2025-07-09",
     "actor": "Donald Trump",
     "category": "Policy",
     "title": "Trump\\'s Middle East Visit Coincides with Family\\'s Business Expansion",
@@ -1357,18 +961,6 @@
   },
   {
     "date": "2025-07-08",
-    "actor": "U.S. Corporations",
-    "category": "Corporate Ethics",
-    "title": "Dark Money\\'s Impact on U.S. Elections",
-    "description": "In the 2020 election cycle, over $1 billion in \\'dark money\\' was spent at the federal level, with the majority of funds coming from opaque political nonprofits and shell companies, raising concerns about transparency and foreign influence in U.S. elections.",
-    "source_url": "https://en.wikipedia.org/wiki/Dark_money",
-    "verified": false,
-    "severity": "high",
-    "id": "md36obtxrotskmz6sn",
-    "added_at": "2025-07-14T14:13:11.781Z"
-  },
-  {
-    "date": "2025-07-08",
     "actor": "Department of Homeland Security (DHS)",
     "category": "Leadership Appointments or Departures",
     "title": "New DHS Secretary Appointed Amidst Organizational Changes",
@@ -1378,30 +970,6 @@
     "severity": "medium",
     "id": "md36obmuu7r7mnj593",
     "added_at": "2025-07-14T14:13:11.526Z"
-  },
-  {
-    "date": "2025-07-08",
-    "actor": "FBI",
-    "category": "New Prosecutions or Investigations",
-    "title": "FBI launches probes into former FBI, CIA directors, Fox News reports",
-    "description": "The FBI initiated criminal investigations into former CIA Director John Brennan and former FBI Director James Comey, focusing on alleged misconduct related to past investigations into Russian interference in the 2016 U.S. presidential election. The scope of the investigations remains unclear, and the DOJ has not confirmed the details.",
-    "source_url": "https://www.reuters.com/world/us/fbi-launches-probes-into-former-fbi-director-ex-cia-director-fox-news-reports-2025-07-08/",
-    "verified": true,
-    "severity": "high",
-    "id": "md28mzuysf5lxa5e3xi",
-    "added_at": "2025-07-13T22:20:22.666Z"
-  },
-  {
-    "date": "2025-07-08",
-    "actor": "Donald Trump",
-    "category": "Business",
-    "title": "Trump\\'s Family Expands Business and Crypto Interests in Middle East",
-    "description": "During a Middle East visit, Trump\\'s sons secured deals in Saudi Arabia, Dubai, Qatar, and Oman, including real estate projects and a luxury golf resort, while the family deepened ties with cryptocurrency ventures in the region.",
-    "source_url": "https://apnews.com/article/cbb7d2354304ce0308800819944cf3f8",
-    "verified": false,
-    "severity": "medium",
-    "id": "md28mzkt9gcacgfuj9p",
-    "added_at": "2025-07-13T22:20:22.301Z"
   },
   {
     "date": "2025-07-08",
@@ -1440,42 +1008,6 @@
     "added_at": "2025-07-13T22:09:44.101Z"
   },
   {
-    "date": "2025-07-08",
-    "actor": "Center for Political Accountability",
-    "category": "Corporate Ethics",
-    "title": "Call for Disclosure of Federal Contractors\\' Political Contributions",
-    "description": "The Center for Political Accountability urges federal contractors to disclose their political contributions, highlighting that while many disclose to some extent, only a few fully disclose contributions to dark money groups used for electioneering purposes.",
-    "source_url": "https://www.citizen.org/article/contractor-political-expenditures/",
-    "verified": false,
-    "severity": "medium",
-    "id": "md26zepbiqjwbqztg4",
-    "added_at": "2025-07-13T21:34:02.543Z"
-  },
-  {
-    "date": "2025-07-08",
-    "actor": "Donald Trump",
-    "category": "Business",
-    "title": "Trump\\'s Family Expands Business and Crypto Interests in Middle East",
-    "description": "During a Middle East visit, Trump\\'s sons secured deals in Saudi Arabia, Dubai, Qatar, and Oman, including real estate projects and a luxury golf resort, while the family deepened ties with cryptocurrency ventures in the region.",
-    "source_url": "https://apnews.com/article/cbb7d2354304ce0308800819944cf3f8",
-    "verified": false,
-    "severity": "medium",
-    "id": "md26zent2shpumbi5j9",
-    "added_at": "2025-07-13T21:34:02.489Z"
-  },
-  {
-    "date": "2025-07-08",
-    "actor": "FBI",
-    "category": "Government Oversight",
-    "title": "FBI launches probes into former FBI, CIA directors, Fox News reports",
-    "description": "The FBI initiated criminal investigations into former CIA Director John Brennan and former FBI Director James Comey, focusing on alleged misconduct related to past investigations into Russian interference in the 2016 U.S. presidential election.",
-    "source_url": "https://www.reuters.com/world/us/fbi-launches-probes-into-former-fbi-director-ex-cia-director-fox-news-reports-2025-07-08/",
-    "verified": true,
-    "severity": "high",
-    "id": "md26zenm5vzad3mg56",
-    "added_at": "2025-07-13T21:34:02.482Z"
-  },
-  {
     "date": "2025-07-07",
     "actor": "Donald Trump",
     "category": "Business",
@@ -1510,54 +1042,6 @@
     "severity": "medium",
     "id": "md289bbo7m6ollglwxp",
     "added_at": "2025-07-13T22:09:44.340Z"
-  },
-  {
-    "date": "2025-07-07",
-    "actor": "SpaceX",
-    "category": "Business-Government Conflicts",
-    "title": "SpaceX Can Pursue Retaliation Lawsuit Against California Agency",
-    "description": "A U.S. District Court judge in Los Angeles has ruled that SpaceX can proceed with a lawsuit against the California Coastal Commission, alleging the agency unfairly targeted the company due to CEO Elon Musk’s political views. The lawsuit aims to invalidate the commission’s requirement for a coastal development permit, claiming that the scrutiny contradicts its government contracts and impedes operations.",
-    "source_url": "https://www.reuters.com/legal/government/musks-spacex-can-pursue-retaliation-lawsuit-against-california-agency-judge-2025-07-07/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md289bboaiy5fiodsu5",
-    "added_at": "2025-07-13T22:09:44.340Z"
-  },
-  {
-    "date": "2025-07-07",
-    "actor": "Donald Trump",
-    "category": "Business",
-    "title": "Trump Organization Partners with Saudi Firm for Qatar Golf Resort",
-    "description": "The Trump Organization announced a partnership with Saudi firm Dar Global to develop a luxury golf resort in Qatar, featuring Trump-branded villas and an 18-hole course, raising ethical concerns over foreign business dealings.",
-    "source_url": "https://apnews.com/article/7379bee2e307d39bd43b534a05ae3207",
-    "verified": false,
-    "severity": "medium",
-    "id": "md26zentp9uhxqw7mji",
-    "added_at": "2025-07-13T21:34:02.489Z"
-  },
-  {
-    "date": "2025-07-06",
-    "actor": "Donald Trump",
-    "category": "Legal",
-    "title": "New York Court Orders Trump Organization to Pay $364 Million in Fraud Case",
-    "description": "A New York court ruled that Donald Trump and his companies must pay $364 million in disgorgement of ill-gotten gains following a civil fraud lawsuit alleging financial misrepresentation to lenders and tax officials.",
-    "source_url": "https://en.wikipedia.org/wiki/New_York_business_fraud_lawsuit_against_the_Trump_Organization",
-    "verified": false,
-    "severity": "high",
-    "id": "md28mzkt2iesnnj18qh",
-    "added_at": "2025-07-13T22:20:22.301Z"
-  },
-  {
-    "date": "2025-07-06",
-    "actor": "Donald Trump",
-    "category": "Legal",
-    "title": "New York Court Orders Trump Organization to Pay $364 Million in Fraud Case",
-    "description": "A New York court ruled that the Trump Organization must pay $364 million in disgorgement of ill-gotten gains, following a civil fraud lawsuit alleging financial misrepresentation to lenders and tax authorities.",
-    "source_url": "https://en.wikipedia.org/wiki/New_York_business_fraud_lawsuit_against_the_Trump_Organization",
-    "verified": false,
-    "severity": "high",
-    "id": "md26zentf1og6n19h8",
-    "added_at": "2025-07-13T21:34:02.489Z"
   },
   {
     "date": "2025-07-02",
@@ -1605,18 +1089,6 @@
     "verified": true,
     "severity": "medium",
     "id": "md2899dt9pl5n8i274",
-    "added_at": "2025-07-13T22:09:41.825Z"
-  },
-  {
-    "date": "2025-07-02",
-    "actor": "Paramount Global",
-    "category": "Legal Proceedings",
-    "title": "Paramount Settles Lawsuit with Trump Over \\'60 Minutes\\' Interview",
-    "description": "Paramount Global agreed to pay $16 million to Donald Trump to settle a lawsuit alleging deceptive editing of a \\'60 Minutes\\' interview with Kamala Harris, Trump\\'s 2024 presidential opponent. The settlement also includes releasing transcripts of future presidential candidate interviews on \\'60 Minutes\\'.",
-    "source_url": "https://www.nytimes.com/2025/07/02/business/paramount-settlement-trump-60-minutes.html",
-    "verified": true,
-    "severity": "medium",
-    "id": "md2899dto1fidv4sj1",
     "added_at": "2025-07-13T22:09:41.825Z"
   },
   {
@@ -1702,42 +1174,6 @@
     "severity": "medium",
     "id": "304b1246-eadc-4b6f-9c39-a61166379717",
     "added_at": "2025-06-29T23:08:01.788Z"
-  },
-  {
-    "date": "2025-06-29",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
-    "title": "Musk Accused of Influencing Political Discourse on Social Media",
-    "description": "In recent days, Elon Musk faced criticism for allegedly using his social media platforms to sway public opinion regarding key political issues. Analysts suggest that his high-profile tweets may be impacting voter sentiment ahead of upcoming elections.",
-    "source_url": "https://example.com",
-    "verified": true,
-    "severity": "medium",
-    "id": "b5e1a8dc-c383-421f-8466-ad974ede90bf",
-    "added_at": "2025-06-29T23:08:01.788Z"
-  },
-  {
-    "date": "2025-06-29",
-    "actor": "Donald Trump",
-    "category": "Financial",
-    "title": "Test entry",
-    "description": "This is a test.",
-    "source_url": "https://example.com",
-    "verified": true,
-    "severity": "medium",
-    "id": 1751238304805.7651,
-    "added_at": "2025-06-29T23:05:04.804Z"
-  },
-  {
-    "date": "2025-06-29",
-    "actor": "Donald Trump",
-    "category": "Election",
-    "title": "Trump Announces 2026 Campaign Rally Schedule",
-    "description": "Former President Donald Trump has announced a series of campaign rallies scheduled for the summer of 2026 as he prepares for a potential run in the upcoming presidential election.",
-    "source_url": "https://example.com",
-    "verified": true,
-    "severity": "medium",
-    "id": 1751237406059.2732,
-    "added_at": "2025-06-29T22:50:06.058Z"
   },
   {
     "date": "2025-06-28",
@@ -1884,18 +1320,6 @@
     "added_at": "2025-06-28T13:55:00Z"
   },
   {
-    "date": "2025-06-25",
-    "actor": "Pam Bondi (AG)",
-    "category": "Civil Liberties",
-    "title": "Bondi claims ignorance on ICE agents wearing masks",
-    "description": "Bondi said she was unaware ICE agents wore masks during raids despite video proof, prompting critics to compare the tactic to authoritarian behavior and heighten public safety concerns.",
-    "source_url": "https://www.theguardian.com/us-news/2025/jun/25/ag-pam-bondi-ice-masks-raids",
-    "verified": true,
-    "severity": "medium",
-    "id": 554321,
-    "added_at": "2025-07-01T09:00:22-05:00"
-  },
-  {
     "date": "2025-06-24",
     "actor": "Palantir (Stephen Miller ties)",
     "category": "Government Oversight",
@@ -2016,18 +1440,6 @@
     "added_at": "2025-07-14T18:41:18.587Z"
   },
   {
-    "date": "2025-06-19",
-    "actor": "ICE",
-    "category": "Civil Liberties",
-    "title": "ICE agents attempt entry into Dodger Stadium lot",
-    "description": "ICE was turned away from stadium parking lot; debate arose over whether CBP or ICE agents and possible LAPD collusion.",
-    "source_url": "https://en.wikipedia.org/wiki/June_2025_Los_Angeles_protests",
-    "verified": true,
-    "severity": "medium",
-    "id": 119,
-    "added_at": "2025-06-28T13:40:00Z"
-  },
-  {
     "date": "2025-06-17",
     "actor": "Trump family",
     "category": "Corporate Ethics",
@@ -2062,18 +1474,6 @@
     "severity": "medium",
     "id": 900309,
     "added_at": "2025-07-01T09:04:59-05:00"
-  },
-  {
-    "date": "2025-06-14",
-    "actor": "Trump / Trump family",
-    "category": "Financial",
-    "title": "Trump reports $600M+ income; crypto & phone included",
-    "description": "Donald Trump disclosed over $600 million in 2024 income—much from crypto ventures and Trump Mobile—raising conflict‑of‑interest concerns.",
-    "source_url": "https://www.businessinsider.com/how-much-money-has-trump-made-white-house-disclosure-2025-5",
-    "verified": true,
-    "severity": "medium",
-    "id": 140,
-    "added_at": "2025-06-28T17:05:00Z"
   },
   {
     "date": "2025-06-14",
@@ -2148,18 +1548,6 @@
     "added_at": "2025-07-01T09:04:59-05:00"
   },
   {
-    "date": "2025-06-06",
-    "actor": "ICE",
-    "category": "Civil Liberties",
-    "title": "LA immigrant raids spark mass protests",
-    "description": "Over 500 detained in immigration raids across Los Angeles; National Guard mobilized amid clashes and civil rights complaints.",
-    "source_url": "https://en.wikipedia.org/wiki/June_2025_Los_Angeles_protests",
-    "verified": true,
-    "severity": "high",
-    "id": 117,
-    "added_at": "2025-06-28T13:30:00Z"
-  },
-  {
     "date": "2025-06-05",
     "actor": "Trump Jr. & Eric Trump",
     "category": "Corporate Ethics",
@@ -2232,18 +1620,6 @@
     "added_at": "2025-07-01T09:00:22-05:00"
   },
   {
-    "date": "2025-05-23",
-    "actor": "ICE",
-    "category": "Civil Liberties",
-    "title": "Pregnant US citizen detained in Alabama raid",
-    "description": "Leonardo Garcia Venegas, a U.S. citizen with REAL ID, was handcuffed during ICE raid before being released after verifying status.",
-    "source_url": "https://en.wikipedia.org/wiki/Detention_and_deportation_of_American_citizens_in_the_second_Trump_administration",
-    "verified": true,
-    "severity": "medium",
-    "id": 115,
-    "added_at": "2025-06-28T13:20:00Z"
-  },
-  {
     "date": "2025-05-22",
     "actor": "Trump",
     "category": "Platform Manipulation",
@@ -2254,54 +1630,6 @@
     "severity": "high",
     "id": 142,
     "added_at": "2025-06-28T17:15:00Z"
-  },
-  {
-    "date": "2025-04-25",
-    "actor": "Elizabeth Warren",
-    "category": "Conflicts of Interest",
-    "title": "Warren Requests SEC Records on Trump Media\\'s Investment Products",
-    "description": "Senator Elizabeth Warren has asked the U.S. Securities and Exchange Commission (SEC) to disclose its plans for regulating exchange-traded funds (ETFs) launched by Trump Media & Technology Group, expressing concerns over potential conflicts of interest.",
-    "source_url": "https://www.reuters.com/sustainability/boards-policy-regulation/extraordinary-conflict-interest-warren-asks-sec-records-trump-medias-investment-2025-04-25/",
-    "verified": true,
-    "severity": "medium",
-    "id": "md375yhpb2p82231de9",
-    "added_at": "2025-07-14T14:26:54.301Z"
-  },
-  {
-    "date": "2025-04-25",
-    "actor": "Donald Trump",
-    "category": "Business Dealings",
-    "title": "Trump Company Partners with Saudi Firm for Qatari Golf Resort",
-    "description": "The Trump Organization has announced a partnership with Saudi firm Dar Global to develop a luxury golf resort in Qatar, featuring Trump-branded villas and an 18-hole course, raising ethical concerns due to potential conflicts of interest.",
-    "source_url": "https://apnews.com/article/7379bee2e307d39bd43b534a05ae3207",
-    "verified": false,
-    "severity": "high",
-    "id": "md375yhpgqwdzpcchk7",
-    "added_at": "2025-07-14T14:26:54.301Z"
-  },
-  {
-    "date": "2025-04-25",
-    "actor": "Donald Trump",
-    "category": "Business Dealings",
-    "title": "Trump\\'s Middle East Visit Coincides with Family\\'s Business Expansion",
-    "description": "President Donald Trump\\'s recent Middle East visit coincided with his family\\'s expanding business and cryptocurrency interests in the region, including real estate projects and a new luxury golf resort in Qatar, raising concerns over potential conflicts of interest.",
-    "source_url": "https://apnews.com/article/cbb7d2354304ce0308800819944cf3f8",
-    "verified": false,
-    "severity": "high",
-    "id": "md375yhp53yuc0yunh",
-    "added_at": "2025-07-14T14:26:54.301Z"
-  },
-  {
-    "date": "2025-04-25",
-    "actor": "Donald Trump",
-    "category": "Policy Announcements",
-    "title": "Trump\\'s Middle East Visit and Family Business Expansion",
-    "description": "President Donald Trump\\'s recent Middle East visit coincided with his family\\'s expanding business and cryptocurrency interests in the region, including real estate projects and a new luxury golf resort in Qatar, raising concerns over potential conflicts of interest.",
-    "source_url": "https://apnews.com/article/cbb7d2354304ce0308800819944cf3f8",
-    "verified": false,
-    "severity": "high",
-    "id": "md375yhpr28akpgve1n",
-    "added_at": "2025-07-14T14:26:54.301Z"
   },
   {
     "date": "2025-04-25",
@@ -2326,18 +1654,6 @@
     "severity": "high",
     "id": 109,
     "added_at": "2025-06-28T12:40:00Z"
-  },
-  {
-    "date": "2025-03-21",
-    "actor": "Donald Trump",
-    "category": "Legal Proceedings",
-    "title": "Trump revokes security clearances of prominent lawyers",
-    "description": "Presidential memo stripped security clearances from 14 lawyers including Alvin Bragg and Letitia James; several have sued claiming retaliation.",
-    "source_url": "https://en.wikipedia.org/wiki/Targeting_of_law_firms_and_lawyers_under_the_second_Trump_administration",
-    "verified": true,
-    "severity": "medium",
-    "id": 108,
-    "added_at": "2025-06-28T12:35:00Z"
   },
   {
     "date": "2025-02-27",
@@ -2422,18 +1738,6 @@
     "severity": "high",
     "id": 133,
     "added_at": "2025-06-28T16:15:00Z"
-  },
-  {
-    "date": "2025-01-30",
-    "actor": "ICE",
-    "category": "Civil Liberties",
-    "title": "ICE detains Native Americans at checkpoint",
-    "description": "ICE agents, unaware CDIB cards count as U.S. citizenship proof, detained multiple Navajo individuals during raids, sparking tribal outcry over profiling.",
-    "source_url": "https://en.wikipedia.org/wiki/Detention_and_deportation_of_American_citizens_in_the_second_Trump_administration",
-    "verified": true,
-    "severity": "medium",
-    "id": 111,
-    "added_at": "2025-06-28T13:00:00Z"
   },
   {
     "date": "2025-01-24",
