@@ -1,0 +1,157 @@
+name: Cleanup Duplicate Entries
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Create cleanup script
+      run: |
+        cat > cleanup-duplicates.js << 'EOF'
+        import fs from 'fs/promises';
+        import path from 'path';
+
+        console.log('🧹 DUPLICATE CLEANUP SCRIPT');
+        console.log('==========================\\n');
+
+        // Helper function for fuzzy title matching
+        function isSimilarTitle(title1, title2) {
+          const clean1 = title1.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const clean2 = title2.toLowerCase().replace(/[^a-z0-9]/g, '');
+          
+          const shorter = clean1.length < clean2.length ? clean1 : clean2;
+          const longer = clean1.length < clean2.length ? clean2 : clean1;
+          
+          if (longer.includes(shorter) && shorter.length > 20) {
+            return true;
+          }
+          
+          let matches = 0;
+          for (let i = 0; i < shorter.length; i++) {
+            if (longer.includes(shorter.substr(i, 3))) matches++;
+          }
+          
+          const similarity = matches / shorter.length;
+          return similarity > 0.85;
+        }
+
+        async function cleanupDuplicates() {
+          try {
+            console.log('📁 Loading master-tracker-log.json...');
+            const masterData = await fs.readFile('master-tracker-log.json', 'utf8');
+            const entries = JSON.parse(masterData);
+            console.log(`Found ${entries.length} total entries\\n`);
+
+            console.log('💾 Creating backup...');
+            await fs.writeFile('master-tracker-log.backup.json', masterData);
+            console.log('Backup saved as master-tracker-log.backup.json\\n');
+
+            const seenUrls = new Map();
+            const seenTitles = new Map();
+            const seenDateActor = new Map();
+            
+            const uniqueEntries = [];
+            let duplicateCount = 0;
+
+            for (let i = 0; i < entries.length; i++) {
+              const entry = entries[i];
+              const url = entry.source_url;
+              const titleKey = entry.title?.toLowerCase().trim() || '';
+              const dateActorKey = `${entry.date}-${(entry.actor || '').toLowerCase().trim()}`;
+              
+              let isDuplicate = false;
+
+              if (url && seenUrls.has(url)) {
+                isDuplicate = true;
+              }
+              else if (titleKey && seenTitles.has(titleKey)) {
+                isDuplicate = true;
+              }
+              else if (seenDateActor.has(dateActorKey)) {
+                const existingIndex = seenDateActor.get(dateActorKey);
+                const existingEntry = uniqueEntries[existingIndex];
+                if (entry.title && existingEntry.title && isSimilarTitle(entry.title, existingEntry.title)) {
+                  isDuplicate = true;
+                }
+              }
+
+              if (isDuplicate) {
+                duplicateCount++;
+              } else {
+                const uniqueIndex = uniqueEntries.length;
+                uniqueEntries.push(entry);
+                
+                if (url) seenUrls.set(url, uniqueIndex);
+                if (titleKey) seenTitles.set(titleKey, uniqueIndex);
+                seenDateActor.set(dateActorKey, uniqueIndex);
+              }
+            }
+
+            console.log('📊 RESULTS:');
+            console.log(`Original entries: ${entries.length}`);
+            console.log(`Unique entries: ${uniqueEntries.length}`);
+            console.log(`Duplicates removed: ${duplicateCount}\\n`);
+
+            uniqueEntries.sort((a, b) => {
+              const dateCompare = (b.date || '').localeCompare(a.date || '');
+              if (dateCompare !== 0) return dateCompare;
+              return (b.added_at || '').localeCompare(a.added_at || '');
+            });
+
+            console.log('💾 Saving cleaned data...');
+            await fs.writeFile('master-tracker-log.json', JSON.stringify(uniqueEntries, null, 2));
+            
+            const publicDir = 'public';
+            const publicMasterFile = path.join(publicDir, 'master-tracker-log.json');
+            try {
+              await fs.mkdir(publicDir, { recursive: true });
+              await fs.writeFile(publicMasterFile, JSON.stringify(uniqueEntries, null, 2));
+              console.log('✅ Updated public/master-tracker-log.json');
+            } catch (error) {
+              console.error('❌ Error updating public file:', error.message);
+            }
+
+            console.log('\\n✅ CLEANUP COMPLETE!');
+
+          } catch (error) {
+            console.error('❌ Error during cleanup:', error.message);
+          }
+        }
+
+        cleanupDuplicates();
+        EOF
+        
+    - name: Run cleanup script
+      run: node cleanup-duplicates.js
+      
+    - name: Show results
+      run: |
+        echo "=== CLEANUP RESULTS ==="
+        echo "Entries in cleaned file:"
+        grep -c '"id"' master-tracker-log.json || echo "0"
+        echo "Entries in backup file:"
+        grep -c '"id"' master-tracker-log.backup.json || echo "0"
+        
+    - name: Commit cleaned data
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add master-tracker-log.json public/master-tracker-log.json
+        git commit -m "Cleanup: Remove duplicate entries from database"
+        git push
+        
+    - name: Preserve backup
+      run: |
+        git add master-tracker-log.backup.json
+        git commit -m "Backup: Original data before duplicate cleanup"
+        git push
