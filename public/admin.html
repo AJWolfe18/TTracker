@@ -3,709 +3,377 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Political Tracker - Automated Admin</title>
+    <title>Political Tracker - Secure Admin</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <style>
-        * { box-sizing: border-box; }
-        body { 
-            margin: 0;
-            background: #0f0f0f; 
-            color: #ffffff; 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        .min-h-screen { min-height: 100vh; }
-        .bg-gray-900 { background-color: #111827; }
-        .bg-gray-800 { background-color: #1f2937; }
-        .bg-gray-700 { background-color: #374151; }
-        .bg-gray-600 { background-color: #4b5563; }
-        .text-white { color: #ffffff; }
-        .text-gray-400 { color: #9ca3af; }
-        .text-gray-300 { color: #d1d5db; }
-        .text-gray-500 { color: #6b7280; }
-        .text-blue-400 { color: #60a5fa; }
-        .text-red-400 { color: #f87171; }
-        .text-green-400 { color: #4ade80; }
-        .text-yellow-400 { color: #facc15; }
-        .text-purple-400 { color: #c084fc; }
-        .bg-blue-600 { background-color: #2563eb; }
-        .bg-blue-700 { background-color: #1d4ed8; }
-        .bg-red-600 { background-color: #dc2626; }
-        .bg-red-700 { background-color: #b91c1c; }
-        .bg-red-900 { background-color: #7f1d1d; }
-        .bg-yellow-600 { background-color: #ca8a04; }
-        .bg-yellow-700 { background-color: #a16207; }
-        .bg-yellow-900 { background-color: #713f12; }
-        .bg-green-600 { background-color: #16a34a; }
-        .bg-green-700 { background-color: #15803d; }
-        .bg-green-900 { background-color: #14532d; }
-        .border-red-500 { border-color: #ef4444; }
-        .border-yellow-500 { border-color: #eab308; }
-        .border-green-500 { border-color: #22c55e; }
-        .border-blue-500 { border-color: #3b82f6; }
-        .border-gray-600 { border-color: #4b5563; }
-        .flex { display: flex; }
-        .items-center { align-items: center; }
-        .justify-center { justify-content: center; }
-        .justify-between { justify-content: space-between; }
-        .items-start { align-items: flex-start; }
-        .flex-1 { flex: 1 1 0%; }
-        .flex-wrap { flex-wrap: wrap; }
-        .gap-2 { gap: 0.5rem; }
-        .gap-3 { gap: 0.75rem; }
-        .gap-4 { gap: 1rem; }
-        .p-1 { padding: 0.25rem; }
-        .p-4 { padding: 1rem; }
-        .p-6 { padding: 1.5rem; }
-        .p-8 { padding: 2rem; }
-        .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-        .px-4 { padding-left: 1rem; padding-right: 1rem; }
-        .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-        .py-8 { padding-top: 2rem; padding-bottom: 2rem; }
-        .py-12 { padding-top: 3rem; padding-bottom: 3rem; }
-        .mb-2 { margin-bottom: 0.5rem; }
-        .mb-3 { margin-bottom: 0.75rem; }
-        .mb-4 { margin-bottom: 1rem; }
-        .mb-6 { margin-bottom: 1.5rem; }
-        .mb-8 { margin-bottom: 2rem; }
-        .mt-4 { margin-top: 1rem; }
-        .ml-4 { margin-left: 1rem; }
-        .w-full { width: 100%; }
-        .w-5 { width: 1.25rem; }
-        .h-5 { height: 1.25rem; }
-        .max-w-md { max-width: 28rem; }
-        .min-w-64 { min-width: 16rem; }
-        .rounded { border-radius: 0.25rem; }
-        .rounded-md { border-radius: 0.375rem; }
-        .rounded-lg { border-radius: 0.5rem; }
-        .border { border-width: 1px; }
-        .border-l-4 { border-left-width: 4px; }
-        .text-xs { font-size: 0.75rem; line-height: 1rem; }
-        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-        .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
-        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
-        .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
-        .font-bold { font-weight: 700; }
-        .font-medium { font-weight: 500; }
-        .text-center { text-align: center; }
-        .cursor-pointer { cursor: pointer; }
-        .transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
-        .container { width: 100%; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; }
-        .grid { display: grid; }
-        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-        .space-y-4 > * + * { margin-top: 1rem; }
-        .hover\:bg-blue-700:hover { background-color: #1d4ed8; }
-        .hover\:bg-red-700:hover { background-color: #b91c1c; }
-        .hover\:bg-gray-700:hover { background-color: #374151; }
-        .hover\:bg-yellow-700:hover { background-color: #a16207; }
-        .hover\:bg-green-700:hover { background-color: #15803d; }
-        .hover\:text-white:hover { color: #ffffff; }
-        .focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
-        .focus\:border-blue-500:focus { border-color: #3b82f6; }
-        input, select, button { outline: none; }
-        input:focus, select:focus { border-color: #3b82f6; }
-        button:hover { opacity: 0.9; }
-        
-        @media (min-width: 768px) {
-            .md\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-            .container { max-width: 768px; }
-        }
-        @media (min-width: 1024px) {
-            .container { max-width: 1024px; }
-        }
-        @media (min-width: 1280px) {
-            .container { max-width: 1280px; }
-        }
-
-        .loading-spinner {
-            border: 2px solid #374151;
-            border-top: 2px solid #3b82f6;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .success-message {
-            background-color: #14532d;
-            border: 1px solid #22c55e;
-            color: #4ade80;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-        }
-
-        .error-message {
-            background-color: #7f1d1d;
-            border: 1px solid #ef4444;
-            color: #f87171;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-        }
-    </style>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-gray-900 text-white min-h-screen">
     <div id="admin-root"></div>
 
-    <script>
-        // Configuration - UPDATE THESE VALUES
-        const ADMIN_PASSWORD = 'tracker2025!'; // CHANGE THIS!
-        const GITHUB_TOKEN = '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'; // Add your GitHub Personal Access Token here
-        const GITHUB_REPO = 'AJWolfe18/TTracker'; // Your GitHub username/repository
-        const GITHUB_BRANCH = 'main'; // Your default branch (usually 'main' or 'master')
+    <script type="text/babel">
+        const { useState, useEffect } = React;
 
-        // Token test function - properly placed at top level
-        async function testGitHubToken() {
-            try {
-                console.log('Testing token...');
-                const response = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                    },
-                });
-                
-                console.log('Token test status:', response.status);
-                
-                if (response.ok) {
-                    const user = await response.json();
-                    console.log('Token works! User:', user.login);
-                    alert(`Token works! Logged in as: ${user.login}`);
-                } else {
-                    console.log('Token test failed:', response.status);
-                    alert(`Token test failed: ${response.status}`);
-                }
-            } catch (error) {
-                console.log('Token test error:', error);
-                alert(`Token test error: ${error.message}`);
-            }
-        }
+        function SecureAdminInterface() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [password, setPassword] = useState('');
+            const [githubToken, setGithubToken] = useState('');
+            const [entries, setEntries] = useState([]);
+            const [selectedEntries, setSelectedEntries] = useState(new Set());
+            const [searchTerm, setSearchTerm] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [message, setMessage] = useState('');
+            
+            // Your existing password (you can change this)
+            const ADMIN_PASSWORD = 'AdminTrump2025!';
 
-        function AdminInterface() {
-            const [state, setState] = React.useState({
-                entries: [],
-                archivedEntries: [],
-                loading: true,
-                authenticated: false,
-                password: '',
-                selectedEntries: new Set(),
-                filter: 'all',
-                dateFilter: 'all',
-                showArchived: false,
-                searchTerm: '',
-                isUpdating: false,
-                message: null,
-                messageType: null,
-                setupComplete: false
-            });
-
-            // Check authentication and setup on load
-            React.useEffect(() => {
-                const savedAuth = localStorage.getItem('admin_authenticated');
-                const hasToken = GITHUB_TOKEN && GITHUB_TOKEN.length > 0 && GITHUB_TOKEN !== 'YOUR_TOKEN_HERE';
-                const hasRepo = GITHUB_REPO && GITHUB_REPO.length > 0;
-                
-                if (savedAuth === 'true') {
-                    setState(prev => ({ 
-                        ...prev, 
-                        authenticated: true, 
-                        setupComplete: hasToken && hasRepo 
-                    }));
-                } else {
-                    setState(prev => ({ 
-                        ...prev, 
-                        setupComplete: hasToken && hasRepo 
-                    }));
-                }
-            }, []);
-
-            // Load data when authenticated
-            React.useEffect(() => {
-                if (state.authenticated) {
-                    loadEntries();
-                }
-            }, [state.authenticated]);
-
-            function updateState(updates) {
-                setState(prev => ({ ...prev, ...updates }));
-            }
-
-            function showMessage(message, type = 'success') {
-                updateState({ message, messageType: type });
-                setTimeout(() => {
-                    updateState({ message: null, messageType: null });
-                }, 5000);
-            }
-
-            function handleLogin() {
-                if (state.password === ADMIN_PASSWORD) {
-                    localStorage.setItem('admin_authenticated', 'true');
-                    updateState({ authenticated: true, password: '' });
-                } else {
-                    showMessage('Incorrect password', 'error');
-                    updateState({ password: '' });
-                }
-            }
-
-            function handleLogout() {
-                localStorage.removeItem('admin_authenticated');
-                updateState({ authenticated: false });
-            }
-
-            async function loadEntries() {
-                try {
-                    const response = await fetch('/master-tracker-log.json');
-                    const data = await response.json();
-                    
-                    const active = data.filter(entry => !entry.archived);
-                    const archived = data.filter(entry => entry.archived);
-                    
-                    updateState({ entries: active, archivedEntries: archived, loading: false });
-                } catch (error) {
-                    console.error('Error loading entries:', error);
-                    updateState({ loading: false });
-                    showMessage('Error loading entries', 'error');
-                }
-            }
-
-            async function updateGitHubFile(newData, action) {
-            const filePath = 'master-tracker-log.json';
-            const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=${GITHUB_BRANCH}`;
-
-            // 1. Try to fetch existing file info
-            let sha;
-            const getResponse = await fetch(url, {
-                headers: { Authorization: `token ${GITHUB_TOKEN}` }
-            });
-
-            if (getResponse.ok) {
-                // File exists → grab its SHA
-                const fileInfo = await getResponse.json();
-                sha = fileInfo.sha;
-            } else if (getResponse.status === 404) {
-                // File doesn’t exist yet → we'll create it (no SHA)
-                sha = undefined;
-            } else {
-                // Some other error → stop and report
-                throw new Error(`Failed to get file info: ${getResponse.statusText}`);
-            }
-
-            // 2. Build the PUT body
-            const body = {
-                message: `Admin: ${action} entries via web interface`,
-                content: btoa(JSON.stringify(newData, null, 2)),
-                branch: GITHUB_BRANCH,
-                // only include `sha` when updating an existing file
-                ...(sha && { sha })
+            const showMessage = (text, type = 'info') => {
+                setMessage({ text, type });
+                setTimeout(() => setMessage(''), 5000);
             };
 
-            // 3. Push the change (create or update)
-            const updateResponse = await fetch(
-                `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
-                {
-                method: 'PUT',
-                headers: {
-                    Authorization: `token ${GITHUB_TOKEN}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
+            const authenticate = () => {
+                if (password === ADMIN_PASSWORD && githubToken.trim()) {
+                    if (githubToken.startsWith('github_pat_') || githubToken.startsWith('ghp_')) {
+                        setIsAuthenticated(true);
+                        loadEntries();
+                        showMessage('Authentication successful!', 'success');
+                    } else {
+                        showMessage('Invalid GitHub token format. Should start with github_pat_ or ghp_', 'error');
+                    }
+                } else {
+                    showMessage('Invalid password or missing GitHub token', 'error');
                 }
-            );
+            };
 
-            if (!updateResponse.ok) {
-                const err = await updateResponse.json();
-                throw new Error(`GitHub update failed: ${err.message}`);
-            }
+            const loadEntries = async () => {
+                try {
+                    setIsLoading(true);
+                    const response = await fetch('/master-tracker-log.json');
+                    if (response.ok) {
+                        const data = await response.json();
+                        setEntries(data || []);
+                        showMessage(`Loaded ${data?.length || 0} entries`, 'success');
+                    } else {
+                        showMessage('Failed to load entries', 'error');
+                    }
+                } catch (error) {
+                    showMessage(`Error loading entries: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
 
-            return await updateResponse.json();
-            }
+            const updateGitHubFile = async (newData) => {
+                try {
+                    const repo = 'AJWolfe18/TTracker';
+                    const path = 'master-tracker-log.json';
+                    
+                    // Get current file info
+                    const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
+                        headers: {
+                            'Authorization': `Bearer ${githubToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
 
+                    if (!getResponse.ok) {
+                        throw new Error(`Failed to get file info: ${getResponse.status} ${getResponse.statusText}`);
+                    }
 
-            function toggleEntry(entryId) {
-                const newSelected = new Set(state.selectedEntries);
+                    const fileInfo = await getResponse.json();
+                    const content = btoa(JSON.stringify(newData, null, 2));
+
+                    // Update the file
+                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${githubToken}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: 'Admin: Update tracker data',
+                            content: content,
+                            sha: fileInfo.sha,
+                            branch: 'main'
+                        })
+                    });
+
+                    if (!updateResponse.ok) {
+                        throw new Error(`Failed to update file: ${updateResponse.status} ${updateResponse.statusText}`);
+                    }
+
+                    // Also update public folder
+                    const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
+                        headers: {
+                            'Authorization': `Bearer ${githubToken}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+
+                    if (publicGetResponse.ok) {
+                        const publicFileInfo = await publicGetResponse.json();
+                        await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Authorization': `Bearer ${githubToken}`,
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: 'Admin: Update public tracker data',
+                                content: content,
+                                sha: publicFileInfo.sha,
+                                branch: 'main'
+                            })
+                        });
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error('GitHub update error:', error);
+                    throw error;
+                }
+            };
+
+            const deleteSelected = async () => {
+                if (selectedEntries.size === 0) {
+                    showMessage('No entries selected for deletion', 'error');
+                    return;
+                }
+
+                if (!confirm(`Delete ${selectedEntries.size} selected entries? This cannot be undone.`)) {
+                    return;
+                }
+
+                try {
+                    setIsLoading(true);
+                    const updatedEntries = entries.filter(entry => !selectedEntries.has(entry.id));
+                    
+                    await updateGitHubFile(updatedEntries);
+                    
+                    setEntries(updatedEntries);
+                    setSelectedEntries(new Set());
+                    showMessage(`Successfully deleted ${selectedEntries.size} entries`, 'success');
+                } catch (error) {
+                    showMessage(`Error deleting entries: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const toggleSelection = (entryId) => {
+                const newSelected = new Set(selectedEntries);
                 if (newSelected.has(entryId)) {
                     newSelected.delete(entryId);
                 } else {
                     newSelected.add(entryId);
                 }
-                updateState({ selectedEntries: newSelected });
-            }
+                setSelectedEntries(newSelected);
+            };
 
-            function selectAll() {
-                const currentEntries = state.showArchived ? state.archivedEntries : state.entries;
-                const filtered = filterEntries(currentEntries);
-                const allVisible = new Set(filtered.map(e => e.id).filter(id => id));
-                updateState({ selectedEntries: allVisible });
-            }
-
-            function clearSelection() {
-                updateState({ selectedEntries: new Set() });
-            }
-
-            function filterEntries(entries) {
-                return entries.filter(entry => {
-                    if (!entry) return false;
-                    
-                    if (state.filter !== 'all' && entry.severity !== state.filter) return false;
-                    
-                    if (state.dateFilter !== 'all') {
-                        const entryDate = new Date(entry.date);
-                        const today = new Date();
-                        
-                        switch (state.dateFilter) {
-                            case 'today':
-                                if (entryDate.toDateString() !== today.toDateString()) return false;
-                                break;
-                            case 'week':
-                                const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                                if (entryDate < weekAgo) return false;
-                                break;
-                            case 'month':
-                                const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                                if (entryDate < monthAgo) return false;
-                                break;
-                            case 'old':
-                                const threeMonthsAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
-                                if (entryDate > threeMonthsAgo) return false;
-                                break;
-                        }
-                    }
-                    
-                    if (state.searchTerm) {
-                        const searchLower = state.searchTerm.toLowerCase();
-                        return (
-                            (entry.title || '').toLowerCase().includes(searchLower) ||
-                            (entry.description || '').toLowerCase().includes(searchLower) ||
-                            (entry.actor || '').toLowerCase().includes(searchLower)
-                        );
-                    }
-                    
-                    return true;
-                });
-            }
-
-            async function archiveSelected() {
-                if (state.selectedEntries.size === 0) return;
-                
-                const confirmed = confirm(`Archive ${state.selectedEntries.size} selected entries? This will automatically update GitHub.`);
-                if (!confirmed) return;
-
-                const allEntries = [...state.entries, ...state.archivedEntries];
-                const updatedEntries = allEntries.map(entry => {
-                    if (state.selectedEntries.has(entry.id)) {
-                        return { ...entry, archived: true, archived_at: new Date().toISOString() };
-                    }
-                    return entry;
-                });
-                
-                const success = await updateGitHubFile(updatedEntries, 'archived');
-                if (success) {
-                    const active = updatedEntries.filter(e => !e.archived);
-                    const archived = updatedEntries.filter(e => e.archived);
-                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
+            const selectAll = () => {
+                if (selectedEntries.size === filteredEntries.length) {
+                    setSelectedEntries(new Set());
+                } else {
+                    setSelectedEntries(new Set(filteredEntries.map(e => e.id)));
                 }
-            }
+            };
 
-            async function restoreSelected() {
-                if (state.selectedEntries.size === 0) return;
-                
-                const confirmed = confirm(`Restore ${state.selectedEntries.size} selected entries? This will automatically update GitHub.`);
-                if (!confirmed) return;
-
-                const allEntries = [...state.entries, ...state.archivedEntries];
-                const updatedEntries = allEntries.map(entry => {
-                    if (state.selectedEntries.has(entry.id)) {
-                        const { archived, archived_at, ...restoredEntry } = entry;
-                        return restoredEntry;
-                    }
-                    return entry;
-                });
-                
-                const success = await updateGitHubFile(updatedEntries, 'restored');
-                if (success) {
-                    const active = updatedEntries.filter(e => !e.archived);
-                    const archived = updatedEntries.filter(e => e.archived);
-                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
-                }
-            }
-
-            async function deleteSelected() {
-                if (state.selectedEntries.size === 0) return;
-                
-                const confirmed = confirm(`PERMANENTLY DELETE ${state.selectedEntries.size} selected entries? This will automatically update GitHub and cannot be undone.`);
-                if (!confirmed) return;
-
-                const allEntries = [...state.entries, ...state.archivedEntries];
-                const remaining = allEntries.filter(entry => !state.selectedEntries.has(entry.id));
-                
-                const success = await updateGitHubFile(remaining, 'deleted');
-                if (success) {
-                    const active = remaining.filter(e => !e.archived);
-                    const archived = remaining.filter(e => e.archived);
-                    updateState({ entries: active, archivedEntries: archived, selectedEntries: new Set() });
-                }
-            }
-
-            // Setup screen for GitHub configuration
-            if (!state.setupComplete && state.authenticated) {
-                return React.createElement('div', { className: 'min-h-screen bg-gray-900 flex items-center justify-center' },
-                    React.createElement('div', { className: 'bg-gray-800 rounded-lg p-8 max-w-md w-full' },
-                        React.createElement('h2', { className: 'text-2xl font-bold text-white mb-6 text-center' }, 'Setup Required'),
-                        React.createElement('div', { className: 'text-gray-300 mb-4' },
-                            React.createElement('p', { className: 'mb-4' }, 'To enable automatic GitHub updates, you need to:'),
-                            React.createElement('ol', { className: 'list-decimal list-inside space-y-2 text-sm' },
-                                React.createElement('li', null, 'Create a GitHub Personal Access Token'),
-                                React.createElement('li', null, 'Add it to line 144: GITHUB_TOKEN'),
-                                React.createElement('li', null, 'Verify GITHUB_REPO is correct on line 145'),
-                                React.createElement('li', null, 'Save and refresh this page')
-                            ),
-                            React.createElement('p', { className: 'mt-4 text-yellow-400 text-sm' }, 
-                                'Without this setup, you\'ll need to manually copy/paste JSON updates.'
-                            )
-                        ),
-                        React.createElement('button', {
-                            onClick: () => updateState({ setupComplete: true }),
-                            className: 'w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-medium transition-colors'
-                        }, 'Continue Without Auto-Update')
-                    )
-                );
-            }
-
-            // Login form
-            if (!state.authenticated) {
-                return React.createElement('div', { className: 'min-h-screen bg-gray-900 flex items-center justify-center' },
-                    React.createElement('div', { className: 'bg-gray-800 rounded-lg p-8 max-w-md w-full' },
-                        React.createElement('h2', { className: 'text-2xl font-bold text-white mb-6 text-center' }, 'Admin Access'),
-                        React.createElement('div', { className: 'space-y-4' },
-                            React.createElement('input', {
-                                type: 'password',
-                                placeholder: 'Enter admin password',
-                                value: state.password,
-                                onChange: (e) => updateState({ password: e.target.value }),
-                                onKeyPress: (e) => e.key === 'Enter' && handleLogin(),
-                                className: 'w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-md text-white',
-                                autoFocus: true
-                            }),
-                            React.createElement('button', {
-                                onClick: handleLogin,
-                                className: 'w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-md text-white font-medium transition-colors'
-                            }, 'Login')
-                        ),
-                        React.createElement('p', { className: 'text-gray-400 text-sm mt-4 text-center' }, 'Access restricted to authorized users only')
-                    )
-                );
-            }
-
-            if (state.loading) {
-                return React.createElement('div', { className: 'min-h-screen bg-gray-900 flex items-center justify-center' },
-                    React.createElement('div', { className: 'text-white text-xl' }, 'Loading entries...')
-                );
-            }
-
-            const currentEntries = state.showArchived ? state.archivedEntries : state.entries;
-            const filteredEntries = filterEntries(currentEntries);
-
-            return React.createElement('div', { className: 'min-h-screen bg-gray-900 text-white' },
-                React.createElement('div', { className: 'container mx-auto px-4 py-8' },
-                    // Header
-                    React.createElement('div', { className: 'mb-8 flex justify-between items-center' },
-                        React.createElement('div', null,
-                            React.createElement('h1', { className: 'text-3xl font-bold mb-2' }, 'Political Tracker - Automated Admin'),
-                            React.createElement('p', { className: 'text-gray-400' }, 
-                                GITHUB_TOKEN && GITHUB_TOKEN !== 'YOUR_TOKEN_HERE' ? 'Fully automated - changes update GitHub instantly' : 'Manual mode - requires copy/paste to save changes'
-                            )
-                        ),
-                        React.createElement('button', {
-                            onClick: handleLogout,
-                            className: 'px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors'
-                        }, 'Logout')
-                    ),
-
-                    // Status message
-                    state.message && React.createElement('div', { 
-                        className: state.messageType === 'error' ? 'error-message' : 'success-message' 
-                    }, state.message),
-
-                    // Loading indicator
-                    state.isUpdating && React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4 mb-6 flex items-center' },
-                        React.createElement('div', { className: 'loading-spinner' }),
-                        React.createElement('span', null, 'Updating GitHub repository...')
-                    ),
-
-                    // Controls
-                    React.createElement('div', { className: 'bg-gray-800 rounded-lg p-6 mb-6' },
-                        React.createElement('div', { className: 'flex flex-wrap gap-4 items-center mb-4' },
-                            // Archive toggle
-                            React.createElement('div', { className: 'flex bg-gray-700 rounded-md p-1' },
-                                React.createElement('button', {
-                                    onClick: () => updateState({ showArchived: false }),
-                                    className: `px-4 py-2 rounded transition-colors ${!state.showArchived ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`
-                                }, `Active (${state.entries.length})`),
-                                React.createElement('button', {
-                                    onClick: () => updateState({ showArchived: true }),
-                                    className: `px-4 py-2 rounded transition-colors ${state.showArchived ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white'}`
-                                }, `Archived (${state.archivedEntries.length})`)
-                            ),
-                            // Search
-                            React.createElement('div', { className: 'flex-1 min-w-64' },
-                                React.createElement('input', {
-                                    type: 'text',
-                                    placeholder: 'Search entries...',
-                                    value: state.searchTerm,
-                                    onChange: (e) => updateState({ searchTerm: e.target.value }),
-                                    className: 'w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white'
-                                })
-                            )
-                        ),
-                        React.createElement('div', { className: 'flex flex-wrap gap-4 items-center' },
-                            // Filters
-                            React.createElement('select', {
-                                value: state.filter,
-                                onChange: (e) => updateState({ filter: e.target.value }),
-                                className: 'px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white'
-                            },
-                                React.createElement('option', { value: 'all' }, 'All Severity'),
-                                React.createElement('option', { value: 'high' }, 'High'),
-                                React.createElement('option', { value: 'medium' }, 'Medium'),
-                                React.createElement('option', { value: 'low' }, 'Low')
-                            ),
-                            React.createElement('select', {
-                                value: state.dateFilter,
-                                onChange: (e) => updateState({ dateFilter: e.target.value }),
-                                className: 'px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white'
-                            },
-                                React.createElement('option', { value: 'all' }, 'All Dates'),
-                                React.createElement('option', { value: 'today' }, 'Today'),
-                                React.createElement('option', { value: 'week' }, 'Past Week'),
-                                React.createElement('option', { value: 'month' }, 'Past Month'),
-                                React.createElement('option', { value: 'old' }, 'Older than 3 months')
-                            ),
-                            // Selection controls
-                            React.createElement('button', {
-                                onClick: selectAll,
-                                className: 'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors'
-                            }, `Select All (${filteredEntries.length})`),
-                            React.createElement('button', {
-                                onClick: clearSelection,
-                                className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md transition-colors'
-                            }, 'Clear Selection'),
-                            // Action buttons - now fully automated
-                            state.selectedEntries.size > 0 && React.createElement('div', { className: 'flex gap-2' },
-                                !state.showArchived 
-                                    ? React.createElement('button', {
-                                        onClick: archiveSelected,
-                                        disabled: state.isUpdating,
-                                        className: 'px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-md transition-colors font-medium disabled:opacity-50'
-                                    }, state.isUpdating ? 'Updating...' : `🗃️ Archive (${state.selectedEntries.size})`)
-                                    : React.createElement('button', {
-                                        onClick: restoreSelected,
-                                        disabled: state.isUpdating,
-                                        className: 'px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors font-medium disabled:opacity-50'
-                                    }, state.isUpdating ? 'Updating...' : `↩️ Restore (${state.selectedEntries.size})`),
-                                React.createElement('button', {
-                                    onClick: deleteSelected,
-                                    disabled: state.isUpdating,
-                                    className: 'px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors font-medium disabled:opacity-50'
-                                }, state.isUpdating ? 'Updating...' : `🗑️ Delete Forever (${state.selectedEntries.size})`)
-                            )
-                        )
-                    ),
-
-                    // Stats
-                    React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-5 gap-4 mb-6' },
-                        React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4' },
-                            React.createElement('div', { className: 'text-2xl font-bold text-blue-400' }, state.entries.length),
-                            React.createElement('div', { className: 'text-gray-400' }, 'Active Entries')
-                        ),
-                        React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4' },
-                            React.createElement('div', { className: 'text-2xl font-bold text-yellow-400' }, state.archivedEntries.length),
-                            React.createElement('div', { className: 'text-gray-400' }, 'Archived')
-                        ),
-                        React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4' },
-                            React.createElement('div', { className: 'text-2xl font-bold text-green-400' }, filteredEntries.length),
-                            React.createElement('div', { className: 'text-gray-400' }, 'Filtered Results')
-                        ),
-                        React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4' },
-                            React.createElement('div', { className: 'text-2xl font-bold text-purple-400' }, state.selectedEntries.size),
-                            React.createElement('div', { className: 'text-gray-400' }, 'Selected')
-                        ),
-                        React.createElement('div', { className: 'bg-gray-800 rounded-lg p-4' },
-                            React.createElement('div', { className: 'text-2xl font-bold text-red-400' }, state.entries.filter(e => e.severity === 'high').length),
-                            React.createElement('div', { className: 'text-gray-400' }, 'High Severity')
-                        )
-                    ),
-
-                    // Entries list
-                    React.createElement('div', { className: 'space-y-4' },
-                        filteredEntries.map(entry => {
-                            if (!entry || !entry.id) return null;
-                            
-                            const isSelected = state.selectedEntries.has(entry.id);
-                            const severityColors = {
-                                high: 'bg-red-900 border-red-500',
-                                medium: 'bg-yellow-900 border-yellow-500',
-                                low: 'bg-green-900 border-green-500'
-                            };
-
-                            return React.createElement('div', {
-                                key: entry.id,
-                                className: `border-l-4 p-4 rounded-lg transition-all cursor-pointer ${isSelected ? 'bg-blue-900 border-blue-500' : `bg-gray-800 ${severityColors[entry.severity] || 'border-gray-600'}`}`,
-                                onClick: () => toggleEntry(entry.id)
-                            },
-                                React.createElement('div', { className: 'flex items-start justify-between' },
-                                    React.createElement('div', { className: 'flex-1' },
-                                        React.createElement('div', { className: 'flex items-center gap-3 mb-2' },
-                                            React.createElement('div', {
-                                                className: `px-2 py-1 rounded text-xs font-medium ${entry.severity === 'high' ? 'bg-red-600' : entry.severity === 'medium' ? 'bg-yellow-600' : 'bg-green-600'}`
-                                            }, (entry.severity || 'unknown').toUpperCase()),
-                                            React.createElement('div', { className: 'text-gray-400 text-sm' }, entry.actor || 'Unknown Actor'),
-                                            React.createElement('div', { className: 'text-gray-500 text-sm' }, entry.date || 'No date'),
-                                            entry.verified && React.createElement('span', { className: 'text-green-400' }, '✅'),
-                                            entry.archived && React.createElement('span', { className: 'text-yellow-400 text-xs' }, '📁 ARCHIVED')
-                                        ),
-                                        React.createElement('h3', { className: 'text-lg font-medium mb-2 text-white' }, entry.title || 'No title'),
-                                        React.createElement('p', { className: 'text-gray-300 mb-3' }, entry.description || 'No description'),
-                                        entry.source_url && React.createElement('a', {
-                                            href: entry.source_url,
-                                            target: '_blank',
-                                            rel: 'noopener noreferrer',
-                                            className: 'text-blue-400 hover:text-blue-300 text-sm',
-                                            onClick: (e) => e.stopPropagation()
-                                        }, entry.source_url)
-                                    ),
-                                    React.createElement('div', { className: 'ml-4' },
-                                        React.createElement('input', {
-                                            type: 'checkbox',
-                                            checked: isSelected,
-                                            onChange: () => toggleEntry(entry.id),
-                                            className: 'w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500',
-                                            onClick: (e) => e.stopPropagation()
-                                        })
-                                    )
-                                )
-                            );
-                        })
-                    ),
-
-                    filteredEntries.length === 0 && React.createElement('div', { className: 'text-center py-12' },
-                        React.createElement('div', { className: 'text-gray-400 text-lg' }, 'No entries found matching your criteria')
-                    )
+            const filteredEntries = entries.filter(entry => 
+                !searchTerm || 
+                Object.values(entry).some(value => 
+                    value?.toString().toLowerCase().includes(searchTerm.toLowerCase())
                 )
+            );
+
+            if (!isAuthenticated) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4">
+                        <div className="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full">
+                            <h1 className="text-2xl font-bold mb-6 text-center text-blue-400">
+                                🔐 Secure Admin Access
+                            </h1>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Admin Password:</label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                                        placeholder="Enter admin password"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">GitHub Personal Access Token:</label>
+                                    <input
+                                        type="password"
+                                        value={githubToken}
+                                        onChange={(e) => setGithubToken(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                                        placeholder="github_pat_... or ghp_..."
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Token needs "Contents: Write" permission for TTracker repository
+                                    </p>
+                                </div>
+                                
+                                <button
+                                    onClick={authenticate}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition-colors"
+                                >
+                                    Login
+                                </button>
+                                
+                                {message && (
+                                    <div className={`p-3 rounded text-sm ${
+                                        message.type === 'error' ? 'bg-red-900 text-red-200' :
+                                        message.type === 'success' ? 'bg-green-900 text-green-200' :
+                                        'bg-blue-900 text-blue-200'
+                                    }`}>
+                                        {message.text}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="mt-6 p-4 bg-gray-700 rounded text-xs">
+                                <h3 className="font-medium mb-2">🛡️ Security Notes:</h3>
+                                <ul className="space-y-1 text-gray-300">
+                                    <li>• Your token is NOT stored anywhere</li>
+                                    <li>• Token is only kept in browser memory</li>
+                                    <li>• Create token at: github.com/settings/personal-access-tokens/new</li>
+                                    <li>• Required permission: "Contents: Write" for TTracker repo</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen p-4">
+                    <div className="max-w-6xl mx-auto">
+                        <div className="bg-gray-800 rounded-lg shadow-xl">
+                            <div className="p-6 border-b border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <h1 className="text-2xl font-bold text-blue-400">
+                                        🗂️ Tracker Admin Panel
+                                    </h1>
+                                    <button
+                                        onClick={() => setIsAuthenticated(false)}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                                
+                                <div className="mt-4 flex items-center gap-4">
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search entries..."
+                                        className="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                                    />
+                                    <button
+                                        onClick={loadEntries}
+                                        disabled={isLoading}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50"
+                                    >
+                                        {isLoading ? 'Loading...' : 'Refresh'}
+                                    </button>
+                                </div>
+                                
+                                <div className="mt-4 flex items-center gap-4">
+                                    <span className="text-sm text-gray-400">
+                                        {filteredEntries.length} entries ({selectedEntries.size} selected)
+                                    </span>
+                                    <button
+                                        onClick={selectAll}
+                                        className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-sm"
+                                    >
+                                        {selectedEntries.size === filteredEntries.length ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                    <button
+                                        onClick={deleteSelected}
+                                        disabled={selectedEntries.size === 0 || isLoading}
+                                        className="px-4 py-1 bg-red-600 hover:bg-red-700 rounded text-sm disabled:opacity-50"
+                                    >
+                                        Delete Selected ({selectedEntries.size})
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {message && (
+                                <div className={`mx-6 mt-4 p-3 rounded ${
+                                    message.type === 'error' ? 'bg-red-900 text-red-200' :
+                                    message.type === 'success' ? 'bg-green-900 text-green-200' :
+                                    'bg-blue-900 text-blue-200'
+                                }`}>
+                                    {message.text}
+                                </div>
+                            )}
+                            
+                            <div className="p-6 max-h-96 overflow-y-auto">
+                                {filteredEntries.length === 0 ? (
+                                    <div className="text-center text-gray-400 py-8">
+                                        No entries found
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {filteredEntries.map((entry) => (
+                                            <div
+                                                key={entry.id}
+                                                className={`p-4 rounded border cursor-pointer transition-colors ${
+                                                    selectedEntries.has(entry.id)
+                                                        ? 'bg-blue-900 border-blue-500'
+                                                        : 'bg-gray-700 border-gray-600 hover:bg-gray-650'
+                                                }`}
+                                                onClick={() => toggleSelection(entry.id)}
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="text-sm text-gray-400">{entry.date}</span>
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                                entry.severity === 'high' ? 'bg-red-900 text-red-200' :
+                                                                entry.severity === 'medium' ? 'bg-yellow-900 text-yellow-200' :
+                                                                'bg-green-900 text-green-200'
+                                                            }`}>
+                                                                {entry.severity}
+                                                            </span>
+                                                            <span className="text-sm text-blue-400">{entry.actor}</span>
+                                                        </div>
+                                                        <h3 className="font-medium mb-1">{entry.title}</h3>
+                                                        <p className="text-sm text-gray-300 mb-2">{entry.description}</p>
+                                                        <p className="text-xs text-gray-400">{entry.category}</p>
+                                                    </div>
+                                                    <div className="ml-4">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedEntries.has(entry.id)}
+                                                            onChange={() => toggleSelection(entry.id)}
+                                                            className="w-4 h-4"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
-        ReactDOM.render(React.createElement(AdminInterface), document.getElementById('admin-root'));
+        ReactDOM.render(<SecureAdminInterface />, document.getElementById('admin-root'));
     </script>
 </body>
 </html>
