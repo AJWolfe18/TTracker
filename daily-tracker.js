@@ -374,6 +374,8 @@ Return a JSON array of relevant political developments found. Only include real 
   return allEntries;
 }
 
+// Add this debugging version to temporarily replace your saveToFile function
+
 async function saveToFile(entries) {
   const today = new Date().toISOString().split('T')[0];
   const filename = `real-news-tracker-${today}.json`;
@@ -393,8 +395,15 @@ async function saveToFile(entries) {
       console.log('  No existing master log found, creating new one');
     }
 
+    console.log(`\n🔍 DEBUG: About to check ${entries.length} new entries for duplicates`);
+    
     // Remove duplicates before saving
     const uniqueEntries = removeDuplicates(entries, masterLog);
+    
+    console.log(`📊 DEBUG: After duplicate removal:`);
+    console.log(`  - Started with: ${entries.length} new entries`);
+    console.log(`  - Unique entries: ${uniqueEntries.length}`);
+    console.log(`  - Duplicates removed: ${entries.length - uniqueEntries.length}`);
     
     if (uniqueEntries.length === 0) {
       console.log('\n⚠️  All entries were duplicates - no new data to save');
@@ -405,8 +414,12 @@ async function saveToFile(entries) {
     await fs.writeFile(filename, JSON.stringify(uniqueEntries, null, 2));
     console.log(`\n✅ Saved ${uniqueEntries.length} unique entries to ${filename}`);
 
-    // Add unique entries to master log
+    // IMPORTANT: Only add unique entries to master log
+    console.log(`\n🔍 DEBUG: Master log before adding new entries: ${masterLog.length}`);
     masterLog.push(...uniqueEntries);
+    console.log(`📊 DEBUG: Master log after adding new entries: ${masterLog.length}`);
+    console.log(`📊 DEBUG: Should have added ${uniqueEntries.length} entries`);
+    console.log(`📊 DEBUG: Math check: ${masterLog.length} should equal ${masterLog.length - uniqueEntries.length} + ${uniqueEntries.length}`);
 
     // Sort master log by date (newest first)
     masterLog.sort((a, b) => {
@@ -417,12 +430,22 @@ async function saveToFile(entries) {
 
     // Save updated master log
     await fs.writeFile(masterFilename, JSON.stringify(masterLog, null, 2));
+    console.log(`\n📊 DEBUG: Saved master log with ${masterLog.length} total entries`);
 
     // Ensure public directory exists and copy master log
     try {
       await fs.mkdir(publicDir, { recursive: true });
       await fs.writeFile(publicMasterFile, JSON.stringify(masterLog, null, 2));
       console.log('✅ Updated public master log for website');
+      
+      // Verify the public file
+      const publicData = await fs.readFile(publicMasterFile, 'utf8');
+      const publicEntries = JSON.parse(publicData);
+      console.log(`📊 DEBUG: Public file now has ${publicEntries.length} entries`);
+      
+      if (publicEntries.length !== masterLog.length) {
+        console.error('❌ WARNING: Public file entry count does not match master log!');
+      }
     } catch (publicError) {
       console.error('❌ Error updating public master log:', publicError.message);
     }
