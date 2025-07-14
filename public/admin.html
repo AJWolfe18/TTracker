@@ -280,87 +280,57 @@
             }
 
             async function updateGitHubFile(newData, action) {
-                if (!GITHUB_TOKEN || !GITHUB_REPO || GITHUB_TOKEN === 'YOUR_TOKEN_HERE') {
-                    showMessage('GitHub integration not configured. Update GITHUB_TOKEN and GITHUB_REPO in the code.', 'error');
-                    return false;
-                }
+            const filePath = 'master-tracker-log.json';
+            const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=${GITHUB_BRANCH}`;
 
-                updateState({ isUpdating: true });
+            // 1. Try to fetch existing file info
+            let sha;
+            const getResponse = await fetch(url, {
+                headers: { Authorization: `token ${GITHUB_TOKEN}` }
+            });
 
-                try {
-                    // Get current file SHA
-                    const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/master-tracker-log.json`, {
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json',
-                        },
-                    });
-
-                    if (!getResponse.ok) {
-                        throw new Error(`Failed to get file info: ${getResponse.statusText}`);
-                    }
-
-                    const fileInfo = await getResponse.json();
-                    const sha = fileInfo.sha;
-
-                    // Update the file
-                    const content = btoa(JSON.stringify(newData, null, 2));
-                    const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/master-tracker-log.json`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json',
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            message: `Admin: ${action} entries via web interface`,
-                            content: content,
-                            sha: sha,
-                            branch: GITHUB_BRANCH
-                        }),
-                    });
-
-                    if (!updateResponse.ok) {
-                        throw new Error(`Failed to update file: ${updateResponse.statusText}`);
-                    }
-
-                    // Also update the public copy
-                    const publicGetResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/public/master-tracker-log.json`, {
-                        headers: {
-                            'Authorization': `token ${GITHUB_TOKEN}`,
-                            'Accept': 'application/vnd.github.v3+json',
-                        },
-                    });
-
-                    if (publicGetResponse.ok) {
-                        const publicFileInfo = await publicGetResponse.json();
-                        await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/public/master-tracker-log.json`, {
-                            method: 'PUT',
-                            headers: {
-                                'Authorization': `token ${GITHUB_TOKEN}`,
-                                'Accept': 'application/vnd.github.v3+json',
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                message: `Admin: ${action} entries via web interface (public copy)`,
-                                content: content,
-                                sha: publicFileInfo.sha,
-                                branch: GITHUB_BRANCH
-                            }),
-                        });
-                    }
-
-                    updateState({ isUpdating: false });
-                    showMessage(`Successfully ${action} entries and updated GitHub!`, 'success');
-                    return true;
-
-                } catch (error) {
-                    console.error('GitHub update error:', error);
-                    updateState({ isUpdating: false });
-                    showMessage(`Error updating GitHub: ${error.message}`, 'error');
-                    return false;
-                }
+            if (getResponse.ok) {
+                // File exists → grab its SHA
+                const fileInfo = await getResponse.json();
+                sha = fileInfo.sha;
+            } else if (getResponse.status === 404) {
+                // File doesn’t exist yet → we'll create it (no SHA)
+                sha = undefined;
+            } else {
+                // Some other error → stop and report
+                throw new Error(`Failed to get file info: ${getResponse.statusText}`);
             }
+
+            // 2. Build the PUT body
+            const body = {
+                message: `Admin: ${action} entries via web interface`,
+                content: btoa(JSON.stringify(newData, null, 2)),
+                branch: GITHUB_BRANCH,
+                // only include `sha` when updating an existing file
+                ...(sha && { sha })
+            };
+
+            // 3. Push the change (create or update)
+            const updateResponse = await fetch(
+                `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
+                {
+                method: 'PUT',
+                headers: {
+                    Authorization: `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+                }
+            );
+
+            if (!updateResponse.ok) {
+                const err = await updateResponse.json();
+                throw new Error(`GitHub update failed: ${err.message}`);
+            }
+
+            return await updateResponse.json();
+            }
+
 
             function toggleEntry(entryId) {
                 const newSelected = new Set(state.selectedEntries);
