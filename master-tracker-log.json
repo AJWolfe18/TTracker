@@ -1,6 +1,18 @@
 [
   {
     "date": "2025-07-14",
+    "actor": "New York City Mayor Eric Adams",
+    "category": "Corporate Ethics",
+    "title": "Excessive Contributions in Eric Adams\\' Campaign Raise Concerns",
+    "description": "Investigations revealed that Mayor Eric Adams\\' 2021 campaign accepted donations exceeding legal limits from individuals and entities on the city\\'s \\'doing business\\' list, leading to refunds and raising questions about campaign finance oversight.",
+    "source_url": "https://www.thecity.nyc/2024/07/19/eric-adams-2025-campaign-donor-doing-business/",
+    "verified": false,
+    "severity": "high",
+    "id": "md3gzwkur56knoe9ff9",
+    "added_at": "2025-07-14T19:02:08.046Z"
+  },
+  {
+    "date": "2025-07-14",
     "actor": "xAI",
     "category": "Government Contracts",
     "title": "xAI Secures $200 Million Pentagon Contract",
@@ -142,6 +154,18 @@
     "severity": "high",
     "id": "md36ocmll54amenophi",
     "added_at": "2025-07-14T14:13:12.813Z"
+  },
+  {
+    "date": "2025-07-13",
+    "actor": "Phillip Taylor and Nonprofit Organizations",
+    "category": "Corporate Ethics",
+    "title": "Legal Challenge to Corporate Transparency Act\\'s Reporting Requirements",
+    "description": "A lawsuit filed by Phillip Taylor and several nonprofits in Utah challenges the constitutionality of the Corporate Transparency Act, which mandates beneficial ownership reporting, citing violations of privacy and due process rights.",
+    "source_url": "https://tax.thomsonreuters.com/news/pushback-against-corporate-transparency-act-filing-requirements-continues/",
+    "verified": true,
+    "severity": "medium",
+    "id": "md3gzwkuwut9y9h80pc",
+    "added_at": "2025-07-14T19:02:08.046Z"
   },
   {
     "date": "2025-07-13",
@@ -418,6 +442,18 @@
     "severity": "medium",
     "id": "md26zebvlvfq7keii",
     "added_at": "2025-07-13T21:34:02.059Z"
+  },
+  {
+    "date": "2025-07-12",
+    "actor": "Federal Judge Maame E. Frimpong",
+    "category": "Legal Proceedings",
+    "title": "Judge Halts Indiscriminate Immigration Stops in California",
+    "description": "A federal judge ordered the Trump administration to cease indiscriminate immigration stops and arrests in seven California counties, including Los Angeles, due to allegations of unconstitutional practices. The lawsuit accused federal agents of targeting individuals based on race and conducting warrantless arrests, violating the Fourth and Fifth Amendments. The ruling mandates attorney access at a downtown LA detention facility and temporarily prohibits federal use of race, language, or occupation as sole bases for immigration suspicion.",
+    "source_url": "https://apnews.com/article/b4d59afc4aa6be4944e67f773aa34096",
+    "verified": false,
+    "severity": "high",
+    "id": "md3gznfrifayxwukkqm",
+    "added_at": "2025-07-14T19:01:56.199Z"
   },
   {
     "date": "2025-07-12",
@@ -754,6 +790,18 @@
     "severity": "high",
     "id": "md26zebvvmrt746xnw",
     "added_at": "2025-07-13T21:34:02.059Z"
+  },
+  {
+    "date": "2025-07-11",
+    "actor": "U.S. Federal Election Commission",
+    "category": "Corporate Ethics",
+    "title": "FEC Dismisses McDonald v. FEC Case Due to Lack of Jurisdiction",
+    "description": "The U.S. District Court for the Northern District of Texas dismissed the McDonald v. FEC case without prejudice, citing lack of jurisdiction, following the FEC\\'s motion to dismiss.",
+    "source_url": "https://www.fec.gov/updates/week-of-july-7-11-2025/",
+    "verified": false,
+    "severity": "low",
+    "id": "md3gzwku9i4qq847l7p",
+    "added_at": "2025-07-14T19:02:08.046Z"
   },
   {
     "date": "2025-07-11",
@@ -1510,6 +1558,42 @@
     "severity": "high",
     "id": "md26zentf1og6n19h8",
     "added_at": "2025-07-13T21:34:02.489Z"
+  },
+  {
+    "date": "2025-07-02",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump\\'s Media Group Faces Potential Foreign Investment Scrutiny",
+    "description": "President Trump\\'s media company, Trump Media & Technology Group (TMTG), which owns Truth Social, is under scrutiny for potential foreign investments. Critics express concerns that foreign entities could influence U.S. politics by investing in TMTG, given Trump\\'s significant ownership stake valued at around $3.8 billion.",
+    "source_url": "https://www.france24.com/en/live-news/20241113-trump-presidency-raises-fresh-conflict-of-interest-concerns",
+    "verified": false,
+    "severity": "medium",
+    "id": "md3gzobfn352b1jgl9",
+    "added_at": "2025-07-14T19:01:57.339Z"
+  },
+  {
+    "date": "2025-07-02",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump\\'s Middle East Business Ventures Raise Ethical Questions",
+    "description": "During his Middle East trip, President Trump\\'s family\\'s cryptocurrency venture, $Trump, attracted a $2 billion investment from an Abu Dhabi-backed firm. This development has raised ethical concerns about potential conflicts of interest and the intertwining of private business interests with U.S. foreign policy.",
+    "source_url": "https://www.washingtonpost.com/politics/2025/05/13/trump-mideast-business-conflicts/",
+    "verified": true,
+    "severity": "high",
+    "id": "md3gzobfmy14bl2w6d",
+    "added_at": "2025-07-14T19:01:57.339Z"
+  },
+  {
+    "date": "2025-07-02",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump\\'s Acceptance of Qatari Jet Raises Ethical Concerns",
+    "description": "President Trump\\'s acceptance of a $400 million luxury jet from Qatar to serve as Air Force One has elicited bipartisan criticism. Critics argue that this move could be perceived as a quid pro quo, raising questions about potential conflicts of interest and the influence of foreign governments on U.S. politics.",
+    "source_url": "https://www.theguardian.com/us-news/2025/may/15/trump-acceptance-qatari-jet-ethical-concerns",
+    "verified": false,
+    "severity": "high",
+    "id": "md3gzobfn31dogzfo1",
+    "added_at": "2025-07-14T19:01:57.339Z"
   },
   {
     "date": "2025-07-02",
