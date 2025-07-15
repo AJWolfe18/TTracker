@@ -112,6 +112,13 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+         // ─── Unicode-safe Base64 helper ───────────────────
+        function b64FromUtf8(str) {
+          const bytes = new TextEncoder().encode(str);
+          let binary = '';
+          for (let b of bytes) binary += String.fromCharCode(b);
+          return btoa(binary);
+        }
 
         function SecureAdminInterface() {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -193,7 +200,7 @@
                     }
 
                     const fileInfo = await getResponse.json();
-                    const content = btoa(JSON.stringify(newData, null, 2));
+                    const content = b64FromUtf8(JSON.stringify(newData, null, 2));
 
                     // Update the file
                     const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
