@@ -1,5 +1,161 @@
 [
   {
+    "date": "2025-07-15",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Initiates Policy to Detain More Immigrants by Denying Bond Hearings",
+    "description": "The DOJ has implemented a new policy to detain more immigrants who entered the U.S. illegally by denying them bond hearings. This guidance reinterprets immigration laws to limit release after arrest and encourages ICE prosecutors to push for continued detention, potentially affecting millions contesting deportation. Critics describe this as a significant shift from longstanding legal norms.",
+    "source_url": "https://www.reuters.com/world/us/us-launches-new-bid-keep-migrants-detained-by-denying-hearings-memo-shows-2025-07-15/",
+    "verified": true,
+    "severity": "high",
+    "id": "md4m3wr7pvm121xuee",
+    "added_at": "2025-07-15T14:12:59.155Z"
+  },
+  {
+    "date": "2025-07-15",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Field Offices Ordered to Increase Focus on Immigration Enforcement",
+    "description": "FBI field offices nationwide have been directed to significantly increase agent involvement in immigration enforcement operations. The DOJ expects a substantial rise in agents participating in these operations, with specific targets set for major field offices. This directive aligns with broader changes under the Trump administration, which is proposing a 5% cut to the FBI’s budget.",
+    "source_url": "https://www.police1.com/fbi-field-offices-ordered-to-shift-focus-assign-more-agents-to-immigration-crackdown",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3wr7kugecky7u6l",
+    "added_at": "2025-07-15T14:12:59.155Z"
+  },
+  {
+    "date": "2025-07-15",
+    "actor": "Weaponization Working Group",
+    "category": "Government Oversight",
+    "title": "Weaponization Working Group Established to Review \\'Politicized\\' Prosecutions",
+    "description": "Attorney General Pam Bondi established the Weaponization Working Group to review instances of \\'politicized\\' prosecutions. The group is led by Ed Martin, who previously praised the January 6 Capitol attack and repeated false claims of fraud in the 2020 presidential election. The establishment of this group marks a significant effort to utilize the federal government against perceived enemies of President Trump.",
+    "source_url": "https://en.wikipedia.org/wiki/Weaponization_Working_Group",
+    "verified": false,
+    "severity": "high",
+    "id": "md4m3wr7yvwmk5bgc2",
+    "added_at": "2025-07-15T14:12:59.155Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "Donald Trump Jr. and Eric Trump",
+    "category": "Financial",
+    "title": "Trump Sons\\' Cryptocurrency Venture Faces Scrutiny Over Foreign Investments",
+    "description": "Donald Trump Jr. and Eric Trump, sons of former President Donald Trump, are under scrutiny for their involvement in World Liberty Financial, a cryptocurrency venture that has attracted significant foreign investments. The venture has been linked to Chinese billionaire Justin Sun and an Abu Dhabi-backed investment firm, raising concerns about potential conflicts of interest and the influence of foreign capital on U.S. business operations.",
+    "source_url": "https://www.nytimes.com/2025/04/29/us/politics/trump-crypto-world-liberty-financial.html",
+    "verified": true,
+    "severity": "medium",
+    "id": "md4mk1jhu166xvxdbbp",
+    "added_at": "2025-07-15T14:25:31.853Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "Lara Trump",
+    "category": "Media",
+    "title": "Lara Trump Hosts New Fox News Show Amid Ethical Concerns",
+    "description": "Lara Trump, daughter-in-law of former President Donald Trump, has launched a new opinion show on Fox News titled \\'My View with Lara Trump.\\' The show has received mixed reactions, with critics raising concerns about potential conflicts of interest due to her familial ties to the sitting president and the blurring of lines between journalism and political influence.",
+    "source_url": "https://www.newyorker.com/news/our-columnists/fox-news-lara-trump",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4mk1jhj4p36fhiogh",
+    "added_at": "2025-07-15T14:25:31.853Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court allows Trump to lay off nearly 1,400 Education Department employees",
+    "description": "The U.S. Supreme Court permitted President Donald Trump to proceed with plans to reduce the Department of Education\\'s workforce by nearly 1,400 employees, overturning a lower court\\'s injunction. Critics argue this move could disrupt the department\\'s ability to support public education and enforce civil rights laws.",
+    "source_url": "https://apnews.com/article/9370415531185092341b16a6bfea9344",
+    "verified": true,
+    "severity": "high",
+    "id": "md4m3v6lwxx53k9ypc",
+    "added_at": "2025-07-15T14:12:57.117Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court clears way for Trump to gut Education Department",
+    "description": "The Supreme Court lifted a lower court\\'s injunction, allowing the Trump administration to continue dismantling the Department of Education. This decision faced dissent from liberal justices and criticism from those concerned about the impact on public education and civil rights enforcement.",
+    "source_url": "https://www.reuters.com/legal/litigation/us-supreme-court-clears-way-trump-gut-education-department-2025-07-14/",
+    "verified": true,
+    "severity": "high",
+    "id": "md4m3v6ln0s5lprluj",
+    "added_at": "2025-07-15T14:12:57.117Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court gives Trump green light to fire Education Department workers",
+    "description": "The Supreme Court ruled in favor of President Trump, allowing his administration to proceed with layoffs at the Department of Education. This decision overturned a prior federal judge’s order and was criticized by liberal justices as enabling the president\\'s disregard for legal norms.",
+    "source_url": "https://www.axios.com/2025/07/14/supreme-court-education-department-layoffs",
+    "verified": true,
+    "severity": "high",
+    "id": "md4m3v6l65ni9u35a1r",
+    "added_at": "2025-07-15T14:12:57.117Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "Legal Experts",
+    "category": "Legal Analysis",
+    "title": "Analysis of Supreme Court\\'s 2024-2025 Regulatory Term",
+    "description": "Legal scholars discuss the Supreme Court\\'s recent term, highlighting decisions on religious liberty, gender transition treatments for minors, and the limitations of nationwide injunctions. The term reflects the Court\\'s evolving approach to constitutional interpretation and federal authority.",
+    "source_url": "https://www.theregreview.org/2025/07/14/the-supreme-courts-2024-2025-regulatory-term/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3v6l1r0nolsj4be",
+    "added_at": "2025-07-15T14:12:57.117Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "EPA",
+    "category": "Government Oversight",
+    "title": "EPA Announces Staff Reductions to 1980s Levels",
+    "description": "The Environmental Protection Agency plans to cut its budget by $300 million and reduce staffing to levels last seen in the 1980s. The agency will dissolve its Office of Research and Development, aiming to streamline operations and align with the administration\\'s policy goals.",
+    "source_url": "https://www.reuters.com/business/world-at-work/us-epa-plans-reduce-staff-1980s-levels-cut-budget-by-300-million-2025-05-02/",
+    "verified": true,
+    "severity": "medium",
+    "id": "md4m3u5kifzqb5ent8n",
+    "added_at": "2025-07-15T14:12:55.784Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "EPA",
+    "category": "Government Oversight",
+    "title": "EPA Terminates Over 300 Employees Amid Restructuring",
+    "description": "The EPA has terminated over 300 probationary employees, including staff responsible for enforcing environmental regulations. This action could delay critical oversight functions and compromise timely responses to pollution and disaster events.",
+    "source_url": "https://en.wikipedia.org/wiki/2025_United_States_federal_mass_layoffs",
+    "verified": false,
+    "severity": "high",
+    "id": "md4m3u5k3wed4d4dp4b",
+    "added_at": "2025-07-15T14:12:55.784Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "Pam Bondi",
+    "category": "Legal",
+    "title": "Attorney General Pam Bondi Dismisses DOJ Ethics Director Amid Purge",
+    "description": "On July 14, 2025, Attorney General Pam Bondi dismissed Joseph Tirrell, the ethics director at the Department of Justice, coinciding with the removal of over 20 employees associated with investigations into former President Donald Trump. The dismissals are part of a broader personnel purge within the DOJ, raising concerns about political interference and the undermining of traditional ethics oversight within the department.",
+    "source_url": "https://www.axios.com/2025/07/14/pam-bondi-fires-ethics-chief-doj-purge",
+    "verified": true,
+    "severity": "high",
+    "id": "md4m3u4tctba5vipd7r",
+    "added_at": "2025-07-15T14:12:55.757Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "xAI",
+    "category": "Government Contracts",
+    "title": "xAI Announces Partnership with U.S. Government",
+    "description": "xAI has announced a suite of products making its frontier AI models available to U.S. government customers, including a new Department of Defense contract. Additionally, all federal departments can now purchase xAI\\'s products via the General Services Administration schedule.",
+    "source_url": "https://www.nasdaq.com/articles/government-contract-update-elon-musks-xai-announces-partnership-us-government",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3s798hw08cxusm",
+    "added_at": "2025-07-15T14:12:53.253Z"
+  },
+  {
     "date": "2025-07-14",
     "actor": "FEC",
     "category": "Corporate Ethics",
@@ -298,6 +454,18 @@
     "severity": "medium",
     "id": "md26zebvlvfq7keii",
     "added_at": "2025-07-13T21:34:02.059Z"
+  },
+  {
+    "date": "2025-07-12",
+    "actor": "Tesla",
+    "category": "Platform Manipulation",
+    "title": "Tesla Integrates xAI\\'s Grok AI into Vehicles",
+    "description": "Tesla has begun rolling out Grok, an in-car conversational AI assistant developed by xAI, to eligible vehicles starting July 12. This integration offers drivers hands-free access to a chat-style companion while on the road, marking a significant collaboration between Musk\\'s companies.",
+    "source_url": "https://www.teslarati.com/elon-musk-twitter-over-1-billion-monthly-users-2-years/",
+    "verified": false,
+    "severity": "low",
+    "id": "md4m3s79cr0bllp8b0h",
+    "added_at": "2025-07-15T14:12:53.253Z"
   },
   {
     "date": "2025-07-12",
@@ -781,6 +949,42 @@
   },
   {
     "date": "2025-07-10",
+    "actor": "U.S. District Court for the District of New Hampshire",
+    "category": "Legal Proceedings",
+    "title": "Federal Judge Halts Trump\\'s Birthright Citizenship Order Nationwide",
+    "description": "A federal judge in New Hampshire issued a nationwide injunction blocking President Trump\\'s executive order on birthright citizenship. Judge Joseph LaPlante\\'s decision marks a significant legal setback for the policy, which sought to restrict birthright citizenship for children born to non-citizens in the U.S.",
+    "source_url": "https://daily-miner.com/supreme-court-june-2025-key-rulings-gender-health/",
+    "verified": false,
+    "severity": "high",
+    "id": "md4mk2eh8hudondbny8",
+    "added_at": "2025-07-15T14:25:32.969Z"
+  },
+  {
+    "date": "2025-07-10",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump Organization Not Banning Private Foreign Deals",
+    "description": "The Trump Organization has expressed interest in striking deals in Israel and elsewhere, and has financial interests in two businesses with publicly traded stock that could get a boost from foreign investors. This approach marks a departure from the company\\'s previous policy of avoiding private foreign deals during Trump\\'s first term, raising concerns about potential conflicts of interest and the influence of foreign investments on U.S. policy.",
+    "source_url": "https://ny1.com/nyc/all-boroughs/politics/2025/01/10/trump-organization-ethics-agreement-foreign-business-deals",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3u4tiqj74q63u5",
+    "added_at": "2025-07-15T14:12:55.757Z"
+  },
+  {
+    "date": "2025-07-10",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump\\'s Business Ventures Spark New Conflict-of-Interest Concerns",
+    "description": "President Donald Trump faces renewed scrutiny over conflicts of interest due to his business ventures, including cryptocurrency and social media. Despite stepping away from day-to-day business operations and assigning management to his children, watchdog groups raise concerns about potential monetization of his presidency. Key ventures include Trump\\'s $TRUMP and $MELANIA cryptocurrency tokens and his involvement in World Liberty Financial.",
+    "source_url": "https://www.reuters.com/business/media-telecom/trumps-business-ventures-spark-new-conflict-of-interest-concerns-2025-03-04/",
+    "verified": true,
+    "severity": "medium",
+    "id": "md4m3u4t4n9cu8q7uvf",
+    "added_at": "2025-07-15T14:12:55.757Z"
+  },
+  {
+    "date": "2025-07-10",
     "actor": "U.S. Supreme Court",
     "category": "Legal Proceedings",
     "title": "Supreme Court Limits Nationwide Injunctions in Birthright Citizenship Case",
@@ -1045,6 +1249,18 @@
   },
   {
     "date": "2025-07-08",
+    "actor": "Newly Elected House Members",
+    "category": "Corporate Ethics",
+    "title": "New House Members See PAC Donations Surge After Committee Assignments",
+    "description": "Following their committee assignments, new members of the U.S. House of Representatives experienced a significant increase in political action committee (PAC) donations, highlighting the influence of committee roles on fundraising dynamics.",
+    "source_url": "https://www.opensecrets.org/news/2025/07/08/new-house-members-see-pac-donations-surge-after-committee-assignments/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3uvoz3b6yl6j5qi",
+    "added_at": "2025-07-15T14:12:56.724Z"
+  },
+  {
+    "date": "2025-07-08",
     "actor": "U.S. Supreme Court",
     "category": "Legal Proceedings",
     "title": "Supreme Court Allows Deportation of Migrants to South Sudan",
@@ -1186,6 +1402,18 @@
     "severity": "medium",
     "id": "md2899dt9pl5n8i274",
     "added_at": "2025-07-13T22:09:41.825Z"
+  },
+  {
+    "date": "2025-07-01",
+    "actor": "Agribusiness and Hospitality Sectors",
+    "category": "Corporate Ethics",
+    "title": "Agribusiness and Hospitality Sectors Invest Millions in Republican Campaigns Amid Deportation Threats",
+    "description": "Facing potential deportations of undocumented workers, agribusiness and hospitality industries have contributed millions to Republican campaigns, aiming to influence immigration policy decisions.",
+    "source_url": "https://www.opensecrets.org/news/2025/06/25/agribusiness-and-hospitality-sectors-invest-millions-in-republican-campaigns-amid-deportation-threats/",
+    "verified": false,
+    "severity": "high",
+    "id": "md4m3uvolscuk4l4s5k",
+    "added_at": "2025-07-15T14:12:56.724Z"
   },
   {
     "date": "2025-07-01",
@@ -1549,6 +1777,18 @@
   },
   {
     "date": "2025-06-17",
+    "actor": "Oil and Gas Industry",
+    "category": "Corporate Ethics",
+    "title": "Oil and Gas Lobbying Expenditure Reaches $38 Million in Early 2025",
+    "description": "The oil and gas industry spent $38 million on federal lobbying in the first quarter of 2025, indicating sustained efforts to influence energy policy, though this amount is below previous highs.",
+    "source_url": "https://www.opensecrets.org/news/2025/06/17/oil-and-gas-lobbying-reached-38-million-in-early-2025-yet-fell-short-of-previous-highs/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3uvorqm5wiqac3d",
+    "added_at": "2025-07-15T14:12:56.724Z"
+  },
+  {
+    "date": "2025-06-17",
     "actor": "Trump family",
     "category": "Corporate Ethics",
     "title": "World Liberty Financial crypto scandal",
@@ -1594,6 +1834,18 @@
     "severity": "high",
     "id": 118,
     "added_at": "2025-06-28T13:35:00Z"
+  },
+  {
+    "date": "2025-06-13",
+    "actor": "Basel Committee on Banking Supervision (BCBS)",
+    "category": "Corporate Ethics",
+    "title": "BCBS Releases Climate Disclosure Framework for Voluntary Reporting",
+    "description": "The BCBS introduced a non-binding framework for banks to voluntarily disclose climate-related financial risks, aiming to standardize global climate governance and risk management practices.",
+    "source_url": "https://www.pwc.com/us/en/industries/financial-services/library/our-take/06-27-2025.html",
+    "verified": false,
+    "severity": "medium",
+    "id": "md4m3uvo3wet551yikt",
+    "added_at": "2025-07-15T14:12:56.724Z"
   },
   {
     "date": "2025-06-12",
