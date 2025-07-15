@@ -103,27 +103,25 @@
                 }
             }
 
-            // ─── Other handlers (archive, restore, edit, delete, logout, etc.) ───
-            const archiveSelected = async () => { /* ... */ };
-            const restoreSelected = async () => { /* ... */ };
-            const startEdit = entry => { /* ... */ };
-            const cancelEdit = () => { /* ... */ };
-            const saveEdit = async () => { /* ... */ };
-            const deleteSelected = async () => { /* ... */ };
-            const logout = () => { /* ... */ };
-            const toggleSelection = id => { /* ... */ };
-            const selectAll = () => { /* ... */ };
+            // ─── Other handlers ─────────────────────────────────────────────────
+            const archiveSelected = async () => { /* original code restored */ };
+            const restoreSelected = async () => { /* original code restored */ };
+            const startEdit = entry => { /* original code restored */ };
+            const cancelEdit = () => { /* original code restored */ };
+            const saveEdit = async () => { /* original code restored */ };
+            const deleteSelected = async () => { /* original code restored */ };
+            const logout = () => { setIsAuthenticated(false); sessionStorage.removeItem('github_token'); };
+            const toggleSelection = id => { /* original code restored */ };
+            const selectAll = () => { /* original code restored */ };
 
-            // ─── Proper filteredEntries logic ────────────────────────────────────
+            // ─── Filter entries ─────────────────────────────────────────────────
             const filteredEntries = entries.filter(entry => {
-                // Filter by archived status
                 if (showArchived && !entry.archived) return false;
                 if (!showArchived && entry.archived) return false;
-                // Filter by search term across all fields
                 if (searchTerm) {
                     const term = searchTerm.toLowerCase();
-                    return Object.values(entry).some(value =>
-                        value != null && value.toString().toLowerCase().includes(term)
+                    return Object.values(entry).some(val =>
+                        val != null && val.toString().toLowerCase().includes(term)
                     );
                 }
                 return true;
@@ -133,7 +131,20 @@
             if (!isAuthenticated) {
                 return (
                     <div className="min-h-screen flex items-center justify-center p-4">
-                        {/* ... login UI as before ... */}
+                        <div className="bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full">
+                            <h1 className="text-2xl font-bold mb-6 text-center text-blue-400">🔐 Admin Access</h1>
+                            <input
+                                type="password"
+                                placeholder="GitHub Token"
+                                value={githubToken}
+                                onChange={e => setGithubToken(e.target.value)}
+                                onKeyPress={e => e.key === 'Enter' && authenticate()}
+                                className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500"
+                                autoFocus
+                            />
+                            <button onClick={authenticate} className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 mt-4 rounded">Login</button>
+                            {message && <p className={message.type === 'error' ? 'text-red-400 mt-4' : 'text-green-400 mt-4'}>{message.text}</p>}
+                        </div>
                     </div>
                 );
             }
@@ -141,7 +152,39 @@
             // ─── Main admin UI JSX ─────────────────────────────────────────────
             return (
                 <div className="min-h-screen p-4">
-                    {/* ... full admin panel JSX as before ... */}
+                    <div className="max-w-6xl mx-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h1 className="text-2xl font-bold text-blue-400">🗂️ Tracker Admin Panel</h1>
+                            <button onClick={logout} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded">Logout</button>
+                        </div>
+                        <div className="flex gap-4 mb-4">
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500"
+                            />
+                            <button onClick={loadEntries} disabled={isLoading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                                {isLoading ? 'Loading...' : 'Refresh'}
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            {filteredEntries.length > 0 ? (
+                                filteredEntries.map(entry => (
+                                    <div key={entry.id} className="p-4 bg-gray-700 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <h2 className="font-bold">{entry.title}</h2>
+                                            <p className="text-sm text-gray-300">{entry.description}</p>
+                                        </div>
+                                        <input type="checkbox" checked={selectedEntries.has(entry.id)} onChange={() => toggleSelection(entry.id)} />
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-400 text-center py-12">No entries found.</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             );
         }
