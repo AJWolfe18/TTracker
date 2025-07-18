@@ -1,0 +1,122 @@
+[
+  {
+    "date": "2025-07-16",
+    "actor": "President Donald Trump",
+    "category": "Policy",
+    "title": "Trump Administration Freezes $7 Billion in Education Grants",
+    "description": "The Trump administration froze nearly $7 billion in previously approved education grants, affecting programs for after-school initiatives and teacher training. This move has prompted legal challenges from 24 states and the District of Columbia, who argue that the freeze is unlawful and detrimental to educational opportunities.",
+    "source_url": "https://havanatimes.org/news/international-news-briefs-for-tuesday-july-15-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md8wf9m22u1az12g0td",
+    "added_at": "2025-07-18T14:12:49.898Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "President Donald Trump",
+    "category": "Financial",
+    "title": "Trump Family Profits Amid Ethics Concerns",
+    "description": "Reports indicate that the Trump family has earned nearly $80 million since the election through a documentary deal with Amazon and legal settlements with media and tech companies. This financial gain has raised concerns about potential conflicts of interest, especially as the Trump Organization continues to engage in business dealings without clear restrictions on foreign investments.",
+    "source_url": "https://www.wbur.org/hereandnow/2025/02/25/trump-family-profits",
+    "verified": false,
+    "severity": "medium",
+    "id": "md8wf9m264c3gnu9rje",
+    "added_at": "2025-07-18T14:12:49.898Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "President Donald Trump",
+    "category": "Policy",
+    "title": "Trump Signs HALT Fentanyl Act into Law",
+    "description": "President Trump signed the HALT Fentanyl Act into law, reclassifying all fentanyl-related substances, including synthetic drugs, as Schedule I controlled substances. This legislation aims to enhance efforts to combat the opioid crisis by imposing stricter penalties on the distribution and possession of these substances.",
+    "source_url": "https://www.newsweek.com/thebulletin/2025-07-16",
+    "verified": false,
+    "severity": "high",
+    "id": "md8wf9m265poatcdrnq",
+    "added_at": "2025-07-18T14:12:49.898Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Russ Vought",
+    "category": "Government Efficiency",
+    "title": "Russ Vought Advances DOGE\\'s Policy Goals with $9 Billion Clawback Package",
+    "description": "Russ Vought, Director of the Office of Management and Budget, is advancing DOGE\\'s policy goals by securing a $9 billion clawback package targeting federal funds previously designated for the Public Broadcasting Service, National Public Radio, and foreign aid. This initiative aims to make these budget cuts permanent and aligns with Elon Musk\\'s earlier efforts in a more structured manner. The House narrowly passed the bill with a 216-213 vote, awaiting President Trump\\'s signature.",
+    "source_url": "https://www.axios.com/2025/07/18/russ-vought-doge-elon-musk-recissions",
+    "verified": true,
+    "severity": "high",
+    "id": "md8wfa8wp9spzj0tdz",
+    "added_at": "2025-07-18T14:12:50.720Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Katie Miller",
+    "category": "Political Influence",
+    "title": "Katie Miller Continues Work for Elon Musk Amid Speculation of Fallout",
+    "description": "Katie Miller, a former Trump administration official and wife of Trump adviser Stephen Miller, has denied recent speculation of a fallout with Elon Musk. Despite social media signals suggesting a rift, Miller confirmed she is still employed by Musk, though she did not clarify her specific role. Her continued work for Musk, despite his break with Trump and opposition to policies supported by her husband, has sparked interest among Republican insiders.",
+    "source_url": "https://www.reuters.com/world/us/trump-loyalist-katie-miller-crosses-battle-lines-continue-work-elon-musk-2025-07-18/",
+    "verified": true,
+    "severity": "medium",
+    "id": "md8wfa8wa50h4y0dasc",
+    "added_at": "2025-07-18T14:12:50.720Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "House Democrats",
+    "category": "Government Efficiency",
+    "title": "House Democrats Opt Against Delay Tactics to Stall DOGE Vote",
+    "description": "House Democrats are choosing not to pursue procedural delay tactics to obstruct a Republican-led vote aimed at codifying approximately $9 billion in budget cuts to public broadcasting and foreign aid, referred to as \\'DOGE cuts\\'. Democratic leadership, including House Minority Leader Hakeem Jeffries, is opting against actions like long speeches or filibuster-style strategies, preferring a more targeted approach to opposition.",
+    "source_url": "https://www.axios.com/2025/07/17/npr-pbs-cuts-doge-democrats-johnson",
+    "verified": true,
+    "severity": "medium",
+    "id": "md8wfa8wy4dn5vwm2rp",
+    "added_at": "2025-07-18T14:12:50.720Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "U.S. District Judge Jia Cobb",
+    "category": "Government Oversight",
+    "title": "Judge Dismisses Lawsuit Shielding FBI Agents\\' Identities in Capitol Riot Probe",
+    "description": "A U.S. District Judge dismissed lawsuits filed by FBI agents seeking to prevent the disclosure of their identities in connection with the January 6 Capitol riot investigation, citing insufficient evidence of imminent threat. The FBI Agents Association expressed concerns over agent safety, while the Justice Department is reviewing potential misconduct related to the investigation.",
+    "source_url": "https://www.reuters.com/legal/government/judge-tosses-lawsuit-seeking-shield-names-fbi-agents-capitol-riot-probe-2025-07-17/",
+    "verified": true,
+    "severity": "medium",
+    "id": "md8wf7u8xfqk0dxn1gs",
+    "added_at": "2025-07-18T14:12:47.600Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "U.S. Department of Energy",
+    "category": "Regulatory Actions",
+    "title": "Energy Department Delays Multiple Rules After Public Pushback",
+    "description": "The U.S. Department of Energy postponed the implementation of several rules affecting schools receiving federal funding, responding to public opposition. The new effective date is set for September 12, 2025, to address concerns over student protections related to sex, disability, and racial discrimination.",
+    "source_url": "https://www.k12dive.com/news/energy-department-delays-direct-rules-public-pushback/753396/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md8wf8k3g41z01qrvkr",
+    "added_at": "2025-07-18T14:12:48.531Z"
+  },
+  {
+    "date": "2025-07-10",
+    "actor": "U.S. Department of Education",
+    "category": "Policy Implementation Changes",
+    "title": "ED Ends Access to Funding for Postsecondary Education for Illegal Aliens/Undocumented Immigrants",
+    "description": "The Department of Education announced the cessation of taxpayer subsidization for undocumented immigrants in career, technical, and adult education programs, rescinding a previous policy that allowed such access.",
+    "source_url": "https://www.powerslaw.com/washington-dc-education-update-july-2025/",
+    "verified": false,
+    "severity": "high",
+    "id": "md8wf8k3r4jmzhnts8k",
+    "added_at": "2025-07-18T14:12:48.531Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "U.S. Court of Appeals for the First Circuit",
+    "category": "Corporate Ethics",
+    "title": "Maine\\'s Foreign Election Spending Ban Likely Unconstitutional",
+    "description": "The court ruled that Maine\\'s 2023 law prohibiting foreign government-influenced entities from donating to state and local ballot measures is likely unconstitutional, affirming a lower court\\'s temporary stay on enforcement. The case will return to the lower court for further proceedings.",
+    "source_url": "https://stateandfed.com/campaign-finance/news-you-can-use-digest-july-18-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "md8wfb7ajegkzdss7ce",
+    "added_at": "2025-07-18T14:12:51.958Z"
+  }
+]
