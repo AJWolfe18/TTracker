@@ -1,5 +1,41 @@
 [
   {
+    "date": "2025-07-19",
+    "actor": "FBI Agents Association",
+    "category": "Government Oversight",
+    "title": "FBI Agents Sue DOJ to Prevent Disclosure of Roles in Jan. 6 Probe",
+    "description": "FBI agents filed a lawsuit against the DOJ to prevent the disclosure of personal information regarding their roles in the January 6 Capitol riot investigation. The agents argue that such disclosure could lead to retaliation and compromise their safety.",
+    "source_url": "https://news.bloomberglaw.com/daily-labor-report/fbi-agents-sue-doj-to-stop-disclosure-of-roles-in-jan-6-cases",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac803do5sw1kw27si",
+    "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Announces New Plan for White Collar Enforcement and Revised Policies on Corporate Prosecutions",
+    "description": "The DOJ\\'s Criminal Division, under Matthew R. Galeotti, announced a new plan for white-collar enforcement, including revisions to the Corporate Enforcement and Voluntary Self-Disclosure Policy. The initiative aims to encourage companies to self-disclose and cooperate in addressing corporate misconduct.",
+    "source_url": "https://www.millerchevalier.com/publication/doj-criminal-division-announces-new-plan-white-collar-enforcement-and-revised-policies",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac803dvp6he8tqtnj",
+    "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Elon Musk",
+    "category": "Government Efficiency",
+    "title": "Elon Musk\\'s DOGE Claims $55 Billion in Government Cuts So Far",
+    "description": "Elon Musk\\'s Department of Government Efficiency (DOGE) claims to have saved the government $55 billion through asset sales, contract cancellations, fraud elimination, and workforce reductions. However, the accuracy of these figures has been questioned by experts.",
+    "source_url": "https://www.thinktankinsight.com/elon-musk-government-cuts/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac7yxuf34i2fz5i2",
+    "added_at": "2025-07-19T14:22:49.506Z"
+  },
+  {
     "date": "2025-07-18",
     "actor": "Environmental Protection Agency (EPA)",
     "category": "Agency Restructuring",
@@ -106,6 +142,42 @@
     "severity": "medium",
     "id": "md8wfa8wa50h4y0dasc",
     "added_at": "2025-07-18T14:12:50.720Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "Emil Bove",
+    "category": "Government Oversight",
+    "title": "Senate Judiciary Committee Advances Emil Bove\\'s Nomination Amid Controversy",
+    "description": "The Senate Judiciary Committee voted to advance Emil Bove\\'s nomination for the 3rd U.S. Circuit Court of Appeals, despite opposition from over 900 former DOJ attorneys and civil rights groups. The nomination has sparked debate over Bove\\'s role in dismissing charges against New York City Mayor Eric Adams and concerns about political interference in the judiciary.",
+    "source_url": "https://en.wikipedia.org/wiki/Emil_Bove",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac803d25kguvzp8qhj",
+    "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "Elon Musk",
+    "category": "Government Efficiency",
+    "title": "U.S. House Approves $9 Billion Cuts to Public Broadcasting and Foreign Aid",
+    "description": "The U.S. House of Representatives approved a $9 billion funding cut affecting public broadcasting and foreign aid, aligning with the Department of Government Efficiency\\'s (DOGE) goals. Critics warn of negative impacts on rural news services and global health.",
+    "source_url": "https://www.ft.com/content/1dd7139a-5efc-431e-9e51-068412806e5e",
+    "verified": true,
+    "severity": "high",
+    "id": "mdac7yxudcq40gfvi9j",
+    "added_at": "2025-07-19T14:22:49.506Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump signs GENIUS Act, boosting cryptocurrency and AI sectors",
+    "description": "President Trump signed the GENIUS Act into law, aiming to supercharge cryptocurrency and artificial intelligence industries in the U.S. This legislation is expected to foster innovation and attract significant investments in these sectors.",
+    "source_url": "https://www.wtae.com/article/trump-second-term-business-conflicts/63451285",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac7xpu7xs8whes9ht",
+    "added_at": "2025-07-19T14:22:47.922Z"
   },
   {
     "date": "2025-07-17",
@@ -262,6 +334,18 @@
     "severity": "high",
     "id": "md7gx4ekmwc8zke9cum",
     "added_at": "2025-07-17T14:11:02.924Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "Justice Department Fires Prosecutor on Epstein Case and Daughter of Ex-FBI Director",
+    "description": "The DOJ dismissed Maurene Comey, a seasoned federal prosecutor and daughter of former FBI Director James Comey, without providing a specific reason. Her involvement in high-profile cases, including the prosecution of Jeffrey Epstein, has raised concerns about potential political motivations behind her termination.",
+    "source_url": "https://apnews.com/article/48b4a7ffa208353c5498c4ec51df1d92",
+    "verified": true,
+    "severity": "high",
+    "id": "mdac803dqn3qb2ag0fd",
+    "added_at": "2025-07-19T14:22:51.001Z"
   },
   {
     "date": "2025-07-16",
@@ -469,6 +553,18 @@
   },
   {
     "date": "2025-07-15",
+    "actor": "National Republican Senatorial Committee (NRSC)",
+    "category": "Corporate Ethics",
+    "title": "NRSC Challenges Campaign Finance Restrictions in Supreme Court",
+    "description": "The NRSC, along with other Republican entities, filed a lawsuit challenging federal limits on coordinated party expenditures, seeking to overturn longstanding campaign finance restrictions. The Supreme Court agreed to hear the case, which could significantly reshape campaign finance laws and reduce regulatory constraints on political spending.",
+    "source_url": "https://www.axios.com/2025/06/30/supreme-court-republican-campaign-finance-restrictions",
+    "verified": true,
+    "severity": "high",
+    "id": "mdac875n3gptkep7w4m",
+    "added_at": "2025-07-19T14:23:00.155Z"
+  },
+  {
+    "date": "2025-07-15",
     "actor": "Donald Trump",
     "category": "Financial",
     "title": "Trump secures trade deal with Indonesia",
@@ -586,6 +682,18 @@
     "severity": "high",
     "id": "md4m3wr7yvwmk5bgc2",
     "added_at": "2025-07-15T14:12:59.155Z"
+  },
+  {
+    "date": "2025-07-14",
+    "actor": "Interfaith Center on Corporate Responsibility (ICCR)",
+    "category": "Corporate Ethics",
+    "title": "ICCR Files 60 Proposals for Corporate Political Activity Transparency",
+    "description": "The ICCR announced the filing of 60 shareholder proposals for the 2025 proxy season, calling for increased disclosures and oversight of corporate political activities. These proposals aim to enhance transparency and accountability in corporate political spending and lobbying efforts.",
+    "source_url": "https://www.iccr.org/investors-file-60-proposals-calling-for-transparency-around-corporate-political-activity/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdac875n114h7qjrovo",
+    "added_at": "2025-07-19T14:23:00.155Z"
   },
   {
     "date": "2025-07-14",
@@ -973,6 +1081,18 @@
   },
   {
     "date": "2025-07-13",
+    "actor": "Senator Sheldon Whitehouse and European Parliament Members",
+    "category": "Corporate Ethics",
+    "title": "Call for Lobbying Disclosure and Conflict-of-Interest Policies",
+    "description": "Senator Sheldon Whitehouse, along with nine other members of Congress and the European Parliament, urged international leaders to implement conflict-of-interest policies and mandate the disclosure of lobbying activities. This initiative aims to prevent industry obstruction in negotiations related to plastic pollution.",
+    "source_url": "https://www.whitehouse.senate.gov/news/release/whitehouse-and-transatlantic-climate-leaders-call-for-lobbying-disclosure-requirements-and-conflict-of-interest-policies-to-prevent-industry-obstruction/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdac875nteviojh2i1",
+    "added_at": "2025-07-19T14:23:00.155Z"
+  },
+  {
+    "date": "2025-07-13",
     "actor": "U.S. Supreme Court",
     "category": "Legal Proceedings",
     "title": "Supreme Court\\'s \\'Shadow Docket\\' Benefits Trump Administration",
@@ -1126,6 +1246,18 @@
     "severity": "medium",
     "id": "md26zebvlvfq7keii",
     "added_at": "2025-07-13T21:34:02.059Z"
+  },
+  {
+    "date": "2025-07-12",
+    "actor": "Citizens for Responsibility and Ethics in Washington (CREW)",
+    "category": "Corporate Ethics",
+    "title": "Project 2025 Proposes Weakened Campaign Finance Laws",
+    "description": "CREW reported that Project 2025, a policy framework associated with former Trump administration officials, proposes significant changes to the Federal Election Commission\\'s structure and processes. The plan aims to weaken campaign finance laws and increase the influence of wealthy donors in elections.",
+    "source_url": "https://www.citizensforethics.org/reports-investigations/crew-investigations/trump-tied-project-2025-would-weaken-campaign-finance-laws-and-give-big-donors-more-power/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdac875notcsq0rqus",
+    "added_at": "2025-07-19T14:23:00.155Z"
   },
   {
     "date": "2025-07-12",
