@@ -1,0 +1,86 @@
+[
+  {
+    "date": "2025-07-17",
+    "actor": "Maurene Comey",
+    "category": "Government Oversight",
+    "title": "Fired federal prosecutor Maurene Comey condemns her dismissal",
+    "description": "Maurene Comey, a seasoned federal prosecutor and daughter of former FBI Director James Comey, was dismissed from her position at the Southern District of New York without explanation. In a message to colleagues, she criticized the use of fear in firings and urged commitment to justice and independence. Her termination has raised concerns about potential political influence and the erosion of civil service protections at the DOJ.",
+    "source_url": "https://apnews.com/article/6a75266874bb7723ac83a9b548b7d257",
+    "verified": true,
+    "severity": "high",
+    "id": "mdabrytvgfsz2l29fhu",
+    "added_at": "2025-07-19T14:10:22.867Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Environmental Protection Agency (EPA)",
+    "category": "Agency Restructuring",
+    "title": "EPA Eliminates Research and Development Office, Begins Layoffs",
+    "description": "The EPA announced the elimination of its Office of Research and Development and a workforce reduction affecting over 3,700 employees, approximately 23% of its staff. This restructuring aims to save nearly $750 million and has faced criticism for potentially undermining essential scientific functions.",
+    "source_url": "https://apnews.com/article/acf0ad3a649f940e138b2a917169405f",
+    "verified": true,
+    "severity": "high",
+    "id": "mdabrk3o1wvuw7aky1i",
+    "added_at": "2025-07-19T14:10:03.780Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Environmental Protection Agency (EPA)",
+    "category": "Agency Restructuring",
+    "title": "EPA Cuts Workforce by 23%, Closes Research Division",
+    "description": "The EPA announced a 23% reduction in its workforce, lowering staff from 16,155 to 12,448, and the closure of its Office of Research and Development. This move is part of President Trump\\'s initiative to downsize the federal government and is expected to save $748.8 million.",
+    "source_url": "https://www.reuters.com/legal/government/us-epa-cutting-workforce-by-23-closing-research-division-2025-07-18/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdabrk3ojrtnrv3m9ek",
+    "added_at": "2025-07-19T14:10:03.780Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Department of Education",
+    "category": "Policy Implementation Changes",
+    "title": "Department of Education Begins Closure Process",
+    "description": "On March 20, 2025, President Trump signed an executive order directing the Secretary of Education to \\'facilitate the closure\\' of the Department of Education and return authority over education to the states and local communities. This follows the department\\'s earlier announcement of a major workforce reduction.",
+    "source_url": "https://en.wikipedia.org/wiki/Education_policy_of_the_second_Donald_Trump_administration",
+    "verified": false,
+    "severity": "high",
+    "id": "mdabrk3olj5gw9znk4",
+    "added_at": "2025-07-19T14:10:03.780Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "U.S. District Court Judge Denise J. Casper",
+    "category": "Legal Proceedings",
+    "title": "Judge Modifies Injunction on Trump\\'s Election Overhaul",
+    "description": "A federal judge in New York slightly modified a previous injunction blocking President Trump\\'s executive order on election reforms, limiting its scope to the 19 states involved in the lawsuit. However, a nationwide block remains in effect due to another court\\'s ruling.",
+    "source_url": "https://apnews.com/article/e73a4a02aeb9abe77bf10fefd3181510",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdabrjb7kabpdrn88z8",
+    "added_at": "2025-07-19T14:10:02.755Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Declines to Hear Key Cases",
+    "description": "The Supreme Court declined to hear several significant cases, including Nicholson v. W.L. York, involving racial discrimination at adult entertainment clubs, and Snope v. Brown, concerning Maryland\\'s ban on semi-automatic rifles, allowing lower court decisions to stand.",
+    "source_url": "https://en.wikipedia.org/wiki/2025_term_opinions_of_the_Supreme_Court_of_the_United_States",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdabrjb7bau6erqfbmf",
+    "added_at": "2025-07-19T14:10:02.755Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Issues Orders for July 2025 Term",
+    "description": "The Supreme Court released its order list for July 2025, including decisions in cases such as United States Postal Service v. Konan and Hain Celestial Group, Inc. v. Palmquist, among others.",
+    "source_url": "https://www.law.cornell.edu/supct/orderlists.php",
+    "verified": false,
+    "severity": "low",
+    "id": "mdabrjb7xowwizws1jg",
+    "added_at": "2025-07-19T14:10:02.755Z"
+  }
+]
