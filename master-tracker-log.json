@@ -1,5 +1,17 @@
 [
   {
+    "date": "2025-07-21",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "Former Police Officer to Be Sentenced in Breonna Taylor Case",
+    "description": "Brett Hankison, a former Louisville police officer, is set to be sentenced for violating Breonna Taylor\\'s rights during the 2020 raid. Despite his federal conviction, the Justice Department recommended a one-day prison sentence, sparking controversy and anger from Taylor\\'s family.",
+    "source_url": "https://www.reuters.com/legal/government/us-judge-sentence-former-police-officer-breonna-taylor-case-2025-07-21/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdd6surlo1e3lunrw4",
+    "added_at": "2025-07-21T14:14:24.705Z"
+  },
+  {
     "date": "2025-07-20",
     "actor": "Elon Musk",
     "category": "Platform Manipulation",
@@ -10,6 +22,18 @@
     "severity": "medium",
     "id": "mdbr7ng73m4mvsn704",
     "added_at": "2025-07-20T14:10:15.031Z"
+  },
+  {
+    "date": "2025-07-19",
+    "actor": "U.S. District Judge Nancy Torresen",
+    "category": "Legal Proceedings",
+    "title": "Federal Judge Blocks Enforcement of Trump\\'s ICC Order",
+    "description": "Judge Torresen ruled that former President Trump\\'s executive order targeting individuals working with the International Criminal Court infringed on free speech rights, issuing a nationwide injunction against its enforcement.",
+    "source_url": "https://www.reuters.com/world/us/federal-judge-blocks-enforcement-trumps-order-icc-2025-07-19/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdd6t1tmcdity7owu7s",
+    "added_at": "2025-07-21T14:14:33.850Z"
   },
   {
     "date": "2025-07-19",
@@ -70,6 +94,78 @@
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
     "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Seeks Release of Epstein Grand Jury Records",
+    "description": "The Justice Department, under the Trump administration, has requested a federal court to unseal grand jury documents related to Jeffrey Epstein\\'s case, amid criticism over unfulfilled promises of transparency.",
+    "source_url": "https://apnews.com/article/91f911d2d7a909f78259cdca7b55d9a6",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdd6surlsgtqjdqwvsc",
+    "added_at": "2025-07-21T14:14:24.705Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Ends Bid to Cancel ABA\\'s Domestic Violence Grants",
+    "description": "The Justice Department decided not to appeal a court ruling that blocked its attempt to cancel $3.2 million in domestic violence training grants awarded to the American Bar Association, allowing continued funding through 2027.",
+    "source_url": "https://www.reuters.com/legal/government/justice-department-ends-bid-cancel-abas-domestic-violence-grants-2025-07-18/",
+    "verified": true,
+    "severity": "low",
+    "id": "mdd6surl6ezx2uk9whe",
+    "added_at": "2025-07-21T14:14:24.705Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Trump Sues Wall Street Journal Over Defamation Claims",
+    "description": "Donald Trump filed a defamation lawsuit against the Wall Street Journal, its publisher Dow Jones & Company, and owner News Corp, seeking $10 billion in damages. The suit alleges that a 2003 lewd note attributed to Trump, published by the Journal, was false and defamatory.",
+    "source_url": "https://www.nytimes.com/2025/07/18/us/politics/trump-sues-wall-street-journal.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdd6suiv29nfddbmgue",
+    "added_at": "2025-07-21T14:14:24.391Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "EPA Eliminates Research Office, Reduces Staff",
+    "description": "The Environmental Protection Agency announced the elimination of its Office of Research and Development, resulting in a significant reduction of agency staff. The move aims to streamline operations but has raised concerns about environmental oversight.",
+    "source_url": "https://www.bostonglobe.com/2025/07/18/nation/trump-presidency-live-updates/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdd6suiv3s8l0wh6x8",
+    "added_at": "2025-07-21T14:14:24.391Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Federal Judge Restores FTC Commissioner Slaughter",
+    "description": "A federal judge ruled that President Trump\\'s attempt to remove FTC Commissioner Rebecca Kelly Slaughter violated the FTC Act. The judge ordered her immediate reinstatement, citing protections for officials at independent agencies.",
+    "source_url": "https://www.justsecurity.org/117356/early-edition-july-18-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdd6suiv9e56pxxd9zq",
+    "added_at": "2025-07-21T14:14:24.391Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Justice Department Seeks Epstein Grand Jury Testimony Release",
+    "description": "Attorney General Pam Bondi announced plans to unseal more grand jury testimony in the Jeffrey Epstein case, following public outcry over the Department of Justice\\'s previous decision not to release additional evidence.",
+    "source_url": "https://www.washingtonpost.com/politics/2025/07/18/trump-presidency-news/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdd6suivup1y6vg0go7",
+    "added_at": "2025-07-21T14:14:24.391Z"
   },
   {
     "date": "2025-07-18",
@@ -538,6 +634,18 @@
     "severity": "high",
     "id": "md7gx4ekmwc8zke9cum",
     "added_at": "2025-07-17T14:11:02.924Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "Elon Musk",
+    "category": "Corporate Ethics",
+    "title": "Elon Musk\\'s Texas Lobbying Efforts Under Scrutiny Amid Transparency Concerns",
+    "description": "Elon Musk employed a dozen lobbyists in Texas during the 2025 legislative session, raising questions about the extent of corporate influence and transparency due to state laws limiting disclosure of lobbying activities.",
+    "source_url": "https://www.msn.com/en-us/news/politics/elon-musk-hired-a-dozen-texas-lobbyists-this-year-state-law-keeps-the-extent-of-their-influence-under-wraps/ar-AA1d1X5N",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdd6stp7twcd7a1j0ss",
+    "added_at": "2025-07-21T14:14:23.323Z"
   },
   {
     "date": "2025-07-16",
