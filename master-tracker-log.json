@@ -1,6 +1,18 @@
 [
   {
     "date": "2025-07-22",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Reaches Out to Ghislaine Maxwell for Testimony on Epstein Network",
+    "description": "The DOJ has contacted Ghislaine Maxwell, currently serving a 20-year sentence for child sex trafficking related to Jeffrey Epstein, seeking her cooperation to provide critical information about Epstein\\'s network. This move follows increased political pressure and aims to address public dissatisfaction with the administration\\'s progress on the Epstein case.",
+    "source_url": "https://time.com/7304408/ghislaine-maxwell-epstein-files-bondi/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdemnchmpvgn6rjoifk",
+    "added_at": "2025-07-22T14:25:47.770Z"
+  },
+  {
+    "date": "2025-07-22",
     "actor": "Scott Kupor",
     "category": "Government Efficiency",
     "title": "Scott Kupor Aims to Institutionalize DOGE\\'s Efficiency Policies",
@@ -70,6 +82,18 @@
     "severity": "medium",
     "id": "mdem8uvt5rzyluv3gnt",
     "added_at": "2025-07-22T14:14:31.769Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Urged to Enhance Protection Against Mobile Cyber Threats",
+    "description": "Senator Ron Wyden has urged the FBI to strengthen its efforts to protect government officials from mobile cyber threats. He highlighted that current spyware guidance is insufficient against advanced cyber tools, citing instances where spyware has been found on the phones of numerous government employees.",
+    "source_url": "https://federalnewsnetwork.com/federal-newscast/2025/07/fbi-urged-to-step-up-protection-of-government-officials-from-mobile-cyber-threats/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdemnchm619brvcddl9",
+    "added_at": "2025-07-22T14:25:47.770Z"
   },
   {
     "date": "2025-07-21",
