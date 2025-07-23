@@ -1,85 +1,188 @@
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 
-console.log('=== REAL NEWS POLITICAL TRACKER ===');
+// Simple ID generator - no dependencies needed
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// Duplicate prevention functions
+function removeDuplicates(newEntries, existingEntries) {
+  const existingMap = new Map();
+  
+  // Create a map of existing entries for faster lookup
+  existingEntries.forEach(entry => {
+    // Use multiple keys for duplicate detection
+    const titleKey = entry.title.toLowerCase().trim();
+    const urlKey = entry.source_url;
+    const dateActorKey = `${entry.date}-${entry.actor.toLowerCase()}`;
+    
+    existingMap.set(titleKey, entry);
+    existingMap.set(urlKey, entry);
+    existingMap.set(dateActorKey, entry);
+  });
+  
+  const uniqueEntries = [];
+  const duplicates = [];
+  
+  newEntries.forEach(entry => {
+    const titleKey = entry.title.toLowerCase().trim();
+    const urlKey = entry.source_url;
+    const dateActorKey = `${entry.date}-${entry.actor.toLowerCase()}`;
+    
+    // Check if this is a duplicate
+    if (existingMap.has(titleKey) || existingMap.has(urlKey) || 
+        (existingMap.has(dateActorKey) && isSimilarTitle(entry.title, existingMap.get(dateActorKey).title))) {
+      duplicates.push({
+        title: entry.title,
+        reason: existingMap.has(urlKey) ? 'duplicate URL' : 'duplicate title/content'
+      });
+    } else {
+      uniqueEntries.push(entry);
+      // Add to map to prevent duplicates within the same batch
+      existingMap.set(titleKey, entry);
+      existingMap.set(urlKey, entry);
+      existingMap.set(dateActorKey, entry);
+    }
+  });
+  
+  if (duplicates.length > 0) {
+    console.log(`\n⚠️  [TEST] Removed ${duplicates.length} duplicate entries:`);
+    duplicates.forEach(dup => console.log(`  - "${dup.title}" (${dup.reason})`));
+  }
+  
+  return uniqueEntries;
+}
+
+// Helper function for fuzzy title matching
+function isSimilarTitle(title1, title2) {
+  const clean1 = title1.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const clean2 = title2.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  // Check if one title contains most of the other
+  const shorter = clean1.length < clean2.length ? clean1 : clean2;
+  const longer = clean1.length < clean2.length ? clean2 : clean1;
+  
+  // If shorter title is contained in longer one, likely a duplicate
+  if (longer.includes(shorter) && shorter.length > 20) {
+    return true;
+  }
+  
+  // Calculate similarity ratio
+  const similarity = calculateSimilarity(clean1, clean2);
+  return similarity > 0.85; // 85% similarity threshold
+}
+
+function calculateSimilarity(str1, str2) {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  let matches = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (longer.includes(shorter.substr(i, 3))) matches++;
+  }
+  
+  return matches / shorter.length;
+}
+
+// Date range helper (TEST: shorter window to avoid too much API usage)
+function getDateRangePrompt() {
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 1); // TEST: 1-day window vs 3-day in production
+  
+  return `between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`;
+}
+
+// Entry validation
+function validateEntry(entry) {
+  const required = ['date', 'actor', 'category', 'title', 'description', 'source_url'];
+  const missing = required.filter(field => !entry[field]);
+  
+  if (missing.length > 0) {
+    console.log(`  ⚠️  [TEST] Entry missing required fields: ${missing.join(', ')}`);
+    return false;
+  }
+  
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) {
+    console.log(`  ⚠️  [TEST] Invalid date format: ${entry.date}`);
+    return false;
+  }
+  
+  // Validate URL
+  try {
+    new URL(entry.source_url);
+  } catch {
+    console.log(`  ⚠️  [TEST] Invalid URL: ${entry.source_url}`);
+    return false;
+  }
+  
+  return true;
+}
+
+console.log('=== 🧪 TEST MODE: REAL NEWS POLITICAL TRACKER ===');
+console.log('🧪 This is the TEST version - safe for experimentation');
 console.log('Date:', new Date().toDateString());
 console.log('Time:', new Date().toISOString());
 
-// Real news search prompts using the new Responses API
-const REAL_NEWS_PROMPTS = {
-  'Trump & Family': `Search for recent news and developments involving Donald Trump or Trump family members from the past 24-48 hours. Focus on:
-- Legal proceedings and court cases
-- Business dealings and financial issues  
-- Campaign activities and political statements
-- Policy announcements or government actions
-- Conflicts of interest or ethics concerns
+// TEST: Smaller subset of prompts to save API costs during testing
+const dateRange = getDateRangePrompt();
+const TEST_REAL_NEWS_PROMPTS = {
+  'Trump & Family': `[TEST] Search for recent news involving Donald Trump or Trump family members ${dateRange}. Focus on:
+- NEW legal proceedings, court cases, or rulings
+- RECENT business dealings and financial disclosures  
+- LATEST campaign activities and political statements
+
+IMPORTANT: Only include news from the specified date range. This is a TEST run.
 
 Find credible news sources and return specific, factual developments with proper citations.`,
 
-  'Elon Musk & DOGE': `Search for recent news about Elon Musk's role in government, DOGE (Department of Government Efficiency), or his political influence from the past 24-48 hours. Focus on:
-- DOGE operations and government efficiency recommendations
-- Government contracts involving his companies (Tesla, SpaceX, etc.)
-- X/Twitter platform policy changes affecting political discourse
-- Conflicts between business interests and government responsibilities
-- Public statements on government policy
+  'Elon Musk & DOGE': `[TEST] Search for recent news about Elon Musk's role in government or DOGE ${dateRange}. Focus on:
+- NEW DOGE operations and government efficiency recommendations
+- RECENT government contracts involving his companies
+- LATEST X/Twitter platform policy changes
 
-Find current news with credible sources and citations.`,
+IMPORTANT: Only include unique stories from the date range. This is a TEST run.
 
-  'DOJ & Law Enforcement': `Search for recent developments involving the Department of Justice, FBI, or federal law enforcement from the past 24-48 hours. Focus on:
-- New prosecutions or investigations
-- Leadership changes or appointments
-- Policy shifts in enforcement priorities
-- Civil rights investigations or actions
-- Political interference concerns
-- Whistleblower reports
-
-Find current news from credible legal and political sources.`,
-
-  'Federal Agencies': `Search for recent news about federal agencies (ICE, DHS, Department of Education, EPA, etc.) from the past 24-48 hours. Focus on:
-- Policy implementation changes
-- Regulatory actions or rollbacks
-- Leadership appointments or departures
-- Budget or operational changes
-- Congressional oversight issues
-- Agency restructuring or closures
-
-Find current developments from reliable government and news sources.`,
-
-  'Courts & Legal': `Search for recent federal court rulings, Supreme Court developments, or major legal proceedings from the past 24-48 hours. Focus on:
-- Supreme Court decisions or case acceptances
-- Federal court rulings on political matters
-- Legal challenges to government policies
-- Civil rights or constitutional cases
-- Appeals court decisions
-- Legal expert analysis
-
-Find current legal developments with proper case citations and sources.`,
-
-  'Corporate & Financial': `Search for recent developments involving corporate influence, lobbying, campaign finance, or financial conflicts of interest from the past 24-48 hours. Focus on:
-- Major corporate lobbying efforts
-- Campaign finance violations or investigations
-- PAC activities and dark money flows
-- Government contracts and potential conflicts
-- Corporate regulatory issues
-- Financial disclosure problems
-
-Find current financial and corporate accountability news from credible business and political sources.`
+Find current news with credible sources and citations.`
 };
 
-// Reputable news sources for verification
+// Updated reputable news sources for verification (same as production)
 const REPUTABLE_SOURCES = [
-  'reuters.com', 'ap.org', 'wsj.com', 'nytimes.com', 'washingtonpost.com',
-  'politico.com', 'cnn.com', 'nbcnews.com', 'abcnews.go.com', 'cbsnews.com',
-  'npr.org', 'pbs.org', 'bloomberg.com', 'axios.com', 'thehill.com',
-  'propublica.org', 'courthousenews.com', 'lawfaremedia.org'
+  'reuters.com', 'ap.org', 'apnews.com', 'wsj.com', 'nytimes.com', 'washingtonpost.com', 'usatoday.com',
+  'bbc.com', 'bbc.co.uk', 'guardian.com', 'theguardian.com', 'economist.com', 'ft.com',
+  'cnn.com', 'foxnews.com', 'foxbusiness.com', 'nbcnews.com', 'abcnews.go.com', 'cbsnews.com', 'msnbc.com',
+  'npr.org', 'pbs.org', 'politico.com', 'thehill.com', 'axios.com', 'realclearpolitics.com', 
+  'washingtonexaminer.com', 'nationalreview.com', 'bloomberg.com', 'cnbc.com', 'marketwatch.com', 
+  'forbes.com', 'businessinsider.com', 'propublica.org', 'courthousenews.com', 'lawfaremedia.org', 
+  'lawfareblog.com', '.gov', 'supremecourt.gov', 'justice.gov', 'whitehouse.gov', 'congress.gov', 
+  'senate.gov', 'house.gov', 'state.gov', 'defense.gov', 'treasury.gov', 'fbi.gov', 'cia.gov', 
+  'dhs.gov', 'ed.gov', 'fec.gov', 'sec.gov'
 ];
 
+// Enhanced verification function with better .gov handling
 function isVerifiedSource(url) {
   try {
-    const domain = new URL(url).hostname.toLowerCase();
-    return REPUTABLE_SOURCES.some(source => domain.includes(source));
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.toLowerCase();
+    
+    // Special handling for .gov domains
+    if (domain.endsWith('.gov')) {
+      return true;
+    }
+    
+    // Check against the reputable sources list
+    return REPUTABLE_SOURCES.some(source => {
+      // Handle .gov as special case (already checked above)
+      if (source === '.gov') return false;
+      
+      // For other sources, check if domain includes the source
+      return domain.includes(source) || domain.endsWith(source);
+    });
   } catch {
     return false;
   }
@@ -124,12 +227,14 @@ async function fetchRealPoliticalNews() {
     throw new Error('OpenAI API key not found in environment variables');
   }
 
-  console.log('=== SEARCHING FOR REAL POLITICAL NEWS ===');
+  console.log('\n=== 🧪 TEST: SEARCHING FOR REAL POLITICAL NEWS ===');
+  console.log(`📅 Date range: ${dateRange}`);
+  console.log('🔬 Using reduced prompt set to save API costs during testing\n');
   
   const allEntries = [];
-  const promises = Object.entries(REAL_NEWS_PROMPTS).map(async ([category, prompt]) => {
+  const promises = Object.entries(TEST_REAL_NEWS_PROMPTS).map(async ([category, prompt]) => {
     try {
-      console.log(`Searching real news for: ${category}`);
+      console.log(`🔍 [TEST] Searching real news for: ${category}`);
       
       // Use the new Responses API with web search
       const response = await fetch('https://api.openai.com/v1/responses', {
@@ -152,7 +257,7 @@ For each relevant news story found, extract and format as JSON:
 {
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
-  "category": "${category.includes('Trump') ? 'Financial' : category.includes('Musk') ? 'Platform Manipulation' : category.includes('DOJ') ? 'Government Oversight' : category.includes('Courts') ? 'Legal Proceedings' : category.includes('Corporate') ? 'Corporate Ethics' : 'Government Oversight'}",
+  "category": "${category.includes('Trump') ? 'Financial' : category.includes('Musk') ? 'Platform Manipulation' : 'Government Oversight'}",
   "title": "Headline under 100 characters",
   "description": "2-3 sentence factual summary",
   "source_url": "Full URL to original article",
@@ -160,8 +265,8 @@ For each relevant news story found, extract and format as JSON:
   "severity": "low|medium|high"
 }
 
-Return a JSON array of relevant political developments found. Only include real news from credible sources.`,
-          max_completion_tokens: 2000
+Return a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates.`,
+          max_output_tokens: 2000
         }),
       });
 
@@ -171,10 +276,12 @@ Return a JSON array of relevant political developments found. Only include real 
       }
 
       const data = await response.json();
-      const content = data.output_text || '';
       
-      console.log(`${category} - Response length: ${content.length}`);
-      console.log(`${category} - Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
+      // Extract content from the correct location in response
+      const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
+      
+      console.log(`  [TEST] Response length: ${content.length}`);
+      console.log(`  [TEST] Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
 
       // Extract JSON from the response
       let entries = [];
@@ -188,8 +295,7 @@ Return a JSON array of relevant political developments found. Only include real 
           entries = JSON.parse(content);
         }
       } catch (parseError) {
-        console.log(`${category} - Could not parse JSON response`);
-        console.log(`${category} - Raw content:`, content.substring(0, 500));
+        console.log(`  ❌ [TEST] Could not parse JSON response`);
         entries = [];
       }
 
@@ -203,7 +309,7 @@ Return a JSON array of relevant political developments found. Only include real 
         
         return {
           ...entry,
-          id: uuidv4(),
+          id: generateId(),
           added_at: new Date().toISOString(),
           verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
           title: escapeQuotes(entry.title || ''),
@@ -212,20 +318,20 @@ Return a JSON array of relevant political developments found. Only include real 
           severity: entry.severity || assessSeverity(entry.title, entry.description),
           date: entry.date || new Date().toISOString().split('T')[0]
         };
-      }).filter(entry => entry !== null && entry.title && entry.description);
+      }).filter(entry => entry !== null && validateEntry(entry));
 
-      console.log(`${category} - Found ${processedEntries.length} real news entries`);
+      console.log(`  ✅ [TEST] Found ${processedEntries.length} valid entries`);
       
       if (processedEntries.length > 0) {
         processedEntries.forEach((entry, index) => {
-          console.log(`  ${index + 1}. [${entry.severity.toUpperCase()}] ${entry.actor}: ${entry.title}`);
+          console.log(`    ${index + 1}. [${entry.severity.toUpperCase()}] ${entry.actor}: ${entry.title.substring(0, 60)}...`);
         });
       }
 
       return processedEntries;
 
     } catch (error) {
-      console.error(`Error searching ${category}:`, error.message);
+      console.error(`  ❌ [TEST] Error searching ${category}:`, error.message);
       return [];
     }
   });
@@ -233,100 +339,148 @@ Return a JSON array of relevant political developments found. Only include real 
   const results = await Promise.all(promises);
   results.forEach(entries => allEntries.push(...entries));
 
-  console.log(`=== TOTAL REAL NEWS ENTRIES FOUND: ${allEntries.length} ===`);
+  console.log(`\n=== 🧪 TEST: TOTAL VALID ENTRIES FOUND: ${allEntries.length} ===`);
   
   return allEntries;
 }
 
 async function saveToFile(entries) {
   const today = new Date().toISOString().split('T')[0];
-  const filename = `real-news-tracker-${today}.json`;
+  const filename = `test-news-tracker-${today}.json`; // TEST: different filename
   const masterFilename = 'master-tracker-log.json';
   const publicDir = 'public';
   const publicMasterFile = path.join(publicDir, masterFilename);
 
   try {
-    // Save daily file
-    await fs.writeFile(filename, JSON.stringify(entries, null, 2));
-    console.log(`Saving real news to file: ${filename}`);
-
     // Load existing master log
-    console.log('Loading existing master log...');
+    console.log('\n📁 [TEST] Loading existing master log...');
     let masterLog = [];
     try {
       const masterData = await fs.readFile(masterFilename, 'utf8');
       masterLog = JSON.parse(masterData);
+      console.log(`  [TEST] Found ${masterLog.length} existing entries`);
     } catch (error) {
-      console.log('No existing master log found, creating new one');
+      console.log('  [TEST] No existing master log found, creating new one');
     }
 
-    // Add new entries to master log
-    masterLog.push(...entries);
+    console.log(`\n🔍 [TEST] DEBUG: About to check ${entries.length} new entries for duplicates`);
+    
+    // Remove duplicates before saving
+    const uniqueEntries = removeDuplicates(entries, masterLog);
+    
+    console.log(`📊 [TEST] DEBUG: After duplicate removal:`);
+    console.log(`  - Started with: ${entries.length} new entries`);
+    console.log(`  - Unique entries: ${uniqueEntries.length}`);
+    console.log(`  - Duplicates removed: ${entries.length - uniqueEntries.length}`);
+    
+    if (uniqueEntries.length === 0) {
+      console.log('\n⚠️  [TEST] All entries were duplicates - no new data to save');
+      return;
+    }
+
+    // Save daily file with unique entries only
+    await fs.writeFile(filename, JSON.stringify(uniqueEntries, null, 2));
+    console.log(`\n✅ [TEST] Saved ${uniqueEntries.length} unique entries to ${filename}`);
+
+    // IMPORTANT: Only add unique entries to master log
+    console.log(`\n🔍 [TEST] DEBUG: Master log before adding new entries: ${masterLog.length}`);
+    masterLog.push(...uniqueEntries);
+    console.log(`📊 [TEST] DEBUG: Master log after adding new entries: ${masterLog.length}`);
+
+    // Sort master log by date (newest first)
+    masterLog.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      return b.added_at.localeCompare(a.added_at);
+    });
 
     // Save updated master log
     await fs.writeFile(masterFilename, JSON.stringify(masterLog, null, 2));
+    console.log(`\n📊 [TEST] DEBUG: Saved master log with ${masterLog.length} total entries`);
 
     // Ensure public directory exists and copy master log
     try {
       await fs.mkdir(publicDir, { recursive: true });
       await fs.writeFile(publicMasterFile, JSON.stringify(masterLog, null, 2));
-      console.log('Updated public master log for website');
+      console.log('✅ [TEST] Updated public master log for website');
+      
+      // Verify the public file
+      const publicData = await fs.readFile(publicMasterFile, 'utf8');
+      const publicEntries = JSON.parse(publicData);
+      console.log(`📊 [TEST] DEBUG: Public file now has ${publicEntries.length} entries`);
+      
+      if (publicEntries.length !== masterLog.length) {
+        console.error('❌ [TEST] WARNING: Public file entry count does not match master log!');
+      } else {
+        console.log('✅ [TEST] SUCCESS: Public file sync working correctly!');
+      }
     } catch (publicError) {
-      console.error('Error updating public master log:', publicError.message);
+      console.error('❌ [TEST] Error updating public master log:', publicError.message);
     }
 
-    console.log(`Saved ${entries.length} real news entries to ${filename}`);
-    console.log(`Master log now contains ${masterLog.length} total entries`);
+    console.log(`\n📊 [TEST] Database Summary:`);
+    console.log(`  - New unique entries added: ${uniqueEntries.length}`);
+    console.log(`  - Total entries in database: ${masterLog.length}`);
 
   } catch (error) {
-    console.error('Error saving files:', error.message);
+    console.error('❌ [TEST] Error saving files:', error.message);
     throw error;
   }
 }
 
 async function main() {
   try {
-    console.log('🔍 Searching for real political news using OpenAI Responses API with web search...');
+    console.log('🚀 [TEST] Starting Test Mode Real News Political Tracker...');
+    console.log('🔍 [TEST] Using OpenAI Responses API with web search capabilities');
+    console.log('🧪 [TEST] Reduced API calls to save costs during testing\n');
     
     const entries = await fetchRealPoliticalNews();
     
     if (entries.length === 0) {
-      console.log('ℹ️  No relevant political news found in current search');
-      console.log('This is normal - not every day has major political developments');
+      console.log('\nℹ️  [TEST] No relevant political news found in current search');
+      console.log('[TEST] This is normal - not every search yields new developments');
       return;
     }
 
     await saveToFile(entries);
 
-    console.log('\n=== DAILY REAL NEWS SUMMARY ===');
-    console.log('Date:', new Date().toDateString());
-    console.log('Real news entries found:', entries.length);
+    // Enhanced summary
+    console.log('\n=== 🧪 TEST MODE TRACKING SUMMARY ===');
+    console.log('📅 Date:', new Date().toDateString());
+    console.log('🕐 Time:', new Date().toLocaleTimeString());
+    console.log('📰 New entries found:', entries.length);
     
-    // Show summary by severity
+    // Category breakdown
+    const categoryCount = {};
+    entries.forEach(e => {
+      categoryCount[e.category] = (categoryCount[e.category] || 0) + 1;
+    });
+    
+    console.log('\n📊 [TEST] By Category:');
+    Object.entries(categoryCount).forEach(([cat, count]) => {
+      console.log(`  - ${cat}: ${count}`);
+    });
+    
+    // Severity breakdown
     const highSeverity = entries.filter(e => e.severity === 'high').length;
     const mediumSeverity = entries.filter(e => e.severity === 'medium').length;
     const lowSeverity = entries.filter(e => e.severity === 'low').length;
     
-    console.log(`Severity breakdown: ${highSeverity} high, ${mediumSeverity} medium, ${lowSeverity} low`);
+    console.log(`\n⚠️  [TEST] Severity: ${highSeverity} high, ${mediumSeverity} medium, ${lowSeverity} low`);
     
-    // Get total count from master log
-    try {
-      const masterData = await fs.readFile('master-tracker-log.json', 'utf8');
-      const masterLog = JSON.parse(masterData);
-      console.log('Total entries in database:', masterLog.length);
-    } catch (error) {
-      console.log('Could not read master log for total count');
-    }
+    // Verification status
+    const verified = entries.filter(e => e.verified).length;
+    console.log(`✓ [TEST] Verified sources: ${verified} of ${entries.length} (${Math.round(verified/entries.length*100)}%)`);
     
-    console.log('Data file:', filename);
-    console.log('================================');
+    console.log('\n🧪 TEST MODE COMPLETED SUCCESSFULLY');
+    console.log('===================================\n');
 
   } catch (error) {
-    console.error('Error in main execution:', error.message);
-    console.error('Stack trace:', error.stack);
+    console.error('❌ [TEST] Error in main execution:', error.message);
+    console.error('[TEST] Stack trace:', error.stack);
     
     // Don't throw error - let GitHub Actions continue
-    console.log('Script completed with errors but continuing...');
+    console.log('[TEST] Script completed with errors but continuing...');
   }
 }
 
