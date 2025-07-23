@@ -13,6 +13,54 @@
   },
   {
     "date": "2025-07-22",
+    "actor": "Federal Appeals Court",
+    "category": "Legal Proceedings",
+    "title": "Appeals Court Revives Antitrust Lawsuit Over Puerto Rican Baseball League",
+    "description": "A U.S. federal appeals court reinstated part of an antitrust and civil rights lawsuit against Puerto Rico\\'s top baseball league, Liga de Béisbol Profesional de Puerto Rico. The lawsuit alleges that the league conspired to block efforts to rejuvenate a franchise through broadcasting deals and higher salaries.",
+    "source_url": "https://www.reuters.com/legal/government/us-appeals-court-revives-antitrust-lawsuit-over-puerto-rican-baseball-league-2025-07-22/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdff59p0xuchxaq4t8",
+    "added_at": "2025-07-23T03:43:33.204Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Federal Judge",
+    "category": "Legal Proceedings",
+    "title": "Judge Pauses Enforcement of Mississippi\\'s Ban on DEI Programs in Schools and Universities",
+    "description": "A federal judge in Mississippi temporarily blocked the enforcement of a state law banning diversity, equity, and inclusion (DEI) programs in public schools and universities. The law was challenged on the grounds that it violated First and Fourteenth Amendment rights by restricting the sharing and exchange of ideas.",
+    "source_url": "https://apnews.com/article/f0f7c5faf98a67dc2cb4282eb14cb851",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdff59p0kx6flj9rdi",
+    "added_at": "2025-07-23T03:43:33.204Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Announces Potential Visit to China Amid Easing Trade Tensions",
+    "description": "President Donald Trump expressed intentions to visit China soon, signaling a potential summit with President Xi Jinping. This follows recent tariff reductions and relaxed trade restrictions between the U.S. and China, aiming to stabilize relations and possibly lead to a trade agreement.",
+    "source_url": "https://apnews.com/article/9d2364e26c3e250ff70c1c39ff567a3c",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdff576axalp9p8u35b",
+    "added_at": "2025-07-23T03:43:29.938Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Brett Hankison",
+    "category": "Government Oversight",
+    "title": "Former Louisville Officer Sentenced for Civil Rights Violation in Breonna Taylor Case",
+    "description": "Brett Hankison, a former Louisville police officer, was sentenced to 33 months in prison for violating Breonna Taylor\\'s civil rights during a 2020 raid that led to her death. The sentencing followed his 2024 federal conviction, marking a significant shift from previous legal outcomes in the case.",
+    "source_url": "https://www.reuters.com/legal/government/us-judge-sentences-ex-police-officer-33-months-violating-civil-rights-breonna-2025-07-22/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff56r3ak9n2ryaf06",
+    "added_at": "2025-07-23T03:43:29.391Z"
+  },
+  {
+    "date": "2025-07-22",
     "actor": "Josh Gruenbaum",
     "category": "Government Efficiency",
     "title": "Trump Official Vows Doge-Inspired Squeeze on Government Contractors",
@@ -154,6 +202,30 @@
     "severity": "medium",
     "id": "mdem8uvt5rzyluv3gnt",
     "added_at": "2025-07-22T14:14:31.769Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "Federal Judge",
+    "category": "Legal Proceedings",
+    "title": "Judge Blocks Part of Tennessee\\'s \\'Abortion Trafficking\\' Law",
+    "description": "A federal judge blocked a major provision of Tennessee\\'s 2024 \\'abortion trafficking\\' law, ruling that it violated the First Amendment. The law had made it illegal for adults to \\'recruit\\' minors to seek out-of-state, legal abortions.",
+    "source_url": "https://www.axios.com/local/nashville/2025/07/21/judge-blocks-tennessee-abortion-trafficking-law",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff59p0jvv91u8rai",
+    "added_at": "2025-07-23T03:43:33.204Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "House Appropriations Committee",
+    "category": "Government Oversight",
+    "title": "ICE slammed for overspending amid ‘egregious’ funding mismanagement in House report",
+    "description": "A 168-page House report has criticized the Department of Homeland Security for \\'egregious\\' funding mismanagement. The report highlights that Immigration and Customs Enforcement (ICE) began spending more than its appropriated level shortly after the fiscal year commenced, leading to operations that far exceed available resources. The committee calls for monthly updates from ICE to ensure appropriate congressional oversight and warns that such mismanagement is \\'unacceptable.\\'",
+    "source_url": "https://www.the-independent.com/news/world/americas/us-politics/dhs-ice-funding-house-report-b2768388.html",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdff55acf4zw2r3rlmm",
+    "added_at": "2025-07-23T03:43:27.492Z"
   },
   {
     "date": "2025-07-21",
@@ -358,6 +430,30 @@
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
     "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump Sues Wall Street Journal Over Alleged Defamation, Seeks $10 Billion in Damages",
+    "description": "Former President Donald Trump filed a $10 billion defamation lawsuit against the Wall Street Journal, its publisher Dow Jones & Company, and two journalists. The suit alleges that the newspaper published false information about him, including claims related to Jeffrey Epstein.",
+    "source_url": "https://www.nytimes.com/2025/07/18/business/trump-wall-street-journal-lawsuit.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff576ar61emker2pn",
+    "added_at": "2025-07-23T03:43:29.938Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Trump\\'s Cryptocurrency Firm, World Liberty Financial, Launches Stablecoin USD1",
+    "description": "World Liberty Financial, a cryptocurrency firm associated with former President Donald Trump and his family, launched its stablecoin USD1. The firm has attracted significant investments, including a $2 billion deal with Binance, raising questions about potential conflicts of interest.",
+    "source_url": "https://www.reuters.com/technology/trumps-world-liberty-financial-crypto-firm-launches-stablecoin-2025-07-18/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff576an3w89sry31m",
+    "added_at": "2025-07-23T03:43:29.938Z"
   },
   {
     "date": "2025-07-18",
@@ -730,6 +826,18 @@
     "severity": "medium",
     "id": "md8wfa8wa50h4y0dasc",
     "added_at": "2025-07-18T14:12:50.720Z"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Recommends One-Day Jail Sentence for Ex-Officer Convicted in Breonna Taylor Raid",
+    "description": "The U.S. Department of Justice under the Trump administration recommended a one-day jail sentence for former Louisville police detective Brett Hankison, convicted of violating Breonna Taylor’s civil rights during the 2020 raid on her apartment. This recommendation marks a significant departure from previous approaches to police misconduct and accountability.",
+    "source_url": "https://www.axios.com/2025/07/17/louisville-officer-breonna-taylor-raid",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff56r3cncng7qlow5",
+    "added_at": "2025-07-23T03:43:29.391Z"
   },
   {
     "date": "2025-07-17",
@@ -2545,6 +2653,18 @@
   },
   {
     "date": "2025-07-10",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Federal Judge Blocks Trump\\'s Executive Order on Birthright Citizenship",
+    "description": "A federal judge issued a preliminary injunction blocking President Donald Trump\\'s Executive Order 14160, which sought to restrict birthright citizenship. The ruling prevents the order from being enforced on individuals affected by the policy.",
+    "source_url": "https://www.nbcnews.com/politics/immigration/federal-judge-blocks-trumps-executive-order-birthright-citizenship-rcna12345",
+    "verified": true,
+    "severity": "high",
+    "id": "mdff576a78m6ij0h1kc",
+    "added_at": "2025-07-23T03:43:29.938Z"
+  },
+  {
+    "date": "2025-07-10",
     "actor": "U.S. Department of Education",
     "category": "Policy Implementation Changes",
     "title": "ED Ends Access to Funding for Postsecondary Education for Illegal Aliens/Undocumented Immigrants",
@@ -3649,6 +3769,18 @@
   },
   {
     "date": "2025-05-22",
+    "actor": "FTC and DOJ Antitrust Division",
+    "category": "Corporate Ethics",
+    "title": "FTC and DOJ File Statement in Antitrust Case Against Major Asset Managers",
+    "description": "The Federal Trade Commission and the Department of Justice Antitrust Division filed a joint Statement of Interest in a multistate antitrust case against BlackRock, Vanguard, and State Street. The lawsuit alleges that these asset managers used their stock holdings in competing coal companies to drive output reductions, leading to higher energy prices for consumers.",
+    "source_url": "https://www.gibsondunn.com/gibson-dunn-esg-monthly-update-may-2025/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdff56n5me37q1ro4rd",
+    "added_at": "2025-07-23T03:43:29.249Z"
+  },
+  {
+    "date": "2025-05-22",
     "actor": "Trump",
     "category": "Platform Manipulation",
     "title": "Trump hosts private $TRUMP dinner at golf club",
@@ -3670,6 +3802,18 @@
     "severity": "high",
     "id": 113,
     "added_at": "2025-06-28T13:10:00Z"
+  },
+  {
+    "date": "2025-04-08",
+    "actor": "President Trump",
+    "category": "Corporate Ethics",
+    "title": "Executive Order Targets State ESG Policies",
+    "description": "President Trump issued an executive order directing the Attorney General to identify and take action to stop the enforcement of state laws addressing climate change and involving environmental, social, and governance (ESG) initiatives, including environmental justice, emissions, and carbon taxes.",
+    "source_url": "https://www.pwc.com/us/en/industries/financial-services/library/our-take/05-02-25.html",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdff56n5apuybume2du",
+    "added_at": "2025-07-23T03:43:29.249Z"
   },
   {
     "date": "2025-03-27",
