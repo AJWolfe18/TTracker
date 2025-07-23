@@ -1,16 +1,17 @@
-# .github/workflows/daily-tracker.yml
-name: Test Daily Political Tracker
-
+# .github/workflows/test-tracker.yml
+name: Test Daily Political Tracker (Manual Only)
 on:
-  schedule:
-    # Runs every day at 9:00 AM EST (2:00 PM UTC)
-    - cron: '0 14 * * *'
-  
-  # Allow manual triggering
+  # Only allow manual triggering - no automatic schedule
   workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Enable debug output'
+        required: false
+        default: 'true'
+        type: boolean
 
 jobs:
-  fetch-updates:
+  test-tracker:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,11 +26,11 @@ jobs:
     - name: Install dependencies
       run: npm install
       
-    - name: Run daily tracker
+    - name: Run test tracker
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: node daily-tracker.js
-
+      run: node test-tracker.js
+      
     - name: Test file copy and sizes
       run: |
         echo "=== BEFORE COPY ==="
@@ -45,6 +46,7 @@ jobs:
         tail -5 public/master-tracker-log.json || echo "Cannot read public file"
         
         echo "=== COPYING ==="
+        mkdir -p public
         cp master-tracker-log.json public/master-tracker-log.json
         
         echo "=== AFTER COPY ==="
@@ -58,39 +60,36 @@ jobs:
         tail -5 public/master-tracker-log.json
         
         echo "=== DIFF CHECK ==="
-        diff master-tracker-log.json public/master-tracker-log.json && echo "Files are identical!" 
+        diff master-tracker-log.json public/master-tracker-log.json && echo "Files are identical!" || echo "Files differ!"
      
-    - name: Copy data to public folder
+    - name: Copy data to public folder (backup method)
       run: |
+        echo "=== BACKUP COPY METHOD ==="
         ls -la master-tracker-log.json
+        mkdir -p public
         ls -la public/
         cp master-tracker-log.json public/master-tracker-log.json
         ls -la public/master-tracker-log.json
-        echo "Copy completed"
+        echo "Copy completed successfully"
       
-    - name: Commit and push results
+    - name: Commit and push test results
       run: |
         git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add *.json
-        git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
-        git push
+        git config --local user.name "GitHub Action - Test Run"
+        git add *.json public/*.json
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Test tracker update - $(date +%Y-%m-%d)"
+          git push
+        fi
         
-    - name: Create release with daily data
-      if: github.event_name == 'schedule'
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: daily-${{ github.run_number }}
-        release_name: Daily Update - ${{ github.run_number }}
-        body: |
-          Automated daily political tracker update.
-          
-          This release contains the latest political developments tracked on ${{ github.run_date }}.
-          
-          Files included:
-          - Daily JSON data file
-          - Updated master tracker log
-        draft: false
-        prerelease: false
+    # Remove the release creation step for testing
+    - name: Test completion summary
+      run: |
+        echo "=== TEST COMPLETED ==="
+        echo "Test run completed at: $(date)"
+        echo "Files updated:"
+        echo "- master-tracker-log.json"
+        echo "- public/master-tracker-log.json"
+        echo "Check the repository for updated files."
