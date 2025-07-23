@@ -5,9 +5,9 @@ const PoliticalDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedSeverity, setSelectedSeverity] = useState('all'); // Add severity filter state
-  const [sortBy, setSortBy] = useState('date'); // New state for sorting
-  const [sortOrder, setSortOrder] = useState('desc'); // New state for sort direction
+  const [selectedSeverity, setSelectedSeverity] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   useEffect(() => {
     loadData();
@@ -89,12 +89,23 @@ const PoliticalDashboard = () => {
     setEntries(sampleEntries);
   };
 
+  // Filter entries to exclude archived items and apply search/category/severity filters
   const filteredEntries = entries.filter(entry => {
-    const matchesSearch = entry.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entry.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entry.actor?.toLowerCase().includes(searchTerm.toLowerCase());
+    // Filter out archived items from public view
+    if (entry.archived) return false;
+    
+    // Apply search filter
+    const matchesSearch = !searchTerm || 
+      entry.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.actor?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Apply category filter
     const matchesCategory = selectedCategory === 'all' || entry.category === selectedCategory;
+    
+    // Apply severity filter
     const matchesSeverity = selectedSeverity === 'all' || entry.severity === selectedSeverity;
+    
     return matchesSearch && matchesCategory && matchesSeverity;
   });
 
@@ -129,11 +140,14 @@ const PoliticalDashboard = () => {
     }
   };
 
-  const categories = [...new Set(entries.map(e => e.category))].filter(Boolean);
-  const allHighSeverityCount = entries.filter(e => e.severity === 'high').length;
-  const allMediumSeverityCount = entries.filter(e => e.severity === 'medium').length;
-  const allLowSeverityCount = entries.filter(e => e.severity === 'low').length;
-  const allTotalEntries = entries.length;
+  // Calculate statistics from active (non-archived) entries only
+  const activeEntries = entries.filter(entry => !entry.archived);
+  const categories = [...new Set(activeEntries.map(e => e.category))].filter(Boolean);
+  
+  const allHighSeverityCount = activeEntries.filter(e => e.severity === 'high').length;
+  const allMediumSeverityCount = activeEntries.filter(e => e.severity === 'medium').length;
+  const allLowSeverityCount = activeEntries.filter(e => e.severity === 'low').length;
+  const allTotalEntries = activeEntries.length;
   
   const filteredHighSeverityCount = filteredEntries.filter(e => e.severity === 'high').length;
   const filteredMediumSeverityCount = filteredEntries.filter(e => e.severity === 'medium').length;
