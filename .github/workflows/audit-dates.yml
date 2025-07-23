@@ -1,0 +1,186 @@
+# .github/workflows/audit-dates.yml
+name: Audit Entry Dates
+on:
+  workflow_dispatch:
+    inputs:
+      auto_clean:
+        description: 'Automatically apply cleaning (true/false)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Create audit script
+      run: |
+        cat > audit-dates.js << 'EOF'
+        import fs from 'fs/promises';
+
+        console.log('🔍 POLITICAL TRACKER DATE AUDIT');
+        console.log('===============================\n');
+
+        async function auditDates() {
+          try {
+            console.log('📁 Loading master-tracker-log.json...');
+            const masterData = await fs.readFile('master-tracker-log.json', 'utf8');
+            const entries = JSON.parse(masterData);
+            console.log(`Found ${entries.length} total entries\n`);
+
+            const cutoffDate = new Date('2025-01-01');
+            const now = new Date();
+            
+            const suspiciousEntries = [];
+            const futureEntries = [];
+            const recentEntries = [];
+            
+            entries.forEach(entry => {
+              const entryDate = new Date(entry.date);
+              
+              if (isNaN(entryDate.getTime())) {
+                suspiciousEntries.push({
+                  ...entry,
+                  issue: 'Invalid date format'
+                });
+              } else if (entryDate < cutoffDate) {
+                suspiciousEntries.push({
+                  ...entry,
+                  issue: `Too old (${entryDate.getFullYear()})`
+                });
+              } else if (entryDate > now) {
+                futureEntries.push({
+                  ...entry,
+                  issue: 'Future date'
+                });
+              } else {
+                recentEntries.push(entry);
+              }
+            });
+
+            console.log('📊 AUDIT RESULTS:');
+            console.log('==================');
+            console.log(`✅ Valid recent entries: ${recentEntries.length}`);
+            console.log(`⚠️  Suspicious old entries: ${suspiciousEntries.length}`);
+            console.log(`🔮 Future dated entries: ${futureEntries.length}\n`);
+
+            if (suspiciousEntries.length > 0) {
+              console.log('🚨 SUSPICIOUS OLD ENTRIES:');
+              console.log('===========================');
+              suspiciousEntries.slice(0, 10).forEach((entry, index) => {
+                console.log(`${index + 1}. [${entry.date}] ${entry.title.substring(0, 60)}...`);
+                console.log(`   Actor: ${entry.actor}`);
+                console.log(`   Issue: ${entry.issue}`);
+                console.log('');
+              });
+              if (suspiciousEntries.length > 10) {
+                console.log(`... and ${suspiciousEntries.length - 10} more suspicious entries`);
+              }
+            }
+
+            if (futureEntries.length > 0) {
+              console.log('🔮 FUTURE DATED ENTRIES:');
+              console.log('=========================');
+              futureEntries.forEach((entry, index) => {
+                console.log(`${index + 1}. [${entry.date}] ${entry.title.substring(0, 60)}...`);
+                console.log(`   Actor: ${entry.actor}`);
+                console.log('');
+              });
+            }
+
+            // Create cleaned data
+            const totalProblematic = suspiciousEntries.length + futureEntries.length;
+            if (totalProblematic > 0) {
+              console.log('💾 CREATING CLEANED VERSION:');
+              console.log('=============================');
+              
+              const cleanedEntries = entries.filter(entry => {
+                const entryDate = new Date(entry.date);
+                return !isNaN(entryDate.getTime()) && 
+                       entryDate >= cutoffDate && 
+                       entryDate <= now;
+              });
+              
+              await fs.writeFile('master-tracker-log.cleaned.json', JSON.stringify(cleanedEntries, null, 2));
+              console.log(`✅ Cleaned version created with ${cleanedEntries.length} valid entries`);
+              console.log(`📊 Would remove ${totalProblematic} problematic entries`);
+              
+              // Set output for next step
+              await fs.writeFile('audit-results.txt', `${totalProblematic}`);
+            } else {
+              console.log('✅ No problematic dates found - all entries look good!');
+              await fs.writeFile('audit-results.txt', '0');
+            }
+
+            if (recentEntries.length > 0) {
+              const dates = recentEntries.map(e => new Date(e.date)).sort((a, b) => a - b);
+              const oldest = dates[0];
+              const newest = dates[dates.length - 1];
+              
+              console.log(`\n📅 VALID DATE RANGE:`);
+              console.log(`Oldest entry: ${oldest.toDateString()}`);
+              console.log(`Newest entry: ${newest.toDateString()}`);
+            }
+
+          } catch (error) {
+            console.error('❌ Error during audit:', error.message);
+            process.exit(1);
+          }
+        }
+
+        auditDates();
+        EOF
+        
+    - name: Run date audit
+      run: node audit-dates.js
+      
+    - name: Check if cleaning needed
+      id: check_clean
+      run: |
+        if [ -f audit-results.txt ]; then
+          PROBLEM_COUNT=$(cat audit-results.txt)
+          echo "problem_count=$PROBLEM_COUNT" >> $GITHUB_OUTPUT
+        else
+          echo "problem_count=0" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Apply cleaning if requested
+      if: ${{ github.event.inputs.auto_clean == 'true' && steps.check_clean.outputs.problem_count != '0' }}
+      run: |
+        echo "🧹 Applying automatic cleaning..."
+        cp master-tracker-log.cleaned.json master-tracker-log.json
+        mkdir -p public
+        cp master-tracker-log.cleaned.json public/master-tracker-log.json
+        echo "✅ Cleaned files updated"
+        
+    - name: Commit cleaned files
+      if: ${{ github.event.inputs.auto_clean == 'true' && steps.check_clean.outputs.problem_count != '0' }}
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action - Date Audit"
+        git add master-tracker-log.json public/master-tracker-log.json
+        git commit -m "Clean entries with invalid/old dates - removed ${{ steps.check_clean.outputs.problem_count }} entries"
+        git push
+        
+    - name: Summary
+      run: |
+        echo "=== AUDIT COMPLETE ==="
+        if [ "${{ steps.check_clean.outputs.problem_count }}" != "0" ]; then
+          echo "Found ${{ steps.check_clean.outputs.problem_count }} problematic entries"
+          if [ "${{ github.event.inputs.auto_clean }}" == "true" ]; then
+            echo "✅ Automatic cleaning applied and committed"
+          else
+            echo "💡 Run again with 'auto_clean: true' to automatically fix"
+          fi
+        else
+          echo "✅ No issues found - all dates look good!"
+        fi
