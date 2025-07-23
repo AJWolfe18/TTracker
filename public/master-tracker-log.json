@@ -21,9 +21,7 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay61we7sictot7h",
-    "added_at": "2025-07-23T00:07:24.462Z",
-    "archived": true,
-    "archived_at": "2025-07-23T01:24:11.161Z"
+    "added_at": "2025-07-23T00:07:24.462Z"
   },
   {
     "date": "2025-07-22",
@@ -35,9 +33,7 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay6eyno8iq7f9a",
-    "added_at": "2025-07-23T00:07:24.462Z",
-    "archived": true,
-    "archived_at": "2025-07-23T01:20:06.196Z"
+    "added_at": "2025-07-23T00:07:24.462Z"
   },
   {
     "date": "2025-07-22",
@@ -61,9 +57,7 @@
     "verified": true,
     "severity": "high",
     "id": "mdf7fay64m0i1p07dx4",
-    "added_at": "2025-07-23T00:07:24.462Z",
-    "archived": true,
-    "archived_at": "2025-07-23T01:21:14.475Z"
+    "added_at": "2025-07-23T00:07:24.462Z"
   },
   {
     "date": "2025-07-22",
