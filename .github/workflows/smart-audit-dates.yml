@@ -1,12 +1,12 @@
 # .github/workflows/smart-audit-dates.yml
-name: Smart Date Audit (Check Real Publication Dates)
+name: Smart Date Audit - Last 3 Days (Check Real Publication Dates)
 on:
   workflow_dispatch:
     inputs:
       max_entries:
-        description: 'Maximum entries to check (default: 20)'
+        description: 'Maximum entries to check (default: 50)'
         required: false
-        default: '20'
+        default: '50'
         type: string
       auto_clean:
         description: 'Automatically remove entries with wrong dates'
@@ -36,8 +36,8 @@ jobs:
         import fs from 'fs/promises';
         import fetch from 'node-fetch';
 
-        console.log('🔍 SMART DATE AUDIT - CHECKING REAL PUBLICATION DATES');
-        console.log('=====================================================\n');
+        console.log('🔍 SMART DATE AUDIT - LAST 3 DAYS');
+        console.log('==================================\n');
 
         function extractDateFromHTML(html, url) {
           const datePatterns = [
@@ -155,18 +155,25 @@ jobs:
             const today = new Date();
             const todayStr = today.toISOString().split('T')[0];
             
-            console.log('🔍 Phase 1: Finding entries with suspicious dates...');
-            const suspiciousEntries = entries.filter(entry => isSuspiciousDate(entry, todayStr));
+            console.log('🔍 Phase 1: Finding entries added in the last 3 days...');
             
-            console.log(`Found ${suspiciousEntries.length} entries with suspicious dates\n`);
+            const threeDaysAgo = new Date();
+            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
             
-            if (suspiciousEntries.length === 0) {
-              console.log('✅ No suspicious dates found! All entries look good.');
+            const recentEntries = entries.filter(entry => {
+              const addedDate = new Date(entry.added_at);
+              return addedDate >= threeDaysAgo;
+            });
+            
+            console.log(`Found ${recentEntries.length} entries added in the last 3 days\n`);
+            
+            if (recentEntries.length === 0) {
+              console.log('✅ No recent entries found to audit.');
               return;
             }
             
-            const maxToCheck = parseInt(process.env.MAX_ENTRIES || '20');
-            const entriesToCheck = suspiciousEntries.slice(0, maxToCheck);
+            const maxToCheck = parseInt(process.env.MAX_ENTRIES || '50');
+            const entriesToCheck = recentEntries.slice(0, maxToCheck);
             
             console.log(`🌐 Phase 2: Checking real publication dates for ${entriesToCheck.length} entries...`);
             const results = [];
