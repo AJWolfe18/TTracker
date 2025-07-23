@@ -21,7 +21,9 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay61we7sictot7h",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "archived": true,
+    "archived_at": "2025-07-23T01:24:11.161Z"
   },
   {
     "date": "2025-07-22",
