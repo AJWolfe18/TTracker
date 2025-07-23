@@ -140,6 +140,8 @@ const REAL_NEWS_PROMPTS = {
 
 IMPORTANT: Only include news from the specified date range. Each story must be unique - do not include multiple versions of the same story. Prioritize breaking news and new developments over ongoing stories.
 
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
+
 Find credible news sources and return specific, factual developments with proper citations.`,
 
   'Elon Musk & DOGE': `Search for recent news about Elon Musk's role in government, DOGE (Department of Government Efficiency), or his political influence ${dateRange}. Focus on:
@@ -150,6 +152,8 @@ Find credible news sources and return specific, factual developments with proper
 - CURRENT public statements on government policy
 
 IMPORTANT: Only include unique stories from the date range. No duplicate coverage of the same event.
+
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
 
 Find current news with credible sources and citations.`,
 
@@ -163,6 +167,8 @@ Find current news with credible sources and citations.`,
 
 IMPORTANT: Only include developments from the specified dates. Each entry must be a unique story.
 
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
+
 Find current news from credible legal and political sources.`,
 
   'Federal Agencies': `Search for recent news about federal agencies (ICE, DHS, Department of Education, EPA, etc.) ${dateRange}. Focus on:
@@ -174,6 +180,8 @@ Find current news from credible legal and political sources.`,
 - NEW agency restructuring or closures
 
 IMPORTANT: Focus on new developments only. No repeated coverage of ongoing situations.
+
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
 
 Find current developments from reliable government and news sources.`,
 
@@ -187,6 +195,8 @@ Find current developments from reliable government and news sources.`,
 
 IMPORTANT: Only include rulings and developments from the specified date range.
 
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
+
 Find current legal developments with proper case citations and sources.`,
 
   'Corporate & Financial': `Search for recent developments involving corporate influence, lobbying, campaign finance, or financial conflicts of interest ${dateRange}. Focus on:
@@ -198,6 +208,8 @@ Find current legal developments with proper case citations and sources.`,
 - NEW financial disclosure problems
 
 IMPORTANT: Each entry must be a unique development from the date range specified.
+
+CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
 
 Find current financial and corporate accountability news from credible business and political sources.`
 };
