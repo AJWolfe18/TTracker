@@ -59,7 +59,9 @@
     "verified": true,
     "severity": "high",
     "id": "mdf7fay64m0i1p07dx4",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "archived": true,
+    "archived_at": "2025-07-23T01:21:14.475Z"
   },
   {
     "date": "2025-07-22",
