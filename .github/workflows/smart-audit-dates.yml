@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       max_entries:
-        description: 'Maximum entries to check (default: 50)'
+        description: 'Maximum entries to check (default: 300 for full audit)'
         required: false
-        default: '50'
+        default: '300'
         type: string
       auto_clean:
         description: 'Automatically remove entries with wrong dates'
@@ -111,12 +111,17 @@ jobs:
           try {
             console.log(`  📄 Fetching: ${entry.source_url}`);
             
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
             const response = await fetch(entry.source_url, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
               },
-              timeout: 10000
+              signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
               return { error: `HTTP ${response.status}` };
@@ -141,7 +146,15 @@ jobs:
             return { error: 'No date found in article' };
             
           } catch (error) {
-            return { error: error.message };
+            if (error.name === 'AbortError') {
+              return { error: 'Timeout (>15s)' };
+            } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+              return { error: 'Connection failed' };
+            } else if (error.message.includes('timeout')) {
+              return { error: 'Request timeout' };
+            } else {
+              return { error: `Fetch error: ${error.message}` };
+            }
           }
         }
 
@@ -172,10 +185,11 @@ jobs:
               return;
             }
             
-            const maxToCheck = parseInt(process.env.MAX_ENTRIES || '50');
+            const maxToCheck = parseInt(process.env.MAX_ENTRIES || '300');
             const entriesToCheck = recentEntries.slice(0, maxToCheck);
             
             console.log(`🌐 Phase 2: Checking real publication dates for ${entriesToCheck.length} entries...`);
+            console.log('⏱️  Using 3-second delays between requests to respect rate limits\n');
             const results = [];
             
             for (let i = 0; i < entriesToCheck.length; i++) {
@@ -188,7 +202,7 @@ jobs:
                 ...result
               });
               
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay
             }
             
             console.log('\n📊 SMART AUDIT RESULTS:');
