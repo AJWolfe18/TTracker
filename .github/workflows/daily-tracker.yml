@@ -30,37 +30,74 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: node daily-tracker.js
       
-    - name: Copy data to public folder
+    - name: Copy data to public folder with verification
       run: |
-        ls -la master-tracker-log.json
-        ls -la public/
+        echo "=== PRE-COPY STATUS ==="
+        ls -la master-tracker-log.json || echo "❌ Master file missing!"
+        ls -la public/ || echo "Public directory missing, creating..."
+        
+        echo "=== ENSURE PUBLIC DIRECTORY EXISTS ==="
+        mkdir -p public
+        
+        echo "=== COPYING FILES ==="
         cp master-tracker-log.json public/master-tracker-log.json
-        ls -la public/master-tracker-log.json
-        echo "Copy completed"
+        
+        echo "=== POST-COPY VERIFICATION ==="
+        if [ -f public/master-tracker-log.json ]; then
+          echo "✅ Public file exists after copy"
+          echo "Master file size: $(wc -l < master-tracker-log.json) lines"
+          echo "Public file size: $(wc -l < public/master-tracker-log.json) lines"
+          
+          # Verify files are identical
+          if diff master-tracker-log.json public/master-tracker-log.json > /dev/null; then
+            echo "✅ Files are identical - copy successful"
+          else
+            echo "❌ File copy verification failed - files differ!"
+            exit 1
+          fi
+        else
+          echo "❌ Public file not found after copy!"
+          exit 1
+        fi
       
     - name: Commit and push results
       run: |
         git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        git config --local user.name "GitHub Action - Daily Tracker"
         git add *.json public/master-tracker-log.json
         git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
         git push
         
-    - name: Create release with daily data
+    - name: Create daily release
       if: github.event_name == 'schedule'
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: daily-${{ github.run_number }}
-        release_name: Daily Update - ${{ github.run_number }}
+        name: Daily Political Update - ${{ github.run_number }}
         body: |
-          Automated daily political tracker update.
+          🗳️ **Automated Daily Political Tracker Update**
           
-          This release contains the latest political developments tracked on ${{ github.run_date }}.
+          **Date:** $(date +%Y-%m-%d)
+          **Source:** Real news search using OpenAI Responses API
           
-          Files included:
-          - Daily JSON data file
-          - Updated master tracker log
+          📊 **What's Included:**
+          - Latest political developments across 6 categories
+          - Trump & Family tracking
+          - Elon Musk & DOGE monitoring  
+          - DOJ & Law Enforcement updates
+          - Federal Agency actions
+          - Court rulings & legal proceedings
+          - Corporate ethics & financial tracking
+          
+          🔗 **View Live Dashboard:** https://trumpytracker.com/
+          
+          📁 **Files Updated:**
+          - master-tracker-log.json (complete database)
+          - public/master-tracker-log.json (website data)
+          - real-news-tracker-$(date +%Y-%m-%d).json (today's entries)
+          
+          ⚡ **Powered by:** OpenAI Responses API with real web search
         draft: false
         prerelease: false
