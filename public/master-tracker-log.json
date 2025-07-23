@@ -1,5 +1,77 @@
 [
   {
+    "date": "2025-07-23",
+    "actor": "Former U.S. Secretary of Education",
+    "category": "Policy Implementation Changes",
+    "title": "Former Education Secretary Criticizes Department\\'s Downsizing",
+    "description": "A former U.S. Secretary of Education criticizes the current administration\\'s efforts to dismantle the Department of Education, warning of devastating consequences for American students and communities.",
+    "source_url": "https://time.com/7303430/gutting-department-education-hurts-americans/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdf7f9uh7bnwkvwwxd7",
+    "added_at": "2025-07-23T00:07:23.033Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Josh Gruenbaum",
+    "category": "Government Efficiency",
+    "title": "Trump Official Vows Doge-Inspired Squeeze on Government Contractors",
+    "description": "Josh Gruenbaum, head of the Federal Acquisition Service, has reaffirmed his commitment to an aggressive, Doge-inspired cost-cutting strategy targeting government contractors, especially in the tech and consulting industries. This approach has led to steep discounts from companies like Google and Oracle but has also provoked backlash from major firms, including Microsoft and Amazon.",
+    "source_url": "https://www.ft.com/content/a6d3acad-8d77-4734-b6a5-8fe587c4edac",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdf7fay61we7sictot7h",
+    "added_at": "2025-07-23T00:07:24.462Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Elon Musk\\'s xAI",
+    "category": "AI Expansion",
+    "title": "Musk\\'s xAI to Raise Up to $12 Billion in Debt for AI Expansion",
+    "description": "Elon Musk\\'s AI startup, xAI, is reportedly working with Valor Equity Partners to raise up to $12 billion in debt to fund its expansion. The capital would primarily be used to acquire advanced Nvidia chips to power a new large-scale data center supporting Grok, xAI’s AI chatbot.",
+    "source_url": "https://www.reuters.com/business/musks-xai-raise-up-12-billion-debt-ai-expansion-wsj-reports-2025-07-22/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdf7fay6eyno8iq7f9a",
+    "added_at": "2025-07-23T00:07:24.462Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Elon Musk\\'s SpaceX",
+    "category": "Government Contracts",
+    "title": "US Air Force Awards SpaceX $20 Million Contract to Support Spy Satellites",
+    "description": "The U.S. Air Force has awarded SpaceX a $20 million contract to support its largest spy satellites. This contract underscores the ongoing collaboration between SpaceX and the Department of Defense in national security initiatives.",
+    "source_url": "https://www.teslarati.com/spacex-20m-us-air-force-contract-spy-satellites/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdf7fay6o9hgk1jvt4l",
+    "added_at": "2025-07-23T00:07:24.462Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Elon Musk\\'s xAI",
+    "category": "Platform Manipulation",
+    "title": "Elon Musk\\'s AI Platform Under Fire for Antisemitic Content",
+    "description": "Grok, the AI developed by Musk’s xAI, is under bipartisan congressional scrutiny for antisemitic content. Lawmakers criticized xAI for failing to effectively prevent hate speech, with Grok publicly associating with offensive tropes and language. Musk acknowledged that Grok was overly susceptible to manipulation and promised content moderation actions.",
+    "source_url": "https://www.axios.com/newsletters/axios-hill-leaders-c8015d50-6707-11f0-9749-fd78f1de574e",
+    "verified": true,
+    "severity": "high",
+    "id": "mdf7fay64m0i1p07dx4",
+    "added_at": "2025-07-23T00:07:24.462Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Elon Musk\\'s SpaceX",
+    "category": "Business Interests vs. Government Responsibilities",
+    "title": "Elon Musk\\'s Plan to Convert Protected Marine Area into Spaceport Raises Environmental Concerns",
+    "description": "Elon Musk and SpaceX have received approval to use Mokumanamana Island, part of a protected marine area in Hawaii, as a testing zone and expanded rocket debris drop zone. The project has sparked controversy due to potential environmental risks to endangered species like the Hawaiian monk seal and green sea turtle.",
+    "source_url": "https://as.com/actualidad/sociedad/arranca-el-plan-de-elon-musk-para-convertir-una-zona-marina-protegida-en-un-puerto-espacial-n/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdf7fay6uw9ahkduyrb",
+    "added_at": "2025-07-23T00:07:24.462Z"
+  },
+  {
     "date": "2025-07-22",
     "actor": "Department of Justice",
     "category": "Government Oversight",
@@ -82,6 +154,18 @@
     "severity": "medium",
     "id": "mdem8uvt5rzyluv3gnt",
     "added_at": "2025-07-22T14:14:31.769Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "Trump Administration",
+    "category": "Government Oversight",
+    "title": "Trump Administration Releases FBI Records on Martin Luther King Jr., Defying Family\\'s Wishes",
+    "description": "The Trump administration released over 230,000 previously sealed FBI documents regarding the 1968 assassination of Dr. Martin Luther King Jr., despite objections from the King family. The documents include internal FBI communications and materials on James Earl Ray, the man who pleaded guilty to the murder before later recanting. The King family urged the public to approach the documents with empathy and contextual understanding.",
+    "source_url": "https://time.com/7304293/mlk-files-released-fbi-trump/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdf7f9ij9o16cf16en",
+    "added_at": "2025-07-23T00:07:22.603Z"
   },
   {
     "date": "2025-07-21",
@@ -274,6 +358,30 @@
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
     "added_at": "2025-07-19T14:22:51.001Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Colorado Super PACs",
+    "category": "Corporate Ethics",
+    "title": "Dark Money Funds State Super PAC Supporting Michael Bennet",
+    "description": "Recent reports reveal that dark money groups and charter schools are financing a state super PAC backing Senator Michael Bennet\\'s campaign, raising concerns about undisclosed corporate influence in local politics.",
+    "source_url": "https://coloradosun.com/2025/07/18/the-unafilliated-07182025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdf7f9ue1n8m7hvohjs",
+    "added_at": "2025-07-23T00:07:23.030Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Trump Sues Wall Street Journal Over Epstein Allegations",
+    "description": "Former President Donald Trump filed a $10 billion defamation lawsuit against the Wall Street Journal and Rupert Murdoch, challenging a report alleging his involvement in a sexualized letter linked to Jeffrey Epstein\\'s 2003 birthday album. Trump denies the allegations, calling them \\'false, malicious, and defamatory.\\'",
+    "source_url": "https://apnews.com/article/fe6cda235229aa5f2a72c5035318269b",
+    "verified": true,
+    "severity": "high",
+    "id": "mdf7f9om9azrp36cxec",
+    "added_at": "2025-07-23T00:07:22.822Z"
   },
   {
     "date": "2025-07-18",
@@ -850,6 +958,18 @@
     "severity": "high",
     "id": "md7gx4ekmwc8zke9cum",
     "added_at": "2025-07-17T14:11:02.924Z"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Meets with Bahrain\\'s Crown Prince at White House",
+    "description": "President Donald Trump hosted Crown Prince Salman bin Hamad of Bahrain at the White House, discussing bilateral relations and regional security issues. The meeting aimed to strengthen ties between the U.S. and Bahrain.",
+    "source_url": "https://en.wikipedia.org/wiki/Timeline_of_Donald_Trump%27s_second_presidency_(2025_Q3)",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdf7f9omnveb3dk41x",
+    "added_at": "2025-07-23T00:07:22.822Z"
   },
   {
     "date": "2025-07-16",
@@ -2965,6 +3085,18 @@
   },
   {
     "date": "2025-06-30",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Adds Seven New Cases to 2025-26 Term",
+    "description": "The Court granted certiorari to seven new cases for its forthcoming term, including Bowe v. United States, Barrett v. United States, and Chiles v. Salazar, covering topics from incarcerated rights to the constitutionality of state laws.",
+    "source_url": "https://www.scotusblog.com/2025/06/court-adds-seven-new-cases-to-the-2025-26-term/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdf7f9rrucwridykdgk",
+    "added_at": "2025-07-23T00:07:22.935Z"
+  },
+  {
+    "date": "2025-06-30",
     "actor": "Donald Trump",
     "category": "Legal Proceedings",
     "title": "Federal judges strike down Trump law firm orders",
@@ -3310,6 +3442,18 @@
     "severity": "high",
     "id": "md3g94hnc8sd6mat2a7",
     "added_at": "2025-07-14T18:41:18.587Z"
+  },
+  {
+    "date": "2025-06-18",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Upholds Tennessee\\'s Ban on Gender-Affirming Care for Minors",
+    "description": "The Court ruled that Tennessee\\'s law prohibiting certain gender-transition medical care for minors does not violate the Equal Protection Clause of the 14th Amendment.",
+    "source_url": "https://www.washingtonpost.com/politics/interactive/2025/supreme-court-cases-decisions/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdf7f9rrrbczg5yqy6a",
+    "added_at": "2025-07-23T00:07:22.935Z"
   },
   {
     "date": "2025-06-17",
