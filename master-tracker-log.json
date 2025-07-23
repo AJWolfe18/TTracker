@@ -33,7 +33,9 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay6eyno8iq7f9a",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "archived": true,
+    "archived_at": "2025-07-23T01:20:06.196Z"
   },
   {
     "date": "2025-07-22",
