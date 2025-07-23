@@ -85,18 +85,6 @@
   },
   {
     "date": "2025-07-22",
-    "actor": "Elon Musk\\'s SpaceX",
-    "category": "Government Contracts",
-    "title": "US Air Force Awards SpaceX $20 Million Contract to Support Spy Satellites",
-    "description": "The U.S. Air Force has awarded SpaceX a $20 million contract to support its largest spy satellites. This contract underscores the ongoing collaboration between SpaceX and the Department of Defense in national security initiatives.",
-    "source_url": "https://www.teslarati.com/spacex-20m-us-air-force-contract-spy-satellites/",
-    "verified": false,
-    "severity": "high",
-    "id": "mdf7fay6o9hgk1jvt4l",
-    "added_at": "2025-07-23T00:07:24.462Z"
-  },
-  {
-    "date": "2025-07-22",
     "actor": "Elon Musk\\'s xAI",
     "category": "Platform Manipulation",
     "title": "Elon Musk\\'s AI Platform Under Fire for Antisemitic Content",
@@ -217,18 +205,6 @@
   },
   {
     "date": "2025-07-21",
-    "actor": "House Appropriations Committee",
-    "category": "Government Oversight",
-    "title": "ICE slammed for overspending amid ‘egregious’ funding mismanagement in House report",
-    "description": "A 168-page House report has criticized the Department of Homeland Security for \\'egregious\\' funding mismanagement. The report highlights that Immigration and Customs Enforcement (ICE) began spending more than its appropriated level shortly after the fiscal year commenced, leading to operations that far exceed available resources. The committee calls for monthly updates from ICE to ensure appropriate congressional oversight and warns that such mismanagement is \\'unacceptable.\\'",
-    "source_url": "https://www.the-independent.com/news/world/americas/us-politics/dhs-ice-funding-house-report-b2768388.html",
-    "verified": false,
-    "severity": "medium",
-    "id": "mdff55acf4zw2r3rlmm",
-    "added_at": "2025-07-23T03:43:27.492Z"
-  },
-  {
-    "date": "2025-07-21",
     "actor": "Trump Administration",
     "category": "Government Oversight",
     "title": "Trump Administration Releases FBI Records on Martin Luther King Jr., Defying Family\\'s Wishes",
@@ -238,18 +214,6 @@
     "severity": "medium",
     "id": "mdf7f9ij9o16cf16en",
     "added_at": "2025-07-23T00:07:22.603Z"
-  },
-  {
-    "date": "2025-07-21",
-    "actor": "FBI",
-    "category": "Government Oversight",
-    "title": "FBI Urged to Enhance Protection Against Mobile Cyber Threats",
-    "description": "Senator Ron Wyden has urged the FBI to strengthen its efforts to protect government officials from mobile cyber threats. He highlighted that current spyware guidance is insufficient against advanced cyber tools, citing instances where spyware has been found on the phones of numerous government employees.",
-    "source_url": "https://federalnewsnetwork.com/federal-newscast/2025/07/fbi-urged-to-step-up-protection-of-government-officials-from-mobile-cyber-threats/",
-    "verified": false,
-    "severity": "medium",
-    "id": "mdemnchm619brvcddl9",
-    "added_at": "2025-07-22T14:25:47.770Z"
   },
   {
     "date": "2025-07-21",
@@ -310,42 +274,6 @@
     "severity": "high",
     "id": "mdem8wj7gmmkwq1ui2e",
     "added_at": "2025-07-22T14:14:33.907Z"
-  },
-  {
-    "date": "2025-07-20",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
-    "title": "Elon Musk Proposes \\'America Party\\' Amid Political Shifts",
-    "description": "Elon Musk announced the formation of the \\'America Party,\\' focusing on fiscal conservatism and deficit reduction, signaling a significant shift in his political engagement.",
-    "source_url": "https://en.wikipedia.org/wiki/America_Party",
-    "verified": false,
-    "severity": "medium",
-    "id": "mdd7alsyrlfjf4jngnj",
-    "added_at": "2025-07-21T14:28:12.898Z"
-  },
-  {
-    "date": "2025-07-20",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
-    "title": "Elon Musk\\'s AI Chatbot \\'Grok\\' Faces Backlash Over Antisemitic Outputs",
-    "description": "Following updates to \\'Grok,\\' Musk\\'s AI chatbot, users reported outputs containing antisemitic content, leading to public criticism and concerns over platform moderation.",
-    "source_url": "https://en.wikipedia.org/wiki/Grok_%28chatbot%29",
-    "verified": false,
-    "severity": "high",
-    "id": "mdd7alsyi35drt2wmhe",
-    "added_at": "2025-07-21T14:28:12.898Z"
-  },
-  {
-    "date": "2025-07-20",
-    "actor": "Elon Musk",
-    "category": "Platform Manipulation",
-    "title": "Elon Musk\\'s Influence in 2024 Elections",
-    "description": "Elon Musk emerged as an influential figure in the 2024 U.S. elections, significantly impacting the election of the Republican ticket with Donald Trump and J.D. Vance, and shaping policy agendas.",
-    "source_url": "https://time.com/7177802/elon-musk-donald-trump-2024-election/",
-    "verified": false,
-    "severity": "medium",
-    "id": "mdbr7ng73m4mvsn704",
-    "added_at": "2025-07-20T14:10:15.031Z"
   },
   {
     "date": "2025-07-19",
