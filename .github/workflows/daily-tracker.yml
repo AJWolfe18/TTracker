@@ -1,5 +1,6 @@
 # .github/workflows/daily-tracker.yml
 name: Daily Political Tracker
+
 on:
   schedule:
     # Runs every day at 9:00 AM EST (2:00 PM UTC)
@@ -29,104 +30,37 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: node daily-tracker.js
       
-    - name: Ensure public directory exists
-      run: mkdir -p public
-      
-    - name: Copy data to public folder with verification
+    - name: Copy data to public folder
       run: |
-        echo "=== PRE-COPY STATUS ==="
-        echo "Master file exists:" && ls -la master-tracker-log.json || echo "Master file missing!"
-        echo "Public directory:" && ls -la public/ || echo "Public directory missing!"
-        
-        echo "=== COPYING FILES ==="
+        ls -la master-tracker-log.json
+        ls -la public/
         cp master-tracker-log.json public/master-tracker-log.json
-        
-        echo "=== POST-COPY VERIFICATION ==="
-        echo "Master file size: $(wc -l < master-tracker-log.json) lines"
-        echo "Public file size: $(wc -l < public/master-tracker-log.json) lines"
-        
-        # Verify files are identical
-        if diff master-tracker-log.json public/master-tracker-log.json > /dev/null; then
-          echo "✅ Files successfully copied and verified identical"
-        else
-          echo "❌ File copy verification failed!"
-          exit 1
-        fi
+        ls -la public/master-tracker-log.json
+        echo "Copy completed"
       
     - name: Commit and push results
       run: |
         git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action - Daily Tracker"
+        git config --local user.name "GitHub Action"
+        git add *.json public/master-tracker-log.json
+        git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
+        git push
         
-        # Add all tracker files
-        git add master-tracker-log.json
-        git add public/master-tracker-log.json
-        git add tracker-data-*.json || echo "No daily tracker files to add"
-        
-        # Check if there are changes to commit
-        if git diff --staged --quiet; then
-          echo "No changes detected - skipping commit"
-        else
-          echo "Changes detected - committing updates"
-          git commit -m "Daily tracker update - $(date +%Y-%m-%d) - Real news data"
-          git push
-          echo "✅ Successfully pushed updates to repository"
-        fi
-        
-    - name: Create daily release
+    - name: Create release with daily data
       if: github.event_name == 'schedule'
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: daily-${{ github.run_number }}
-        release_name: Daily Political Update - $(date +%Y-%m-%d)
+        release_name: Daily Update - ${{ github.run_number }}
         body: |
-          🗳️ **Automated Daily Political Tracker Update**
+          Automated daily political tracker update.
           
-          **Date:** $(date +%Y-%m-%d)
-          **Source:** Real news search using OpenAI Responses API
+          This release contains the latest political developments tracked on ${{ github.run_date }}.
           
-          📊 **What's Included:**
-          - Latest political developments across 6 categories
-          - Trump & Family tracking
-          - Elon Musk & DOGE monitoring  
-          - DOJ & Law Enforcement updates
-          - Federal Agency actions
-          - Court rulings & legal proceedings
-          - Corporate ethics & financial tracking
-          
-          🔗 **View Live Dashboard:** https://trumpytracker.com/
-          
-          📁 **Files Updated:**
-          - master-tracker-log.json (complete database)
-          - public/master-tracker-log.json (website data)
-          - tracker-data-$(date +%Y-%m-%d).json (today's entries)
-          
-          ⚡ **Powered by:** OpenAI Responses API with real web search
+          Files included:
+          - Daily JSON data file
+          - Updated master tracker log
         draft: false
         prerelease: false
-        
-    - name: Summary report
-      if: always()
-      run: |
-        echo "=== DAILY TRACKER EXECUTION SUMMARY ==="
-        echo "Date: $(date)"
-        echo "Workflow: ${{ github.workflow }}"
-        echo "Trigger: ${{ github.event_name }}"
-        
-        if [ -f master-tracker-log.json ]; then
-          ENTRY_COUNT=$(grep -c '"id"' master-tracker-log.json || echo "0")
-          echo "Total entries in database: $ENTRY_COUNT"
-        else
-          echo "❌ Master tracker log not found"
-        fi
-        
-        if [ -f public/master-tracker-log.json ]; then
-          PUBLIC_COUNT=$(grep -c '"id"' public/master-tracker-log.json || echo "0")
-          echo "Entries in public file: $PUBLIC_COUNT"
-        else
-          echo "❌ Public tracker log not found"
-        fi
-        
-        echo "=== END SUMMARY ==="
