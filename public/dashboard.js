@@ -226,3 +226,5 @@ const PoliticalDashboard = () => {
     </div>
   );
 };
+
+ReactDOM.render(<PoliticalDashboard />, document.getElementById('root'));
