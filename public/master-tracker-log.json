@@ -1,6 +1,102 @@
 [
   {
     "date": "2025-07-23",
+    "actor": "U.S. Department of Justice",
+    "category": "Legal Proceedings",
+    "title": "Justice Department\\'s Civil Rights Division Faces Mass Exodus",
+    "description": "The U.S. Justice Department\\'s Civil Rights Division has experienced a significant exodus of 368 employees since President Donald Trump took office, including 270 retirements and 98 resignations. This unprecedented loss reflects a shift in the division\\'s focus under Trump-appointed head Harmeet Dhillon, who has redirected efforts to align with the administration\\'s political agenda, raising concerns about the division\\'s ability to fulfill its statutory responsibilities under the Civil Rights Act.",
+    "source_url": "https://www.reuters.com/legal/government/us-justice-dept-civil-rights-unit-faces-mass-exodus-2025-07-23/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdgp1k8ms2ndddjku2",
+    "added_at": "2025-07-24T01:08:22.582Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Allows Removal of CPSC Commissioners",
+    "description": "The U.S. Supreme Court granted an emergency request from the Justice Department, allowing President Donald Trump to remove three Democratic members of the Consumer Product Safety Commission (CPSC). This action suspends a lower court\\'s ruling that blocked the dismissals, indicating the Court\\'s support for the President\\'s authority to remove officials exercising executive power. Justice Elena Kagan dissented, warning that the ruling compromises agency independence and Congressional intent.",
+    "source_url": "https://www.reuters.com/legal/government/us-supreme-court-lets-trump-remove-consumer-product-safety-commissioners-now-2025-07-23/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdgp1k8m86v2eulh38r",
+    "added_at": "2025-07-24T01:08:22.582Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Rules on Federal Habeas Corpus Relief for State Prisoners",
+    "description": "The U.S. Supreme Court ruled that once a state prisoner\\'s first petition for federal habeas corpus relief reaches a final judgment on the merits, any subsequent request for federal habeas corpus relief must comply with stringent requirements. This decision clarifies the procedural standards for successive habeas corpus petitions, impacting the rights of state prisoners seeking federal review of their convictions.",
+    "source_url": "https://supreme-court-news.com/2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdgp1k8mj5e86qk0iz",
+    "added_at": "2025-07-24T01:08:22.582Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Allows President Trump to Remove CPSC Commissioners",
+    "description": "The U.S. Supreme Court ruled in favor of President Donald Trump, permitting him to remove three Democratic members from the Consumer Product Safety Commission (CPSC). This decision overrides a lower court\\'s block on the dismissals and indicates the Court\\'s support for the President\\'s authority to remove officials exercising executive power. Justice Elena Kagan dissented, expressing concerns about agency independence and the use of the emergency docket for such significant decisions.",
+    "source_url": "https://www.reuters.com/legal/government/us-supreme-court-lets-trump-remove-consumer-product-safety-commissioners-2025-07-23/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdgp1k8lzqiwzi43ahp",
+    "added_at": "2025-07-24T01:08:22.581Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "Elon Musk",
+    "category": "Government Contracts",
+    "title": "Tesla Reports Decline Amidst Political Controversies",
+    "description": "Tesla reported a 12% drop in revenue and a 16% decline in net income for the second quarter of 2025, marking its second consecutive quarter of decline. Analysts attribute this downturn to increased competition, limited product offerings, and reputational issues linked to Elon Musk\\'s recent political engagements and his role in the Department of Government Efficiency (DOGE).",
+    "source_url": "https://elpais.com/economia/2025-07-23/tesla-no-levanta-cabeza-caen-sus-ingresos-beneficios-en-el-segundo-trimestre.html",
+    "verified": false,
+    "severity": "high",
+    "id": "mdgp1j9sskvoro67wm9",
+    "added_at": "2025-07-24T01:08:21.328Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "Elon Musk",
+    "category": "Government Contracts",
+    "title": "White House Reviews SpaceX Contracts Amid Tensions",
+    "description": "The White House has directed the Defense Department and NASA to review SpaceX\\'s contracts following escalating tensions between President Donald Trump and Elon Musk. This review could impact approximately $22 billion in federal contracts held by SpaceX, highlighting the delicate balance between business interests and government responsibilities.",
+    "source_url": "https://www.cnbc.com/2025/06/13/white-house-reviews-spacex-contracts-as-trump-musk-feud-simmers-reuters.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdgp1j9svwk6vwybw9",
+    "added_at": "2025-07-24T01:08:21.328Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Elon Musk Steps Back from DOGE to Focus on Tesla Amid Profit Decline",
+    "description": "Elon Musk announced he will reduce his involvement with the Department of Government Efficiency (DOGE) to concentrate more on Tesla, following a 71% plunge in the company\\'s profits. This decision underscores the challenges of balancing business interests with public service roles.",
+    "source_url": "https://www.upi.com/Top_News/US/2025/04/23/Elon-Musk-tesla-doge/1391745379447/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdgp1j9s0pog65jdbgx",
+    "added_at": "2025-07-24T01:08:21.328Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Forms Strike Force to Investigate Intelligence Community \\'Weaponization\\' Claims",
+    "description": "The Department of Justice announced the formation of a strike force to investigate allegations made by Director of National Intelligence Tulsi Gabbard concerning the alleged weaponization of the U.S. intelligence community. The DOJ emphasized its commitment to conducting a thorough assessment of these serious allegations.",
+    "source_url": "https://www.reuters.com/world/us/justice-dept-assess-claims-alleged-weaponization-us-intelligence-community-2025-07-23/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdgp1i1q679cf2li6vc",
+    "added_at": "2025-07-24T01:08:19.742Z"
+  },
+  {
+    "date": "2025-07-23",
     "actor": "Former U.S. Secretary of Education",
     "category": "Policy Implementation Changes",
     "title": "Former Education Secretary Criticizes Department\\'s Downsizing",
@@ -10,6 +106,42 @@
     "severity": "high",
     "id": "mdf7f9uh7bnwkvwwxd7",
     "added_at": "2025-07-23T00:07:23.033Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "U.S. Withdraws from UNESCO",
+    "description": "The United States officially withdrew from the United Nations Educational, Scientific and Cultural Organization (UNESCO), a move that has been criticized by some international observers as detrimental to global cultural and educational cooperation.",
+    "source_url": "https://www.theguardian.com/us-news/2025/jul/22/us-withdraws-from-unesco",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdgp1i55sshnv9kwfj7",
+    "added_at": "2025-07-24T01:08:19.865Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Unveils America\\'s AI Action Plan",
+    "description": "President Trump unveiled America\\'s AI Action Plan, coupled with the launch of AI.gov, aiming to position the U.S. as a global leader in artificial intelligence research and development. The plan outlines strategic initiatives to foster innovation and address ethical considerations in AI.",
+    "source_url": "https://www.whitehouse.gov/briefing-room/statements-releases/2025/07/23/fact-sheet-americas-ai-action-plan/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdgp1i55ud5nyyugbp",
+    "added_at": "2025-07-24T01:08:19.865Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "House Oversight Committee Issues Subpoena for Ghislaine Maxwell",
+    "description": "The House Oversight Committee issued a subpoena for Ghislaine Maxwell to testify before Congress next month, as part of ongoing investigations into Jeffrey Epstein\\'s activities and associated individuals.",
+    "source_url": "https://www.politico.com/news/2025/07/22/house-oversight-committee-subpoena-ghislaine-maxwell-00123456",
+    "verified": true,
+    "severity": "high",
+    "id": "mdgp1i55r80fhcxw96",
+    "added_at": "2025-07-24T01:08:19.865Z"
   },
   {
     "date": "2025-07-22",
@@ -2398,6 +2530,18 @@
     "severity": "high",
     "id": "md26zebvvmrt746xnw",
     "added_at": "2025-07-13T21:34:02.059Z"
+  },
+  {
+    "date": "2025-07-11",
+    "actor": "Financial Crimes Enforcement Network (FinCEN)",
+    "category": "Corporate Ethics",
+    "title": "FinCEN Removes Beneficial Reporting Requirements for U.S. Companies",
+    "description": "FinCEN issued an interim final rule striking the requirement for U.S. companies and U.S. persons to report beneficial ownership information under the Corporate Transparency Act, exempting domestic reporting companies from BOI reporting requirements.",
+    "source_url": "https://www.jdsupra.com/legalnews/daily-financial-regulation-update-3049555/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdgp1k6qcxjwhzfpy4",
+    "added_at": "2025-07-24T01:08:22.514Z"
   },
   {
     "date": "2025-07-11",
