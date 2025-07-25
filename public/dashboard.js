@@ -109,11 +109,7 @@ const PoliticalDashboard = () => {
           </div>
           
           <p className="text-xl text-gray-300 mb-4">
-            AI-Powered Real-Time Political Intelligence
-          </p>
-          <p className="text-gray-400 max-w-2xl mx-auto">
-            Automated daily monitoring of Trump Administration 2.0, federal agencies, and key political actors. 
-            Real news discovery with AI verification from credible sources.
+            Political Accountability Tracker
           </p>
           
           {/* Email Signup CTA */}
@@ -143,7 +139,7 @@ const PoliticalDashboard = () => {
           </div>
         </header>
 
-        {/* Intelligence Dashboard Stats */}
+        {/* Political Dashboard Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div 
             className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
@@ -153,7 +149,7 @@ const PoliticalDashboard = () => {
               setSearchTerm('');
             }}
           >
-            <h3 className="text-lg font-semibold text-blue-400 mb-2">📊 Total Intelligence</h3>
+            <h3 className="text-lg font-semibold text-blue-400 mb-2">📊 Total Entries</h3>
             <p className="text-3xl font-bold">{totalEntries}</p>
             <p className="text-sm text-gray-400">Political developments tracked</p>
           </div>
@@ -171,32 +167,18 @@ const PoliticalDashboard = () => {
             className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
             onClick={() => setSearchTerm('trump')}
           >
-            <h3 className="text-lg font-semibold text-orange-400 mb-2">🏛️ Trump & Family</h3>
+            <h3 className="text-lg font-semibold text-orange-400 mb-2">🏛️ Executive Branch</h3>
             <p className="text-3xl font-bold text-orange-400">{trumpEntries}</p>
-            <p className="text-sm text-gray-400">Trump-related entries</p>
+            <p className="text-sm text-gray-400">Administration actions</p>
           </div>
 
           <div 
             className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
-            onClick={() => setSearchTerm('musk')}
+            onClick={() => setSearchTerm('ice')}
           >
-            <h3 className="text-lg font-semibold text-purple-400 mb-2">🚀 Musk & DOGE</h3>
-            <p className="text-3xl font-bold text-purple-400">{muskEntries}</p>
-            <p className="text-sm text-gray-400">DOGE & tech influence</p>
-          </div>
-        </div>
-
-        {/* Trump 2.0 vs 1.0 Comparison Teaser */}
-        <div className="bg-gradient-to-r from-gray-800/60 to-blue-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-semibold text-blue-400 mb-2">🔄 Trump 2.0 vs 1.0 Analysis</h3>
-              <p className="text-gray-300">Compare current developments with Trump's first presidency patterns</p>
-              <p className="text-sm text-gray-400 mt-1">Coming soon: Historical comparison dashboard</p>
-            </div>
-            <button className="bg-blue-600/30 border border-blue-500 px-6 py-2 rounded font-medium hover:bg-blue-600/50 transition-colors">
-              Preview Feature
-            </button>
+            <h3 className="text-lg font-semibold text-purple-400 mb-2">🛡️ ICE & Immigration</h3>
+            <p className="text-3xl font-bold text-purple-400">{iceEntries}</p>
+            <p className="text-sm text-gray-400">Enforcement actions</p>
           </div>
         </div>
 
@@ -205,7 +187,7 @@ const PoliticalDashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <input
               type="text"
-              placeholder="Search intelligence..."
+              placeholder="Search entries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
@@ -227,7 +209,7 @@ const PoliticalDashboard = () => {
               onChange={(e) => setSelectedSeverity(e.target.value)}
               className="px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
             >
-              <option value="all">All Threat Levels</option>
+              <option value="all">All Severities</option>
               <option value="high">🚨 High Priority</option>
               <option value="medium">⚠️ Medium Priority</option>
               <option value="low">ℹ️ Low Priority</option>
@@ -254,8 +236,8 @@ const PoliticalDashboard = () => {
           </div>
           
           <div className="mt-4 flex items-center justify-between text-sm text-gray-400">
-            <span>Showing {sortedEntries.length} of {totalEntries} intelligence reports</span>
-            <span>🤖 Updated daily via AI monitoring</span>
+            <span>Showing {sortedEntries.length} of {totalEntries} political developments</span>
+            <span>🤖 Updated daily via automated monitoring</span>
           </div>
         </div>
 
@@ -312,15 +294,15 @@ const PoliticalDashboard = () => {
         {/* Footer */}
         <footer className="mt-16 text-center">
           <div className="bg-gray-800/60 backdrop-blur p-8 rounded-lg border border-gray-700">
-            <h3 className="text-xl font-semibold text-blue-400 mb-4">AI-Powered Political Intelligence</h3>
+            <h3 className="text-xl font-semibold text-blue-400 mb-4">Automated Political Monitoring</h3>
             <p className="text-gray-300 mb-4">
-              Automated daily monitoring using OpenAI's web search capabilities to discover and verify 
-              political developments from credible news sources.
+              Daily tracking of political developments using automated web search and verification 
+              from credible news sources.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-400">
               <div>
-                <strong className="text-blue-400">🤖 AI Technology</strong><br/>
-                GPT-4o-mini with web search
+                <strong className="text-blue-400">🤖 Automated Collection</strong><br/>
+                Daily news discovery
               </div>
               <div>
                 <strong className="text-green-400">✅ Source Verification</strong><br/>
@@ -332,7 +314,7 @@ const PoliticalDashboard = () => {
               </div>
             </div>
             <p className="text-gray-500 text-xs mt-6">
-              Last updated: {new Date().toLocaleDateString()} • Trump 2.0 Era Intelligence Platform
+              Last updated: {new Date().toLocaleDateString()} • Political Accountability Platform
             </p>
           </div>
         </footer>
