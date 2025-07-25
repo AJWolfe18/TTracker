@@ -50,10 +50,11 @@ const PoliticalDashboard = () => {
     entry.actor?.toLowerCase().includes('trump') || 
     entry.title?.toLowerCase().includes('trump')
   ).length;
-  const muskEntries = activeEntries.filter(entry => 
-    entry.actor?.toLowerCase().includes('musk') || 
-    entry.title?.toLowerCase().includes('musk') ||
-    entry.title?.toLowerCase().includes('doge')
+  const iceEntries = activeEntries.filter(entry => 
+    entry.actor?.toLowerCase().includes('ice') || 
+    entry.title?.toLowerCase().includes('ice') ||
+    entry.actor?.toLowerCase().includes('homeland') ||
+    entry.title?.toLowerCase().includes('immigration')
   ).length;
 
   const sortedEntries = [...filteredEntries].sort((a, b) => {
@@ -85,7 +86,7 @@ const PoliticalDashboard = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-white text-xl">Loading AI Political Intelligence...</div>
+          <div className="text-white text-xl">Loading Political Tracker...</div>
         </div>
       </div>
     );
@@ -142,7 +143,7 @@ const PoliticalDashboard = () => {
         {/* Political Dashboard Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div 
-            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
+            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300 shadow-lg"
             onClick={() => {
               setSelectedSeverity('all');
               setSelectedCategory('all');
@@ -155,7 +156,7 @@ const PoliticalDashboard = () => {
           </div>
           
           <div 
-            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
+            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300 shadow-lg"
             onClick={() => setSelectedSeverity('high')}
           >
             <h3 className="text-lg font-semibold text-red-400 mb-2">🚨 High Priority</h3>
@@ -164,7 +165,7 @@ const PoliticalDashboard = () => {
           </div>
 
           <div 
-            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
+            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300 shadow-lg"
             onClick={() => setSearchTerm('trump')}
           >
             <h3 className="text-lg font-semibold text-orange-400 mb-2">🏛️ Executive Branch</h3>
@@ -173,7 +174,7 @@ const PoliticalDashboard = () => {
           </div>
 
           <div 
-            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300"
+            className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 cursor-pointer hover:bg-gray-700/60 transition-all duration-300 shadow-lg"
             onClick={() => setSearchTerm('ice')}
           >
             <h3 className="text-lg font-semibold text-purple-400 mb-2">🛡️ ICE & Immigration</h3>
@@ -183,7 +184,7 @@ const PoliticalDashboard = () => {
         </div>
 
         {/* Advanced Search and Filters */}
-        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8">
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8 shadow-lg">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <input
               type="text"
@@ -241,17 +242,17 @@ const PoliticalDashboard = () => {
           </div>
         </div>
 
-        {/* Intelligence Feed */}
+        {/* Entries Feed */}
         <div className="space-y-4">
           {sortedEntries.length === 0 ? (
             <div className="text-center py-12 bg-gray-800/60 backdrop-blur rounded-lg border border-gray-700">
               <div className="text-6xl mb-4">🔍</div>
-              <p className="text-gray-400 text-lg">No intelligence found matching your criteria.</p>
+              <p className="text-gray-400 text-lg">No entries found matching your criteria.</p>
               <p className="text-gray-500 text-sm mt-2">Try adjusting your search filters</p>
             </div>
           ) : (
             sortedEntries.map((entry) => (
-              <div key={entry.id} className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 hover:bg-gray-700/60 transition-all duration-300">
+              <div key={entry.id} className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 hover:bg-gray-700/60 transition-all duration-300 shadow-lg">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-400">📅 {new Date(entry.date).toLocaleDateString()}</span>
@@ -260,11 +261,11 @@ const PoliticalDashboard = () => {
                       entry.severity === 'medium' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-500' :
                       'bg-green-900/50 text-green-200 border border-green-500'
                     }`}>
-                      {entry.severity === 'high' ? '🚨 HIGH PRIORITY' :
+                      {entry.severity === 'high' ? '🚨 HIGH' :
                        entry.severity === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ LOW'}
                     </span>
                     {entry.verified && (
-                      <span className="text-green-400 text-sm">✅ AI-Verified</span>
+                      <span className="text-green-400 text-sm">✅ Verified</span>
                     )}
                   </div>
                   <span className="text-sm text-blue-400 font-medium">{entry.actor}</span>
@@ -293,7 +294,7 @@ const PoliticalDashboard = () => {
 
         {/* Footer */}
         <footer className="mt-16 text-center">
-          <div className="bg-gray-800/60 backdrop-blur p-8 rounded-lg border border-gray-700">
+          <div className="bg-gray-800/60 backdrop-blur p-8 rounded-lg border border-gray-700 shadow-lg">
             <h3 className="text-xl font-semibold text-blue-400 mb-4">Automated Political Monitoring</h3>
             <p className="text-gray-300 mb-4">
               Daily tracking of political developments using automated web search and verification 
