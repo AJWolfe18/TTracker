@@ -1,0 +1,122 @@
+[
+  {
+    "date": "2025-07-24",
+    "actor": "Elon Musk",
+    "category": "Government Relations",
+    "title": "Musk Ordered Starlink Shutdown During Ukrainian Counteroffensive",
+    "description": "In late September 2022, Elon Musk ordered a Starlink satellite service shutdown in key areas of Ukraine during a critical counteroffensive against Russian forces. The decision led to a sudden communications blackout, disrupting Ukrainian military operations. Musk cited concerns over provoking a Russian nuclear response as the reason for the shutdown.",
+    "source_url": "https://www.reuters.com/investigations/musk-ordered-shutdown-starlink-satellite-service-ukraine-retook-territory-russia-2025-07-25/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwz1rlno0h50yfzrq",
+    "added_at": "2025-07-25T14:25:54.609Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Sues New York City Over Sanctuary Policies",
+    "description": "The DOJ filed a lawsuit against New York City, alleging that its sanctuary policies obstruct federal immigration enforcement and violate the Constitution\\'s Supremacy Clause. The suit follows a recent incident where undocumented migrants shot a customs officer during a robbery in Manhattan.",
+    "source_url": "https://apnews.com/article/522887bf4e05a927c7898312f1d8c129",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwz0pshs8ew8vs8s4",
+    "added_at": "2025-07-25T14:25:53.248Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "House Oversight Committee",
+    "category": "Government Oversight",
+    "title": "House Panel Subpoenas Epstein Files",
+    "description": "The House Oversight Committee voted 8-2 to subpoena the DOJ for files related to Jeffrey Epstein’s sex trafficking investigation, seeking transparency and accountability. The subpoena includes documents and testimony from key figures, including Ghislaine Maxwell and former attorneys general under Donald Trump.",
+    "source_url": "https://time.com/7305200/epstein-files-trump-house-subpoena/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdiwz0ps88qvkl0ablq",
+    "added_at": "2025-07-25T14:25:53.248Z"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "U.S. Department of Education",
+    "category": "Budget and Operational Changes",
+    "title": "Department of Education Releases $1.3 Billion for After-School Programs",
+    "description": "The White House Office of Management and Budget announced the release of approximately $1.3 billion to state educational agencies for the 21st Century Community Learning Centers program, funds that were previously withheld. The release follows a review completed on July 18, 2025, and addresses concerns over delayed funding for K-12 education programs. Further details on the release of other education funds remain unclear.",
+    "source_url": "https://schoolhouseconnection.org/article/shcs-federal-policy-updates-live-tracking-of-major-actions",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdiwz5mpk1vsdxoi5v",
+    "added_at": "2025-07-25T14:25:59.617Z"
+  },
+  {
+    "date": "2025-07-15",
+    "actor": "U.S. Department of Education and Department of Labor",
+    "category": "Policy Implementation Changes",
+    "title": "Transfer of Workforce Development Programs to Department of Labor",
+    "description": "The U.S. Department of Education and the Department of Labor announced a shift in management of key federal workforce development programs. Under an interagency agreement signed on July 15, 2025, adult education and family literacy programs, as well as career and technical education programs, will now be managed by the Department of Labor alongside Education Department staff, marking a significant change in federal education oversight.",
+    "source_url": "https://www.k12dive.com/news/week-in-review-july-21-2025/753484/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdiwz5mphf9gylk68ji",
+    "added_at": "2025-07-25T14:25:59.617Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Blocks North Dakota Redistricting Ruling Threatening Voting Rights Act",
+    "description": "The Supreme Court temporarily halted a lower court\\'s decision in a North Dakota redistricting case that could have weakened a key provision of the Voting Rights Act. This decision preserves the current enforcement mechanisms for challenging discriminatory voting laws.",
+    "source_url": "https://apnews.com/article/289e84539fcb2b309c8d00fb6a077097",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwz0oivzq3f9b2u2",
+    "added_at": "2025-07-25T14:25:53.202Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Temporarily Pauses Rollbacks to Voting Rights Act",
+    "description": "The Supreme Court issued a temporary pause on a lower court ruling that would have weakened the Voting Rights Act, providing a short-term victory to Native American groups challenging North Dakota\\'s redistricting plan.",
+    "source_url": "https://www.axios.com/2025/07/24/supreme-court-voting-rights-act-ruling-north-dakota",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwz0oija0ukibsvai",
+    "added_at": "2025-07-25T14:25:53.202Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Declines to Hear Major Voting Rights Case",
+    "description": "The Supreme Court declined to hear a significant voting rights case, leaving lower court rulings intact. This decision has implications for future voting rights legislation and enforcement.",
+    "source_url": "https://www.nytimes.com/2025/07/24/us/supreme-court-voting-rights.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwz0oib7nsuabe0qv",
+    "added_at": "2025-07-25T14:25:53.202Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "Glass Lewis",
+    "category": "Corporate Ethics",
+    "title": "Glass Lewis Sues Texas Over ESG and DEI Restrictions on Proxy Advisers",
+    "description": "Glass Lewis, a prominent proxy advisory firm, filed a lawsuit against Texas over a new law set to take effect on September 1, 2025, which restricts proxy advisers from making recommendations based on non-financial factors such as environmental, social governance (ESG), and diversity, equity, and inclusion (DEI) initiatives. The law mandates that advisers provide financial analysis to back any such recommendation. Glass Lewis argues this violates its First Amendment rights, calling the law \\'blatantly unconstitutional\\' and harmful to its business and clients.",
+    "source_url": "https://www.ft.com/content/35ea9ff1-fed5-4e36-b444-b66ad9b56aec",
+    "verified": true,
+    "severity": "high",
+    "id": "mdiwyzso4kuu9kic4ur",
+    "added_at": "2025-07-25T14:25:52.056Z"
+  },
+  {
+    "date": "2025-07-22",
+    "actor": "California State Legislature",
+    "category": "Corporate Ethics",
+    "title": "California Passes Climate Disclosure Laws Surpassing SEC Requirements",
+    "description": "In October 2023, California passed Senate Bill 253, the \\'Climate Corporate Data Accountability Act,\\' which surpasses the SEC’s climate disclosure rules. Senate Bill 261, also signed into law in October 2023, requires that on or before January 1, 2026, and every two years thereafter, a \\'covered entity\\' (which includes companies doing business in California and with over $500 million in revenue) must disclose their \\'climate-related financial risk\\' and measures taken to reduce and adapt to climate change. These laws are currently being challenged in the courts, but if they survive, they could impact many companies.",
+    "source_url": "https://www.clydeco.com/en/insights/2025/03/politics-shaping-the-regulatory-agenda",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdiwyzsoksuim9ywpg",
+    "added_at": "2025-07-25T14:25:52.056Z"
+  }
+]
