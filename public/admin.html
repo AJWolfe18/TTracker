@@ -3,310 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrumpyTracker - Admin Panel</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <title>TrumpyTracker Admin</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom styles that work with Tailwind */
         body {
-            background: linear-gradient(135deg, #111827 0%, #1e3a8a 50%, #111827 100%);
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
+            color: white;
             min-height: 100vh;
         }
-        
-        .glass-card {
-            background: rgba(31, 41, 55, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(75, 85, 99, 0.3);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-        
-        .brand-gradient {
-            background: linear-gradient(135deg, #60a5fa 0%, #ef4444 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .logo-gradient {
-            background: linear-gradient(135deg, #ef4444 0%, #3b82f6 100%);
-        }
-        
-        /* Status indicators */
-        .status-high { 
-            background: rgba(127, 29, 29, 0.4); 
-            color: #fecaca; 
-            border: 1px solid rgba(239, 68, 68, 0.5);
-        }
-        
-        .status-medium { 
-            background: rgba(113, 63, 18, 0.4); 
-            color: #fef08a; 
-            border: 1px solid rgba(245, 158, 11, 0.5);
-        }
-        
-        .status-low { 
-            background: rgba(20, 83, 45, 0.4); 
-            color: #bbf7d0; 
-            border: 1px solid rgba(34, 197, 94, 0.5);
-        }
-        
-        .status-archived {
-            background: rgba(88, 28, 135, 0.4);
-            color: #e9d5ff;
-            border: 1px solid rgba(147, 51, 234, 0.5);
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .card { background: rgba(45, 55, 72, 0.9); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #4a5568; }
+        .input { width: 100%; padding: 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; color: white; font-size: 14px; }
+        .input:focus { outline: none; border-color: #3182ce; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #3182ce; color: white; }
+        .btn-primary:hover { background: #2c5aa0; }
+        .btn-danger { background: #e53e3e; color: white; }
+        .btn-danger:hover { background: #c53030; }
+        .btn-success { background: #38a169; color: white; }
+        .btn-success:hover { background: #2f855a; }
+        .btn-secondary { background: #4a5568; color: white; }
+        .btn-secondary:hover { background: #2d3748; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-4 { gap: 16px; }
+        .gap-2 { gap: 8px; }
+        .mb-4 { margin-bottom: 16px; }
+        .mb-2 { margin-bottom: 8px; }
+        .text-center { text-align: center; }
+        .text-sm { font-size: 14px; }
+        .text-xs { font-size: 12px; }
+        .font-bold { font-weight: 700; }
+        .opacity-75 { opacity: 0.75; }
+        .grid { display: grid; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .entry { background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
+        .entry:hover { background: #374151; }
+        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
+        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
+        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
+        .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
+        .scrollable { max-height: 600px; overflow-y: auto; }
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .flex-mobile { flex-direction: column; }
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white">
-    <div id="admin-root"></div>
+<body>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
-        
-        // Robust Base64 encoding function
-        function safeBase64Encode(str) {
-            try {
-                // Handle Unicode characters properly
-                const bytes = new TextEncoder().encode(str);
-                let binary = '';
-                for (let i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                return btoa(binary);
-            } catch (error) {
-                console.error('Base64 encoding error:', error);
-                // Fallback to simple btoa for basic ASCII
-                return btoa(unescape(encodeURIComponent(str)));
-            }
-        }
+        const { useState, useEffect } = React;
 
-        function AdminInterface() {
-            // State management
+        function AdminApp() {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [githubToken, setGithubToken] = useState('');
+            const [token, setToken] = useState('');
             const [entries, setEntries] = useState([]);
-            const [selectedEntries, setSelectedEntries] = useState(new Set());
-            const [searchTerm, setSearchTerm] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
+            const [selected, setSelected] = useState(new Set());
+            const [search, setSearch] = useState('');
+            const [loading, setLoading] = useState(false);
             const [message, setMessage] = useState(null);
             const [showArchived, setShowArchived] = useState(false);
-            const [editingEntry, setEditingEntry] = useState(null);
-            const [editForm, setEditForm] = useState({});
+            const [editing, setEditing] = useState(null);
+            const [editData, setEditData] = useState({});
 
-            // Message handler with auto-clear
-            const showMessage = useCallback((text, type = 'info') => {
-                setMessage({ text, type, id: Date.now() });
+            // Show message with auto-hide
+            const showMessage = (text, type = 'info') => {
+                setMessage({ text, type });
                 setTimeout(() => setMessage(null), 5000);
-            }, []);
+            };
 
-            // Authentication
-            const authenticate = useCallback(() => {
-                if (!githubToken.trim()) {
+            // Login
+            const login = () => {
+                if (!token.trim()) {
                     showMessage('Please enter your GitHub token', 'error');
                     return;
                 }
-                
-                if (!githubToken.startsWith('github_pat_') && !githubToken.startsWith('ghp_')) {
-                    showMessage('Invalid token format. Should start with github_pat_ or ghp_', 'error');
+                if (!token.startsWith('github_pat_') && !token.startsWith('ghp_')) {
+                    showMessage('Token must start with github_pat_ or ghp_', 'error');
                     return;
                 }
-                
                 setIsAuthenticated(true);
-                sessionStorage.setItem('github_token', githubToken);
+                sessionStorage.setItem('admin_token', token);
                 loadEntries();
-                showMessage('🤖 Admin access granted!', 'success');
-            }, [githubToken]);
+                showMessage('✅ Login successful', 'success');
+            };
 
-            // Load entries from API
-            const loadEntries = useCallback(async () => {
+            // Load entries
+            const loadEntries = async () => {
                 try {
-                    setIsLoading(true);
+                    setLoading(true);
                     const response = await fetch('/master-tracker-log.json');
-                    if (response.ok) {
-                        const data = await response.json();
-                        setEntries(Array.isArray(data) ? data : []);
-                        showMessage(`📊 Loaded ${data?.length || 0} entries`, 'success');
-                    } else {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error('Failed to load');
+                    const data = await response.json();
+                    setEntries(Array.isArray(data) ? data : []);
+                    showMessage(`📊 Loaded ${data?.length || 0} entries`, 'success');
                 } catch (error) {
-                    console.error('Load error:', error);
-                    showMessage(`Error loading entries: ${error.message}`, 'error');
+                    showMessage(`❌ Error: ${error.message}`, 'error');
                     setEntries([]);
                 } finally {
-                    setIsLoading(false);
+                    setLoading(false);
                 }
-            }, [showMessage]);
+            };
 
-            // GitHub API update
-            const updateGitHubFile = useCallback(async (newData) => {
+            // Base64 encode safely
+            const encodeBase64 = (str) => {
+                try {
+                    return btoa(unescape(encodeURIComponent(str)));
+                } catch {
+                    return btoa(str);
+                }
+            };
+
+            // Update GitHub
+            const updateGitHub = async (newData) => {
                 const repo = 'AJWolfe18/TTracker';
                 const path = 'master-tracker-log.json';
                 
                 try {
-                    // Get current file
-                    const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
-                        headers: {
-                            'Authorization': `Bearer ${githubToken}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
+                    // Get file
+                    const getResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
-
-                    if (!getResponse.ok) {
-                        throw new Error(`Failed to get file: ${getResponse.status}`);
-                    }
-
-                    const fileInfo = await getResponse.json();
-                    const content = safeBase64Encode(JSON.stringify(newData, null, 2));
-
-                    // Update main file
-                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                    if (!getResp.ok) throw new Error('Cannot access file');
+                    
+                    const fileData = await getResp.json();
+                    
+                    // Update file
+                    const updateResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
                         method: 'PUT',
                         headers: {
-                            'Authorization': `Bearer ${githubToken}`,
-                            'Accept': 'application/vnd.github.v3+json',
+                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            message: 'Admin: Update tracker data',
-                            content: content,
-                            sha: fileInfo.sha,
-                            branch: 'main'
+                            message: 'Admin update',
+                            content: encodeBase64(JSON.stringify(newData, null, 2)),
+                            sha: fileData.sha
                         })
                     });
-
-                    if (!updateResponse.ok) {
-                        throw new Error(`Failed to update file: ${updateResponse.status}`);
-                    }
-
-                    // Try to update public file (don't fail if it doesn't exist)
+                    
+                    if (!updateResp.ok) throw new Error('Update failed');
+                    
+                    // Try to update public file
                     try {
-                        const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
-                            headers: {
-                                'Authorization': `Bearer ${githubToken}`,
-                                'Accept': 'application/vnd.github.v3+json'
-                            }
+                        const publicResp = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
                         });
-
-                        if (publicGetResponse.ok) {
-                            const publicFileInfo = await publicGetResponse.json();
+                        if (publicResp.ok) {
+                            const publicData = await publicResp.json();
                             await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
                                 method: 'PUT',
                                 headers: {
-                                    'Authorization': `Bearer ${githubToken}`,
-                                    'Accept': 'application/vnd.github.v3+json',
+                                    'Authorization': `Bearer ${token}`,
                                     'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({
-                                    message: 'Admin: Update public tracker data',
-                                    content: content,
-                                    sha: publicFileInfo.sha,
-                                    branch: 'main'
+                                    message: 'Admin update public',
+                                    content: encodeBase64(JSON.stringify(newData, null, 2)),
+                                    sha: publicData.sha
                                 })
                             });
                         }
-                    } catch (publicError) {
-                        console.warn('Could not update public file:', publicError);
+                    } catch (e) {
+                        console.warn('Public file update failed:', e);
                     }
-
+                    
                     return true;
                 } catch (error) {
-                    console.error('GitHub update error:', error);
-                    throw error;
+                    throw new Error(`GitHub error: ${error.message}`);
                 }
-            }, [githubToken]);
+            };
 
             // Archive entries
-            const archiveSelected = useCallback(async () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected for archiving', 'error');
-                    return;
-                }
-
-                if (!confirm(`Archive ${selectedEntries.size} selected entries?`)) {
-                    return;
-                }
-
+            const archive = async () => {
+                if (selected.size === 0) return;
+                if (!confirm(`Archive ${selected.size} entries?`)) return;
+                
                 try {
-                    setIsLoading(true);
-                    const updatedEntries = entries.map(entry => {
-                        if (selectedEntries.has(entry.id)) {
-                            return { ...entry, archived: true, archived_at: new Date().toISOString() };
-                        }
-                        return entry;
-                    });
-                    
-                    await updateGitHubFile(updatedEntries);
-                    setEntries(updatedEntries);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗃️ Archived ${selectedEntries.size} entries`, 'success');
+                    setLoading(true);
+                    const updated = entries.map(entry => 
+                        selected.has(entry.id) 
+                            ? { ...entry, archived: true, archived_at: new Date().toISOString() }
+                            : entry
+                    );
+                    await updateGitHub(updated);
+                    setEntries(updated);
+                    setSelected(new Set());
+                    showMessage(`🗃️ Archived ${selected.size} entries`, 'success');
                 } catch (error) {
-                    showMessage(`Error archiving: ${error.message}`, 'error');
+                    showMessage(`❌ Archive failed: ${error.message}`, 'error');
                 } finally {
-                    setIsLoading(false);
+                    setLoading(false);
                 }
-            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
+            };
 
             // Restore entries
-            const restoreSelected = useCallback(async () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected for restoration', 'error');
-                    return;
-                }
-
+            const restore = async () => {
+                if (selected.size === 0) return;
+                
                 try {
-                    setIsLoading(true);
-                    const updatedEntries = entries.map(entry => {
-                        if (selectedEntries.has(entry.id)) {
-                            const { archived, archived_at, ...restoredEntry } = entry;
-                            return restoredEntry;
+                    setLoading(true);
+                    const updated = entries.map(entry => {
+                        if (selected.has(entry.id)) {
+                            const { archived, archived_at, ...restored } = entry;
+                            return restored;
                         }
                         return entry;
                     });
-                    
-                    await updateGitHubFile(updatedEntries);
-                    setEntries(updatedEntries);
-                    setSelectedEntries(new Set());
-                    showMessage(`🔄 Restored ${selectedEntries.size} entries`, 'success');
+                    await updateGitHub(updated);
+                    setEntries(updated);
+                    setSelected(new Set());
+                    showMessage(`🔄 Restored ${selected.size} entries`, 'success');
                 } catch (error) {
-                    showMessage(`Error restoring: ${error.message}`, 'error');
+                    showMessage(`❌ Restore failed: ${error.message}`, 'error');
                 } finally {
-                    setIsLoading(false);
+                    setLoading(false);
                 }
-            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
+            };
 
             // Delete entries
-            const deleteSelected = useCallback(async () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected for deletion', 'error');
-                    return;
-                }
-
-                if (!confirm(`Permanently delete ${selectedEntries.size} entries? This cannot be undone.`)) {
-                    return;
-                }
-
+            const deleteEntries = async () => {
+                if (selected.size === 0) return;
+                if (!confirm(`PERMANENTLY delete ${selected.size} entries?`)) return;
+                
                 try {
-                    setIsLoading(true);
-                    const updatedEntries = entries.filter(entry => !selectedEntries.has(entry.id));
-                    
-                    await updateGitHubFile(updatedEntries);
-                    setEntries(updatedEntries);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗑️ Deleted ${selectedEntries.size} entries`, 'success');
+                    setLoading(true);
+                    const updated = entries.filter(entry => !selected.has(entry.id));
+                    await updateGitHub(updated);
+                    setEntries(updated);
+                    setSelected(new Set());
+                    showMessage(`🗑️ Deleted ${selected.size} entries`, 'success');
                 } catch (error) {
-                    showMessage(`Error deleting: ${error.message}`, 'error');
+                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
                 } finally {
-                    setIsLoading(false);
+                    setLoading(false);
                 }
-            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
+            };
 
-            // Edit functions
-            const startEdit = useCallback((entry) => {
-                setEditingEntry(entry.id);
-                setEditForm({
+            // Start editing
+            const startEdit = (entry) => {
+                setEditing(entry.id);
+                setEditData({
                     title: entry.title || '',
                     description: entry.description || '',
                     actor: entry.actor || '',
@@ -316,154 +269,114 @@
                     verified: Boolean(entry.verified),
                     date: entry.date || new Date().toISOString().split('T')[0]
                 });
-            }, []);
+            };
 
-            const cancelEdit = useCallback(() => {
-                setEditingEntry(null);
-                setEditForm({});
-            }, []);
-
-            const saveEdit = useCallback(async () => {
+            // Save edit
+            const saveEdit = async () => {
                 try {
-                    setIsLoading(true);
-                    const updatedEntries = entries.map(entry => {
-                        if (entry.id === editingEntry) {
-                            return {
-                                ...entry,
-                                ...editForm,
-                                modified_at: new Date().toISOString()
-                            };
-                        }
-                        return entry;
-                    });
-                    
-                    await updateGitHubFile(updatedEntries);
-                    setEntries(updatedEntries);
-                    setEditingEntry(null);
-                    setEditForm({});
-                    showMessage('✅ Entry updated successfully', 'success');
+                    setLoading(true);
+                    const updated = entries.map(entry => 
+                        entry.id === editing 
+                            ? { ...entry, ...editData, modified_at: new Date().toISOString() }
+                            : entry
+                    );
+                    await updateGitHub(updated);
+                    setEntries(updated);
+                    setEditing(null);
+                    setEditData({});
+                    showMessage('✅ Entry updated', 'success');
                 } catch (error) {
-                    showMessage(`Error updating: ${error.message}`, 'error');
+                    showMessage(`❌ Save failed: ${error.message}`, 'error');
                 } finally {
-                    setIsLoading(false);
+                    setLoading(false);
                 }
-            }, [editingEntry, editForm, entries, updateGitHubFile, showMessage]);
+            };
 
-            // Selection functions
-            const toggleSelection = useCallback((entryId) => {
-                setSelectedEntries(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(entryId)) {
-                        newSet.delete(entryId);
-                    } else {
-                        newSet.add(entryId);
-                    }
-                    return newSet;
-                });
-            }, []);
-
-            const selectAll = useCallback(() => {
-                setSelectedEntries(prev => {
-                    if (prev.size === filteredEntries.length) {
-                        return new Set();
-                    } else {
-                        return new Set(filteredEntries.map(e => e.id));
-                    }
-                });
-            }, []);
-
-            // Load token from session on mount
-            useEffect(() => {
-                const sessionToken = sessionStorage.getItem('github_token');
-                if (sessionToken) {
-                    setGithubToken(sessionToken);
+            // Toggle selection
+            const toggleSelect = (id) => {
+                const newSelected = new Set(selected);
+                if (newSelected.has(id)) {
+                    newSelected.delete(id);
+                } else {
+                    newSelected.add(id);
                 }
-            }, []);
+                setSelected(newSelected);
+            };
 
-            // Filter entries
-            const filteredEntries = entries.filter(entry => {
-                if (showArchived && !entry.archived) return false;
-                if (!showArchived && entry.archived) return false;
-                
-                if (!searchTerm) return true;
-                
-                const searchLower = searchTerm.toLowerCase();
-                return Object.values(entry).some(value => 
-                    value?.toString().toLowerCase().includes(searchLower)
-                );
-            });
+            // Select all filtered
+            const selectAll = () => {
+                const filtered = getFilteredEntries();
+                if (selected.size === filtered.length) {
+                    setSelected(new Set());
+                } else {
+                    setSelected(new Set(filtered.map(e => e.id)));
+                }
+            };
+
+            // Get filtered entries
+            const getFilteredEntries = () => {
+                return entries.filter(entry => {
+                    if (showArchived && !entry.archived) return false;
+                    if (!showArchived && entry.archived) return false;
+                    if (!search) return true;
+                    const searchLower = search.toLowerCase();
+                    return Object.values(entry).some(val => 
+                        val?.toString().toLowerCase().includes(searchLower)
+                    );
+                });
+            };
 
             // Logout
-            const logout = useCallback(() => {
+            const logout = () => {
                 setIsAuthenticated(false);
-                setGithubToken('');
-                sessionStorage.removeItem('github_token');
+                setToken('');
+                sessionStorage.removeItem('admin_token');
                 setEntries([]);
-                setSelectedEntries(new Set());
-                setMessage(null);
+                setSelected(new Set());
+            };
+
+            // Load token on mount
+            useEffect(() => {
+                const savedToken = sessionStorage.getItem('admin_token');
+                if (savedToken) setToken(savedToken);
             }, []);
+
+            const filteredEntries = getFilteredEntries();
 
             // Login screen
             if (!isAuthenticated) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center p-4">
-                        <div className="glass-card rounded-lg p-8 max-w-md w-full">
-                            <div className="text-center mb-6">
-                                <div className="w-12 h-12 logo-gradient rounded-lg flex items-center justify-center mx-auto mb-4">
-                                    <span className="text-lg font-bold text-white">T2</span>
-                                </div>
-                                <h1 className="text-2xl font-bold brand-gradient mb-2">
+                    <div className="container">
+                        <div style={{ maxWidth: '400px', margin: '100px auto' }}>
+                            <div className="card text-center">
+                                <div className="logo" style={{ margin: '0 auto 20px' }}>T2</div>
+                                <h1 style={{ margin: '0 0 20px', background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                                     TrumpyTracker Admin
                                 </h1>
-                                <p className="text-blue-300 text-sm">Administrative Control Panel</p>
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-2 text-gray-300">
-                                        🔐 GitHub Access Token:
+                                
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+                                        🔐 GitHub Token:
                                     </label>
                                     <input
                                         type="password"
-                                        value={githubToken}
-                                        onChange={(e) => setGithubToken(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
-                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-blue-500 focus:outline-none text-white"
+                                        value={token}
+                                        onChange={(e) => setToken(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && login()}
+                                        className="input"
                                         placeholder="github_pat_... or ghp_..."
-                                        autoComplete="off"
                                     />
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        Token needs "Contents: Write" permission for TTracker repository
-                                    </p>
                                 </div>
                                 
-                                <button
-                                    onClick={authenticate}
-                                    disabled={!githubToken.trim()}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
-                                >
-                                    🚀 Access Admin Panel
+                                <button onClick={login} className="btn btn-primary" style={{ width: '100%' }}>
+                                    🚀 Login
                                 </button>
                                 
                                 {message && (
-                                    <div className={`p-3 rounded-lg text-sm ${
-                                        message.type === 'error' ? 'status-high' :
-                                        message.type === 'success' ? 'status-low' :
-                                        'bg-blue-900/30 text-blue-200 border border-blue-500/30'
-                                    }`}>
+                                    <div className={`message message-${message.type}`}>
                                         {message.text}
                                     </div>
                                 )}
-                            </div>
-                            
-                            <div className="mt-6 bg-gray-800/50 p-4 rounded-lg text-xs">
-                                <h3 className="font-medium mb-2 text-blue-400">🛡️ Security Notes:</h3>
-                                <ul className="space-y-1 text-gray-300">
-                                    <li>• Token stored only for browser session</li>
-                                    <li>• Automatic clearance on tab close</li>
-                                    <li>• Create at: github.com/settings/personal-access-tokens/new</li>
-                                    <li>• Required: "Contents: Write" for TTracker repo</li>
-                                </ul>
                             </div>
                         </div>
                     </div>
@@ -472,303 +385,238 @@
 
             // Main admin interface
             return (
-                <div className="min-h-screen flex flex-col p-4">
-                    <div className="max-w-6xl mx-auto flex-1 flex flex-col">
-                        <div className="glass-card rounded-lg flex flex-col flex-1 overflow-hidden">
-                            {/* Header */}
-                            <div className="p-6 border-b border-gray-700">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center">
-                                        <div className="w-10 h-10 logo-gradient rounded-lg flex items-center justify-center mr-3">
-                                            <span className="font-bold text-white">T2</span>
-                                        </div>
-                                        <div>
-                                            <h1 className="text-xl font-bold brand-gradient">Admin Control Panel</h1>
-                                            <p className="text-sm text-blue-300">Political Tracker Management</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={logout}
-                                        className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-medium transition-colors"
-                                    >
-                                        🚪 Logout
-                                    </button>
-                                </div>
-                                
-                                <div className="flex items-center gap-4 mb-4">
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="🔍 Search entries..."
-                                        className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-blue-500 focus:outline-none text-white"
-                                    />
-                                    <button
-                                        onClick={loadEntries}
-                                        disabled={isLoading}
-                                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-4 py-2 rounded-lg font-medium transition-colors"
-                                    >
-                                        {isLoading ? '🔄 Loading...' : '📊 Refresh'}
-                                    </button>
-                                </div>
-                                
-                                <div className="flex items-center gap-3 flex-wrap">
-                                    <span className="text-sm text-gray-400">
-                                        📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
-                                    </span>
-                                    <button
-                                        onClick={() => setShowArchived(!showArchived)}
-                                        className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                                            showArchived ? 'status-archived' : 'bg-gray-600 hover:bg-gray-500 text-white'
-                                        }`}
-                                    >
-                                        {showArchived ? '📂 Show Active' : '🗃️ Show Archives'}
-                                    </button>
-                                    <button
-                                        onClick={selectAll}
-                                        className="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded-lg text-sm transition-colors"
-                                    >
-                                        {selectedEntries.size === filteredEntries.length ? '❌ Deselect All' : '✅ Select All'}
-                                    </button>
-                                    {!showArchived ? (
-                                        <button
-                                            onClick={archiveSelected}
-                                            disabled={selectedEntries.size === 0 || isLoading}
-                                            className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-3 py-1 rounded-lg text-sm transition-colors"
-                                        >
-                                            🗃️ Archive ({selectedEntries.size})
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={restoreSelected}
-                                            disabled={selectedEntries.size === 0 || isLoading}
-                                            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-3 py-1 rounded-lg text-sm transition-colors"
-                                        >
-                                            🔄 Restore ({selectedEntries.size})
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={deleteSelected}
-                                        disabled={selectedEntries.size === 0 || isLoading}
-                                        className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-3 py-1 rounded-lg text-sm transition-colors"
-                                    >
-                                        🗑️ Delete ({selectedEntries.size})
-                                    </button>
+                <div className="container">
+                    {/* Header */}
+                    <div className="card">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-4">
+                                <div className="logo">T2</div>
+                                <div>
+                                    <h1 style={{ margin: 0, background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                        Admin Panel
+                                    </h1>
+                                    <div style={{ fontSize: '14px', color: '#a0aec0' }}>Political Tracker Management</div>
                                 </div>
                             </div>
-                            
-                            {/* Messages */}
-                            {message && (
-                                <div className={`mx-6 mt-4 p-3 rounded-lg text-sm ${
-                                    message.type === 'error' ? 'status-high' :
-                                    message.type === 'success' ? 'status-low' :
-                                    'bg-blue-900/30 text-blue-200 border border-blue-500/30'
-                                }`}>
-                                    {message.text}
-                                </div>
+                            <button onClick={logout} className="btn btn-danger">
+                                🚪 Logout
+                            </button>
+                        </div>
+                        
+                        <div className="flex gap-4 mb-4 flex-mobile">
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="🔍 Search entries..."
+                                className="input"
+                                style={{ flex: 1 }}
+                            />
+                            <button onClick={loadEntries} disabled={loading} className="btn btn-primary">
+                                {loading ? '🔄' : '📊'} Refresh
+                            </button>
+                        </div>
+                        
+                        <div className="flex gap-2 mb-4 flex-mobile">
+                            <span className="text-sm" style={{ color: '#a0aec0' }}>
+                                📋 {filteredEntries.length} entries ({selected.size} selected)
+                            </span>
+                            <button
+                                onClick={() => setShowArchived(!showArchived)}
+                                className={`btn ${showArchived ? 'btn-secondary' : 'btn-secondary'}`}
+                            >
+                                {showArchived ? '📂 Active' : '🗃️ Archives'}
+                            </button>
+                            <button onClick={selectAll} className="btn btn-secondary">
+                                {selected.size === filteredEntries.length ? '❌ None' : '✅ All'}
+                            </button>
+                            {!showArchived ? (
+                                <button onClick={archive} disabled={selected.size === 0 || loading} className="btn btn-secondary">
+                                    🗃️ Archive ({selected.size})
+                                </button>
+                            ) : (
+                                <button onClick={restore} disabled={selected.size === 0 || loading} className="btn btn-success">
+                                    🔄 Restore ({selected.size})
+                                </button>
                             )}
-                            
-                            {/* Entries List */}
-                            <div className="flex-1 overflow-y-auto p-6">
-                                {filteredEntries.length === 0 ? (
-                                    <div className="text-center text-gray-400 py-12">
-                                        <div className="text-6xl mb-4">📊</div>
-                                        <p className="text-lg">No entries found</p>
-                                        <p className="text-sm mt-2">Try adjusting your search or view settings</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {filteredEntries.map((entry) => (
-                                            <div
-                                                key={entry.id}
-                                                className={`bg-gray-800/50 border rounded-lg p-4 transition-all ${
-                                                    editingEntry === entry.id ? 'border-blue-500 bg-gray-800/70' :
-                                                    selectedEntries.has(entry.id) ? 'border-blue-400 bg-blue-900/20' :
-                                                    entry.archived ? 'border-gray-600 opacity-75' :
-                                                    'border-gray-600 hover:border-gray-500'
-                                                } ${editingEntry !== entry.id ? 'cursor-pointer' : ''}`}
-                                                onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
-                                            >
-                                                {editingEntry === entry.id ? (
-                                                    <div className="space-y-4">
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div>
-                                                            <label className="block text-xs text-gray-400 mb-1">👤 Actor</label>
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.actor}
-                                                                onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
-                                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                placeholder="Person or organization"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div>
-                                                            <label className="block text-xs text-gray-400 mb-1">📰 Title</label>
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.title}
-                                                                onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                placeholder="Brief headline"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div>
-                                                            <label className="block text-xs text-gray-400 mb-1">📝 Description</label>
-                                                            <textarea
-                                                                value={editForm.description}
-                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                rows="3"
-                                                                placeholder="2-3 sentence summary"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                            <div>
-                                                                <label className="block text-xs text-gray-400 mb-1">📁 Category</label>
-                                                                <select
-                                                                    value={editForm.category}
-                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                                                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                >
-                                                                    <option value="Financial">💰 Financial</option>
-                                                                    <option value="Civil Liberties">⚖️ Civil Liberties</option>
-                                                                    <option value="Platform Manipulation">📱 Platform Manipulation</option>
-                                                                    <option value="Government Oversight">🏛️ Government Oversight</option>
-                                                                    <option value="Election Integrity">🗳️ Election Integrity</option>
-                                                                    <option value="Corporate Ethics">🏢 Corporate Ethics</option>
-                                                                    <option value="Legal Proceedings">⚖️ Legal Proceedings</option>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-xs text-gray-400 mb-1">🔗 Source URL</label>
-                                                                <input
-                                                                    type="url"
-                                                                    value={editForm.source_url}
-                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
-                                                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                    placeholder="https://..."
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="flex items-center gap-4">
-                                                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={editForm.verified}
-                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
-                                                                    className="w-4 h-4"
-                                                                />
-                                                                <span className="text-gray-300">✅ Verified Source</span>
-                                                            </label>
-                                                        </div>
-                                                        
-                                                        <div className="flex gap-3 pt-2">
-                                                            <button
-                                                                onClick={saveEdit}
-                                                                disabled={isLoading}
-                                                                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                                            >
-                                                                💾 Save Changes
-                                                            </button>
-                                                            <button
-                                                                onClick={cancelEdit}
-                                                                className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                                            >
-                                                                ❌ Cancel
-                                                            </button>
-                                                        </div>
+                            <button onClick={deleteEntries} disabled={selected.size === 0 || loading} className="btn btn-danger">
+                                🗑️ Delete ({selected.size})
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Messages */}
+                    {message && (
+                        <div className={`message message-${message.type}`}>
+                            {message.text}
+                        </div>
+                    )}
+
+                    {/* Entries */}
+                    <div className="card">
+                        <div className="scrollable">
+                            {filteredEntries.length === 0 ? (
+                                <div className="text-center" style={{ padding: '40px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                                    <div style={{ color: '#a0aec0' }}>No entries found</div>
+                                </div>
+                            ) : (
+                                filteredEntries.map(entry => (
+                                    <div
+                                        key={entry.id}
+                                        className={`entry ${selected.has(entry.id) ? 'selected' : ''} ${editing === entry.id ? 'editing' : ''}`}
+                                        onClick={() => editing !== entry.id && toggleSelect(entry.id)}
+                                    >
+                                        {editing === entry.id ? (
+                                            <div>
+                                                <div className="grid grid-2 gap-4 mb-4">
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
+                                                        <input
+                                                            type="date"
+                                                            value={editData.date}
+                                                            onChange={(e) => setEditData({...editData, date: e.target.value})}
+                                                            className="input"
+                                                        />
                                                     </div>
-                                                ) : (
-                                                    <div className="flex items-start justify-between">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                                <span className="text-sm text-gray-400">📅 {entry.date}</span>
-                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                                                    entry.severity === 'high' ? 'status-high' :
-                                                                    entry.severity === 'medium' ? 'status-medium' :
-                                                                    'status-low'
-                                                                }`}>
-                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
-                                                                     entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
-                                                                </span>
-                                                                {entry.archived && (
-                                                                    <span className="status-archived px-2 py-1 rounded text-xs">
-                                                                        🗃️ Archived
-                                                                    </span>
-                                                                )}
-                                                                <span className="text-sm text-blue-400 truncate">{entry.actor}</span>
-                                                            </div>
-                                                            <h3 className="font-medium mb-1 text-white">{entry.title}</h3>
-                                                            <p className="text-sm text-gray-300 mb-2 line-clamp-2">{entry.description}</p>
-                                                            <div className="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
-                                                                <span>📁 {entry.category}</span>
-                                                                {entry.verified && <span className="text-green-400">✅ Verified</span>}
-                                                                {entry.modified_at && (
-                                                                    <span>📝 Modified: {new Date(entry.modified_at).toLocaleDateString()}</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div className="ml-4 flex items-start gap-2 flex-shrink-0">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    startEdit(entry);
-                                                                }}
-                                                                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs font-medium transition-colors"
-                                                            >
-                                                                ✏️ Edit
-                                                            </button>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedEntries.has(entry.id)}
-                                                                onChange={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleSelection(entry.id);
-                                                                }}
-                                                                className="w-4 h-4 mt-1"
-                                                            />
-                                                        </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
+                                                        <select
+                                                            value={editData.severity}
+                                                            onChange={(e) => setEditData({...editData, severity: e.target.value})}
+                                                            className="input"
+                                                        >
+                                                            <option value="low">🟢 Low</option>
+                                                            <option value="medium">🟡 Medium</option>
+                                                            <option value="high">🔴 High</option>
+                                                        </select>
                                                     </div>
-                                                )}
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editData.actor}
+                                                        onChange={(e) => setEditData({...editData, actor: e.target.value})}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editData.title}
+                                                        onChange={(e) => setEditData({...editData, title: e.target.value})}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
+                                                    <textarea
+                                                        value={editData.description}
+                                                        onChange={(e) => setEditData({...editData, description: e.target.value})}
+                                                        className="input"
+                                                        rows="3"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="grid grid-2 gap-4 mb-4">
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
+                                                        <select
+                                                            value={editData.category}
+                                                            onChange={(e) => setEditData({...editData, category: e.target.value})}
+                                                            className="input"
+                                                        >
+                                                            <option value="Financial">Financial</option>
+                                                            <option value="Civil Liberties">Civil Liberties</option>
+                                                            <option value="Platform Manipulation">Platform Manipulation</option>
+                                                            <option value="Government Oversight">Government Oversight</option>
+                                                            <option value="Election Integrity">Election Integrity</option>
+                                                            <option value="Corporate Ethics">Corporate Ethics</option>
+                                                            <option value="Legal Proceedings">Legal Proceedings</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
+                                                        <input
+                                                            type="url"
+                                                            value={editData.source_url}
+                                                            onChange={(e) => setEditData({...editData, source_url: e.target.value})}
+                                                            className="input"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editData.verified}
+                                                            onChange={(e) => setEditData({...editData, verified: e.target.checked})}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div className="flex gap-2">
+                                                    <button onClick={saveEdit} disabled={loading} className="btn btn-success">
+                                                        💾 Save
+                                                    </button>
+                                                    <button onClick={() => setEditing(null)} className="btn btn-secondary">
+                                                        ❌ Cancel
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ))}
+                                        ) : (
+                                            <div className="flex justify-between">
+                                                <div style={{ flex: 1 }}>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {entry.date}</span>
+                                                        <span className={`badge badge-${entry.severity}`}>
+                                                            {entry.severity === 'high' ? '🚨 HIGH' :
+                                                             entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
+                                                        </span>
+                                                        {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
+                                                        <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                    </div>
+                                                    <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
+                                                    <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
+                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
+                                                        <span>📁 {entry.category}</span>
+                                                        {entry.verified && <span style={{ color: '#48bb78' }}>✅ Verified</span>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
+                                                        className="btn btn-primary"
+                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selected.has(entry.id)}
+                                                        onChange={(e) => { e.stopPropagation(); toggleSelect(entry.id); }}
+                                                        style={{ marginTop: '4px' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
             );
         }
 
-        ReactDOM.render(<AdminInterface />, document.getElementById('admin-root'));
+        ReactDOM.render(<AdminApp />, document.getElementById('root'));
     </script>
 </body>
 </html>
-                                                                <label className="block text-xs text-gray-400 mb-1">📅 Date</label>
-                                                                <input
-                                                                    type="date"
-                                                                    value={editForm.date}
-                                                                    onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                                                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-xs text-gray-400 mb-1">⚠️ Severity</label>
-                                                                <select
-                                                                    value={editForm.severity}
-                                                                    onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
-                                                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                                                                >
-                                                                    <option value="low">🟢 Low</option>
-                                                                    <option value="medium">🟡 Medium</option>
-                                                                    <option value="high">🔴 High</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div>
