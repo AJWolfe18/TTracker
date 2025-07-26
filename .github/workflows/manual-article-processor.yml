@@ -1,0 +1,71 @@
+# .github/workflows/manual-article-processor.yml
+name: Process Manual Article Submissions
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_source:
+        description: 'Source of manual trigger'
+        required: false
+        default: 'admin'
+  repository_dispatch:
+    types: [process-manual-submissions]
+
+jobs:
+  process-manual-articles:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Check for pending submissions
+      id: check_pending
+      run: |
+        if [ -f "pending-submissions.json" ]; then
+          SUBMISSION_COUNT=$(jq length pending-submissions.json)
+          echo "count=$SUBMISSION_COUNT" >> $GITHUB_OUTPUT
+          echo "has_submissions=true" >> $GITHUB_OUTPUT
+        else
+          echo "count=0" >> $GITHUB_OUTPUT
+          echo "has_submissions=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Process manual submissions
+      if: steps.check_pending.outputs.has_submissions == 'true'
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: node manual-article-processor.js
+      
+    - name: Copy updated data to public folder
+      if: steps.check_pending.outputs.has_submissions == 'true'
+      run: |
+        mkdir -p public
+        cp master-tracker-log.json public/master-tracker-log.json
+        
+    - name: Commit processed articles
+      if: steps.check_pending.outputs.has_submissions == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action - Manual Article Processor"
+        git add master-tracker-log.json public/master-tracker-log.json
+        if [ -f "pending-submissions.json" ]; then
+          git add pending-submissions.json
+        fi
+        git commit -m "Process ${{ steps.check_pending.outputs.count }} manual article submission(s)" || echo "No changes to commit"
+        git push
+        
+    - name: Summary
+      run: |
+        if [ "${{ steps.check_pending.outputs.has_submissions }}" == "true" ]; then
+          echo "✅ Processed ${{ steps.check_pending.outputs.count }} manual article submission(s)"
+        else
+          echo "ℹ️ No pending submissions found"
+        fi
