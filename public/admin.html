@@ -91,7 +91,9 @@
             const [editing, setEditing] = useState(null);
             const [submissionUrl, setSubmissionUrl] = useState('');
             const [submitting, setSubmitting] = useState(false);
-            const [newEntryId, setNewEntryId] = useState(null);
+            const [showSubmissionQueue, setShowSubmissionQueue] = useState(false);
+            const [pendingSubmissions, setPendingSubmissions] = useState([]);
+            const [failedSubmissions, setFailedSubmissions] = useState([]);
 
             // Show message with auto-hide
             const showMessage = (text, type = 'info') => {
@@ -461,6 +463,15 @@
                             <button onClick={selectAll} className="btn btn-secondary">
                                 {selected.size === filteredEntries.length ? '❌ None' : '✅ All'}
                             </button>
+                            <button
+                                onClick={() => {
+                                    setShowSubmissionQueue(!showSubmissionQueue);
+                                    if (!showSubmissionQueue) loadSubmissionQueue();
+                                }}
+                                className={`btn ${showSubmissionQueue ? 'btn-primary' : 'btn-secondary'}`}
+                            >
+                                📋 Queue ({pendingSubmissions.length + failedSubmissions.length})
+                            </button>
                             {!showArchived ? (
                                 <button onClick={archive} disabled={selected.size === 0 || loading} className="btn btn-secondary">
                                     🗃️ Archive ({selected.size})
@@ -475,6 +486,155 @@
                             </button>
                         </div>
                     </div>
+
+                    {/* Submission Queue Modal */}
+                    {showSubmissionQueue && (
+                        <div style={{ 
+                            position: 'fixed', 
+                            top: 0, 
+                            left: 0, 
+                            right: 0, 
+                            bottom: 0, 
+                            background: 'rgba(0,0,0,0.8)', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            zIndex: 1000
+                        }}>
+                            <div style={{ 
+                                background: '#2d3748', 
+                                borderRadius: '12px', 
+                                padding: '24px', 
+                                maxWidth: '800px', 
+                                width: '90%', 
+                                maxHeight: '80vh', 
+                                overflow: 'auto',
+                                border: '1px solid #4a5568'
+                            }}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
+                                        📋 Submission Queue
+                                    </h2>
+                                    <button 
+                                        onClick={() => setShowSubmissionQueue(false)}
+                                        className="btn btn-secondary"
+                                        style={{ padding: '8px 12px' }}
+                                    >
+                                        ✕ Close
+                                    </button>
+                                </div>
+
+                                {/* Pending Submissions */}
+                                {pendingSubmissions.length > 0 && (
+                                    <div className="mb-6">
+                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#60a5fa' }}>
+                                            🔄 Pending Processing ({pendingSubmissions.length})
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {pendingSubmissions.map(submission => (
+                                                <div key={submission.id} className="entry" style={{ padding: '12px' }}>
+                                                    <div className="flex justify-between items-start">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="badge badge-medium">⏳ PENDING</span>
+                                                                {submission.retry_attempt && (
+                                                                    <span className="text-xs" style={{ color: '#a0aec0' }}>
+                                                                        Retry #{submission.retry_attempt}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                                                                <strong>URL:</strong> {submission.url}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: '#a0aec0' }}>
+                                                                Submitted: {new Date(submission.submitted_at).toLocaleString()}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Failed Submissions */}
+                                {failedSubmissions.length > 0 && (
+                                    <div className="mb-4">
+                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#f56565' }}>
+                                            ❌ Failed Submissions ({failedSubmissions.length})
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {failedSubmissions.map(submission => (
+                                                <div key={submission.id} className="entry" style={{ padding: '12px' }}>
+                                                    <div className="flex justify-between items-start">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="badge badge-high">❌ FAILED</span>
+                                                                {submission.retry_attempt && (
+                                                                    <span className="text-xs" style={{ color: '#a0aec0' }}>
+                                                                        After {submission.retry_attempt} retries
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: '14px', marginBottom: '4px' }}>
+                                                                <strong>URL:</strong> {submission.url}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: '#f56565', marginBottom: '4px' }}>
+                                                                <strong>Error:</strong> {submission.error}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: '#a0aec0' }}>
+                                                                Failed: {submission.failed_at ? new Date(submission.failed_at).toLocaleString() : 'Unknown'}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2" style={{ marginLeft: '12px' }}>
+                                                            <button
+                                                                onClick={() => retryFailedSubmission(submission)}
+                                                                disabled={submitting}
+                                                                className="btn btn-success"
+                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                            >
+                                                                🔄 Retry
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteFailedSubmission(submission)}
+                                                                className="btn btn-danger"
+                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                            >
+                                                                🗑️ Delete
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Empty State */}
+                                {pendingSubmissions.length === 0 && failedSubmissions.length === 0 && (
+                                    <div className="text-center" style={{ padding: '40px', color: '#a0aec0' }}>
+                                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+                                        <div>No submissions in queue</div>
+                                        <div style={{ fontSize: '14px', marginTop: '8px' }}>
+                                            All submissions have been processed successfully
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-between items-center mt-4" style={{ borderTop: '1px solid #4a5568', paddingTop: '16px' }}>
+                                    <button
+                                        onClick={loadSubmissionQueue}
+                                        className="btn btn-secondary"
+                                    >
+                                        🔄 Refresh Queue
+                                    </button>
+                                    <div style={{ fontSize: '12px', color: '#a0aec0' }}>
+                                        Queue automatically refreshes when submissions are processed
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Messages */}
                     {message && (
