@@ -203,7 +203,88 @@
                 }
             };
 
-            // Update function calls to use new GitHub API method
+            // GitHub API update (enhanced for different files) - FIXED
+            const updateGitHubFile = useCallback(async (newData, fileName = 'master-tracker-log.json') => {
+                const repo = 'AJWolfe18/TTracker';
+                const path = fileName;
+                
+                try {
+                    // Get current file (might not exist for new files)
+                    let fileInfo = null;
+                    try {
+                        const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        });
+                        if (getResponse.ok) {
+                            fileInfo = await getResponse.json();
+                        }
+                    } catch (error) {
+                        console.log(`File ${fileName} doesn't exist yet, will create new`);
+                    }
+
+                    const content = encodeBase64(JSON.stringify(newData, null, 2));
+
+                    // Update or create the file
+                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/vnd.github.v3+json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Admin: Update ${fileName}`,
+                            content: content,
+                            sha: fileInfo?.sha, // undefined for new files
+                            branch: 'main'
+                        })
+                    });
+
+                    if (!updateResponse.ok) {
+                        throw new Error(`Failed to update ${fileName}: ${updateResponse.status}`);
+                    }
+
+                    // For master tracker log, also update public file
+                    if (fileName === 'master-tracker-log.json') {
+                        try {
+                            const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Accept': 'application/vnd.github.v3+json'
+                                }
+                            });
+
+                            if (publicGetResponse.ok) {
+                                const publicFileInfo = await publicGetResponse.json();
+                                await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
+                                    method: 'PUT',
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Accept': 'application/vnd.github.v3+json',
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        message: `Admin: Update public ${fileName}`,
+                                        content: content,
+                                        sha: publicFileInfo.sha,
+                                        branch: 'main'
+                                    })
+                                });
+                            }
+                        } catch (publicError) {
+                            console.warn('Could not update public file:', publicError);
+                        }
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error('GitHub update error:', error);
+                    throw error;
+                }
+            }, [token, encodeBase64]);
             const archive = async () => {
                 if (selected.size === 0) return;
                 if (!confirm(`Archive ${selected.size} entries?`)) return;
