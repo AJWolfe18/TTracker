@@ -201,7 +201,7 @@
                 }
             };
 
-            // Archive entries
+            // Update function calls to use new GitHub API method
             const archive = async () => {
                 if (selected.size === 0) return;
                 if (!confirm(`Archive ${selected.size} entries?`)) return;
@@ -213,7 +213,7 @@
                             ? { ...entry, archived: true, archived_at: new Date().toISOString() }
                             : entry
                     );
-                    await updateGitHub(updated);
+                    await updateGitHubFile(updated);
                     setEntries(updated);
                     setSelected(new Set());
                     showMessage(`🗃️ Archived ${selected.size} entries`, 'success');
@@ -237,7 +237,7 @@
                         }
                         return entry;
                     });
-                    await updateGitHub(updated);
+                    await updateGitHubFile(updated);
                     setEntries(updated);
                     setSelected(new Set());
                     showMessage(`🔄 Restored ${selected.size} entries`, 'success');
@@ -256,7 +256,7 @@
                 try {
                     setLoading(true);
                     const updated = entries.filter(entry => !selected.has(entry.id));
-                    await updateGitHub(updated);
+                    await updateGitHubFile(updated);
                     setEntries(updated);
                     setSelected(new Set());
                     showMessage(`🗑️ Deleted ${selected.size} entries`, 'success');
