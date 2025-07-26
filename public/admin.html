@@ -51,7 +51,16 @@
         .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
         .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
         .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
+        .entry.new-submission {
+            border: 2px solid #38a169;
+            background: rgba(56, 161, 105, 0.1);
+            animation: highlight 0.5s ease-in-out;
+        }
+        @keyframes highlight {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(56, 161, 105, 0.4); }
+            50% { transform: scale(1.02); box-shadow: 0 0 20px rgba(56, 161, 105, 0.4); }
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(56, 161, 105, 0.4); }
+        }
         .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
         .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
         .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
@@ -80,7 +89,9 @@
             const [message, setMessage] = useState(null);
             const [showArchived, setShowArchived] = useState(false);
             const [editing, setEditing] = useState(null);
-            const [editData, setEditData] = useState({});
+            const [submissionUrl, setSubmissionUrl] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+            const [newEntryId, setNewEntryId] = useState(null);
 
             // Show message with auto-hide
             const showMessage = (text, type = 'info') => {
@@ -417,6 +428,26 @@
                             </button>
                         </div>
                         
+                        {/* Manual Article Submission */}
+                        <div className="flex gap-4 mb-4 flex-mobile">
+                            <input
+                                type="url"
+                                value={submissionUrl}
+                                onChange={(e) => setSubmissionUrl(e.target.value)}
+                                placeholder="📎 Paste article URL to submit manually..."
+                                className="input"
+                                style={{ flex: 1 }}
+                                disabled={submitting}
+                            />
+                            <button 
+                                onClick={submitManualArticle} 
+                                disabled={!submissionUrl.trim() || submitting || loading} 
+                                className="btn btn-success"
+                            >
+                                {submitting ? '🔄 Processing...' : '📰 Submit Article'}
+                            </button>
+                        </div>
+
                         <div className="flex gap-2 mb-4 flex-mobile">
                             <span className="text-sm" style={{ color: '#a0aec0' }}>
                                 📋 {filteredEntries.length} entries ({selected.size} selected)
@@ -464,7 +495,7 @@
                                 filteredEntries.map(entry => (
                                     <div
                                         key={entry.id}
-                                        className={`entry ${selected.has(entry.id) ? 'selected' : ''} ${editing === entry.id ? 'editing' : ''}`}
+                                        className={`entry ${selected.has(entry.id) ? 'selected' : ''} ${editing === entry.id ? 'editing' : ''} ${newEntryId === entry.id ? 'new-submission' : ''}`}
                                         onClick={() => editing !== entry.id && toggleSelect(entry.id)}
                                     >
                                         {editing === entry.id ? (
