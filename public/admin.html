@@ -4,31 +4,85 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrumpyTracker Admin</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body {
-            margin: 0;
-            font-family: system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
-            color: white;
-            min-height: 100vh;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            color: white; 
+            min-height: 100vh; 
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .card { background: rgba(45, 55, 72, 0.9); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #4a5568; }
-        .input { width: 100%; padding: 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; color: white; font-size: 14px; }
-        .input:focus { outline: none; border-color: #3182ce; }
-        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
-        .btn-primary { background: #3182ce; color: white; }
-        .btn-primary:hover { background: #2c5aa0; }
-        .btn-danger { background: #e53e3e; color: white; }
-        .btn-danger:hover { background: #c53030; }
-        .btn-success { background: #38a169; color: white; }
-        .btn-success:hover { background: #2f855a; }
-        .btn-secondary { background: #4a5568; color: white; }
-        .btn-secondary:hover { background: #2d3748; }
+        .card { 
+            background: rgba(30, 41, 59, 0.95); 
+            backdrop-filter: blur(10px);
+            border-radius: 16px; 
+            padding: 24px; 
+            margin-bottom: 20px; 
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .input { 
+            width: 100%; 
+            padding: 12px 16px; 
+            background: rgba(15, 23, 42, 0.8); 
+            border: 1px solid rgba(71, 85, 105, 0.5); 
+            border-radius: 8px; 
+            color: white; 
+            font-size: 14px; 
+            transition: all 0.2s ease;
+        }
+        .input:focus { 
+            outline: none; 
+            border-color: #3b82f6; 
+            background: rgba(15, 23, 42, 0.95);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .btn { 
+            padding: 10px 16px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 500; 
+            font-size: 14px;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { 
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary:hover:not(:disabled) { 
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+        .btn-success { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+            color: white; 
+        }
+        .btn-success:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-danger { 
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+            color: white; 
+        }
+        .btn-danger:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-secondary { 
+            background: rgba(71, 85, 105, 0.8); 
+            color: white; 
+            border: 1px solid rgba(71, 85, 105, 0.5);
+        }
+        .btn-secondary:hover:not(:disabled) { 
+            background: rgba(71, 85, 105, 1); 
+            transform: translateY(-1px);
+        }
+        
         .flex { display: flex; }
         .items-center { align-items: center; }
         .justify-between { justify-content: space-between; }
@@ -40,36 +94,141 @@
         .text-sm { font-size: 14px; }
         .text-xs { font-size: 12px; }
         .font-bold { font-weight: 700; }
-        .opacity-75 { opacity: 0.75; }
         .grid { display: grid; }
         .grid-2 { grid-template-columns: 1fr 1fr; }
-        .entry { background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
-        .entry:hover { background: #374151; }
-        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
-        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .entry.new-submission {
-            border: 2px solid #38a169;
-            background: rgba(56, 161, 105, 0.1);
-            animation: highlight 0.5s ease-in-out;
+        
+        .entry { 
+            background: rgba(30, 41, 59, 0.6); 
+            border: 1px solid rgba(71, 85, 105, 0.3); 
+            border-radius: 12px; 
+            padding: 16px; 
+            margin-bottom: 12px; 
+            cursor: pointer; 
+            transition: all 0.2s ease;
         }
-        @keyframes highlight {
-            0% { transform: scale(1); box-shadow: 0 0 0 rgba(56, 161, 105, 0.4); }
-            50% { transform: scale(1.02); box-shadow: 0 0 20px rgba(56, 161, 105, 0.4); }
-            100% { transform: scale(1); box-shadow: 0 0 0 rgba(56, 161, 105, 0.4); }
+        .entry:hover { 
+            background: rgba(30, 41, 59, 0.8); 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
-        .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
-        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
-        .scrollable { height: calc(100vh - 400px); overflow-y: auto; }
+        .entry.selected { 
+            border-color: #3b82f6; 
+            background: rgba(59, 130, 246, 0.1); 
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .entry.editing { 
+            border-color: #10b981; 
+            background: rgba(16, 185, 129, 0.1); 
+            cursor: default; 
+        }
+        .entry.new-entry {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            animation: newEntryGlow 3s ease-out;
+        }
+        
+        @keyframes newEntryGlow {
+            0% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+            100% { box-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        
+        .badge { 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            font-size: 11px; 
+            font-weight: 600; 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-high { 
+            background: rgba(239, 68, 68, 0.2); 
+            color: #fca5a5; 
+            border: 1px solid rgba(239, 68, 68, 0.3); 
+        }
+        .badge-medium { 
+            background: rgba(245, 158, 11, 0.2); 
+            color: #fcd34d; 
+            border: 1px solid rgba(245, 158, 11, 0.3); 
+        }
+        .badge-low { 
+            background: rgba(16, 185, 129, 0.2); 
+            color: #6ee7b7; 
+            border: 1px solid rgba(16, 185, 129, 0.3); 
+        }
+        .badge-archived { 
+            background: rgba(139, 92, 246, 0.2); 
+            color: #c4b5fd; 
+            border: 1px solid rgba(139, 92, 246, 0.3); 
+        }
+        
+        .logo { 
+            width: 40px; 
+            height: 40px; 
+            background: linear-gradient(135deg, #ef4444 0%, #3b82f6 100%); 
+            border-radius: 10px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
+            font-size: 16px;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message { 
+            padding: 12px 16px; 
+            border-radius: 8px; 
+            margin-bottom: 16px; 
+            border-left: 4px solid;
+            backdrop-filter: blur(10px);
+        }
+        .message-success { 
+            background: rgba(16, 185, 129, 0.1); 
+            color: #6ee7b7; 
+            border-left-color: #10b981; 
+        }
+        .message-error { 
+            background: rgba(239, 68, 68, 0.1); 
+            color: #fca5a5; 
+            border-left-color: #ef4444; 
+        }
+        .message-info { 
+            background: rgba(59, 130, 246, 0.1); 
+            color: #93c5fd; 
+            border-left-color: #3b82f6; 
+        }
+        
+        .scrollable { 
+            height: calc(100vh - 420px); 
+            overflow-y: auto; 
+            padding-right: 8px;
+        }
+        .scrollable::-webkit-scrollbar { width: 6px; }
+        .scrollable::-webkit-scrollbar-track { background: rgba(71, 85, 105, 0.2); border-radius: 3px; }
+        .scrollable::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); border-radius: 3px; }
+        .scrollable::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.7); }
+        
         @media (max-width: 768px) {
             .grid-2 { grid-template-columns: 1fr; }
             .flex-mobile { flex-direction: column; }
+            .container { padding: 16px; }
+            .scrollable { height: calc(100vh - 480px); }
+        }
+        
+        select, textarea { 
+            width: 100%; 
+            padding: 12px 16px; 
+            background: rgba(15, 23, 42, 0.8); 
+            border: 1px solid rgba(71, 85, 105, 0.5); 
+            border-radius: 8px; 
+            color: white; 
+            font-size: 14px; 
+            font-family: inherit;
+        }
+        select:focus, textarea:focus { 
+            outline: none; 
+            border-color: #3b82f6; 
+            background: rgba(15, 23, 42, 0.95);
         }
     </style>
 </head>
@@ -77,32 +236,44 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useCallback } = React;
 
         function AdminApp() {
+            // === ALL STATE DECLARATIONS ===
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [token, setToken] = useState('');
             const [entries, setEntries] = useState([]);
-            const [selected, setSelected] = useState(new Set());
-            const [search, setSearch] = useState('');
-            const [loading, setLoading] = useState(false);
+            const [selectedEntries, setSelectedEntries] = useState(new Set());
+            const [searchTerm, setSearchTerm] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
             const [message, setMessage] = useState(null);
             const [showArchived, setShowArchived] = useState(false);
-            const [editing, setEditing] = useState(null);
+            const [editingEntry, setEditingEntry] = useState(null);
+            const [editForm, setEditForm] = useState({});
             const [submissionUrl, setSubmissionUrl] = useState('');
-            const [submitting, setSubmitting] = useState(false);
-            const [showSubmissionQueue, setShowSubmissionQueue] = useState(false);
-            const [pendingSubmissions, setPendingSubmissions] = useState([]);
-            const [failedSubmissions, setFailedSubmissions] = useState([]);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [newEntryId, setNewEntryId] = useState(null);
 
-            // Show message with auto-hide
-            const showMessage = (text, type = 'info') => {
+            // === UTILITY FUNCTIONS ===
+            const generateId = useCallback(() => {
+                return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            }, []);
+
+            const encodeBase64 = useCallback((str) => {
+                try {
+                    return btoa(unescape(encodeURIComponent(str)));
+                } catch {
+                    return btoa(str);
+                }
+            }, []);
+
+            const showMessage = useCallback((text, type = 'info') => {
                 setMessage({ text, type });
                 setTimeout(() => setMessage(null), 5000);
-            };
+            }, []);
 
-            // Login
-            const login = () => {
+            // === AUTHENTICATION ===
+            const authenticate = useCallback(() => {
                 if (!token.trim()) {
                     showMessage('Please enter your GitHub token', 'error');
                     return;
@@ -115,14 +286,23 @@
                 sessionStorage.setItem('admin_token', token);
                 loadEntries();
                 showMessage('✅ Login successful', 'success');
-            };
+            }, [token]);
 
-            // Load entries
-            const loadEntries = async () => {
+            const logout = useCallback(() => {
+                setIsAuthenticated(false);
+                setToken('');
+                sessionStorage.removeItem('admin_token');
+                setEntries([]);
+                setSelectedEntries(new Set());
+                setMessage(null);
+            }, []);
+
+            // === DATA OPERATIONS ===
+            const loadEntries = useCallback(async () => {
                 try {
-                    setLoading(true);
+                    setIsLoading(true);
                     const response = await fetch('/master-tracker-log.json');
-                    if (!response.ok) throw new Error('Failed to load');
+                    if (!response.ok) throw new Error('Failed to load entries');
                     const data = await response.json();
                     setEntries(Array.isArray(data) ? data : []);
                     showMessage(`📊 Loaded ${data?.length || 0} entries`, 'success');
@@ -130,93 +310,20 @@
                     showMessage(`❌ Error: ${error.message}`, 'error');
                     setEntries([]);
                 } finally {
-                    setLoading(false);
+                    setIsLoading(false);
                 }
-            };
+            }, [showMessage]);
 
-            // Base64 encode safely
-            const encodeBase64 = (str) => {
-                try {
-                    return btoa(unescape(encodeURIComponent(str)));
-                } catch {
-                    return btoa(str);
-                }
-            };
-
-            // Update GitHub
-            const updateGitHub = async (newData) => {
-                const repo = 'AJWolfe18/TTracker';
-                const path = 'master-tracker-log.json';
-                
-                try {
-                    // Get file
-                    const getResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (!getResp.ok) throw new Error('Cannot access file');
-                    
-                    const fileData = await getResp.json();
-                    
-                    // Update file
-                    const updateResp = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: 'Admin update',
-                            content: encodeBase64(JSON.stringify(newData, null, 2)),
-                            sha: fileData.sha
-                        })
-                    });
-                    
-                    if (!updateResp.ok) throw new Error('Update failed');
-                    
-                    // Try to update public file
-                    try {
-                        const publicResp = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        if (publicResp.ok) {
-                            const publicData = await publicResp.json();
-                            await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    message: 'Admin update public',
-                                    content: encodeBase64(JSON.stringify(newData, null, 2)),
-                                    sha: publicData.sha
-                                })
-                            });
-                        }
-                    } catch (e) {
-                        console.warn('Public file update failed:', e);
-                    }
-                    
-                    return true;
-                } catch (error) {
-                    throw new Error(`GitHub error: ${error.message}`);
-                }
-            };
-
-            // GitHub API update (enhanced for different files) - FIXED
             const updateGitHubFile = useCallback(async (newData, fileName = 'master-tracker-log.json') => {
                 const repo = 'AJWolfe18/TTracker';
                 const path = fileName;
                 
                 try {
-                    // Get current file (might not exist for new files)
+                    // Get current file
                     let fileInfo = null;
                     try {
                         const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Accept': 'application/vnd.github.v3+json'
-                            }
+                            headers: { 'Authorization': `Bearer ${token}` }
                         });
                         if (getResponse.ok) {
                             fileInfo = await getResponse.json();
@@ -224,53 +331,43 @@
                     } catch (error) {
                         console.log(`File ${fileName} doesn't exist yet, will create new`);
                     }
-
-                    const content = encodeBase64(JSON.stringify(newData, null, 2));
-
-                    // Update or create the file
+                    
+                    // Update file
                     const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
                         method: 'PUT',
                         headers: {
                             'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/vnd.github.v3+json',
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            message: `Admin: Update ${fileName}`,
-                            content: content,
-                            sha: fileInfo?.sha, // undefined for new files
-                            branch: 'main'
+                            message: `Admin update ${fileName}`,
+                            content: encodeBase64(JSON.stringify(newData, null, 2)),
+                            sha: fileInfo?.sha
                         })
                     });
-
+                    
                     if (!updateResponse.ok) {
-                        throw new Error(`Failed to update ${fileName}: ${updateResponse.status}`);
+                        throw new Error(`Update failed: ${updateResponse.status}`);
                     }
-
-                    // For master tracker log, also update public file
+                    
+                    // Update public file for master tracker
                     if (fileName === 'master-tracker-log.json') {
                         try {
                             const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Accept': 'application/vnd.github.v3+json'
-                                }
+                                headers: { 'Authorization': `Bearer ${token}` }
                             });
-
                             if (publicGetResponse.ok) {
                                 const publicFileInfo = await publicGetResponse.json();
                                 await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
                                     method: 'PUT',
                                     headers: {
                                         'Authorization': `Bearer ${token}`,
-                                        'Accept': 'application/vnd.github.v3+json',
                                         'Content-Type': 'application/json'
                                     },
                                     body: JSON.stringify({
-                                        message: `Admin: Update public ${fileName}`,
-                                        content: content,
-                                        sha: publicFileInfo.sha,
-                                        branch: 'main'
+                                        message: `Admin update public ${fileName}`,
+                                        content: encodeBase64(JSON.stringify(newData, null, 2)),
+                                        sha: publicFileInfo.sha
                                     })
                                 });
                             }
@@ -278,43 +375,120 @@
                             console.warn('Could not update public file:', publicError);
                         }
                     }
-
+                    
                     return true;
                 } catch (error) {
                     console.error('GitHub update error:', error);
                     throw error;
                 }
             }, [token, encodeBase64]);
-            const archive = async () => {
-                if (selected.size === 0) return;
-                if (!confirm(`Archive ${selected.size} entries?`)) return;
+
+            // === MANUAL ARTICLE SUBMISSION ===
+            const submitManualArticle = useCallback(async () => {
+                if (!submissionUrl.trim()) return;
                 
                 try {
-                    setLoading(true);
+                    setIsSubmitting(true);
+                    
+                    // Validate URL
+                    try {
+                        new URL(submissionUrl);
+                    } catch {
+                        throw new Error('Please enter a valid URL');
+                    }
+                    
+                    // Check for duplicates
+                    const duplicates = entries.filter(entry => entry.source_url === submissionUrl);
+                    if (duplicates.length > 0) {
+                        const override = confirm(`⚠️ Duplicate found: "${duplicates[0].title}"\n\nSubmit anyway?`);
+                        if (!override) {
+                            setIsSubmitting(false);
+                            return;
+                        }
+                    }
+                    
+                    showMessage('📝 Adding to processing queue...', 'info');
+                    
+                    // Create submission
+                    const submission = {
+                        url: submissionUrl,
+                        submitted_by: 'admin',
+                        submitted_at: new Date().toISOString(),
+                        id: generateId()
+                    };
+                    
+                    // Load existing pending submissions
+                    let pendingSubmissions = [];
+                    try {
+                        const response = await fetch('/pending-submissions.json');
+                        if (response.ok) {
+                            pendingSubmissions = await response.json();
+                        }
+                    } catch (error) {
+                        console.log('No existing pending submissions found');
+                    }
+                    
+                    pendingSubmissions.push(submission);
+                    await updateGitHubFile(pendingSubmissions, 'pending-submissions.json');
+                    
+                    // Trigger workflow
+                    await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            event_type: 'process-manual-submissions',
+                            client_payload: {
+                                submission_count: pendingSubmissions.length,
+                                latest_url: submissionUrl
+                            }
+                        })
+                    });
+                    
+                    setSubmissionUrl('');
+                    showMessage('✅ Article submitted for processing!', 'success');
+                    
+                    setTimeout(() => loadEntries(), 30000);
+                    
+                } catch (error) {
+                    showMessage(`❌ Submission failed: ${error.message}`, 'error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }, [submissionUrl, entries, generateId, updateGitHubFile, token, loadEntries, showMessage]);
+
+            // === ENTRY MANAGEMENT ===
+            const archiveSelected = useCallback(async () => {
+                if (selectedEntries.size === 0) return;
+                if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
+                
+                try {
+                    setIsLoading(true);
                     const updated = entries.map(entry => 
-                        selected.has(entry.id) 
+                        selectedEntries.has(entry.id) 
                             ? { ...entry, archived: true, archived_at: new Date().toISOString() }
                             : entry
                     );
                     await updateGitHubFile(updated);
                     setEntries(updated);
-                    setSelected(new Set());
-                    showMessage(`🗃️ Archived ${selected.size} entries`, 'success');
+                    setSelectedEntries(new Set());
+                    showMessage(`🗃️ Archived ${selectedEntries.size} entries`, 'success');
                 } catch (error) {
                     showMessage(`❌ Archive failed: ${error.message}`, 'error');
                 } finally {
-                    setLoading(false);
+                    setIsLoading(false);
                 }
-            };
+            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
 
-            // Restore entries
-            const restore = async () => {
-                if (selected.size === 0) return;
+            const restoreSelected = useCallback(async () => {
+                if (selectedEntries.size === 0) return;
                 
                 try {
-                    setLoading(true);
+                    setIsLoading(true);
                     const updated = entries.map(entry => {
-                        if (selected.has(entry.id)) {
+                        if (selectedEntries.has(entry.id)) {
                             const { archived, archived_at, ...restored } = entry;
                             return restored;
                         }
@@ -322,38 +496,37 @@
                     });
                     await updateGitHubFile(updated);
                     setEntries(updated);
-                    setSelected(new Set());
-                    showMessage(`🔄 Restored ${selected.size} entries`, 'success');
+                    setSelectedEntries(new Set());
+                    showMessage(`🔄 Restored ${selectedEntries.size} entries`, 'success');
                 } catch (error) {
                     showMessage(`❌ Restore failed: ${error.message}`, 'error');
                 } finally {
-                    setLoading(false);
+                    setIsLoading(false);
                 }
-            };
+            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
 
-            // Delete entries
-            const deleteEntries = async () => {
-                if (selected.size === 0) return;
-                if (!confirm(`PERMANENTLY delete ${selected.size} entries?`)) return;
+            const deleteSelected = useCallback(async () => {
+                if (selectedEntries.size === 0) return;
+                if (!confirm(`PERMANENTLY delete ${selectedEntries.size} entries?`)) return;
                 
                 try {
-                    setLoading(true);
-                    const updated = entries.filter(entry => !selected.has(entry.id));
+                    setIsLoading(true);
+                    const updated = entries.filter(entry => !selectedEntries.has(entry.id));
                     await updateGitHubFile(updated);
                     setEntries(updated);
-                    setSelected(new Set());
-                    showMessage(`🗑️ Deleted ${selected.size} entries`, 'success');
+                    setSelectedEntries(new Set());
+                    showMessage(`🗑️ Deleted ${selectedEntries.size} entries`, 'success');
                 } catch (error) {
                     showMessage(`❌ Delete failed: ${error.message}`, 'error');
                 } finally {
-                    setLoading(false);
+                    setIsLoading(false);
                 }
-            };
+            }, [selectedEntries, entries, updateGitHubFile, showMessage]);
 
-            // Start editing
-            const startEdit = (entry) => {
-                setEditing(entry.id);
-                setEditData({
+            // === EDITING ===
+            const startEdit = useCallback((entry) => {
+                setEditingEntry(entry.id);
+                setEditForm({
                     title: entry.title || '',
                     description: entry.description || '',
                     actor: entry.actor || '',
@@ -363,81 +536,84 @@
                     verified: Boolean(entry.verified),
                     date: entry.date || new Date().toISOString().split('T')[0]
                 });
-            };
+            }, []);
 
-            // Save edit
-            const saveEdit = async () => {
+            const saveEdit = useCallback(async () => {
                 try {
-                    setLoading(true);
+                    setIsLoading(true);
                     const updated = entries.map(entry => 
-                        entry.id === editing 
-                            ? { ...entry, ...editData, modified_at: new Date().toISOString() }
+                        entry.id === editingEntry 
+                            ? { ...entry, ...editForm, modified_at: new Date().toISOString() }
                             : entry
                     );
-                    await updateGitHub(updated);
+                    await updateGitHubFile(updated);
                     setEntries(updated);
-                    setEditing(null);
-                    setEditData({});
+                    setEditingEntry(null);
+                    setEditForm({});
                     showMessage('✅ Entry updated', 'success');
                 } catch (error) {
                     showMessage(`❌ Save failed: ${error.message}`, 'error');
                 } finally {
-                    setLoading(false);
+                    setIsLoading(false);
                 }
-            };
+            }, [editingEntry, editForm, entries, updateGitHubFile, showMessage]);
 
-            // Toggle selection
-            const toggleSelect = (id) => {
-                const newSelected = new Set(selected);
-                if (newSelected.has(id)) {
-                    newSelected.delete(id);
+            const cancelEdit = useCallback(() => {
+                setEditingEntry(null);
+                setEditForm({});
+            }, []);
+
+            // === SELECTION ===
+            const toggleSelection = useCallback((entryId) => {
+                const newSelected = new Set(selectedEntries);
+                if (newSelected.has(entryId)) {
+                    newSelected.delete(entryId);
                 } else {
-                    newSelected.add(id);
+                    newSelected.add(entryId);
                 }
-                setSelected(newSelected);
-            };
+                setSelectedEntries(newSelected);
+            }, [selectedEntries]);
 
-            // Select all filtered
-            const selectAll = () => {
+            const selectAll = useCallback(() => {
                 const filtered = getFilteredEntries();
-                if (selected.size === filtered.length) {
-                    setSelected(new Set());
+                if (selectedEntries.size === filtered.length) {
+                    setSelectedEntries(new Set());
                 } else {
-                    setSelected(new Set(filtered.map(e => e.id)));
+                    setSelectedEntries(new Set(filtered.map(e => e.id)));
                 }
-            };
+            }, [selectedEntries]);
 
-            // Get filtered entries
-            const getFilteredEntries = () => {
+            // === FILTERING ===
+            const getFilteredEntries = useCallback(() => {
                 return entries.filter(entry => {
                     if (showArchived && !entry.archived) return false;
                     if (!showArchived && entry.archived) return false;
-                    if (!search) return true;
-                    const searchLower = search.toLowerCase();
+                    if (!searchTerm) return true;
+                    
+                    const searchLower = searchTerm.toLowerCase();
                     return Object.values(entry).some(val => 
                         val?.toString().toLowerCase().includes(searchLower)
                     );
                 });
-            };
+            }, [entries, showArchived, searchTerm]);
 
-            // Logout
-            const logout = () => {
-                setIsAuthenticated(false);
-                setToken('');
-                sessionStorage.removeItem('admin_token');
-                setEntries([]);
-                setSelected(new Set());
-            };
-
-            // Load token on mount
+            // === EFFECTS ===
             useEffect(() => {
                 const savedToken = sessionStorage.getItem('admin_token');
                 if (savedToken) setToken(savedToken);
             }, []);
 
+            useEffect(() => {
+                if (newEntryId) {
+                    const timer = setTimeout(() => setNewEntryId(null), 5000);
+                    return () => clearTimeout(timer);
+                }
+            }, [newEntryId]);
+
+            // === COMPUTED VALUES ===
             const filteredEntries = getFilteredEntries();
 
-            // Login screen
+            // === RENDER ===
             if (!isAuthenticated) {
                 return (
                     <div className="container">
@@ -456,13 +632,14 @@
                                         type="password"
                                         value={token}
                                         onChange={(e) => setToken(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && login()}
+                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
                                         className="input"
                                         placeholder="github_pat_... or ghp_..."
+                                        autoFocus
                                     />
                                 </div>
                                 
-                                <button onClick={login} className="btn btn-primary" style={{ width: '100%' }}>
+                                <button onClick={authenticate} className="btn btn-primary" style={{ width: '100%' }}>
                                     🚀 Login
                                 </button>
                                 
@@ -477,7 +654,6 @@
                 );
             }
 
-            // Main admin interface
             return (
                 <div className="container">
                     {/* Header */}
@@ -489,25 +665,11 @@
                                     <h1 style={{ margin: 0, background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                                         Admin Panel
                                     </h1>
-                                    <div style={{ fontSize: '14px', color: '#a0aec0' }}>Political Tracker Management</div>
+                                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>Political Tracker Management</div>
                                 </div>
                             </div>
                             <button onClick={logout} className="btn btn-danger">
                                 🚪 Logout
-                            </button>
-                        </div>
-                        
-                        <div className="flex gap-4 mb-4 flex-mobile">
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="🔍 Search entries..."
-                                className="input"
-                                style={{ flex: 1 }}
-                            />
-                            <button onClick={loadEntries} disabled={loading} className="btn btn-primary">
-                                {loading ? '🔄' : '📊'} Refresh
                             </button>
                         </div>
                         
@@ -520,202 +682,58 @@
                                 placeholder="📎 Paste article URL to submit manually..."
                                 className="input"
                                 style={{ flex: 1 }}
-                                disabled={submitting}
+                                disabled={isSubmitting}
                             />
                             <button 
                                 onClick={submitManualArticle} 
-                                disabled={!submissionUrl.trim() || submitting || loading} 
+                                disabled={!submissionUrl.trim() || isSubmitting || isLoading} 
                                 className="btn btn-success"
                             >
-                                {submitting ? '🔄 Processing...' : '📰 Submit Article'}
+                                {isSubmitting ? '🔄 Processing...' : '📰 Submit Article'}
                             </button>
                         </div>
-
+                        
+                        <div className="flex gap-4 mb-4 flex-mobile">
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="🔍 Search entries..."
+                                className="input"
+                                style={{ flex: 1 }}
+                            />
+                            <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
+                                {isLoading ? '🔄' : '📊'} Refresh
+                            </button>
+                        </div>
+                        
                         <div className="flex gap-2 mb-4 flex-mobile">
-                            <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                📋 {filteredEntries.length} entries ({selected.size} selected)
+                            <span className="text-sm" style={{ color: '#94a3b8' }}>
+                                📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
                             </span>
                             <button
                                 onClick={() => setShowArchived(!showArchived)}
-                                className={`btn ${showArchived ? 'btn-secondary' : 'btn-secondary'}`}
+                                className="btn btn-secondary"
                             >
                                 {showArchived ? '📂 Active' : '🗃️ Archives'}
                             </button>
                             <button onClick={selectAll} className="btn btn-secondary">
-                                {selected.size === filteredEntries.length ? '❌ None' : '✅ All'}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowSubmissionQueue(!showSubmissionQueue);
-                                    if (!showSubmissionQueue) loadSubmissionQueue();
-                                }}
-                                className={`btn ${showSubmissionQueue ? 'btn-primary' : 'btn-secondary'}`}
-                            >
-                                📋 Queue ({pendingSubmissions.length + failedSubmissions.length})
+                                {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
                             </button>
                             {!showArchived ? (
-                                <button onClick={archive} disabled={selected.size === 0 || loading} className="btn btn-secondary">
-                                    🗃️ Archive ({selected.size})
+                                <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
+                                    🗃️ Archive ({selectedEntries.size})
                                 </button>
                             ) : (
-                                <button onClick={restore} disabled={selected.size === 0 || loading} className="btn btn-success">
-                                    🔄 Restore ({selected.size})
+                                <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                    🔄 Restore ({selectedEntries.size})
                                 </button>
                             )}
-                            <button onClick={deleteEntries} disabled={selected.size === 0 || loading} className="btn btn-danger">
-                                🗑️ Delete ({selected.size})
+                            <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
+                                🗑️ Delete ({selectedEntries.size})
                             </button>
                         </div>
                     </div>
-
-                    {/* Submission Queue Modal */}
-                    {showSubmissionQueue && (
-                        <div style={{ 
-                            position: 'fixed', 
-                            top: 0, 
-                            left: 0, 
-                            right: 0, 
-                            bottom: 0, 
-                            background: 'rgba(0,0,0,0.8)', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            zIndex: 1000
-                        }}>
-                            <div style={{ 
-                                background: '#2d3748', 
-                                borderRadius: '12px', 
-                                padding: '24px', 
-                                maxWidth: '800px', 
-                                width: '90%', 
-                                maxHeight: '80vh', 
-                                overflow: 'auto',
-                                border: '1px solid #4a5568'
-                            }}>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
-                                        📋 Submission Queue
-                                    </h2>
-                                    <button 
-                                        onClick={() => setShowSubmissionQueue(false)}
-                                        className="btn btn-secondary"
-                                        style={{ padding: '8px 12px' }}
-                                    >
-                                        ✕ Close
-                                    </button>
-                                </div>
-
-                                {/* Pending Submissions */}
-                                {pendingSubmissions.length > 0 && (
-                                    <div className="mb-6">
-                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#60a5fa' }}>
-                                            🔄 Pending Processing ({pendingSubmissions.length})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {pendingSubmissions.map(submission => (
-                                                <div key={submission.id} className="entry" style={{ padding: '12px' }}>
-                                                    <div className="flex justify-between items-start">
-                                                        <div style={{ flex: 1 }}>
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="badge badge-medium">⏳ PENDING</span>
-                                                                {submission.retry_attempt && (
-                                                                    <span className="text-xs" style={{ color: '#a0aec0' }}>
-                                                                        Retry #{submission.retry_attempt}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                                                                <strong>URL:</strong> {submission.url}
-                                                            </div>
-                                                            <div style={{ fontSize: '12px', color: '#a0aec0' }}>
-                                                                Submitted: {new Date(submission.submitted_at).toLocaleString()}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Failed Submissions */}
-                                {failedSubmissions.length > 0 && (
-                                    <div className="mb-4">
-                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#f56565' }}>
-                                            ❌ Failed Submissions ({failedSubmissions.length})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {failedSubmissions.map(submission => (
-                                                <div key={submission.id} className="entry" style={{ padding: '12px' }}>
-                                                    <div className="flex justify-between items-start">
-                                                        <div style={{ flex: 1 }}>
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="badge badge-high">❌ FAILED</span>
-                                                                {submission.retry_attempt && (
-                                                                    <span className="text-xs" style={{ color: '#a0aec0' }}>
-                                                                        After {submission.retry_attempt} retries
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: '14px', marginBottom: '4px' }}>
-                                                                <strong>URL:</strong> {submission.url}
-                                                            </div>
-                                                            <div style={{ fontSize: '12px', color: '#f56565', marginBottom: '4px' }}>
-                                                                <strong>Error:</strong> {submission.error}
-                                                            </div>
-                                                            <div style={{ fontSize: '12px', color: '#a0aec0' }}>
-                                                                Failed: {submission.failed_at ? new Date(submission.failed_at).toLocaleString() : 'Unknown'}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex gap-2" style={{ marginLeft: '12px' }}>
-                                                            <button
-                                                                onClick={() => retryFailedSubmission(submission)}
-                                                                disabled={submitting}
-                                                                className="btn btn-success"
-                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                            >
-                                                                🔄 Retry
-                                                            </button>
-                                                            <button
-                                                                onClick={() => deleteFailedSubmission(submission)}
-                                                                className="btn btn-danger"
-                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                            >
-                                                                🗑️ Delete
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Empty State */}
-                                {pendingSubmissions.length === 0 && failedSubmissions.length === 0 && (
-                                    <div className="text-center" style={{ padding: '40px', color: '#a0aec0' }}>
-                                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-                                        <div>No submissions in queue</div>
-                                        <div style={{ fontSize: '14px', marginTop: '8px' }}>
-                                            All submissions have been processed successfully
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex justify-between items-center mt-4" style={{ borderTop: '1px solid #4a5568', paddingTop: '16px' }}>
-                                    <button
-                                        onClick={loadSubmissionQueue}
-                                        className="btn btn-secondary"
-                                    >
-                                        🔄 Refresh Queue
-                                    </button>
-                                    <div style={{ fontSize: '12px', color: '#a0aec0' }}>
-                                        Queue automatically refreshes when submissions are processed
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     {/* Messages */}
                     {message && (
@@ -730,32 +748,32 @@
                             {filteredEntries.length === 0 ? (
                                 <div className="text-center" style={{ padding: '40px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-                                    <div style={{ color: '#a0aec0' }}>No entries found</div>
+                                    <div style={{ color: '#94a3b8' }}>No entries found</div>
                                 </div>
                             ) : (
                                 filteredEntries.map(entry => (
                                     <div
                                         key={entry.id}
-                                        className={`entry ${selected.has(entry.id) ? 'selected' : ''} ${editing === entry.id ? 'editing' : ''} ${newEntryId === entry.id ? 'new-submission' : ''}`}
-                                        onClick={() => editing !== entry.id && toggleSelect(entry.id)}
+                                        className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${newEntryId === entry.id ? 'new-entry' : ''}`}
+                                        onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
                                     >
-                                        {editing === entry.id ? (
+                                        {editingEntry === entry.id ? (
                                             <div>
                                                 <div className="grid grid-2 gap-4 mb-4">
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Date</label>
                                                         <input
                                                             type="date"
-                                                            value={editData.date}
-                                                            onChange={(e) => setEditData({...editData, date: e.target.value})}
+                                                            value={editForm.date}
+                                                            onChange={(e) => setEditForm({...editForm, date: e.target.value})}
                                                             className="input"
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Severity</label>
                                                         <select
-                                                            value={editData.severity}
-                                                            onChange={(e) => setEditData({...editData, severity: e.target.value})}
+                                                            value={editForm.severity}
+                                                            onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
                                                             className="input"
                                                         >
                                                             <option value="low">🟢 Low</option>
@@ -766,30 +784,30 @@
                                                 </div>
                                                 
                                                 <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Actor</label>
                                                     <input
                                                         type="text"
-                                                        value={editData.actor}
-                                                        onChange={(e) => setEditData({...editData, actor: e.target.value})}
+                                                        value={editForm.actor}
+                                                        onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
                                                         className="input"
                                                     />
                                                 </div>
                                                 
                                                 <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Title</label>
                                                     <input
                                                         type="text"
-                                                        value={editData.title}
-                                                        onChange={(e) => setEditData({...editData, title: e.target.value})}
+                                                        value={editForm.title}
+                                                        onChange={(e) => setEditForm({...editForm, title: e.target.value})}
                                                         className="input"
                                                     />
                                                 </div>
                                                 
                                                 <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Description</label>
                                                     <textarea
-                                                        value={editData.description}
-                                                        onChange={(e) => setEditData({...editData, description: e.target.value})}
+                                                        value={editForm.description}
+                                                        onChange={(e) => setEditForm({...editForm, description: e.target.value})}
                                                         className="input"
                                                         rows="3"
                                                     />
@@ -797,10 +815,10 @@
                                                 
                                                 <div className="grid grid-2 gap-4 mb-4">
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Category</label>
                                                         <select
-                                                            value={editData.category}
-                                                            onChange={(e) => setEditData({...editData, category: e.target.value})}
+                                                            value={editForm.category}
+                                                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
                                                             className="input"
                                                         >
                                                             <option value="Financial">Financial</option>
@@ -813,11 +831,11 @@
                                                         </select>
                                                     </div>
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Source URL</label>
                                                         <input
                                                             type="url"
-                                                            value={editData.source_url}
-                                                            onChange={(e) => setEditData({...editData, source_url: e.target.value})}
+                                                            value={editForm.source_url}
+                                                            onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
                                                             className="input"
                                                         />
                                                     </div>
@@ -827,18 +845,18 @@
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                                                         <input
                                                             type="checkbox"
-                                                            checked={editData.verified}
-                                                            onChange={(e) => setEditData({...editData, verified: e.target.checked})}
+                                                            checked={editForm.verified}
+                                                            onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
                                                         />
                                                         <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
                                                     </label>
                                                 </div>
                                                 
                                                 <div className="flex gap-2">
-                                                    <button onClick={saveEdit} disabled={loading} className="btn btn-success">
+                                                    <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
                                                         💾 Save
                                                     </button>
-                                                    <button onClick={() => setEditing(null)} className="btn btn-secondary">
+                                                    <button onClick={cancelEdit} className="btn btn-secondary">
                                                         ❌ Cancel
                                                     </button>
                                                 </div>
@@ -847,19 +865,31 @@
                                             <div className="flex justify-between">
                                                 <div style={{ flex: 1 }}>
                                                     <div className="flex items-center gap-2 mb-2">
-                                                        <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {entry.date}</span>
+                                                        <span className="text-sm" style={{ color: '#94a3b8' }}>📅 {entry.date}</span>
                                                         <span className={`badge badge-${entry.severity}`}>
                                                             {entry.severity === 'high' ? '🚨 HIGH' :
                                                              entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
                                                         </span>
                                                         {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
                                                         <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                        {entry.manual_submission && <span className="text-xs" style={{ color: '#10b981' }}>📝 Manual</span>}
                                                     </div>
                                                     <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
                                                     <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
-                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
+                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#94a3b8' }}>
                                                         <span>📁 {entry.category}</span>
-                                                        {entry.verified && <span style={{ color: '#48bb78' }}>✅ Verified</span>}
+                                                        {entry.verified && <span style={{ color: '#10b981' }}>✅ Verified</span>}
+                                                        {entry.source_url && (
+                                                            <a 
+                                                                href={entry.source_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                style={{ color: '#60a5fa', textDecoration: 'none' }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                🔗 Source
+                                                            </a>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
@@ -872,8 +902,8 @@
                                                     </button>
                                                     <input
                                                         type="checkbox"
-                                                        checked={selected.has(entry.id)}
-                                                        onChange={(e) => { e.stopPropagation(); toggleSelect(entry.id); }}
+                                                        checked={selectedEntries.has(entry.id)}
+                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
                                                         style={{ marginTop: '4px' }}
                                                     />
                                                 </div>
