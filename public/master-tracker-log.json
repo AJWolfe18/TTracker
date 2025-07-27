@@ -9,7 +9,9 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccdsc9hs8y4koni",
-    "added_at": "2025-07-26T14:23:57.132Z"
+    "added_at": "2025-07-26T14:23:57.132Z",
+    "archived": true,
+    "archived_at": "2025-07-27T04:04:01.594Z"
   },
   {
     "date": "2025-07-25",
