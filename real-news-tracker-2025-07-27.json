@@ -1,0 +1,98 @@
+[
+  {
+    "date": "2025-07-24",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Trump Sues Wall Street Journal Over Epstein Allegation",
+    "description": "Former President Trump filed a libel lawsuit against Rupert Murdoch, Dow Jones, and two Wall Street Journal reporters in response to a report suggesting he contributed a lewd illustration to Jeffrey Epstein\\'s 50th birthday album, intensifying scrutiny over his past ties to Epstein.",
+    "source_url": "https://usanews.com/newsroom/july-18-2025-trump-led-push-sparks-tumult-in-politics-economy-courts-and-media",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdlrrbdf2ytzh68m3jc",
+    "added_at": "2025-07-27T14:23:14.259Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "Donald Trump",
+    "category": "Legal",
+    "title": "Supreme Court Allows Trump to Remove Consumer Product Safety Regulators",
+    "description": "The Supreme Court cleared the way for President Trump to remove Democratic members of the Consumer Product Safety Commission, enabling the administration to continue reshaping the federal bureaucracy amid ongoing litigation.",
+    "source_url": "https://stateandfed.com/campaign-finance/news-you-can-use-digest-july-25-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdlrrbdfvh35fnfud7e",
+    "added_at": "2025-07-27T14:23:14.259Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "Alina Habba",
+    "category": "Government Oversight",
+    "title": "Alina Habba Appointed Acting U.S. Attorney for New Jersey",
+    "description": "Alina Habba, former personal lawyer to President Trump, was appointed as Acting U.S. Attorney for New Jersey. This move followed the withdrawal of her nomination for the permanent position, allowing her to serve in an acting capacity for the next 210 days.",
+    "source_url": "https://www.justsecurity.org/117831/early-edition-july-25-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdlrr718nysl2bient",
+    "added_at": "2025-07-27T14:23:08.636Z"
+  },
+  {
+    "date": "2025-07-23",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Whistleblower Alleges Improper Suspension of Security Clearances",
+    "description": "An FBI whistleblower alleged that the bureau improperly suspended security clearances for agents with \\'conservative views.\\' The complaint suggests that the FBI\\'s Security Division used the clearance process to force employees out, causing financial distress and retaliation against those who attempted to stop the abuse.",
+    "source_url": "https://www.foxnews.com/politics/fbi-whistleblower-alleges-bureau-improperly-suspended-security-clearance-agents-conservative-views",
+    "verified": true,
+    "severity": "high",
+    "id": "mdlrr718dgj5y8tdx49",
+    "added_at": "2025-07-27T14:23:08.636Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "Denver Public Schools (DPS)",
+    "category": "Government Oversight",
+    "title": "DPS Sues DHS Over ICE Presence in Schools",
+    "description": "Denver Public Schools filed a federal lawsuit against the Department of Homeland Security, challenging a policy that permits ICE agents in schools. DPS argues that this policy disrupts education and instills fear among students and families, leading to decreased attendance and resource diversion.",
+    "source_url": "https://apnews.com/article/d3baeee5db9525ff56b7bc8f5c81117f",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdlrr6ytvt1wtyq3gz",
+    "added_at": "2025-07-27T14:23:08.549Z"
+  },
+  {
+    "date": "2025-07-21",
+    "actor": "U.S. Department of Homeland Security",
+    "category": "Regulatory Action",
+    "title": "DHS Rescinds Biden \\'Protected Areas\\' Enforcement Policy",
+    "description": "On January 20, 2025, Acting DHS Secretary Benjamine Huffman rescinded the 2021 policy that restricted enforcement actions in sensitive areas like schools and hospitals. This change allows DHS to conduct enforcement operations in these locations, reversing previous protections.",
+    "source_url": "https://www.nafsa.org/regulatory-information/dhs-rescinds-biden-protected-areas-enforcement-policy",
+    "verified": false,
+    "severity": "high",
+    "id": "mdlrr6ytel8sk5r7qts",
+    "added_at": "2025-07-27T14:23:08.549Z"
+  },
+  {
+    "date": "2025-07-25",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court Unanimously Nullifies Impeachment Complaint Against Vice President Duterte",
+    "description": "The Supreme Court unanimously nullified the impeachment complaint against Vice President Sara Duterte, ruling it unconstitutional. The Court stated that the \\'one year-bar rule\\' was already covered by previous impeachment cases, rendering the fourth complaint invalid. Consequently, no trial before the Senate will be held, as the chamber cannot acquire jurisdiction per the court ruling.",
+    "source_url": "https://en.wikipedia.org/wiki/Impeachment_of_Sara_Duterte",
+    "verified": false,
+    "severity": "low",
+    "id": "mdlrr707h2jc4zyfd58",
+    "added_at": "2025-07-27T14:23:08.599Z"
+  },
+  {
+    "date": "2025-07-24",
+    "actor": "U.S. Department of Justice (DOJ)",
+    "category": "Corporate Ethics",
+    "title": "DOJ Uncovers Bribery Scheme Involving USAID Contracting Officer",
+    "description": "The DOJ revealed a bribery scheme where a USAID contracting officer accepted over $1 million in bribes from contractors. In exchange, the officer steered more than $550 million in government contracts to these parties, undermining the competitive procurement process and the integrity of the 8(a) Program.",
+    "source_url": "https://thecgp.org/2025/07/17/friday-flash-07-18-2025/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdlrr5xl2u7xjakvsvj",
+    "added_at": "2025-07-27T14:23:07.209Z"
+  }
+]
