@@ -213,9 +213,10 @@
     "description": "President Trump publicly stated his support for Elon Musk and his companies, denying claims that he intends to dismantle federal subsidies provided to them. This came after Musk warned Tesla investors about potential financial instability if federal support for electric vehicle manufacturers is reduced.",
     "source_url": "https://www.reuters.com/business/autos-transportation/trump-says-he-wants-musk-his-companies-thrive-us-2025-07-24/",
     "verified": true,
-    "severity": "medium",
+    "severity": "low",
     "id": "mdhhlz25yebgn89dh09",
-    "added_at": "2025-07-24T14:28:04.157Z"
+    "added_at": "2025-07-24T14:28:04.157Z",
+    "modified_at": "2025-07-27T01:11:20.956Z"
   },
   {
     "date": "2025-07-24",
