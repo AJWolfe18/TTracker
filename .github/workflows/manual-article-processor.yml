@@ -55,6 +55,7 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action - Manual Article Processor"
+        git pull origin main
         git add master-tracker-log.json public/master-tracker-log.json
         if [ -f "pending-submissions.json" ]; then
           git add pending-submissions.json
