@@ -3521,6 +3521,22 @@
     "added_at": "2025-07-13T21:34:02.059Z"
   },
   {
+    "id": "1753591007787-avd3zvyok",
+    "date": "2025-07-09",
+    "actor": "Greg Abbott",
+    "category": "Election Integrity",
+    "title": "Texas Gov. Greg Abbott orders lawmakers to consider redistricting as GOP seeks midterm advantage | CNN Politics",
+    "description": "Texas Gov. Greg Abbott on Wednesday directed lawmakers to redraw the state’s congressional map as part of a special session that kicks off later this month, as the GOP seeks to retain its narrow US House majority after next year’s midterm elections.",
+    "source_url": "https://www.cnn.com/2025/07/09/politics/texas-abbott-redistricting-gop-midterms",
+    "verified": true,
+    "severity": "medium",
+    "added_at": "2025-07-27T04:36:47.787Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "submitted_at": "2025-07-27T04:36:29.089Z",
+    "processed_at": "2025-07-27T04:36:47.787Z"
+  },
+  {
     "date": "2025-07-09",
     "actor": "Japanese Liberal Democratic Party",
     "category": "Corporate Ethics",
