@@ -938,7 +938,9 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbr7ibws0ifxdl7nbd",
-    "added_at": "2025-07-20T14:10:08.396Z"
+    "added_at": "2025-07-20T14:10:08.396Z",
+    "archived": true,
+    "archived_at": "2025-07-27T04:39:22.296Z"
   },
   {
     "date": "2025-07-19",
