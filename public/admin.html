@@ -1,107 +1,879 @@
-// EXPERT REVIEWED QUEUE LOADING SOLUTION
-// This fixes the file access pattern mismatch
-
-const loadQueueData = useCallback(async () => {
-    try {
-        setQueueLoading(true);
-        
-        // SOLUTION: Try public path first, fallback to GitHub API
-        await loadQueueFiles();
-        
-    } catch (error) {
-        console.warn('Queue loading failed (expected for new deployments):', error.message);
-        // Set empty state - this is expected behavior
-        setPendingSubmissions([]);
-        setFailedSubmissions([]);
-    } finally {
-        setQueueLoading(false);
-    }
-}, []);
-
-const loadQueueFiles = useCallback(async () => {
-    // Try public folder access first (fastest, CORS-safe)
-    try {
-        const [pendingResp, failedResp] = await Promise.allSettled([
-            fetch('/pending-submissions.json'),
-            fetch('/failed-submissions.json')
-        ]);
-        
-        // Process pending submissions
-        if (pendingResp.status === 'fulfilled' && pendingResp.value.ok) {
-            const pendingData = await pendingResp.value.json();
-            setPendingSubmissions(Array.isArray(pendingData) ? pendingData : []);
-        } else {
-            // Fallback to GitHub API for pending
-            await loadPendingViaAPI();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker Admin</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
+            color: white;
+            min-height: 100vh;
         }
-        
-        // Process failed submissions  
-        if (failedResp.status === 'fulfilled' && failedResp.value.ok) {
-            const failedData = await failedResp.value.json();
-            setFailedSubmissions(Array.isArray(failedData) ? failedData : []);
-        } else {
-            // Fallback to GitHub API for failed
-            await loadFailedViaAPI();
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .card { background: rgba(45, 55, 72, 0.9); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #4a5568; backdrop-filter: blur(10px); }
+        .input { width: 100%; padding: 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; color: white; font-size: 14px; box-sizing: border-box; }
+        .input:focus { outline: none; border-color: #3182ce; }
+        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; font-size: 14px; }
+        .btn-primary { background: #3182ce; color: white; }
+        .btn-primary:hover { background: #2c5aa0; }
+        .btn-danger { background: #e53e3e; color: white; }
+        .btn-danger:hover { background: #c53030; }
+        .btn-success { background: #38a169; color: white; }
+        .btn-success:hover { background: #2f855a; }
+        .btn-secondary { background: #4a5568; color: white; }
+        .btn-secondary:hover { background: #2d3748; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-4 { gap: 16px; }
+        .gap-2 { gap: 8px; }
+        .mb-4 { margin-bottom: 16px; }
+        .mb-2 { margin-bottom: 8px; }
+        .text-center { text-align: center; }
+        .text-sm { font-size: 14px; }
+        .text-xs { font-size: 12px; }
+        .font-bold { font-weight: 700; }
+        .grid { display: grid; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .entry { background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; }
+        .entry:hover { background: #374151; transform: translateY(-1px); }
+        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
+        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
+        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .badge-pending { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
+        .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
+        .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
+        .tabs { display: flex; border-bottom: 1px solid #4a5568; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab.active { border-bottom-color: #3182ce; color: #60a5fa; }
+        .tab:hover { background: rgba(255,255,255,0.1); }
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .flex-mobile { flex-direction: column; }
         }
-        
-    } catch (error) {
-        // Final fallback - try GitHub API
-        console.log('Public file access failed, trying GitHub API...');
-        await Promise.allSettled([
-            loadPendingViaAPI(),
-            loadFailedViaAPI()
-        ]);
-    }
-}, [token]);
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-const loadPendingViaAPI = useCallback(async () => {
-    try {
-        const response = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/contents/pending-submissions.json?ref=main`, {
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/vnd.github.v3+json'
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        function AdminApp() {
+            // === STATE MANAGEMENT ===
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [token, setToken] = useState('');
+            const [entries, setEntries] = useState([]);
+            const [selectedEntries, setSelectedEntries] = useState(new Set());
+            const [searchTerm, setSearchTerm] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [message, setMessage] = useState(null);
+            const [showArchived, setShowArchived] = useState(false);
+            const [editingEntry, setEditingEntry] = useState(null);
+            const [editForm, setEditForm] = useState({});
+            const [submissionUrl, setSubmissionUrl] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            
+            // Queue management state - NO FILE-BASED STORAGE
+            const [activeTab, setActiveTab] = useState('entries');
+            const [processingQueue, setProcessingQueue] = useState([]);
+            const [queueLoading, setQueueLoading] = useState(false);
+
+            // === UTILITY FUNCTIONS ===
+            const generateId = () => {
+                return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            };
+
+            const encodeBase64 = (str) => {
+                try {
+                    return btoa(unescape(encodeURIComponent(str)));
+                } catch {
+                    return btoa(str);
+                }
+            };
+
+            const showMessage = useCallback((text, type = 'info') => {
+                setMessage({ text, type });
+                const timeoutId = setTimeout(() => setMessage(null), 5000);
+                return () => clearTimeout(timeoutId);
+            }, []);
+
+            // === AUTHENTICATION ===
+            const authenticate = async () => {
+                if (!token.trim()) {
+                    showMessage('Please enter your GitHub token', 'error');
+                    return;
+                }
+                if (!token.startsWith('github_pat_') && !token.startsWith('ghp_')) {
+                    showMessage('Token must start with github_pat_ or ghp_', 'error');
+                    return;
+                }
+
+                // Validate token with GitHub API
+                try {
+                    const response = await fetch('https://api.github.com/user', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Invalid token');
+                    }
+                } catch (error) {
+                    showMessage('Invalid GitHub token - please check and try again', 'error');
+                    return;
+                }
+
+                setIsAuthenticated(true);
+                sessionStorage.setItem('admin_token', token);
+                loadEntries();
+                showMessage('✅ Login successful', 'success');
+            };
+
+            const logout = () => {
+                setIsAuthenticated(false);
+                setToken('');
+                sessionStorage.removeItem('admin_token');
+                setEntries([]);
+                setSelectedEntries(new Set());
+                setProcessingQueue([]);
+                setMessage(null);
+            };
+
+            // === DATA OPERATIONS ===
+            const loadEntries = async () => {
+                try {
+                    setIsLoading(true);
+                    const response = await fetch('/master-tracker-log.json');
+                    if (!response.ok) throw new Error('Failed to load');
+                    const data = await response.json();
+                    setEntries(Array.isArray(data) ? data : []);
+                    showMessage(`📊 Loaded ${data?.length || 0} entries`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Error: ${error.message}`, 'error');
+                    setEntries([]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const updateGitHubFile = async (newData, fileName = 'master-tracker-log.json') => {
+                const repo = 'AJWolfe18/TTracker';
+                const path = fileName;
+                
+                try {
+                    // Get current file
+                    let fileInfo = null;
+                    try {
+                        const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (getResponse.ok) {
+                            fileInfo = await getResponse.json();
+                        }
+                    } catch (error) {
+                        console.log(`File ${fileName} doesn't exist yet, will create new`);
+                    }
+                    
+                    // Update file
+                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Admin update ${fileName}`,
+                            content: encodeBase64(JSON.stringify(newData, null, 2)),
+                            sha: fileInfo?.sha
+                        })
+                    });
+                    
+                    if (!updateResponse.ok) {
+                        throw new Error(`Update failed: ${updateResponse.status}`);
+                    }
+                    
+                    // Update public file for master tracker
+                    if (fileName === 'master-tracker-log.json') {
+                        try {
+                            const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (publicGetResponse.ok) {
+                                const publicFileInfo = await publicGetResponse.json();
+                                await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
+                                    method: 'PUT',
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        message: `Admin update public ${fileName}`,
+                                        content: encodeBase64(JSON.stringify(newData, null, 2)),
+                                        sha: publicFileInfo.sha
+                                    })
+                                });
+                            }
+                        } catch (publicError) {
+                            console.warn('Could not update public file:', publicError);
+                        }
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('GitHub update error:', error);
+                    throw error;
+                }
+            };
+
+            // === QUEUE MANAGEMENT - NO FILES, DIRECT WORKFLOW DISPATCH ===
+            const submitManualArticle = async () => {
+                if (!submissionUrl.trim()) return;
+                
+                try {
+                    setIsSubmitting(true);
+                    
+                    // Validate URL
+                    try {
+                        new URL(submissionUrl);
+                    } catch {
+                        throw new Error('Please enter a valid URL');
+                    }
+                    
+                    // Check for duplicates
+                    const duplicates = entries.filter(entry => entry.source_url === submissionUrl);
+                    if (duplicates.length > 0) {
+                        const override = confirm(`⚠️ Duplicate found: "${duplicates[0].title}"\n\nSubmit anyway?`);
+                        if (!override) {
+                            setIsSubmitting(false);
+                            return;
+                        }
+                    }
+                    
+                    showMessage('📝 Processing article directly...', 'info');
+                    
+                    // Add to local processing queue for UI feedback
+                    const submission = {
+                        url: submissionUrl,
+                        submitted_by: 'admin',
+                        submitted_at: new Date().toISOString(),
+                        id: generateId(),
+                        status: 'processing'
+                    };
+                    
+                    setProcessingQueue(prev => [...prev, submission]);
+                    
+                    // Trigger immediate workflow processing with the URL
+                    await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            event_type: 'process-manual-article',
+                            client_payload: {
+                                article_url: submissionUrl,
+                                submitted_by: 'admin',
+                                submission_id: submission.id
+                            }
+                        })
+                    });
+                    
+                    setSubmissionUrl('');
+                    setActiveTab('queue'); // Switch to queue tab
+                    showMessage('✅ Article submitted for immediate processing!', 'success');
+                    
+                    // Check for completion after 60 seconds
+                    setTimeout(() => {
+                        loadEntries();
+                        setProcessingQueue(prev => prev.filter(item => item.id !== submission.id));
+                    }, 60000);
+                    
+                } catch (error) {
+                    showMessage(`❌ Submission failed: ${error.message}`, 'error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            // Clear completed items from processing queue
+            const clearProcessingQueue = () => {
+                setProcessingQueue([]);
+                showMessage('🧹 Cleared processing queue', 'success');
+            };
+
+            // === ENTRY MANAGEMENT ===
+            const archiveSelected = async () => {
+                if (selectedEntries.size === 0) return;
+                if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
+                
+                try {
+                    setIsLoading(true);
+                    const updated = entries.map(entry => 
+                        selectedEntries.has(entry.id) 
+                            ? { ...entry, archived: true, archived_at: new Date().toISOString() }
+                            : entry
+                    );
+                    await updateGitHubFile(updated);
+                    setEntries(updated);
+                    setSelectedEntries(new Set());
+                    showMessage(`🗃️ Archived ${selectedEntries.size} entries`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Archive failed: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const restoreSelected = async () => {
+                if (selectedEntries.size === 0) return;
+                
+                try {
+                    setIsLoading(true);
+                    const updated = entries.map(entry => {
+                        if (selectedEntries.has(entry.id)) {
+                            const { archived, archived_at, ...restored } = entry;
+                            return restored;
+                        }
+                        return entry;
+                    });
+                    await updateGitHubFile(updated);
+                    setEntries(updated);
+                    setSelectedEntries(new Set());
+                    showMessage(`🔄 Restored ${selectedEntries.size} entries`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Restore failed: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const deleteSelected = async () => {
+                if (selectedEntries.size === 0) return;
+                if (!confirm(`PERMANENTLY delete ${selectedEntries.size} entries?`)) return;
+                
+                try {
+                    setIsLoading(true);
+                    const updated = entries.filter(entry => !selectedEntries.has(entry.id));
+                    await updateGitHubFile(updated);
+                    setEntries(updated);
+                    setSelectedEntries(new Set());
+                    showMessage(`🗑️ Deleted ${selectedEntries.size} entries`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // === EDITING ===
+            const startEdit = (entry) => {
+                setEditingEntry(entry.id);
+                setEditForm({
+                    title: entry.title || '',
+                    description: entry.description || '',
+                    actor: entry.actor || '',
+                    category: entry.category || 'Government Oversight',
+                    severity: entry.severity || 'medium',
+                    source_url: entry.source_url || '',
+                    verified: Boolean(entry.verified),
+                    date: entry.date || new Date().toISOString().split('T')[0]
+                });
+            };
+
+            const saveEdit = async () => {
+                try {
+                    setIsLoading(true);
+                    const updated = entries.map(entry => 
+                        entry.id === editingEntry 
+                            ? { ...entry, ...editForm, modified_at: new Date().toISOString() }
+                            : entry
+                    );
+                    await updateGitHubFile(updated);
+                    setEntries(updated);
+                    setEditingEntry(null);
+                    setEditForm({});
+                    showMessage('✅ Entry updated', 'success');
+                } catch (error) {
+                    showMessage(`❌ Save failed: ${error.message}`, 'error');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const cancelEdit = () => {
+                setEditingEntry(null);
+                setEditForm({});
+            };
+
+            // === SELECTION ===
+            const toggleSelection = (entryId) => {
+                const newSelected = new Set(selectedEntries);
+                if (newSelected.has(entryId)) {
+                    newSelected.delete(entryId);
+                } else {
+                    newSelected.add(entryId);
+                }
+                setSelectedEntries(newSelected);
+            };
+
+            const selectAll = () => {
+                const filtered = getFilteredEntries();
+                if (selectedEntries.size === filtered.length) {
+                    setSelectedEntries(new Set());
+                } else {
+                    setSelectedEntries(new Set(filtered.map(e => e.id)));
+                }
+            };
+
+            // === FILTERING ===
+            const getFilteredEntries = () => {
+                return entries.filter(entry => {
+                    if (showArchived && !entry.archived) return false;
+                    if (!showArchived && entry.archived) return false;
+                    if (!searchTerm) return true;
+                    
+                    const searchLower = searchTerm.toLowerCase();
+                    return Object.values(entry).some(val => 
+                        val?.toString().toLowerCase().includes(searchLower)
+                    );
+                });
+            };
+
+            // === EFFECTS ===
+            useEffect(() => {
+                const savedToken = sessionStorage.getItem('admin_token');
+                if (savedToken) setToken(savedToken);
+            }, []);
+
+            // === COMPUTED VALUES ===
+            const filteredEntries = getFilteredEntries();
+
+            // === RENDER ===
+            if (!isAuthenticated) {
+                return (
+                    <div className="container">
+                        <div style={{ maxWidth: '400px', margin: '100px auto' }}>
+                            <div className="card text-center">
+                                <div className="logo" style={{ margin: '0 auto 20px' }}>T2</div>
+                                <h1 style={{ margin: '0 0 20px', background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                    TrumpyTracker Admin
+                                </h1>
+                                
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+                                        🔐 GitHub Token:
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={token}
+                                        onChange={(e) => setToken(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
+                                        className="input"
+                                        placeholder="github_pat_... or ghp_..."
+                                    />
+                                </div>
+                                
+                                <button onClick={authenticate} className="btn btn-primary" style={{ width: '100%' }}>
+                                    🚀 Login
+                                </button>
+                                
+                                {message && (
+                                    <div className={`message message-${message.type}`}>
+                                        {message.text}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
             }
-        });
-        
-        if (response.ok) {
-            const fileData = await response.json();
-            const content = atob(fileData.content);
-            const data = JSON.parse(content);
-            setPendingSubmissions(Array.isArray(data) ? data : []);
-        } else if (response.status === 404) {
-            // File doesn't exist yet - normal for new deployment
-            setPendingSubmissions([]);
-        } else {
-            throw new Error(`GitHub API error: ${response.status}`);
-        }
-    } catch (error) {
-        console.warn('Could not load pending submissions:', error.message);
-        setPendingSubmissions([]);
-    }
-}, [token]);
 
-const loadFailedViaAPI = useCallback(async () => {
-    try {
-        const response = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/contents/failed-submissions.json?ref=main`, {
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (response.ok) {
-            const fileData = await response.json();
-            const content = atob(fileData.content);
-            const data = JSON.parse(content);
-            setFailedSubmissions(Array.isArray(data) ? data : []);
-        } else if (response.status === 404) {
-            // File doesn't exist yet - normal for new deployment
-            setFailedSubmissions([]);
-        } else {
-            throw new Error(`GitHub API error: ${response.status}`);
+            return (
+                <div className="container">
+                    {/* Header */}
+                    <div className="card">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-4">
+                                <div className="logo">T2</div>
+                                <div>
+                                    <h1 style={{ margin: 0, background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                                        Admin Panel
+                                    </h1>
+                                    <div style={{ fontSize: '14px', color: '#a0aec0' }}>GitHub API Only - No File Storage</div>
+                                </div>
+                            </div>
+                            <button onClick={logout} className="btn btn-danger">
+                                🚪 Logout
+                            </button>
+                        </div>
+                        
+                        {/* Manual Article Submission */}
+                        <div className="flex gap-4 mb-4 flex-mobile">
+                            <input
+                                type="url"
+                                value={submissionUrl}
+                                onChange={(e) => setSubmissionUrl(e.target.value)}
+                                placeholder="📎 Paste article URL for immediate processing..."
+                                className="input"
+                                style={{ flex: 1 }}
+                                disabled={isSubmitting}
+                            />
+                            <button 
+                                onClick={submitManualArticle} 
+                                disabled={!submissionUrl.trim() || isSubmitting || isLoading} 
+                                className="btn btn-success"
+                            >
+                                {isSubmitting ? '🔄 Processing...' : '⚡ Process Now'}
+                            </button>
+                        </div>
+
+                        {/* Tab Navigation */}
+                        <div className="tabs">
+                            <div 
+                                className={`tab ${activeTab === 'entries' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('entries')}
+                            >
+                                📝 Entries ({filteredEntries.length})
+                            </div>
+                            <div 
+                                className={`tab ${activeTab === 'queue' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('queue')}
+                            >
+                                ⚡ Processing Queue ({processingQueue.length})
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Messages */}
+                    {message && (
+                        <div className={`message message-${message.type}`}>
+                            {message.text}
+                        </div>
+                    )}
+
+                    {/* Entries Tab Content */}
+                    {activeTab === 'entries' && (
+                        <>
+                            <div className="card">
+                                <div className="flex gap-4 mb-4 flex-mobile">
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="🔍 Search entries..."
+                                        className="input"
+                                        style={{ flex: 1 }}
+                                    />
+                                    <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
+                                        {isLoading ? '🔄' : '📊'} Refresh
+                                    </button>
+                                </div>
+                                
+                                <div className="flex gap-2 mb-4 flex-mobile">
+                                    <span className="text-sm" style={{ color: '#a0aec0' }}>
+                                        📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
+                                    </span>
+                                    <button
+                                        onClick={() => setShowArchived(!showArchived)}
+                                        className="btn btn-secondary"
+                                    >
+                                        {showArchived ? '📂 Active' : '🗃️ Archives'}
+                                    </button>
+                                    <button onClick={selectAll} className="btn btn-secondary">
+                                        {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
+                                    </button>
+                                    {!showArchived ? (
+                                        <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
+                                            🗃️ Archive ({selectedEntries.size})
+                                        </button>
+                                    ) : (
+                                        <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                            🔄 Restore ({selectedEntries.size})
+                                        </button>
+                                    )}
+                                    <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
+                                        🗑️ Delete ({selectedEntries.size})
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="card">
+                                <div className="scrollable">
+                                    {filteredEntries.length === 0 ? (
+                                        <div className="text-center" style={{ padding: '40px' }}>
+                                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                                            <div style={{ color: '#a0aec0' }}>No entries found</div>
+                                        </div>
+                                    ) : (
+                                        filteredEntries.map(entry => (
+                                            <div
+                                                key={entry.id}
+                                                className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''}`}
+                                                onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
+                                            >
+                                                {editingEntry === entry.id ? (
+                                                    <div>
+                                                        <div className="grid grid-2 gap-4 mb-4">
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
+                                                                <input
+                                                                    type="date"
+                                                                    value={editForm.date}
+                                                                    onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                                                    className="input"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
+                                                                <select
+                                                                    value={editForm.severity}
+                                                                    onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
+                                                                    className="input"
+                                                                >
+                                                                    <option value="low">🟢 Low</option>
+                                                                    <option value="medium">🟡 Medium</option>
+                                                                    <option value="high">🔴 High</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editForm.title}
+                                                                onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
+                                                            <textarea
+                                                                value={editForm.description}
+                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                                                className="input"
+                                                                rows="3"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-2 gap-4 mb-4">
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
+                                                                <select
+                                                                    value={editForm.category}
+                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                                                                    className="input"
+                                                                >
+                                                                    <option value="Financial">Financial</option>
+                                                                    <option value="Civil Liberties">Civil Liberties</option>
+                                                                    <option value="Platform Manipulation">Platform Manipulation</option>
+                                                                    <option value="Government Oversight">Government Oversight</option>
+                                                                    <option value="Election Integrity">Election Integrity</option>
+                                                                    <option value="Corporate Ethics">Corporate Ethics</option>
+                                                                    <option value="Legal Proceedings">Legal Proceedings</option>
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
+                                                                <input
+                                                                    type="url"
+                                                                    value={editForm.source_url}
+                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
+                                                                    className="input"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={editForm.verified}
+                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
+                                                                />
+                                                                <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-2">
+                                                            <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
+                                                                💾 Save
+                                                            </button>
+                                                            <button onClick={cancelEdit} className="btn btn-secondary">
+                                                                ❌ Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex justify-between">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {entry.date}</span>
+                                                                <span className={`badge badge-${entry.severity}`}>
+                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
+                                                                     entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
+                                                                </span>
+                                                                {entry.archived && <span className="badge badge-pending">🗃️ Archived</span>}
+                                                                <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                            </div>
+                                                            <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
+                                                            <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
+                                                            <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
+                                                                <span>📁 {entry.category}</span>
+                                                                {entry.verified && <span style={{ color: '#48bb78' }}>✅ Verified</span>}
+                                                                {entry.manual_submission && <span style={{ color: '#ed8936' }}>👤 Manual</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
+                                                                className="btn btn-primary"
+                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedEntries.has(entry.id)}
+                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
+                                                                style={{ marginTop: '4px' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Processing Queue Tab Content */}
+                    {activeTab === 'queue' && (
+                        <div className="card">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>⚡ Processing Queue (GitHub API Only)</h2>
+                                <button onClick={clearProcessingQueue} disabled={processingQueue.length === 0} className="btn btn-secondary">
+                                    🧹 Clear Queue
+                                </button>
+                            </div>
+
+                            <div style={{ background: 'rgba(49, 130, 206, 0.1)', padding: '16px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #3182ce' }}>
+                                <h3 style={{ margin: '0 0 8px', color: '#60a5fa', fontSize: '14px' }}>📝 How This Works</h3>
+                                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#bee3f8' }}>
+                                    <li>Articles submitted directly trigger GitHub Actions workflow</li>
+                                    <li>No queue files stored - immediate processing via API dispatch</li>
+                                    <li>Processing status tracked in browser session only</li>
+                                    <li>Check "Entries" tab after ~60 seconds to see processed articles</li>
+                                </ul>
+                            </div>
+
+                            {/* Current Processing Items */}
+                            {processingQueue.length > 0 ? (
+                                <div>
+                                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#ed8936' }}>⏳ Currently Processing</h3>
+                                    <div className="space-y-2">
+                                        {processingQueue.map(item => (
+                                            <div key={item.id} className="entry">
+                                                <div className="flex justify-between items-start">
+                                                    <div style={{ flex: 1 }}>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="badge badge-pending">⚡ Processing</span>
+                                                            <span className="text-sm" style={{ color: '#a0aec0' }}>
+                                                                📅 {new Date(item.submitted_at).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', wordBreak: 'break-all' }}>
+                                                            🔗 {item.url}
+                                                        </p>
+                                                        <p style={{ margin: 0, fontSize: '12px', color: '#a0aec0' }}>
+                                                            ID: {item.id} • Submitted by: {item.submitted_by}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div style={{ fontSize: '20px', animation: 'spin 1s linear infinite' }}>🔄</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(237, 137, 54, 0.1)', borderRadius: '6px', border: '1px solid #ed8936' }}>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#feebc8' }}>
+                                            ℹ️ Processing typically takes 30-90 seconds. Items will automatically disappear when complete.
+                                            Check the "Entries" tab to see processed articles.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center" style={{ padding: '40px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚡</div>
+                                    <div style={{ color: '#a0aec0' }}>No articles currently processing</div>
+                                    <p style={{ fontSize: '14px', color: '#718096', marginTop: '8px' }}>
+                                        Submit articles using the form above for immediate GitHub Actions processing
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Processing Statistics */}
+                            <div style={{ marginTop: '24px', padding: '16px', background: '#2d3748', borderRadius: '8px', border: '1px solid #4a5568' }}>
+                                <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#a0aec0' }}>📊 Session Statistics</h4>
+                                <div className="grid grid-2 gap-4">
+                                    <div>
+                                        <span style={{ fontSize: '12px', color: '#718096' }}>Articles Submitted This Session:</span>
+                                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#60a5fa' }}>
+                                            {processingQueue.length}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: '12px', color: '#718096' }}>Processing Method:</span>
+                                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#48bb78' }}>
+                                            GitHub API Direct
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
         }
-    } catch (error) {
-        console.warn('Could not load failed submissions:', error.message);
-        setFailedSubmissions([]);
-    }
-}, [token]);
+
+        ReactDOM.render(<AdminApp />, document.getElementById('root'));
+    </script>
+    
+    <style>
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</body>
+</html>
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editForm.actor}
+                                                                onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
