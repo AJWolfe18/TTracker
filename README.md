@@ -105,3 +105,17 @@ Last Updated: Daily via automated process
 Data Coverage: Ongoing since project start
 Repository: Automatically maintained
 
+### January 27, 2025 - Queue Management MVP
+- **Submission Queue Interface**: View pending and failed article submissions
+- **Queue Operations**: Delete individual items or clear entire queues
+- **Visual Status Tracking**: Color-coded badges and error message display
+- **Tabbed Admin Interface**: Switch between entry management and queue management
+- **Real-time Queue Refresh**: Manual refresh to check processing status
+- **Integration Ready**: Uses existing GitHub API and authentication patterns
+
+### Queue Management Features
+- View articles waiting for processing (pending submissions)
+- See failed submissions with specific error messages
+- Remove problematic articles from processing queue
+- Clear entire queue when needed
+- Statistics display showing queue health
