@@ -82,6 +82,11 @@
             background: rgba(71, 85, 105, 1); 
             transform: translateY(-1px);
         }
+        .btn-warning { 
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+            color: white; 
+        }
+        .btn-warning:hover:not(:disabled) { transform: translateY(-1px); }
         
         .flex { display: flex; }
         .items-center { align-items: center; }
@@ -127,6 +132,21 @@
             animation: newEntryGlow 3s ease-out;
         }
         
+        .queue-item {
+            background: rgba(30, 41, 59, 0.6); 
+            border: 1px solid rgba(71, 85, 105, 0.3); 
+            border-radius: 12px; 
+            padding: 16px; 
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+        .queue-item:hover { 
+            background: rgba(30, 41, 59, 0.8); 
+            transform: translateY(-1px);
+        }
+        .queue-item.pending { border-left: 4px solid #f59e0b; }
+        .queue-item.failed { border-left: 4px solid #ef4444; }
+        
         @keyframes newEntryGlow {
             0% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
             100% { box-shadow: 0 0 0 rgba(16, 185, 129, 0); }
@@ -159,6 +179,16 @@
             background: rgba(139, 92, 246, 0.2); 
             color: #c4b5fd; 
             border: 1px solid rgba(139, 92, 246, 0.3); 
+        }
+        .badge-pending { 
+            background: rgba(245, 158, 11, 0.2); 
+            color: #fcd34d; 
+            border: 1px solid rgba(245, 158, 11, 0.3); 
+        }
+        .badge-failed { 
+            background: rgba(239, 68, 68, 0.2); 
+            color: #fca5a5; 
+            border: 1px solid rgba(239, 68, 68, 0.3); 
         }
         
         .logo { 
@@ -208,6 +238,32 @@
         .scrollable::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); border-radius: 3px; }
         .scrollable::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.7); }
         
+        .queue-scrollable {
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+        }
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .tab:hover {
+            background: rgba(71, 85, 105, 0.2);
+        }
+        .tab.active {
+            border-bottom-color: #3b82f6;
+            color: #60a5fa;
+        }
+        
         @media (max-width: 768px) {
             .grid-2 { grid-template-columns: 1fr; }
             .flex-mobile { flex-direction: column; }
@@ -253,6 +309,12 @@
             const [submissionUrl, setSubmissionUrl] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [newEntryId, setNewEntryId] = useState(null);
+            
+            // === NEW QUEUE MANAGEMENT STATE ===
+            const [activeTab, setActiveTab] = useState('entries');
+            const [pendingSubmissions, setPendingSubmissions] = useState([]);
+            const [failedSubmissions, setFailedSubmissions] = useState([]);
+            const [queueLoading, setQueueLoading] = useState(false);
 
             // === UTILITY FUNCTIONS ===
             const generateId = useCallback(() => {
@@ -285,6 +347,7 @@
                 setIsAuthenticated(true);
                 sessionStorage.setItem('admin_token', token);
                 loadEntries();
+                loadQueueData();
                 showMessage('✅ Login successful', 'success');
             }, [token]);
 
@@ -294,6 +357,8 @@
                 sessionStorage.removeItem('admin_token');
                 setEntries([]);
                 setSelectedEntries(new Set());
+                setPendingSubmissions([]);
+                setFailedSubmissions([]);
                 setMessage(null);
             }, []);
 
@@ -311,6 +376,44 @@
                     setEntries([]);
                 } finally {
                     setIsLoading(false);
+                }
+            }, [showMessage]);
+
+            // === NEW QUEUE MANAGEMENT FUNCTIONS ===
+            const loadQueueData = useCallback(async () => {
+                try {
+                    setQueueLoading(true);
+                    
+                    // Load pending submissions
+                    try {
+                        const pendingResponse = await fetch('/pending-submissions.json');
+                        if (pendingResponse.ok) {
+                            const pendingData = await pendingResponse.json();
+                            setPendingSubmissions(Array.isArray(pendingData) ? pendingData : []);
+                        } else {
+                            setPendingSubmissions([]);
+                        }
+                    } catch {
+                        setPendingSubmissions([]);
+                    }
+                    
+                    // Load failed submissions
+                    try {
+                        const failedResponse = await fetch('/failed-submissions.json');
+                        if (failedResponse.ok) {
+                            const failedData = await failedResponse.json();
+                            setFailedSubmissions(Array.isArray(failedData) ? failedData : []);
+                        } else {
+                            setFailedSubmissions([]);
+                        }
+                    } catch {
+                        setFailedSubmissions([]);
+                    }
+                    
+                } catch (error) {
+                    showMessage(`❌ Error loading queue: ${error.message}`, 'error');
+                } finally {
+                    setQueueLoading(false);
                 }
             }, [showMessage]);
 
@@ -383,6 +486,69 @@
                 }
             }, [token, encodeBase64]);
 
+            // === QUEUE MANAGEMENT OPERATIONS ===
+            const deleteSubmission = useCallback(async (submissionId, type) => {
+                try {
+                    setQueueLoading(true);
+                    
+                    if (type === 'pending') {
+                        const updated = pendingSubmissions.filter(sub => sub.id !== submissionId);
+                        await updateGitHubFile(updated, 'pending-submissions.json');
+                        setPendingSubmissions(updated);
+                    } else {
+                        const updated = failedSubmissions.filter(sub => sub.id !== submissionId);
+                        await updateGitHubFile(updated, 'failed-submissions.json');
+                        setFailedSubmissions(updated);
+                    }
+                    
+                    showMessage(`🗑️ Removed submission from ${type} queue`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
+                } finally {
+                    setQueueLoading(false);
+                }
+            }, [pendingSubmissions, failedSubmissions, updateGitHubFile, showMessage]);
+
+            const clearQueue = useCallback(async (type) => {
+                if (!confirm(`Clear all ${type} submissions? This cannot be undone.`)) return;
+                
+                try {
+                    setQueueLoading(true);
+                    const fileName = type === 'pending' ? 'pending-submissions.json' : 'failed-submissions.json';
+                    
+                    await updateGitHubFile([], fileName);
+                    
+                    if (type === 'pending') {
+                        setPendingSubmissions([]);
+                    } else {
+                        setFailedSubmissions([]);
+                    }
+                    
+                    showMessage(`🧹 Cleared all ${type} submissions`, 'success');
+                } catch (error) {
+                    showMessage(`❌ Clear failed: ${error.message}`, 'error');
+                } finally {
+                    setQueueLoading(false);
+                }
+            }, [updateGitHubFile, showMessage]);
+
+            const formatDate = useCallback((dateString) => {
+                try {
+                    return new Date(dateString).toLocaleString();
+                } catch {
+                    return 'Invalid Date';
+                }
+            }, []);
+
+            const formatUrl = useCallback((url) => {
+                try {
+                    const urlObj = new URL(url);
+                    return urlObj.hostname + urlObj.pathname;
+                } catch {
+                    return url;
+                }
+            }, []);
+
             // === MANUAL ARTICLE SUBMISSION ===
             const submitManualArticle = useCallback(async () => {
                 if (!submissionUrl.trim()) return;
@@ -417,19 +583,10 @@
                         id: generateId()
                     };
                     
-                    // Load existing pending submissions
-                    let pendingSubmissions = [];
-                    try {
-                        const response = await fetch('/pending-submissions.json');
-                        if (response.ok) {
-                            pendingSubmissions = await response.json();
-                        }
-                    } catch (error) {
-                        console.log('No existing pending submissions found');
-                    }
-                    
-                    pendingSubmissions.push(submission);
-                    await updateGitHubFile(pendingSubmissions, 'pending-submissions.json');
+                    // Add to pending submissions
+                    const updatedPending = [...pendingSubmissions, submission];
+                    await updateGitHubFile(updatedPending, 'pending-submissions.json');
+                    setPendingSubmissions(updatedPending);
                     
                     // Trigger workflow
                     await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
@@ -441,7 +598,7 @@
                         body: JSON.stringify({
                             event_type: 'process-manual-submissions',
                             client_payload: {
-                                submission_count: pendingSubmissions.length,
+                                submission_count: updatedPending.length,
                                 latest_url: submissionUrl
                             }
                         })
@@ -450,16 +607,20 @@
                     setSubmissionUrl('');
                     showMessage('✅ Article submitted for processing!', 'success');
                     
-                    setTimeout(() => loadEntries(), 30000);
+                    // Switch to queue tab to see the submission
+                    setActiveTab('queue');
+                    
+                    // Refresh queue after 30 seconds
+                    setTimeout(() => loadQueueData(), 30000);
                     
                 } catch (error) {
                     showMessage(`❌ Submission failed: ${error.message}`, 'error');
                 } finally {
                     setIsSubmitting(false);
                 }
-            }, [submissionUrl, entries, generateId, updateGitHubFile, token, loadEntries, showMessage]);
+            }, [submissionUrl, entries, generateId, pendingSubmissions, updateGitHubFile, token, showMessage, loadQueueData]);
 
-            // === ENTRY MANAGEMENT ===
+            // === ENTRY MANAGEMENT (existing functions - shortened for space) ===
             const archiveSelected = useCallback(async () => {
                 if (selectedEntries.size === 0) return;
                 if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
@@ -523,7 +684,7 @@
                 }
             }, [selectedEntries, entries, updateGitHubFile, showMessage]);
 
-            // === EDITING ===
+            // === EDITING (shortened) ===
             const startEdit = useCallback((entry) => {
                 setEditingEntry(entry.id);
                 setEditForm({
@@ -692,227 +853,403 @@
                                 {isSubmitting ? '🔄 Processing...' : '📰 Submit Article'}
                             </button>
                         </div>
-                        
-                        <div className="flex gap-4 mb-4 flex-mobile">
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="🔍 Search entries..."
-                                className="input"
-                                style={{ flex: 1 }}
-                            />
-                            <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
-                                {isLoading ? '🔄' : '📊'} Refresh
-                            </button>
-                        </div>
-                        
-                        <div className="flex gap-2 mb-4 flex-mobile">
-                            <span className="text-sm" style={{ color: '#94a3b8' }}>
-                                📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
-                            </span>
-                            <button
-                                onClick={() => setShowArchived(!showArchived)}
-                                className="btn btn-secondary"
-                            >
-                                {showArchived ? '📂 Active' : '🗃️ Archives'}
-                            </button>
-                            <button onClick={selectAll} className="btn btn-secondary">
-                                {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
-                            </button>
-                            {!showArchived ? (
-                                <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
-                                    🗃️ Archive ({selectedEntries.size})
-                                </button>
-                            ) : (
-                                <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                    🔄 Restore ({selectedEntries.size})
-                                </button>
-                            )}
-                            <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
-                                🗑️ Delete ({selectedEntries.size})
-                            </button>
-                        </div>
                     </div>
 
-                    {/* Messages */}
-                    {message && (
-                        <div className={`message message-${message.type}`}>
-                            {message.text}
-                        </div>
-                    )}
-
-                    {/* Entries */}
+                    {/* Tabs */}
                     <div className="card">
-                        <div className="scrollable">
-                            {filteredEntries.length === 0 ? (
-                                <div className="text-center" style={{ padding: '40px' }}>
-                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-                                    <div style={{ color: '#94a3b8' }}>No entries found</div>
+                        <div className="tabs">
+                            <div 
+                                className={`tab ${activeTab === 'entries' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('entries')}
+                            >
+                                📋 Entries ({filteredEntries.length})
+                            </div>
+                            <div 
+                                className={`tab ${activeTab === 'queue' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveTab('queue');
+                                    loadQueueData();
+                                }}
+                            >
+                                ⏳ Submission Queue ({pendingSubmissions.length + failedSubmissions.length})
+                            </div>
+                        </div>
+
+                        {/* Messages */}
+                        {message && (
+                            <div className={`message message-${message.type}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        {/* Tab Content */}
+                        {activeTab === 'entries' ? (
+                            <>
+                                {/* Entry Management Controls */}
+                                <div className="flex gap-4 mb-4 flex-mobile">
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="🔍 Search entries..."
+                                        className="input"
+                                        style={{ flex: 1 }}
+                                    />
+                                    <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
+                                        {isLoading ? '🔄' : '📊'} Refresh
+                                    </button>
                                 </div>
-                            ) : (
-                                filteredEntries.map(entry => (
-                                    <div
-                                        key={entry.id}
-                                        className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${newEntryId === entry.id ? 'new-entry' : ''}`}
-                                        onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
+                                
+                                <div className="flex gap-2 mb-4 flex-mobile">
+                                    <span className="text-sm" style={{ color: '#94a3b8' }}>
+                                        📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
+                                    </span>
+                                    <button
+                                        onClick={() => setShowArchived(!showArchived)}
+                                        className="btn btn-secondary"
                                     >
-                                        {editingEntry === entry.id ? (
-                                            <div>
-                                                <div className="grid grid-2 gap-4 mb-4">
+                                        {showArchived ? '📂 Active' : '🗃️ Archives'}
+                                    </button>
+                                    <button onClick={selectAll} className="btn btn-secondary">
+                                        {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
+                                    </button>
+                                    {!showArchived ? (
+                                        <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
+                                            🗃️ Archive ({selectedEntries.size})
+                                        </button>
+                                    ) : (
+                                        <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                            🔄 Restore ({selectedEntries.size})
+                                        </button>
+                                    )}
+                                    <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
+                                        🗑️ Delete ({selectedEntries.size})
+                                    </button>
+                                </div>
+
+                                {/* Entries List */}
+                                <div className="scrollable">
+                                    {filteredEntries.length === 0 ? (
+                                        <div className="text-center" style={{ padding: '40px' }}>
+                                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                                            <div style={{ color: '#94a3b8' }}>No entries found</div>
+                                        </div>
+                                    ) : (
+                                        filteredEntries.map(entry => (
+                                            <div
+                                                key={entry.id}
+                                                className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${newEntryId === entry.id ? 'new-entry' : ''}`}
+                                                onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
+                                            >
+                                                {editingEntry === entry.id ? (
                                                     <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Date</label>
-                                                        <input
-                                                            type="date"
-                                                            value={editForm.date}
-                                                            onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                                                            className="input"
-                                                        />
+                                                        <div className="grid grid-2 gap-4 mb-4">
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Date</label>
+                                                                <input
+                                                                    type="date"
+                                                                    value={editForm.date}
+                                                                    onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                                                    className="input"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Severity</label>
+                                                                <select
+                                                                    value={editForm.severity}
+                                                                    onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
+                                                                    className="input"
+                                                                >
+                                                                    <option value="low">🟢 Low</option>
+                                                                    <option value="medium">🟡 Medium</option>
+                                                                    <option value="high">🔴 High</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Actor</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editForm.actor}
+                                                                onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Title</label>
+                                                            <input
+                                                                type="text"
+                                                                value={editForm.title}
+                                                                onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Description</label>
+                                                            <textarea
+                                                                value={editForm.description}
+                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                                                className="input"
+                                                                rows="3"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-2 gap-4 mb-4">
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Category</label>
+                                                                <select
+                                                                    value={editForm.category}
+                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                                                                    className="input"
+                                                                >
+                                                                    <option value="Financial">Financial</option>
+                                                                    <option value="Civil Liberties">Civil Liberties</option>
+                                                                    <option value="Platform Manipulation">Platform Manipulation</option>
+                                                                    <option value="Government Oversight">Government Oversight</option>
+                                                                    <option value="Election Integrity">Election Integrity</option>
+                                                                    <option value="Corporate Ethics">Corporate Ethics</option>
+                                                                    <option value="Legal Proceedings">Legal Proceedings</option>
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Source URL</label>
+                                                                <input
+                                                                    type="url"
+                                                                    value={editForm.source_url}
+                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
+                                                                    className="input"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={editForm.verified}
+                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
+                                                                />
+                                                                <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-2">
+                                                            <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
+                                                                💾 Save
+                                                            </button>
+                                                            <button onClick={cancelEdit} className="btn btn-secondary">
+                                                                ❌ Cancel
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Severity</label>
-                                                        <select
-                                                            value={editForm.severity}
-                                                            onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
-                                                            className="input"
-                                                        >
-                                                            <option value="low">🟢 Low</option>
-                                                            <option value="medium">🟡 Medium</option>
-                                                            <option value="high">🔴 High</option>
-                                                        </select>
+                                                ) : (
+                                                    <div className="flex justify-between">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-sm" style={{ color: '#94a3b8' }}>📅 {entry.date}</span>
+                                                                <span className={`badge badge-${entry.severity}`}>
+                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
+                                                                     entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
+                                                                </span>
+                                                                {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
+                                                                <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                                {entry.manual_submission && <span className="text-xs" style={{ color: '#10b981' }}>📝 Manual</span>}
+                                                            </div>
+                                                            <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
+                                                            <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
+                                                            <div className="flex items-center gap-4 text-xs" style={{ color: '#94a3b8' }}>
+                                                                <span>📁 {entry.category}</span>
+                                                                {entry.verified && <span style={{ color: '#10b981' }}>✅ Verified</span>}
+                                                                {entry.source_url && (
+                                                                    <a 
+                                                                        href={entry.source_url} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                        style={{ color: '#60a5fa', textDecoration: 'none' }}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        🔗 Source
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
+                                                                className="btn btn-primary"
+                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedEntries.has(entry.id)}
+                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
+                                                                style={{ marginTop: '4px' }}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Actor</label>
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.actor}
-                                                        onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Title</label>
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.title}
-                                                        onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Description</label>
-                                                    <textarea
-                                                        value={editForm.description}
-                                                        onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                                                        className="input"
-                                                        rows="3"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="grid grid-2 gap-4 mb-4">
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Category</label>
-                                                        <select
-                                                            value={editForm.category}
-                                                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                                                            className="input"
-                                                        >
-                                                            <option value="Financial">Financial</option>
-                                                            <option value="Civil Liberties">Civil Liberties</option>
-                                                            <option value="Platform Manipulation">Platform Manipulation</option>
-                                                            <option value="Government Oversight">Government Oversight</option>
-                                                            <option value="Election Integrity">Election Integrity</option>
-                                                            <option value="Corporate Ethics">Corporate Ethics</option>
-                                                            <option value="Legal Proceedings">Legal Proceedings</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#94a3b8' }}>Source URL</label>
-                                                        <input
-                                                            type="url"
-                                                            value={editForm.source_url}
-                                                            onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
-                                                            className="input"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editForm.verified}
-                                                            onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
-                                                        />
-                                                        <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
-                                                    </label>
-                                                </div>
-                                                
-                                                <div className="flex gap-2">
-                                                    <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
-                                                        💾 Save
-                                                    </button>
-                                                    <button onClick={cancelEdit} className="btn btn-secondary">
-                                                        ❌ Cancel
-                                                    </button>
-                                                </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="flex justify-between">
-                                                <div style={{ flex: 1 }}>
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <span className="text-sm" style={{ color: '#94a3b8' }}>📅 {entry.date}</span>
-                                                        <span className={`badge badge-${entry.severity}`}>
-                                                            {entry.severity === 'high' ? '🚨 HIGH' :
-                                                             entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
-                                                        </span>
-                                                        {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
-                                                        <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
-                                                        {entry.manual_submission && <span className="text-xs" style={{ color: '#10b981' }}>📝 Manual</span>}
-                                                    </div>
-                                                    <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
-                                                    <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
-                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#94a3b8' }}>
-                                                        <span>📁 {entry.category}</span>
-                                                        {entry.verified && <span style={{ color: '#10b981' }}>✅ Verified</span>}
-                                                        {entry.source_url && (
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            // Queue Management Tab
+                            <>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
+                                        📦 Submission Queue Manager
+                                    </h2>
+                                    <button 
+                                        onClick={loadQueueData} 
+                                        disabled={queueLoading} 
+                                        className="btn btn-primary"
+                                    >
+                                        {queueLoading ? '🔄' : '📊'} Refresh Queue
+                                    </button>
+                                </div>
+
+                                {/* Queue Statistics */}
+                                <div className="grid grid-2 gap-4 mb-4">
+                                    <div className="card" style={{ margin: 0, padding: '16px' }}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 style={{ margin: 0, fontSize: '14px', color: '#fcd34d' }}>⏳ Pending</h3>
+                                                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 'bold' }}>{pendingSubmissions.length}</p>
+                                                <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Awaiting processing</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => clearQueue('pending')} 
+                                                disabled={pendingSubmissions.length === 0 || queueLoading}
+                                                className="btn btn-warning"
+                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                            >
+                                                🧹 Clear All
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="card" style={{ margin: 0, padding: '16px' }}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 style={{ margin: 0, fontSize: '14px', color: '#fca5a5' }}>❌ Failed</h3>
+                                                <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 'bold' }}>{failedSubmissions.length}</p>
+                                                <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>Processing errors</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => clearQueue('failed')} 
+                                                disabled={failedSubmissions.length === 0 || queueLoading}
+                                                className="btn btn-danger"
+                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                            >
+                                                🧹 Clear All
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Pending Submissions */}
+                                {pendingSubmissions.length > 0 && (
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#fcd34d' }}>⏳ Pending Submissions</h3>
+                                        <div className="queue-scrollable">
+                                            {pendingSubmissions.map(submission => (
+                                                <div key={submission.id} className="queue-item pending">
+                                                    <div className="flex justify-between items-start">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="badge badge-pending">PENDING</span>
+                                                                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                                                                    Submitted: {formatDate(submission.submitted_at)}
+                                                                </span>
+                                                            </div>
+                                                            <p style={{ margin: '0 0 8px', fontWeight: 500 }}>{formatUrl(submission.url)}</p>
                                                             <a 
-                                                                href={entry.source_url} 
+                                                                href={submission.url} 
                                                                 target="_blank" 
                                                                 rel="noopener noreferrer"
+                                                                className="text-xs" 
                                                                 style={{ color: '#60a5fa', textDecoration: 'none' }}
-                                                                onClick={(e) => e.stopPropagation()}
                                                             >
-                                                                🔗 Source
+                                                                🔗 View Article
                                                             </a>
-                                                        )}
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => deleteSubmission(submission.id, 'pending')}
+                                                            disabled={queueLoading}
+                                                            className="btn btn-danger"
+                                                            style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                        >
+                                                            🗑️ Remove
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
-                                                        className="btn btn-primary"
-                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                    >
-                                                        ✏️ Edit
-                                                    </button>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedEntries.has(entry.id)}
-                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
-                                                        style={{ marginTop: '4px' }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
+                                            ))}
+                                        </div>
                                     </div>
-                                ))
-                            )}
-                        </div>
+                                )}
+
+                                {/* Failed Submissions */}
+                                {failedSubmissions.length > 0 && (
+                                    <div>
+                                        <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#fca5a5' }}>❌ Failed Submissions</h3>
+                                        <div className="queue-scrollable">
+                                            {failedSubmissions.map(submission => (
+                                                <div key={submission.id} className="queue-item failed">
+                                                    <div className="flex justify-between items-start">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="badge badge-failed">FAILED</span>
+                                                                <span className="text-xs" style={{ color: '#94a3b8' }}>
+                                                                    Failed: {formatDate(submission.failed_at)}
+                                                                </span>
+                                                            </div>
+                                                            <p style={{ margin: '0 0 8px', fontWeight: 500 }}>{formatUrl(submission.url)}</p>
+                                                            {submission.error && (
+                                                                <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#fca5a5' }}>
+                                                                    Error: {submission.error}
+                                                                </p>
+                                                            )}
+                                                            <a 
+                                                                href={submission.url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs" 
+                                                                style={{ color: '#60a5fa', textDecoration: 'none' }}
+                                                            >
+                                                                🔗 View Article
+                                                            </a>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => deleteSubmission(submission.id, 'failed')}
+                                                            disabled={queueLoading}
+                                                            className="btn btn-danger"
+                                                            style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                        >
+                                                            🗑️ Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Empty State */}
+                                {pendingSubmissions.length === 0 && failedSubmissions.length === 0 && (
+                                    <div className="text-center" style={{ padding: '40px' }}>
+                                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+                                        <div style={{ color: '#94a3b8', fontSize: '18px', marginBottom: '8px' }}>Queue is Empty</div>
+                                        <div style={{ color: '#6b7280', fontSize: '14px' }}>No pending or failed submissions</div>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
             );
