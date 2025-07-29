@@ -638,6 +638,200 @@
                                                                     className="input"
                                                                 />
                                                             </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
+                                                            <textarea
+                                                                value={editForm.description}
+                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                                                className="input"
+                                                                rows="3"
+                                                            />
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-2 gap-4 mb-4">
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
+                                                                <select
+                                                                    value={editForm.category}
+                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                                                                    className="input"
+                                                                >
+                                                                    <option value="Financial">Financial</option>
+                                                                    <option value="Civil Liberties">Civil Liberties</option>
+                                                                    <option value="Platform Manipulation">Platform Manipulation</option>
+                                                                    <option value="Government Oversight">Government Oversight</option>
+                                                                    <option value="Election Integrity">Election Integrity</option>
+                                                                    <option value="Corporate Ethics">Corporate Ethics</option>
+                                                                    <option value="Legal Proceedings">Legal Proceedings</option>
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
+                                                                <input
+                                                                    type="url"
+                                                                    value={editForm.source_url}
+                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
+                                                                    className="input"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="mb-4">
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={editForm.verified}
+                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
+                                                                />
+                                                                <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-2">
+                                                            <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
+                                                                💾 Save
+                                                            </button>
+                                                            <button onClick={cancelEdit} className="btn btn-secondary">
+                                                                ❌ Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex justify-between">
+                                                        <div style={{ flex: 1 }}>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {entry.date}</span>
+                                                                <span className={`badge badge-${entry.severity}`}>
+                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
+                                                                     entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
+                                                                </span>
+                                                                {entry.archived && <span className="badge badge-pending">🗃️ Archived</span>}
+                                                                <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                            </div>
+                                                            <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
+                                                            <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
+                                                            <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
+                                                                <span>📁 {entry.category}</span>
+                                                                {entry.verified && <span style={{ color: '#48bb78' }}>✅ Verified</span>}
+                                                                {entry.manual_submission && <span style={{ color: '#ed8936' }}>👤 Manual</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
+                                                                className="btn btn-primary"
+                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedEntries.has(entry.id)}
+                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
+                                                                style={{ marginTop: '4px' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Processing Queue Tab Content */}
+                    {activeTab === 'queue' && (
+                        <div className="card">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>⚡ Processing Queue (GitHub API Only)</h2>
+                                <button onClick={clearProcessingQueue} disabled={processingQueue.length === 0} className="btn btn-secondary">
+                                    🧹 Clear Queue
+                                </button>
+                            </div>
+
+                            <div style={{ background: 'rgba(49, 130, 206, 0.1)', padding: '16px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #3182ce' }}>
+                                <h3 style={{ margin: '0 0 8px', color: '#60a5fa', fontSize: '14px' }}>📝 How This Works</h3>
+                                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#bee3f8' }}>
+                                    <li>Articles submitted directly trigger GitHub Actions workflow</li>
+                                    <li>No queue files stored - immediate processing via API dispatch</li>
+                                    <li>Processing status tracked in browser session only</li>
+                                    <li>Check "Entries" tab after ~60 seconds to see processed articles</li>
+                                </ul>
+                            </div>
+
+                            {/* Current Processing Items */}
+                            {processingQueue.length > 0 ? (
+                                <div>
+                                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#ed8936' }}>⏳ Currently Processing</h3>
+                                    <div className="space-y-2">
+                                        {processingQueue.map(item => (
+                                            <div key={item.id} className="entry">
+                                                <div className="flex justify-between items-start">
+                                                    <div style={{ flex: 1 }}>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className="badge badge-pending">⚡ Processing</span>
+                                                            <span className="text-sm" style={{ color: '#a0aec0' }}>
+                                                                📅 {new Date(item.submitted_at).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', wordBreak: 'break-all' }}>
+                                                            🔗 {item.url}
+                                                        </p>
+                                                        <p style={{ margin: 0, fontSize: '12px', color: '#a0aec0' }}>
+                                                            ID: {item.id} • Submitted by: {item.submitted_by}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div style={{ fontSize: '20px', animation: 'spin 1s linear infinite' }}>🔄</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    
+                                    <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(237, 137, 54, 0.1)', borderRadius: '6px', border: '1px solid #ed8936' }}>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#feebc8' }}>
+                                            ℹ️ Processing typically takes 30-90 seconds. Items will automatically disappear when complete.
+                                            Check the "Entries" tab to see processed articles.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center" style={{ padding: '40px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚡</div>
+                                    <div style={{ color: '#a0aec0' }}>No articles currently processing</div>
+                                    <p style={{ fontSize: '14px', color: '#718096', marginTop: '8px' }}>
+                                        Submit articles using the form above for immediate GitHub Actions processing
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Processing Statistics */}
+                            <div style={{ marginTop: '24px', padding: '16px', background: '#2d3748', borderRadius: '8px', border: '1px solid #4a5568' }}>
+                                <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#a0aec0' }}>📊 Session Statistics</h4>
+                                <div className="grid grid-2 gap-4">
+                                    <div>
+                                        <span style={{ fontSize: '12px', color: '#718096' }}>Articles Submitted This Session:</span>
+                                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#60a5fa' }}>
+                                            {processingQueue.length}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: '12px', color: '#718096' }}>Processing Method:</span>
+                                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#48bb78' }}>
+                                            GitHub API Direct
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
                                                             <div>
                                                                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
                                                                 <select
