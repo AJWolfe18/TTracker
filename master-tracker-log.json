@@ -1,5 +1,20 @@
 [
   {
+    "id": "1753759354534-laz1fcxr9",
+    "date": "2025-07-29",
+    "actor": "Ghislaine Maxwell",
+    "category": "Legal Proceedings",
+    "title": "MSN",
+    "description": "Political article from www.msn.com",
+    "source_url": "https://www.msn.com/en-us/news/politics/ghislaine-maxwell-makes-pitch-to-supreme-court/ar-AA1Js7L1?ocid=hpmsn&cvid=f3e6010c24704377be9bf411d29aed39&ei=10",
+    "verified": true,
+    "severity": "medium",
+    "added_at": "2025-07-29T03:22:34.534Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-07-29T03:22:34.534Z"
+  },
+  {
     "date": "2025-07-28",
     "actor": "Department of Education",
     "category": "Budget and Operational Changes",
