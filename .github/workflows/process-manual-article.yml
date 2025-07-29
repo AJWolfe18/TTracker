@@ -157,13 +157,13 @@ jobs:
                                 role: 'user',
                                 content: `Analyze this article: Title: ${title}, Description: ${description}, URL: ${url}
 
-Return ONLY valid JSON:
-{
-  "actor": "main person/organization (e.g. 'Donald Trump', 'DOJ')",
-  "category": "Financial|Civil Liberties|Platform Manipulation|Government Oversight|Election Integrity|Corporate Ethics|Legal Proceedings",
-  "severity": "low|medium|high",
-  "verified": true|false
-}`
+                                Return ONLY valid JSON:
+                                {
+                                  "actor": "main person/organization (e.g. 'Donald Trump', 'DOJ')",
+                                  "category": "Financial|Civil Liberties|Platform Manipulation|Government Oversight|Election Integrity|Corporate Ethics|Legal Proceedings",
+                                  "severity": "low|medium|high",
+                                  "verified": true|false
+                                }`
                             }
                         ],
                         max_tokens: 300,
