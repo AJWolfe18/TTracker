@@ -1,1055 +1,292 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrumpyTracker Admin</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            font-family: system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
-            color: white;
-            min-height: 100vh;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .card { background: rgba(45, 55, 72, 0.9); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #4a5568; backdrop-filter: blur(10px); }
-        .input { width: 100%; padding: 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; color: white; font-size: 14px; box-sizing: border-box; }
-        .input:focus { outline: none; border-color: #3182ce; }
-        .btn { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; font-size: 14px; }
-        .btn-primary { background: #3182ce; color: white; }
-        .btn-primary:hover { background: #2c5aa0; }
-        .btn-danger { background: #e53e3e; color: white; }
-        .btn-danger:hover { background: #c53030; }
-        .btn-success { background: #38a169; color: white; }
-        .btn-success:hover { background: #2f855a; }
-        .btn-secondary { background: #4a5568; color: white; }
-        .btn-secondary:hover { background: #2d3748; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .flex { display: flex; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .gap-4 { gap: 16px; }
-        .gap-2 { gap: 8px; }
-        .mb-4 { margin-bottom: 16px; }
-        .mb-2 { margin-bottom: 8px; }
-        .text-center { text-align: center; }
-        .text-sm { font-size: 14px; }
-        .text-xs { font-size: 12px; }
-        .font-bold { font-weight: 700; }
-        .grid { display: grid; }
-        .grid-2 { grid-template-columns: 1fr 1fr; }
-        .entry { background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; }
-        .entry:hover { background: #374151; transform: translateY(-1px); }
-        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
-        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-pending { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
-        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
-        .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
-        .tabs { display: flex; border-bottom: 1px solid #4a5568; margin-bottom: 20px; }
-        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
-        .tab.active { border-bottom-color: #3182ce; color: #60a5fa; }
-        .tab:hover { background: rgba(255,255,255,0.1); }
-        @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            .flex-mobile { flex-direction: column; }
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+# .github/workflows/process-manual-article.yml
+name: Process Single Manual Article
+on:
+  workflow_dispatch:
+    inputs:
+      article_url:
+        description: 'Article URL to process'
+        required: true
+        type: string
+      submitted_by:
+        description: 'Who submitted this article'
+        required: false
+        default: 'admin'
+        type: string
+  repository_dispatch:
+    types: [process-manual-article]
 
-    <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+jobs:
+  process-article:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Extract article details
+      id: extract_article
+      run: |
+        # Get URL from input or dispatch event
+        if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+          ARTICLE_URL="${{ github.event.client_payload.article_url }}"
+          SUBMITTED_BY="${{ github.event.client_payload.submitted_by }}"
+        else
+          ARTICLE_URL="${{ github.event.inputs.article_url }}"
+          SUBMITTED_BY="${{ github.event.inputs.submitted_by }}"
+        fi
+        
+        echo "article_url=$ARTICLE_URL" >> $GITHUB_OUTPUT
+        echo "submitted_by=$SUBMITTED_BY" >> $GITHUB_OUTPUT
+        echo "Processing: $ARTICLE_URL"
+        
+    - name: Process single article
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ARTICLE_URL: ${{ steps.extract_article.outputs.article_url }}
+        SUBMITTED_BY: ${{ steps.extract_article.outputs.submitted_by }}
+      run: |
+        cat > process-single-article.js << 'EOF'
+        import fs from 'fs/promises';
+        import fetch from 'node-fetch';
 
-        function AdminApp() {
-            // === STATE MANAGEMENT ===
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [token, setToken] = useState('');
-            const [entries, setEntries] = useState([]);
-            const [selectedEntries, setSelectedEntries] = useState(new Set());
-            const [searchTerm, setSearchTerm] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
-            const [message, setMessage] = useState(null);
-            const [showArchived, setShowArchived] = useState(false);
-            const [editingEntry, setEditingEntry] = useState(null);
-            const [editForm, setEditForm] = useState({});
-            const [submissionUrl, setSubmissionUrl] = useState('');
-            const [isSubmitting, setIsSubmitting] = useState(false);
+        console.log('🔄 PROCESSING SINGLE MANUAL ARTICLE');
+        console.log('===================================');
+        
+        const ARTICLE_URL = process.env.ARTICLE_URL;
+        const SUBMITTED_BY = process.env.SUBMITTED_BY || 'admin';
+        
+        console.log(`📎 URL: ${ARTICLE_URL}`);
+        console.log(`👤 Submitted by: ${SUBMITTED_BY}\n`);
+
+        // Generate simple ID
+        function generateId() {
+            return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Check if source is verified
+        function isVerifiedSource(url) {
+            const verifiedDomains = [
+                'reuters.com', 'ap.org', 'apnews.com', 'wsj.com', 'nytimes.com',
+                'washingtonpost.com', 'usatoday.com', 'bbc.com', 'bbc.co.uk',
+                'cnn.com', 'foxnews.com', 'nbcnews.com', 'abcnews.go.com', 
+                'cbsnews.com', 'msnbc.com', 'npr.org', 'pbs.org', 'politico.com',
+                'thehill.com', 'axios.com', 'bloomberg.com', 'cnbc.com', 'forbes.com',
+                'propublica.org', 'courthousenews.com'
+            ];
             
-            // Queue management state
-            const [activeTab, setActiveTab] = useState('entries');
-            const [pendingSubmissions, setPendingSubmissions] = useState([]);
-            const [failedSubmissions, setFailedSubmissions] = useState([]);
-            const [queueLoading, setQueueLoading] = useState(false);
-
-            // === UTILITY FUNCTIONS ===
-            const generateId = () => {
-                return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            };
-
-            const encodeBase64 = (str) => {
-                try {
-                    return btoa(unescape(encodeURIComponent(str)));
-                } catch {
-                    return btoa(str);
-                }
-            };
-
-            const showMessage = (text, type = 'info') => {
-                setMessage({ text, type });
-                setTimeout(() => setMessage(null), 5000);
-            };
-
-            // === AUTHENTICATION ===
-            const authenticate = () => {
-                if (!token.trim()) {
-                    showMessage('Please enter your GitHub token', 'error');
-                    return;
-                }
-                if (!token.startsWith('github_pat_') && !token.startsWith('ghp_')) {
-                    showMessage('Token must start with github_pat_ or ghp_', 'error');
-                    return;
-                }
-                setIsAuthenticated(true);
-                sessionStorage.setItem('admin_token', token);
-                loadEntries();
-                loadQueueData();
-                showMessage('✅ Login successful', 'success');
-            };
-
-            const logout = () => {
-                setIsAuthenticated(false);
-                setToken('');
-                sessionStorage.removeItem('admin_token');
-                setEntries([]);
-                setSelectedEntries(new Set());
-                setPendingSubmissions([]);
-                setFailedSubmissions([]);
-                setMessage(null);
-            };
-
-            // === DATA OPERATIONS ===
-            const loadEntries = async () => {
-                try {
-                    setIsLoading(true);
-                    const response = await fetch('/master-tracker-log.json');
-                    if (!response.ok) throw new Error('Failed to load');
-                    const data = await response.json();
-                    setEntries(Array.isArray(data) ? data : []);
-                    showMessage(`📊 Loaded ${data?.length || 0} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Error: ${error.message}`, 'error');
-                    setEntries([]);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            // === QUEUE MANAGEMENT ===
-            const loadQueueData = useCallback(async () => {
-                try {
-                    setQueueLoading(true);
-                    await loadQueueFiles();
-                } catch (error) {
-                    console.warn('Queue loading failed (expected for new deployments):', error.message);
-                    setPendingSubmissions([]);
-                    setFailedSubmissions([]);
-                } finally {
-                    setQueueLoading(false);
-                }
-            }, [token]);
-
-            const loadQueueFiles = useCallback(async () => {
-                // Try public folder access first (fastest, CORS-safe)
-                try {
-                    const [pendingResp, failedResp] = await Promise.allSettled([
-                        fetch('/pending-submissions.json'),
-                        fetch('/failed-submissions.json')
-                    ]);
-                    
-                    // Process pending submissions
-                    if (pendingResp.status === 'fulfilled' && pendingResp.value.ok) {
-                        const pendingData = await pendingResp.value.json();
-                        setPendingSubmissions(Array.isArray(pendingData) ? pendingData : []);
-                    } else {
-                        // Fallback to GitHub API for pending
-                        await loadPendingViaAPI();
-                    }
-                    
-                    // Process failed submissions  
-                    if (failedResp.status === 'fulfilled' && failedResp.value.ok) {
-                        const failedData = await failedResp.value.json();
-                        setFailedSubmissions(Array.isArray(failedData) ? failedData : []);
-                    } else {
-                        // Fallback to GitHub API for failed
-                        await loadFailedViaAPI();
-                    }
-                    
-                } catch (error) {
-                    // Final fallback - try GitHub API
-                    console.log('Public file access failed, trying GitHub API...');
-                    await Promise.allSettled([
-                        loadPendingViaAPI(),
-                        loadFailedViaAPI()
-                    ]);
-                }
-            }, [token]);
-
-            const loadPendingViaAPI = useCallback(async () => {
-                try {
-                    const response = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/contents/pending-submissions.json?ref=main`, {
-                        headers: { 
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const fileData = await response.json();
-                        const content = atob(fileData.content);
-                        const data = JSON.parse(content);
-                        setPendingSubmissions(Array.isArray(data) ? data : []);
-                    } else if (response.status === 404) {
-                        setPendingSubmissions([]);
-                    } else {
-                        throw new Error(`GitHub API error: ${response.status}`);
-                    }
-                } catch (error) {
-                    console.warn('Could not load pending submissions:', error.message);
-                    setPendingSubmissions([]);
-                }
-            }, [token]);
-
-            const loadFailedViaAPI = useCallback(async () => {
-                try {
-                    const response = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/contents/failed-submissions.json?ref=main`, {
-                        headers: { 
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const fileData = await response.json();
-                        const content = atob(fileData.content);
-                        const data = JSON.parse(content);
-                        setFailedSubmissions(Array.isArray(data) ? data : []);
-                    } else if (response.status === 404) {
-                        setFailedSubmissions([]);
-                    } else {
-                        throw new Error(`GitHub API error: ${response.status}`);
-                    }
-                } catch (error) {
-                    console.warn('Could not load failed submissions:', error.message);
-                    setFailedSubmissions([]);
-                }
-            }, [token]);
-
-            const updateGitHubFile = async (newData, fileName = 'master-tracker-log.json') => {
-                const repo = 'AJWolfe18/TTracker';
-                const path = fileName;
-                
-                try {
-                    // Get current file
-                    let fileInfo = null;
-                    try {
-                        const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        if (getResponse.ok) {
-                            fileInfo = await getResponse.json();
-                        }
-                    } catch (error) {
-                        console.log(`File ${fileName} doesn't exist yet, will create new`);
-                    }
-                    
-                    // Update file
-                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: `Admin update ${fileName}`,
-                            content: encodeBase64(JSON.stringify(newData, null, 2)),
-                            sha: fileInfo?.sha
-                        })
-                    });
-                    
-                    if (!updateResponse.ok) {
-                        throw new Error(`Update failed: ${updateResponse.status}`);
-                    }
-                    
-                    // Update public file for master tracker
-                    if (fileName === 'master-tracker-log.json') {
-                        try {
-                            const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}?ref=main`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (publicGetResponse.ok) {
-                                const publicFileInfo = await publicGetResponse.json();
-                                await fetch(`https://api.github.com/repos/${repo}/contents/public/${path}`, {
-                                    method: 'PUT',
-                                    headers: {
-                                        'Authorization': `Bearer ${token}`,
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({
-                                        message: `Admin update public ${fileName}`,
-                                        content: encodeBase64(JSON.stringify(newData, null, 2)),
-                                        sha: publicFileInfo.sha
-                                    })
-                                });
-                            }
-                        } catch (publicError) {
-                            console.warn('Could not update public file:', publicError);
-                        }
-                    }
-                    
-                    return true;
-                } catch (error) {
-                    console.error('GitHub update error:', error);
-                    throw error;
-                }
-            };
-
-            // === MANUAL ARTICLE SUBMISSION ===
-            const submitManualArticle = async () => {
-                if (!submissionUrl.trim()) return;
-                
-                try {
-                    setIsSubmitting(true);
-                    
-                    // Validate URL
-                    try {
-                        new URL(submissionUrl);
-                    } catch {
-                        throw new Error('Please enter a valid URL');
-                    }
-                    
-                    // Check for duplicates
-                    const duplicates = entries.filter(entry => entry.source_url === submissionUrl);
-                    if (duplicates.length > 0) {
-                        const override = confirm(`⚠️ Duplicate found: "${duplicates[0].title}"\n\nSubmit anyway?`);
-                        if (!override) {
-                            setIsSubmitting(false);
-                            return;
-                        }
-                    }
-                    
-                    showMessage('📝 Adding to processing queue...', 'info');
-                    
-                    // Create submission
-                    const submission = {
-                        url: submissionUrl,
-                        submitted_by: 'admin',
-                        submitted_at: new Date().toISOString(),
-                        id: generateId()
-                    };
-                    
-                    // Load existing pending submissions
-                    let pendingSubmissions = [];
-                    try {
-                        const response = await fetch('/pending-submissions.json');
-                        if (response.ok) {
-                            pendingSubmissions = await response.json();
-                        }
-                    } catch (error) {
-                        console.log('No existing pending submissions found');
-                    }
-                    
-                    pendingSubmissions.push(submission);
-                    await updateGitHubFile(pendingSubmissions, 'pending-submissions.json');
-                    
-                    // Trigger workflow
-                    await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            event_type: 'process-manual-submissions',
-                            client_payload: {
-                                submission_count: pendingSubmissions.length,
-                                latest_url: submissionUrl
-                            }
-                        })
-                    });
-                    
-                    setSubmissionUrl('');
-                    setActiveTab('queue'); // Switch to queue tab
-                    await loadQueueData(); // Refresh queue
-                    showMessage('✅ Article submitted for processing!', 'success');
-                    
-                    setTimeout(() => loadEntries(), 30000);
-                    
-                } catch (error) {
-                    showMessage(`❌ Submission failed: ${error.message}`, 'error');
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-
-            // === QUEUE OPERATIONS ===
-            const deleteQueueItem = async (type, itemId) => {
-                try {
-                    setQueueLoading(true);
-                    
-                    let items, fileName;
-                    if (type === 'pending') {
-                        items = pendingSubmissions.filter(item => item.id !== itemId);
-                        fileName = 'pending-submissions.json';
-                        setPendingSubmissions(items);
-                    } else {
-                        items = failedSubmissions.filter(item => item.id !== itemId);
-                        fileName = 'failed-submissions.json';
-                        setFailedSubmissions(items);
-                    }
-                    
-                    await updateGitHubFile(items, fileName);
-                    showMessage(`🗑️ Removed ${type} submission`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
-                } finally {
-                    setQueueLoading(false);
-                }
-            };
-
-            const clearQueue = async (type) => {
-                if (!confirm(`Clear all ${type} submissions?`)) return;
-                
-                try {
-                    setQueueLoading(true);
-                    const fileName = `${type}-submissions.json`;
-                    await updateGitHubFile([], fileName);
-                    
-                    if (type === 'pending') {
-                        setPendingSubmissions([]);
-                    } else {
-                        setFailedSubmissions([]);
-                    }
-                    
-                    showMessage(`🧹 Cleared all ${type} submissions`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Clear failed: ${error.message}`, 'error');
-                } finally {
-                    setQueueLoading(false);
-                }
-            };
-
-            // === ENTRY MANAGEMENT ===
-            const archiveSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => 
-                        selectedEntries.has(entry.id) 
-                            ? { ...entry, archived: true, archived_at: new Date().toISOString() }
-                            : entry
-                    );
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗃️ Archived ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Archive failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const restoreSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => {
-                        if (selectedEntries.has(entry.id)) {
-                            const { archived, archived_at, ...restored } = entry;
-                            return restored;
-                        }
-                        return entry;
-                    });
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🔄 Restored ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Restore failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const deleteSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                if (!confirm(`PERMANENTLY delete ${selectedEntries.size} entries?`)) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.filter(entry => !selectedEntries.has(entry.id));
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗑️ Deleted ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            // === EDITING ===
-            const startEdit = (entry) => {
-                setEditingEntry(entry.id);
-                setEditForm({
-                    title: entry.title || '',
-                    description: entry.description || '',
-                    actor: entry.actor || '',
-                    category: entry.category || 'Government Oversight',
-                    severity: entry.severity || 'medium',
-                    source_url: entry.source_url || '',
-                    verified: Boolean(entry.verified),
-                    date: entry.date || new Date().toISOString().split('T')[0]
-                });
-            };
-
-            const saveEdit = async () => {
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => 
-                        entry.id === editingEntry 
-                            ? { ...entry, ...editForm, modified_at: new Date().toISOString() }
-                            : entry
-                    );
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setEditingEntry(null);
-                    setEditForm({});
-                    showMessage('✅ Entry updated', 'success');
-                } catch (error) {
-                    showMessage(`❌ Save failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const cancelEdit = () => {
-                setEditingEntry(null);
-                setEditForm({});
-            };
-
-            // === SELECTION ===
-            const toggleSelection = (entryId) => {
-                const newSelected = new Set(selectedEntries);
-                if (newSelected.has(entryId)) {
-                    newSelected.delete(entryId);
-                } else {
-                    newSelected.add(entryId);
-                }
-                setSelectedEntries(newSelected);
-            };
-
-            const selectAll = () => {
-                const filtered = getFilteredEntries();
-                if (selectedEntries.size === filtered.length) {
-                    setSelectedEntries(new Set());
-                } else {
-                    setSelectedEntries(new Set(filtered.map(e => e.id)));
-                }
-            };
-
-            // === FILTERING ===
-            const getFilteredEntries = () => {
-                return entries.filter(entry => {
-                    if (showArchived && !entry.archived) return false;
-                    if (!showArchived && entry.archived) return false;
-                    if (!searchTerm) return true;
-                    
-                    const searchLower = searchTerm.toLowerCase();
-                    return Object.values(entry).some(val => 
-                        val?.toString().toLowerCase().includes(searchLower)
-                    );
-                });
-            };
-
-            // === EFFECTS ===
-            useEffect(() => {
-                const savedToken = sessionStorage.getItem('admin_token');
-                if (savedToken) setToken(savedToken);
-            }, []);
-
-            // === COMPUTED VALUES ===
-            const filteredEntries = getFilteredEntries();
-
-            // === RENDER ===
-            if (!isAuthenticated) {
-                return (
-                    <div className="container">
-                        <div style={{ maxWidth: '400px', margin: '100px auto' }}>
-                            <div className="card text-center">
-                                <div className="logo" style={{ margin: '0 auto 20px' }}>T2</div>
-                                <h1 style={{ margin: '0 0 20px', background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                    TrumpyTracker Admin
-                                </h1>
-                                
-                                <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
-                                        🔐 GitHub Token:
-                                    </label>
-                                    <input
-                                        type="password"
-                                        value={token}
-                                        onChange={(e) => setToken(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
-                                        className="input"
-                                        placeholder="github_pat_... or ghp_..."
-                                    />
-                                </div>
-                                
-                                <button onClick={authenticate} className="btn btn-primary" style={{ width: '100%' }}>
-                                    🚀 Login
-                                </button>
-                                
-                                {message && (
-                                    <div className={`message message-${message.type}`}>
-                                        {message.text}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
+            try {
+                const domain = new URL(url).hostname.toLowerCase();
+                return verifiedDomains.some(verified => domain.includes(verified)) || domain.endsWith('.gov');
+            } catch {
+                return false;
             }
-
-            return (
-                <div className="container">
-                    {/* Header */}
-                    <div className="card">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                                <div className="logo">T2</div>
-                                <div>
-                                    <h1 style={{ margin: 0, background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                        Admin Panel
-                                    </h1>
-                                    <div style={{ fontSize: '14px', color: '#a0aec0' }}>Political Tracker Management</div>
-                                </div>
-                            </div>
-                            <button onClick={logout} className="btn btn-danger">
-                                🚪 Logout
-                            </button>
-                        </div>
-                        
-                        {/* Manual Article Submission */}
-                        <div className="flex gap-4 mb-4 flex-mobile">
-                            <input
-                                type="url"
-                                value={submissionUrl}
-                                onChange={(e) => setSubmissionUrl(e.target.value)}
-                                placeholder="📎 Paste article URL to submit manually..."
-                                className="input"
-                                style={{ flex: 1 }}
-                                disabled={isSubmitting}
-                            />
-                            <button 
-                                onClick={submitManualArticle} 
-                                disabled={!submissionUrl.trim() || isSubmitting || isLoading} 
-                                className="btn btn-success"
-                            >
-                                {isSubmitting ? '🔄 Processing...' : '📰 Submit Article'}
-                            </button>
-                        </div>
-
-                        {/* Tab Navigation */}
-                        <div className="tabs">
-                            <div 
-                                className={`tab ${activeTab === 'entries' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('entries')}
-                            >
-                                📝 Entries ({filteredEntries.length})
-                            </div>
-                            <div 
-                                className={`tab ${activeTab === 'queue' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('queue')}
-                            >
-                                🗂️ Submission Queue ({pendingSubmissions.length + failedSubmissions.length})
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Messages */}
-                    {message && (
-                        <div className={`message message-${message.type}`}>
-                            {message.text}
-                        </div>
-                    )}
-
-                    {/* Entries Tab Content */}
-                    {activeTab === 'entries' && (
-                        <>
-                            <div className="card">
-                                <div className="flex gap-4 mb-4 flex-mobile">
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="🔍 Search entries..."
-                                        className="input"
-                                        style={{ flex: 1 }}
-                                    />
-                                    <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
-                                        {isLoading ? '🔄' : '📊'} Refresh
-                                    </button>
-                                </div>
-                                
-                                <div className="flex gap-2 mb-4 flex-mobile">
-                                    <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                        📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
-                                    </span>
-                                    <button
-                                        onClick={() => setShowArchived(!showArchived)}
-                                        className="btn btn-secondary"
-                                    >
-                                        {showArchived ? '📂 Active' : '🗃️ Archives'}
-                                    </button>
-                                    <button onClick={selectAll} className="btn btn-secondary">
-                                        {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
-                                    </button>
-                                    {!showArchived ? (
-                                        <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
-                                            🗃️ Archive ({selectedEntries.size})
-                                        </button>
-                                    ) : (
-                                        <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                            🔄 Restore ({selectedEntries.size})
-                                        </button>
-                                    )}
-                                    <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
-                                        🗑️ Delete ({selectedEntries.size})
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div className="card">
-                                <div className="scrollable">
-                                    {filteredEntries.length === 0 ? (
-                                        <div className="text-center" style={{ padding: '40px' }}>
-                                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-                                            <div style={{ color: '#a0aec0' }}>No entries found</div>
-                                        </div>
-                                    ) : (
-                                        filteredEntries.map(entry => (
-                                            <div
-                                                key={entry.id}
-                                                className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''}`}
-                                                onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
-                                            >
-                                                {editingEntry === entry.id ? (
-                                                    <div>
-                                                        <div className="grid grid-2 gap-4 mb-4">
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
-                                                                <input
-                                                                    type="date"
-                                                                    value={editForm.date}
-                                                                    onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
-                                                                <select
-                                                                    value={editForm.severity}
-                                                                    onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
-                                                                    className="input"
-                                                                >
-                                                                    <option value="low">🟢 Low</option>
-                                                                    <option value="medium">🟡 Medium</option>
-                                                                    <option value="high">🔴 High</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.actor}
-                                                                onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
-                                                                className="input"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.title}
-                                                                onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                                                                className="input"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
-                                                            <textarea
-                                                                value={editForm.description}
-                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                                                                className="input"
-                                                                rows="3"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="grid grid-2 gap-4 mb-4">
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
-                                                                <select
-                                                                    value={editForm.category}
-                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                                                                    className="input"
-                                                                >
-                                                                    <option value="Financial">Financial</option>
-                                                                    <option value="Civil Liberties">Civil Liberties</option>
-                                                                    <option value="Platform Manipulation">Platform Manipulation</option>
-                                                                    <option value="Government Oversight">Government Oversight</option>
-                                                                    <option value="Election Integrity">Election Integrity</option>
-                                                                    <option value="Corporate Ethics">Corporate Ethics</option>
-                                                                    <option value="Legal Proceedings">Legal Proceedings</option>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
-                                                                <input
-                                                                    type="url"
-                                                                    value={editForm.source_url}
-                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={editForm.verified}
-                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
-                                                                />
-                                                                <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
-                                                            </label>
-                                                        </div>
-                                                        
-                                                        <div className="flex gap-2">
-                                                            <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
-                                                                💾 Save
-                                                            </button>
-                                                            <button onClick={cancelEdit} className="btn btn-secondary">
-                                                                ❌ Cancel
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex justify-between">
-                                                        <div style={{ flex: 1 }}>
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {entry.date}</span>
-                                                                <span className={`badge badge-${entry.severity}`}>
-                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
-                                                                     entry.severity === 'medium' ? '⚠️ MED' : '🟢 LOW'}
-                                                                </span>
-                                                                {entry.archived && <span className="badge badge-pending">🗃️ Archived</span>}
-                                                                <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
-                                                            </div>
-                                                            <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
-                                                            <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
-                                                            <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
-                                                                <span>📁 {entry.category}</span>
-                                                                {entry.verified && <span style={{ color: '#48bb78' }}>✅ Verified</span>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
-                                                                className="btn btn-primary"
-                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                            >
-                                                                ✏️ Edit
-                                                            </button>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedEntries.has(entry.id)}
-                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
-                                                                style={{ marginTop: '4px' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Queue Tab Content */}
-                    {activeTab === 'queue' && (
-                        <div className="card">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Submission Queue Management</h2>
-                                <button onClick={loadQueueData} disabled={queueLoading} className="btn btn-primary">
-                                    {queueLoading ? '🔄' : '📊'} Refresh Queue
-                                </button>
-                            </div>
-
-                            {/* Queue Statistics */}
-                            <div className="grid grid-2 gap-4 mb-6">
-                                <div style={{ background: '#2d3748', padding: '16px', borderRadius: '8px', border: '1px solid #4a5568' }}>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#ed8936' }}>⏳ Pending Submissions</h3>
-                                            <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{pendingSubmissions.length}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => clearQueue('pending')} 
-                                            disabled={pendingSubmissions.length === 0 || queueLoading}
-                                            className="btn btn-secondary"
-                                            style={{ fontSize: '12px', padding: '6px 12px' }}
-                                        >
-                                            🧹 Clear All
-                                        </button>
-                                    </div>
-                                </div>
-                                <div style={{ background: '#2d3748', padding: '16px', borderRadius: '8px', border: '1px solid #4a5568' }}>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 style={{ margin: '0 0 4px', fontSize: '14px', color: '#e53e3e' }}>❌ Failed Submissions</h3>
-                                            <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{failedSubmissions.length}</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => clearQueue('failed')} 
-                                            disabled={failedSubmissions.length === 0 || queueLoading}
-                                            className="btn btn-secondary"
-                                            style={{ fontSize: '12px', padding: '6px 12px' }}
-                                        >
-                                            🧹 Clear All
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Pending Submissions */}
-                            {pendingSubmissions.length > 0 && (
-                                <div style={{ marginBottom: '24px' }}>
-                                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#ed8936' }}>⏳ Pending Submissions</h3>
-                                    <div className="space-y-2">
-                                        {pendingSubmissions.map(submission => (
-                                            <div key={submission.id} className="entry">
-                                                <div className="flex justify-between items-start">
-                                                    <div style={{ flex: 1 }}>
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="badge badge-pending">⏳ Pending</span>
-                                                            <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                                                📅 {new Date(submission.submitted_at).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', wordBreak: 'break-all' }}>
-                                                            🔗 {submission.url}
-                                                        </p>
-                                                        <p style={{ margin: 0, fontSize: '12px', color: '#a0aec0' }}>
-                                                            Submitted by: {submission.submitted_by}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => deleteQueueItem('pending', submission.id)}
-                                                        className="btn btn-danger"
-                                                        style={{ fontSize: '12px', padding: '6px 12px' }}
-                                                    >
-                                                        🗑️ Remove
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Failed Submissions */}
-                            {failedSubmissions.length > 0 && (
-                                <div>
-                                    <h3 style={{ margin: '0 0 12px', fontSize: '16px', color: '#e53e3e' }}>❌ Failed Submissions</h3>
-                                    <div className="space-y-2">
-                                        {failedSubmissions.map(submission => (
-                                            <div key={submission.id} className="entry">
-                                                <div className="flex justify-between items-start">
-                                                    <div style={{ flex: 1 }}>
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="badge badge-failed">❌ Failed</span>
-                                                            <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                                                📅 {new Date(submission.failed_at || submission.submitted_at).toLocaleString()}
-                                                            </span>
-                                                        </div>
-                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', wordBreak: 'break-all' }}>
-                                                            🔗 {submission.url}
-                                                        </p>
-                                                        {submission.error && (
-                                                            <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#fed7d7', background: 'rgba(229, 62, 62, 0.1)', padding: '8px', borderRadius: '4px' }}>
-                                                                ⚠️ Error: {submission.error}
-                                                            </p>
-                                                        )}
-                                                        <p style={{ margin: 0, fontSize: '12px', color: '#a0aec0' }}>
-                                                            Submitted by: {submission.submitted_by}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => deleteQueueItem('failed', submission.id)}
-                                                        className="btn btn-danger"
-                                                        style={{ fontSize: '12px', padding: '6px 12px' }}
-                                                    >
-                                                        🗑️ Remove
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Empty State */}
-                            {pendingSubmissions.length === 0 && failedSubmissions.length === 0 && (
-                                <div className="text-center" style={{ padding: '40px' }}>
-                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📪</div>
-                                    <div style={{ color: '#a0aec0' }}>No submissions in queue</div>
-                                    <p style={{ fontSize: '14px', color: '#718096', marginTop: '8px' }}>
-                                        Submit articles using the form above to see them here
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            );
         }
 
-        ReactDOM.render(<AdminApp />, document.getElementById('root'));
-    </script>
-</body>
-</html>
+        // Fetch article content
+        async function fetchArticleContent(url) {
+            try {
+                console.log(`📄 Fetching content from: ${url}`);
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; PoliticalTracker/1.0)'
+                    },
+                    timeout: 15000
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const html = await response.text();
+                
+                // Extract title, description, date
+                const titleMatch = html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i) ||
+                                 html.match(/<title[^>]*>([^<]+)<\/title>/i);
+                const title = titleMatch ? titleMatch[1].trim() : `Article from ${new URL(url).hostname}`;
+                
+                const descMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i) ||
+                                html.match(/<meta[^>]+name="description"[^>]+content="([^"]+)"/i);
+                const description = descMatch ? descMatch[1].trim() : `Political article from ${new URL(url).hostname}`;
+                
+                const dateMatch = html.match(/<meta[^>]+property="article:published_time"[^>]+content="([^"]+)"/i) ||
+                                html.match(/(\d{4}-\d{2}-\d{2})/);
+                let articleDate = new Date().toISOString().split('T')[0];
+                if (dateMatch) {
+                    try {
+                        articleDate = new Date(dateMatch[1]).toISOString().split('T')[0];
+                    } catch {}
+                }
+                
+                console.log(`✅ Extracted: "${title.substring(0, 50)}..."`);
+                return { title, description, date: articleDate };
+                
+            } catch (error) {
+                console.error(`❌ Failed to fetch content: ${error.message}`);
+                throw error;
+            }
+        }
+
+        // Analyze with OpenAI
+        async function analyzeArticle(title, description, url) {
+            try {
+                console.log('🤖 Analyzing with OpenAI...');
+                
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are a political accountability analyst. Analyze articles for Trump 2.0 Era political relevance.'
+                            },
+                            {
+                                role: 'user',
+                                content: `Analyze this article: Title: ${title}, Description: ${description}, URL: ${url}
+
+Return ONLY valid JSON:
+{
+  "actor": "main person/organization (e.g. 'Donald Trump', 'DOJ')",
+  "category": "Financial|Civil Liberties|Platform Manipulation|Government Oversight|Election Integrity|Corporate Ethics|Legal Proceedings",
+                  "severity": "low|medium|high",
+                  "verified": true|false
+                }`
+                            }
+                        ],
+                        max_tokens: 300,
+                        temperature: 0.3
+                    })
+                });
+
+                if (!response.ok) {
+                    console.warn('OpenAI API failed, using fallback');
+                    return {
+                        actor: 'Manual Submission',
+                        category: 'Government Oversight',
+                        severity: 'medium',
+                        verified: isVerifiedSource(url)
+                    };
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content.trim();
+                
+                try {
+                    const analysis = JSON.parse(content);
+                    return {
+                        actor: analysis.actor || 'Manual Submission',
+                        category: analysis.category || 'Government Oversight',
+                        severity: analysis.severity || 'medium',
+                        verified: analysis.verified !== undefined ? analysis.verified : isVerifiedSource(url)
+                    };
+                } catch {
+                    return {
+                        actor: 'Manual Submission',
+                        category: 'Government Oversight',
+                        severity: 'medium',
+                        verified: isVerifiedSource(url)
+                    };
+                }
+                
+            } catch (error) {
+                console.warn(`AI analysis failed: ${error.message}`);
+                return {
+                    actor: 'Manual Submission',
+                    category: 'Government Oversight',
+                    severity: 'medium',
+                    verified: isVerifiedSource(url)
+                };
+            }
+        }
+
+        async function processArticle() {
+            try {
+                // Fetch article content
+                const content = await fetchArticleContent(ARTICLE_URL);
+                
+                // Analyze with AI
+                const analysis = await analyzeArticle(content.title, content.description, ARTICLE_URL);
+                
+                // Create entry
+                const entry = {
+                    id: generateId(),
+                    date: content.date,
+                    actor: analysis.actor,
+                    category: analysis.category,
+                    title: content.title,
+                    description: content.description,
+                    source_url: ARTICLE_URL,
+                    verified: analysis.verified,
+                    severity: analysis.severity,
+                    added_at: new Date().toISOString(),
+                    manual_submission: true,
+                    submitted_by: SUBMITTED_BY,
+                    processed_at: new Date().toISOString()
+                };
+                
+                // Load existing entries
+                let existingEntries = [];
+                try {
+                    const masterData = await fs.readFile('master-tracker-log.json', 'utf8');
+                    existingEntries = JSON.parse(masterData);
+                } catch (error) {
+                    console.log('No existing entries found, creating new tracker');
+                }
+                
+                // Add new entry and sort
+                existingEntries.unshift(entry); // Add to beginning
+                existingEntries.sort((a, b) => {
+                    const dateCompare = (b.date || '').localeCompare(a.date || '');
+                    if (dateCompare !== 0) return dateCompare;
+                    return (b.added_at || '').localeCompare(a.added_at || '');
+                });
+                
+                // Save updated tracker
+                await fs.writeFile('master-tracker-log.json', JSON.stringify(existingEntries, null, 2));
+                
+                console.log('✅ SUCCESS: Article processed and added to tracker');
+                console.log(`📊 Total entries in tracker: ${existingEntries.length}`);
+                
+            } catch (error) {
+                console.error('❌ FAILED to process article:', error.message);
+                process.exit(1);
+            }
+        }
+
+        processArticle();
+        EOF
+        
+        node process-single-article.js
+        
+    - name: Copy to public folder
+      run: |
+        mkdir -p public
+        cp master-tracker-log.json public/master-tracker-log.json
+        
+    - name: Commit processed article
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action - Article Processor"
+        git pull origin main
+        git add master-tracker-log.json public/master-tracker-log.json
+        git commit -m "Add manually submitted article: ${{ steps.extract_article.outputs.article_url }}" || echo "No changes to commit"
+        git push
+        
+    - name: Summary
+      run: |
+        echo "✅ Successfully processed manual article submission"
+        echo "📎 URL: ${{ steps.extract_article.outputs.article_url }}"
+        echo "👤 Submitted by: ${{ steps.extract_article.outputs.submitted_by }}"
