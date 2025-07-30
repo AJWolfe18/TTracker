@@ -237,50 +237,29 @@
                             <p className="text-gray-300">Manage Political Accountability Entries</p>
                         </header>
 
-                        {/* Statistics */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                            <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700">
-                                <h3 className="text-sm font-semibold text-gray-400 mb-2">Total Entries</h3>
-                                <p className="text-3xl font-bold">{stats.total}</p>
-                            </div>
-                            <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700">
-                                <h3 className="text-sm font-semibold text-green-400 mb-2">Published</h3>
-                                <p className="text-3xl font-bold text-green-400">{stats.published}</p>
-                            </div>
-                            <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700">
-                                <h3 className="text-sm font-semibold text-red-400 mb-2">Failed</h3>
-                                <p className="text-3xl font-bold text-red-400">{stats.failed}</p>
-                            </div>
-                            <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700">
-                                <h3 className="text-sm font-semibold text-gray-400 mb-2">Archived</h3>
-                                <p className="text-3xl font-bold text-gray-400">{stats.archived}</p>
-                            </div>
-                        </div>
-
-                        {/* Submit New Article */}
+                        {/* Combined Control Panel */}
                         <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8">
-                            <h2 className="text-xl font-semibold mb-4">Submit New Article</h2>
-                            <form onSubmit={handleSubmitArticle} className="flex gap-2">
-                                <input
-                                    type="url"
-                                    value={newArticleUrl}
-                                    onChange={(e) => setNewArticleUrl(e.target.value)}
-                                    placeholder="Enter article URL..."
-                                    className="flex-1 px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white placeholder-gray-400"
-                                    required
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-6 py-2 rounded font-medium transition-colors"
-                                >
-                                    {isSubmitting ? 'Submitting...' : 'Submit Article'}
-                                </button>
-                            </form>
-                        </div>
+                            {/* Statistics Row */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pb-6 border-b border-gray-700">
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold">{stats.total}</p>
+                                    <p className="text-sm text-gray-400">Total Entries</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold text-green-400">{stats.published}</p>
+                                    <p className="text-sm text-green-400">Published</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold text-red-400">{stats.failed}</p>
+                                    <p className="text-sm text-red-400">Failed</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold text-gray-400">{stats.archived}</p>
+                                    <p className="text-sm text-gray-400">Archived</p>
+                                </div>
+                            </div>
 
-                        {/* Filters */}
-                        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8">
+                            {/* Filters Row */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <input
                                     type="text"
@@ -322,9 +301,31 @@
                                 </select>
                             </div>
                             
-                            <div className="mt-4 text-sm text-gray-400">
+                            <div className="mt-4 text-sm text-gray-400 text-center">
                                 Showing {sortedEntries.length} of {entries.length} entries
                             </div>
+                        </div>
+
+                        {/* Submit New Article */}
+                        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 mb-8">
+                            <h2 className="text-xl font-semibold mb-4">Submit New Article</h2>
+                            <form onSubmit={handleSubmitArticle} className="flex gap-2">
+                                <input
+                                    type="url"
+                                    value={newArticleUrl}
+                                    onChange={(e) => setNewArticleUrl(e.target.value)}
+                                    placeholder="Enter article URL..."
+                                    className="flex-1 px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white placeholder-gray-400"
+                                    required
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-6 py-2 rounded font-medium transition-colors"
+                                >
+                                    {isSubmitting ? 'Submitting...' : 'Submit Article'}
+                                </button>
+                            </form>
                         </div>
 
                         {/* Entries List */}
