@@ -1,5 +1,20 @@
 [
   {
+    "id": "1753840437176-upztuy4ar",
+    "date": "2025-07-30",
+    "actor": "CNN",
+    "category": "Government Oversight",
+    "title": "Live updates: Tsunami alerts issued for Japan, Alaska, Hawaii and US West Coast after a major earthquake strikes Russia’s remote Far East | CNN",
+    "description": "Tsunami warnings have been issued for parts of Russia and Japan after a massive 8.7 magnitude earthquake struck Wednesday off Russia’s remote and sparsely populated far eastern coast. Follow for live updates.",
+    "source_url": "https://www.cnn.com/world/live-news/russia-japan-tsunami-earthquake-hnk-intl-07-30-25",
+    "verified": true,
+    "severity": "medium",
+    "added_at": "2025-07-30T01:53:57.176Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-07-30T01:53:57.176Z"
+  },
+  {
     "id": "1753840415217-ib8u2308i",
     "date": "2025-07-30",
     "actor": "Manual Submission",
