@@ -1,5 +1,20 @@
 [
   {
+    "id": "1753840415217-ib8u2308i",
+    "date": "2025-07-30",
+    "actor": "Manual Submission",
+    "category": "Government Oversight",
+    "title": "Processing: www.cnn.com",
+    "description": "Article is being processed...",
+    "source_url": "https://www.cnn.com/world/live-news/russia-japan-tsunami-earthquake-hnk-intl-07-30-25",
+    "verified": false,
+    "severity": "medium",
+    "status": "processing",
+    "added_at": "2025-07-30T01:53:35.217Z",
+    "manual_submission": true,
+    "submitted_by": "admin"
+  },
+  {
     "date": "2025-07-29",
     "actor": "Department of Justice",
     "category": "Government Oversight",
@@ -9,7 +24,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdomw5wrvkttpig8qso",
-    "added_at": "2025-07-29T14:30:20.907Z"
+    "added_at": "2025-07-29T14:30:20.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-29",
@@ -21,7 +37,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdomw5wr7gfmrwjzbp3",
-    "added_at": "2025-07-29T14:30:20.907Z"
+    "added_at": "2025-07-29T14:30:20.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-29",
@@ -33,7 +50,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdomw5wrys6t0rmjth",
-    "added_at": "2025-07-29T14:30:20.907Z"
+    "added_at": "2025-07-29T14:30:20.907Z",
+    "status": "published"
   },
   {
     "id": "1753759354534-laz1fcxr9",
@@ -48,7 +66,8 @@
     "added_at": "2025-07-29T03:22:34.534Z",
     "manual_submission": true,
     "submitted_by": "admin",
-    "processed_at": "2025-07-29T03:22:34.534Z"
+    "processed_at": "2025-07-29T03:22:34.534Z",
+    "status": "published"
   },
   {
     "date": "2025-07-28",
@@ -60,7 +79,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdomw6mm8ig6ogpxtwk",
-    "added_at": "2025-07-29T14:30:21.838Z"
+    "added_at": "2025-07-29T14:30:21.838Z",
+    "status": "published"
   },
   {
     "date": "2025-07-28",
@@ -72,7 +92,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdomw47j9uz51g9jf9u",
-    "added_at": "2025-07-29T14:30:18.703Z"
+    "added_at": "2025-07-29T14:30:18.703Z",
+    "status": "published"
   },
   {
     "date": "2025-07-28",
@@ -84,7 +105,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdn7e9dt4cs08gxohh",
-    "added_at": "2025-07-28T14:28:45.185Z"
+    "added_at": "2025-07-28T14:28:45.185Z",
+    "status": "published"
   },
   {
     "date": "2025-07-27",
@@ -96,7 +118,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdomw47j30vpl6z9o5y",
-    "added_at": "2025-07-29T14:30:18.703Z"
+    "added_at": "2025-07-29T14:30:18.703Z",
+    "status": "published"
   },
   {
     "date": "2025-07-26",
@@ -108,7 +131,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdn7e7tdlbxad6q0jdf",
-    "added_at": "2025-07-28T14:28:43.153Z"
+    "added_at": "2025-07-28T14:28:43.153Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -120,7 +144,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdn7e9dtqrgc4b7s34",
-    "added_at": "2025-07-28T14:28:45.185Z"
+    "added_at": "2025-07-28T14:28:45.185Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -132,7 +157,8 @@
     "verified": false,
     "severity": "low",
     "id": "mdlrr707h2jc4zyfd58",
-    "added_at": "2025-07-27T14:23:08.599Z"
+    "added_at": "2025-07-27T14:23:08.599Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -146,7 +172,8 @@
     "id": "mdkccdsc9hs8y4koni",
     "added_at": "2025-07-26T14:23:57.132Z",
     "archived": true,
-    "archived_at": "2025-07-27T04:04:01.594Z"
+    "archived_at": "2025-07-27T04:04:01.594Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -158,7 +185,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccdscz6lu13nl12p",
-    "added_at": "2025-07-26T14:23:57.132Z"
+    "added_at": "2025-07-26T14:23:57.132Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -170,7 +198,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccdsc8ec419twd1",
-    "added_at": "2025-07-26T14:23:57.132Z"
+    "added_at": "2025-07-26T14:23:57.132Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -182,7 +211,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccaiqpvbwsudyq2",
-    "added_at": "2025-07-26T14:23:52.898Z"
+    "added_at": "2025-07-26T14:23:52.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -194,7 +224,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdkcca3medq336rb5p",
-    "added_at": "2025-07-26T14:23:52.354Z"
+    "added_at": "2025-07-26T14:23:52.354Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -208,7 +239,8 @@
     "id": "mdkcc9cgg5gwkui2w1m",
     "added_at": "2025-07-26T14:23:51.376Z",
     "archived": true,
-    "archived_at": "2025-07-27T01:10:05.603Z"
+    "archived_at": "2025-07-27T01:10:05.603Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -220,7 +252,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdkcc9cgmy0rcdgj4eq",
-    "added_at": "2025-07-26T14:23:51.376Z"
+    "added_at": "2025-07-26T14:23:51.376Z",
+    "status": "published"
   },
   {
     "date": "2025-07-25",
@@ -232,7 +265,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdkcc9cgkmcdk2nfi9j",
-    "added_at": "2025-07-26T14:23:51.376Z"
+    "added_at": "2025-07-26T14:23:51.376Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -244,7 +278,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdlrrbdf2ytzh68m3jc",
-    "added_at": "2025-07-27T14:23:14.259Z"
+    "added_at": "2025-07-27T14:23:14.259Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -256,7 +291,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdlrrbdfvh35fnfud7e",
-    "added_at": "2025-07-27T14:23:14.259Z"
+    "added_at": "2025-07-27T14:23:14.259Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -268,7 +304,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdlrr5xl2u7xjakvsvj",
-    "added_at": "2025-07-27T14:23:07.209Z"
+    "added_at": "2025-07-27T14:23:07.209Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -280,7 +317,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccaiq1oeduwgnkuu",
-    "added_at": "2025-07-26T14:23:52.898Z"
+    "added_at": "2025-07-26T14:23:52.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -292,7 +330,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccaiqphlvi0km54k",
-    "added_at": "2025-07-26T14:23:52.898Z"
+    "added_at": "2025-07-26T14:23:52.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -304,7 +343,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdkcc92axx57abyvjim",
-    "added_at": "2025-07-26T14:23:51.010Z"
+    "added_at": "2025-07-26T14:23:51.010Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -316,7 +356,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwz1rlno0h50yfzrq",
-    "added_at": "2025-07-25T14:25:54.609Z"
+    "added_at": "2025-07-25T14:25:54.609Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -328,7 +369,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwz0pshs8ew8vs8s4",
-    "added_at": "2025-07-25T14:25:53.248Z"
+    "added_at": "2025-07-25T14:25:53.248Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -340,7 +382,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdiwz0ps88qvkl0ablq",
-    "added_at": "2025-07-25T14:25:53.248Z"
+    "added_at": "2025-07-25T14:25:53.248Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -352,7 +395,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwz0oivzq3f9b2u2",
-    "added_at": "2025-07-25T14:25:53.202Z"
+    "added_at": "2025-07-25T14:25:53.202Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -364,7 +408,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwz0oija0ukibsvai",
-    "added_at": "2025-07-25T14:25:53.202Z"
+    "added_at": "2025-07-25T14:25:53.202Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -376,7 +421,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwyzso4kuu9kic4ur",
-    "added_at": "2025-07-25T14:25:52.056Z"
+    "added_at": "2025-07-25T14:25:52.056Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -389,7 +435,8 @@
     "severity": "low",
     "id": "mdhhlz25yebgn89dh09",
     "added_at": "2025-07-24T14:28:04.157Z",
-    "modified_at": "2025-07-27T01:11:20.956Z"
+    "modified_at": "2025-07-27T01:11:20.956Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -401,7 +448,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdhhly0gwnx2kaeo6v",
-    "added_at": "2025-07-24T14:28:02.800Z"
+    "added_at": "2025-07-24T14:28:02.800Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -413,7 +461,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdhhly0g6s2qek2k5qx",
-    "added_at": "2025-07-24T14:28:02.800Z"
+    "added_at": "2025-07-24T14:28:02.800Z",
+    "status": "published"
   },
   {
     "date": "2025-07-24",
@@ -425,7 +474,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdhhlxvnf9dkxdkd4r",
-    "added_at": "2025-07-24T14:28:02.627Z"
+    "added_at": "2025-07-24T14:28:02.627Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -437,7 +487,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdlrr718nysl2bient",
-    "added_at": "2025-07-27T14:23:08.636Z"
+    "added_at": "2025-07-27T14:23:08.636Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -449,7 +500,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdlrr718dgj5y8tdx49",
-    "added_at": "2025-07-27T14:23:08.636Z"
+    "added_at": "2025-07-27T14:23:08.636Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -461,7 +513,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccak1asc289gcm2i",
-    "added_at": "2025-07-26T14:23:52.945Z"
+    "added_at": "2025-07-26T14:23:52.945Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -473,7 +526,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdkccak134pwt2c5dkl",
-    "added_at": "2025-07-26T14:23:52.945Z"
+    "added_at": "2025-07-26T14:23:52.945Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -485,7 +539,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdkccak19hgo1lzsr6e",
-    "added_at": "2025-07-26T14:23:52.945Z"
+    "added_at": "2025-07-26T14:23:52.945Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -497,7 +552,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdkcc92a5hz5zmp1gp",
-    "added_at": "2025-07-26T14:23:51.010Z"
+    "added_at": "2025-07-26T14:23:51.010Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -509,7 +565,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdhhlz25ugp3gqea6je",
-    "added_at": "2025-07-24T14:28:04.157Z"
+    "added_at": "2025-07-24T14:28:04.157Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -521,7 +578,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdhhlw1dfjcietf18yn",
-    "added_at": "2025-07-24T14:28:00.241Z"
+    "added_at": "2025-07-24T14:28:00.241Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -533,7 +591,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdgp1k8ms2ndddjku2",
-    "added_at": "2025-07-24T01:08:22.582Z"
+    "added_at": "2025-07-24T01:08:22.582Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -545,7 +604,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdgp1k8m86v2eulh38r",
-    "added_at": "2025-07-24T01:08:22.582Z"
+    "added_at": "2025-07-24T01:08:22.582Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -557,7 +617,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdgp1k8mj5e86qk0iz",
-    "added_at": "2025-07-24T01:08:22.582Z"
+    "added_at": "2025-07-24T01:08:22.582Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -569,7 +630,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdgp1k8lzqiwzi43ahp",
-    "added_at": "2025-07-24T01:08:22.581Z"
+    "added_at": "2025-07-24T01:08:22.581Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -581,7 +643,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdgp1j9sskvoro67wm9",
-    "added_at": "2025-07-24T01:08:21.328Z"
+    "added_at": "2025-07-24T01:08:21.328Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -593,7 +656,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdgp1j9svwk6vwybw9",
-    "added_at": "2025-07-24T01:08:21.328Z"
+    "added_at": "2025-07-24T01:08:21.328Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -605,7 +669,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdgp1j9s0pog65jdbgx",
-    "added_at": "2025-07-24T01:08:21.328Z"
+    "added_at": "2025-07-24T01:08:21.328Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -617,7 +682,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdgp1i1q679cf2li6vc",
-    "added_at": "2025-07-24T01:08:19.742Z"
+    "added_at": "2025-07-24T01:08:19.742Z",
+    "status": "published"
   },
   {
     "date": "2025-07-23",
@@ -629,7 +695,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdf7f9uh7bnwkvwwxd7",
-    "added_at": "2025-07-23T00:07:23.033Z"
+    "added_at": "2025-07-23T00:07:23.033Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -641,7 +708,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdiwz0oib7nsuabe0qv",
-    "added_at": "2025-07-25T14:25:53.202Z"
+    "added_at": "2025-07-25T14:25:53.202Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -653,7 +721,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdiwyzsoksuim9ywpg",
-    "added_at": "2025-07-25T14:25:52.056Z"
+    "added_at": "2025-07-25T14:25:52.056Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -665,7 +734,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdhhlw1dtb4oml5f9gd",
-    "added_at": "2025-07-24T14:28:00.241Z"
+    "added_at": "2025-07-24T14:28:00.241Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -677,7 +747,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdgp1i55sshnv9kwfj7",
-    "added_at": "2025-07-24T01:08:19.865Z"
+    "added_at": "2025-07-24T01:08:19.865Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -689,7 +760,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdgp1i55ud5nyyugbp",
-    "added_at": "2025-07-24T01:08:19.865Z"
+    "added_at": "2025-07-24T01:08:19.865Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -701,7 +773,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdgp1i55r80fhcxw96",
-    "added_at": "2025-07-24T01:08:19.865Z"
+    "added_at": "2025-07-24T01:08:19.865Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -713,7 +786,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdg269vhz9vvll8yzkb",
-    "added_at": "2025-07-23T14:28:11.261Z"
+    "added_at": "2025-07-23T14:28:11.261Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -725,7 +799,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdg269vhwm7pe37tjvb",
-    "added_at": "2025-07-23T14:28:11.261Z"
+    "added_at": "2025-07-23T14:28:11.261Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -737,7 +812,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdg267vqoam19tmojre",
-    "added_at": "2025-07-23T14:28:08.678Z"
+    "added_at": "2025-07-23T14:28:08.678Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -749,7 +825,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdff59p0xuchxaq4t8",
-    "added_at": "2025-07-23T03:43:33.204Z"
+    "added_at": "2025-07-23T03:43:33.204Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -761,7 +838,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdff59p0kx6flj9rdi",
-    "added_at": "2025-07-23T03:43:33.204Z"
+    "added_at": "2025-07-23T03:43:33.204Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -773,7 +851,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdff576axalp9p8u35b",
-    "added_at": "2025-07-23T03:43:29.938Z"
+    "added_at": "2025-07-23T03:43:29.938Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -785,7 +864,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff56r3ak9n2ryaf06",
-    "added_at": "2025-07-23T03:43:29.391Z"
+    "added_at": "2025-07-23T03:43:29.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -797,7 +877,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay61we7sictot7h",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -809,7 +890,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdf7fay6eyno8iq7f9a",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -821,7 +903,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdf7fay64m0i1p07dx4",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -833,7 +916,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdf7fay6uw9ahkduyrb",
-    "added_at": "2025-07-23T00:07:24.462Z"
+    "added_at": "2025-07-23T00:07:24.462Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -845,7 +929,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdemnchmpvgn6rjoifk",
-    "added_at": "2025-07-22T14:25:47.770Z"
+    "added_at": "2025-07-22T14:25:47.770Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -857,7 +942,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8wowjhhnt3qmiva",
-    "added_at": "2025-07-22T14:14:34.112Z"
+    "added_at": "2025-07-22T14:14:34.112Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -869,7 +955,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8wowu16u1vausne",
-    "added_at": "2025-07-22T14:14:34.112Z"
+    "added_at": "2025-07-22T14:14:34.112Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -881,7 +968,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8wowoi058lhquab",
-    "added_at": "2025-07-22T14:14:34.112Z"
+    "added_at": "2025-07-22T14:14:34.112Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -893,7 +981,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8wj7ebva8moy3lr",
-    "added_at": "2025-07-22T14:14:33.907Z"
+    "added_at": "2025-07-22T14:14:33.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -905,7 +994,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8uvtewev6j63itt",
-    "added_at": "2025-07-22T14:14:31.769Z"
+    "added_at": "2025-07-22T14:14:31.769Z",
+    "status": "published"
   },
   {
     "date": "2025-07-22",
@@ -917,7 +1007,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8uvt5rzyluv3gnt",
-    "added_at": "2025-07-22T14:14:31.769Z"
+    "added_at": "2025-07-22T14:14:31.769Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -929,7 +1020,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdlrr6ytvt1wtyq3gz",
-    "added_at": "2025-07-27T14:23:08.549Z"
+    "added_at": "2025-07-27T14:23:08.549Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -941,7 +1033,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdlrr6ytel8sk5r7qts",
-    "added_at": "2025-07-27T14:23:08.549Z"
+    "added_at": "2025-07-27T14:23:08.549Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -953,7 +1046,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdg267vqjfbsnq1bibc",
-    "added_at": "2025-07-23T14:28:08.678Z"
+    "added_at": "2025-07-23T14:28:08.678Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -965,7 +1059,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdg265s6oqxz0vneon",
-    "added_at": "2025-07-23T14:28:05.958Z"
+    "added_at": "2025-07-23T14:28:05.958Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -977,7 +1072,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff59p0jvv91u8rai",
-    "added_at": "2025-07-23T03:43:33.204Z"
+    "added_at": "2025-07-23T03:43:33.204Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -989,7 +1085,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdf7f9ij9o16cf16en",
-    "added_at": "2025-07-23T00:07:22.603Z"
+    "added_at": "2025-07-23T00:07:22.603Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -1001,7 +1098,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8vzujxvi3gfitvi",
-    "added_at": "2025-07-22T14:14:33.210Z"
+    "added_at": "2025-07-22T14:14:33.210Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -1013,7 +1111,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8vzu4b59dovdts3",
-    "added_at": "2025-07-22T14:14:33.210Z"
+    "added_at": "2025-07-22T14:14:33.210Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -1025,7 +1124,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdd7b8kufn7kx7j8amn",
-    "added_at": "2025-07-21T14:28:42.414Z"
+    "added_at": "2025-07-21T14:28:42.414Z",
+    "status": "published"
   },
   {
     "date": "2025-07-21",
@@ -1037,7 +1137,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdd6surlo1e3lunrw4",
-    "added_at": "2025-07-21T14:14:24.705Z"
+    "added_at": "2025-07-21T14:14:24.705Z",
+    "status": "published"
   },
   {
     "date": "2025-07-20",
@@ -1049,7 +1150,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdg265s5hmy42aapudt",
-    "added_at": "2025-07-23T14:28:05.957Z"
+    "added_at": "2025-07-23T14:28:05.957Z",
+    "status": "published"
   },
   {
     "date": "2025-07-20",
@@ -1061,7 +1163,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8wj7gmmkwq1ui2e",
-    "added_at": "2025-07-22T14:14:33.907Z"
+    "added_at": "2025-07-22T14:14:33.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1073,7 +1176,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdg26b9ctokmdtlkbm",
-    "added_at": "2025-07-23T14:28:13.056Z"
+    "added_at": "2025-07-23T14:28:13.056Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1085,7 +1189,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdg26b9c7k3nnhisuzt",
-    "added_at": "2025-07-23T14:28:13.056Z"
+    "added_at": "2025-07-23T14:28:13.056Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1097,7 +1202,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdg267vqnigysae1rrg",
-    "added_at": "2025-07-23T14:28:08.678Z"
+    "added_at": "2025-07-23T14:28:08.678Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1109,7 +1215,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdem8wj7tbpurwyzi6k",
-    "added_at": "2025-07-22T14:14:33.907Z"
+    "added_at": "2025-07-22T14:14:33.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1121,7 +1228,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdd6t1tmcdity7owu7s",
-    "added_at": "2025-07-21T14:14:33.850Z"
+    "added_at": "2025-07-21T14:14:33.850Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1133,7 +1241,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdbrog2yvw2qm4vhagp",
-    "added_at": "2025-07-20T14:23:18.634Z"
+    "added_at": "2025-07-20T14:23:18.634Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1145,7 +1254,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbr7k4ysyxfm3g9dw",
-    "added_at": "2025-07-20T14:10:10.738Z"
+    "added_at": "2025-07-20T14:10:10.738Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1159,7 +1269,8 @@
     "id": "mdbr7ibws0ifxdl7nbd",
     "added_at": "2025-07-20T14:10:08.396Z",
     "archived": true,
-    "archived_at": "2025-07-27T04:39:22.296Z"
+    "archived_at": "2025-07-27T04:39:22.296Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1171,7 +1282,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbr7ibwtie5vbpfs7o",
-    "added_at": "2025-07-20T14:10:08.396Z"
+    "added_at": "2025-07-20T14:10:08.396Z",
+    "status": "published"
   },
   {
     "date": "2025-07-19",
@@ -1183,7 +1295,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
-    "added_at": "2025-07-19T14:22:51.001Z"
+    "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1195,7 +1308,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdomw5n70mwo0omt8zd",
-    "added_at": "2025-07-29T14:30:20.563Z"
+    "added_at": "2025-07-29T14:30:20.563Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1207,7 +1321,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdiwz5mpk1vsdxoi5v",
-    "added_at": "2025-07-25T14:25:59.617Z"
+    "added_at": "2025-07-25T14:25:59.617Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1219,7 +1334,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdg267vqc79qvgor05",
-    "added_at": "2025-07-23T14:28:08.678Z"
+    "added_at": "2025-07-23T14:28:08.678Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1231,7 +1347,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff576ar61emker2pn",
-    "added_at": "2025-07-23T03:43:29.938Z"
+    "added_at": "2025-07-23T03:43:29.938Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1243,7 +1360,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff576an3w89sry31m",
-    "added_at": "2025-07-23T03:43:29.938Z"
+    "added_at": "2025-07-23T03:43:29.938Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1255,7 +1373,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdf7f9ue1n8m7hvohjs",
-    "added_at": "2025-07-23T00:07:23.030Z"
+    "added_at": "2025-07-23T00:07:23.030Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1267,7 +1386,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdf7f9om9azrp36cxec",
-    "added_at": "2025-07-23T00:07:22.822Z"
+    "added_at": "2025-07-23T00:07:22.822Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1279,7 +1399,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8wj7rbbwfv0tegh",
-    "added_at": "2025-07-22T14:14:33.907Z"
+    "added_at": "2025-07-22T14:14:33.907Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1291,7 +1412,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdd7aoaigspvnndmy8g",
-    "added_at": "2025-07-21T14:28:16.122Z"
+    "added_at": "2025-07-21T14:28:16.122Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1303,7 +1425,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdd6surlsgtqjdqwvsc",
-    "added_at": "2025-07-21T14:14:24.705Z"
+    "added_at": "2025-07-21T14:14:24.705Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1315,7 +1438,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdd6surl6ezx2uk9whe",
-    "added_at": "2025-07-21T14:14:24.705Z"
+    "added_at": "2025-07-21T14:14:24.705Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1327,7 +1451,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdd6suiv29nfddbmgue",
-    "added_at": "2025-07-21T14:14:24.391Z"
+    "added_at": "2025-07-21T14:14:24.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1339,7 +1464,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdd6suiv3s8l0wh6x8",
-    "added_at": "2025-07-21T14:14:24.391Z"
+    "added_at": "2025-07-21T14:14:24.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1351,7 +1477,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdd6suiv9e56pxxd9zq",
-    "added_at": "2025-07-21T14:14:24.391Z"
+    "added_at": "2025-07-21T14:14:24.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1363,7 +1490,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdd6suivup1y6vg0go7",
-    "added_at": "2025-07-21T14:14:24.391Z"
+    "added_at": "2025-07-21T14:14:24.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1375,7 +1503,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdbrodz8s0r3m8vw2gm",
-    "added_at": "2025-07-20T14:23:15.908Z"
+    "added_at": "2025-07-20T14:23:15.908Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1387,7 +1516,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbrodz80m820g19p6qb",
-    "added_at": "2025-07-20T14:23:15.908Z"
+    "added_at": "2025-07-20T14:23:15.908Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1399,7 +1529,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbrodz85ukbuix4pg",
-    "added_at": "2025-07-20T14:23:15.908Z"
+    "added_at": "2025-07-20T14:23:15.908Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1411,7 +1542,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdbrodz8z1hkbhe6du",
-    "added_at": "2025-07-20T14:23:15.908Z"
+    "added_at": "2025-07-20T14:23:15.908Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1423,7 +1555,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdbr7k4x5hnf3gqsizx",
-    "added_at": "2025-07-20T14:10:10.738Z"
+    "added_at": "2025-07-20T14:10:10.738Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1435,7 +1568,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdbr7k4y9l2rzy51mlj",
-    "added_at": "2025-07-20T14:10:10.738Z"
+    "added_at": "2025-07-20T14:10:10.738Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1447,7 +1581,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdbr7k4xkhfx8c5yyu",
-    "added_at": "2025-07-20T14:10:10.737Z"
+    "added_at": "2025-07-20T14:10:10.737Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1459,7 +1594,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdbr7ibwn4t3ynr8eqr",
-    "added_at": "2025-07-20T14:10:08.396Z"
+    "added_at": "2025-07-20T14:10:08.396Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1471,7 +1607,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbr7ibwn4mm7zkk8zp",
-    "added_at": "2025-07-20T14:10:08.396Z"
+    "added_at": "2025-07-20T14:10:08.396Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1483,7 +1620,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbr7hex3rx3zd9x7ma",
-    "added_at": "2025-07-20T14:10:07.209Z"
+    "added_at": "2025-07-20T14:10:07.209Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1495,7 +1633,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac803dvp6he8tqtnj",
-    "added_at": "2025-07-19T14:22:51.001Z"
+    "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1507,7 +1646,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac7yxuf34i2fz5i2",
-    "added_at": "2025-07-19T14:22:49.506Z"
+    "added_at": "2025-07-19T14:22:49.506Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1519,7 +1659,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdabrk3o1wvuw7aky1i",
-    "added_at": "2025-07-19T14:10:03.780Z"
+    "added_at": "2025-07-19T14:10:03.780Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1531,7 +1672,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdabrk3ojrtnrv3m9ek",
-    "added_at": "2025-07-19T14:10:03.780Z"
+    "added_at": "2025-07-19T14:10:03.780Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1543,7 +1685,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdabrk3olj5gw9znk4",
-    "added_at": "2025-07-19T14:10:03.780Z"
+    "added_at": "2025-07-19T14:10:03.780Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1555,7 +1698,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdabrjb7kabpdrn88z8",
-    "added_at": "2025-07-19T14:10:02.755Z"
+    "added_at": "2025-07-19T14:10:02.755Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1567,7 +1711,8 @@
     "verified": true,
     "severity": "high",
     "id": "md8ww58d02mr1ue7j92a",
-    "added_at": "2025-07-18T14:25:57.373Z"
+    "added_at": "2025-07-18T14:25:57.373Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1579,7 +1724,8 @@
     "verified": true,
     "severity": "high",
     "id": "md8ww58d7wwpktp0gnn",
-    "added_at": "2025-07-18T14:25:57.373Z"
+    "added_at": "2025-07-18T14:25:57.373Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1591,7 +1737,8 @@
     "verified": true,
     "severity": "high",
     "id": "md8ww4ui0zba2f5zunhn",
-    "added_at": "2025-07-18T14:25:56.874Z"
+    "added_at": "2025-07-18T14:25:56.874Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1603,7 +1750,8 @@
     "verified": true,
     "severity": "high",
     "id": "md8wfa8wp9spzj0tdz",
-    "added_at": "2025-07-18T14:12:50.720Z"
+    "added_at": "2025-07-18T14:12:50.720Z",
+    "status": "published"
   },
   {
     "date": "2025-07-18",
@@ -1615,7 +1763,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8wfa8wa50h4y0dasc",
-    "added_at": "2025-07-18T14:12:50.720Z"
+    "added_at": "2025-07-18T14:12:50.720Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1627,7 +1776,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff56r3cncng7qlow5",
-    "added_at": "2025-07-23T03:43:29.391Z"
+    "added_at": "2025-07-23T03:43:29.391Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1639,7 +1789,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdem8vzugb8zz45wl",
-    "added_at": "2025-07-22T14:14:33.210Z"
+    "added_at": "2025-07-22T14:14:33.210Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1651,7 +1802,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdbrodng5f8q8e0w02t",
-    "added_at": "2025-07-20T14:23:15.484Z"
+    "added_at": "2025-07-20T14:23:15.484Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1663,7 +1815,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdbr7k4xqws3w0exdyc",
-    "added_at": "2025-07-20T14:10:10.737Z"
+    "added_at": "2025-07-20T14:10:10.737Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1675,7 +1828,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac803d25kguvzp8qhj",
-    "added_at": "2025-07-19T14:22:51.001Z"
+    "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1687,7 +1841,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdac7yxudcq40gfvi9j",
-    "added_at": "2025-07-19T14:22:49.506Z"
+    "added_at": "2025-07-19T14:22:49.506Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1699,7 +1854,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac7xpu7xs8whes9ht",
-    "added_at": "2025-07-19T14:22:47.922Z"
+    "added_at": "2025-07-19T14:22:47.922Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1711,7 +1867,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdabrytvgfsz2l29fhu",
-    "added_at": "2025-07-19T14:10:22.867Z"
+    "added_at": "2025-07-19T14:10:22.867Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1723,7 +1880,8 @@
     "verified": false,
     "severity": "high",
     "id": "md8ww68aozp5he94xdm",
-    "added_at": "2025-07-18T14:25:58.666Z"
+    "added_at": "2025-07-18T14:25:58.666Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1735,7 +1893,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8ww68a2rmp4c88pj2",
-    "added_at": "2025-07-18T14:25:58.666Z"
+    "added_at": "2025-07-18T14:25:58.666Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1747,7 +1906,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8ww58dlytipjpj02c",
-    "added_at": "2025-07-18T14:25:57.373Z"
+    "added_at": "2025-07-18T14:25:57.373Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1759,7 +1919,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8ww4ui49gx3dl3eb",
-    "added_at": "2025-07-18T14:25:56.874Z"
+    "added_at": "2025-07-18T14:25:56.874Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1771,7 +1932,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8wfa8wy4dn5vwm2rp",
-    "added_at": "2025-07-18T14:12:50.720Z"
+    "added_at": "2025-07-18T14:12:50.720Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1783,7 +1945,8 @@
     "verified": false,
     "severity": "high",
     "id": "md8wf9m265poatcdrnq",
-    "added_at": "2025-07-18T14:12:49.898Z"
+    "added_at": "2025-07-18T14:12:49.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1795,7 +1958,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md8wf8k3g41z01qrvkr",
-    "added_at": "2025-07-18T14:12:48.531Z"
+    "added_at": "2025-07-18T14:12:48.531Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1807,7 +1971,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8wf7u8xfqk0dxn1gs",
-    "added_at": "2025-07-18T14:12:47.600Z"
+    "added_at": "2025-07-18T14:12:47.600Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1819,7 +1984,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfocuo511tfudbms",
-    "added_at": "2025-07-17T14:25:28.590Z"
+    "added_at": "2025-07-17T14:25:28.590Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1831,7 +1997,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfbdybc73o8q5816",
-    "added_at": "2025-07-17T14:25:11.782Z"
+    "added_at": "2025-07-17T14:25:11.782Z",
+    "status": "published"
   },
   {
     "date": "2025-07-17",
@@ -1843,7 +2010,8 @@
     "verified": true,
     "severity": "high",
     "id": "md7gx4ekmwc8zke9cum",
-    "added_at": "2025-07-17T14:11:02.924Z"
+    "added_at": "2025-07-17T14:11:02.924Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1855,7 +2023,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdhhly2iujbhmelydbb",
-    "added_at": "2025-07-24T14:28:02.874Z"
+    "added_at": "2025-07-24T14:28:02.874Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1867,7 +2036,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdf7f9omnveb3dk41x",
-    "added_at": "2025-07-23T00:07:22.822Z"
+    "added_at": "2025-07-23T00:07:22.822Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1879,7 +2049,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdd6stp7twcd7a1j0ss",
-    "added_at": "2025-07-21T14:14:23.323Z"
+    "added_at": "2025-07-21T14:14:23.323Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1891,7 +2062,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdbrodkyzjv5f5ph70k",
-    "added_at": "2025-07-20T14:23:15.394Z"
+    "added_at": "2025-07-20T14:23:15.394Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1903,7 +2075,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdbrodkx58ejs3da70r",
-    "added_at": "2025-07-20T14:23:15.393Z"
+    "added_at": "2025-07-20T14:23:15.393Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1915,7 +2088,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdbr7hru1zyortgo9in",
-    "added_at": "2025-07-20T14:10:07.674Z"
+    "added_at": "2025-07-20T14:10:07.674Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1927,7 +2101,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdbr7hruqeu7bhbkxk",
-    "added_at": "2025-07-20T14:10:07.674Z"
+    "added_at": "2025-07-20T14:10:07.674Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1939,7 +2114,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdbr7hruw70cmcjq3nf",
-    "added_at": "2025-07-20T14:10:07.674Z"
+    "added_at": "2025-07-20T14:10:07.674Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1951,7 +2127,8 @@
     "verified": true,
     "severity": "low",
     "id": "mdbr7hrutqrww4vl74m",
-    "added_at": "2025-07-20T14:10:07.674Z"
+    "added_at": "2025-07-20T14:10:07.674Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1963,7 +2140,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdac803dqn3qb2ag0fd",
-    "added_at": "2025-07-19T14:22:51.001Z"
+    "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1975,7 +2153,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdabrjb7bau6erqfbmf",
-    "added_at": "2025-07-19T14:10:02.755Z"
+    "added_at": "2025-07-19T14:10:02.755Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1987,7 +2166,8 @@
     "verified": false,
     "severity": "low",
     "id": "mdabrjb7xowwizws1jg",
-    "added_at": "2025-07-19T14:10:02.755Z"
+    "added_at": "2025-07-19T14:10:02.755Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -1999,7 +2179,8 @@
     "verified": true,
     "severity": "high",
     "id": "md8ww4ui5g93v4bihde",
-    "added_at": "2025-07-18T14:25:56.874Z"
+    "added_at": "2025-07-18T14:25:56.874Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2011,7 +2192,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md8wf9m22u1az12g0td",
-    "added_at": "2025-07-18T14:12:49.898Z"
+    "added_at": "2025-07-18T14:12:49.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2023,7 +2205,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md8wf9m264c3gnu9rje",
-    "added_at": "2025-07-18T14:12:49.898Z"
+    "added_at": "2025-07-18T14:12:49.898Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2035,7 +2218,8 @@
     "verified": true,
     "severity": "high",
     "id": "md7hfdgvpfy0rdmgrv",
-    "added_at": "2025-07-17T14:25:14.479Z"
+    "added_at": "2025-07-17T14:25:14.479Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2047,7 +2231,8 @@
     "verified": true,
     "severity": "high",
     "id": "md7hfdgve1sx1ho9koc",
-    "added_at": "2025-07-17T14:25:14.479Z"
+    "added_at": "2025-07-17T14:25:14.479Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2059,7 +2244,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7hfdgveyqd8b3g5np",
-    "added_at": "2025-07-17T14:25:14.479Z"
+    "added_at": "2025-07-17T14:25:14.479Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2071,7 +2257,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7hfdgvzqbvxsbym8l",
-    "added_at": "2025-07-17T14:25:14.479Z"
+    "added_at": "2025-07-17T14:25:14.479Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2083,7 +2270,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7gx8efvtczhbw5ze",
-    "added_at": "2025-07-17T14:11:08.103Z"
+    "added_at": "2025-07-17T14:11:08.103Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2095,7 +2283,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7gx8efbvlrr196iwi",
-    "added_at": "2025-07-17T14:11:08.103Z"
+    "added_at": "2025-07-17T14:11:08.103Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2107,7 +2296,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7gx8efapjds50rh9k",
-    "added_at": "2025-07-17T14:11:08.103Z"
+    "added_at": "2025-07-17T14:11:08.103Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2119,7 +2309,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7gx5838b643s3dp2",
-    "added_at": "2025-07-17T14:11:03.987Z"
+    "added_at": "2025-07-17T14:11:03.987Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2131,7 +2322,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7gx583s3h3p48gzs",
-    "added_at": "2025-07-17T14:11:03.987Z"
+    "added_at": "2025-07-17T14:11:03.987Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2143,7 +2335,8 @@
     "verified": false,
     "severity": "high",
     "id": "md7gx582zmuxjhoirli",
-    "added_at": "2025-07-17T14:11:03.986Z"
+    "added_at": "2025-07-17T14:11:03.986Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2155,7 +2348,8 @@
     "verified": true,
     "severity": "high",
     "id": "md61i9hhi1zv2ef4b5",
-    "added_at": "2025-07-16T14:11:49.253Z"
+    "added_at": "2025-07-16T14:11:49.253Z",
+    "status": "published"
   },
   {
     "date": "2025-07-16",
@@ -2167,7 +2361,8 @@
     "verified": true,
     "severity": "high",
     "id": "md61i8p2rq3jx74rmaf",
-    "added_at": "2025-07-16T14:11:48.230Z"
+    "added_at": "2025-07-16T14:11:48.230Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2179,7 +2374,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdiwz5mphf9gylk68ji",
-    "added_at": "2025-07-25T14:25:59.617Z"
+    "added_at": "2025-07-25T14:25:59.617Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2191,7 +2387,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8wdxplmg32ki00f",
-    "added_at": "2025-07-22T14:14:33.717Z"
+    "added_at": "2025-07-22T14:14:33.717Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2203,7 +2400,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdem8wdw5qi3yuobg9k",
-    "added_at": "2025-07-22T14:14:33.716Z"
+    "added_at": "2025-07-22T14:14:33.716Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2215,7 +2413,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdem8wdw0ewm6owppurq",
-    "added_at": "2025-07-22T14:14:33.716Z"
+    "added_at": "2025-07-22T14:14:33.716Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2227,7 +2426,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdbr7hex2oeji11jckv",
-    "added_at": "2025-07-20T14:10:07.209Z"
+    "added_at": "2025-07-20T14:10:07.209Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2239,7 +2439,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdac875n3gptkep7w4m",
-    "added_at": "2025-07-19T14:23:00.155Z"
+    "added_at": "2025-07-19T14:23:00.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2251,7 +2452,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md8ww4uiys0aywq2n6",
-    "added_at": "2025-07-18T14:25:56.874Z"
+    "added_at": "2025-07-18T14:25:56.874Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2263,7 +2465,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfocuovpmci6d47",
-    "added_at": "2025-07-17T14:25:28.590Z"
+    "added_at": "2025-07-17T14:25:28.590Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2275,7 +2478,8 @@
     "verified": false,
     "severity": "low",
     "id": "md7hfdnajrquoxxcons",
-    "added_at": "2025-07-17T14:25:14.710Z"
+    "added_at": "2025-07-17T14:25:14.710Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2287,7 +2491,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfbdyppd1ybaf0gr",
-    "added_at": "2025-07-17T14:25:11.782Z"
+    "added_at": "2025-07-17T14:25:11.782Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2299,7 +2504,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7gx4ekhd41159wv24",
-    "added_at": "2025-07-17T14:11:02.924Z"
+    "added_at": "2025-07-17T14:11:02.924Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2311,7 +2517,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md61z8z5mc11m6nkhpi",
-    "added_at": "2025-07-16T14:25:01.745Z"
+    "added_at": "2025-07-16T14:25:01.745Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2323,7 +2530,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md61i8p2zawinf3rjq",
-    "added_at": "2025-07-16T14:11:48.230Z"
+    "added_at": "2025-07-16T14:11:48.230Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2335,7 +2543,8 @@
     "verified": true,
     "severity": "high",
     "id": "md4m3wr7pvm121xuee",
-    "added_at": "2025-07-15T14:12:59.155Z"
+    "added_at": "2025-07-15T14:12:59.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2347,7 +2556,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3wr7kugecky7u6l",
-    "added_at": "2025-07-15T14:12:59.155Z"
+    "added_at": "2025-07-15T14:12:59.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-15",
@@ -2359,7 +2569,8 @@
     "verified": false,
     "severity": "high",
     "id": "md4m3wr7yvwmk5bgc2",
-    "added_at": "2025-07-15T14:12:59.155Z"
+    "added_at": "2025-07-15T14:12:59.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2371,7 +2582,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdhhlwogxxe80em0gm",
-    "added_at": "2025-07-24T14:28:01.072Z"
+    "added_at": "2025-07-24T14:28:01.072Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2383,7 +2595,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdd7aoaijrf2ku6glv",
-    "added_at": "2025-07-21T14:28:16.122Z"
+    "added_at": "2025-07-21T14:28:16.122Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2395,7 +2608,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdac875n114h7qjrovo",
-    "added_at": "2025-07-19T14:23:00.155Z"
+    "added_at": "2025-07-19T14:23:00.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2407,7 +2621,8 @@
     "verified": false,
     "severity": "high",
     "id": "md8ww6xpq42kmxwtxds",
-    "added_at": "2025-07-18T14:25:59.581Z"
+    "added_at": "2025-07-18T14:25:59.581Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2419,7 +2634,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md8wfb7ajegkzdss7ce",
-    "added_at": "2025-07-18T14:12:51.958Z"
+    "added_at": "2025-07-18T14:12:51.958Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2431,7 +2647,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfdnafqamqdqt9bh",
-    "added_at": "2025-07-17T14:25:14.710Z"
+    "added_at": "2025-07-17T14:25:14.710Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2443,7 +2660,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md7hfcrt6pba0i3vt05",
-    "added_at": "2025-07-17T14:25:13.577Z"
+    "added_at": "2025-07-17T14:25:13.577Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2455,7 +2673,8 @@
     "verified": true,
     "severity": "high",
     "id": "md61z8z5qat2mwjd5zr",
-    "added_at": "2025-07-16T14:25:01.745Z"
+    "added_at": "2025-07-16T14:25:01.745Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2467,7 +2686,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md61z8my5nopwauht13",
-    "added_at": "2025-07-16T14:25:01.306Z"
+    "added_at": "2025-07-16T14:25:01.306Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2479,7 +2699,8 @@
     "verified": true,
     "severity": "high",
     "id": "md61ib6u977iwa6hucg",
-    "added_at": "2025-07-16T14:11:51.462Z"
+    "added_at": "2025-07-16T14:11:51.462Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2491,7 +2712,8 @@
     "verified": true,
     "severity": "low",
     "id": "md61i9dcf0rv3uvs6xk",
-    "added_at": "2025-07-16T14:11:49.104Z"
+    "added_at": "2025-07-16T14:11:49.104Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2503,7 +2725,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md4mk1jhu166xvxdbbp",
-    "added_at": "2025-07-15T14:25:31.853Z"
+    "added_at": "2025-07-15T14:25:31.853Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2515,7 +2738,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4mk1jhj4p36fhiogh",
-    "added_at": "2025-07-15T14:25:31.853Z"
+    "added_at": "2025-07-15T14:25:31.853Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2527,7 +2751,8 @@
     "verified": true,
     "severity": "high",
     "id": "md4m3v6lwxx53k9ypc",
-    "added_at": "2025-07-15T14:12:57.117Z"
+    "added_at": "2025-07-15T14:12:57.117Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2539,7 +2764,8 @@
     "verified": true,
     "severity": "high",
     "id": "md4m3v6ln0s5lprluj",
-    "added_at": "2025-07-15T14:12:57.117Z"
+    "added_at": "2025-07-15T14:12:57.117Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2551,7 +2777,8 @@
     "verified": true,
     "severity": "high",
     "id": "md4m3v6l65ni9u35a1r",
-    "added_at": "2025-07-15T14:12:57.117Z"
+    "added_at": "2025-07-15T14:12:57.117Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2563,7 +2790,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3v6l1r0nolsj4be",
-    "added_at": "2025-07-15T14:12:57.117Z"
+    "added_at": "2025-07-15T14:12:57.117Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2575,7 +2803,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md4m3u5kifzqb5ent8n",
-    "added_at": "2025-07-15T14:12:55.784Z"
+    "added_at": "2025-07-15T14:12:55.784Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2587,7 +2816,8 @@
     "verified": false,
     "severity": "high",
     "id": "md4m3u5k3wed4d4dp4b",
-    "added_at": "2025-07-15T14:12:55.784Z"
+    "added_at": "2025-07-15T14:12:55.784Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2599,7 +2829,8 @@
     "verified": true,
     "severity": "high",
     "id": "md4m3u4tctba5vipd7r",
-    "added_at": "2025-07-15T14:12:55.757Z"
+    "added_at": "2025-07-15T14:12:55.757Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2611,7 +2842,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3s798hw08cxusm",
-    "added_at": "2025-07-15T14:12:53.253Z"
+    "added_at": "2025-07-15T14:12:53.253Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2623,7 +2855,8 @@
     "verified": true,
     "severity": "high",
     "id": "md3i293bvukwuru2ynj",
-    "added_at": "2025-07-14T19:31:57.191Z"
+    "added_at": "2025-07-14T19:31:57.191Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2635,7 +2868,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3i27z6cuep138gftn",
-    "added_at": "2025-07-14T19:31:55.746Z"
+    "added_at": "2025-07-14T19:31:55.746Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2647,7 +2881,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3i27z6e0mcmaduk4t",
-    "added_at": "2025-07-14T19:31:55.746Z"
+    "added_at": "2025-07-14T19:31:55.746Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2659,7 +2894,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3i26mmao62ducaw1c",
-    "added_at": "2025-07-14T19:31:53.998Z"
+    "added_at": "2025-07-14T19:31:53.998Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2671,7 +2907,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3gzwkur56knoe9ff9",
-    "added_at": "2025-07-14T19:02:08.046Z"
+    "added_at": "2025-07-14T19:02:08.046Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2683,7 +2920,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3g99mdkiz6azgceuo",
-    "added_at": "2025-07-14T18:41:25.237Z"
+    "added_at": "2025-07-14T18:41:25.237Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2695,7 +2933,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3g99md35ugvr0pm7r",
-    "added_at": "2025-07-14T18:41:25.237Z"
+    "added_at": "2025-07-14T18:41:25.237Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2707,7 +2946,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g99mdg8ey8x6tnq4",
-    "added_at": "2025-07-14T18:41:25.237Z"
+    "added_at": "2025-07-14T18:41:25.237Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2719,7 +2959,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md37606ba8fhrrx9o4",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2731,7 +2972,8 @@
     "verified": true,
     "severity": "high",
     "id": "md37606bv4pfplfyref",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2743,7 +2985,8 @@
     "verified": false,
     "severity": "high",
     "id": "md375z9xb4l8abxz09",
-    "added_at": "2025-07-14T14:26:55.317Z"
+    "added_at": "2025-07-14T14:26:55.317Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2755,7 +2998,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36ocxblpsci5aoyk",
-    "added_at": "2025-07-14T14:13:13.199Z"
+    "added_at": "2025-07-14T14:13:13.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2767,7 +3011,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36ocxbf2c7edhogom",
-    "added_at": "2025-07-14T14:13:13.199Z"
+    "added_at": "2025-07-14T14:13:13.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-14",
@@ -2779,7 +3024,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36ocxbvk86o3dr0tb",
-    "added_at": "2025-07-14T14:13:13.199Z"
+    "added_at": "2025-07-14T14:13:13.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2791,7 +3037,8 @@
     "verified": true,
     "severity": "medium",
     "id": "mdac875nteviojh2i1",
-    "added_at": "2025-07-19T14:23:00.155Z"
+    "added_at": "2025-07-19T14:23:00.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2803,7 +3050,8 @@
     "verified": true,
     "severity": "high",
     "id": "md61iampsjegb0w871o",
-    "added_at": "2025-07-16T14:11:50.737Z"
+    "added_at": "2025-07-16T14:11:50.737Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2815,7 +3063,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md61i9dcifo8oil3v2n",
-    "added_at": "2025-07-16T14:11:49.104Z"
+    "added_at": "2025-07-16T14:11:49.104Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2827,7 +3076,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3gzwkuwut9y9h80pc",
-    "added_at": "2025-07-14T19:02:08.046Z"
+    "added_at": "2025-07-14T19:02:08.046Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2839,7 +3089,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md37606byke34jfa1q",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2851,7 +3102,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md375wvbovfmz1edsg",
-    "added_at": "2025-07-14T14:26:52.199Z"
+    "added_at": "2025-07-14T14:26:52.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2863,7 +3115,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md28mzuy663ducxvpvu",
-    "added_at": "2025-07-13T22:20:22.666Z"
+    "added_at": "2025-07-13T22:20:22.666Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2875,7 +3128,8 @@
     "verified": false,
     "severity": "high",
     "id": "md28mzuymyg1biybzhj",
-    "added_at": "2025-07-13T22:20:22.666Z"
+    "added_at": "2025-07-13T22:20:22.666Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2887,7 +3141,8 @@
     "verified": true,
     "severity": "high",
     "id": "md289buwd1jeyplr4tw",
-    "added_at": "2025-07-13T22:09:45.032Z"
+    "added_at": "2025-07-13T22:09:45.032Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2899,7 +3154,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289buwzgv6m4ngmd",
-    "added_at": "2025-07-13T22:09:45.032Z"
+    "added_at": "2025-07-13T22:09:45.032Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2911,7 +3167,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zg7b6k0e36vefhe",
-    "added_at": "2025-07-13T21:34:04.487Z"
+    "added_at": "2025-07-13T21:34:04.487Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2923,7 +3180,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zg7b0gou0cj1prt",
-    "added_at": "2025-07-13T21:34:04.487Z"
+    "added_at": "2025-07-13T21:34:04.487Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2935,7 +3193,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zg7bn7wcqnimod",
-    "added_at": "2025-07-13T21:34:04.487Z"
+    "added_at": "2025-07-13T21:34:04.487Z",
+    "status": "published"
   },
   {
     "date": "2025-07-13",
@@ -2947,7 +3206,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zebvlvfq7keii",
-    "added_at": "2025-07-13T21:34:02.059Z"
+    "added_at": "2025-07-13T21:34:02.059Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -2959,7 +3219,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdac875notcsq0rqus",
-    "added_at": "2025-07-19T14:23:00.155Z"
+    "added_at": "2025-07-19T14:23:00.155Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -2971,7 +3232,8 @@
     "verified": false,
     "severity": "low",
     "id": "md4m3s79cr0bllp8b0h",
-    "added_at": "2025-07-15T14:12:53.253Z"
+    "added_at": "2025-07-15T14:12:53.253Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -2983,7 +3245,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3gznfrifayxwukkqm",
-    "added_at": "2025-07-14T19:01:56.199Z"
+    "added_at": "2025-07-14T19:01:56.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -2995,7 +3258,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md37608fyjs06irpt8",
-    "added_at": "2025-07-14T14:26:56.559Z"
+    "added_at": "2025-07-14T14:26:56.559Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3007,7 +3271,8 @@
     "verified": false,
     "severity": "high",
     "id": "md37608fa4ghwk2gfof",
-    "added_at": "2025-07-14T14:26:56.559Z"
+    "added_at": "2025-07-14T14:26:56.559Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3019,7 +3284,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md37608fhbksxlp68mv",
-    "added_at": "2025-07-14T14:26:56.559Z"
+    "added_at": "2025-07-14T14:26:56.559Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3031,7 +3297,8 @@
     "verified": true,
     "severity": "high",
     "id": "md37606bz2zrfs4vmwq",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3043,7 +3310,8 @@
     "verified": false,
     "severity": "high",
     "id": "md375z9xc6asn8kvwve",
-    "added_at": "2025-07-14T14:26:55.317Z"
+    "added_at": "2025-07-14T14:26:55.317Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3055,7 +3323,8 @@
     "verified": false,
     "severity": "high",
     "id": "md375wvbodzo5q13rd",
-    "added_at": "2025-07-14T14:26:52.199Z"
+    "added_at": "2025-07-14T14:26:52.199Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3067,7 +3336,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36ocmlvjwjs9kmw2",
-    "added_at": "2025-07-14T14:13:12.813Z"
+    "added_at": "2025-07-14T14:13:12.813Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3079,7 +3349,8 @@
     "verified": false,
     "severity": "high",
     "id": "md36obtxws8vnukprmr",
-    "added_at": "2025-07-14T14:13:11.781Z"
+    "added_at": "2025-07-14T14:13:11.781Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3091,7 +3362,8 @@
     "verified": true,
     "severity": "high",
     "id": "md36obmtfut8ckma6yl",
-    "added_at": "2025-07-14T14:13:11.525Z"
+    "added_at": "2025-07-14T14:13:11.525Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3103,7 +3375,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28n0shdkwz1hd3imv",
-    "added_at": "2025-07-13T22:20:23.873Z"
+    "added_at": "2025-07-13T22:20:23.873Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3115,7 +3388,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28n0sggb93isqk3wj",
-    "added_at": "2025-07-13T22:20:23.872Z"
+    "added_at": "2025-07-13T22:20:23.872Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3127,7 +3401,8 @@
     "verified": true,
     "severity": "high",
     "id": "md289b51bl25cxcriif",
-    "added_at": "2025-07-13T22:09:44.101Z"
+    "added_at": "2025-07-13T22:09:44.101Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3139,7 +3414,8 @@
     "verified": true,
     "severity": "high",
     "id": "md26zfu3qyr1b37vw5",
-    "added_at": "2025-07-13T21:34:04.011Z"
+    "added_at": "2025-07-13T21:34:04.011Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3151,7 +3427,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zfu3x6rft8tew0a",
-    "added_at": "2025-07-13T21:34:04.011Z"
+    "added_at": "2025-07-13T21:34:04.011Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3163,7 +3440,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zfu3z5rzi3gxa2b",
-    "added_at": "2025-07-13T21:34:04.011Z"
+    "added_at": "2025-07-13T21:34:04.011Z",
+    "status": "published"
   },
   {
     "date": "2025-07-12",
@@ -3175,7 +3453,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zebvvmrt746xnw",
-    "added_at": "2025-07-13T21:34:02.059Z"
+    "added_at": "2025-07-13T21:34:02.059Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3187,7 +3466,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdhhlwogfftpumjhuew",
-    "added_at": "2025-07-24T14:28:01.072Z"
+    "added_at": "2025-07-24T14:28:01.072Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3199,7 +3479,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdgp1k6qcxjwhzfpy4",
-    "added_at": "2025-07-24T01:08:22.514Z"
+    "added_at": "2025-07-24T01:08:22.514Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3211,7 +3492,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md61i9hhjk3cq2ciqwb",
-    "added_at": "2025-07-16T14:11:49.253Z"
+    "added_at": "2025-07-16T14:11:49.253Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3223,7 +3505,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md61i9hhozrdjuj8lpm",
-    "added_at": "2025-07-16T14:11:49.253Z"
+    "added_at": "2025-07-16T14:11:49.253Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3235,7 +3518,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3i28sr2ypmdytuwyl",
-    "added_at": "2025-07-14T19:31:56.811Z"
+    "added_at": "2025-07-14T19:31:56.811Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3247,7 +3531,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3i28sr3ddn7ro293i",
-    "added_at": "2025-07-14T19:31:56.811Z"
+    "added_at": "2025-07-14T19:31:56.811Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3259,7 +3544,8 @@
     "verified": false,
     "severity": "low",
     "id": "md3gzwku9i4qq847l7p",
-    "added_at": "2025-07-14T19:02:08.046Z"
+    "added_at": "2025-07-14T19:02:08.046Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3271,7 +3557,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g9733np27jhd29ie",
-    "added_at": "2025-07-14T18:41:21.951Z"
+    "added_at": "2025-07-14T18:41:21.951Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3283,7 +3570,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g9733ldfbxfc5mi",
-    "added_at": "2025-07-14T18:41:21.951Z"
+    "added_at": "2025-07-14T18:41:21.951Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3295,7 +3583,8 @@
     "verified": false,
     "severity": "low",
     "id": "md3g9733d5p038nanhp",
-    "added_at": "2025-07-14T18:41:21.951Z"
+    "added_at": "2025-07-14T18:41:21.951Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3307,7 +3596,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md3g9733u2njrrbh1zk",
-    "added_at": "2025-07-14T18:41:21.951Z"
+    "added_at": "2025-07-14T18:41:21.951Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3319,7 +3609,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g9733vf7as20w72h",
-    "added_at": "2025-07-14T18:41:21.951Z"
+    "added_at": "2025-07-14T18:41:21.951Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3331,7 +3622,8 @@
     "verified": true,
     "severity": "high",
     "id": "md3g95dpa6x86rs8lcn",
-    "added_at": "2025-07-14T18:41:19.741Z"
+    "added_at": "2025-07-14T18:41:19.741Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3343,7 +3635,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g95dp5sp884462n",
-    "added_at": "2025-07-14T18:41:19.741Z"
+    "added_at": "2025-07-14T18:41:19.741Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3355,7 +3648,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g95dpkfdahwu65o",
-    "added_at": "2025-07-14T18:41:19.741Z"
+    "added_at": "2025-07-14T18:41:19.741Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3367,7 +3661,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3g95dp9mwzw8j4vkn",
-    "added_at": "2025-07-14T18:41:19.741Z"
+    "added_at": "2025-07-14T18:41:19.741Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3379,7 +3674,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3g94hn01fhtkr9v63n",
-    "added_at": "2025-07-14T18:41:18.587Z"
+    "added_at": "2025-07-14T18:41:18.587Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3391,7 +3687,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md37606bn97l3v92u2",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3403,7 +3700,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md37606brp603pclejj",
-    "added_at": "2025-07-14T14:26:56.483Z"
+    "added_at": "2025-07-14T14:26:56.483Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3415,7 +3713,8 @@
     "verified": false,
     "severity": "high",
     "id": "md375z9xai0w18k867b",
-    "added_at": "2025-07-14T14:26:55.317Z"
+    "added_at": "2025-07-14T14:26:55.317Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3427,7 +3726,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36obtxt6i0qfrv9le",
-    "added_at": "2025-07-14T14:13:11.781Z"
+    "added_at": "2025-07-14T14:13:11.781Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3439,7 +3739,8 @@
     "verified": true,
     "severity": "high",
     "id": "md36obmt4fvoprbb3la",
-    "added_at": "2025-07-14T14:13:11.525Z"
+    "added_at": "2025-07-14T14:13:11.525Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3451,7 +3752,8 @@
     "verified": false,
     "severity": "high",
     "id": "md28mzjjv7fhkxcfj0b",
-    "added_at": "2025-07-13T22:20:22.255Z"
+    "added_at": "2025-07-13T22:20:22.255Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3463,7 +3765,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28mzjjat1gr0fag8",
-    "added_at": "2025-07-13T22:20:22.255Z"
+    "added_at": "2025-07-13T22:20:22.255Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3475,7 +3778,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289b51wh70p1ld5d",
-    "added_at": "2025-07-13T22:09:44.101Z"
+    "added_at": "2025-07-13T22:09:44.101Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3487,7 +3791,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zepbe2nv1j92ix",
-    "added_at": "2025-07-13T21:34:02.543Z"
+    "added_at": "2025-07-13T21:34:02.543Z",
+    "status": "published"
   },
   {
     "date": "2025-07-11",
@@ -3499,7 +3804,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zebvvu05v7mwrx",
-    "added_at": "2025-07-13T21:34:02.059Z"
+    "added_at": "2025-07-13T21:34:02.059Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3511,7 +3817,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdhhlwogfiliwp0f96h",
-    "added_at": "2025-07-24T14:28:01.072Z"
+    "added_at": "2025-07-24T14:28:01.072Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3523,7 +3830,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdff576a78m6ij0h1kc",
-    "added_at": "2025-07-23T03:43:29.938Z"
+    "added_at": "2025-07-23T03:43:29.938Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3535,7 +3843,8 @@
     "verified": false,
     "severity": "high",
     "id": "md8wf8k3r4jmzhnts8k",
-    "added_at": "2025-07-18T14:12:48.531Z"
+    "added_at": "2025-07-18T14:12:48.531Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3547,7 +3856,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md7gx5xoco6pye8r5x8",
-    "added_at": "2025-07-17T14:11:04.908Z"
+    "added_at": "2025-07-17T14:11:04.908Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3559,7 +3869,8 @@
     "verified": false,
     "severity": "high",
     "id": "md4mk2eh8hudondbny8",
-    "added_at": "2025-07-15T14:25:32.969Z"
+    "added_at": "2025-07-15T14:25:32.969Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3571,7 +3882,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3u4tiqj74q63u5",
-    "added_at": "2025-07-15T14:12:55.757Z"
+    "added_at": "2025-07-15T14:12:55.757Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3583,7 +3895,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md4m3u4t4n9cu8q7uvf",
-    "added_at": "2025-07-15T14:12:55.757Z"
+    "added_at": "2025-07-15T14:12:55.757Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3595,7 +3908,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3i28xr86bkm26mm3",
-    "added_at": "2025-07-14T19:31:56.991Z"
+    "added_at": "2025-07-14T19:31:56.991Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3607,7 +3921,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3i28xr9ll0zoi09yh",
-    "added_at": "2025-07-14T19:31:56.991Z"
+    "added_at": "2025-07-14T19:31:56.991Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3619,7 +3934,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3g942uqomo1ogsw6o",
-    "added_at": "2025-07-14T18:41:18.054Z"
+    "added_at": "2025-07-14T18:41:18.054Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3631,7 +3947,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g93jwzr6ov8r7lx",
-    "added_at": "2025-07-14T18:41:17.372Z"
+    "added_at": "2025-07-14T18:41:17.372Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3643,7 +3960,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md375z9x50i1hregdqb",
-    "added_at": "2025-07-14T14:26:55.317Z"
+    "added_at": "2025-07-14T14:26:55.317Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3655,7 +3973,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md36obtxffuhct7o26t",
-    "added_at": "2025-07-14T14:13:11.781Z"
+    "added_at": "2025-07-14T14:13:11.781Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3667,7 +3986,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md36obmtiumw5w61yj",
-    "added_at": "2025-07-14T14:13:11.525Z"
+    "added_at": "2025-07-14T14:13:11.525Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3679,7 +3999,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md28mzuyw0r47loh9s9",
-    "added_at": "2025-07-13T22:20:22.666Z"
+    "added_at": "2025-07-13T22:20:22.666Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3691,7 +4012,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md28mzktvm11rt3n5",
-    "added_at": "2025-07-13T22:20:22.301Z"
+    "added_at": "2025-07-13T22:20:22.301Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3703,7 +4025,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289b51q8k2p46s6rl",
-    "added_at": "2025-07-13T22:09:44.101Z"
+    "added_at": "2025-07-13T22:09:44.101Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3715,7 +4038,8 @@
     "verified": true,
     "severity": "high",
     "id": "md289b1y58iqtzza0cg",
-    "added_at": "2025-07-13T22:09:43.990Z"
+    "added_at": "2025-07-13T22:09:43.990Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3727,7 +4051,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zepbismr70y1w5",
-    "added_at": "2025-07-13T21:34:02.543Z"
+    "added_at": "2025-07-13T21:34:02.543Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3739,7 +4064,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zent06qzl5v9b47d",
-    "added_at": "2025-07-13T21:34:02.489Z"
+    "added_at": "2025-07-13T21:34:02.489Z",
+    "status": "published"
   },
   {
     "date": "2025-07-10",
@@ -3751,7 +4077,8 @@
     "verified": false,
     "severity": "high",
     "id": "md26zebv3i1o2dmhq3f",
-    "added_at": "2025-07-13T21:34:02.059Z"
+    "added_at": "2025-07-13T21:34:02.059Z",
+    "status": "published"
   },
   {
     "id": "1753591007787-avd3zvyok",
@@ -3767,7 +4094,8 @@
     "manual_submission": true,
     "submitted_by": "admin",
     "submitted_at": "2025-07-27T04:36:29.089Z",
-    "processed_at": "2025-07-27T04:36:47.787Z"
+    "processed_at": "2025-07-27T04:36:47.787Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3779,7 +4107,8 @@
     "verified": false,
     "severity": "high",
     "id": "md36obtxr0rhlckd849",
-    "added_at": "2025-07-14T14:13:11.781Z"
+    "added_at": "2025-07-14T14:13:11.781Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3791,7 +4120,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md36obmufrfmm7nrzqq",
-    "added_at": "2025-07-14T14:13:11.526Z"
+    "added_at": "2025-07-14T14:13:11.526Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3803,7 +4133,8 @@
     "verified": false,
     "severity": "high",
     "id": "md28mzktsdugks1v2pc",
-    "added_at": "2025-07-13T22:20:22.301Z"
+    "added_at": "2025-07-13T22:20:22.301Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3815,7 +4146,8 @@
     "verified": false,
     "severity": "high",
     "id": "md28mys2rzbpw871iik",
-    "added_at": "2025-07-13T22:20:21.266Z"
+    "added_at": "2025-07-13T22:20:21.266Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3827,7 +4159,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28mys2g158q4gni0c",
-    "added_at": "2025-07-13T22:20:21.266Z"
+    "added_at": "2025-07-13T22:20:21.266Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3839,7 +4172,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289b51n0s9gi9lxw9",
-    "added_at": "2025-07-13T22:09:44.101Z"
+    "added_at": "2025-07-13T22:09:44.101Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3851,7 +4185,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zentjamkdyxu3f",
-    "added_at": "2025-07-13T21:34:02.489Z"
+    "added_at": "2025-07-13T21:34:02.489Z",
+    "status": "published"
   },
   {
     "date": "2025-07-09",
@@ -3863,7 +4198,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md26zebvlk4lkdme11",
-    "added_at": "2025-07-13T21:34:02.059Z"
+    "added_at": "2025-07-13T21:34:02.059Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3875,7 +4211,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3uvoz3b6yl6j5qi",
-    "added_at": "2025-07-15T14:12:56.724Z"
+    "added_at": "2025-07-15T14:12:56.724Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3887,7 +4224,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3g94hnurdnwc4g8z",
-    "added_at": "2025-07-14T18:41:18.587Z"
+    "added_at": "2025-07-14T18:41:18.587Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3899,7 +4237,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md36obmuu7r7mnj593",
-    "added_at": "2025-07-14T14:13:11.526Z"
+    "added_at": "2025-07-14T14:13:11.526Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3911,7 +4250,8 @@
     "verified": false,
     "severity": "high",
     "id": "md289bboucj8v74ztl",
-    "added_at": "2025-07-13T22:09:44.340Z"
+    "added_at": "2025-07-13T22:09:44.340Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3923,7 +4263,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289bboy51xdre6hq",
-    "added_at": "2025-07-13T22:09:44.340Z"
+    "added_at": "2025-07-13T22:09:44.340Z",
+    "status": "published"
   },
   {
     "date": "2025-07-08",
@@ -3935,7 +4276,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md289b513ddefalqo1k",
-    "added_at": "2025-07-13T22:09:44.101Z"
+    "added_at": "2025-07-13T22:09:44.101Z",
+    "status": "published"
   },
   {
     "date": "2025-07-07",
@@ -3947,7 +4289,8 @@
     "verified": false,
     "severity": "high",
     "id": "md7gx4ek83awl8rjvvy",
-    "added_at": "2025-07-17T14:11:02.924Z"
+    "added_at": "2025-07-17T14:11:02.924Z",
+    "status": "published"
   },
   {
     "date": "2025-07-07",
@@ -3959,7 +4302,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28mzkt4csn1n54jic",
-    "added_at": "2025-07-13T22:20:22.301Z"
+    "added_at": "2025-07-13T22:20:22.301Z",
+    "status": "published"
   },
   {
     "date": "2025-07-07",
@@ -3971,7 +4315,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md28mys26pgegp4qb2j",
-    "added_at": "2025-07-13T22:20:21.266Z"
+    "added_at": "2025-07-13T22:20:21.266Z",
+    "status": "published"
   },
   {
     "date": "2025-07-07",
@@ -3983,7 +4328,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md289bbo7m6ollglwxp",
-    "added_at": "2025-07-13T22:09:44.340Z"
+    "added_at": "2025-07-13T22:09:44.340Z",
+    "status": "published"
   },
   {
     "date": "2025-07-03",
@@ -3995,7 +4341,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdbr7i2y0fpd7q8sidzr",
-    "added_at": "2025-07-20T14:10:08.074Z"
+    "added_at": "2025-07-20T14:10:08.074Z",
+    "status": "published"
   },
   {
     "date": "2025-07-02",
@@ -4007,7 +4354,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md3gzobfn352b1jgl9",
-    "added_at": "2025-07-14T19:01:57.339Z"
+    "added_at": "2025-07-14T19:01:57.339Z",
+    "status": "published"
   },
   {
     "date": "2025-07-02",
@@ -4019,7 +4367,8 @@
     "verified": true,
     "severity": "high",
     "id": "md3gzobfmy14bl2w6d",
-    "added_at": "2025-07-14T19:01:57.339Z"
+    "added_at": "2025-07-14T19:01:57.339Z",
+    "status": "published"
   },
   {
     "date": "2025-07-02",
@@ -4031,7 +4380,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3gzobfn31dogzfo1",
-    "added_at": "2025-07-14T19:01:57.339Z"
+    "added_at": "2025-07-14T19:01:57.339Z",
+    "status": "published"
   },
   {
     "date": "2025-07-02",
@@ -4043,7 +4393,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md2899dt9pl5n8i274",
-    "added_at": "2025-07-13T22:09:41.825Z"
+    "added_at": "2025-07-13T22:09:41.825Z",
+    "status": "published"
   },
   {
     "date": "2025-07-01",
@@ -4055,7 +4406,8 @@
     "verified": false,
     "severity": "high",
     "id": "md4m3uvolscuk4l4s5k",
-    "added_at": "2025-07-15T14:12:56.724Z"
+    "added_at": "2025-07-15T14:12:56.724Z",
+    "status": "published"
   },
   {
     "date": "2025-07-01",
@@ -4067,7 +4419,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3i28dyzmsxnxx3qq",
-    "added_at": "2025-07-14T19:31:56.278Z"
+    "added_at": "2025-07-14T19:31:56.278Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4079,7 +4432,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdf7f9rrucwridykdgk",
-    "added_at": "2025-07-23T00:07:22.935Z"
+    "added_at": "2025-07-23T00:07:22.935Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4091,7 +4445,8 @@
     "verified": true,
     "severity": "high",
     "id": 721045,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4103,7 +4458,8 @@
     "verified": true,
     "severity": "high",
     "id": 584239,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4115,7 +4471,8 @@
     "verified": true,
     "severity": "medium",
     "id": 410329,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4127,7 +4484,8 @@
     "verified": true,
     "severity": "medium",
     "id": 275839,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4139,7 +4497,8 @@
     "verified": true,
     "severity": "medium",
     "id": 824302,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-30",
@@ -4151,7 +4510,8 @@
     "verified": true,
     "severity": "medium",
     "id": 993476,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-29",
@@ -4163,7 +4523,8 @@
     "verified": true,
     "severity": "medium",
     "id": "304b1246-eadc-4b6f-9c39-a61166379717",
-    "added_at": "2025-06-29T23:08:01.788Z"
+    "added_at": "2025-06-29T23:08:01.788Z",
+    "status": "published"
   },
   {
     "date": "2025-06-28",
@@ -4175,7 +4536,8 @@
     "verified": true,
     "severity": "medium",
     "id": 455281,
-    "added_at": "2025-06-30T14:20:00Z"
+    "added_at": "2025-06-30T14:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-27",
@@ -4187,7 +4549,8 @@
     "verified": true,
     "severity": "medium",
     "id": 127,
-    "added_at": "2025-06-28T15:05:00Z"
+    "added_at": "2025-06-28T15:05:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-27",
@@ -4199,7 +4562,8 @@
     "verified": true,
     "severity": "high",
     "id": 126,
-    "added_at": "2025-06-28T15:00:00Z"
+    "added_at": "2025-06-28T15:00:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-27",
@@ -4211,7 +4575,8 @@
     "verified": true,
     "severity": "high",
     "id": 121,
-    "added_at": "2025-06-28T13:50:00Z"
+    "added_at": "2025-06-28T13:50:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-27",
@@ -4223,7 +4588,8 @@
     "verified": true,
     "severity": "high",
     "id": 103,
-    "added_at": "2025-06-28T12:10:00Z"
+    "added_at": "2025-06-28T12:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-27",
@@ -4235,7 +4601,8 @@
     "verified": true,
     "severity": "medium",
     "id": 102,
-    "added_at": "2025-06-28T12:05:00Z"
+    "added_at": "2025-06-28T12:05:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4247,7 +4614,8 @@
     "verified": true,
     "severity": "medium",
     "id": 435678,
-    "added_at": "2025-07-01T09:00:22-05:00"
+    "added_at": "2025-07-01T09:00:22-05:00",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4259,7 +4627,8 @@
     "verified": true,
     "severity": "medium",
     "id": 138,
-    "added_at": "2025-06-28T16:45:00Z"
+    "added_at": "2025-06-28T16:45:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4271,7 +4640,8 @@
     "verified": true,
     "severity": "medium",
     "id": 130,
-    "added_at": "2025-06-28T16:00:00Z"
+    "added_at": "2025-06-28T16:00:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4283,7 +4653,8 @@
     "verified": true,
     "severity": "medium",
     "id": 129,
-    "added_at": "2025-06-28T15:15:00Z"
+    "added_at": "2025-06-28T15:15:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4295,7 +4666,8 @@
     "verified": true,
     "severity": "medium",
     "id": 123,
-    "added_at": "2025-06-28T14:00:00Z"
+    "added_at": "2025-06-28T14:00:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-26",
@@ -4307,7 +4679,8 @@
     "verified": true,
     "severity": "medium",
     "id": 122,
-    "added_at": "2025-06-28T13:55:00Z"
+    "added_at": "2025-06-28T13:55:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-24",
@@ -4319,7 +4692,8 @@
     "verified": true,
     "severity": "high",
     "id": 124,
-    "added_at": "2025-06-28T14:05:00Z"
+    "added_at": "2025-06-28T14:05:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-24",
@@ -4331,7 +4705,8 @@
     "verified": true,
     "severity": "medium",
     "id": 120,
-    "added_at": "2025-06-28T13:45:00Z"
+    "added_at": "2025-06-28T13:45:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-23",
@@ -4343,7 +4718,8 @@
     "verified": true,
     "severity": "medium",
     "id": 137,
-    "added_at": "2025-06-28T16:40:00Z"
+    "added_at": "2025-06-28T16:40:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-23",
@@ -4355,7 +4731,8 @@
     "verified": true,
     "severity": "medium",
     "id": 136,
-    "added_at": "2025-06-28T16:35:00Z"
+    "added_at": "2025-06-28T16:35:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-23",
@@ -4367,7 +4744,8 @@
     "verified": true,
     "severity": "medium",
     "id": 128,
-    "added_at": "2025-06-28T15:10:00Z"
+    "added_at": "2025-06-28T15:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-23",
@@ -4379,7 +4757,8 @@
     "verified": false,
     "severity": "medium",
     "id": 105,
-    "added_at": "2025-06-28T12:20:00Z"
+    "added_at": "2025-06-28T12:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-23",
@@ -4391,7 +4770,8 @@
     "verified": true,
     "severity": "medium",
     "id": 104,
-    "added_at": "2025-06-28T12:15:00Z"
+    "added_at": "2025-06-28T12:15:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-22",
@@ -4403,7 +4783,8 @@
     "verified": true,
     "severity": "high",
     "id": 135,
-    "added_at": "2025-06-28T16:30:00Z"
+    "added_at": "2025-06-28T16:30:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-22",
@@ -4415,7 +4796,8 @@
     "verified": true,
     "severity": "high",
     "id": 134,
-    "added_at": "2025-06-28T16:25:00Z"
+    "added_at": "2025-06-28T16:25:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-20",
@@ -4427,7 +4809,8 @@
     "verified": false,
     "severity": "high",
     "id": "md3g94hnc8sd6mat2a7",
-    "added_at": "2025-07-14T18:41:18.587Z"
+    "added_at": "2025-07-14T18:41:18.587Z",
+    "status": "published"
   },
   {
     "date": "2025-06-18",
@@ -4439,7 +4822,8 @@
     "verified": true,
     "severity": "high",
     "id": "mdf7f9rrrbczg5yqy6a",
-    "added_at": "2025-07-23T00:07:22.935Z"
+    "added_at": "2025-07-23T00:07:22.935Z",
+    "status": "published"
   },
   {
     "date": "2025-06-17",
@@ -4451,7 +4835,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3uvorqm5wiqac3d",
-    "added_at": "2025-07-15T14:12:56.724Z"
+    "added_at": "2025-07-15T14:12:56.724Z",
+    "status": "published"
   },
   {
     "date": "2025-06-17",
@@ -4463,7 +4848,8 @@
     "verified": true,
     "severity": "high",
     "id": 143,
-    "added_at": "2025-06-28T17:20:00Z"
+    "added_at": "2025-06-28T17:20:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-16",
@@ -4475,7 +4861,8 @@
     "verified": true,
     "severity": "medium",
     "id": 139,
-    "added_at": "2025-06-28T17:00:00Z"
+    "added_at": "2025-06-28T17:00:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-14",
@@ -4487,7 +4874,8 @@
     "verified": true,
     "severity": "medium",
     "id": 900309,
-    "added_at": "2025-07-01T09:04:59-05:00"
+    "added_at": "2025-07-01T09:04:59-05:00",
+    "status": "published"
   },
   {
     "date": "2025-06-14",
@@ -4499,7 +4887,8 @@
     "verified": true,
     "severity": "high",
     "id": 118,
-    "added_at": "2025-06-28T13:35:00Z"
+    "added_at": "2025-06-28T13:35:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-13",
@@ -4511,7 +4900,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md4m3uvo3wet551yikt",
-    "added_at": "2025-07-15T14:12:56.724Z"
+    "added_at": "2025-07-15T14:12:56.724Z",
+    "status": "published"
   },
   {
     "date": "2025-06-12",
@@ -4523,7 +4913,8 @@
     "verified": true,
     "severity": "medium",
     "id": 900208,
-    "added_at": "2025-07-01T09:04:59-05:00"
+    "added_at": "2025-07-01T09:04:59-05:00",
+    "status": "published"
   },
   {
     "date": "2025-06-11",
@@ -4535,7 +4926,8 @@
     "verified": true,
     "severity": "low",
     "id": 131,
-    "added_at": "2025-06-28T16:05:00Z"
+    "added_at": "2025-06-28T16:05:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-10",
@@ -4547,7 +4939,8 @@
     "verified": true,
     "severity": "high",
     "id": 125,
-    "added_at": "2025-06-28T14:10:00Z"
+    "added_at": "2025-06-28T14:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-08",
@@ -4559,7 +4952,8 @@
     "verified": true,
     "severity": "medium",
     "id": 116,
-    "added_at": "2025-06-28T13:25:00Z"
+    "added_at": "2025-06-28T13:25:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-07",
@@ -4571,7 +4965,8 @@
     "verified": true,
     "severity": "high",
     "id": 900107,
-    "added_at": "2025-07-01T09:04:59-05:00"
+    "added_at": "2025-07-01T09:04:59-05:00",
+    "status": "published"
   },
   {
     "date": "2025-06-05",
@@ -4583,7 +4978,8 @@
     "verified": true,
     "severity": "low",
     "id": 145,
-    "added_at": "2025-06-28T17:30:00Z"
+    "added_at": "2025-06-28T17:30:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-05",
@@ -4595,7 +4991,8 @@
     "verified": true,
     "severity": "medium",
     "id": 144,
-    "added_at": "2025-06-28T17:25:00Z"
+    "added_at": "2025-06-28T17:25:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-05",
@@ -4607,7 +5004,8 @@
     "verified": true,
     "severity": "high",
     "id": 141,
-    "added_at": "2025-06-28T17:10:00Z"
+    "added_at": "2025-06-28T17:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-06-05",
@@ -4619,7 +5017,8 @@
     "verified": true,
     "severity": "medium",
     "id": 132,
-    "added_at": "2025-06-28T16:10:00Z"
+    "added_at": "2025-06-28T16:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-05-30",
@@ -4631,7 +5030,8 @@
     "verified": true,
     "severity": "medium",
     "id": 114,
-    "added_at": "2025-06-28T13:15:00Z"
+    "added_at": "2025-06-28T13:15:00Z",
+    "status": "published"
   },
   {
     "date": "2025-05-23",
@@ -4643,7 +5043,8 @@
     "verified": true,
     "severity": "high",
     "id": 876543,
-    "added_at": "2025-07-01T09:00:22-05:00"
+    "added_at": "2025-07-01T09:00:22-05:00",
+    "status": "published"
   },
   {
     "date": "2025-05-22",
@@ -4655,7 +5056,8 @@
     "verified": false,
     "severity": "high",
     "id": "mdff56n5me37q1ro4rd",
-    "added_at": "2025-07-23T03:43:29.249Z"
+    "added_at": "2025-07-23T03:43:29.249Z",
+    "status": "published"
   },
   {
     "date": "2025-05-22",
@@ -4667,7 +5069,8 @@
     "verified": true,
     "severity": "high",
     "id": 142,
-    "added_at": "2025-06-28T17:15:00Z"
+    "added_at": "2025-06-28T17:15:00Z",
+    "status": "published"
   },
   {
     "date": "2025-04-25",
@@ -4679,7 +5082,8 @@
     "verified": true,
     "severity": "high",
     "id": 113,
-    "added_at": "2025-06-28T13:10:00Z"
+    "added_at": "2025-06-28T13:10:00Z",
+    "status": "published"
   },
   {
     "date": "2025-04-08",
@@ -4691,7 +5095,8 @@
     "verified": false,
     "severity": "medium",
     "id": "mdff56n5apuybume2du",
-    "added_at": "2025-07-23T03:43:29.249Z"
+    "added_at": "2025-07-23T03:43:29.249Z",
+    "status": "published"
   },
   {
     "date": "2025-03-27",
@@ -4703,7 +5108,8 @@
     "verified": true,
     "severity": "high",
     "id": 109,
-    "added_at": "2025-06-28T12:40:00Z"
+    "added_at": "2025-06-28T12:40:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-27",
@@ -4715,7 +5121,8 @@
     "verified": true,
     "severity": "high",
     "id": 106,
-    "added_at": "2025-06-28T12:25:00Z"
+    "added_at": "2025-06-28T12:25:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-14",
@@ -4727,7 +5134,8 @@
     "verified": true,
     "severity": "high",
     "id": 107,
-    "added_at": "2025-06-28T12:30:00Z"
+    "added_at": "2025-06-28T12:30:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-12",
@@ -4739,7 +5147,8 @@
     "verified": true,
     "severity": "high",
     "id": 112,
-    "added_at": "2025-06-28T13:05:00Z"
+    "added_at": "2025-06-28T13:05:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-10",
@@ -4751,7 +5160,8 @@
     "verified": false,
     "severity": "medium",
     "id": 110,
-    "added_at": "2025-06-28T12:45:00Z"
+    "added_at": "2025-06-28T12:45:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-07",
@@ -4763,7 +5173,8 @@
     "verified": true,
     "severity": "medium",
     "id": 146,
-    "added_at": "2025-06-28T17:35:00Z"
+    "added_at": "2025-06-28T17:35:00Z",
+    "status": "published"
   },
   {
     "date": "2025-02-02",
@@ -4775,7 +5186,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md28mzjj032f5mj90mk7",
-    "added_at": "2025-07-13T22:20:22.255Z"
+    "added_at": "2025-07-13T22:20:22.255Z",
+    "status": "published"
   },
   {
     "date": "2025-01-31",
@@ -4787,7 +5199,8 @@
     "verified": true,
     "severity": "high",
     "id": 133,
-    "added_at": "2025-06-28T16:15:00Z"
+    "added_at": "2025-06-28T16:15:00Z",
+    "status": "published"
   },
   {
     "date": "2025-01-24",
@@ -4799,7 +5212,8 @@
     "verified": true,
     "severity": "high",
     "id": 101,
-    "added_at": "2025-06-28T12:00:00Z"
+    "added_at": "2025-06-28T12:00:00Z",
+    "status": "published"
   },
   {
     "date": "2025-01-17",
@@ -4811,7 +5225,8 @@
     "verified": true,
     "severity": "high",
     "id": 147,
-    "added_at": "2025-06-28T17:40:00Z"
+    "added_at": "2025-06-28T17:40:00Z",
+    "status": "published"
   },
   {
     "date": "2024-09-04",
@@ -4823,7 +5238,8 @@
     "verified": true,
     "severity": "high",
     "id": "md289b50hfspg0n2vgr",
-    "added_at": "2025-07-13T22:09:44.100Z"
+    "added_at": "2025-07-13T22:09:44.100Z",
+    "status": "published"
   },
   {
     "date": "2024-07-22",
@@ -4835,7 +5251,8 @@
     "verified": true,
     "severity": "high",
     "id": "md289b50df5y6dm5xys",
-    "added_at": "2025-07-13T22:09:44.100Z"
+    "added_at": "2025-07-13T22:09:44.100Z",
+    "status": "published"
   },
   {
     "date": "2024-07-19",
@@ -4847,7 +5264,8 @@
     "verified": true,
     "severity": "medium",
     "id": "md289b504x86gi2bfu3",
-    "added_at": "2025-07-13T22:09:44.100Z"
+    "added_at": "2025-07-13T22:09:44.100Z",
+    "status": "published"
   },
   {
     "date": "2024-05-25",
@@ -4859,7 +5277,8 @@
     "verified": false,
     "severity": "high",
     "id": "md289b5005527myen8sd",
-    "added_at": "2025-07-13T22:09:44.100Z"
+    "added_at": "2025-07-13T22:09:44.100Z",
+    "status": "published"
   },
   {
     "date": "2024-05-09",
@@ -4871,7 +5290,8 @@
     "verified": false,
     "severity": "medium",
     "id": "md289b50yej2k83afe",
-    "added_at": "2025-07-13T22:09:44.100Z"
+    "added_at": "2025-07-13T22:09:44.100Z",
+    "status": "published"
   },
   {
     "date": "2024-03-06",
@@ -4883,6 +5303,7 @@
     "verified": true,
     "severity": "high",
     "id": "md28mzjjyhpy895d3l",
-    "added_at": "2025-07-13T22:20:22.255Z"
+    "added_at": "2025-07-13T22:20:22.255Z",
+    "status": "published"
   }
 ]
