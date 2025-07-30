@@ -17,6 +17,7 @@
         const AdminInterface = () => {
             const [entries, setEntries] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
             const [editingEntry, setEditingEntry] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [notification, setNotification] = useState(null);
@@ -34,13 +35,43 @@
             const loadEntries = useCallback(async () => {
                 try {
                     setLoading(true);
-                    const response = await fetch('/master-tracker-log.json?t=' + Date.now());
-                    if (!response.ok) throw new Error('Failed to load entries');
+                    setError(null);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    
+                    const response = await fetch('/master-tracker-log.json?t=' + Date.now(), {
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
                     const data = await response.json();
-                    setEntries(Array.isArray(data) ? data : []);
+                    
+                    if (!Array.isArray(data)) {
+                        throw new Error('Invalid data format: expected array');
+                    }
+                    
+                    setEntries(data);
+                    setError(null);
                 } catch (error) {
                     console.error('Error loading entries:', error);
-                    showNotification('Failed to load entries', 'error');
+                    
+                    if (error.name === 'AbortError') {
+                        setError('Request timeout - please refresh the page');
+                    } else if (error.message.includes('HTTP')) {
+                        setError(`Failed to load data: ${error.message}`);
+                    } else if (error instanceof SyntaxError) {
+                        setError('Invalid data format received');
+                    } else {
+                        setError('Failed to load entries. Please try again.');
+                    }
+                    
+                    showNotification(error.message || 'Failed to load entries', 'error');
                     setEntries([]);
                 } finally {
                     setLoading(false);
@@ -221,6 +252,25 @@
                         <div className="text-center">
                             <div className="w-16 h-16 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                             <div className="text-white text-xl">Loading Admin Interface...</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Error state
+            if (error && entries.length === 0) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-4">
+                        <div className="text-center max-w-md">
+                            <div className="text-red-400 text-6xl mb-4">⚠️</div>
+                            <h2 className="text-white text-xl mb-2">Error Loading Data</h2>
+                            <p className="text-gray-400 mb-4">{error}</p>
+                            <button
+                                onClick={loadEntries}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                            >
+                                🔄 Try Again
+                            </button>
                         </div>
                     </div>
                 );
