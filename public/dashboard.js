@@ -74,6 +74,9 @@ const PoliticalDashboard = () => {
     return entries.filter(entry => {
       // Filter out archived items from public view
       if (entry.archived) return false;
+
+      // Filter out non-published entries (treat missing status as published for legacy entries)
+      if (entry.status && entry.status !== 'published') return false;
       
       // Apply search filter
       const matchesSearch = !searchTerm || [
