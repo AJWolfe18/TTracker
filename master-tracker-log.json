@@ -1,5 +1,20 @@
 [
   {
+    "id": "1753849123937-zwx78uz5v",
+    "date": "2025-07-30",
+    "actor": "Manual Submission",
+    "category": "Government Oversight",
+    "title": "Processing: meidasnews.com",
+    "description": "Article is being processed...",
+    "source_url": "https://meidasnews.com/news/exclusive-trump-reposted-promise-to-expose-epstein-network-in-2022",
+    "verified": false,
+    "severity": "medium",
+    "status": "processing",
+    "added_at": "2025-07-30T04:18:43.937Z",
+    "manual_submission": true,
+    "submitted_by": "admin"
+  },
+  {
     "id": "1753840437176-upztuy4ar",
     "date": "2025-07-30",
     "actor": "CNN",
