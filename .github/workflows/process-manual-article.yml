@@ -52,6 +52,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ARTICLE_URL: ${{ steps.extract_article.outputs.article_url }}
         SUBMITTED_BY: ${{ steps.extract_article.outputs.submitted_by }}
+        ENTRY_ID: ${{ github.event.client_payload.entry_id }} 
       run: |
         cat > process-single-article.js << 'EOF'
         import fs from 'fs/promises';
@@ -231,6 +232,7 @@ jobs:
                     source_url: ARTICLE_URL,
                     verified: analysis.verified,
                     severity: analysis.severity,
+                    status: 'published', 
                     added_at: new Date().toISOString(),
                     manual_submission: true,
                     submitted_by: SUBMITTED_BY,
