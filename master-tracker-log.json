@@ -1,5 +1,70 @@
 [
   {
+    "date": "2025-07-30",
+    "actor": "Antonio Gracias",
+    "category": "Government Efficiency Recommendations",
+    "title": "Venture Capitalist Antonio Gracias Steps Down from DOGE Amid Scrutiny",
+    "description": "Antonio Gracias, head of Valor Equity Partners, resigned from Elon Musk\\'s Department of Government Efficiency (DOGE) following pressure from investors concerned about his dual commitments affecting his firm\\'s responsibilities.",
+    "source_url": "https://www.ft.com/content/9ae6620a-8c7a-485e-98a8-1ff2480ccf93",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp07ldz5m9dc7jrjb",
+    "added_at": "2025-07-31T01:05:01.297Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Elon Musk",
+    "category": "Public Statements on Government Policy",
+    "title": "Elon Musk Announces Departure from DOGE, Thanks President Trump",
+    "description": "Elon Musk confirmed his departure from the Department of Government Efficiency, thanking President Trump for the opportunity to reduce wasteful spending and expressing confidence in DOGE\\'s ongoing mission.",
+    "source_url": "https://www.cnbc.com/2025/05/28/elon-musk-trump-doge.html",
+    "verified": true,
+    "severity": "low",
+    "id": "mdqp07ldk4so3n6jl9d",
+    "added_at": "2025-07-31T01:05:01.297Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Elon Musk",
+    "category": "Public Statements on Government Policy",
+    "title": "Elon Musk Criticizes Trump\\'s Spending Bill Amid DOGE\\'s Efforts",
+    "description": "Elon Musk expressed disappointment over President Trump\\'s spending bill, stating it increases the budget deficit and undermines the work of the Department of Government Efficiency.",
+    "source_url": "https://www.cnbc.com/2025/06/05/trump-musk-crazy-government-contracts.html",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp07ldbbcfnph0dmc",
+    "added_at": "2025-07-31T01:05:01.297Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "U.S. Supreme Court",
+    "category": "Legal Proceedings",
+    "title": "Supreme Court\\'s Medina Decision Limits Medicaid Enforcement Actions",
+    "description": "The Supreme Court\\'s June 2025 decision in *Medina v. Planned Parenthood South Atlantic* restricts Medicaid enrollees and providers from suing states under 42 U.S.C. Section 1983 for alleged Medicaid Act violations. The Court found the Act\\'s \\'any qualified provider\\' provision lacks explicit \\'rights-creating language\\' necessary for a private right of action, reducing judicial enforcement options and increasing reliance on federal oversight. This decision has significant implications for reproductive healthcare providers and enrollees, especially following the passage of the One Big Beautiful Bill Act, which limits federal Medicaid funding to organizations associated with abortion services. States now have broader authority to exclude providers like Planned Parenthood from their Medicaid programs, potentially reducing access to essential healthcare services, particularly in underserved areas.",
+    "source_url": "https://www.reuters.com/legal/litigation/supreme-courts-medina-decision-limits-options-medicaid-enforcement-actions-2025-07-30/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdqp05ta6fbmnj0qymm",
+    "added_at": "2025-07-31T01:04:58.990Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "White House Set to Unveil Crypto Policy Report",
+    "description": "The White House is preparing to release a significant crypto policy report formulated by a working group established by President Donald Trump. This report aims to outline regulations and legislative proposals to support the administration\\'s pro-crypto stance, including frameworks for tokenization and guidance on stablecoins. The initiative has raised concerns due to Trump\\'s personal links to the crypto space, potentially leading to conflicts of interest.",
+    "source_url": "https://www.reuters.com/legal/government/white-house-set-unveil-closely-watched-crypto-policy-report-2025-07-30/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp035rp28f916sz2c",
+    "added_at": "2025-07-31T01:04:55.551Z",
+    "status": "published"
+  },
+  {
     "id": "1753849123937-zwx78uz5v",
     "date": "2025-07-30",
     "actor": "Manual Submission",
@@ -44,6 +109,45 @@
     "added_at": "2025-07-30T01:53:35.217Z",
     "manual_submission": true,
     "submitted_by": "admin"
+  },
+  {
+    "date": "2025-07-29",
+    "actor": "SpaceX",
+    "category": "Government Contracts",
+    "title": "SpaceX\\'s Rocket Diplomacy Faces Setbacks in the Bahamas",
+    "description": "SpaceX\\'s attempt to secure a rocket landing agreement with the Bahamas encountered political and environmental controversies, leading to the suspension of the deal in April 2025 after a Starship rocket explosion in March spread debris across Bahamian islands.",
+    "source_url": "https://www.reuters.com/science/how-spacexs-rocket-diplomacy-backfired-bahamas-2025-07-29/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp07ldaq9dp8zp3l",
+    "added_at": "2025-07-31T01:05:01.297Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-29",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Finds UCLA in Violation of Civil Rights Law",
+    "description": "The DOJ\\'s Civil Rights Division determined that the University of California, Los Angeles violated federal civil rights laws by discriminating against students based on race and national origin. The university is now required to implement corrective measures to address these violations.",
+    "source_url": "https://www.justice.gov/opa/pr/justice-department-finds-university-california-los-angeles-violation-federal-civil-rights-law",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp04v6w7b3b93skjk",
+    "added_at": "2025-07-31T01:04:57.762Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-29",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Dismisses Agreement with Leflore County Juvenile Detention Center",
+    "description": "The DOJ\\'s Civil Rights Division moved to dismiss a 2015 court-ordered settlement agreement with the Leflore County Juvenile Detention Center, citing improvements in conditions and compliance with federal standards. This decision marks a significant step in the center\\'s reform process.",
+    "source_url": "https://www.justice.gov/opa/pr/civil-rights-division-moves-dismiss-court-ordered-agreement-regarding-leflore-county-juvenile",
+    "verified": true,
+    "severity": "low",
+    "id": "mdqp04v6t5w6jyue7us",
+    "added_at": "2025-07-31T01:04:57.762Z",
+    "status": "published"
   },
   {
     "date": "2025-07-29",
@@ -98,6 +202,32 @@
     "manual_submission": true,
     "submitted_by": "admin",
     "processed_at": "2025-07-29T03:22:34.534Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "Civil Rights Organization",
+    "category": "Legal Proceedings",
+    "title": "Civil Rights Group Files Lawsuit Over Police Practices",
+    "description": "A prominent civil rights organization filed a lawsuit challenging police practices in a major city, alleging violations of constitutional rights. The case is expected to have significant implications for law enforcement policies nationwide.",
+    "source_url": "https://www.cnn.com/2025/07/28/us/civil-rights-lawsuit-police-practices.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdqp05taboh3u66whg",
+    "added_at": "2025-07-31T01:04:58.990Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Calls for Increased Gaza Aid During UK Meeting",
+    "description": "President Donald Trump and UK Prime Minister Keir Starmer discussed global issues, including the humanitarian crisis in Gaza, advocating for increased food aid and acknowledging Israel\\'s responsibility. Trump also set a deadline for Russia to seek peace in Ukraine, threatening severe tariffs by early August. These discussions took place at Trump\\'s golf course in Scotland.",
+    "source_url": "https://apnews.com/article/07148d292cf1c62b8c4dcf11171abef3",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdqp035s6auhadfo5k8",
+    "added_at": "2025-07-31T01:04:55.552Z",
     "status": "published"
   },
   {
@@ -1795,6 +1925,19 @@
     "severity": "medium",
     "id": "md8wfa8wa50h4y0dasc",
     "added_at": "2025-07-18T14:12:50.720Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-17",
+    "actor": "California Attorney General Rob Bonta",
+    "category": "Corporate Ethics",
+    "title": "California Investigates Use of Consumer Location Data by Mobile Apps and Data Brokers",
+    "description": "California\\'s Attorney General initiated an investigation into how mobile app providers, advertising networks, and data brokers collect and use consumer location data, focusing on compliance with the California Consumer Privacy Act (CCPA).",
+    "source_url": "https://www.hsfkramer.com/insights/2025-07/corporate-governance-2025-midyear-review",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdqp04rybnx0eg07eph",
+    "added_at": "2025-07-31T01:04:57.646Z",
     "status": "published"
   },
   {
