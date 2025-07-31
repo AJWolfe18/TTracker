@@ -1,5 +1,57 @@
 [
   {
+    "date": "2025-07-31",
+    "actor": "Elon Musk",
+    "category": "Government Contracts",
+    "title": "Italy\\'s Opposition Raises Concerns Over SpaceX\\'s Role in Military Satellite Update",
+    "description": "Italy\\'s Democratic Party has expressed national security concerns over the potential involvement of Elon Musk\\'s SpaceX in updating the country\\'s military satellite system, SICRAL. The party insists that only Italian or European companies should be involved, fearing strategic risks associated with foreign entities like SpaceX.",
+    "source_url": "https://www.reuters.com/business/media-telecom/italys-opposition-warns-against-involving-spacex-satellite-update-2025-07-31/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdrhp9uxy8rs7g4s8fb",
+    "added_at": "2025-07-31T14:28:19.881Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-31",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Opens Office in New Zealand to Counter China\\'s Influence",
+    "description": "The FBI has established a standalone office in Wellington, New Zealand, aiming to enhance cooperation in countering China\\'s presence in the Pacific region. This move focuses on issues like cybercrime, narcotics trafficking, and countering the Chinese Communist Party\\'s influence. Both nations are members of the Five Eyes intelligence alliance.",
+    "source_url": "https://www.reuters.com/world/asia-pacific/us-fbi-opens-office-new-zealand-2025-07-31/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdrhp9kqlguo7mh91cb",
+    "added_at": "2025-07-31T14:28:19.514Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Donald Trump",
+    "category": "Financial",
+    "title": "Federal Reserve Holds Interest Rates Steady Amid Presidential Pressure",
+    "description": "The Federal Reserve decided to keep interest rates unchanged, despite President Trump\\'s repeated calls for a rate cut. This decision comes as the administration faces economic challenges, including rising inflation and jobless claims.",
+    "source_url": "https://www.nbcchicago.com/news/politics/president-trump/trump-administration-gaza-health-ai-epstein-july-30-2025-live-updates/3801076/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdrhpardwap9vlub2pq",
+    "added_at": "2025-07-31T14:28:21.049Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Elon Musk",
+    "category": "Government Contracts",
+    "title": "SpaceX\\'s Rocket Diplomacy Faces Backlash in the Bahamas",
+    "description": "SpaceX\\'s negotiations with the Bahamas to allow Falcon 9 rocket boosters to land in Bahamian territory have been paused following environmental concerns and a lack of broad governmental consultation. The Bahamas is reviewing environmental impacts and may tighten its space reentry regulations.",
+    "source_url": "https://www.reuters.com/science/how-spacexs-rocket-diplomacy-backfired-bahamas-2025-07-30/",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdrhp9ux09l322kzae1q",
+    "added_at": "2025-07-31T14:28:19.881Z",
+    "status": "published"
+  },
+  {
     "date": "2025-07-30",
     "actor": "Antonio Gracias",
     "category": "Government Efficiency Recommendations",
@@ -112,6 +164,19 @@
   },
   {
     "date": "2025-07-29",
+    "actor": "U.S. Department of Justice",
+    "category": "Government Oversight",
+    "title": "Trump Administration Extends Term of Controversial U.S. Attorney",
+    "description": "The Trump administration has reappointed Sigal Chattah as Acting U.S. Attorney for Nevada, extending her term to prevent a federal court from potentially rejecting her permanent appointment. Critics have raised concerns over her history of racially charged statements and partisan rhetoric.",
+    "source_url": "https://www.reuters.com/legal/government/trump-administration-seeks-keep-us-attorneys-place-before-court-can-act-2025-07-29/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdrhp9kq7ku9k0kobd9",
+    "added_at": "2025-07-31T14:28:19.514Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-29",
     "actor": "SpaceX",
     "category": "Government Contracts",
     "title": "SpaceX\\'s Rocket Diplomacy Faces Setbacks in the Bahamas",
@@ -202,6 +267,45 @@
     "manual_submission": true,
     "submitted_by": "admin",
     "processed_at": "2025-07-29T03:22:34.534Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "U.S. Department of Education",
+    "category": "Government Oversight",
+    "title": "Department of Education Reduces Workforce by 50%",
+    "description": "The Department of Education announced a reduction in force affecting 50% of its workforce. This action is part of the broader Department of Government Efficiency (DOGE) Workforce Optimization Initiative, which aims to significantly reduce the size of the federal workforce and implement new hiring practices.",
+    "source_url": "https://www.nafsa.org/executive-and-regulatory-actions-trump2admin",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdrhpawzw2knj984bxf",
+    "added_at": "2025-07-31T14:28:21.251Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "U.S. Department of Education",
+    "category": "Government Oversight",
+    "title": "Supreme Court Lifts Injunction, Department of Education Resumes Layoffs",
+    "description": "On July 14, 2025, the U.S. Supreme Court lifted a lower court’s preliminary injunction, allowing the Department of Education to resume employee terminations and proceed with the transfer of core departmental functions to other agencies. Secretary of Education Linda McMahon confirmed that the Department would move forward with workforce reductions as part of a broader effort to streamline operations and improve internal accountability.",
+    "source_url": "https://www.naceweb.org/public-policy-and-legal/legislation-and-regulations/latest-federal-update",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdrhpawzhvrspk2jb1r",
+    "added_at": "2025-07-31T14:28:21.251Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Announces New Tariffs Amid Trade Tensions",
+    "description": "President Trump announced new trade measures, including 50% tariffs on Brazil and a 15% tax on imports from South Korea. While the White House touts these decisions as evidence of Trump\\'s strength in trade negotiations, critics warn of potential inflation and economic repercussions.",
+    "source_url": "https://apnews.com/article/0301351f3abe6d9c9f359043f56795e8",
+    "verified": true,
+    "severity": "high",
+    "id": "mdrhpare9e2iitb1z3q",
+    "added_at": "2025-07-31T14:28:21.050Z",
     "status": "published"
   },
   {
@@ -1457,6 +1561,19 @@
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
     "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Irvine City Council",
+    "category": "Corporate Ethics",
+    "title": "Irvine City Council Re-Adopts Lobbying Rules Amid Legal Settlement",
+    "description": "The Irvine City Council re-adopted city lobbying laws to settle a Brown Act lawsuit, requiring more registration but leaving exceptions for many in-house lobbyists, after rescinding a prior vote alleged to violate open meeting laws.",
+    "source_url": "https://www.nmgovlaw.com/essential-ethics/july-24-2025/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdrhp9ku4cp6w95cewp",
+    "added_at": "2025-07-31T14:28:19.518Z",
     "status": "published"
   },
   {
