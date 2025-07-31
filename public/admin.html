@@ -17,13 +17,18 @@
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .card { 
-            background: rgba(45, 55, 72, 0.9); 
+            background: rgba(45, 55, 72, 0.6);
             backdrop-filter: blur(10px);
             border-radius: 12px; 
             padding: 24px; 
             margin-bottom: 20px; 
             border: 1px solid #4a5568;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            background: rgba(45, 55, 72, 0.8);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
         }
         .input { 
             width: 100%; 
@@ -39,23 +44,58 @@
         .btn { 
             padding: 10px 16px; 
             border: none; 
-            border-radius: 6px; 
+            border-radius: 8px; 
             cursor: pointer; 
             font-weight: 500; 
-            transition: all 0.2s; 
-            font-size: 14px; 
+            transition: all 0.3s ease; 
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
-        .btn-primary { background: #3182ce; color: white; }
-        .btn-primary:hover { background: #2c5aa0; }
-        .btn-primary:disabled { background: #4a5568; cursor: not-allowed; }
-        .btn-danger { background: #e53e3e; color: white; }
-        .btn-danger:hover { background: #c53030; }
-        .btn-success { background: #38a169; color: white; }
-        .btn-success:hover { background: #2f855a; }
-        .btn-secondary { background: #4a5568; color: white; }
-        .btn-secondary:hover { background: #2d3748; }
-        .btn-warning { background: #d69e2e; color: white; }
-        .btn-warning:hover { background: #b7791f; }
+        .btn-primary { 
+            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%); 
+            color: white; 
+        }
+        .btn-primary:hover { 
+            background: linear-gradient(135deg, #2c5aa0 0%, #1d4ed8 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(49, 130, 206, 0.4);
+        }
+        .btn-success { 
+            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%); 
+            color: white; 
+        }
+        .btn-success:hover { 
+            background: linear-gradient(135deg, #2f855a 0%, #16a34a 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(56, 161, 105, 0.4);
+        }
+        .btn-danger { 
+            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%); 
+            color: white; 
+        }
+        .btn-danger:hover { 
+            background: linear-gradient(135deg, #c53030 0%, #dc2626 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(229, 62, 62, 0.4);
+        }
+        .btn-secondary { 
+            background: linear-gradient(135deg, #4a5568 0%, #6b7280 100%); 
+            color: white; 
+        }
+        .btn-secondary:hover { 
+            background: linear-gradient(135deg, #2d3748 0%, #4b5563 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(74, 85, 104, 0.4);
+        }
+        .btn-warning { 
+            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%); 
+            color: white; 
+        }
+        .btn-warning:hover { 
+            background: linear-gradient(135deg, #b7791f 0%, #d97706 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(214, 158, 46, 0.4);
+        }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .flex { display: flex; }
         .items-center { align-items: center; }
@@ -71,15 +111,21 @@
         .grid { display: grid; }
         .grid-2 { grid-template-columns: 1fr 1fr; }
         .entry { 
-            background: #2d3748; 
+            background: rgba(45, 55, 72, 0.6);
+            backdrop-filter: blur(10px);
             border: 1px solid #4a5568; 
-            border-radius: 8px; 
+            border-radius: 12px; 
             padding: 16px; 
             margin-bottom: 12px; 
             cursor: pointer; 
-            transition: all 0.2s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         }
-        .entry:hover { background: #374151; transform: translateY(-1px); }
+        .entry:hover { 
+            background: rgba(55, 65, 81, 0.8);
+            transform: translateY(-2px); 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
         .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
         .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
         .entry.failed { border-left: 4px solid #e53e3e; }
@@ -107,7 +153,22 @@
         .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
         .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .stat-card { background: #374151; padding: 16px; border-radius: 8px; text-align: center; }
+        .stat-card { 
+            background: rgba(55, 65, 81, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 20px; 
+            border-radius: 12px; 
+            text-align: center;
+            border: 1px solid #4a5568;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+        .stat-card:hover {
+            background: rgba(55, 65, 81, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
         @media (max-width: 768px) {
             .grid-2 { grid-template-columns: 1fr; }
             .flex-mobile { flex-direction: column; }
@@ -690,17 +751,38 @@
 
                         {/* Entry Status Overview */}
                         <div className="stats-grid">
-                            <div className="stat-card">
-                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{statusStats.total}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Total Active</div>
+                            <div 
+                                className="stat-card"
+                                onClick={() => setStatusFilter('all')}
+                                style={{ 
+                                    borderColor: statusFilter === 'all' ? '#3182ce' : '#4a5568',
+                                    boxShadow: statusFilter === 'all' ? '0 0 0 2px rgba(49, 130, 206, 0.3)' : undefined
+                                }}
+                            >
+                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#60a5fa', marginBottom: '8px' }}>{statusStats.total}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>📊 Total Active</div>
                             </div>
-                            <div className="stat-card">
-                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4ade80' }}>{statusStats.published}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Published</div>
+                            <div 
+                                className="stat-card"
+                                onClick={() => setStatusFilter('published')}
+                                style={{ 
+                                    borderColor: statusFilter === 'published' ? '#38a169' : '#4a5568',
+                                    boxShadow: statusFilter === 'published' ? '0 0 0 2px rgba(56, 161, 105, 0.3)' : undefined
+                                }}
+                            >
+                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#4ade80', marginBottom: '8px' }}>{statusStats.published}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>✅ Published</div>
                             </div>
-                            <div className="stat-card">
-                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f87171' }}>{statusStats.failed}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Failed</div>
+                            <div 
+                                className="stat-card"
+                                onClick={() => setStatusFilter('failed')}
+                                style={{ 
+                                    borderColor: statusFilter === 'failed' ? '#e53e3e' : '#4a5568',
+                                    boxShadow: statusFilter === 'failed' ? '0 0 0 2px rgba(229, 62, 62, 0.3)' : undefined
+                                }}
+                            >
+                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f87171', marginBottom: '8px' }}>{statusStats.failed}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>❌ Failed</div>
                             </div>
                         </div>
 
@@ -712,51 +794,51 @@
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="🔍 Search entries..."
                                 className="input"
-                                style={{ flex: 1 }}
+                                style={{ flex: 1, fontSize: '16px', padding: '14px' }}
                             />
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="input"
-                                style={{ minWidth: '150px' }}
-                            >
-                                <option value="all">All Status</option>
-                                <option value="published">✅ Published</option>
-                                <option value="failed">❌ Failed</option>
-                            </select>
                             <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
                                 {isLoading ? '🔄' : '📊'} Refresh
                             </button>
                         </div>
                         
-                        <div className="flex gap-2 mb-4 flex-mobile">
-                            <span className="text-sm" style={{ color: '#a0aec0' }}>
+                        <div className="flex gap-3 mb-4 flex-mobile" style={{ flexWrap: 'wrap' }}>
+                            <span className="text-sm" style={{ color: '#a0aec0', alignSelf: 'center' }}>
                                 📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
                             </span>
-                            <button
-                                onClick={() => setShowArchived(!showArchived)}
-                                className="btn btn-secondary"
-                            >
-                                {showArchived ? '📂 Active' : '🗃️ Archives'}
-                            </button>
-                            <button onClick={selectAll} className="btn btn-secondary">
-                                {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
-                            </button>
-                            <button onClick={markAsPublished} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                ✅ Mark Published ({selectedEntries.size})
-                            </button>
-                            {!showArchived ? (
-                                <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
-                                    🗃️ Archive ({selectedEntries.size})
+                            
+                            {/* View Controls */}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowArchived(!showArchived)}
+                                    className="btn btn-secondary"
+                                >
+                                    {showArchived ? '📂 Active' : '🗃️ Archives'}
                                 </button>
-                            ) : (
-                                <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                    🔄 Restore ({selectedEntries.size})
+                                <button onClick={selectAll} className="btn btn-secondary">
+                                    {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
                                 </button>
-                            )}
-                            <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
-                                🗑️ Delete ({selectedEntries.size})
-                            </button>
+                            </div>
+                            
+                            {/* Modification Actions */}
+                            <div className="flex gap-2">
+                                <button onClick={markAsPublished} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                    ✅ Publish ({selectedEntries.size})
+                                </button>
+                                {!showArchived ? (
+                                    <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
+                                        🗃️ Archive ({selectedEntries.size})
+                                    </button>
+                                ) : (
+                                    <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                        🔄 Restore ({selectedEntries.size})
+                                    </button>
+                                )}
+                                <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
+                                    🗑️ Delete ({selectedEntries.size})
+                                </button>
+                            </div>
+                            
+                            {/* Special Actions */}
                             {statusStats.failed > 0 && (
                                 <button 
                                     onClick={() => {
