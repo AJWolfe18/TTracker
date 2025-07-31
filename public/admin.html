@@ -83,7 +83,6 @@
         .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
         .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
         .entry.failed { border-left: 4px solid #e53e3e; }
-        .entry.processing { border-left: 4px solid #d69e2e; }
         .entry.published { border-left: 4px solid #38a169; }
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
         .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
@@ -91,7 +90,6 @@
         .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
         .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
         .badge-published { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-processing { background: rgba(214, 158, 46, 0.2); color: #fef08a; border: 1px solid #d69e2e; }
         .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
         .logo { 
             width: 40px; 
@@ -108,17 +106,6 @@
         .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
         .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
         .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
-        .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-        .tab { 
-            padding: 12px 20px; 
-            background: #374151; 
-            border: 1px solid #4a5568; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            transition: all 0.2s;
-        }
-        .tab.active { background: #3182ce; border-color: #3182ce; }
-        .tab:hover { background: #4a5568; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
         .stat-card { background: #374151; padding: 16px; border-radius: 8px; text-align: center; }
         @media (max-width: 768px) {
@@ -147,7 +134,6 @@
             const [editForm, setEditForm] = useState({});
             const [submissionUrl, setSubmissionUrl] = useState('');
             const [isSubmitting, setIsSubmitting] = useState(false);
-            const [activeTab, setActiveTab] = useState('entries');
             const [statusFilter, setStatusFilter] = useState('all');
 
             // === UTILITY FUNCTIONS ===
@@ -197,7 +183,6 @@
             const getStatusClasses = useCallback((status) => {
                 switch (status) {
                     case 'published': return 'badge badge-published';
-                    case 'processing': return 'badge badge-processing';
                     case 'failed': return 'badge badge-failed';
                     default: return 'badge badge-published'; // Default to published for legacy entries
                 }
@@ -360,31 +345,9 @@
                         }
                     }
                     
-                    // Create processing entry immediately
-                    const processingEntry = {
-                        id: generateId(),
-                        date: new Date().toISOString().split('T')[0],
-                        actor: 'Manual Submission',
-                        category: 'Government Oversight',
-                        title: `Processing: ${new URL(submissionUrl).hostname}`,
-                        description: 'Article is being processed...',
-                        source_url: submissionUrl,
-                        verified: false,
-                        severity: 'medium',
-                        status: 'processing',
-                        added_at: new Date().toISOString(),
-                        manual_submission: true,
-                        submitted_by: 'admin'
-                    };
-                    
-                    // Add to entries immediately
-                    const updatedEntries = [processingEntry, ...entries];
-                    setEntries(updatedEntries);
-                    await updateGitHubFile(updatedEntries);
-                    
                     showMessage('📝 Processing article...', 'info');
                     
-                    // Trigger GitHub Actions workflow
+                    // Trigger GitHub Actions workflow directly
                     const workflowResponse = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
                         method: 'POST',
                         headers: {
@@ -396,27 +359,17 @@
                             client_payload: {
                                 article_url: submissionUrl,
                                 submitted_by: 'admin',
-                                submitted_at: new Date().toISOString(),
-                                entry_id: processingEntry.id
+                                submitted_at: new Date().toISOString()
                             }
                         })
                     });
                     
                     if (!workflowResponse.ok) {
-                        // Mark as failed if workflow trigger fails
-                        const failedEntries = updatedEntries.map(entry => 
-                            entry.id === processingEntry.id 
-                                ? { ...entry, status: 'failed', error_message: `Workflow trigger failed: ${workflowResponse.status}` }
-                                : entry
-                        );
-                        setEntries(failedEntries);
-                        await updateGitHubFile(failedEntries);
                         throw new Error(`Workflow trigger failed: ${workflowResponse.status}`);
                     }
                     
                     setSubmissionUrl('');
-                    showMessage('✅ Article submitted for processing!', 'success');
-                    setActiveTab('status'); // Switch to status tab
+                    showMessage('✅ Article submitted for processing! Check back in a few minutes.', 'success');
                     
                     // Auto-refresh after delay
                     setTimeout(() => loadEntries(), 30000);
@@ -444,23 +397,6 @@
                 try {
                     setIsLoading(true);
                     
-                    // Update entries to processing status
-                    const updatedEntries = entries.map(entry => {
-                        if (selectedEntries.has(entry.id) && entry.status === 'failed') {
-                            return {
-                                ...entry,
-                                status: 'processing',
-                                error_message: undefined,
-                                retry_count: (entry.retry_count || 0) + 1,
-                                retried_at: new Date().toISOString()
-                            };
-                        }
-                        return entry;
-                    });
-                    
-                    setEntries(updatedEntries);
-                    await updateGitHubFile(updatedEntries);
-                    
                     // Trigger workflows for each failed entry
                     for (const entry of failedEntries) {
                         await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
@@ -475,7 +411,6 @@
                                     article_url: entry.source_url,
                                     submitted_by: entry.submitted_by || 'admin',
                                     submitted_at: new Date().toISOString(),
-                                    entry_id: entry.id,
                                     retry: true
                                 }
                             })
@@ -513,7 +448,7 @@
                 }
             };
 
-            // === ENTRY MANAGEMENT (keeping existing functions) ===
+            // === ENTRY MANAGEMENT ===
             const archiveSelected = async () => {
                 if (selectedEntries.size === 0) return;
                 if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
@@ -665,7 +600,6 @@
             const statusStats = {
                 total: entries.filter(e => !e.archived).length,
                 published: entries.filter(e => !e.archived && (e.status === 'published' || !e.status)).length,
-                processing: entries.filter(e => !e.archived && e.status === 'processing').length,
                 failed: entries.filter(e => !e.archived && e.status === 'failed').length
             };
 
@@ -754,22 +688,88 @@
                             </button>
                         </div>
 
-                        {/* Tab Navigation */}
-                        <div className="tabs">
-                            <div 
-                                className={`tab ${activeTab === 'entries' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('entries')}
-                            >
-                                📊 All Entries ({statusStats.total})
+                        {/* Entry Status Overview */}
+                        <div className="stats-grid">
+                            <div className="stat-card">
+                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{statusStats.total}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Total Active</div>
                             </div>
-                            <div 
-                                className={`tab ${activeTab === 'status' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('status')}
-                            >
-                                📋 Status Monitor
-                                {statusStats.failed > 0 && <span style={{ color: '#f87171', marginLeft: '4px' }}>• {statusStats.failed} failed</span>}
-                                {statusStats.processing > 0 && <span style={{ color: '#fbbf24', marginLeft: '4px' }}>• {statusStats.processing} processing</span>}
+                            <div className="stat-card">
+                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4ade80' }}>{statusStats.published}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Published</div>
                             </div>
+                            <div className="stat-card">
+                                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f87171' }}>{statusStats.failed}</div>
+                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>Failed</div>
+                            </div>
+                        </div>
+
+                        {/* Unified Controls */}
+                        <div className="flex gap-4 mb-4 flex-mobile">
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="🔍 Search entries..."
+                                className="input"
+                                style={{ flex: 1 }}
+                            />
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="input"
+                                style={{ minWidth: '150px' }}
+                            >
+                                <option value="all">All Status</option>
+                                <option value="published">✅ Published</option>
+                                <option value="failed">❌ Failed</option>
+                            </select>
+                            <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
+                                {isLoading ? '🔄' : '📊'} Refresh
+                            </button>
+                        </div>
+                        
+                        <div className="flex gap-2 mb-4 flex-mobile">
+                            <span className="text-sm" style={{ color: '#a0aec0' }}>
+                                📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
+                            </span>
+                            <button
+                                onClick={() => setShowArchived(!showArchived)}
+                                className="btn btn-secondary"
+                            >
+                                {showArchived ? '📂 Active' : '🗃️ Archives'}
+                            </button>
+                            <button onClick={selectAll} className="btn btn-secondary">
+                                {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
+                            </button>
+                            <button onClick={markAsPublished} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                ✅ Mark Published ({selectedEntries.size})
+                            </button>
+                            {!showArchived ? (
+                                <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
+                                    🗃️ Archive ({selectedEntries.size})
+                                </button>
+                            ) : (
+                                <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
+                                    🔄 Restore ({selectedEntries.size})
+                                </button>
+                            )}
+                            <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
+                                🗑️ Delete ({selectedEntries.size})
+                            </button>
+                            {statusStats.failed > 0 && (
+                                <button 
+                                    onClick={() => {
+                                        const failedEntries = entries.filter(e => e.status === 'failed' && !e.archived);
+                                        setSelectedEntries(new Set(failedEntries.map(e => e.id)));
+                                        retrySelected();
+                                    }} 
+                                    className="btn btn-warning"
+                                    disabled={isLoading}
+                                >
+                                    🔄 Retry All Failed ({statusStats.failed})
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -780,405 +780,213 @@
                         </div>
                     )}
 
-                    {/* All Entries Tab */}
-                    {activeTab === 'entries' && (
-                        <div>
-                            {/* Controls */}
-                            <div className="card">
-                                <div className="flex gap-4 mb-4 flex-mobile">
-                                    <input
-                                        type="text"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="🔍 Search entries..."
-                                        className="input"
-                                        style={{ flex: 1 }}
-                                    />
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value)}
-                                        className="input"
-                                        style={{ minWidth: '150px' }}
-                                    >
-                                        <option value="all">All Status</option>
-                                        <option value="published">✅ Published</option>
-                                        <option value="processing">🔄 Processing</option>
-                                        <option value="failed">❌ Failed</option>
-                                    </select>
-                                    <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
-                                        {isLoading ? '🔄' : '📊'} Refresh
-                                    </button>
+                    {/* Entries List */}
+                    <div className="card">
+                        <div className="scrollable">
+                            {filteredEntries.length === 0 ? (
+                                <div className="text-center" style={{ padding: '40px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                                    <div style={{ color: '#a0aec0' }}>No entries found</div>
                                 </div>
-                                
-                                <div className="flex gap-2 mb-4 flex-mobile">
-                                    <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                        📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
-                                    </span>
-                                    <button
-                                        onClick={() => setShowArchived(!showArchived)}
-                                        className="btn btn-secondary"
+                            ) : (
+                                filteredEntries.map(entry => (
+                                    <div
+                                        key={entry.id}
+                                        className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${entry.status || 'published'}`}
+                                        onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
                                     >
-                                        {showArchived ? '📂 Active' : '🗃️ Archives'}
-                                    </button>
-                                    <button onClick={selectAll} className="btn btn-secondary">
-                                        {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
-                                    </button>
-                                    <button onClick={markAsPublished} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                        ✅ Mark Published ({selectedEntries.size})
-                                    </button>
-                                    {!showArchived ? (
-                                        <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
-                                            🗃️ Archive ({selectedEntries.size})
-                                        </button>
-                                    ) : (
-                                        <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                            🔄 Restore ({selectedEntries.size})
-                                        </button>
-                                    )}
-                                    <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
-                                        🗑️ Delete ({selectedEntries.size})
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Entries List */}
-                            <div className="card">
-                                <div className="scrollable">
-                                    {filteredEntries.length === 0 ? (
-                                        <div className="text-center" style={{ padding: '40px' }}>
-                                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-                                            <div style={{ color: '#a0aec0' }}>No entries found</div>
-                                        </div>
-                                    ) : (
-                                        filteredEntries.map(entry => (
-                                            <div
-                                                key={entry.id}
-                                                className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${entry.status || 'published'}`}
-                                                onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
-                                            >
-                                                {editingEntry === entry.id ? (
+                                        {editingEntry === entry.id ? (
+                                            <div>
+                                                <div className="grid grid-2 gap-4 mb-4">
                                                     <div>
-                                                        <div className="grid grid-2 gap-4 mb-4">
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
-                                                                <input
-                                                                    type="date"
-                                                                    value={editForm.date}
-                                                                    onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Status</label>
-                                                                <select
-                                                                    value={editForm.status}
-                                                                    onChange={(e) => setEditForm({...editForm, status: e.target.value})}
-                                                                    className="input"
-                                                                >
-                                                                    <option value="published">✅ Published</option>
-                                                                    <option value="processing">🔄 Processing</option>
-                                                                    <option value="failed">❌ Failed</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="grid grid-2 gap-4 mb-4">
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
-                                                                <select
-                                                                    value={editForm.severity}
-                                                                    onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
-                                                                    className="input"
-                                                                >
-                                                                    <option value="low">🟢 Low</option>
-                                                                    <option value="medium">🟡 Medium</option>
-                                                                    <option value="high">🔴 High</option>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={editForm.actor}
-                                                                    onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.title}
-                                                                onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                                                                className="input"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
-                                                            <textarea
-                                                                value={editForm.description}
-                                                                onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                                                                className="input"
-                                                                rows="3"
-                                                            />
-                                                        </div>
-                                                        
-                                                        <div className="grid grid-2 gap-4 mb-4">
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
-                                                                <select
-                                                                    value={editForm.category}
-                                                                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                                                                    className="input"
-                                                                >
-                                                                    <option value="Financial">Financial</option>
-                                                                    <option value="Civil Liberties">Civil Liberties</option>
-                                                                    <option value="Platform Manipulation">Platform Manipulation</option>
-                                                                    <option value="Government Oversight">Government Oversight</option>
-                                                                    <option value="Election Integrity">Election Integrity</option>
-                                                                    <option value="Corporate Ethics">Corporate Ethics</option>
-                                                                    <option value="Legal Proceedings">Legal Proceedings</option>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
-                                                                <input
-                                                                    type="url"
-                                                                    value={editForm.source_url}
-                                                                    onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div className="mb-4">
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={editForm.verified}
-                                                                    onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
-                                                                />
-                                                                <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
-                                                            </label>
-                                                        </div>
-                                                        
-                                                        <div className="flex gap-2">
-                                                            <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
-                                                                💾 Save
-                                                            </button>
-                                                            <button onClick={cancelEdit} className="btn btn-secondary">
-                                                                ❌ Cancel
-                                                            </button>
-                                                        </div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
+                                                        <input
+                                                            type="date"
+                                                            value={editForm.date}
+                                                            onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                                            className="input"
+                                                        />
                                                     </div>
-                                                ) : (
-                                                    <div className="flex justify-between">
-                                                        <div style={{ flex: 1 }}>
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {formatDate(entry.date)}</span>
-                                                                <span className={getStatusClasses(entry.status)}>
-                                                                    {entry.status === 'processing' ? '🔄 PROCESSING' :
-                                                                     entry.status === 'failed' ? '❌ FAILED' :
-                                                                     '✅ PUBLISHED'}
-                                                                </span>
-                                                                <span className={getSeverityClasses(entry.severity)}>
-                                                                    {entry.severity === 'high' ? '🚨 HIGH' :
-                                                                     entry.severity === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ LOW'}
-                                                                </span>
-                                                                {entry.verified && <span className="text-green-400 text-sm">✅ Verified</span>}
-                                                                {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
-                                                                <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
-                                                            </div>
-                                                            <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
-                                                            <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
-                                                            {entry.error_message && (
-                                                                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#f87171' }}>
-                                                                    ❌ Error: {entry.error_message}
-                                                                </p>
-                                                            )}
-                                                            <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
-                                                                <span>📁 {entry.category}</span>
-                                                                {entry.retry_count && <span>🔄 Retry #{entry.retry_count}</span>}
-                                                                {entry.source_url && (
-                                                                    <a 
-                                                                        href={entry.source_url} 
-                                                                        target="_blank" 
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-blue-400 hover:text-blue-300"
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                    >
-                                                                        🔗 Source
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
-                                                            {entry.status === 'failed' && (
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setSelectedEntries(new Set([entry.id]));
-                                                                        retrySelected();
-                                                                    }}
-                                                                    className="btn btn-warning"
-                                                                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                                                                    disabled={isLoading}
-                                                                >
-                                                                    🔄 Retry
-                                                                </button>
-                                                            )}
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
-                                                                className="btn btn-primary"
-                                                                style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                            >
-                                                                ✏️ Edit
-                                                            </button>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedEntries.has(entry.id)}
-                                                                onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
-                                                                style={{ marginTop: '4px' }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Status Monitor Tab */}
-                    {activeTab === 'status' && (
-                        <div>
-                            {/* Status Statistics */}
-                            <div className="card">
-                                <h3 style={{ margin: '0 0 16px', color: '#60a5fa' }}>📊 Entry Status Overview</h3>
-                                <div className="stats-grid">
-                                    <div className="stat-card">
-                                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{statusStats.total}</div>
-                                        <div style={{ fontSize: '14px', color: '#a0aec0' }}>Total Active</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4ade80' }}>{statusStats.published}</div>
-                                        <div style={{ fontSize: '14px', color: '#a0aec0' }}>Published</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#fbbf24' }}>{statusStats.processing}</div>
-                                        <div style={{ fontSize: '14px', color: '#a0aec0' }}>Processing</div>
-                                    </div>
-                                    <div className="stat-card">
-                                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f87171' }}>{statusStats.failed}</div>
-                                        <div style={{ fontSize: '14px', color: '#a0aec0' }}>Failed</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Status Controls */}
-                            <div className="card">
-                                <div className="flex gap-2 mb-4 flex-mobile">
-                                    <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
-                                        {isLoading ? '🔄' : '📊'} Refresh
-                                    </button>
-                                    <button 
-                                        onClick={() => setStatusFilter('processing')} 
-                                        className="btn btn-warning"
-                                        disabled={statusStats.processing === 0}
-                                    >
-                                        🔄 View Processing ({statusStats.processing})
-                                    </button>
-                                    <button 
-                                        onClick={() => setStatusFilter('failed')} 
-                                        className="btn btn-danger"
-                                        disabled={statusStats.failed === 0}
-                                    >
-                                        ❌ View Failed ({statusStats.failed})
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            const failedEntries = entries.filter(e => e.status === 'failed' && !e.archived);
-                                            setSelectedEntries(new Set(failedEntries.map(e => e.id)));
-                                            retrySelected();
-                                        }} 
-                                        className="btn btn-warning"
-                                        disabled={statusStats.failed === 0 || isLoading}
-                                    >
-                                        🔄 Retry All Failed ({statusStats.failed})
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Recent Activity */}
-                            <div className="card">
-                                <h3 style={{ margin: '0 0 16px', color: '#60a5fa' }}>📋 Recent Activity</h3>
-                                <div className="scrollable">
-                                    {entries
-                                        .filter(entry => !entry.archived)
-                                        .sort((a, b) => new Date(b.added_at || b.date) - new Date(a.added_at || a.date))
-                                        .slice(0, 20)
-                                        .map(entry => (
-                                            <div key={entry.id} className={`entry ${entry.status || 'published'}`} style={{ cursor: 'default' }}>
-                                                <div className="flex justify-between">
-                                                    <div style={{ flex: 1 }}>
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <span className="text-sm" style={{ color: '#a0aec0' }}>
-                                                                📅 {formatDateTime(entry.added_at || entry.date)}
-                                                            </span>
-                                                            <span className={getStatusClasses(entry.status)}>
-                                                                {entry.status === 'processing' ? '🔄 PROCESSING' :
-                                                                 entry.status === 'failed' ? '❌ FAILED' :
-                                                                 '✅ PUBLISHED'}
-                                                            </span>
-                                                            {entry.manual_submission && (
-                                                                <span className="text-xs" style={{ color: '#a78bfa' }}>📝 Manual</span>
-                                                            )}
-                                                        </div>
-                                                        <h4 style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '16px' }}>{entry.title}</h4>
-                                                        <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
-                                                            <span>👤 {entry.actor}</span>
-                                                            <span>📁 {entry.category}</span>
-                                                            {entry.retry_count && <span>🔄 Retry #{entry.retry_count}</span>}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
-                                                        {entry.status === 'failed' && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedEntries(new Set([entry.id]));
-                                                                    retrySelected();
-                                                                }}
-                                                                className="btn btn-warning"
-                                                                style={{ padding: '4px 8px', fontSize: '12px' }}
-                                                                disabled={isLoading}
-                                                            >
-                                                                🔄 Retry
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => {
-                                                                setActiveTab('entries');
-                                                                setStatusFilter('all');
-                                                                setSelectedEntries(new Set([entry.id]));
-                                                            }}
-                                                            className="btn btn-primary"
-                                                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Status</label>
+                                                        <select
+                                                            value={editForm.status}
+                                                            onChange={(e) => setEditForm({...editForm, status: e.target.value})}
+                                                            className="input"
                                                         >
-                                                            👁️ View
-                                                        </button>
+                                                            <option value="published">✅ Published</option>
+                                                            <option value="failed">❌ Failed</option>
+                                                        </select>
                                                     </div>
                                                 </div>
+                                                
+                                                <div className="grid grid-2 gap-4 mb-4">
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
+                                                        <select
+                                                            value={editForm.severity}
+                                                            onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
+                                                            className="input"
+                                                        >
+                                                            <option value="low">🟢 Low</option>
+                                                            <option value="medium">🟡 Medium</option>
+                                                            <option value="high">🔴 High</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
+                                                        <input
+                                                            type="text"
+                                                            value={editForm.actor}
+                                                            onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
+                                                            className="input"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editForm.title}
+                                                        onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
+                                                    <textarea
+                                                        value={editForm.description}
+                                                        onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                                        className="input"
+                                                        rows="3"
+                                                    />
+                                                </div>
+                                                
+                                                <div className="grid grid-2 gap-4 mb-4">
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
+                                                        <select
+                                                            value={editForm.category}
+                                                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                                                            className="input"
+                                                        >
+                                                            <option value="Financial">Financial</option>
+                                                            <option value="Civil Liberties">Civil Liberties</option>
+                                                            <option value="Platform Manipulation">Platform Manipulation</option>
+                                                            <option value="Government Oversight">Government Oversight</option>
+                                                            <option value="Election Integrity">Election Integrity</option>
+                                                            <option value="Corporate Ethics">Corporate Ethics</option>
+                                                            <option value="Legal Proceedings">Legal Proceedings</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
+                                                        <input
+                                                            type="url"
+                                                            value={editForm.source_url}
+                                                            onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
+                                                            className="input"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="mb-4">
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editForm.verified}
+                                                            onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
+                                                        />
+                                                        <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
+                                                    </label>
+                                                </div>
+                                                
+                                                <div className="flex gap-2">
+                                                    <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
+                                                        💾 Save
+                                                    </button>
+                                                    <button onClick={cancelEdit} className="btn btn-secondary">
+                                                        ❌ Cancel
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ))}
-                                </div>
-                            </div>
+                                        ) : (
+                                            <div className="flex justify-between">
+                                                <div style={{ flex: 1 }}>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {formatDate(entry.date)}</span>
+                                                        <span className={getStatusClasses(entry.status)}>
+                                                            {entry.status === 'failed' ? '❌ FAILED' : '✅ PUBLISHED'}
+                                                        </span>
+                                                        <span className={getSeverityClasses(entry.severity)}>
+                                                            {entry.severity === 'high' ? '🚨 HIGH' :
+                                                             entry.severity === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ LOW'}
+                                                        </span>
+                                                        {entry.verified && <span className="text-green-400 text-sm">✅ Verified</span>}
+                                                        {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
+                                                        <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
+                                                    </div>
+                                                    <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
+                                                    <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
+                                                    {entry.error_message && (
+                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#f87171' }}>
+                                                            ❌ Error: {entry.error_message}
+                                                        </p>
+                                                    )}
+                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
+                                                        <span>📁 {entry.category}</span>
+                                                        {entry.retry_count && <span>🔄 Retry #{entry.retry_count}</span>}
+                                                        {entry.source_url && (
+                                                            <a 
+                                                                href={entry.source_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-400 hover:text-blue-300"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                🔗 Source
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
+                                                    {entry.status === 'failed' && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedEntries(new Set([entry.id]));
+                                                                retrySelected();
+                                                            }}
+                                                            className="btn btn-warning"
+                                                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                                                            disabled={isLoading}
+                                                        >
+                                                            🔄 Retry
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
+                                                        className="btn btn-primary"
+                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedEntries.has(entry.id)}
+                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
+                                                        style={{ marginTop: '4px' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             );
         }
