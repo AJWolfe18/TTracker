@@ -440,7 +440,7 @@ Return a JSON array of relevant political developments found. Only include real 
           actor: escapeQuotes(entry.actor || ''),
           severity: entry.severity || assessSeverity(entry.title, entry.description),
           date: entry.date || new Date().toISOString().split('T')[0]
-          status: 'published'
+          status: 'published',
         };
       }).filter(entry => entry !== null && validateEntry(entry));
 
