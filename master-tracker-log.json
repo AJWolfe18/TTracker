@@ -1,5 +1,57 @@
 [
   {
+    "date": "2025-08-01",
+    "actor": "Elon Musk",
+    "category": "Political Influence",
+    "title": "Elon Musk Continues Financial Support for Republican Candidates Amid Tensions with Trump",
+    "description": "Despite a public fallout with President Donald Trump, Elon Musk has continued to financially support Republican candidates, donating $5 million each to two major Republican Super PACs. This support comes despite Musk\\'s previous announcement to withdraw from politics after the loss of conservative candidate Brad Schimel and backlash against his companies due to his role in the Trump administration.",
+    "source_url": "https://www.ft.com/content/a94f6b2e-42cd-4e2b-a782-ce15c25b87c2",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdsx4fn4hy1uarxtmns",
+    "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-01",
+    "actor": "Elon Musk",
+    "category": "Political Influence",
+    "title": "Elon Musk\\'s X Platform Boosts Hard-Right Figures in Europe",
+    "description": "An Associated Press investigation revealed that Elon Musk, as the head of X (formerly Twitter), plays a significant role in boosting the reach and influence of hard-right politicians and commentators across Europe. Since acquiring the platform in 2022, Musk\\'s interactions with far-right influencers\\' posts have led to substantial increases in their viewership and follower counts, raising concerns about foreign interference and biased content amplification.",
+    "source_url": "https://apnews.com/article/89746e1e17bcc134206c14a204efcbce",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4fn4d6g2vko6unu",
+    "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-31",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump\\'s Acceptance of Qatar\\'s Luxury Jet Raises Ethical Concerns",
+    "description": "In May 2025, President Donald Trump announced his intention to accept a $400 million luxury jet from Qatar, which would first serve as Air Force One and later be transferred to his presidential library. This decision has elicited bipartisan criticism, with opponents labeling it as a \\'bribe\\' and an example of \\'corruption.\\' Critics argue that the acceptance of such a gift could lead to potential conflicts of interest and ethical dilemmas, questioning the propriety of accepting such a substantial gift from a foreign nation during his presidency.",
+    "source_url": "https://www.theguardian.com/us-news/2025/may/15/trump-qatar-luxury-jet-air-force-one-ethical-concerns",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx55oz98pfuxpp08e",
+    "added_at": "2025-08-01T14:28:21.395Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-31",
+    "actor": "Elon Musk",
+    "category": "Government Efficiency",
+    "title": "Maryland Leads Nation in Federal Job Losses Due to DOGE Policies",
+    "description": "Maryland has experienced the largest number of federal job losses in the nation since the start of the second Trump administration, according to the Maryland Department of Labor. Approximately 229,000 Marylanders work for the federal government, making it a major component of the state’s economy. The recent government cuts, driven by DOGE-related policy changes, have had a swift and severe impact, comparable to the effects of the two-year sequestration a decade ago, despite only occurring over six months.",
+    "source_url": "https://www.axios.com/local/washington-dc/2025/07/31/maryland-leads-nation-federal-job-losses-doge",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4fn4maubhg5evzj",
+    "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
     "date": "2025-07-31",
     "actor": "Elon Musk",
     "category": "Government Contracts",
@@ -23,6 +75,58 @@
     "severity": "medium",
     "id": "mdrhp9kqlguo7mh91cb",
     "added_at": "2025-07-31T14:28:19.514Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Donald Trump",
+    "category": "Business",
+    "title": "Trump Organization Announces New Ethics Plan Amid Presidency",
+    "description": "On January 10, 2025, the Trump Organization unveiled a new ethics plan aimed at limiting President-elect Donald Trump\\'s involvement in business operations during his tenure in the White House. The plan stipulates that Trump will have \\'limited access\\' to the company\\'s financial information, receiving only \\'general business updates.\\' Additionally, the organization committed to not entering into any new material transactions or contracts with foreign governments during his presidency. This move seeks to address potential conflicts of interest and maintain ethical standards during his term.",
+    "source_url": "https://www.cnbc.com/2025/01/10/trump-organization-to-limit-president-elects-involvement-under-new-ethics-plan.html",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdsx55oz2c0f2rjaw4g",
+    "added_at": "2025-08-01T14:28:21.395Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Elon Musk",
+    "category": "Government Contracts",
+    "title": "SpaceX Expresses Interest in $151 Billion \\'Golden Dome\\' Defense Project",
+    "description": "The Trump administration has initiated a $151 billion procurement process for the \\'Golden Dome\\' project, a massive defense initiative inspired by Israel\\'s Iron Dome. Overseen by the US Missile Defense Agency, the effort aims to build an advanced, multi-domain system to detect and neutralize ballistic, hypersonic, and cruise missile threats. Major defense firms such as Lockheed Martin, RTX, Northrop Grumman, L3Harris, and Booz Allen Hamilton have indicated interest, as has Elon Musk\\'s SpaceX, despite recent tensions with Trump.",
+    "source_url": "https://www.ft.com/content/b8cbefc9-9e68-4ba9-a621-667024481a5b",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdsx4fn4fao0v33kyo",
+    "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Elon Musk",
+    "category": "Political Influence",
+    "title": "Elon Musk Announces Formation of \\'America Party\\' Amid Tensions with Trump",
+    "description": "Elon Musk announced the formation of a new political party called the \\'America Party,\\' focusing on deficit reduction and fiscal conservatism. This move comes amid tensions with President Donald Trump, following Musk\\'s criticism of Trump\\'s spending bill and the loss of conservative candidate Brad Schimel. The announcement has raised questions about Musk\\'s future political ambitions and his relationship with the Trump administration.",
+    "source_url": "https://en.wikipedia.org/wiki/America_Party",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdsx4fn4yar69zpl1ak",
+    "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-30",
+    "actor": "Trump Administration",
+    "category": "Government Oversight",
+    "title": "Launch of Private Health Tracking System Raises Privacy Concerns",
+    "description": "On July 30, 2025, the Trump administration announced a controversial new private health tracking system in partnership with major tech companies such as Apple, Google, and Amazon. This system aims to modernize healthcare by improving access to medical records and assisting with wellness management, but it has raised significant concerns from privacy advocates due to ethical and legal implications of sharing personal health data with private firms.",
+    "source_url": "https://apnews.com/article/512d62ee9d2e67fd4335e16ec5fa0592",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdsx4dtdcyv3fa9uwgt",
+    "added_at": "2025-08-01T14:27:45.265Z",
     "status": "published"
   },
   {
@@ -164,6 +268,19 @@
   },
   {
     "date": "2025-07-29",
+    "actor": "Mesa County, Colorado Sheriff\\'s Office",
+    "category": "Government Oversight",
+    "title": "Colorado Deputies Disciplined for Sharing Information with Federal Immigration Agents",
+    "description": "Two Mesa County, Colorado deputies, Alexander Zwinck and Erik Olson, were disciplined for violating state law by sharing information with federal immigration agents, helping them carry out an arrest. Their actions, including the use of Signal chat to communicate with federal agents, particularly during a drug task force operation, led to disciplinary actions: Zwinck received three weeks of unpaid leave, Olson two weeks, and both were removed from the task force. Supervisors were also penalized, receiving suspensions, reprimands, or counseling.",
+    "source_url": "https://apnews.com/article/0a5bad90d8e66ba77e31bf3511377aa4",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdsx4dtdrsf5f1rlswl",
+    "added_at": "2025-08-01T14:27:45.265Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-29",
     "actor": "U.S. Department of Justice",
     "category": "Government Oversight",
     "title": "Trump Administration Extends Term of Controversial U.S. Attorney",
@@ -267,6 +384,19 @@
     "manual_submission": true,
     "submitted_by": "admin",
     "processed_at": "2025-07-29T03:22:34.534Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-28",
+    "actor": "U.S. Department of Justice",
+    "category": "Legal Proceedings",
+    "title": "Trump administration files misconduct complaint against prominent judge Boasberg",
+    "description": "The U.S. Justice Department filed a misconduct complaint against Chief U.S. District Judge James Boasberg, alleging his comments about potential constitutional crises undermined judicial neutrality and violated the judicial code of conduct.",
+    "source_url": "https://www.reuters.com/legal/government/trump-administration-files-misconduct-complaint-against-prominent-judge-boasberg-2025-07-28/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4d66dp88dkickn5",
+    "added_at": "2025-08-01T14:27:44.430Z",
     "status": "published"
   },
   {
@@ -1561,6 +1691,19 @@
     "severity": "medium",
     "id": "mdac803do5sw1kw27si",
     "added_at": "2025-07-19T14:22:51.001Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-18",
+    "actor": "Donald Trump",
+    "category": "Corporate Ethics",
+    "title": "Trump\\'s Crypto Ventures Raise Conflict of Interest Concerns",
+    "description": "President Trump has launched his own cryptocurrency and a related firm, World Liberty Financial, raising questions about potential conflicts of interest as he promotes deregulation in the crypto industry. Critics argue that his administration\\'s policies may disproportionately benefit his family\\'s business interests.",
+    "source_url": "https://www.washingtonpost.com/politics/2025/07/18/trump-businesses-trump-organization-white-house-conflicts-of-interest/4661a2d8-63c8-11f0-bf70-56d8888ebb94_story.html",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4hzj33zi00ncfbg",
+    "added_at": "2025-08-01T14:27:50.671Z",
     "status": "published"
   },
   {
@@ -5364,6 +5507,19 @@
     "status": "published"
   },
   {
+    "date": "2025-05-05",
+    "actor": "EPA",
+    "category": "Regulatory Action",
+    "title": "EPA Announces Reorganization to Streamline Operations",
+    "description": "The EPA announced a reorganization creating an Office of State Air Partnerships within the Office of Air and Radiation, focusing on collaboration with state, local, and tribal air permitting agencies. The restructuring aims to improve processing of State Implementation Plans and resolve air permitting concerns, with an expected annual savings of over $300 million by the end of fiscal year 2026.",
+    "source_url": "https://www.mcaa.org/news/government-affairs-update-2025-05-19/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdsx4e2dxx6gvewenf",
+    "added_at": "2025-08-01T14:27:45.589Z",
+    "status": "published"
+  },
+  {
     "date": "2025-04-25",
     "actor": "George Santos",
     "category": "Financial",
@@ -5400,6 +5556,19 @@
     "severity": "high",
     "id": 109,
     "added_at": "2025-06-28T12:40:00Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-03-04",
+    "actor": "Trump Administration",
+    "category": "Corporate Ethics",
+    "title": "Trump Agencies Accused of Halting Corporate Investigations",
+    "description": "The Trump administration has been accused of pausing or dismissing investigations into at least 89 companies, including cases of foreign bribery and environmental violations. Critics argue that this approach undermines corporate accountability and public trust.",
+    "source_url": "https://www.npr.org/2025/03/04/g-s1-51799/trump-corporate-bribery-investigations",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4hzj1znj4eolluk",
+    "added_at": "2025-08-01T14:27:50.671Z",
     "status": "published"
   },
   {
@@ -5520,6 +5689,19 @@
     "status": "published"
   },
   {
+    "date": "2024-10-07",
+    "actor": "Donald Trump",
+    "category": "Corporate Ethics",
+    "title": "Trump\\'s Courtship of Big Donors Raises Corruption Concerns",
+    "description": "Former President Trump has intensified efforts to secure large donations from mega-donors, including Elon Musk and fossil fuel magnates, prompting concerns about potential corruption and undue influence over policy decisions.",
+    "source_url": "https://www.theguardian.com/us-news/2024/oct/07/trump-big-donors-corruption-musk",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4hzj7e6fwzfo8pl",
+    "added_at": "2025-08-01T14:27:50.671Z",
+    "status": "published"
+  },
+  {
     "date": "2024-09-04",
     "actor": "U.S. Supreme Court",
     "category": "Legal Proceedings",
@@ -5585,6 +5767,19 @@
     "status": "published"
   },
   {
+    "date": "2024-03-28",
+    "actor": "Foreign-Invested Companies",
+    "category": "Corporate Ethics",
+    "title": "Foreign-Invested Companies\\' Political Spending Undermines U.S. Elections",
+    "description": "Companies with significant foreign investment have been found to spend millions on U.S. elections, raising concerns about foreign influence and its impact on democratic processes and national security.",
+    "source_url": "https://www.forbes.com/sites/iansimmons/2024/03/28/under-the-influence-how-companies-loyal-to-foreign-investors-undermine-our-elections-and-economy/",
+    "verified": true,
+    "severity": "high",
+    "id": "mdsx4hzji7xh4y9ft5q",
+    "added_at": "2025-08-01T14:27:50.671Z",
+    "status": "published"
+  },
+  {
     "date": "2024-03-06",
     "actor": "Legal Industry Professionals",
     "category": "Corporate Ethics",
@@ -5595,6 +5790,19 @@
     "severity": "high",
     "id": "md28mzjjyhpy895d3l",
     "added_at": "2025-07-13T22:20:22.255Z",
+    "status": "published"
+  },
+  {
+    "date": "2024-01-11",
+    "actor": "Various Corporations",
+    "category": "Corporate Ethics",
+    "title": "Companies Reduce Political Contributions Following Capitol Violence",
+    "description": "In the aftermath of the January 6 Capitol riot, several major corporations, including Google, Coca-Cola, and UPS, announced suspensions of political contributions, signaling a shift in corporate political engagement.",
+    "source_url": "https://democracy21.org/news/press-releases/companies-pull-back-political-giving-following-capitol-violence-nyt-corporate-revolt-shakes-political-fundraising-world-cnn",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdsx4hzjptkssirls",
+    "added_at": "2025-08-01T14:27:50.671Z",
     "status": "published"
   }
 ]
