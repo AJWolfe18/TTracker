@@ -29,31 +29,37 @@ async function fetchExecutiveOrders() {
                         search_context_size: 'large'
                     }
                 ],
-                input: `Search for executive orders issued by Donald Trump since January 20, 2025. Look specifically on whitehouse.gov for official executive orders.
+                Search for all U.S. Executive Orders issued between January 20, 2025 and today.
 
-For each executive order found, extract and format as JSON:
+For each executive order, extract and return the following structured data in valid JSON format:
 {
   "date": "YYYY-MM-DD",
-  "title": "Executive Order Title",
-  "order_number": "Executive Order number if available",
-  "summary": "2-3 sentence summary of what the order does",
-  "impact_areas": ["area1", "area2", "area3"],
-  "affected_agencies": ["agency1", "agency2"],
-  "policy_direction": "expand|restrict|modify|create|eliminate",
-  "severity_rating": "low|medium|high",
-  "source_url": "Official WhiteHouse.gov URL",
-  "full_text_available": true|false
+  "title": "Full official title of the executive order",
+  "order_number": "Executive Order number (e.g. EO 14001)",
+  "summary": "2–3 sentence nonpartisan summary of what the order does and its intended impact",
+  "impact_areas": ["e.g. immigration", "energy policy", "trade", "education"],
+  "affected_agencies": ["List of federal departments or agencies involved"],
+  "policy_direction": "expand | restrict | modify | create | eliminate",
+  "severity_rating": "low | medium | high",
+  "source_url": "Direct URL to official WhiteHouse.gov page",
+  "full_text_available": true | false
 }
 
-Focus on:
-- Immigration and border security orders
-- Federal agency restructuring
-- Regulatory changes
-- Economic policy orders
-- Energy and environment orders
-- National security directives
+Focus on categorizing each order by policy area. Prioritize orders related to:
+- Immigration and border security (e.g. wall, deportations, asylum)
+- Energy and environment (e.g. drilling, pipelines, climate rollback)
+- Trade and tariffs (especially China, Mexico, WTO, USMCA)
+- Defense and national security (DoD, NSA, cyber, border ops)
+- Federal agency restructuring, appointments, or spending cuts
+- Education, healthcare, and social policy (e.g. Title IX, ACA)
+- Regulatory rollback or new enforcement measures
 
-Return a JSON array of executive orders found. Only include official orders from whitehouse.gov.`,
+### Instructions:
+- Include all orders, both major and minor — no filtering
+- Include EOs issued on weekends, holidays, or same-day edits
+- Only include EOs published or confirmed on whitehouse.gov
+- Group amended or rescinded orders with the original, noting changes
+- Return as a complete JSON array (even if over 20 results)
                 max_output_tokens: 3000
             }),
         });
