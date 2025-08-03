@@ -1,4 +1,4 @@
-/ executive-orders-tracker.js
+// executive-orders-tracker.js
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 
