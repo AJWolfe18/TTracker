@@ -36,6 +36,15 @@ jobs:
       
     - name: Commit and push changes
       run: |
-        git add executive-orders-*.json executive-orders-log.json public/executive-orders-log.json
-        git commit -m "Auto-update: Executive Orders $(date '+%Y-%m-%d')" || exit 0
-        git push
+        # Add files that exist
+        git add executive-orders-log.json || true
+        git add public/executive-orders-log.json || true
+        git add executive-orders-*.json 2>/dev/null || true
+        
+        # Only commit if there are changes
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Auto-update: Executive Orders $(date '+%Y-%m-%d')"
+          git push
+        fi
