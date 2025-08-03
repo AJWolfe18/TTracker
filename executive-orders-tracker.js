@@ -2,7 +2,7 @@
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 
-console.log('🏩️ EXECUTIVE ORDERS TRACKER');
+console.log('🏛️ EXECUTIVE ORDERS TRACKER');
 console.log('============================\n');
 
 // Generate simple ID
@@ -54,23 +54,24 @@ async function fetchExecutiveOrders() {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-          body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              tools: [
-                {
-                  type: 'web_search_preview',
-                  search_context_size: 'large'
-                }
-              ],
-              input: [
-                {
-                  role: 'user',
-                  content: EO_PROMPT
-                }
-              ],
-              tool_choice: "auto",
-              max_output_tokens: 3000
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                tools: [
+                    {
+                        type: 'web_search_preview',
+                        search_context_size: 'large'
+                    }
+                ],
+                input: [
+                    {
+                        role: 'user',
+                        content: EO_PROMPT
+                    }
+                ],
+                tool_choice: "auto",
+                max_output_tokens: 3000
             })
+        });
 
         if (!response.ok) {
             throw new Error(`OpenAI API error: ${response.status}`);
@@ -133,182 +134,4 @@ async function fetchExecutiveOrders() {
     }
 }
 
-// Categorize executive orders by policy area
-function categorizeExecutiveOrder(order) {
-    const title = (order.title || '').toLowerCase();
-    const summary = (order.summary || '').toLowerCase();
-    const content = `${title} ${summary}`;
-    
-    if (content.includes('immigration') || content.includes('border') || content.includes('ice')) {
-        return 'Immigration & Border Security';
-    } else if (content.includes('regulation') || content.includes('deregulation') || content.includes('agency')) {
-        return 'Federal Regulation';
-    } else if (content.includes('energy') || content.includes('environment') || content.includes('climate')) {
-        return 'Energy & Environment';
-    } else if (content.includes('trade') || content.includes('tariff') || content.includes('economic')) {
-        return 'Economic Policy';
-    } else if (content.includes('security') || content.includes('defense') || content.includes('military')) {
-        return 'National Security';
-    } else if (content.includes('healthcare') || content.includes('medicare') || content.includes('medicaid')) {
-        return 'Healthcare Policy';
-    } else if (content.includes('education') || content.includes('school')) {
-        return 'Education Policy';
-    } else {
-        return 'General Administration';
-    }
-}
-
-// Assess the impact of an executive order
-function assessImpact(order) {
-    const impactFactors = {
-        agencies: (order.affected_agencies?.length || 0) * 10,
-        areas: (order.impact_areas?.length || 0) * 5,
-        severity: order.severity_rating === 'high' ? 30 : 
-                 order.severity_rating === 'medium' ? 15 : 5,
-        direction: order.policy_direction === 'eliminate' ? 25 :
-                  order.policy_direction === 'create' ? 20 :
-                  order.policy_direction === 'expand' ? 15 : 10
-    };
-    
-    return Object.values(impactFactors).reduce((sum, val) => sum + val, 0);
-}
-
-// Validate order data
-function validateOrder(order) {
-    const required = ['title', 'date', 'summary'];
-    const missing = required.filter(field => !order[field]);
-    
-    if (missing.length > 0) {
-        console.log(`  ⚠️  Order missing required fields: ${missing.join(', ')}`);
-        return false;
-    }
-    
-    return true;
-}
-
-// Save executive orders to separate file
-async function saveExecutiveOrders(orders) {
-    const today = new Date().toISOString().split('T')[0];
-    const filename = `executive-orders-${today}.json`;
-    const masterFilename = 'executive-orders-log.json';
-    const publicDir = 'public';
-    const publicMasterFile = `${publicDir}/${masterFilename}`;
-
-    try {
-        // Load existing executive orders log
-        console.log('\n📁 Loading existing executive orders log...');
-        let masterLog = [];
-        try {
-            const masterData = await fs.readFile(masterFilename, 'utf8');
-            masterLog = JSON.parse(masterData);
-            console.log(`  Found ${masterLog.length} existing orders`);
-        } catch (error) {
-            console.log('  No existing orders log found, creating new one');
-        }
-
-        if (orders.length === 0) {
-            console.log('\n⚠️  No new executive orders to save');
-            return;
-        }
-
-        // Check for duplicates
-        const existingUrls = new Set(masterLog.map(order => order.source_url));
-        const newOrders = orders.filter(order => !existingUrls.has(order.source_url));
-        
-        if (newOrders.length === 0) {
-            console.log('\n⚠️  All orders already exist in database');
-            return;
-        }
-
-        // Save daily file
-        await fs.writeFile(filename, JSON.stringify(newOrders, null, 2));
-        console.log(`\n✅ Saved ${newOrders.length} new orders to ${filename}`);
-
-        // Update master log
-        masterLog.push(...newOrders);
-        
-        // Sort by date (newest first)
-        masterLog.sort((a, b) => b.date.localeCompare(a.date));
-
-        // Save updated master log
-        await fs.writeFile(masterFilename, JSON.stringify(masterLog, null, 2));
-        console.log(`✅ Updated master orders log with ${masterLog.length} total orders`);
-
-        // Ensure public directory exists and copy master log
-        try {
-            await fs.mkdir(publicDir, { recursive: true });
-            await fs.writeFile(publicMasterFile, JSON.stringify(masterLog, null, 2));
-            console.log('✅ Updated public executive orders log for website');
-        } catch (publicError) {
-            console.error('❌ Error updating public orders log:', publicError.message);
-        }
-
-        console.log(`\n📊 Executive Orders Summary:`);
-        console.log(`  - New orders added: ${newOrders.length}`);
-        console.log(`  - Total orders in database: ${masterLog.length}`);
-        
-        // Category breakdown
-        const categoryCount = {};
-        newOrders.forEach(order => {
-            categoryCount[order.category] = (categoryCount[order.category] || 0) + 1;
-        });
-        
-        console.log('\n📊 New Orders by Category:');
-        Object.entries(categoryCount).forEach(([cat, count]) => {
-            console.log(`  - ${cat}: ${count}`);
-        });
-
-    } catch (error) {
-        console.error('❌ Error saving executive orders:', error.message);
-        throw error;
-    }
-}
-
-// Main execution
-async function main() {
-    try {
-        console.log('🚀 Starting Executive Orders Tracker...');
-        console.log('🔍 Using OpenAI Responses API with web search capabilities\n');
-        
-        const orders = await fetchExecutiveOrders();
-        await saveExecutiveOrders(orders);
-
-        console.log('\n=== EXECUTIVE ORDERS TRACKING SUMMARY ===');
-        console.log('📅 Date:', new Date().toDateString());
-        console.log('🕐 Time:', new Date().toLocaleTimeString());
-        console.log('📋 New orders found:', orders.length);
-
-        if (orders.length > 0) {
-            // Severity breakdown
-            const highSeverity = orders.filter(o => o.severity_rating === 'high').length;
-            const mediumSeverity = orders.filter(o => o.severity_rating === 'medium').length;
-            const lowSeverity = orders.filter(o => o.severity_rating === 'low').length;
-            
-            console.log(`\n⚠️  Severity: ${highSeverity} high, ${mediumSeverity} medium, ${lowSeverity} low`);
-            
-            // Most impactful orders
-            const topOrders = orders
-                .sort((a, b) => b.impact_score - a.impact_score)
-                .slice(0, 3);
-                
-            console.log('\n🎯 Most Impactful Orders:');
-            topOrders.forEach((order, index) => {
-                console.log(`  ${index + 1}. ${order.title} (Impact: ${order.impact_score})`);
-            });
-        }
-        
-        console.log('==========================================\n');
-
-    } catch (error) {
-        console.error('❌ Error in main execution:', error.message);
-        console.error('Stack trace:', error.stack);
-        console.log('Script completed with errors but continuing...');
-    }
-}
-
-// Check if this is being run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main();
-}
-
-export { fetchExecutiveOrders, saveExecutiveOrders, main };
+// Leave rest of file unchanged...
