@@ -118,12 +118,17 @@ async function fetchExecutiveOrders() {
             };
         }).filter(order => order !== null && validateOrder(order));
 
-        console.log(`  ✅ Found ${processedOrders.length} valid executive orders`);
+        console.log(`\n=== EXECUTIVE ORDER FETCH SUMMARY ===`);
+        console.log(`📅 Date: ${new Date().toISOString().split('T')[0]}`);
+        console.log(`🗂️ Orders returned by API: ${orders.length}`);
+        console.log(`✅ Valid after filtering: ${processedOrders.length}`);
 
         if (processedOrders.length > 0) {
             processedOrders.forEach((order, index) => {
-                console.log(`    ${index + 1}. [${order.severity_rating.toUpperCase()}] ${order.title}`);
+                console.log(`  ${index + 1}. [${order.severity_rating.toUpperCase()}] ${order.title}`);
             });
+        } else {
+            console.log('⚠️ No valid executive orders found in this run.');
         }
 
         return processedOrders;
