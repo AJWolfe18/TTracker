@@ -1,0 +1,35 @@
+# .github/workflows/executive-orders-tracker.yml
+name: Track Executive Orders
+on:
+  schedule:
+    - cron: '0 16 * * *'  # 11:00 AM EST daily (2 hours after main tracker)
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  track-orders:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Track Executive Orders
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: node executive-orders-tracker.js
+      
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action - Executive Orders"
+        git add executive-orders-*.json executive-orders-log.json public/executive-orders-log.json
+        git commit -m "Auto-update: Executive Orders $(date '+%Y-%m-%d')" || exit 0
+        git push
