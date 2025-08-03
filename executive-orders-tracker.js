@@ -54,17 +54,12 @@ async function fetchExecutiveOrders() {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                tools: [
-                    {
-                        type: 'web_search_preview',
-                        search_context_size: 'large'
-                    }
-                ],
-                input: EO_PROMPT,
-                max_output_tokens: 3000
-            }),
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            tools: [{ type: 'web_search_preview', search_context_size: 'large' }],
+            input: [{ role: 'user', content: EO_PROMPT }],
+            max_output_tokens: 3000
+          })
         });
 
         if (!response.ok) {
