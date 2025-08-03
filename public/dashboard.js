@@ -5,6 +5,32 @@ const { useState, useEffect, useCallback, useMemo } = React;
 // Main Dashboard Component with Tabs
 const TrumpyTrackerDashboard = () => {
   const [activeTab, setActiveTab] = useState('political');
+  const [executiveOrders, setExecutiveOrders] = useState([]);
+
+  // Load executive orders data
+  const loadExecutiveOrders = useCallback(async () => {
+    try {
+      const response = await fetch('/executive-orders-log.json', {
+        cache: 'no-cache'
+      });
+      
+      if (!response.ok) {
+        console.log('Executive orders data not yet available');
+        return;
+      }
+      
+      const data = await response.json();
+      const validOrders = Array.isArray(data) ? data : [];
+      setExecutiveOrders(validOrders);
+    } catch (error) {
+      console.log('Executive orders not loaded:', error.message);
+      setExecutiveOrders([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadExecutiveOrders();
+  }, [loadExecutiveOrders]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -50,7 +76,7 @@ const TrumpyTrackerDashboard = () => {
                     : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
                 }`}
               >
-                🏛️ Executive Orders
+                🏛️ Executive Orders ({executiveOrders.length})
               </button>
             </div>
           </div>
@@ -58,7 +84,7 @@ const TrumpyTrackerDashboard = () => {
 
         {/* Tab Content */}
         {activeTab === 'political' && <PoliticalDashboard />}
-        {activeTab === 'executive' && <ExecutiveOrdersDashboard />}
+        {activeTab === 'executive' && <ExecutiveOrdersDashboard orders={executiveOrders} />}
 
         {/* Footer */}
         <footer className="mt-16 text-center">
@@ -528,7 +554,226 @@ const PoliticalDashboard = () => {
   );
 };
 
-// [Include the ExecutiveOrdersDashboard component from the previous artifact here]
+// Executive Orders Dashboard Component
+const ExecutiveOrdersDashboard = ({ orders }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedSeverity, setSelectedSeverity] = useState('all');
+
+  // Filter orders based on search and filters
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      const matchesSearch = !searchTerm || [
+        order.title,
+        order.summary,
+        order.category,
+        order.order_number,
+        order.impact_areas?.join(' '),
+        order.affected_agencies?.join(' ')
+      ].some(field => 
+        field?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      const matchesCategory = selectedCategory === 'all' || order.category === selectedCategory;
+      const matchesSeverity = selectedSeverity === 'all' || order.severity_rating === selectedSeverity;
+      
+      return matchesSearch && matchesCategory && matchesSeverity;
+    });
+  }, [orders, searchTerm, selectedCategory, selectedSeverity]);
+
+  // Get unique categories
+  const categories = useMemo(() => {
+    return [...new Set(orders.map(order => order.category).filter(Boolean))].sort();
+  }, [orders]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = filteredOrders.length;
+    const highSeverity = filteredOrders.filter(o => o.severity_rating === 'high').length;
+    const mediumSeverity = filteredOrders.filter(o => o.severity_rating === 'medium').length;
+    const lowSeverity = filteredOrders.filter(o => o.severity_rating === 'low').length;
+    
+    // Recent orders (last 7 days)
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const recent = filteredOrders.filter(o => new Date(o.date) >= weekAgo).length;
+    
+    return { total, highSeverity, mediumSeverity, lowSeverity, recent };
+  }, [filteredOrders]);
+
+  const formatDate = (dateString) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  const getSeverityBadge = (severity) => {
+    const baseClasses = 'px-3 py-1 rounded-full text-xs font-bold border';
+    switch (severity) {
+      case 'high':
+        return `${baseClasses} bg-red-900/50 text-red-200 border-red-500`;
+      case 'medium':
+        return `${baseClasses} bg-yellow-900/50 text-yellow-200 border-yellow-500`;
+      case 'low':
+        return `${baseClasses} bg-green-900/50 text-green-200 border-green-500`;
+      default:
+        return `${baseClasses} bg-gray-900/50 text-gray-200 border-gray-500`;
+    }
+  };
+
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <div className="text-6xl mb-6">🏛️</div>
+        <h3 className="text-2xl font-semibold text-white mb-4">No Executive Orders Found</h3>
+        <p className="text-gray-400 mb-6">Executive orders will appear here once the tracker finds official orders from whitehouse.gov</p>
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 max-w-md mx-auto">
+          <p className="text-sm text-gray-300">
+            The executive orders tracker runs daily and searches for official orders from the White House.
+            Check back after the next automated run.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 shadow-lg">
+          <h3 className="text-lg font-semibold text-blue-400 mb-2">📋 Total Orders</h3>
+          <p className="text-3xl font-bold">{stats.total}</p>
+          <p className="text-sm text-gray-400">Executive orders tracked</p>
+        </div>
+
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 shadow-lg">
+          <h3 className="text-lg font-semibold text-red-400 mb-2">🚨 High Impact</h3>
+          <p className="text-3xl font-bold text-red-400">{stats.highSeverity}</p>
+          <p className="text-sm text-gray-400">Critical orders</p>
+        </div>
+
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 shadow-lg">
+          <h3 className="text-lg font-semibold text-yellow-400 mb-2">⚠️ Medium Impact</h3>
+          <p className="text-3xl font-bold text-yellow-400">{stats.mediumSeverity}</p>
+          <p className="text-sm text-gray-400">Standard orders</p>
+        </div>
+
+        <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 shadow-lg">
+          <h3 className="text-lg font-semibold text-green-400 mb-2">📅 Recent</h3>
+          <p className="text-3xl font-bold text-green-400">{stats.recent}</p>
+          <p className="text-sm text-gray-400">Last 7 days</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 shadow-lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="🔍 Search executive orders..."
+            className="px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white placeholder-gray-400"
+          />
+
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(category => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedSeverity}
+            onChange={(e) => setSelectedSeverity(e.target.value)}
+            className="px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white"
+          >
+            <option value="all">All Impact Levels</option>
+            <option value="high">🔴 High Impact</option>
+            <option value="medium">🟡 Medium Impact</option>
+            <option value="low">🟢 Low Impact</option>
+          </select>
+        </div>
+        
+        <div className="text-sm text-gray-400">
+          Showing {filteredOrders.length} of {orders.length} executive orders
+        </div>
+      </div>
+
+      {/* Executive Orders List */}
+      <div className="space-y-4">
+        {filteredOrders.length === 0 ? (
+          <div className="text-center py-12 bg-gray-800/60 backdrop-blur rounded-lg border border-gray-700 shadow-lg">
+            <div className="text-6xl mb-4">🔍</div>
+            <p className="text-gray-400 text-lg">No executive orders match your search criteria</p>
+            <p className="text-gray-500 text-sm mt-2">Try adjusting your search filters</p>
+          </div>
+        ) : (
+          filteredOrders.map((order, index) => (
+            <article 
+              key={order.id || index}
+              className="bg-gray-800/60 backdrop-blur p-6 rounded-lg border border-gray-700 hover:bg-gray-700/60 transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-gray-400">📅 {formatDate(order.date)}</span>
+                  {order.order_number && (
+                    <span className="text-blue-400 text-sm font-mono bg-blue-400/10 px-2 py-1 rounded">
+                      {order.order_number}
+                    </span>
+                  )}
+                  <span className={getSeverityBadge(order.severity_rating)}>
+                    {order.severity_rating === 'high' ? '🚨 HIGH' :
+                     order.severity_rating === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ LOW'}
+                  </span>
+                  {order.verified && (
+                    <span className="text-green-400 text-sm">✅ Official</span>
+                  )}
+                </div>
+              </div>
+
+              <h3 className="text-xl font-semibold mb-3 text-white leading-tight">{order.title}</h3>
+              <p className="text-gray-300 mb-4 leading-relaxed">{order.summary}</p>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-3 text-sm text-gray-400">
+                  <span>📁 {order.category}</span>
+                  <span>📊 {order.policy_direction}</span>
+                  {order.impact_score && <span>Impact: {order.impact_score}</span>}
+                  {order.impact_areas && order.impact_areas.length > 0 && (
+                    <span>🎯 {order.impact_areas.length} areas</span>
+                  )}
+                  {order.affected_agencies && order.affected_agencies.length > 0 && (
+                    <span>🏢 {order.affected_agencies.length} agencies</span>
+                  )}
+                </div>
+                
+                {order.source_url && (
+                  <a 
+                    href={order.source_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-blue-600/20 border border-blue-500 text-blue-400 hover:bg-blue-600/30 px-4 py-2 rounded text-sm font-medium transition-colors inline-flex items-center gap-2"
+                  >
+                    🔗 View Official Order
+                    <span className="text-xs">↗</span>
+                  </a>
+                )}
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Render the main dashboard
 ReactDOM.render(<TrumpyTrackerDashboard />, document.getElementById('root'));
