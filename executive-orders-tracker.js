@@ -74,8 +74,10 @@ async function fetchExecutiveOrders() {
         });
 
         if (!response.ok) {
-            throw new Error(`OpenAI API error: ${response.status}`);
-        }
+    const errorBody = await response.text();
+    console.error(`OpenAI API error ${response.status}: ${errorBody}`);
+    throw new Error(`OpenAI API returned error ${response.status}`);
+}
 
         const data = await response.json();
         const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
