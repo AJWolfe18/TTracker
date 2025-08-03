@@ -26,10 +26,16 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: node executive-orders-tracker.js
       
-    - name: Commit and push changes
+    - name: Configure git
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action - Executive Orders"
+        
+    - name: Pull latest changes
+      run: git pull origin main
+      
+    - name: Commit and push changes
+      run: |
         git add executive-orders-*.json executive-orders-log.json public/executive-orders-log.json
         git commit -m "Auto-update: Executive Orders $(date '+%Y-%m-%d')" || exit 0
         git push
