@@ -55,12 +55,22 @@ async function fetchExecutiveOrders() {
                 'Content-Type': 'application/json',
             },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            tools: [{ type: 'web_search_preview', search_context_size: 'large' }],
-            input: [{ role: 'user', content: EO_PROMPT }],
-            max_output_tokens: 3000
-          })
-        });
+              model: 'gpt-4o-mini',
+              tools: [
+                {
+                  type: 'web_search_preview',
+                  search_context_size: 'large'
+                }
+              ],
+              input: [
+                {
+                  role: 'user',
+                  content: EO_PROMPT
+                }
+              ],
+              tool_choice: "auto",
+              max_output_tokens: 3000
+            })
 
         if (!response.ok) {
             throw new Error(`OpenAI API error: ${response.status}`);
