@@ -1,5 +1,83 @@
 [
   {
+    "date": "2025-08-05",
+    "actor": "Attorney General Pam Bondi",
+    "category": "Government Oversight",
+    "title": "DOJ Initiates Grand Jury Investigation into Obama Officials Over 2016 Election Interference",
+    "description": "Attorney General Pam Bondi has directed the Justice Department to advance an investigation into the origins of the Trump-Russia probe, following the release of documents intended to discredit the initial inquiry. A prosecutor will now present evidence to a grand jury, based on referrals from top intelligence officials under the Trump administration.",
+    "source_url": "https://apnews.com/article/55bd00e15fe18da1533b623c3ca9bbbb",
+    "verified": true,
+    "severity": "high",
+    "id": "mdymzpspfhbvm2vbq5b",
+    "added_at": "2025-08-05T14:30:48.409Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-05",
+    "actor": "New America Acquisition 1 Corp.",
+    "category": "Financial",
+    "title": "Trump Sons\\' Company Removes Federal Incentive Plans Amid Conflict Concerns",
+    "description": "New America Acquisition 1 Corp., advised by Eric and Donald Trump Jr., initially disclosed plans to benefit from federal and state incentives, raising conflict-of-interest concerns. After inquiries, the company removed the statement, attributing it to a clerical error. Ethics experts criticized the move, highlighting potential attempts to profit from public office.",
+    "source_url": "https://apnews.com/article/86760765e1dc12a923d357d1cf448fcc",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdymzopqkrrqw5ayume",
+    "added_at": "2025-08-05T14:30:47.006Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "FBI Director Kash Patel",
+    "category": "Government Oversight",
+    "title": "FBI Intensifies Focus on Violent Crime and Illegal Immigration Under New Leadership",
+    "description": "Under FBI Director Kash Patel, the agency has heightened its focus on violent crime and illegal immigration. The FBI has participated in over 10,000 immigration-related arrests and has been directed to commit more resources to these areas, marking a shift from previous priorities that emphasized counterterrorism and white-collar crime.",
+    "source_url": "https://www.ajc.com/news/2025/06/under-patel-fbi-heightens-focus-on-violent-crime-illegal-immigration-other-threats-abound-too/",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdymzpspl8p01gb0on",
+    "added_at": "2025-08-05T14:30:48.409Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Elon Musk\\'s Companies Face Financial Risks Amid Trump Feud",
+    "description": "Elon Musk\\'s companies, including SpaceX and Tesla, are facing potential financial setbacks due to an escalating conflict with former President Donald Trump. The dispute threatens government contracts and regulatory approvals critical to Musk\\'s ventures.",
+    "source_url": "https://apnews.com/article/63bb732f2ce6ad3744f24762526286c3",
+    "verified": true,
+    "severity": "high",
+    "id": "mdymznfiy75qopc2cee",
+    "added_at": "2025-08-05T14:30:45.342Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Musk\\'s Companies at Risk Amid Renewed Feud with Trump",
+    "description": "Elon Musk\\'s companies, including SpaceX, Tesla, and his efficiency-focused government agency DOGE, are under threat as his renewed feud with President Donald Trump intensifies. The conflict could jeopardize billions in government contracts awarded to Musk\\'s companies.",
+    "source_url": "https://apnews.com/article/8a43b64f0f4508c8e74ef23572a0eece",
+    "verified": true,
+    "severity": "high",
+    "id": "mdymznfi6p199yk9iyr",
+    "added_at": "2025-08-05T14:30:45.342Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-03",
+    "actor": "Federal Election Commission (FEC)",
+    "category": "Corporate Ethics",
+    "title": "FEC Dismisses Multiple Campaign Finance Complaints",
+    "description": "The FEC dismissed several campaign finance complaints, including one alleging that U.S. Representative Gwen Moore\\'s leadership PAC, GWEN PAC, was a \\'scam PAC\\' due to spending the majority of its funds on operating expenses rather than supporting candidates and causes. The Commission exercised its prosecutorial discretion in these cases.",
+    "source_url": "https://www.fec.gov/updates/week-of-february-3-7-2025/",
+    "verified": true,
+    "severity": "low",
+    "id": "mdymznndtqcemifhaf8",
+    "added_at": "2025-08-05T14:30:45.625Z",
+    "status": "published"
+  },
+  {
     "date": "2025-08-03",
     "actor": "Department of Education",
     "category": "Government Oversight",
@@ -36,6 +114,19 @@
     "severity": "medium",
     "id": "mdvrugw05xhoxtuck9",
     "added_at": "2025-08-03T14:23:23.136Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-02",
+    "actor": "Holtzman Vogel\\'s Political Law Team",
+    "category": "Corporate Ethics",
+    "title": "President Trump Removes FEC Commissioner Ellen Weintraub",
+    "description": "President Trump informed FEC Chair Ellen Weintraub of her immediate removal from the Federal Election Commission. Weintraub questioned the President\\'s authority to remove her in this manner but has not indicated she will take legal action. This marks the first expulsion of an FEC commissioner in the agency\\'s history.",
+    "source_url": "https://www.holtzmanvogel.com/news-insights/in-compliance-holtzman-vogel-s-february-2025-round-up",
+    "verified": false,
+    "severity": "medium",
+    "id": "mdymznnd0wjkkkz7iy3",
+    "added_at": "2025-08-05T14:30:45.625Z",
     "status": "published"
   },
   {
@@ -5001,6 +5092,19 @@
   },
   {
     "date": "2025-07-08",
+    "actor": "Department of Homeland Security (DHS)",
+    "category": "Government Oversight",
+    "title": "DHS Shuts Down Three Oversight Offices Amid Increased Deportations",
+    "description": "In April 2025, DHS Secretary Kristi Noem closed three oversight offices, reducing staff from hundreds to a dozen. This move has raised concerns about diminished accountability as deportation efforts intensify, with at least 11 deaths in ICE custody reported since the fiscal year began.",
+    "source_url": "https://www.wral.com/story/cuts-to-dhs-watchdogs-spark-more-questions-as-deportation-efforts-increase/22078691/",
+    "verified": false,
+    "severity": "high",
+    "id": "mdymzozkumqq5xeggdi",
+    "added_at": "2025-08-05T14:30:47.360Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-08",
     "actor": "U.S. Supreme Court",
     "category": "Government Oversight",
     "title": "Supreme Court Overturns Injunction on HHS Reorganization",
@@ -5625,6 +5729,19 @@
   },
   {
     "date": "2025-06-20",
+    "actor": "Supreme Court of the United States",
+    "category": "Legal Proceedings",
+    "title": "Fuld v. Palestine Liberation Organization: Supreme Court Upholds Jurisdiction Over Terrorism Cases",
+    "description": "The Supreme Court held that the Promoting Security and Justice for Victims of Terrorism Act\\'s personal jurisdiction provision does not violate the Fifth Amendment\\'s Due Process Clause, allowing U.S. courts to hear cases involving foreign terrorist organizations.",
+    "source_url": "https://www.reuters.com/article/us-usa-court-palestine-idUSKBN2A20Z8",
+    "verified": true,
+    "severity": "high",
+    "id": "mdymzwslt5ijf4jodwp",
+    "added_at": "2025-08-05T14:30:57.477Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-06-20",
     "actor": "U.S. Supreme Court",
     "category": "Legal Proceedings",
     "title": "Supreme Court Upholds Jurisdiction Over PLO in Terrorism Cases",
@@ -5725,6 +5842,19 @@
     "severity": "medium",
     "id": "md4m3uvo3wet551yikt",
     "added_at": "2025-07-15T14:12:56.724Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-06-12",
+    "actor": "Supreme Court of the United States",
+    "category": "Legal Proceedings",
+    "title": "Martin v. United States: Supreme Court Allows Lawsuit Over Wrong-House Raid",
+    "description": "The Supreme Court unanimously ruled that victims of a mistaken FBI raid can sue the federal government under the Federal Tort Claims Act, rejecting the government\\'s claim of immunity based on the Supremacy Clause. The case was remanded for further proceedings.",
+    "source_url": "https://www.cnn.com/2025/06/12/politics/supreme-court-martin-v-united-states-wrong-house-raid/index.html",
+    "verified": true,
+    "severity": "medium",
+    "id": "mdymzwskmtflgxc31cc",
+    "added_at": "2025-08-05T14:30:57.476Z",
     "status": "published"
   },
   {
