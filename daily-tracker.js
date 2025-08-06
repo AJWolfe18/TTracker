@@ -472,12 +472,16 @@ Return a JSON array of relevant political developments found. Only include real 
 
 async function saveToFile(entries) {
   const today = new Date().toISOString().split('T')[0];
-  const filename = `real-news-tracker-${today}.json`;
+  const dataDir = 'data';
+  const filename = path.join(dataDir, `real-news-tracker-${today}.json`);
   const masterFilename = 'master-tracker-log.json';
   const publicDir = 'public';
   const publicMasterFile = path.join(publicDir, masterFilename);
 
   try {
+    // Ensure data directory exists
+    await fs.mkdir(dataDir, { recursive: true });
+    
     // Load existing master log
     console.log('\n📁 Loading existing master log...');
     let masterLog = [];
