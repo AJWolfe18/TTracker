@@ -1,6 +1,19 @@
 [
   {
     "date": "2025-08-05",
+    "actor": "Donald Trump",
+    "category": "Policy",
+    "title": "Trump Repeals Ethics Rules, Raising Concerns Over Lobbyist Influence",
+    "description": "President Donald Trump has repealed ethics rules prohibiting executive branch employees from accepting major gifts from lobbyists and imposing two-year bans on lobbyists seeking executive jobs and vice versa. Critics describe the repeal as the opposite of his pledge to \\'drain the swamp\\'. Trump also signed an executive order to stop the Justice Department from prosecuting Americans accused of bribing foreign government officials. These actions have raised concerns about increased influence of lobbyists and foreign entities within the administration.",
+    "source_url": "https://en.wikipedia.org/wiki/Second_presidency_of_Donald_Trump",
+    "verified": false,
+    "severity": "medium",
+    "id": "me02etf2na0hg571nti",
+    "added_at": "2025-08-06T14:30:13.358Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-05",
     "actor": "Attorney General Pam Bondi",
     "category": "Government Oversight",
     "title": "DOJ Initiates Grand Jury Investigation into Obama Officials Over 2016 Election Interference",
@@ -23,6 +36,45 @@
     "severity": "medium",
     "id": "mdymzopqkrrqw5ayume",
     "added_at": "2025-08-05T14:30:47.006Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Federal Judge Timothy L. Brooks",
+    "category": "Legal Proceedings",
+    "title": "Federal Judge Blocks Arkansas Law Requiring Ten Commandments Display in Public Schools",
+    "description": "On August 4, 2025, Federal Judge Timothy L. Brooks of the District Court of Arkansas issued a ruling blocking an Arkansas law that mandated the display of the Ten Commandments in all public schools and government buildings. The law, signed by Governor Sarah Huckabee Sanders in 2024, was challenged on constitutional grounds, leading to this injunction.",
+    "source_url": "https://www.nytimes.com/2025/08/04/us/arkansas-ten-commandments-law-blocked.html",
+    "verified": true,
+    "severity": "medium",
+    "id": "me02esksoplxmmjraab",
+    "added_at": "2025-08-06T14:30:12.268Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Health Secretary Robert F. Kennedy Jr.",
+    "category": "Legal Proceedings",
+    "title": "Health Secretary Announces Withdrawal of $500 Million in mRNA Vaccine Funding",
+    "description": "On August 4, 2025, Health Secretary Robert F. Kennedy Jr. announced the withdrawal of $500 million in funding for mRNA vaccines targeting diseases such as influenza and COVID-19. The decision was based on concerns that mRNA technology poses more risks than benefits for these respiratory viruses, marking a significant shift in the administration\\'s public health strategy.",
+    "source_url": "https://www.cnn.com/2025/08/04/health/mrna-vaccine-funding-withdrawal/index.html",
+    "verified": true,
+    "severity": "high",
+    "id": "me02eskshy7f2dqd1hh",
+    "added_at": "2025-08-06T14:30:12.268Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Texas House of Representatives",
+    "category": "Legal Proceedings",
+    "title": "Texas House Issues Civil Arrest Warrants for Democratic Representatives Over Redistricting",
+    "description": "On August 4, 2025, the Texas House of Representatives voted to issue civil arrest warrants for more than 50 Democratic representatives who left the state to block a vote on a U.S. House of Representatives map that would give Republicans more seats. In Texas, at least 100 of the 150 representatives must be present for a vote. The civil arrest warrants are largely symbolic, as they only apply within Texas.",
+    "source_url": "https://www.texastribune.org/2025/08/04/texas-house-arrest-warrants-democrats-redistricting/",
+    "verified": false,
+    "severity": "medium",
+    "id": "me02esksmh0h0pp5k7",
+    "added_at": "2025-08-06T14:30:12.268Z",
     "status": "published"
   },
   {
@@ -283,6 +335,19 @@
     "severity": "high",
     "id": "mdsx4fn4d6g2vko6unu",
     "added_at": "2025-08-01T14:27:47.632Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-31",
+    "actor": "Department of Government Efficiency (DOGE)",
+    "category": "Budget and Operational Changes",
+    "title": "DOGE Claims $160 Billion Savings Amid Workforce Reductions",
+    "description": "The Department of Government Efficiency reported $160 billion in savings from federal workforce reductions, though analyses suggest the cuts have cost taxpayers $135 billion.",
+    "source_url": "https://en.wikipedia.org/wiki/Department_of_Government_Efficiency",
+    "verified": false,
+    "severity": "high",
+    "id": "me02eu4ori52dhjlelo",
+    "added_at": "2025-08-06T14:30:14.280Z",
     "status": "published"
   },
   {
@@ -2124,6 +2189,19 @@
   },
   {
     "date": "2025-07-18",
+    "actor": "Environmental Protection Agency (EPA)",
+    "category": "Regulatory Actions",
+    "title": "EPA Proposes Repeal of Greenhouse Gas Endangerment Finding",
+    "description": "The EPA released a proposed rule to repeal the 2009 endangerment finding that greenhouse gases pose a risk to human health, a basis for many EPA regulations under the Clean Air Act.",
+    "source_url": "https://en.wikipedia.org/wiki/United_States_Environmental_Protection_Agency",
+    "verified": false,
+    "severity": "high",
+    "id": "me02eu4o0lh4g9bpik4",
+    "added_at": "2025-08-06T14:30:14.280Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-18",
     "actor": "Donald Trump",
     "category": "Corporate Ethics",
     "title": "Trump\\'s Crypto Ventures Raise Conflict of Interest Concerns",
@@ -2900,6 +2978,19 @@
     "severity": "high",
     "id": "md7gx4ekmwc8zke9cum",
     "added_at": "2025-07-17T14:11:02.924Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-07-16",
+    "actor": "U.S. Department of Education",
+    "category": "Leadership Appointments",
+    "title": "Department of Education Announces Seven New Appointments",
+    "description": "The Department of Education announced seven new political appointees, including two to the Office of Special Education and Rehabilitative Services, as part of the Trump administration\\'s restructuring efforts.",
+    "source_url": "https://iel.org/july-2025-policy-by-the-people-federal-update",
+    "verified": false,
+    "severity": "medium",
+    "id": "me02eu4oi4sxqdbxkl",
+    "added_at": "2025-08-06T14:30:14.280Z",
     "status": "published"
   },
   {
@@ -6024,6 +6115,19 @@
     "severity": "high",
     "id": 142,
     "added_at": "2025-06-28T17:15:00Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-05-19",
+    "actor": "Department of Justice",
+    "category": "Government Oversight",
+    "title": "DOJ Launches Civil Rights Fraud Initiative Targeting False Claims Act Violations",
+    "description": "The DOJ initiated a Civil Rights Fraud Initiative on May 19, 2025, aiming to investigate and prosecute entities that misuse federal funds for discriminatory practices, signaling a significant escalation in enforcement against civil rights violations.",
+    "source_url": "https://federalnewsnetwork.com/commentary/2025/05/doj-expands-dei-crackdown-with-new-civil-rights-fraud-initiative-centered-on-false-claims-act-enforcement/",
+    "verified": false,
+    "severity": "high",
+    "id": "me02eudmms79sxwv0ui",
+    "added_at": "2025-08-06T14:30:14.602Z",
     "status": "published"
   },
   {
