@@ -1,19 +1,6 @@
 [
   {
     "date": "2025-08-05",
-    "actor": "Donald Trump",
-    "category": "Policy",
-    "title": "Trump Repeals Ethics Rules, Raising Concerns Over Lobbyist Influence",
-    "description": "President Donald Trump has repealed ethics rules prohibiting executive branch employees from accepting major gifts from lobbyists and imposing two-year bans on lobbyists seeking executive jobs and vice versa. Critics describe the repeal as the opposite of his pledge to \\'drain the swamp\\'. Trump also signed an executive order to stop the Justice Department from prosecuting Americans accused of bribing foreign government officials. These actions have raised concerns about increased influence of lobbyists and foreign entities within the administration.",
-    "source_url": "https://en.wikipedia.org/wiki/Second_presidency_of_Donald_Trump",
-    "verified": false,
-    "severity": "medium",
-    "id": "me02etf2na0hg571nti",
-    "added_at": "2025-08-06T14:30:13.358Z",
-    "status": "published"
-  },
-  {
-    "date": "2025-08-05",
     "actor": "Attorney General Pam Bondi",
     "category": "Government Oversight",
     "title": "DOJ Initiates Grand Jury Investigation into Obama Officials Over 2016 Election Interference",
