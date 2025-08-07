@@ -1,6 +1,29 @@
-// Updated dashboard.js with tabs for Political Tracker and Executive Orders
+// Updated dashboard.js with TrumpyTracker logo, construction banner, and contact info
 
 const { useState, useEffect, useCallback, useMemo } = React;
+
+// Construction Banner Component
+const ConstructionBanner = () => (
+  <div className="bg-gradient-to-r from-yellow-600 to-orange-600 border-l-4 border-yellow-500 p-4 mb-6 shadow-lg">
+    <div className="flex items-center justify-center">
+      <div className="flex items-center space-x-3">
+        <div className="text-2xl animate-bounce">🚧</div>
+        <div className="text-center">
+          <p className="text-yellow-100 font-semibold text-lg">
+            🔨 Site Under Construction
+          </p>
+          <p className="text-yellow-200 text-sm">
+            We're actively building new features. Have feedback? Contact us at: 
+            <a href="mailto:contact.trumpytracker@gmail.com" className="text-white font-semibold underline hover:text-yellow-100 ml-1">
+              contact.trumpytracker@gmail.com
+            </a>
+          </p>
+        </div>
+        <div className="text-2xl animate-bounce" style={{animationDelay: '0.5s'}}>🚧</div>
+      </div>
+    </div>
+  </div>
+);
 
 // Main Dashboard Component with Tabs
 const TrumpyTrackerDashboard = () => {
@@ -35,23 +58,69 @@ const TrumpyTrackerDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Hero Header */}
+        {/* Construction Banner */}
+        <ConstructionBanner />
+        
+        {/* Hero Header with New Logo */}
         <header className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-blue-500 rounded-lg flex items-center justify-center mr-4 shadow-lg">
-              <span className="text-2xl font-bold">T2</span>
-            </div>
-            <div>
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-red-400 bg-clip-text text-transparent mb-2">
-                TrumpyTracker
-              </h1>
-              <div className="text-sm text-blue-300 font-semibold">TRUMP 2.0 ERA</div>
+            {/* Logo Container */}
+            <div className="flex items-center space-x-4">
+              <div className="w-20 h-20 flex items-center justify-center">
+                <a 
+                  href="./trumpytracker-logo.jpeg" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  title="Click to view logo full size"
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <img 
+                    src="./trumpytracker-logo.jpeg" 
+                    alt="TrumpyTracker Logo" 
+                    className="w-full h-full object-contain rounded-lg shadow-lg hover:shadow-xl transition-shadow"
+                    onError={(e) => {
+                      // Fallback if image doesn't load
+                      e.target.style.display = 'none';
+                      e.target.parentElement.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                </a>
+                {/* Fallback logo */}
+                <div 
+                  className="w-full h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg" 
+                  style={{display: 'none'}}
+                >
+                  <span className="text-2xl font-bold">T2</span>
+                </div>
+              </div>
+              
+              <div className="text-left">
+                <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
+                  TRUMPYTRACKER
+                </h1>
+                <div className="text-center text-sm text-orange-300 font-semibold tracking-wider">
+                  FOXTROT DELTA TANGO
+                </div>
+              </div>
             </div>
           </div>
           
-          <p className="text-xl text-gray-300 mb-4">
-            Political Accountability & Executive Action Monitor
+          <p className="text-xl text-gray-300 mb-6">
+            Comprehensive Tracking of Political Developments & Executive Actions
           </p>
+          
+          {/* Simple Contact CTA */}
+          <div className="mb-8">
+            <a 
+              href="mailto:contact.trumpytracker@gmail.com?subject=Newsletter Interest&body=Hi! I'd like to be notified about TrumpyTracker updates and new features."
+              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white font-semibold rounded-lg hover:from-orange-700 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+            >
+              📧 Get Updates via Email
+            </a>
+            <p className="text-sm text-gray-400 mt-2">
+              Click to send us an email for notifications about new features
+            </p>
+          </div>
         </header>
 
         {/* Tab Navigation */}
@@ -62,7 +131,7 @@ const TrumpyTrackerDashboard = () => {
                 onClick={() => setActiveTab('political')}
                 className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                   activeTab === 'political'
-                    ? 'bg-blue-600 text-white shadow-lg'
+                    ? 'bg-orange-600 text-white shadow-lg'
                     : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
                 }`}
               >
@@ -86,17 +155,32 @@ const TrumpyTrackerDashboard = () => {
         {activeTab === 'political' && <PoliticalDashboard />}
         {activeTab === 'executive' && <ExecutiveOrdersDashboard orders={executiveOrders} />}
 
-        {/* Footer */}
+        {/* Enhanced Footer */}
         <footer className="mt-16 text-center">
           <div className="bg-gray-800/60 backdrop-blur p-8 rounded-lg border border-gray-700 shadow-lg">
-            <h3 className="text-xl font-semibold text-blue-400 mb-4">Comprehensive Political Monitoring</h3>
-            <p className="text-gray-300 mb-4 max-w-2xl mx-auto">
+            <h3 className="text-xl font-semibold text-orange-400 mb-4">Comprehensive Political Monitoring</h3>
+            <p className="text-gray-300 mb-6 max-w-2xl mx-auto">
               Automated tracking of political developments and executive actions using AI-powered 
-              daily monitoring from credible sources.
+              daily monitoring from credible news sources.
             </p>
+            
+            {/* Contact & Feedback Section */}
+            <div className="bg-gray-700/50 p-4 rounded-lg mb-6 max-w-xl mx-auto">
+              <h4 className="text-orange-400 font-semibold mb-2">📬 Contact & Feedback</h4>
+              <p className="text-gray-300 text-sm mb-2">
+                Questions, suggestions, or issues with the site?
+              </p>
+              <a 
+                href="mailto:contact.trumpytracker@gmail.com" 
+                className="text-orange-400 hover:text-orange-300 font-semibold underline"
+              >
+                contact.trumpytracker@gmail.com
+              </a>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm text-gray-400">
               <div>
-                <strong className="text-blue-400">🤖 AI-Powered Collection</strong><br/>
+                <strong className="text-orange-400">🤖 AI-Powered Collection</strong><br/>
                 Daily news discovery & analysis
               </div>
               <div>
@@ -112,9 +196,13 @@ const TrumpyTrackerDashboard = () => {
                 Multiple daily collections
               </div>
             </div>
-            <p className="text-gray-500 text-xs mt-6">
-              Last updated: {new Date().toLocaleDateString()} • Political Accountability Platform
-            </p>
+            
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              <p className="text-xs text-gray-500">
+                © 2025 TrumpyTracker • Political Accountability Monitor • 
+                <span className="text-orange-400 ml-1">Under Active Development</span>
+              </p>
+            </div>
           </div>
         </footer>
       </div>
@@ -350,45 +438,6 @@ const PoliticalDashboard = () => {
 
   return (
     <div className="space-y-8">
-      {/* Email Signup CTA */}
-      <div className="text-center">
-        {!showEmailSignup ? (
-          <button 
-            onClick={() => setShowEmailSignup(true)}
-            className="bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-700 hover:to-red-700 px-8 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg"
-          >
-            📧 Get High-Severity Alerts
-          </button>
-        ) : (
-          <form onSubmit={handleEmailSignup} className="bg-gray-800/50 p-6 rounded-lg max-w-md mx-auto backdrop-blur border border-gray-700">
-            <div className="flex gap-2">
-              <input 
-                type="email" 
-                value={emailAddress}
-                onChange={(e) => setEmailAddress(e.target.value)}
-                placeholder="Enter your email for alerts"
-                className="flex-1 px-4 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 focus:outline-none text-white"
-                required
-              />
-              <button 
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-medium transition-colors"
-              >
-                Subscribe
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-2">Get notified of high-severity political developments</p>
-            <button
-              type="button"
-              onClick={() => setShowEmailSignup(false)}
-              className="text-xs text-gray-500 hover:text-gray-400 mt-2"
-            >
-              Cancel
-            </button>
-          </form>
-        )}
-      </div>
-
       {/* Political Dashboard Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div 
