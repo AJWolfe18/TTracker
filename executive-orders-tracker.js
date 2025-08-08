@@ -1,5 +1,9 @@
-const fs = require('fs').promises;
-const path = require('path');
+import fs from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Generate unique ID for each entry
 function generateId() {
@@ -318,6 +322,4 @@ Be comprehensive - this is a historical backfill to populate our tracking system
 }
 
 // Run the tracker
-if (require.main === module) {
-    main();
-}
+main().catch(console.error);
