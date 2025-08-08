@@ -7,10 +7,9 @@ const __dirname = dirname(__filename);
 
 // Configuration for legal compliance
 const CONFIG = {
-    // Legally compliant endpoints (official government APIs)
-    FEDERAL_REGISTER_API: 'https://api.federalregister.gov/v1',
-    WHITEHOUSE_RSS: 'https://www.whitehouse.gov/feed/',
-    PRESIDENTIAL_ACTIONS_RSS: 'https://www.whitehouse.gov/presidential-actions/feed/',
+    // Updated endpoints based on testing
+    FEDERAL_REGISTER_BASE: 'https://www.federalregister.gov/api/v1',
+    WHITEHOUSE_RSS: 'https://www.whitehouse.gov/news/feed/', // Fixed URL
     
     // User agent for proper identification
     USER_AGENT: 'TrumpyTracker/1.0 (Political Accountability Tracker; +https://trumpytracker.com)',
@@ -38,6 +37,7 @@ async function fetchWithRetry(url, options = {}, maxRetries = CONFIG.RETRY_ATTEM
                 signal: controller.signal,
                 headers: {
                     'User-Agent': CONFIG.USER_AGENT,
+                    'Accept': 'application/json',
                     ...options.headers
                 }
             });
@@ -64,19 +64,18 @@ async function fetchWithRetry(url, options = {}, maxRetries = CONFIG.RETRY_ATTEM
     }
 }
 
-// Fetch executive orders from Federal Register API (official government source)
+// Fixed Federal Register API call based on documentation
 async function fetchFromFederalRegisterAPI() {
     try {
         console.log('🏛️  Fetching from Federal Register API (official government source)...');
         
         const today = new Date().toISOString().split('T')[0];
-        const startDate = '2025-01-20';
         
-        // Use official Federal Register API for Trump executive orders
-        const apiUrl = `${CONFIG.FEDERAL_REGISTER_API}/articles.json` + 
-                      `?conditions[president]=donald-trump` +
-                      `&conditions[presidential_document_type]=executive_order` +
-                      `&conditions[publication_date][gte]=${startDate}` +
+        // FIXED: Use correct parameter format based on API documentation
+        // Based on search results, the API uses different parameter structure
+        const apiUrl = `${CONFIG.FEDERAL_REGISTER_BASE}/articles.json` + 
+                      `?conditions[type]=PRESDOCU` + // Presidential documents
+                      `&conditions[publication_date][gte]=2025-01-20` +
                       `&conditions[publication_date][lte]=${today}` +
                       `&fields[]=title&fields[]=executive_order_number&fields[]=publication_date` +
                       `&fields[]=signing_date&fields[]=citation&fields[]=html_url` +
@@ -86,28 +85,46 @@ async function fetchFromFederalRegisterAPI() {
         console.log(`  📡 API Query: ${apiUrl}`);
         
         const response = await fetchWithRetry(apiUrl);
-        const data = await response.json();
         
-        console.log(`  ✅ Federal Register API returned ${data.count} total results`);
+        // FIXED: Better error handling for API response
+        let data;
+        try {
+            const responseText = await response.text();
+            console.log(`  📄 Response preview: ${responseText.substring(0, 200)}...`);
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.log(`  ❌ Failed to parse API response as JSON: ${parseError.message}`);
+            return [];
+        }
         
-        if (!data.results || data.results.length === 0) {
+        console.log(`  ✅ Federal Register API returned ${data.count || 0} total results`);
+        
+        if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
             console.log('  ℹ️  No executive orders found in Federal Register for this period');
             return [];
         }
         
-        // Process Federal Register results
-        const processedOrders = data.results.map(order => ({
-            title: order.title,
-            order_number: order.executive_order_number || null,
-            date: order.signing_date || order.publication_date,
-            publication_date: order.publication_date,
-            citation: order.citation,
-            source_url: order.html_url,
-            pdf_url: order.pdf_url,
-            abstract: order.abstract,
-            source: 'Federal Register API',
-            verified: true
-        }));
+        // FIXED: Defensive programming for API response fields
+        const processedOrders = data.results
+            .filter(order => order && typeof order === 'object')
+            .filter(order => {
+                // Only include actual executive orders
+                const title = (order.title || '').toLowerCase();
+                return title.includes('executive order') || title.includes('presidential memorandum');
+            })
+            .map(order => ({
+                title: order.title || 'Untitled Executive Order',
+                order_number: order.executive_order_number || null,
+                date: order.signing_date || order.publication_date || null,
+                publication_date: order.publication_date || null,
+                citation: order.citation || null,
+                source_url: order.html_url || `https://www.federalregister.gov/documents/${order.document_number}`,
+                pdf_url: order.pdf_url || null,
+                abstract: order.abstract || null,
+                document_number: order.document_number || null,
+                source: 'Federal Register API',
+                verified: true
+            }));
         
         console.log(`  ✅ Processed ${processedOrders.length} executive orders from Federal Register`);
         return processedOrders;
@@ -118,14 +135,15 @@ async function fetchFromFederalRegisterAPI() {
     }
 }
 
-// Fetch from WhiteHouse.gov RSS feeds (officially provided feeds)
+// Fixed RSS feed fetching with better URL and parsing
 async function fetchFromWhiteHouseRSS() {
     try {
         console.log('📡 Fetching from WhiteHouse.gov RSS feeds (official channels)...');
         
+        // FIXED: Use working RSS endpoints
         const rssEndpoints = [
-            CONFIG.WHITEHOUSE_RSS,
-            CONFIG.PRESIDENTIAL_ACTIONS_RSS
+            CONFIG.WHITEHOUSE_RSS, // Main news feed
+            'https://www.whitehouse.gov/presidential-actions/feed/', // Working URL from test
         ];
         
         const allOrders = [];
@@ -134,38 +152,57 @@ async function fetchFromWhiteHouseRSS() {
             try {
                 console.log(`  📡 Checking RSS: ${rssUrl}`);
                 
-                const response = await fetchWithRetry(rssUrl);
-                const xml = await response.text();
+                const response = await fetchWithRetry(rssUrl, {
+                    headers: {
+                        'Accept': 'application/rss+xml, application/xml, text/xml'
+                    }
+                });
                 
+                const xml = await response.text();
                 console.log(`  ✅ Retrieved RSS feed (${xml.length} characters)`);
                 
-                // Basic XML parsing for RSS items
-                const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+                // FIXED: Better XML parsing with more robust regex
+                const itemMatches = xml.match(/<item[^>]*>[\s\S]*?<\/item>/g) || [];
                 
                 for (const item of itemMatches) {
-                    const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || 
-                                     item.match(/<title>(.*?)<\/title>/);
-                    const linkMatch = item.match(/<link>(.*?)<\/link>/);
-                    const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
-                    const descMatch = item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) ||
-                                     item.match(/<description>(.*?)<\/description>/);
+                    // FIXED: Handle both CDATA and regular title formats
+                    const titleMatch = item.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/s) ||
+                                     item.match(/<title[^>]*>(.*?)<\/title>/s);
+                    const linkMatch = item.match(/<link[^>]*>(.*?)<\/link>/s);
+                    const dateMatch = item.match(/<pubDate[^>]*>(.*?)<\/pubDate>/s);
+                    const descMatch = item.match(/<description[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/description>/s);
+                    const categoryMatch = item.match(/<category[^>]*>(.*?)<\/category>/s);
                     
                     if (titleMatch && linkMatch) {
-                        const title = titleMatch[1];
-                        const url = linkMatch[1];
-                        const pubDate = dateMatch ? dateMatch[1] : '';
-                        const description = descMatch ? descMatch[1] : '';
+                        const title = titleMatch[1].trim();
+                        const url = linkMatch[1].trim();
+                        const pubDate = dateMatch ? dateMatch[1].trim() : '';
+                        const description = descMatch ? descMatch[1].trim() : '';
+                        const category = categoryMatch ? categoryMatch[1].trim() : '';
                         
-                        // Filter for executive orders from 2025
-                        if ((title.toLowerCase().includes('executive order') || 
-                             title.toLowerCase().includes('presidential memorandum')) &&
-                            (pubDate.includes('2025') || title.includes('2025'))) {
-                            
+                        // FIXED: Better filtering for executive orders
+                        const isExecutiveOrder = (
+                            title.toLowerCase().includes('executive order') ||
+                            title.toLowerCase().includes('presidential memorandum') ||
+                            category.toLowerCase().includes('executive order') ||
+                            url.includes('executive-order') ||
+                            url.includes('presidential-memorandum')
+                        );
+                        
+                        // Filter for 2025 content
+                        const is2025Content = (
+                            pubDate.includes('2025') ||
+                            title.includes('2025') ||
+                            url.includes('2025')
+                        );
+                        
+                        if (isExecutiveOrder && is2025Content) {
                             allOrders.push({
                                 title: title,
                                 source_url: url,
                                 pub_date: pubDate,
                                 description: description,
+                                category: category,
                                 source: 'WhiteHouse.gov RSS',
                                 verified: true
                             });
@@ -188,7 +225,45 @@ async function fetchFromWhiteHouseRSS() {
     }
 }
 
-// Analyze executive order with OpenAI (keeping your existing approach)
+// Try bulk download as backup method
+async function fetchFromFederalRegisterBulk() {
+    try {
+        console.log('📄 Trying Federal Register bulk download as backup...');
+        
+        // FIXED: Try the bulk download endpoint mentioned in documentation
+        const bulkUrl = 'https://www.federalregister.gov/presidential-documents/executive-orders/donald-trump/2025.json';
+        
+        console.log(`  📡 Bulk Query: ${bulkUrl}`);
+        
+        const response = await fetchWithRetry(bulkUrl);
+        const data = await response.json();
+        
+        if (data && Array.isArray(data)) {
+            console.log(`  ✅ Bulk download returned ${data.length} orders`);
+            
+            const processedOrders = data.map(order => ({
+                title: order.title || 'Untitled Executive Order',
+                order_number: order.executive_order_number || order.number || null,
+                date: order.signing_date || order.date || null,
+                source_url: order.html_url || order.url || null,
+                pdf_url: order.pdf_url || null,
+                citation: order.citation || null,
+                source: 'Federal Register Bulk',
+                verified: true
+            }));
+            
+            return processedOrders;
+        }
+        
+        return [];
+        
+    } catch (error) {
+        console.log(`  ⚠️  Bulk download failed: ${error.message}`);
+        return [];
+    }
+}
+
+// Enhanced OpenAI analysis (keeping existing logic)
 async function analyzeExecutiveOrderWithOpenAI(order, apiKey) {
     try {
         console.log(`  🤖 Analyzing: ${order.title.substring(0, 50)}...`);
@@ -199,6 +274,8 @@ Title: ${order.title}
 Source URL: ${order.source_url}
 ${order.abstract ? `Abstract: ${order.abstract}` : ''}
 ${order.description ? `Description: ${order.description}` : ''}
+${order.order_number ? `Order Number: ${order.order_number}` : ''}
+${order.date ? `Date: ${order.date}` : ''}
 
 Please provide a JSON response with the following structure:
 {
@@ -253,11 +330,12 @@ Based on the title and any context provided, provide your best analysis. Use the
                     ...analysis,
                     // Preserve official data over AI analysis
                     order_number: order.order_number || analysis.order_number,
-                    date: order.date || order.signing_date || analysis.date,
+                    date: order.date || analysis.date,
                     source_url: order.source_url,
                     pdf_url: order.pdf_url,
                     citation: order.citation,
                     publication_date: order.publication_date,
+                    document_number: order.document_number,
                     source: order.source,
                     verified: true
                 };
@@ -274,35 +352,29 @@ Based on the title and any context provided, provide your best analysis. Use the
     }
 }
 
-// Enhanced categorization with fallback
+// Enhanced categorization
 function categorizeExecutiveOrder(order) {
-    if (order.category) return order.category; // Use AI categorization if available
+    if (order.category && order.category !== 'Presidential Actions') return order.category;
     
     const title = (order.title || '').toLowerCase();
     const summary = (order.summary || '').toLowerCase();
     const text = title + ' ' + summary;
     
-    // Immigration keywords
     if (text.match(/immigration|border|deportation|asylum|visa|refugee|daca|ice|cbp|homeland/)) {
         return 'immigration';
     }
-    // Economy keywords  
     if (text.match(/economy|trade|tariff|tax|business|commerce|jobs|employment|labor/)) {
         return 'economy';
     }
-    // Healthcare keywords
     if (text.match(/health|medical|medicare|medicaid|obamacare|affordable care|drug|pharmaceutical/)) {
         return 'healthcare';
     }
-    // Environment keywords
     if (text.match(/environment|climate|energy|oil|gas|renewable|epa|pollution|carbon/)) {
         return 'environment';
     }
-    // Foreign policy keywords
     if (text.match(/foreign|international|nato|china|russia|military|defense|security|war/)) {
         return 'foreign_policy';
     }
-    // Security keywords
     if (text.match(/security|terrorism|intelligence|fbi|cia|surveillance|cyber/)) {
         return 'security';
     }
@@ -352,7 +424,7 @@ function validateOrder(order) {
     return true;
 }
 
-// Save executive orders (keeping your existing logic)
+// Save executive orders (keeping existing logic)
 async function saveExecutiveOrders(orders) {
     const today = new Date().toISOString().split('T')[0];
     const filename = `executive-orders-${today}.json`;
@@ -361,7 +433,6 @@ async function saveExecutiveOrders(orders) {
     const publicMasterFile = `${publicDir}/${masterFilename}`;
 
     try {
-        // Load existing executive orders log
         console.log('\n📁 Loading existing executive orders log...');
         let masterLog = [];
         try {
@@ -374,7 +445,6 @@ async function saveExecutiveOrders(orders) {
 
         if (orders.length === 0) {
             console.log('\n⚠️  No new executive orders to save');
-            // Still create the files for dashboard
             await fs.writeFile(masterFilename, JSON.stringify(masterLog, null, 2));
             
             try {
@@ -389,13 +459,15 @@ async function saveExecutiveOrders(orders) {
             return;
         }
 
-        // Check for duplicates by URL and order number
+        // Enhanced duplicate detection
         const existingUrls = new Set(masterLog.map(order => order.source_url));
         const existingNumbers = new Set(masterLog.map(order => order.order_number).filter(Boolean));
+        const existingTitles = new Set(masterLog.map(order => order.title.toLowerCase()));
         
         const newOrders = orders.filter(order => 
             !existingUrls.has(order.source_url) && 
-            (!order.order_number || !existingNumbers.has(order.order_number))
+            (!order.order_number || !existingNumbers.has(order.order_number)) &&
+            !existingTitles.has(order.title.toLowerCase())
         );
         
         if (newOrders.length === 0) {
@@ -454,10 +526,10 @@ async function saveExecutiveOrders(orders) {
 
 // Main execution function
 async function main() {
-    console.log('\n🏛️  Executive Orders Tracker - Legal & Compliant Data Collection');
+    console.log('\n🏛️  Executive Orders Tracker - FIXED Legal & Compliant Version');
     console.log('='.repeat(75));
-    console.log('🔒 Using official government APIs and RSS feeds only');
-    console.log('✅ Fully compliant with robots.txt and government data policies');
+    console.log('🔧 Fixed API parameters and RSS parsing based on testing');
+    console.log('✅ Fully compliant with government data policies');
 
     const today = new Date().toISOString().split('T')[0];
     const startDate = '2025-01-20';
@@ -471,30 +543,39 @@ async function main() {
     }
 
     try {
-        // Step 1: Fetch from official Federal Register API
+        // Step 1: Fixed Federal Register API call
         const federalRegisterOrders = await fetchFromFederalRegisterAPI();
         
-        // Add rate limiting between different API calls
         await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY));
         
-        // Step 2: Fetch from WhiteHouse.gov RSS feeds
+        // Step 2: Try bulk download as backup
+        const bulkOrders = federalRegisterOrders.length === 0 ? await fetchFromFederalRegisterBulk() : [];
+        
+        await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY));
+        
+        // Step 3: Fixed RSS feed fetching
         const rssOrders = await fetchFromWhiteHouseRSS();
         
-        // Step 3: Combine and deduplicate
-        const allRawOrders = [...federalRegisterOrders, ...rssOrders];
+        // Step 4: Combine all sources
+        const allRawOrders = [...federalRegisterOrders, ...bulkOrders, ...rssOrders];
         const uniqueOrders = [];
         const seenUrls = new Set();
         const seenNumbers = new Set();
+        const seenTitles = new Set();
         
         for (const order of allRawOrders) {
-            const isDuplicateUrl = seenUrls.has(order.source_url);
-            const isDuplicateNumber = order.order_number && seenNumbers.has(order.order_number);
+            const urlKey = order.source_url;
+            const numberKey = order.order_number;
+            const titleKey = order.title.toLowerCase();
             
-            if (!isDuplicateUrl && !isDuplicateNumber) {
-                seenUrls.add(order.source_url);
-                if (order.order_number) {
-                    seenNumbers.add(order.order_number);
-                }
+            const isDuplicate = seenUrls.has(urlKey) || 
+                              (numberKey && seenNumbers.has(numberKey)) ||
+                              seenTitles.has(titleKey);
+            
+            if (!isDuplicate) {
+                seenUrls.add(urlKey);
+                if (numberKey) seenNumbers.add(numberKey);
+                seenTitles.add(titleKey);
                 uniqueOrders.push(order);
             }
         }
@@ -507,25 +588,24 @@ async function main() {
             console.log('  • No executive orders have been issued yet in this timeframe');
             console.log('  • Orders are still being processed by the Federal Register');
             console.log('  • There may be a delay in official publication');
+            console.log('  • API parameters may need further adjustment');
             await saveExecutiveOrders([]);
             return;
         }
         
-        // Step 4: Analyze with OpenAI (with rate limiting)
+        // Step 5: Analyze with OpenAI (with rate limiting)
         console.log('\n🤖 Analyzing executive orders with OpenAI...');
         const analyzedOrders = [];
         
         for (let i = 0; i < uniqueOrders.length; i++) {
             const rawOrder = uniqueOrders[i];
             
-            // Rate limiting between API calls
             if (i > 0) {
                 await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY));
             }
             
             const analysis = await analyzeExecutiveOrderWithOpenAI(rawOrder, apiKey);
             if (analysis) {
-                // Enhance with additional processing
                 const enhancedOrder = {
                     ...analysis,
                     id: generateId(),
@@ -554,7 +634,6 @@ async function main() {
             });
         }
 
-        // Step 5: Save the executive orders
         await saveExecutiveOrders(analyzedOrders);
 
         console.log('\n🎉 Executive Orders tracking completed successfully!');
@@ -562,17 +641,10 @@ async function main() {
         console.log('  1. Check your dashboard Executive Orders tab');
         console.log('  2. Verify data quality and source links');
         console.log('  3. Daily automation will continue from here');
-        
-        console.log('\n🔒 Legal Compliance Summary:');
-        console.log('  ✅ Used only official government APIs');
-        console.log('  ✅ Respected rate limiting and robots.txt');
-        console.log('  ✅ Proper attribution and source tracking');
-        console.log('  ✅ No unauthorized web scraping performed');
 
     } catch (error) {
         console.error('\n❌ Error in executive orders tracking:', error);
         
-        // Create empty files to prevent workflow failures
         try {
             await fs.writeFile('executive-orders-log.json', JSON.stringify([], null, 2));
             await fs.mkdir('public', { recursive: true });
