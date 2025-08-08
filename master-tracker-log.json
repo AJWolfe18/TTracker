@@ -1,5 +1,21 @@
 [
   {
+    "id": "1754690991555-i3s1zlerb",
+    "date": "2025-08-08",
+    "actor": "Trump Administration",
+    "category": "Legal Proceedings",
+    "title": "MSN",
+    "description": "Political article from msn.com requiring manual review",
+    "source_url": "https://www.msn.com/en-us/news/us/trump-administration-proposes-1-billion-settlement-with-ucla/ar-AA1Kb6sU?ocid=hpmsn&cvid=f087ea9016114e4afdbbe8c7f7cd3e3f&ei=6",
+    "verified": true,
+    "severity": "medium",
+    "status": "published",
+    "added_at": "2025-08-08T22:09:51.555Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-08-08T22:09:51.555Z"
+  },
+  {
     "id": "1754690843065-b6bmj8pih",
     "date": "2025-08-08",
     "actor": "DOJ",
