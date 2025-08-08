@@ -1,21 +1,5 @@
 [
   {
-    "id": "1754688850525-j9f7gki6t",
-    "date": "2025-08-08",
-    "actor": "Jim Lovell",
-    "category": "Government Oversight",
-    "title": "MSN",
-    "description": "Political article from www.msn.com",
-    "source_url": "https://www.msn.com/en-us/news/us/jim-lovell-apollo-13-commander-dies-at-age-97/ar-AA1KaQ2u?ocid=hpmsn&cvid=e82ee55dc3be4ae18ab6090f417d7d73&ei=6",
-    "verified": true,
-    "severity": "low",
-    "status": "published",
-    "added_at": "2025-08-08T21:34:10.525Z",
-    "manual_submission": true,
-    "submitted_by": "admin",
-    "processed_at": "2025-08-08T21:34:10.525Z"
-  },
-  {
     "date": "2025-08-08",
     "actor": "Donald Trump",
     "category": "Policy Announcement",
