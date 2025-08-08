@@ -1,5 +1,21 @@
 [
   {
+    "id": "1754691182462-fsby8jw4q",
+    "date": "2025-08-08",
+    "actor": "Donald Trump",
+    "category": "Legal Proceedings",
+    "title": "Manual Article from apnews.com",
+    "description": "Article submitted manually from apnews.com. Content extraction failed - requires manual review.",
+    "source_url": "https://apnews.com/article/a7cdb6d21ca18e8038c6dece556e5d9a",
+    "verified": false,
+    "severity": "medium",
+    "status": "published",
+    "added_at": "2025-08-08T22:13:02.462Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-08-08T22:13:02.462Z"
+  },
+  {
     "id": "1754690991555-i3s1zlerb",
     "date": "2025-08-08",
     "actor": "Trump Administration",
