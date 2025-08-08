@@ -94,6 +94,19 @@ async function saveExecutiveOrders(orders) {
 
         if (orders.length === 0) {
             console.log('\n⚠️  No new executive orders to save');
+            // Still create the empty files for the dashboard
+            await fs.writeFile(masterFilename, JSON.stringify(masterLog, null, 2));
+            
+            // Ensure public directory exists
+            try {
+                await fs.access(publicDir);
+            } catch {
+                await fs.mkdir(publicDir, { recursive: true });
+                console.log(`  📁 Created ${publicDir} directory`);
+            }
+            
+            await fs.writeFile(publicMasterFile, JSON.stringify(masterLog, null, 2));
+            console.log(`  ✅ Created empty dashboard files`);
             return;
         }
 
@@ -156,19 +169,19 @@ async function main() {
     
     console.log(`📅 Collecting executive orders from ${startDate} to ${today}`);
 
+    const apiKey = process.env.OPENAI_API_KEY;
+    
+    if (!apiKey) {
+        throw new Error('OpenAI API key not found in environment variables');
+    }
+
     try {
         console.log('\n🔍 Searching for executive orders...');
         
-        // Updated comprehensive search prompt for historical backfill
-        const searchPrompt = `Find all executive orders issued by President Trump from January 20, 2025 to ${today}. 
-Search WhiteHouse.gov comprehensively for executive orders during this entire period.
+        // Use the EXACT same API format as your working political tracker
+        const searchPrompt = `Search WhiteHouse.gov for all executive orders issued by President Trump from January 20, 2025 to ${today}. Find all executive orders, presidential memoranda, and policy directives during this entire period.
 
-I need you to search the official White House website and find ALL executive orders issued during this timeframe. Look for:
-- Executive Orders numbered sequentially 
-- Presidential Memoranda that function as executive orders
-- Any policy directives issued via executive action
-
-For each executive order found, provide a JSON object with these exact fields:
+For each executive order found, extract and format as JSON:
 {
   "title": "Full official title of the executive order",
   "order_number": "Executive Order number (e.g., 'EO 14001') if available, or null",
@@ -182,69 +195,38 @@ For each executive order found, provide a JSON object with these exact fields:
   "severity_rating": "One of: low, medium, high (based on scope of impact and number of people affected)"
 }
 
-Return only a valid JSON array of executive orders. Ensure:
-- All source URLs are accessible WhiteHouse.gov links
-- Dates are in correct YYYY-MM-DD format
-- All required fields are included for each order
-- Summary is informative but concise
+Return a JSON array of all executive orders found from this time period. Ensure all source URLs are accessible WhiteHouse.gov links and all required fields are included.`;
 
-Be comprehensive - this is a historical backfill to populate our tracking system.`;
-
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        // Use the EXACT same API call structure as your working political tracker
+        const response = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a political research assistant specializing in tracking executive orders and government actions. Use web search to find accurate, up-to-date information from official government sources.'
-                    },
-                    {
-                        role: 'user', 
-                        content: searchPrompt
-                    }
-                ],
                 tools: [
                     {
-                        type: 'function',
-                        function: {
-                            name: 'web_search_preview',
-                            description: 'Search the web for current information',
-                            parameters: {
-                                type: 'object',
-                                properties: {
-                                    query: {
-                                        type: 'string',
-                                        description: 'Search query'
-                                    }
-                                },
-                                required: ['query']
-                            }
-                        }
+                        type: 'web_search_preview',
+                        search_context_size: 'medium'
                     }
                 ],
-                tool_choice: 'auto',
-                max_tokens: 4000,
-                temperature: 0.1
-            })
+                input: searchPrompt,
+                max_output_tokens: 4000
+            }),
         });
 
         if (!response.ok) {
-            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
-        console.log(`  ✅ Received response from OpenAI API`);
+        console.log(`  ✅ Received response from OpenAI Responses API`);
 
-        // Extract content from response
-        const content = data.choices?.[0]?.message?.content || 
-                       data.choices?.[0]?.text || 
-                       data.response || 
-                       data.content?.[0]?.text || '';
+        // Extract content using the same pattern as your political tracker
+        const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
         
         console.log(`  Response length: ${content.length}`);
         console.log(`  Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
