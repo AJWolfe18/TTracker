@@ -1,8 +1,8 @@
 [
   {
-    "id": "1754687129390-wv3frv44v",
+    "id": "1754689183889-o7yszl77s",
     "date": "2025-08-08",
-    "actor": "Trump Administration",
+    "actor": "Trump administration",
     "category": "Legal Proceedings",
     "title": "MSN",
     "description": "Political article from www.msn.com",
@@ -10,10 +10,10 @@
     "verified": true,
     "severity": "medium",
     "status": "published",
-    "added_at": "2025-08-08T21:05:29.390Z",
+    "added_at": "2025-08-08T21:39:43.890Z",
     "manual_submission": true,
     "submitted_by": "admin",
-    "processed_at": "2025-08-08T21:05:29.390Z"
+    "processed_at": "2025-08-08T21:39:43.890Z"
   },
   {
     "date": "2025-08-08",
