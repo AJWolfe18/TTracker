@@ -86,12 +86,18 @@ async function fetchFromFederalRegisterAPI() {
         
         const response = await fetchWithRetry(apiUrl);
         
-        // FIXED: Better error handling for API response
+        // Basic validation for government API response
         let data;
         try {
             const responseText = await response.text();
             console.log(`  📄 Response preview: ${responseText.substring(0, 200)}...`);
             data = JSON.parse(responseText);
+            
+            // Basic validation - just check if we got a valid response structure
+            if (!data || typeof data !== 'object') {
+                console.log(`  ⚠️  Invalid response structure from Federal Register API`);
+                return [];
+            }
         } catch (parseError) {
             console.log(`  ❌ Failed to parse API response as JSON: ${parseError.message}`);
             return [];
@@ -225,43 +231,8 @@ async function fetchFromWhiteHouseRSS() {
     }
 }
 
-// Try bulk download as backup method
-async function fetchFromFederalRegisterBulk() {
-    try {
-        console.log('📄 Trying Federal Register bulk download as backup...');
-        
-        // FIXED: Try the bulk download endpoint mentioned in documentation
-        const bulkUrl = 'https://www.federalregister.gov/presidential-documents/executive-orders/donald-trump/2025.json';
-        
-        console.log(`  📡 Bulk Query: ${bulkUrl}`);
-        
-        const response = await fetchWithRetry(bulkUrl);
-        const data = await response.json();
-        
-        if (data && Array.isArray(data)) {
-            console.log(`  ✅ Bulk download returned ${data.length} orders`);
-            
-            const processedOrders = data.map(order => ({
-                title: order.title || 'Untitled Executive Order',
-                order_number: order.executive_order_number || order.number || null,
-                date: order.signing_date || order.date || null,
-                source_url: order.html_url || order.url || null,
-                pdf_url: order.pdf_url || null,
-                citation: order.citation || null,
-                source: 'Federal Register Bulk',
-                verified: true
-            }));
-            
-            return processedOrders;
-        }
-        
-        return [];
-        
-    } catch (error) {
-        console.log(`  ⚠️  Bulk download failed: ${error.message}`);
-        return [];
-    }
-}
+// Removed bulk download method - was using hardcoded URL that doesn't exist
+// Federal Register API + RSS feeds provide comprehensive coverage
 
 // Enhanced OpenAI analysis (keeping existing logic)
 async function analyzeExecutiveOrderWithOpenAI(order, apiKey) {
@@ -528,7 +499,7 @@ async function saveExecutiveOrders(orders) {
 async function main() {
     console.log('\n🏛️  Executive Orders Tracker - FIXED Legal & Compliant Version');
     console.log('='.repeat(75));
-    console.log('🔧 Fixed API parameters and RSS parsing based on testing');
+    console.log('🔧 Simplified to 2 reliable sources: Federal Register API + RSS');
     console.log('✅ Fully compliant with government data policies');
 
     const today = new Date().toISOString().split('T')[0];
@@ -543,21 +514,16 @@ async function main() {
     }
 
     try {
-        // Step 1: Fixed Federal Register API call
+        // Step 1: Federal Register API call (primary source)
         const federalRegisterOrders = await fetchFromFederalRegisterAPI();
         
         await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY));
         
-        // Step 2: Try bulk download as backup
-        const bulkOrders = federalRegisterOrders.length === 0 ? await fetchFromFederalRegisterBulk() : [];
-        
-        await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY));
-        
-        // Step 3: Fixed RSS feed fetching
+        // Step 2: WhiteHouse RSS feeds (secondary source)
         const rssOrders = await fetchFromWhiteHouseRSS();
         
-        // Step 4: Combine all sources
-        const allRawOrders = [...federalRegisterOrders, ...bulkOrders, ...rssOrders];
+        // Step 3: Combine both official sources
+        const allRawOrders = [...federalRegisterOrders, ...rssOrders];
         const uniqueOrders = [];
         const seenUrls = new Set();
         const seenNumbers = new Set();
