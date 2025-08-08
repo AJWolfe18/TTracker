@@ -1,9 +1,16 @@
 // manual-article-processor.js - FIXED VERSION
 import fs from 'fs/promises';
 import fetch from 'node-fetch';
+import path from 'path';
 
 console.log('🔄 MANUAL ARTICLE PROCESSOR (ENHANCED)');
 console.log('======================================\n');
+
+// ADD: Environment validation
+if (!process.env.OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY environment variable is required');
+    process.exit(1);
+}
 
 // Generate simple ID
 function generateId() {
@@ -45,6 +52,10 @@ async function fetchArticleContent(url) {
             const userAgent = userAgents[attempt];
             console.log(`  🔄 Attempt ${attempt + 1}/${userAgents.length} with User-Agent: ${userAgent.split(' ')[2]}...`);
             
+            // FIX: Proper timeout implementation
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
             const response = await fetch(url, {
                 headers: {
                     'User-Agent': userAgent,
@@ -59,8 +70,10 @@ async function fetchArticleContent(url) {
                     'Sec-Fetch-Site': 'none',
                     'Cache-Control': 'max-age=0'
                 },
-                timeout: 15000
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
             
             if (response.ok) {
                 const html = await response.text();
@@ -152,7 +165,18 @@ function extractArticleData(html, url) {
         for (const dateMatch of dateMatches) {
             if (dateMatch) {
                 try {
-                    const dateStr = Array.isArray(dateMatch) ? dateMatch[0] : dateMatch[1];
+                    let dateStr;
+                    if (Array.isArray(dateMatch)) {
+                        // Global regex match - use first result
+                        dateStr = dateMatch[0];
+                    } else if (dateMatch[1]) {
+                        // Regex capture group - use captured group
+                        dateStr = dateMatch[1];
+                    } else {
+                        // Skip this match
+                        continue;
+                    }
+                    
                     const parsedDate = new Date(dateStr);
                     if (!isNaN(parsedDate.getTime())) {
                         articleDate = parsedDate.toISOString().split('T')[0];
@@ -160,6 +184,7 @@ function extractArticleData(html, url) {
                     }
                 } catch (e) {
                     // Continue to next match
+                    continue;
                 }
             }
         }
@@ -416,7 +441,7 @@ async function processManualSubmissions() {
             // Also update public folder
             try {
                 await fs.mkdir('public', { recursive: true });
-                await fs.writeFile('public/master-tracker-log.json', JSON.stringify(updatedEntries, null, 2));
+                await fs.writeFile(path.join('public', 'master-tracker-log.json'), JSON.stringify(updatedEntries, null, 2));
                 console.log(`\n💾 Updated master tracker and public folder with ${processedEntries.length} entries`);
             } catch (error) {
                 console.warn(`⚠️ Could not update public folder: ${error.message}`);
