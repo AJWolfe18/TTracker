@@ -1,5 +1,70 @@
 [
   {
+    "date": "2025-08-08",
+    "actor": "Donald Trump",
+    "category": "Policy Announcement",
+    "title": "Trump Orders Federal Law Enforcement Surge in Washington, D.C.",
+    "description": "President Donald Trump has ordered a surge of federal law enforcement officers onto the streets of Washington, D.C., following a high-profile carjacking incident. This move is part of a broader consideration to federalize the District, which would require repealing the Home Rule Act. The decision comes despite a general decline in overall crime rates in the city.",
+    "source_url": "https://apnews.com/article/a7cdb6d21ca18e8038c6dece556e5d9a",
+    "verified": true,
+    "severity": "medium",
+    "id": "me2x7e47u51jimk6ea",
+    "added_at": "2025-08-08T14:27:47.383Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Donald Trump",
+    "category": "Policy Announcement",
+    "title": "Trump Signs Executive Order Targeting Federal Grant Spending",
+    "description": "President Trump signed an executive order increasing political oversight of federal grant allocations. The order mandates that Trump\\'s political appointees evaluate grant approvals to align with the administration\\'s policy goals, specifically targeting programs supporting diversity, equity, and inclusion, as well as assistance for undocumented immigrants.",
+    "source_url": "https://www.reuters.com/legal/government/trump-signs-executive-order-targeting-spending-grants-2025-08-08/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me2x7e471bbib6mpvhf",
+    "added_at": "2025-08-08T14:27:47.383Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Donald Trump",
+    "category": "Legal Proceeding",
+    "title": "New Lawsuit Seeks Release of Epstein-Related Records Involving Trump",
+    "description": "The legal advocacy group Democracy Forward filed a lawsuit demanding the release of Trump administration communications related to the federal investigation of Jeffrey Epstein. The suit targets the Justice Department and FBI, seeking access to documents under the Freedom of Information Act.",
+    "source_url": "https://apnews.com/article/77748e5801d9278ecead678bd0852d46",
+    "verified": true,
+    "severity": "high",
+    "id": "me2x7e47quss2ouf",
+    "added_at": "2025-08-08T14:27:47.383Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Dismisses Senior Officials Amid Leadership Purge",
+    "description": "The FBI has dismissed several high-level officials, including former Acting Director Brian Driscoll, in a continued purge of employees linked to investigations that have displeased former President Donald Trump. Driscoll, once praised internally for defending FBI personnel involved in the Capitol riot investigations, reportedly received no explanation for his termination. Others fired include Steve Jensen, Spencer Evans, and Walter Giardina—figures who had worked on sensitive Trump-related cases. The dismissals follow a series of similar actions beginning with Trump’s return to office, affecting individuals involved in January 6 and classified document cases. The FBI Agents Association expressed alarm, citing concerns over the lack of due process and potential political motivations. The Bureau declined to comment, and some of those fired have initiated legal challenges.",
+    "source_url": "https://www.reuters.com/world/us/fbi-ousts-ex-acting-director-other-agents-latest-purge-people-briefed-say-2025-08-07/",
+    "verified": true,
+    "severity": "high",
+    "id": "me2x7e25sqr4nf1aql",
+    "added_at": "2025-08-08T14:27:47.309Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "US National Weather Service to restore hundreds of jobs cut under Trump",
+    "description": "The U.S. National Weather Service (NWS) is set to restore hundreds of jobs lost during cost-cutting measures implemented under former President Trump\\'s administration. The Department of Government Efficiency (DOGE), once led by Elon Musk, had overseen layoffs and early retirements that reduced the NWS workforce by over 550 positions. Now, the National Oceanic and Atmospheric Administration (NOAA) plans to rehire 450 meteorologists, hydrologists, and technicians. U.S. Representatives Mike Flood (R-NE) and Eric Sorensen (D-IL) announced the move and continue to advocate for legislation to reclassify NWS jobs as critical to public safety, thereby protecting them from future cuts. The reductions had negatively impacted storm tracking and emergency forecasting, as seen during recent deadly flash floods in Texas. The hiring reversal was supported by lawmakers from both parties, including Rep. Mark Alford (R-MO), and follows criticism over the impact of understaffing. Senate Majority Leader Chuck Schumer has called for an investigation into whether the staffing shortfalls contributed to delays in forecast accuracy during the recent flood disaster.",
+    "source_url": "https://www.reuters.com/world/us/us-national-weather-service-restore-hundreds-jobs-cut-under-trump-2025-08-08/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me2x7cwuu3vmvky5uf",
+    "added_at": "2025-08-08T14:27:45.822Z",
+    "status": "published"
+  },
+  {
     "date": "2025-08-07",
     "actor": "President Donald Trump",
     "category": "Government Oversight",
@@ -23,6 +88,19 @@
     "severity": "medium",
     "id": "me1hu11v209jbmhr1o",
     "added_at": "2025-08-07T14:29:43.507Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-06",
+    "actor": "Senator Chuck Grassley",
+    "category": "Government Oversight",
+    "title": "New Bill Aims to Enhance Whistleblower Protections for FBI Employees",
+    "description": "Federal Newscast reports that Senator Chuck Grassley (R-Iowa) has introduced legislation to bolster whistleblower protections for FBI employees. The proposed bill seeks to safeguard agents who appeal adverse personnel decisions and those who cooperate in whistleblower investigations. Grassley stated that the legislation responds to what he described as whistleblower retaliation during the Biden administration. The bill aims to address concerns about the lack of due process and potential political motivations within the FBI, particularly following recent leadership changes and dismissals.",
+    "source_url": "https://federalnewsnetwork.com/federal-newscast/2025/08/a-new-bill-looks-to-enhance-whistleblower-protections-for-fbi-employees/",
+    "verified": false,
+    "severity": "medium",
+    "id": "me2x7e25f1nrv5apxcl",
+    "added_at": "2025-08-08T14:27:47.309Z",
     "status": "published"
   },
   {
@@ -75,6 +153,32 @@
     "severity": "high",
     "id": "me1hu2miy759y2wolbs",
     "added_at": "2025-08-07T14:29:45.546Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-05",
+    "actor": "Donald Trump and Rupert Murdoch",
+    "category": "Legal Proceeding",
+    "title": "Trump and Murdoch Agree to Delay Deposition in Libel Case",
+    "description": "Former President Trump and media mogul Rupert Murdoch agreed to delay Murdoch\\'s deposition in a libel case stemming from a Wall Street Journal report about an \\'Epstein birthday book\\' allegedly involving Trump. The agreement pauses discovery until the court rules on a motion to dismiss the lawsuit.",
+    "source_url": "https://www.axios.com/2025/08/05/trump-murdoch-lawsuit-epstein-birthday-book-deposition",
+    "verified": true,
+    "severity": "medium",
+    "id": "me2x7e47668eytvk4p7",
+    "added_at": "2025-08-08T14:27:47.383Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-05",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Trump administration formally axes Elon Musk\\'s \\'five things\\' email",
+    "description": "The Trump administration has officially ended the \\'five things\\' email program initiated by Elon Musk, which required federal employees to report five accomplishments weekly. The Office of Personnel Management (OPM) rescinded the guidance, citing existing tools that allow managers to track employee progress more effectively. This move follows a fallout between Trump and Musk in June, after Musk criticized Trump\\'s tax and spending bill. The email initiative had garnered confusion and resistance across federal agencies since its inception.",
+    "source_url": "https://www.reuters.com/legal/litigation/trump-administration-formally-axes-elon-musks-five-things-email-2025-08-05/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me2x7cwuylulp9y1w7",
+    "added_at": "2025-08-08T14:27:45.822Z",
     "status": "published"
   },
   {
