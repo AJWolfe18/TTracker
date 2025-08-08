@@ -1,5 +1,21 @@
 [
   {
+    "id": "1754690843065-b6bmj8pih",
+    "date": "2025-08-08",
+    "actor": "DOJ",
+    "category": "Legal Proceedings",
+    "title": "Manual Article from politico.com",
+    "description": "Article submitted manually from politico.com. Content extraction failed - requires manual review.",
+    "source_url": "https://www.politico.com/news/2025/08/06/justice-department-sanctions-immigration-lawyer-00496886",
+    "verified": true,
+    "severity": "medium",
+    "status": "published",
+    "added_at": "2025-08-08T22:07:23.065Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-08-08T22:07:23.065Z"
+  },
+  {
     "date": "2025-08-08",
     "actor": "Donald Trump",
     "category": "Policy Announcement",
