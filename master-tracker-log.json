@@ -867,7 +867,7 @@
     "source_url": "https://meidasnews.com/news/exclusive-trump-reposted-promise-to-expose-epstein-network-in-2022",
     "verified": false,
     "severity": "medium",
-    "status": "processing",
+    "status": "published",
     "added_at": "2025-07-30T04:18:43.937Z",
     "manual_submission": true,
     "submitted_by": "admin"
@@ -898,7 +898,7 @@
     "source_url": "https://www.cnn.com/world/live-news/russia-japan-tsunami-earthquake-hnk-intl-07-30-25",
     "verified": false,
     "severity": "medium",
-    "status": "processing",
+    "status": "published",
     "added_at": "2025-07-30T01:53:35.217Z",
     "manual_submission": true,
     "submitted_by": "admin"
