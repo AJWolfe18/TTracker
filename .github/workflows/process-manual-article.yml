@@ -156,7 +156,6 @@ jobs:
         // Extract article data from HTML
         function extractArticleData(html, url) {
             try {
-                
                 // Extract title
                 const titleMatches = [
                     html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i),
@@ -178,166 +177,7 @@ jobs:
                 
                 // Remove site name from title
                 const siteName = new URL(url).hostname.replace('www.', '');
-                title = title.replace(new RegExp(`\\s*[-|–]\\s*${siteName}.*# .github/workflows/process-manual-article.yml
-name: Process Single Manual Article
-on:
-  workflow_dispatch:
-    inputs:
-      article_url:
-        description: 'Article URL to process'
-        required: true
-        type: string
-      submitted_by:
-        description: 'Who submitted this article'
-        required: false
-        default: 'admin'
-        type: string
-  repository_dispatch:
-    types: [process-manual-article]
-
-jobs:
-  process-article:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Install dependencies
-      run: npm install
-      
-    - name: Extract article details
-      id: extract_article
-      run: |
-        # Get URL from input or dispatch event
-        if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-          ARTICLE_URL="${{ github.event.client_payload.article_url }}"
-          SUBMITTED_BY="${{ github.event.client_payload.submitted_by }}"
-        else
-          ARTICLE_URL="${{ github.event.inputs.article_url }}"
-          SUBMITTED_BY="${{ github.event.inputs.submitted_by }}"
-        fi
-        
-        echo "article_url=$ARTICLE_URL" >> $GITHUB_OUTPUT
-        echo "submitted_by=$SUBMITTED_BY" >> $GITHUB_OUTPUT
-        echo "Processing: $ARTICLE_URL"
-        
-    - name: Process single article
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        ARTICLE_URL: ${{ steps.extract_article.outputs.article_url }}
-        SUBMITTED_BY: ${{ steps.extract_article.outputs.submitted_by }}
-        ENTRY_ID: ${{ github.event.client_payload.entry_id }} 
-      run: |
-        cat > process-single-article.js << 'EOF'
-        import fs from 'fs/promises';
-        import fetch from 'node-fetch';
-
-        console.log('🔄 PROCESSING SINGLE MANUAL ARTICLE');
-        console.log('===================================');
-        
-        const ARTICLE_URL = process.env.ARTICLE_URL;
-        const SUBMITTED_BY = process.env.SUBMITTED_BY || 'admin';
-        
-        console.log(`📎 URL: ${ARTICLE_URL}`);
-        console.log(`👤 Submitted by: ${SUBMITTED_BY}\n`);
-
-        // Generate simple ID
-        function generateId() {
-            return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        }
-
-        // Check if source is verified
-        function isVerifiedSource(url) {
-            const verifiedDomains = [
-                'reuters.com', 'ap.org', 'apnews.com', 'wsj.com', 'nytimes.com',
-                'washingtonpost.com', 'usatoday.com', 'bbc.com', 'bbc.co.uk',
-                'cnn.com', 'foxnews.com', 'nbcnews.com', 'abcnews.go.com', 
-                'cbsnews.com', 'msnbc.com', 'npr.org', 'pbs.org', 'politico.com',
-                'thehill.com', 'axios.com', 'bloomberg.com', 'cnbc.com', 'forbes.com',
-                'propublica.org', 'courthousenews.com'
-            ];
-            
-            try {
-                const domain = new URL(url).hostname.toLowerCase();
-                return verifiedDomains.some(verified => domain.includes(verified)) || domain.endsWith('.gov');
-            } catch {
-                return false;
-            }
-        }
-
-        // Fetch article content with enhanced anti-bot protection
-        async function fetchArticleContent(url) {
-            const userAgents = [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0'
-            ];
-            
-            console.log(`📄 Fetching content from: ${url}`);
-            
-            for (let attempt = 0; attempt < userAgents.length; attempt++) {
-                try {
-                    const userAgent = userAgents[attempt];
-                    console.log(`🔄 Attempt ${attempt + 1}/${userAgents.length} with User-Agent: ${userAgent.split(' ')[2]}...`);
-                    
-                    // FIX: Proper timeout implementation
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000);
-                    
-                    const response = await fetch(url, {
-                        headers: {
-                            'User-Agent': userAgent,
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                            'Accept-Language': 'en-US,en;q=0.5',
-                            'Accept-Encoding': 'gzip, deflate',
-                            'DNT': '1',
-                            'Connection': 'keep-alive',
-                            'Upgrade-Insecure-Requests': '1',
-                            'Sec-Fetch-Dest': 'document',
-                            'Sec-Fetch-Mode': 'navigate',
-                            'Sec-Fetch-Site': 'none',
-                            'Cache-Control': 'max-age=0'
-                        },
-                        signal: controller.signal
-                    });
-                    
-                    clearTimeout(timeoutId);
-                
-                    if (response.ok) {
-                        const html = await response.text();
-                        console.log(`✅ Successfully fetched content (${html.length} bytes)`);
-                        return extractArticleData(html, url);
-                    } else {
-                        console.log(`⚠️ Attempt ${attempt + 1} failed: HTTP ${response.status}`);
-                        if (attempt === userAgents.length - 1) {
-                            throw new Error(`All fetch attempts failed. Final: HTTP ${response.status}: ${response.statusText}`);
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    }
-                    
-                } catch (error) {
-                    console.log(`⚠️ Attempt ${attempt + 1} error: ${error.message}`);
-                    if (attempt === userAgents.length - 1) {
-                        console.log(`🔧 All fetch attempts failed, creating manual entry...`);
-                        return createManualEntry(url);
-                    }
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            }
-        }
-        
-        // Extract article data from HTML
-        function extractArticleData(html, url) {
-            try {
-                
-, 'i'), '');
+                title = title.replace(new RegExp(`\\s*[-|–]\\s*${siteName}.*$`, 'i'), '');
                 
                 if (!title) {
                     title = `Article from ${siteName}`;
@@ -416,7 +256,6 @@ jobs:
                 description: `Article submitted manually from ${domain}. Content extraction failed - requires manual review.`,
                 date: new Date().toISOString().split('T')[0]
             };
-        }
         }
 
         // Analyze with OpenAI
