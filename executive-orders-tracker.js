@@ -75,6 +75,7 @@ async function fetchFromFederalRegisterAPI() {
         // Based on search results, the API uses different parameter structure
         const apiUrl = `${CONFIG.FEDERAL_REGISTER_BASE}/articles.json` + 
                       `?conditions[type]=PRESDOCU` + // Presidential documents
+                      `&conditions[presidential_document_type_id]=2` + // Executive Orders specifically
                       `&conditions[publication_date][gte]=2025-01-20` +
                       `&conditions[publication_date][lte]=${today}` +
                       `&fields[]=title&fields[]=executive_order_number&fields[]=publication_date` +
@@ -110,14 +111,9 @@ async function fetchFromFederalRegisterAPI() {
             return [];
         }
         
-        // FIXED: Defensive programming for API response fields
+        // Process all Executive Orders (API filter confirmed working)
         const processedOrders = data.results
             .filter(order => order && typeof order === 'object')
-            .filter(order => {
-                // Only include actual executive orders
-                const title = (order.title || '').toLowerCase();
-                return title.includes('executive order') || title.includes('presidential memorandum');
-            })
             .map(order => ({
                 title: order.title || 'Untitled Executive Order',
                 order_number: order.executive_order_number || null,
