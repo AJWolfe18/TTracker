@@ -21,30 +21,16 @@ jobs:
     - name: Install dependencies
       run: npm install
       
-    - name: Track Executive Orders
+    - name: Track Executive Orders (Supabase)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: node executive-orders-tracker.js
+      run: node executive-orders-tracker-supabase.js
       
-    - name: Configure git
+    - name: Commit any changes (minimal, since data is in Supabase)
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action - Executive Orders"
-        
-    - name: Pull latest changes
-      run: git pull origin main
-      
-    - name: Commit and push changes
-      run: |
-        # Add files that exist
-        git add executive-orders-log.json || true
-        git add public/executive-orders-log.json || true
-        git add executive-orders-*.json 2>/dev/null || true
-        
-        # Only commit if there are changes
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "Auto-update: Executive Orders $(date '+%Y-%m-%d')"
-          git push
-        fi
+        # Only commit if there are actual file changes (unlikely with Supabase)
+        git add -A
+        git diff --staged --quiet || git commit -m "Executive Orders run - $(date +%Y-%m-%d)"
+        git push || echo "No changes to push"
