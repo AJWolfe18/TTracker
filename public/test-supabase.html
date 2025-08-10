@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker - Test Supabase Connection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <h1 class="text-3xl font-bold mb-4">Supabase Connection Test</h1>
+    
+    <div id="status" class="mb-4 p-4 bg-gray-800 rounded">
+        Testing connection...
+    </div>
+    
+    <div id="results" class="space-y-4"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://osjbulmltfpcoldydexg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
+        
+        async function testConnection() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            
+            try {
+                // Test 1: Basic connection
+                statusEl.innerHTML = '🔄 Testing basic connection...';
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    resultsEl.innerHTML += '<div class="p-3 bg-green-800 rounded">✅ Connection successful!</div>';
+                } else {
+                    throw new Error(`Connection failed: ${response.status}`);
+                }
+                
+                // Test 2: Count political entries
+                statusEl.innerHTML = '🔄 Counting political entries...';
+                const politicalResponse = await fetch(`${SUPABASE_URL}/rest/v1/political_entries?select=count`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Prefer': 'count=exact',
+                        'Range': '0-0'
+                    }
+                });
+                
+                const politicalCount = politicalResponse.headers.get('content-range');
+                resultsEl.innerHTML += `<div class="p-3 bg-blue-800 rounded">📊 Political Entries: ${politicalCount || 'Unable to count'}</div>`;
+                
+                // Test 3: Fetch first 5 entries
+                statusEl.innerHTML = '🔄 Fetching sample entries...';
+                const entriesResponse = await fetch(`${SUPABASE_URL}/rest/v1/political_entries?limit=5&order=date.desc`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const entries = await entriesResponse.json();
+                
+                if (entries && entries.length > 0) {
+                    resultsEl.innerHTML += '<div class="p-3 bg-gray-800 rounded"><h3 class="font-bold mb-2">Latest Entries:</h3>';
+                    entries.forEach(entry => {
+                        resultsEl.innerHTML += `
+                            <div class="ml-4 p-2 border-l-2 border-gray-600">
+                                <div class="text-sm text-gray-400">${entry.date}</div>
+                                <div class="font-semibold">${entry.title}</div>
+                                <div class="text-sm text-gray-300">${entry.category} - ${entry.severity}</div>
+                            </div>
+                        `;
+                    });
+                    resultsEl.innerHTML += '</div>';
+                }
+                
+                // Test 4: Count executive orders
+                statusEl.innerHTML = '🔄 Counting executive orders...';
+                const eoResponse = await fetch(`${SUPABASE_URL}/rest/v1/executive_orders?select=count`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Prefer': 'count=exact',
+                        'Range': '0-0'
+                    }
+                });
+                
+                const eoCount = eoResponse.headers.get('content-range');
+                resultsEl.innerHTML += `<div class="p-3 bg-purple-800 rounded">📜 Executive Orders: ${eoCount || 'Unable to count'}</div>`;
+                
+                statusEl.innerHTML = '<div class="text-green-400 font-bold">✨ All tests complete!</div>';
+                
+            } catch (error) {
+                statusEl.innerHTML = `<div class="text-red-400">❌ Error: ${error.message}</div>`;
+                console.error('Test failed:', error);
+            }
+        }
+        
+        // Run test on load
+        testConnection();
+    </script>
+</body>
+</html>
