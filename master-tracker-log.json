@@ -1,5 +1,18 @@
 [
   {
+    "date": "2025-08-10",
+    "actor": "Department of Education",
+    "category": "Leadership Appointment",
+    "title": "Michael Kratsios Confirmed as Director of White House Office of Science and Technology Policy",
+    "description": "Michael Kratsios has been confirmed by the Senate as the Director of the White House Office of Science and Technology Policy. Previously serving as Chief Technology Officer in President Trump\\'s first administration, Kratsios will now advise the President on scientific, engineering, and technological aspects of national policy.",
+    "source_url": "https://educationcounsel.com/our_work/e-updates/all/e-update-for-march-31-2025",
+    "verified": false,
+    "severity": "medium",
+    "id": "me5rwqqwck8oyku8vd",
+    "added_at": "2025-08-10T14:22:50.984Z",
+    "status": "published"
+  },
+  {
     "date": "2025-08-09",
     "actor": "Elon Musk",
     "category": "Platform Manipulation",
@@ -10,6 +23,71 @@
     "severity": "medium",
     "id": "me4ch1lhrtyejexwshk",
     "added_at": "2025-08-09T14:22:58.133Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "New York Attorney General Letitia James",
+    "category": "Legal",
+    "title": "NY Attorney General Blasts \\'Weaponization\\' Following Reported DOJ Probes",
+    "description": "New York Attorney General Letitia James strongly criticized the Trump administration for allegedly politicizing the justice system, following reports that the Justice Department opened an investigation into her civil fraud case against Donald Trump and a separate lawsuit against the National Rifle Association. Sources cited by Fox News and The New York Times claim a grand jury has been convened and subpoenas issued to James\\' office. Although Reuters couldn’t verify the reports, and the Justice Department declined to comment, James\\' legal representative labeled the investigation as political retribution.",
+    "source_url": "https://www.reuters.com/legal/government/ny-attorney-general-blasts-weaponization-following-reported-trump-administration-2025-08-08/",
+    "verified": true,
+    "severity": "high",
+    "id": "me5rwsmlrnivf0k2atb",
+    "added_at": "2025-08-10T14:22:53.421Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "FBI",
+    "category": "Government Oversight",
+    "title": "FBI Proposes Adding Drug Cartel Suspects to Terror Watch List",
+    "description": "The FBI has directed local law enforcement agencies to submit names of individuals linked to eight criminal organizations, including drug cartels and gangs labeled as foreign terrorist entities by the Trump administration, potentially expanding the terrorist watch list significantly.",
+    "source_url": "https://www.reuters.com/legal/government/fbi-looks-add-drug-cartel-suspects-terror-watch-list-government-files-show-2025-08-08/",
+    "verified": true,
+    "severity": "high",
+    "id": "me5rwrk9mqqrg001ix",
+    "added_at": "2025-08-10T14:22:52.041Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Justice Department",
+    "category": "Government Oversight",
+    "title": "Justice Department Intensifies Investigations into Political Opponents",
+    "description": "The Justice Department under President Donald Trump is intensifying legal scrutiny of political opponents, launching investigations into New York Attorney General Letitia James and U.S. Senator Adam Schiff, with subpoenas issued for records tied to their cases against Trump and the National Rifle Association.",
+    "source_url": "https://apnews.com/article/9dec45248df0e06b1d99ff9944e6d327",
+    "verified": true,
+    "severity": "high",
+    "id": "me5rwrk97zx53lnir5n",
+    "added_at": "2025-08-10T14:22:52.041Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "U.S. District Judge Deborah Boardman",
+    "category": "Legal Proceedings",
+    "title": "Fourth Court Blocks Trump\\'s Birthright Citizenship Order Nationwide",
+    "description": "Judge Boardman issued a nationwide injunction against President Trump\\'s executive order limiting birthright citizenship, aligning with previous rulings that the order likely violates the 14th Amendment. This decision is part of a series of legal challenges to the order, including the class action case Casa Inc. et al v. Trump.",
+    "source_url": "https://www.reuters.com/legal/government/fourth-court-blocks-trumps-birthright-citizenship-order-nationwide-2025-08-08/",
+    "verified": true,
+    "severity": "high",
+    "id": "me5rwpnxukzohv4qus",
+    "added_at": "2025-08-10T14:22:49.581Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "U.S. District Judge Charles R. Breyer",
+    "category": "Legal Proceedings",
+    "title": "Bench Trial Scheduled in Newsom v. Trump Case",
+    "description": "Judge Breyer scheduled a bench trial for August 11, 2025, in the case Newsom v. Trump. The lawsuit, filed by California Governor Gavin Newsom, challenges the federalization and deployment of the California National Guard during the June 2025 Los Angeles protests, alleging unlawful action by the Trump administration.",
+    "source_url": "https://en.wikipedia.org/wiki/Newsom_v._Trump",
+    "verified": false,
+    "severity": "medium",
+    "id": "me5rwpnxclxhzmtkhxt",
+    "added_at": "2025-08-10T14:22:49.581Z",
     "status": "published"
   },
   {
@@ -162,6 +240,32 @@
     "severity": "medium",
     "id": "me2x7cwuu3vmvky5uf",
     "added_at": "2025-08-08T14:27:45.822Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-07",
+    "actor": "President Donald Trump",
+    "category": "Government Oversight",
+    "title": "Trump Orders Surge in Federal Law Enforcement in D.C. Amid Declining Crime Rates",
+    "description": "President Trump has ordered a surge in federal law enforcement officers in Washington, D.C., citing the need to combat \\'violent crime,\\' despite data showing crime rates are at their lowest levels in over 30 years. Critics argue the move is excessive and politically motivated.",
+    "source_url": "https://time.com/7308580/trump-dc-violent-crime/",
+    "verified": false,
+    "severity": "medium",
+    "id": "me5rwrk91y0yx51lmlai",
+    "added_at": "2025-08-10T14:22:52.041Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-07",
+    "actor": "Governor JB Pritzker",
+    "category": "Government Oversight",
+    "title": "Pritzker Responds to FBI\\'s Involvement in Texas Redistricting Controversy",
+    "description": "Illinois Governor JB Pritzker humorously welcomed the FBI to the Illinois State Fair, suggesting they visit for the fair rather than to make arrests, in response to the FBI aiding Texas law enforcement in tracking down Democratic legislators who fled the state to block a controversial redistricting vote.",
+    "source_url": "https://www.axios.com/local/chicago/2025/08/07/pritzker-fbi-cornyn-kash-patel-trump-illinois-texas-democrats-redistricting",
+    "verified": true,
+    "severity": "medium",
+    "id": "me5rwrk9cegl8lgog04",
+    "added_at": "2025-08-10T14:22:52.041Z",
     "status": "published"
   },
   {
@@ -513,6 +617,19 @@
     "severity": "medium",
     "id": "mdvrugw05xhoxtuck9",
     "added_at": "2025-08-03T14:23:23.136Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-02",
+    "actor": "MAGA Inc.",
+    "category": "Corporate Ethics",
+    "title": "MAGA Inc. Raises $177 Million in First Half of 2025",
+    "description": "MAGA Inc., a super PAC supporting former President Trump, raised $177 million in the first half of 2025, doubling the Republican National Committee\\'s fundraising. Donors, including lobbyists and corporations, gained access to the president, leading to favorable policy actions and appointments.",
+    "source_url": "https://www.nytimes.com/2025/08/02/us/politics/maga-inc-fundraising.html",
+    "verified": true,
+    "severity": "high",
+    "id": "me5rwqprszjs8jywr0e",
+    "added_at": "2025-08-10T14:22:50.943Z",
     "status": "published"
   },
   {
