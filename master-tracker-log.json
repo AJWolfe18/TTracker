@@ -1,5 +1,57 @@
 [
   {
+    "date": "2025-08-09",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Elon Musk\\'s X Platform Faces Censorship Dispute with Indian Government",
+    "description": "Elon Musk\\'s social media platform, X, is embroiled in a dispute with the Indian government over internet censorship policies, highlighting tensions between tech companies and governmental regulations.",
+    "source_url": "https://www.reuters.com/podcasts/trump-putin-germanys-israel-curb-5-meals-musk-vs-modi-2025-08-09/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me4ch1lhrtyejexwshk",
+    "added_at": "2025-08-09T14:22:58.133Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "U.S. Department of Justice",
+    "category": "Legal",
+    "title": "Justice Department Investigates New York AG Letitia James Over Trump Case",
+    "description": "The U.S. Department of Justice is probing New York Attorney General Letitia James for potential civil rights violations related to her civil fraud lawsuit against former President Donald Trump. A grand jury has been convened, and subpoenas have been issued for documents. James and her legal team have criticized the investigation as politically motivated.",
+    "source_url": "https://www.reuters.com/legal/government/justice-dept-probes-ny-case-against-trump-ag-james-blasts-weaponization-2025-08-08/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me4ch1yr984q8chuxkv",
+    "added_at": "2025-08-09T14:22:58.611Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Elon Musk",
+    "category": "Platform Manipulation",
+    "title": "Trump Threatens Federal Takeover of DC After Attack on Former DOGE Worker",
+    "description": "Following the violent attack on Edward Coristine, a former member of the Department of Government Efficiency under President Trump, President Trump condemned the city\\'s handling of crime and threatened federal intervention if local governance doesn\\'t improve.",
+    "source_url": "https://apnews.com/article/05aaaeb09d106ca1af673b46e89d60e1",
+    "verified": true,
+    "severity": "medium",
+    "id": "me4ch1lhf4r3q9n93qi",
+    "added_at": "2025-08-09T14:22:58.133Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-08",
+    "actor": "Turning Point USA Political Arms",
+    "category": "Corporate Ethics",
+    "title": "Arizona PAC Accused of Dark Money Disclosure Violations",
+    "description": "A student-led Democratic PAC filed a complaint alleging that Turning Point USA\\'s political arms violated Arizona\\'s dark money disclosure law by failing to reveal donors funding a campaign supporting Rep. Andy Biggs\\' gubernatorial bid.",
+    "source_url": "https://www.azmirror.com/2025/07/31/turning-point-usa-political-arms-accused-of-violating-arizona-dark-money-disclosure-law/",
+    "verified": false,
+    "severity": "medium",
+    "id": "me4ch0i4zfl84ije12m",
+    "added_at": "2025-08-09T14:22:56.716Z",
+    "status": "published"
+  },
+  {
     "id": "1754691182462-fsby8jw4q",
     "date": "2025-08-08",
     "actor": "Donald Trump",
@@ -114,6 +166,32 @@
   },
   {
     "date": "2025-08-07",
+    "actor": "Environmental Protection Agency",
+    "category": "Government Oversight",
+    "title": "EPA Seeks Nominations for Children\\'s Health Advisory Committee",
+    "description": "The EPA has announced a call for nominations to its Children\\'s Health Protection Advisory Committee, aiming to enhance its advisory capacity on children\\'s health issues. This initiative reflects the agency\\'s ongoing efforts to involve stakeholders in shaping policies affecting children\\'s health.",
+    "source_url": "https://regulations.justia.com/regulations/fedreg/2025/08/07/2025-14985.html",
+    "verified": false,
+    "severity": "low",
+    "id": "me4ch1i6yl8wsi5jx5g",
+    "added_at": "2025-08-09T14:22:58.014Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-07",
+    "actor": "Department of Defense, General Services Administration, NASA, Office of Federal Procurement Policy",
+    "category": "Government Oversight",
+    "title": "New Small Entity Compliance Guide Issued for Federal Acquisition Regulation",
+    "description": "A new Small Entity Compliance Guide has been issued to assist small entities in understanding and complying with the Federal Acquisition Regulation, reflecting ongoing efforts to streamline federal procurement processes and ensure compliance among small businesses.",
+    "source_url": "https://regulations.justia.com/regulations/fedreg/2025/08/07/2025-14987.html",
+    "verified": false,
+    "severity": "low",
+    "id": "me4ch1i6y600brpkcl",
+    "added_at": "2025-08-09T14:22:58.014Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-07",
     "actor": "President Donald Trump",
     "category": "Government Oversight",
     "title": "White House plans increase in law enforcement as Trump eyes D.C. takeover",
@@ -205,6 +283,19 @@
   },
   {
     "date": "2025-08-05",
+    "actor": "California Social Media Platforms",
+    "category": "Corporate Ethics",
+    "title": "Federal Judge Blocks California\\'s Misinformation Law",
+    "description": "A federal judge ruled that California\\'s Assembly Bill 2655, requiring large social media companies to remove deceptive content, is preempted by federal law, granting platforms immunity under the Communications Decency Act.",
+    "source_url": "https://www.courthousenews.com/federal-judge-rebukes-california-laws-targeting-misinformation/",
+    "verified": true,
+    "severity": "medium",
+    "id": "me4ch0i42ie5327ow42",
+    "added_at": "2025-08-09T14:22:56.716Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-05",
     "actor": "Donald Trump and Rupert Murdoch",
     "category": "Legal Proceeding",
     "title": "Trump and Murdoch Agree to Delay Deposition in Libel Case",
@@ -266,6 +357,19 @@
     "severity": "medium",
     "id": "mdymzopqkrrqw5ayume",
     "added_at": "2025-08-05T14:30:47.006Z",
+    "status": "published"
+  },
+  {
+    "date": "2025-08-04",
+    "actor": "Sacramento County Official Stephanie Hopkins",
+    "category": "Corporate Ethics",
+    "title": "Sacramento Official Profits from COVID-19 Food Aid Program",
+    "description": "Stephanie Hopkins, overseeing Sacramento County\\'s COVID-19 food aid program, profited through public funds distributed to her private business and participated in an audit revealing improper allocation of federal funds.",
+    "source_url": "https://www.sacbee.com/news/local/article274123456.html",
+    "verified": false,
+    "severity": "high",
+    "id": "me4ch0i413t4rxxtqk3r",
+    "added_at": "2025-08-09T14:22:56.716Z",
     "status": "published"
   },
   {
