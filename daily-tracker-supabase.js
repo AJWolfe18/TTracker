@@ -1,7 +1,7 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase instead of JSON files
 import fetch from 'node-fetch';
-import { supabaseRequest } from './supabase-config.js';
+import { supabaseRequest } from './supabase-config-node.js';
 
 console.log('🚀 DAILY POLITICAL TRACKER - SUPABASE VERSION');
 console.log('==============================================\n');

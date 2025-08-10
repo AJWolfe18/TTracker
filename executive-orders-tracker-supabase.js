@@ -2,7 +2,7 @@
 // Fetches and stores executive orders in Supabase
 
 import fetch from 'node-fetch';
-import { supabaseRequest } from './supabase-config.js';
+import { supabaseRequest } from './supabase-config-node.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
