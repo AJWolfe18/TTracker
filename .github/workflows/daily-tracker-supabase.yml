@@ -1,0 +1,69 @@
+# .github/workflows/daily-tracker.yml
+name: Daily Political Tracker
+
+on:
+  schedule:
+    # Runs every day at 9:00 AM EST (2:00 PM UTC)
+    - cron: '0 14 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  fetch-updates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run daily tracker (Supabase version)
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: node daily-tracker-supabase.js
+      
+    - name: Commit any local changes (for backup)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action - Daily Tracker"
+        git add -A
+        git diff --staged --quiet || git commit -m "Daily tracker update - $(date +%Y-%m-%d)"
+        git push || echo "No changes to push"
+        
+    - name: Create daily release
+      if: github.event_name == 'schedule'
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: daily-${{ github.run_number }}
+        name: Daily Political Update - ${{ github.run_number }}
+        body: |
+          🗳️ **Automated Daily Political Tracker Update**
+          
+          **Date:** $(date +%Y-%m-%d)
+          **Source:** Real news search using OpenAI Responses API
+          **Storage:** Supabase PostgreSQL Database
+          
+          📊 **What's Included:**
+          - Latest political developments across 6 categories
+          - Trump & Family tracking
+          - Elon Musk & DOGE monitoring  
+          - DOJ & Law Enforcement updates
+          - Federal Agency actions
+          - Court rulings & legal proceedings
+          - Corporate ethics & financial tracking
+          
+          🔗 **View Live Dashboard:** https://trumpytracker.com/
+          
+          ⚡ **Powered by:** OpenAI Responses API + Supabase
+        draft: false
+        prerelease: false
