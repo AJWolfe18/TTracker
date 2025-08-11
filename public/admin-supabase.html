@@ -237,8 +237,8 @@
             </div>
 
             <!-- Add/Edit Entry Form -->
-            <div class="card">
-                <h2 style="margin-top: 0;">📝 Add/Edit Entry</h2>
+            <div id="entryFormCard" class="card" style="display: none;">
+                <h2 style="margin-top: 0;">📝 <span id="formTitle">Add Entry</span></h2>
                 <form id="entryForm">
                     <input type="hidden" id="entryId">
                     <input type="hidden" id="entryType">
@@ -303,6 +303,7 @@
                     <div class="flex gap-2">
                         <button type="submit" class="btn btn-primary">Save Entry</button>
                         <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
+                        <button class="btn btn-success add-new-entry">Add New Entry</button>
                     </div>
                 </form>
             </div>
@@ -321,6 +322,7 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 style="margin: 0;">📊 All Entries</h2>
                     <div class="flex gap-2">
+                        <button class="btn btn-success add-new-entry">Add New Entry</button>
                         <button id="selectAll" class="btn btn-secondary">Select All</button>
                         <button id="deselectAll" class="btn btn-secondary">Deselect All</button>
                         <button id="archiveSelected" class="btn btn-warning">Archive</button>
@@ -558,7 +560,7 @@
                                 ${(entry.severity || 'medium').toUpperCase()}
                             </span>
                             <span class="badge" style="background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce;">
-                                ${entry.type === 'political' ? 'Political' : 'Executive'}
+                                ${entry.type === 'political' ? 'Political Entry' : 'Executive Order'}
                             </span>
                             ${entry.archived ? '<span class="badge badge-archived">ARCHIVED</span>' : ''}
                         </div>
@@ -582,12 +584,12 @@
                         </div>
                     ` : ''}
                     <div class="flex gap-2">
-                        <button class="btn btn-primary" onclick="editEntry(${entry.id})">Edit</button>
+                        <button class="btn btn-primary" onclick="editEntry('${entry.id}')">Edit</button>
                         <button class="btn btn-${entry.archived ? 'success' : 'warning'}" 
                                 onclick="toggleArchive([${entry.id}], ${!entry.archived})">
                             ${entry.archived ? 'Restore' : 'Archive'}
                         </button>
-                        <button class="btn btn-danger" onclick="deleteEntry(${entry.id})">Delete</button>
+                        <button class="btn btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -596,20 +598,27 @@
             document.querySelectorAll('.checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', (e) => {
                     const id = parseInt(e.target.dataset.id);
+                    const entryElement = document.getElementById(`entry-${id}`);
                     if (e.target.checked) {
                         selectedEntries.add(id);
                     } else {
                         selectedEntries.delete(id);
                     }
-                    document.getElementById(`entry-${id}`).classList.toggle('selected');
+                    if (entryElement) {
+                        entryElement.classList.toggle('selected', e.target.checked);
+                    }
                 });
             });
         }
 
-        // Edit entry - FIXED: Date formatting for input
+        // Edit entry - FIXED: Date formatting and ID handling
         function editEntry(id) {
-            const entry = entries.find(e => e.id === id);
+            const entry = entries.find(e => e.id === parseInt(id));
             if (!entry) return;
+
+            // Show the form and update title
+            document.getElementById('entryFormCard').style.display = 'block';
+            document.getElementById('formTitle').textContent = 'Edit Entry';
 
             document.getElementById('entryId').value = entry.id;
             document.getElementById('entryType').value = entry.type;
@@ -625,13 +634,22 @@
             document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Delete entry
+        // Show add new entry form
+        function showAddForm() {
+            document.getElementById('entryFormCard').style.display = 'block';
+            document.getElementById('formTitle').textContent = 'Add Entry';
+            document.getElementById('entryForm').reset();
+            document.getElementById('entryId').value = '';
+            document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Delete entry - FIXED: ID handling
         async function deleteEntry(id) {
             if (!confirm('Are you sure you want to delete this entry? This cannot be undone.')) {
                 return;
             }
 
-            const entry = entries.find(e => e.id === id);
+            const entry = entries.find(e => e.id === parseInt(id));
             if (!entry) return;
 
             const tableName = entry.type === 'political' ? 'political_entries' : 'executive_orders';
@@ -765,6 +783,12 @@
             document.getElementById('cancelEdit').addEventListener('click', () => {
                 document.getElementById('entryForm').reset();
                 document.getElementById('entryId').value = '';
+                document.getElementById('entryFormCard').style.display = 'none';
+            });
+
+            // Add new entry buttons (using class instead of duplicate IDs)
+            document.querySelectorAll('.add-new-entry').forEach(btn => {
+                btn.addEventListener('click', showAddForm);
             });
 
             // Manual submission
