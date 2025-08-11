@@ -5,556 +5,331 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrumpyTracker Admin - Supabase Edition</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
+            color: white;
             min-height: 100vh;
-            padding: 20px;
         }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .card { 
+            background: rgba(45, 55, 72, 0.6);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border-radius: 12px; 
+            padding: 24px; 
+            margin-bottom: 20px; 
+            border: 1px solid #4a5568;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
         }
-
-        .logo-section {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            margin-bottom: 20px;
+        .card:hover {
+            background: rgba(45, 55, 72, 0.8);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
         }
-
-        .logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 15px;
+        .input { 
+            width: 100%; 
+            padding: 12px; 
+            background: #2d3748; 
+            border: 1px solid #4a5568; 
+            border-radius: 8px; 
+            color: white; 
+            font-size: 14px; 
+            box-sizing: border-box; 
         }
-
-        h1 {
-            color: #2d3748;
-            font-size: 2.5rem;
-            font-weight: 700;
+        .input:focus { outline: none; border-color: #3182ce; }
+        .btn { 
+            padding: 10px 16px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 500; 
+            transition: all 0.3s ease; 
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
-
-        .subtitle {
-            color: #718096;
-            font-size: 1.1rem;
+        .btn-primary { 
+            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%); 
+            color: white; 
         }
-
-        .auth-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 20px;
+        .btn-primary:hover { 
+            background: linear-gradient(135deg, #2c5aa0 0%, #1d4ed8 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(49, 130, 206, 0.4);
         }
-
-        .auth-input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 1rem;
-            margin-top: 10px;
+        .btn-success { 
+            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%); 
+            color: white; 
         }
-
-        .auth-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
+        .btn-success:hover { 
+            background: linear-gradient(135deg, #2f855a 0%, #16a34a 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(56, 161, 105, 0.4);
         }
-
-        .auth-button {
-            margin-top: 15px;
-            padding: 12px 30px;
-            background: white;
-            color: #667eea;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
+        .btn-danger { 
+            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%); 
+            color: white; 
         }
-
-        .auth-button:hover {
-            transform: translateY(-2px);
+        .btn-danger:hover { 
+            background: linear-gradient(135deg, #c53030 0%, #dc2626 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(229, 62, 62, 0.4);
         }
-
-        .main-content {
-            display: none;
+        .btn-secondary { 
+            background: linear-gradient(135deg, #4a5568 0%, #6b7280 100%); 
+            color: white; 
         }
-
-        .main-content.authenticated {
-            display: block;
+        .btn-secondary:hover { 
+            background: linear-gradient(135deg, #2d3748 0%, #4b5563 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(74, 85, 104, 0.4);
         }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+        .btn-warning { 
+            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%); 
+            color: white; 
         }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.95);
+        .btn-warning:hover { 
+            background: linear-gradient(135deg, #b7791f 0%, #d97706 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(214, 158, 46, 0.4);
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-4 { gap: 16px; }
+        .gap-2 { gap: 8px; }
+        .mb-4 { margin-bottom: 16px; }
+        .mb-2 { margin-bottom: 8px; }
+        .text-center { text-align: center; }
+        .text-sm { font-size: 14px; }
+        .text-xs { font-size: 12px; }
+        .font-bold { font-weight: 700; }
+        .grid { display: grid; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .entry { 
+            background: rgba(45, 55, 72, 0.6);
             backdrop-filter: blur(10px);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            border: 1px solid #4a5568; 
+            border-radius: 12px; 
+            padding: 16px; 
+            margin-bottom: 12px; 
+            cursor: pointer; 
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         }
-
-        .stat-label {
-            color: #718096;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 5px;
+        .entry:hover { 
+            background: rgba(55, 65, 81, 0.8);
+            transform: translateY(-2px); 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
         }
-
-        .stat-value {
-            color: #2d3748;
-            font-size: 2rem;
-            font-weight: 700;
+        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
+        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
+        .entry.failed { border-left: 4px solid #e53e3e; }
+        .entry.published { border-left: 4px solid #38a169; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
+        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
+        .badge-published { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .logo { 
+            width: 40px; 
+            height: 40px; 
+            background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
         }
-
-        .controls-section {
-            background: rgba(255, 255, 255, 0.95);
+        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
+        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
+        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
+        .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .stat-card { 
+            background: rgba(55, 65, 81, 0.6);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        }
-
-        .control-group {
-            margin-bottom: 25px;
-        }
-
-        .control-label {
-            display: block;
-            color: #4a5568;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .control-input, .control-select, .control-textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: border-color 0.2s;
-        }
-
-        .control-input:focus, .control-select:focus, .control-textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .control-textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-            color: white;
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-            color: white;
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-            color: white;
-        }
-
-        .btn-secondary {
-            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
-            color: white;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .entries-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        }
-
-        .entries-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .entries-title {
-            color: #2d3748;
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
-
-        .entry-item {
-            background: white;
-            border: 2px solid #e2e8f0;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.2s;
-        }
-
-        .entry-item:hover {
-            border-color: #667eea;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
-        }
-
-        .entry-item.selected {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-            border-color: #667eea;
-        }
-
-        .entry-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
-        }
-
-        .entry-title {
-            color: #2d3748;
-            font-size: 1.1rem;
-            font-weight: 600;
-            flex: 1;
-        }
-
-        .entry-meta {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 10px;
-        }
-
-        .entry-badge {
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .badge-high {
-            background: #fed7d7;
-            color: #c53030;
-        }
-
-        .badge-medium {
-            background: #feebc8;
-            color: #c05621;
-        }
-
-        .badge-low {
-            background: #c6f6d5;
-            color: #276749;
-        }
-
-        .badge-political {
-            background: #e9d8fd;
-            color: #553c9a;
-        }
-
-        .badge-executive {
-            background: #bee3f8;
-            color: #2c5282;
-        }
-
-        .badge-archived {
-            background: #e2e8f0;
-            color: #4a5568;
-        }
-
-        .entry-description {
-            color: #4a5568;
-            line-height: 1.6;
-            margin-bottom: 10px;
-        }
-
-        .entry-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-
-        .checkbox-wrapper {
-            display: flex;
-            align-items: center;
-        }
-
-        .checkbox {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        .message {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            animation: slideIn 0.3s ease;
-        }
-
-        .message.success {
-            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-            color: white;
-        }
-
-        .message.error {
-            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-            color: white;
-        }
-
-        .message.info {
-            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-            color: white;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .loading {
+            padding: 20px; 
+            border-radius: 12px; 
             text-align: center;
-            padding: 40px;
-            color: #718096;
+            border: 1px solid #4a5568;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         }
-
-        .manual-submission {
-            background: linear-gradient(135deg, #805ad5 0%, #553c9a 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
+        .stat-card:hover {
+            background: rgba(55, 65, 81, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        .auth-section {
+            background: rgba(45, 55, 72, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 24px;
             margin-bottom: 20px;
+            border: 1px solid #4a5568;
+            text-align: center;
         }
-
-        .manual-submission h3 {
-            margin-bottom: 15px;
+        .checkbox { 
+            width: 16px; 
+            height: 16px; 
+            margin-right: 8px; 
+            cursor: pointer; 
         }
-
-        .manual-submission .control-input {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.3);
-            color: white;
-        }
-
-        .manual-submission .control-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
         @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
-            
-            .entries-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .button-group {
-                flex-direction: column;
-            }
-            
-            .btn {
-                width: 100%;
-            }
+            .grid-2 { grid-template-columns: 1fr; }
+            .flex-mobile { flex-direction: column; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="logo-section">
-                <img src="trumpytracker-logo.jpeg" alt="TrumpyTracker Logo" class="logo">
+        <!-- Header -->
+        <div class="card">
+            <div class="flex items-center gap-4">
+                <div class="logo">T2</div>
                 <div>
-                    <h1>TrumpyTracker Admin Panel</h1>
-                    <div class="subtitle">Supabase Database Management System</div>
+                    <h1 style="margin: 0; font-size: 24px;">TrumpyTracker Admin</h1>
+                    <p style="margin: 0; color: #a0aec0; font-size: 14px;">Supabase Database Management</p>
                 </div>
             </div>
         </div>
 
+        <!-- Authentication Section -->
         <div id="authSection" class="auth-section">
             <h2>🔐 Authentication Required</h2>
-            <p>Enter your GitHub Personal Access Token to access admin features:</p>
-            <input type="password" id="tokenInput" class="auth-input" placeholder="ghp_xxxxxxxxxxxx">
-            <button id="authButton" class="auth-button">Authenticate</button>
+            <p style="margin: 16px 0;">Enter your GitHub Personal Access Token:</p>
+            <input type="password" id="tokenInput" class="input" placeholder="ghp_xxxxxxxxxxxx" style="margin-bottom: 16px;">
+            <button id="authButton" class="btn btn-primary">Authenticate</button>
         </div>
 
-        <div id="mainContent" class="main-content">
+        <!-- Main Content -->
+        <div id="mainContent" style="display: none;">
             <div id="messageContainer"></div>
 
-            <div class="stats-grid" id="statsGrid">
+            <!-- Statistics -->
+            <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-label">Total Entries</div>
-                    <div class="stat-value" id="statTotal">0</div>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="statTotal">0</div>
+                    <div style="color: #a0aec0; font-size: 14px;">Total Entries</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">High Severity</div>
-                    <div class="stat-value" id="statHigh">0</div>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #e53e3e;" id="statHigh">0</div>
+                    <div style="color: #a0aec0; font-size: 14px;">High Severity</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Medium Severity</div>
-                    <div class="stat-value" id="statMedium">0</div>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #ed8936;" id="statMedium">0</div>
+                    <div style="color: #a0aec0; font-size: 14px;">Medium Severity</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Low Severity</div>
-                    <div class="stat-value" id="statLow">0</div>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #38a169;" id="statLow">0</div>
+                    <div style="color: #a0aec0; font-size: 14px;">Low Severity</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Archived</div>
-                    <div class="stat-value" id="statArchived">0</div>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #805ad5;" id="statArchived">0</div>
+                    <div style="color: #a0aec0; font-size: 14px;">Archived</div>
                 </div>
             </div>
 
-            <div class="controls-section">
-                <h2>📝 Add/Edit Entry</h2>
+            <!-- Add/Edit Entry Form -->
+            <div class="card">
+                <h2 style="margin-top: 0;">📝 Add/Edit Entry</h2>
                 <form id="entryForm">
                     <input type="hidden" id="entryId">
                     <input type="hidden" id="entryType">
                     
-                    <div class="control-group">
-                        <label class="control-label">Entry Type</label>
-                        <select id="entryTypeSelect" class="control-select">
-                            <option value="political">Political Entry</option>
-                            <option value="executive">Executive Order</option>
-                        </select>
+                    <div class="grid grid-2 gap-4 mb-4">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Entry Type</label>
+                            <select id="entryTypeSelect" class="input">
+                                <option value="political">Political Entry</option>
+                                <option value="executive">Executive Order</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Date</label>
+                            <input type="date" id="entryDate" class="input" required>
+                        </div>
                     </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Date</label>
-                        <input type="date" id="entryDate" class="control-input" required>
+                    <div class="grid grid-2 gap-4 mb-4">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Actor</label>
+                            <input type="text" id="entryActor" class="input" placeholder="e.g., Donald Trump" required>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Severity</label>
+                            <select id="entrySeverity" class="input">
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Actor/Title</label>
-                        <input type="text" id="entryActor" class="control-input" placeholder="e.g., Donald Trump" required>
+                    <div class="mb-4">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Title</label>
+                        <input type="text" id="entryTitle" class="input" placeholder="Brief title of the action" required>
                     </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Title/Action</label>
-                        <input type="text" id="entryTitle" class="control-input" placeholder="Brief title of the action" required>
+                    <div class="mb-4">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Description</label>
+                        <textarea id="entryDescription" class="input" rows="4" placeholder="Detailed description..." required></textarea>
                     </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Description</label>
-                        <textarea id="entryDescription" class="control-textarea" placeholder="Detailed description..." required></textarea>
+                    <div class="grid grid-2 gap-4 mb-4">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Category</label>
+                            <select id="entryCategory" class="input">
+                                <option value="Democracy & Rule of Law">Democracy & Rule of Law</option>
+                                <option value="Authoritarian Indicators">Authoritarian Indicators</option>
+                                <option value="Corruption & Self-Dealing">Corruption & Self-Dealing</option>
+                                <option value="Disinformation & Propaganda">Disinformation & Propaganda</option>
+                                <option value="Judicial Manipulation">Judicial Manipulation</option>
+                                <option value="Power Consolidation">Power Consolidation</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Source URL</label>
+                            <input type="url" id="entrySource" class="input" placeholder="https://...">
+                        </div>
                     </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Category</label>
-                        <select id="entryCategory" class="control-select">
-                            <option value="Democracy & Rule of Law">Democracy & Rule of Law</option>
-                            <option value="Authoritarian Indicators">Authoritarian Indicators</option>
-                            <option value="Corruption & Self-Dealing">Corruption & Self-Dealing</option>
-                            <option value="Disinformation & Propaganda">Disinformation & Propaganda</option>
-                            <option value="Judicial Manipulation">Judicial Manipulation</option>
-                            <option value="Power Consolidation">Power Consolidation</option>
-                        </select>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Severity</label>
-                        <select id="entrySeverity" class="control-select">
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                        </select>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Source URL</label>
-                        <input type="url" id="entrySource" class="control-input" placeholder="https://...">
-                    </div>
-
-                    <div class="button-group">
+                    <div class="flex gap-2">
                         <button type="submit" class="btn btn-primary">Save Entry</button>
                         <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
                     </div>
                 </form>
             </div>
 
-            <div class="manual-submission">
-                <h3>🔗 Submit Article for Processing</h3>
-                <input type="url" id="manualUrl" class="control-input" placeholder="Enter article URL...">
-                <button id="submitManual" class="btn btn-primary" style="margin-top: 10px;">Submit for AI Processing</button>
+            <!-- Manual Article Submission -->
+            <div class="card">
+                <h3 style="margin-top: 0;">🔗 Submit Article for Processing</h3>
+                <div class="flex gap-2">
+                    <input type="url" id="manualUrl" class="input" placeholder="Enter article URL..." style="flex: 1;">
+                    <button id="submitManual" class="btn btn-primary">Submit</button>
+                </div>
             </div>
 
-            <div class="entries-section">
-                <div class="entries-header">
-                    <h2 class="entries-title">📊 All Entries</h2>
-                    <div class="button-group">
+            <!-- Entries Management -->
+            <div class="card">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 style="margin: 0;">📊 All Entries</h2>
+                    <div class="flex gap-2">
                         <button id="selectAll" class="btn btn-secondary">Select All</button>
                         <button id="deselectAll" class="btn btn-secondary">Deselect All</button>
-                        <button id="archiveSelected" class="btn btn-warning">Archive Selected</button>
-                        <button id="restoreSelected" class="btn btn-success">Restore Selected</button>
-                        <button id="deleteSelected" class="btn btn-danger">Delete Selected</button>
+                        <button id="archiveSelected" class="btn btn-warning">Archive</button>
+                        <button id="restoreSelected" class="btn btn-success">Restore</button>
+                        <button id="deleteSelected" class="btn btn-danger">Delete</button>
                         <button id="refreshEntries" class="btn btn-primary">Refresh</button>
                     </div>
                 </div>
-                <div id="entriesList" class="loading">Loading entries...</div>
+                <div id="entriesList" style="text-align: center; padding: 40px; color: #a0aec0;">Loading entries...</div>
             </div>
         </div>
     </div>
@@ -668,7 +443,7 @@
             }
         }
 
-        // MISSING FUNCTION FIXED: Toggle Archive
+        // Toggle Archive - FIXED: Missing function added
         async function toggleArchive(entryIds, archived) {
             try {
                 const politicalIds = [];
@@ -694,19 +469,21 @@
                     if (!success) await archiveWithWorkaround(executiveIds, 'executive_orders', archived);
                 }
 
-                showMessage(`✅ ${archived ? 'Archived' : 'Restored'} ${entryIds.length} entries`, 'success');
+                showMessage(`${archived ? 'Archived' : 'Restored'} ${entryIds.length} entries`, 'success');
                 selectedEntries.clear();
                 await loadEntries();
             } catch (error) {
                 console.error(`Error ${archived ? 'archiving' : 'restoring'} entries:`, error);
-                showMessage(`❌ Failed to ${archived ? 'archive' : 'restore'} entries: ${error.message}`, 'error');
+                showMessage(`Failed to ${archived ? 'archive' : 'restore'} entries: ${error.message}`, 'error');
             }
         }
 
         // Show message
         function showMessage(text, type = 'info') {
             const container = document.getElementById('messageContainer');
-            container.innerHTML = `<div class="message ${type}">${text}</div>`;
+            const className = type === 'success' ? 'message-success' : 
+                             type === 'error' ? 'message-error' : 'message-info';
+            container.innerHTML = `<div class="message ${className}">${text}</div>`;
             setTimeout(() => {
                 container.innerHTML = '';
             }, 5000);
@@ -733,10 +510,10 @@
 
                 updateStats();
                 renderEntries();
-                showMessage(`✅ Loaded ${entries.length} entries`, 'success');
+                showMessage(`Loaded ${entries.length} entries`, 'success');
             } catch (error) {
                 console.error('Error loading entries:', error);
-                showMessage(`❌ Failed to load entries: ${error.message}`, 'error');
+                showMessage(`Failed to load entries: ${error.message}`, 'error');
             }
         }
 
@@ -762,49 +539,49 @@
             const entriesList = document.getElementById('entriesList');
             
             if (entries.length === 0) {
-                entriesList.innerHTML = '<div class="loading">No entries found</div>';
+                entriesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0aec0;">No entries found</div>';
                 return;
             }
 
             entriesList.innerHTML = entries.map(entry => `
-                <div class="entry-item ${selectedEntries.has(entry.id) ? 'selected' : ''}" id="entry-${entry.id}">
-                    <div class="entry-header">
-                        <div class="checkbox-wrapper">
+                <div class="entry ${selectedEntries.has(entry.id) ? 'selected' : ''}" id="entry-${entry.id}">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
                             <input type="checkbox" 
                                    class="checkbox" 
                                    data-id="${entry.id}"
                                    ${selectedEntries.has(entry.id) ? 'checked' : ''}>
-                            <div class="entry-title">${entry.title || entry.actor || 'Untitled'}</div>
+                            <strong>${entry.title || entry.actor || 'Untitled'}</strong>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="badge badge-${entry.severity || 'medium'}">
+                                ${(entry.severity || 'medium').toUpperCase()}
+                            </span>
+                            <span class="badge" style="background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce;">
+                                ${entry.type === 'political' ? 'Political' : 'Executive'}
+                            </span>
+                            ${entry.archived ? '<span class="badge badge-archived">ARCHIVED</span>' : ''}
                         </div>
                     </div>
-                    <div class="entry-meta">
-                        <span class="entry-badge badge-${entry.severity || 'medium'}">
-                            ${(entry.severity || 'medium').toUpperCase()}
-                        </span>
-                        <span class="entry-badge badge-${entry.type}">
-                            ${entry.type === 'political' ? 'Political' : 'Executive Order'}
-                        </span>
-                        ${entry.archived ? '<span class="entry-badge badge-archived">ARCHIVED</span>' : ''}
-                        <span style="color: #718096; font-size: 0.875rem;">
-                            ${new Date(entry.date).toLocaleDateString()}
-                        </span>
+                    <div style="color: #a0aec0; font-size: 14px; margin-bottom: 8px;">
+                        ${new Date(entry.date).toLocaleDateString()} • ${entry.actor}
                     </div>
-                    <div class="entry-description">
+                    <div style="margin-bottom: 12px;">
                         ${entry.description || ''}
                     </div>
                     ${entry.source_url ? `
-                        <div style="margin-top: 10px;">
-                            <a href="${entry.source_url}" target="_blank" style="color: #667eea; text-decoration: none;">
+                        <div style="margin-bottom: 8px;">
+                            <a href="${entry.source_url}" target="_blank" style="color: #3182ce; text-decoration: none;">
                                 🔗 View Source
                             </a>
                         </div>
                     ` : ''}
                     ${entry.type === 'executive' && entry.source ? `
-                        <div style="margin-top: 5px; font-size: 0.875rem; color: #718096;">
+                        <div style="font-size: 12px; color: #a0aec0; margin-bottom: 8px;">
                             API Source: ${entry.source}
                         </div>
                     ` : ''}
-                    <div class="entry-actions">
+                    <div class="flex gap-2">
                         <button class="btn btn-primary" onclick="editEntry(${entry.id})">Edit</button>
                         <button class="btn btn-${entry.archived ? 'success' : 'warning'}" 
                                 onclick="toggleArchive([${entry.id}], ${!entry.archived})">
@@ -861,11 +638,11 @@
 
             try {
                 await supabaseRequest(`${tableName}?id=eq.${id}`, 'DELETE');
-                showMessage('✅ Entry deleted successfully', 'success');
+                showMessage('Entry deleted successfully', 'success');
                 await loadEntries();
             } catch (error) {
                 console.error('Error deleting entry:', error);
-                showMessage(`❌ Failed to delete entry: ${error.message}`, 'error');
+                showMessage(`Failed to delete entry: ${error.message}`, 'error');
             }
         }
 
@@ -897,11 +674,11 @@
                         'PATCH',
                         entryData
                     );
-                    showMessage('✅ Entry updated successfully', 'success');
+                    showMessage('Entry updated successfully', 'success');
                 } else {
                     // Create new
                     await supabaseRequest(tableName, 'POST', entryData);
-                    showMessage('✅ Entry created successfully', 'success');
+                    showMessage('Entry created successfully', 'success');
                 }
 
                 document.getElementById('entryForm').reset();
@@ -909,7 +686,7 @@
                 await loadEntries();
             } catch (error) {
                 console.error('Error saving entry:', error);
-                showMessage(`❌ Failed to save entry: ${error.message}`, 'error');
+                showMessage(`Failed to save entry: ${error.message}`, 'error');
             }
         }
 
@@ -928,14 +705,14 @@
 
                 if (response.ok) {
                     currentToken = tokenValue;
-                    document.getElementById('mainContent').classList.add('authenticated');
+                    document.getElementById('mainContent').style.display = 'block';
                     document.getElementById('authSection').style.display = 'none';
                     await loadEntries();
                 } else {
                     throw new Error('Invalid token');
                 }
             } catch (error) {
-                showMessage('❌ Authentication failed', 'error');
+                showMessage('Authentication failed', 'error');
             }
         }
 
@@ -965,11 +742,11 @@
                     throw new Error(`GitHub API error: ${response.status}`);
                 }
 
-                showMessage('✅ Article submitted for processing', 'success');
+                showMessage('Article submitted for processing', 'success');
                 document.getElementById('manualUrl').value = '';
             } catch (error) {
                 console.error('Error submitting article:', error);
-                showMessage(`❌ Failed to submit article: ${error.message}`, 'error');
+                showMessage(`Failed to submit article: ${error.message}`, 'error');
             }
         }
 
@@ -1041,12 +818,12 @@
                         }
                     }
                     
-                    showMessage(`✅ Deleted ${selectedEntries.size} entries`, 'success');
+                    showMessage(`Deleted ${selectedEntries.size} entries`, 'success');
                     selectedEntries.clear();
                     await loadEntries();
                 } catch (error) {
                     console.error('Error deleting entries:', error);
-                    showMessage(`❌ Failed to delete entries: ${error.message}`, 'error');
+                    showMessage(`Failed to delete entries: ${error.message}`, 'error');
                 }
             });
         });
