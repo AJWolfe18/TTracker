@@ -13,6 +13,9 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         /* Custom scrollbar for dark theme */
         ::-webkit-scrollbar {
@@ -43,7 +46,7 @@
     <div id="root"></div>
     
     <!-- Load the Supabase version of the dashboard -->
-    <script src="dashboard.js"></script>
+    <script type="text/babel" src="dashboard.js"></script>
     
     <!-- Fallback for users with JavaScript disabled -->
     <noscript>
