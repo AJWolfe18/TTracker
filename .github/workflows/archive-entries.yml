@@ -1,0 +1,83 @@
+# .github/workflows/archive-entries.yml
+name: Archive Entries with Service Role
+
+on:
+  repository_dispatch:
+    types: [archive_entries]
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Archive/Restore Entries
+      env:
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        ENTRY_IDS: ${{ github.event.client_payload.entry_ids }}
+        TABLE_NAME: ${{ github.event.client_payload.table_name }}
+        ARCHIVED: ${{ github.event.client_payload.archived }}
+        ACTION: ${{ github.event.client_payload.action }}
+      run: |
+        cat << 'EOF' > archive-entries.js
+        import fetch from 'node-fetch';
+
+        const SUPABASE_URL = 'https://osjbulmltfpcoldydexg.supabase.co';
+        const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+        const entryIds = JSON.parse(process.env.ENTRY_IDS || '[]');
+        const tableName = process.env.TABLE_NAME;
+        const archived = process.env.ARCHIVED === 'true';
+        const action = process.env.ACTION;
+
+        async function archiveEntries() {
+            if (!SUPABASE_SERVICE_KEY) {
+                console.error('Service key not found');
+                process.exit(1);
+            }
+
+            console.log(`${action} ${entryIds.length} entries in ${tableName}`);
+
+            for (const id of entryIds) {
+                try {
+                    const response = await fetch(
+                        `${SUPABASE_URL}/rest/v1/${tableName}?id=eq.${id}`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'apikey': SUPABASE_SERVICE_KEY,
+                                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=representation'
+                            },
+                            body: JSON.stringify({ archived })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const error = await response.text();
+                        console.error(`Failed to update entry ${id}: ${error}`);
+                    } else {
+                        console.log(`Successfully updated entry ${id}`);
+                    }
+                } catch (error) {
+                    console.error(`Error updating entry ${id}:`, error);
+                }
+            }
+
+            console.log(`${action} operation completed`);
+        }
+
+        archiveEntries();
+        EOF
+        
+        node archive-entries.js

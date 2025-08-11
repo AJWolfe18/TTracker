@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker Admin - Supabase Edition</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); }
+        .logo-section { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+        .logo { width: 60px; height: 60px; border-radius: 15px; }
+        h1 { color: #2d3748; font-size: 2.5rem; font-weight: 700; }
+        .subtitle { color: #718096; font-size: 1.1rem; }
+        .auth-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+        .auth-input { width: 100%; padding: 12px; border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 10px; background: rgba(255, 255, 255, 0.1); color: white; font-size: 1rem; margin-top: 10px; }
+        .auth-input::placeholder { color: rgba(255, 255, 255, 0.6); }
+        .auth-button { margin-top: 15px; padding: 12px 30px; background: white; color: #667eea; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform 0.2s; }
+        .auth-button:hover { transform: translateY(-2px); }
+        .main-content { display: none; }
+        .main-content.authenticated { display: block; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1); }
+        .stat-label { color: #718096; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+        .stat-value { color: #2d3748; font-size: 2rem; font-weight: 700; }
+        .controls-section { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); }
+        .control-group { margin-bottom: 25px; }
+        .control-label { display: block; color: #4a5568; font-weight: 600; margin-bottom: 10px; }
+        .control-input, .control-select, .control-textarea { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 1rem; transition: border-color 0.2s; }
+        .control-input:focus, .control-select:focus, .control-textarea:focus { outline: none; border-color: #667eea; }
+        .control-textarea { min-height: 100px; resize: vertical; }
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 12px 24px; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; }
+        .btn-danger { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); color: white; }
+        .btn-warning { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); color: white; }
+        .btn-secondary { background: linear-gradient(135deg, #718096 0%, #4a5568 100%); color: white; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); }
+        .entries-section { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; padding: 30px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); }
+        .entries-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px; }
+        .entries-title { color: #2d3748; font-size: 1.5rem; font-weight: 700; }
+        .entry-item { background: white; border: 2px solid #e2e8f0; border-radius: 15px; padding: 20px; margin-bottom: 15px; transition: all 0.2s; }
+        .entry-item:hover { border-color: #667eea; box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1); }
+        .entry-item.selected { background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-color: #667eea; }
+        .entry-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+        .entry-title { color: #2d3748; font-size: 1.1rem; font-weight: 600; flex: 1; }
+        .entry-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .entry-badge { padding: 4px 10px; border-radius: 6px; font-size: 0.875rem; font-weight: 600; }
+        .badge-high { background: #fed7d7; color: #c53030; }
+        .badge-medium { background: #feebc8; color: #c05621; }
+        .badge-low { background: #c6f6d5; color: #276749; }
+        .badge-political { background: #e9d8fd; color: #553c9a; }
+        .badge-executive { background: #bee3f8; color: #2c5282; }
+        .badge-archived { background: #e2e8f0; color: #4a5568; }
+        .entry-description { color: #4a5568; line-height: 1.6; margin-bottom: 10px; }
+        .entry-actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .checkbox-wrapper { display: flex; align-items: center; }
+        .checkbox { width: 20px; height: 20px; margin-right: 10px; cursor: pointer; }
+        .message { padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; animation: slideIn 0.3s ease; }
+        .message.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; }
+        .message.error { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); color: white; }
+        .message.info { background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%); color: white; }
+        @keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .loading { text-align: center; padding: 40px; color: #718096; }
+        .manual-submission { background: linear-gradient(135deg, #805ad5 0%, #553c9a 100%); color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+        .manual-submission h3 { margin-bottom: 15px; }
+        .manual-submission .control-input { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.3); color: white; }
+        .manual-submission .control-input::placeholder { color: rgba(255, 255, 255, 0.6); }
+        @media (max-width: 768px) { 
+            .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+            .entries-header { flex-direction: column; align-items: stretch; }
+            .button-group { flex-direction: column; }
+            .btn { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-section">
+                <img src="trumpytracker-logo.jpeg" alt="TrumpyTracker Logo" class="logo">
+                <div>
+                    <h1>TrumpyTracker Admin Panel</h1>
+                    <div class="subtitle">Supabase Database Management System</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="authSection" class="auth-section">
+            <h2>🔐 Authentication Required</h2>
+            <p>Enter your GitHub Personal Access Token to access admin features:</p>
+            <input type="password" id="tokenInput" class="auth-input" placeholder="ghp_xxxxxxxxxxxx">
+            <button id="authButton" class="auth-button">Authenticate</button>
+        </div>
+
+        <div id="mainContent" class="main-content">
+            <div id="messageContainer"></div>
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Entries</div>
+                    <div class="stat-value" id="statTotal">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">High Severity</div>
+                    <div class="stat-value" id="statHigh">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Medium Severity</div>
+                    <div class="stat-value" id="statMedium">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Low Severity</div>
+                    <div class="stat-value" id="statLow">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Archived</div>
+                    <div class="stat-value" id="statArchived">0</div>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <h2>📝 Add/Edit Entry</h2>
+                <form id="entryForm">
+                    <input type="hidden" id="entryId">
+                    <input type="hidden" id="entryType">
+                    
+                    <div class="control-group">
+                        <label class="control-label">Entry Type</label>
+                        <select id="entryTypeSelect" class="control-select">
+                            <option value="political">Political Entry</option>
+                            <option value="executive">Executive Order</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Date</label>
+                        <input type="date" id="entryDate" class="control-input" required>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Actor/Title</label>
+                        <input type="text" id="entryActor" class="control-input" placeholder="e.g., Donald Trump" required>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Title/Action</label>
+                        <input type="text" id="entryTitle" class="control-input" placeholder="Brief title of the action" required>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Description</label>
+                        <textarea id="entryDescription" class="control-textarea" placeholder="Detailed description..." required></textarea>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Category</label>
+                        <select id="entryCategory" class="control-select">
+                            <option value="Democracy & Rule of Law">Democracy & Rule of Law</option>
+                            <option value="Authoritarian Indicators">Authoritarian Indicators</option>
+                            <option value="Corruption & Self-Dealing">Corruption & Self-Dealing</option>
+                            <option value="Disinformation & Propaganda">Disinformation & Propaganda</option>
+                            <option value="Judicial Manipulation">Judicial Manipulation</option>
+                            <option value="Power Consolidation">Power Consolidation</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Severity</label>
+                        <select id="entrySeverity" class="control-select">
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label">Source URL</label>
+                        <input type="url" id="entrySource" class="control-input" placeholder="https://...">
+                    </div>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn btn-primary">Save Entry</button>
+                        <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="manual-submission">
+                <h3>🔗 Submit Article for Processing</h3>
+                <input type="url" id="manualUrl" class="control-input" placeholder="Enter article URL...">
+                <button id="submitManual" class="btn btn-primary" style="margin-top: 10px;">Submit for AI Processing</button>
+            </div>
+
+            <div class="entries-section">
+                <div class="entries-header">
+                    <h2 class="entries-title">📊 All Entries</h2>
+                    <div class="button-group">
+                        <button id="selectAll" class="btn btn-secondary">Select All</button>
+                        <button id="deselectAll" class="btn btn-secondary">Deselect All</button>
+                        <button id="archiveSelected" class="btn btn-warning">Archive Selected</button>
+                        <button id="restoreSelected" class="btn btn-success">Restore Selected</button>
+                        <button id="deleteSelected" class="btn btn-danger">Delete Selected</button>
+                        <button id="refreshEntries" class="btn btn-primary">Refresh</button>
+                    </div>
+                </div>
+                <div id="entriesList" class="loading">Loading entries...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase configuration
+        const SUPABASE_URL = 'https://osjbulmltfpcoldydexg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
+
+        // Global state
+        let currentToken = '';
+        let entries = [];
+        let selectedEntries = new Set();
+
+        // Supabase request helper
+        async function supabaseRequest(endpoint, method = 'GET', body = null) {
+            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                }
+            };
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Supabase error: ${response.status} - ${error}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await response.json();
+            }
+            
+            return { success: true };
+        }
+
+        // Archive operations using GitHub Actions (service role key)
+        async function archiveViaGitHub(entryIds, tableName, archived) {
+            try {
+                const response = await fetch('https://api.github.com/repos/joshpollara/TTracker/dispatches', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        event_type: 'archive_entries',
+                        client_payload: {
+                            entry_ids: entryIds,
+                            table_name: tableName,
+                            archived: archived,
+                            action: archived ? 'archive' : 'restore'
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`GitHub API error: ${response.status}`);
+                }
+
+                // Wait a moment for the action to process
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                return true;
+            } catch (error) {
+                console.error('Error triggering archive action:', error);
+                // Fall back to workaround method
+                return false;
+            }
+        }
+
+        // Archive workaround (delete and recreate)
+        async function archiveWithWorkaround(entryIds, tableName, archived) {
+            for (const id of entryIds) {
+                const entry = entries.find(e => e.id === id && 
+                    (tableName.includes('political') ? e.type === 'political' : e.type === 'executive'));
+                
+                if (!entry) continue;
+                
+                try {
+                    // Create a copy with updated archived status
+                    const updatedEntry = { ...entry, archived };
+                    delete updatedEntry.id;
+                    delete updatedEntry.type;
+                    
+                    // Delete the old entry
+                    await supabaseRequest(`${tableName}?id=eq.${id}`, 'DELETE');
+                    
+                    // Create new entry with archived flag
+                    await supabaseRequest(tableName, 'POST', updatedEntry);
+                } catch (error) {
+                    console.error(`Error updating entry ${id}:`, error);
+                    throw error;
+                }
+            }
+        }
+
+        // Show message
+        function showMessage(text, type = 'info') {
+            const container = document.getElementById('messageContainer');
+            container.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
+        // Load entries
+        async function loadEntries() {
+            try {
+                const [politicalEntries, executiveOrders] = await Promise.all([
+                    supabaseRequest('political_entries?order=date.desc,id.desc'),
+                    supabaseRequest('executive_orders?order=date.desc,id.desc')
+                ]);
+
+                entries = [
+                    ...politicalEntries.map(e => ({ ...e, type: 'political' })),
+                    ...executiveOrders.map(e => ({ ...e, type: 'executive' }))
+                ];
+
+                entries.sort((a, b) => {
+                    const dateCompare = new Date(b.date) - new Date(a.date);
+                    if (dateCompare !== 0) return dateCompare;
+                    return b.id - a.id;
+                });
+
+                updateStats();
+                renderEntries();
+                showMessage(`✅ Loaded ${entries.length} entries`, 'success');
+            } catch (error) {
+                console.error('Error loading entries:', error);
+                showMessage(`❌ Failed to load entries: ${error.message}`, 'error');
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const stats = {
+                total: entries.length,
+                high: entries.filter(e => e.severity === 'high' && !e.archived).length,
+                medium: entries.filter(e => e.severity === 'medium' && !e.archived).length,
+                low: entries.filter(e => e.severity === 'low' && !e.archived).length,
+                archived: entries.filter(e => e.archived).length
+            };
+
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statHigh').textContent = stats.high;
+            document.getElementById('statMedium').textContent = stats.medium;
+            document.getElementById('statLow').textContent = stats.low;
+            document.getElementById('statArchived').textContent = stats.archived;
+        }
+
+        // Render entries list
+        function renderEntries() {
+            const entriesList = document.getElementById('entriesList');
+            
+            if (entries.length === 0) {
+                entriesList.innerHTML = '<div class="loading">No entries found</div>';
+                return;
+            }
+
+            entriesList.innerHTML = entries.map(entry => `
+                <div class="entry-item ${selectedEntries.has(entry.id) ? 'selected' : ''}" id="entry-${entry.id}">
+                    <div class="entry-header">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" 
+                                   class="checkbox" 
+                                   data-id="${entry.id}"
+                                   ${selectedEntries.has(entry.id) ? 'checked' : ''}>
+                            <div class="entry-title">${entry.title || entry.actor || 'Untitled'}</div>
+                        </div>
+                    </div>
+                    <div class="entry-meta">
+                        <span class="entry-badge badge-${entry.severity || 'medium'}">
+                            ${(entry.severity || 'medium').toUpperCase()}
+                        </span>
+                        <span class="entry-badge badge-${entry.type}">
+                            ${entry.type === 'political' ? 'Political' : 'Executive Order'}
+                        </span>
+                        ${entry.archived ? '<span class="entry-badge badge-archived">ARCHIVED</span>' : ''}
+                        <span style="color: #718096; font-size: 0.875rem;">
+                            ${new Date(entry.date).toLocaleDateString()}
+                        </span>
+                    </div>
+                    <div class="entry-description">
+                        ${entry.description || ''}
+                    </div>
+                    ${entry.source ? `
+                        <div style="margin-top: 10px;">
+                            <a href="${entry.source}" target="_blank" style="color: #667eea; text-decoration: none;">
+                                🔗 View Source
+                            </a>
+                        </div>
+                    ` : ''}
+                    <div class="entry-actions">
+                        <button class="btn btn-primary" onclick="editEntry(${entry.id})">Edit</button>
+                        <button class="btn btn-${entry.archived ? 'success' : 'warning'}" 
+                                onclick="toggleArchive([${entry.id}], ${!entry.archived})">
+                            ${entry.archived ? 'Restore' : 'Archive'}
+                        </button>
+                        <button class="btn btn-danger" onclick="deleteEntry(${entry.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add checkbox listeners
+            document.querySelectorAll('.checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    if (e.target.checked) {
+                        selectedEntries.add(id);
+                    } else {
+                        selectedEntries.delete(id);
+                    }
+                    document.getElementById(`entry-${id}`).classList.toggle('selected');
+                });
+            });
+        }
+
+        // Edit entry
+        function editEntry(id) {
+            const entry = entries.find(e => e.id === id);
+            if (!entry) return;
+
+            document.getElementById('entryId').value = entry.id;
+            document.getElementById('entryType').value = entry.type;
+            document.getElementById('entryTypeSelect').value = entry.type;
+            document.getElementById('entryDate').value = entry.date;
+            document.getElementById('entryActor').value = entry.actor || entry.title || '';
+            document.getElementById('entryTitle').value = entry.title || '';
+            document.getElementById('entryDescription').value = entry.description || '';
+            document.getElementById('entryCategory').value = entry.category || 'Democracy & Rule of Law';
+            document.getElementById('entrySeverity').value = entry.severity || 'medium';
+            document.getElementById('entrySource').value = entry.source || '';
+            
+            document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Delete entry
+        async function deleteEntry(id) {
+            if (!confirm('Are you sure you want to delete this entry? This cannot be undone.')) {
+                return;
+            }
+
+            const entry = entries.find(e => e.id === id);
+            if (!entry) return;
+
+            const tableName = entry.type === 'political' ? 'political_entries' : 'executive_orders';
+
+            try {
+                await supabaseRequest(`${tableName}?id=eq.${id}`, 'DELETE');
+                showMessage('✅ Entry deleted successfully', 'success');
+                await loadEntries();
+            } catch (error) {
+                console.error('Error deleting entry:', error);
+                showMessage(`❌ Failed to delete entry: ${error.message}`, 'error');
+            }
+        }
+
+        // Toggle archive status
+        async function toggleArchive(entryIds, archived) {
+            try {
+                // Group entries by type
+                const politicalIds = [];
+                const executiveIds = [];
+                
+                entryIds.forEach(id => {
+                    const entry = entries.find(e => e.id === id);
+                    if (entry) {
+                        if (entry.type === 'political') {
+                            politicalIds.push(id);
+                        } else {
+                            executiveIds.push(id);
+                        }
+                    }
+                });
+
+                // Try GitHub Actions first (uses service role key)
+                let success = false;
+                
+                if (politicalIds.length > 0) {
+                    success = await archiveViaGitHub(politicalIds, 'political_entries', archived);
+                    if (!success) {
+                        await archiveWithWorkaround(politicalIds, 'political_entries', archived);
+                    }
+                }
+                
+                if (executiveIds.length > 0) {
+                    success = await archiveViaGitHub(executiveIds, 'executive_orders', archived);
+                    if (!success) {
+                        await archiveWithWorkaround(executiveIds, 'executive_orders', archived);
+                    }
+                }
+
+                showMessage(`✅ ${archived ? 'Archived' : 'Restored'} ${entryIds.length} entries`, 'success');
+                selectedEntries.clear();
+                await loadEntries();
+            } catch (error) {
+                console.error(`Error ${archived ? 'archiving' : 'restoring'} entries:`, error);
+                showMessage(`❌ Failed to ${archived ? 'archive' : 'restore'} entries: ${error.message}`, 'error');
+            }
+        }
+
+        // Save entry (create or update)
+        async function saveEntry(e) {
+            e.preventDefault();
+            
+            const entryType = document.getElementById('entryTypeSelect').value;
+            const tableName = entryType === 'political' ? 'political_entries' : 'executive_orders';
+            
+            const entryData = {
+                date: document.getElementById('entryDate').value,
+                actor: document.getElementById('entryActor').value,
+                title: document.getElementById('entryTitle').value,
+                description: document.getElementById('entryDescription').value,
+                category: document.getElementById('entryCategory').value,
+                severity: document.getElementById('entrySeverity').value,
+                source: document.getElementById('entrySource').value,
+                archived: false
+            };
+
+            try {
+                const entryId = document.getElementById('entryId').value;
+                
+                if (entryId) {
+                    // Update existing
+                    await supabaseRequest(
+                        `${tableName}?id=eq.${entryId}`,
+                        'PATCH',
+                        entryData
+                    );
+                    showMessage('✅ Entry updated successfully', 'success');
+                } else {
+                    // Create new
+                    await supabaseRequest(tableName, 'POST', entryData);
+                    showMessage('✅ Entry created successfully', 'success');
+                }
+
+                document.getElementById('entryForm').reset();
+                document.getElementById('entryId').value = '';
+                await loadEntries();
+            } catch (error) {
+                console.error('Error saving entry:', error);
+                showMessage(`❌ Failed to save entry: ${error.message}`, 'error');
+            }
+        }
+
+        // Authenticate with GitHub
+        async function authenticate() {
+            const tokenValue = document.getElementById('tokenInput').value;
+            if (!tokenValue) {
+                showMessage('Please enter a GitHub token', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Authorization': `Bearer ${tokenValue}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (response.ok) {
+                    currentToken = tokenValue;
+                    document.getElementById('mainContent').classList.add('authenticated');
+                    document.getElementById('authSection').style.display = 'none';
+                    await loadEntries();
+                } else {
+                    throw new Error('Invalid token');
+                }
+            } catch (error) {
+                showMessage('❌ Authentication failed', 'error');
+            }
+        }
+
+        // Submit manual article
+        async function submitManualArticle() {
+            const url = document.getElementById('manualUrl').value.trim();
+            if (!url) {
+                showMessage('Please enter a URL', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('https://api.github.com/repos/joshpollara/TTracker/dispatches', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        event_type: 'manual_article_submission',
+                        client_payload: {
+                            url: url,
+                            submitted_by: 'admin',
+                            submitted_at: new Date().toISOString()
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`GitHub API error: ${response.status}`);
+                }
+
+                showMessage('✅ Article submitted for processing', 'success');
+                document.getElementById('manualUrl').value = '';
+            } catch (error) {
+                console.error('Error submitting article:', error);
+                showMessage(`❌ Failed to submit article: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Authentication
+            document.getElementById('authButton').addEventListener('click', authenticate);
+            document.getElementById('tokenInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') authenticate();
+            });
+
+            // Form submission
+            document.getElementById('entryForm').addEventListener('submit', saveEntry);
+
+            // Cancel edit
+            document.getElementById('cancelEdit').addEventListener('click', () => {
+                document.getElementById('entryForm').reset();
+                document.getElementById('entryId').value = '';
+            });
+
+            // Manual submission
+            document.getElementById('submitManual').addEventListener('click', submitManualArticle);
+
+            // Bulk actions
+            document.getElementById('selectAll').addEventListener('click', () => {
+                entries.forEach(e => selectedEntries.add(e.id));
+                renderEntries();
+            });
+
+            document.getElementById('deselectAll').addEventListener('click', () => {
+                selectedEntries.clear();
+                renderEntries();
+            });
+
+            document.getElementById('refreshEntries').addEventListener('click', loadEntries);
+
+            document.getElementById('archiveSelected').addEventListener('click', () => {
+                if (selectedEntries.size === 0) {
+                    showMessage('No entries selected', 'error');
+                    return;
+                }
+                toggleArchive(Array.from(selectedEntries), true);
+            });
+
+            document.getElementById('restoreSelected').addEventListener('click', () => {
+                if (selectedEntries.size === 0) {
+                    showMessage('No entries selected', 'error');
+                    return;
+                }
+                toggleArchive(Array.from(selectedEntries), false);
+            });
+
+            document.getElementById('deleteSelected').addEventListener('click', async () => {
+                if (selectedEntries.size === 0) {
+                    showMessage('No entries selected', 'error');
+                    return;
+                }
+                
+                if (!confirm(`Are you sure you want to delete ${selectedEntries.size} entries? This cannot be undone.`)) {
+                    return;
+                }
+
+                try {
+                    for (const id of selectedEntries) {
+                        const entry = entries.find(e => e.id === id);
+                        if (entry) {
+                            const tableName = entry.type === 'political' ? 'political_entries' : 'executive_orders';
+                            await supabaseRequest(`${tableName}?id=eq.${id}`, 'DELETE');
+                        }
+                    }
+                    
+                    showMessage(`✅ Deleted ${selectedEntries.size} entries`, 'success');
+                    selectedEntries.clear();
+                    await loadEntries();
+                } catch (error) {
+                    console.error('Error deleting entries:', error);
+                    showMessage(`❌ Failed to delete entries: ${error.message}`, 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
