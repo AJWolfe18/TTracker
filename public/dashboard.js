@@ -1,14 +1,91 @@
-// TrumpyTracker Dashboard - Supabase Edition
-// Updated to pull data directly from PostgreSQL database
+// TrumpyTracker Dashboard - Supabase Edition with Pagination & Caching
+// Optimized for performance and cost reduction
 
 const { useState, useEffect, useCallback, useMemo } = React;
 
-// Supabase Configuration
+// Configuration
 const SUPABASE_URL = 'https://osjbulmltfpcoldydexg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
 
-// Helper function for Supabase API calls
-const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
+// Pagination settings
+const ITEMS_PER_PAGE = 20;
+const EO_ITEMS_PER_PAGE = 25;
+
+// Cache settings - 24 hour cache since data updates once daily
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_KEY_PREFIX = 'tt_cache_';
+const FORCE_REFRESH_HOUR = 12; // Force refresh at noon each day
+
+// Cache helper functions
+const getCachedData = (key) => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY_PREFIX + key);
+    if (!cached) return null;
+    
+    const { data, timestamp } = JSON.parse(cached);
+    const age = Date.now() - timestamp;
+    
+    // Check if cache is expired
+    if (age > CACHE_DURATION) {
+      localStorage.removeItem(CACHE_KEY_PREFIX + key);
+      return null;
+    }
+    
+    // Also expire if we've passed the daily refresh time
+    const lastRefresh = new Date(timestamp);
+    const now = new Date();
+    if (now.getDate() !== lastRefresh.getDate() && now.getHours() >= FORCE_REFRESH_HOUR) {
+      localStorage.removeItem(CACHE_KEY_PREFIX + key);
+      return null;
+    }
+    
+    console.log(`Using cached data for ${key} (age: ${Math.round(age/1000/60)} minutes)`);
+    return data;
+  } catch (error) {
+    console.error('Cache read error:', error);
+    return null;
+  }
+};
+
+const setCachedData = (key, data) => {
+  try {
+    const cacheData = {
+      data,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify(cacheData));
+    console.log(`Cached data for ${key}`);
+  } catch (error) {
+    console.error('Cache write error:', error);
+    // If localStorage is full, clear old cache entries
+    if (error.name === 'QuotaExceededError') {
+      clearOldCache();
+    }
+  }
+};
+
+const clearOldCache = () => {
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith(CACHE_KEY_PREFIX)) {
+      localStorage.removeItem(key);
+    }
+  });
+};
+
+const clearCache = () => {
+  clearOldCache();
+  window.location.reload();
+};
+
+// Supabase request helper with caching
+const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache = true) => {
+  // Try cache first for GET requests
+  if (method === 'GET' && useCache) {
+    const cached = getCachedData(endpoint);
+    if (cached) return cached;
+  }
+  
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
   const options = {
     method,
@@ -33,7 +110,14 @@ const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
 
   const contentType = response.headers.get('content-type');
   if (contentType && contentType.includes('application/json')) {
-    return await response.json();
+    const data = await response.json();
+    
+    // Cache successful GET requests
+    if (method === 'GET' && useCache) {
+      setCachedData(endpoint, data);
+    }
+    
+    return data;
   }
   
   return { success: true };
@@ -62,47 +146,79 @@ const ConstructionBanner = () => (
   </div>
 );
 
-// Main Dashboard Component with Supabase Integration
+// Main Dashboard Component
 const TrumpyTrackerDashboard = () => {
+  // State management
   const [activeTab, setActiveTab] = useState('political');
-  const [politicalEntries, setPoliticalEntries] = useState([]);
+  const [allPoliticalEntries, setAllPoliticalEntries] = useState([]);
+  const [displayedPoliticalEntries, setDisplayedPoliticalEntries] = useState([]);
   const [executiveOrders, setExecutiveOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({});
+  const [activeFilter, setActiveFilter] = useState(null);
+  
+  // Pagination state
+  const [politicalPage, setPoliticalPage] = useState(1);
+  const [eoPage, setEoPage] = useState(1);
+  const [totalPoliticalPages, setTotalPoliticalPages] = useState(1);
+  const [totalEoPages, setTotalEoPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // Load political entries from Supabase
-  const loadPoliticalEntries = useCallback(async () => {
+  // Load political entries with pagination
+  const loadPoliticalEntries = useCallback(async (page = 1, append = false) => {
     try {
-      // Default to showing things about Trump (actor filter)
-      const query = 'political_entries?archived=neq.true&order=date.desc,added_at.desc&limit=50';
+      setLoadingMore(true);
+      const offset = (page - 1) * ITEMS_PER_PAGE;
+      
+      // First, get total count (cached separately)
+      const countQuery = 'political_entries?select=id&archived=neq.true';
+      const countData = await supabaseRequest(countQuery);
+      const totalCount = countData ? countData.length : 0;
+      setTotalPoliticalPages(Math.ceil(totalCount / ITEMS_PER_PAGE));
+      
+      // Then get paginated data
+      const query = `political_entries?archived=neq.true&order=date.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
       const data = await supabaseRequest(query);
       
-      // Filter for Trump-related entries by default
-      const trumpEntries = data.filter(entry => 
-        entry.actor && entry.actor.toLowerCase().includes('trump')
-      );
-      
-      setPoliticalEntries(trumpEntries.length > 0 ? trumpEntries : data);
+      if (append) {
+        setAllPoliticalEntries(prev => [...prev, ...(data || [])]);
+      } else {
+        setAllPoliticalEntries(data || []);
+      }
+      setDisplayedPoliticalEntries(data || []);
+      setPoliticalPage(page);
     } catch (error) {
       console.error('Error loading political entries:', error);
       setError(`Failed to load political entries: ${error.message}`);
+    } finally {
+      setLoadingMore(false);
     }
   }, []);
 
-  // Load executive orders from Supabase
-  const loadExecutiveOrders = useCallback(async () => {
+  // Load executive orders with pagination
+  const loadExecutiveOrders = useCallback(async (page = 1) => {
     try {
-      const query = 'executive_orders?order=date.desc,order_number.desc&limit=25';
+      const offset = (page - 1) * EO_ITEMS_PER_PAGE;
+      
+      // Get total count
+      const countQuery = 'executive_orders?select=id';
+      const countData = await supabaseRequest(countQuery);
+      const totalCount = countData ? countData.length : 0;
+      setTotalEoPages(Math.ceil(totalCount / EO_ITEMS_PER_PAGE));
+      
+      // Get paginated data
+      const query = `executive_orders?order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
       const data = await supabaseRequest(query);
       setExecutiveOrders(data || []);
+      setEoPage(page);
     } catch (error) {
       console.error('Error loading executive orders:', error);
       setError(`Failed to load executive orders: ${error.message}`);
     }
   }, []);
 
-  // Load dashboard statistics
+  // Load dashboard statistics (heavily cached)
   const loadStats = useCallback(async () => {
     try {
       const statsData = await supabaseRequest('dashboard_stats');
@@ -111,19 +227,23 @@ const TrumpyTrackerDashboard = () => {
       }
     } catch (error) {
       console.error('Error loading stats:', error);
-      // Stats are nice-to-have, don't set error state for this
     }
   }, []);
 
   // Load all data
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     
+    // Clear cache if forced
+    if (forceRefresh) {
+      clearOldCache();
+    }
+    
     try {
       await Promise.all([
-        loadPoliticalEntries(),
-        loadExecutiveOrders(),
+        loadPoliticalEntries(1),
+        loadExecutiveOrders(1),
         loadStats()
       ]);
     } catch (error) {
@@ -136,7 +256,80 @@ const TrumpyTrackerDashboard = () => {
 
   useEffect(() => {
     loadAllData();
-  }, [loadAllData]);
+  }, []);
+
+  // Memoized filter counts - prevents recalculation on every render
+  const filterCounts = useMemo(() => {
+    if (!allPoliticalEntries) return { high: 0, medium: 0, low: 0, ice: 0, trump: 0 };
+    
+    return {
+      high: allPoliticalEntries.filter(e => 
+        e.severity?.toLowerCase() === 'high' || e.severity?.toLowerCase() === 'critical'
+      ).length,
+      medium: allPoliticalEntries.filter(e => 
+        e.severity?.toLowerCase() === 'medium'
+      ).length,
+      low: allPoliticalEntries.filter(e => 
+        e.severity?.toLowerCase() === 'low'
+      ).length,
+      ice: allPoliticalEntries.filter(e => 
+        e.title?.toLowerCase().includes('ice') || 
+        e.description?.toLowerCase().includes('ice') ||
+        e.description?.toLowerCase().includes('immigration')
+      ).length,
+      trump: allPoliticalEntries.filter(e => 
+        e.actor?.toLowerCase().includes('trump')
+      ).length
+    };
+  }, [allPoliticalEntries]);
+
+  // Filter function
+  const applyFilter = (filterType) => {
+    if (activeFilter === filterType) {
+      setActiveFilter(null);
+      setDisplayedPoliticalEntries(allPoliticalEntries);
+    } else {
+      setActiveFilter(filterType);
+      let filtered = [...allPoliticalEntries];
+      
+      switch(filterType) {
+        case 'high':
+          filtered = allPoliticalEntries.filter(entry => 
+            entry.severity?.toLowerCase() === 'high' || entry.severity?.toLowerCase() === 'critical'
+          );
+          break;
+        case 'medium':
+          filtered = allPoliticalEntries.filter(entry => 
+            entry.severity?.toLowerCase() === 'medium'
+          );
+          break;
+        case 'low':
+          filtered = allPoliticalEntries.filter(entry => 
+            entry.severity?.toLowerCase() === 'low'
+          );
+          break;
+        case 'ice':
+          filtered = allPoliticalEntries.filter(entry => 
+            entry.title?.toLowerCase().includes('ice') || 
+            entry.description?.toLowerCase().includes('ice') ||
+            entry.description?.toLowerCase().includes('immigration') ||
+            entry.category?.toLowerCase().includes('immigration')
+          );
+          break;
+        case 'trump':
+          filtered = allPoliticalEntries.filter(entry => 
+            entry.actor?.toLowerCase().includes('trump') ||
+            entry.title?.toLowerCase().includes('trump') ||
+            entry.description?.toLowerCase().includes('trump')
+          );
+          break;
+        default:
+          filtered = allPoliticalEntries;
+      }
+      
+      setDisplayedPoliticalEntries(filtered);
+    }
+  };
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -168,24 +361,152 @@ const TrumpyTrackerDashboard = () => {
     }
   };
 
-  // Stats component
+  // Pagination Component
+  const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
+    if (totalPages <= 1) return null;
+    
+    return (
+      <div className="flex justify-center items-center gap-2 mt-8">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded ${
+            currentPage === 1 
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+              : 'bg-gray-800 text-white hover:bg-gray-700'
+          }`}
+        >
+          First
+        </button>
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded ${
+            currentPage === 1 
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+              : 'bg-gray-800 text-white hover:bg-gray-700'
+          }`}
+        >
+          Previous
+        </button>
+        <span className="text-gray-400 px-4">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded ${
+            currentPage === totalPages 
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+              : 'bg-gray-800 text-white hover:bg-gray-700'
+          }`}
+        >
+          Next
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded ${
+            currentPage === totalPages 
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+              : 'bg-gray-800 text-white hover:bg-gray-700'
+          }`}
+        >
+          Last
+        </button>
+      </div>
+    );
+  };
+
+  // Stats component with clickable filters
   const StatsSection = ({ stats }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-        <div className="text-2xl font-bold text-white">{stats.total_entries || 0}</div>
-        <div className="text-gray-400 text-sm">Total Political Entries</div>
+    <div className="space-y-4 mb-8">
+      {/* Main stats row - responsive grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
+          <div className="text-2xl font-bold text-white">{stats.total_entries || 0}</div>
+          <div className="text-gray-400 text-sm">Total Political Entries</div>
+        </div>
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
+          <div className="text-2xl font-bold text-red-400">{stats.high_severity_count || 0}</div>
+          <div className="text-gray-400 text-sm">High Severity</div>
+        </div>
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
+          <div className="text-2xl font-bold text-blue-400">{stats.total_executive_orders || 0}</div>
+          <div className="text-gray-400 text-sm">Executive Orders</div>
+        </div>
       </div>
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-        <div className="text-2xl font-bold text-red-400">{stats.high_severity_count || 0}</div>
-        <div className="text-gray-400 text-sm">High Severity</div>
-      </div>
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-        <div className="text-2xl font-bold text-blue-400">{stats.total_executive_orders || 0}</div>
-        <div className="text-gray-400 text-sm">Executive Orders</div>
-      </div>
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-        <div className="text-2xl font-bold text-green-400">{formatDate(stats.latest_entry_date)}</div>
-        <div className="text-gray-400 text-sm">Latest Entry</div>
+      
+      {/* Filter buttons - only show on political tab */}
+      {activeTab === 'political' && (
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button
+            onClick={() => applyFilter('high')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeFilter === 'high'
+                ? 'bg-red-600 text-white'
+                : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+            }`}
+            aria-label={`Filter by high severity (${filterCounts.high} items)`}
+          >
+            High ({filterCounts.high})
+          </button>
+          <button
+            onClick={() => applyFilter('medium')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeFilter === 'medium'
+                ? 'bg-yellow-600 text-white'
+                : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+            }`}
+            aria-label={`Filter by medium severity (${filterCounts.medium} items)`}
+          >
+            Medium ({filterCounts.medium})
+          </button>
+          <button
+            onClick={() => applyFilter('low')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeFilter === 'low'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+            }`}
+            aria-label={`Filter by low severity (${filterCounts.low} items)`}
+          >
+            Low ({filterCounts.low})
+          </button>
+          <div className="border-l border-gray-600 mx-2 hidden sm:block"></div>
+          <button
+            onClick={() => applyFilter('ice')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeFilter === 'ice'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+            }`}
+            aria-label={`Filter by ICE related (${filterCounts.ice} items)`}
+          >
+            ICE ({filterCounts.ice})
+          </button>
+          <button
+            onClick={() => applyFilter('trump')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeFilter === 'trump'
+                ? 'bg-orange-600 text-white'
+                : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50 border border-gray-700'
+            }`}
+            aria-label={`Filter by Trump related (${filterCounts.trump} items)`}
+          >
+            Trump ({filterCounts.trump})
+          </button>
+        </div>
+      )}
+      
+      {/* Cache indicator */}
+      <div className="text-center">
+        <button
+          onClick={() => loadAllData(true)}
+          className="text-xs text-gray-500 hover:text-gray-400"
+        >
+          🔄 Refresh Data (Last updated: {new Date().toLocaleDateString()})
+        </button>
       </div>
     </div>
   );
@@ -280,6 +601,7 @@ const TrumpyTrackerDashboard = () => {
     </div>
   );
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white flex items-center justify-center">
@@ -291,7 +613,8 @@ const TrumpyTrackerDashboard = () => {
     );
   }
 
-  if (error) {
+  // Error state with partial data display
+  if (error && displayedPoliticalEntries.length === 0 && executiveOrders.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -299,7 +622,7 @@ const TrumpyTrackerDashboard = () => {
           <h2 className="text-2xl font-bold mb-4">Connection Error</h2>
           <p className="text-gray-400 mb-6">{error}</p>
           <button 
-            onClick={loadAllData}
+            onClick={() => loadAllData(true)}
             className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-medium transition-colors"
           >
             Retry
@@ -355,21 +678,37 @@ const TrumpyTrackerDashboard = () => {
           </div>
         </header>
 
-        {/* Statistics Section */}
+        {/* Error banner if there's an error but we have cached data */}
+        {error && (displayedPoliticalEntries.length > 0 || executiveOrders.length > 0) && (
+          <div className="bg-yellow-600/20 border border-yellow-600 rounded-lg p-3 mb-4">
+            <p className="text-yellow-400 text-sm">
+              ⚠️ Connection issue - showing cached data. 
+              <button onClick={() => loadAllData(true)} className="underline ml-2">
+                Try refreshing
+              </button>
+            </p>
+          </div>
+        )}
+
+        {/* Statistics Section with Filter Buttons */}
         <StatsSection stats={stats} />
 
         {/* Tab Navigation */}
         <div className="flex justify-center mb-8">
           <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700">
             <button
-              onClick={() => setActiveTab('political')}
+              onClick={() => {
+                setActiveTab('political');
+                setActiveFilter(null);
+                setDisplayedPoliticalEntries(allPoliticalEntries);
+              }}
               className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
                 activeTab === 'political'
                   ? 'bg-orange-600 text-white shadow-lg'
                   : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
               }`}
             >
-              Political Entries ({politicalEntries.length})
+              Political Entries
             </button>
             <button
               onClick={() => setActiveTab('executive')}
@@ -379,7 +718,7 @@ const TrumpyTrackerDashboard = () => {
                   : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
               }`}
             >
-              Executive Orders ({executiveOrders.length})
+              Executive Orders
             </button>
           </div>
         </div>
@@ -390,18 +729,52 @@ const TrumpyTrackerDashboard = () => {
             <div>
               <h2 className="text-2xl font-bold mb-6 text-center">
                 Recent Political Accountability Entries
+                {activeFilter && (
+                  <span className="text-lg font-normal text-gray-400 ml-2">
+                    (Filtered: {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)})
+                  </span>
+                )}
               </h2>
-              {politicalEntries.length === 0 ? (
+              
+              {loadingMore && (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                </div>
+              )}
+              
+              {displayedPoliticalEntries.length === 0 ? (
                 <div className="text-center text-gray-400 py-12">
-                  <p className="text-xl mb-2">No political entries found</p>
-                  <p>Check back later for updates</p>
+                  <p className="text-xl mb-2">
+                    {activeFilter ? 'No entries match this filter' : 'No political entries found'}
+                  </p>
+                  {activeFilter && (
+                    <button
+                      onClick={() => {
+                        setActiveFilter(null);
+                        setDisplayedPoliticalEntries(allPoliticalEntries);
+                      }}
+                      className="mt-4 text-blue-400 hover:text-blue-300"
+                    >
+                      Clear filter
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {politicalEntries.map(entry => (
-                    <PoliticalEntryCard key={entry.id} entry={entry} />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {displayedPoliticalEntries.map(entry => (
+                      <PoliticalEntryCard key={entry.id} entry={entry} />
+                    ))}
+                  </div>
+                  
+                  {!activeFilter && (
+                    <PaginationControls
+                      currentPage={politicalPage}
+                      totalPages={totalPoliticalPages}
+                      onPageChange={(page) => loadPoliticalEntries(page)}
+                    />
+                  )}
+                </>
               )}
             </div>
           )}
@@ -411,17 +784,32 @@ const TrumpyTrackerDashboard = () => {
               <h2 className="text-2xl font-bold mb-6 text-center">
                 Recent Executive Orders
               </h2>
+              
+              {loadingMore && (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+                </div>
+              )}
+              
               {executiveOrders.length === 0 ? (
                 <div className="text-center text-gray-400 py-12">
                   <p className="text-xl mb-2">No executive orders found</p>
                   <p>Check back later for updates</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {executiveOrders.map(order => (
-                    <ExecutiveOrderCard key={order.id} order={order} />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {executiveOrders.map(order => (
+                      <ExecutiveOrderCard key={order.id} order={order} />
+                    ))}
+                  </div>
+                  
+                  <PaginationControls
+                    currentPage={eoPage}
+                    totalPages={totalEoPages}
+                    onPageChange={(page) => loadExecutiveOrders(page)}
+                  />
+                </>
               )}
             </div>
           )}
@@ -436,7 +824,7 @@ const TrumpyTrackerDashboard = () => {
             </a>
           </p>
           <p className="text-gray-500 text-xs mt-2">
-            Data updated in real-time from our database
+            Data cached for performance - Updates daily at noon
           </p>
         </footer>
       </div>
