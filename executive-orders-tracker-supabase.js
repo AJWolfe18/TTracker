@@ -2,12 +2,21 @@
 // Fetches and stores executive orders in Supabase
 // FIXED VERSION - Only collects actual Executive Orders, not all presidential documents
 // TEMPORARY: Forced full import mode enabled (Aug 15, 2025) - see line 34
+// HYBRID: Uses Federal Register for data + OpenAI for summaries
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from './supabase-config-node.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
+
+// Check if OpenAI is available
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_KEY) {
+    console.log('⚠️  WARNING: No OPENAI_API_KEY found - summaries will be basic');
+} else {
+    console.log('✅ OpenAI API key found - will generate AI summaries');
+}
 
 // Generate unique ID for executive orders
 function generateOrderId() {
@@ -23,6 +32,99 @@ async function orderExists(orderNumber) {
     } catch (error) {
         console.error('Error checking for existing order:', error.message);
         return false;
+    }
+}
+
+// Generate AI analysis using OpenAI (summary + all metadata)
+async function generateAIAnalysis(title, orderNumber, abstract = '') {
+    if (!OPENAI_KEY) {
+        // Fallback if no OpenAI key - return basic defaults
+        return {
+            summary: `Executive Order ${orderNumber}: ${title}`,
+            severity_rating: 'medium',
+            policy_direction: 'modify',
+            implementation_timeline: 'ongoing',
+            impact_areas: [],
+            full_text_available: true
+        };
+    }
+    
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENAI_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a political analyst. Analyze executive orders and provide structured JSON output.'
+                    },
+                    {
+                        role: 'user',
+                        content: `Analyze Executive Order ${orderNumber}: "${title}"${abstract ? `. Abstract: ${abstract}` : ''}.
+
+Provide a JSON response with these exact fields:
+{
+  "summary": "2-3 sentence summary of what this order does and its key impacts",
+  "severity_rating": "low|medium|high based on scope and impact",
+  "policy_direction": "expand|restrict|modify|create|eliminate",
+  "implementation_timeline": "immediate|30_days|90_days|ongoing",
+  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"],
+  "full_text_available": true
+}
+
+Respond ONLY with valid JSON.`
+                    }
+                ],
+                max_tokens: 300,
+                temperature: 0.3
+            }),
+        });
+
+        if (!response.ok) {
+            console.log(`   ⚠️ OpenAI API error: ${response.status}`);
+            return {
+                summary: `Executive Order ${orderNumber}: ${title}`,
+                severity_rating: 'medium',
+                policy_direction: 'modify',
+                implementation_timeline: 'ongoing',
+                impact_areas: [],
+                full_text_available: true
+            };
+        }
+
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content;
+        
+        try {
+            const analysis = JSON.parse(content);
+            return analysis;
+        } catch (parseError) {
+            console.log(`   ⚠️ Could not parse AI response as JSON`);
+            return {
+                summary: content || `Executive Order ${orderNumber}: ${title}`,
+                severity_rating: 'medium',
+                policy_direction: 'modify',
+                implementation_timeline: 'ongoing',
+                impact_areas: [],
+                full_text_available: true
+            };
+        }
+        
+    } catch (error) {
+        console.log(`   ⚠️ Error generating AI analysis: ${error.message}`);
+        return {
+            summary: `Executive Order ${orderNumber}: ${title}`,
+            severity_rating: 'medium',
+            policy_direction: 'modify',
+            implementation_timeline: 'ongoing',
+            impact_areas: [],
+            full_text_available: true
+        };
     }
 }
 
@@ -139,12 +241,19 @@ async function fetchFromFederalRegister() {
                     continue;
                 }
                 
+                // Generate AI analysis for all missing fields
+                let aiAnalysis = null;
+                if (!item.abstract || item.abstract.trim() === '') {
+                    console.log(`   🤖 Generating AI analysis for EO ${orderNumber}...`);
+                    aiAnalysis = await generateAIAnalysis(item.title, orderNumber, item.abstract);
+                }
+                
                 const order = {
                     id: generateOrderId(),
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
                     date: item.publication_date || today,
-                    summary: item.abstract || item.description || 'No summary available',
+                    summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`),
                     category: determineCategory(item.title, item.abstract),
                     agencies_affected: extractAgencies(item),
                     source_url: item.html_url || `https://www.federalregister.gov/documents/${item.document_number}`,
@@ -156,7 +265,16 @@ async function fetchFromFederalRegister() {
                     verified: true,
                     added_at: new Date().toISOString(),
                     impact_score: calculateImpactScore(item),
-                    implementation_status: 'issued'
+                    implementation_status: 'issued',
+                    // New fields from AI analysis
+                    severity_rating: aiAnalysis ? aiAnalysis.severity_rating : 'medium',
+                    policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
+                    implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
+                    impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
+                    full_text_available: aiAnalysis ? aiAnalysis.full_text_available : true,
+                    type: 'executive_order',
+                    legal_challenges: [],
+                    related_orders: []
                 };
                 
                 orders.push(order);
