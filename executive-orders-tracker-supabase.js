@@ -29,8 +29,28 @@ async function orderExists(orderNumber) {
 async function fetchFromFederalRegister() {
     console.log('📊 Fetching from Federal Register API (Executive Orders ONLY)...');
     
-    const startDate = '2025-01-20'; // Inauguration date
+    // Check if this is initial import or daily update
     const today = new Date().toISOString().split('T')[0];
+    
+    // Check if we have any existing orders
+    let startDate;
+    try {
+        const existing = await supabaseRequest('executive_orders?select=id&limit=1');
+        if (!existing || existing.length === 0) {
+            // Initial import - get everything since inauguration
+            startDate = '2025-01-20';
+            console.log('   🚀 INITIAL IMPORT MODE - fetching all EOs since inauguration');
+        } else {
+            // Daily update - only last 3 days
+            const threeDaysAgo = new Date(Date.now() - 3*24*60*60*1000).toISOString().split('T')[0];
+            startDate = threeDaysAgo;
+            console.log('   📅 DAILY UPDATE MODE - fetching last 3 days only');
+        }
+    } catch (error) {
+        // If check fails, default to full import
+        startDate = '2025-01-20';
+        console.log('   ⚠️ Could not check existing records, doing full import');
+    }
     
     // Using proper endpoint for Executive Orders only
     // presidential_document_type_id=2 specifically means Executive Orders
@@ -43,49 +63,77 @@ async function fetchFromFederalRegister() {
         const response = await fetch(url);
         
         if (!response.ok) {
-            throw new Error(`Federal Register API error: ${response.status}`);
+            const errorText = await response.text();
+            throw new Error(`Federal Register API error: ${response.status} - ${errorText}`);
         }
         
         const data = await response.json();
+        
+        // Validate API response structure
+        if (!data || typeof data !== 'object') {
+            throw new Error('Invalid API response: not a valid JSON object');
+        }
+        
+        if (!Array.isArray(data.results)) {
+            throw new Error(`Invalid API response: results is not an array (got ${typeof data.results})`);
+        }
         const orders = [];
         let skippedNonEO = 0;
         
         if (data.results && data.results.length > 0) {
-            console.log(`   📋 Found ${data.results.length} presidential documents`);
-            console.log(`   🔍 Filtering for Executive Orders only...\n`);
+            console.log(`   📋 Found ${data.results.length} Executive Orders from Federal Register`);
+            console.log(`   🔍 Processing and extracting order numbers...\n`);
             
             for (const item of data.results) {
-                // CRITICAL FIX: Only process items that are actually Executive Orders
-                // Must have "Executive Order" in the title AND have an order number
-                const isExecutiveOrder = item.title && 
-                    (item.title.includes('Executive Order') || 
-                     item.subtype === 'Executive Order' ||
-                     item.presidential_document_type === 'Executive Order');
+                // DEBUG: Log what we actually get from the API
+                console.log(`   🔍 DEBUG: executive_order_number = "${item.executive_order_number}" (type: ${typeof item.executive_order_number})`);
+                console.log(`   🔍 DEBUG: title = "${item.title?.substring(0, 80)}..."`);
+                console.log(`   🔍 DEBUG: document_number = "${item.document_number}"`);
                 
-                if (!isExecutiveOrder) {
-                    skippedNonEO++;
-                    console.log(`   ⏭️ Skipping non-EO: ${item.title?.substring(0, 50)}...`);
-                    continue;
+                // Extract EO number - MUST be actual Executive Order number (14XXX)
+                let orderNumber = null;
+                
+                // 1. Try the dedicated executive_order_number field (most reliable)
+                if (item.executive_order_number && item.executive_order_number !== "") {
+                    orderNumber = item.executive_order_number.toString();
+                    console.log(`   🎯 Using API executive_order_number: ${orderNumber}`);
+                } 
+                // 2. Try extracting from title "Executive Order 14334" (5-digit numbers only)
+                else if (item.title) {
+                    const eoMatch = item.title.match(/Executive Order (1\d{4})/i); // Must start with 1, be 5 digits
+                    if (eoMatch) {
+                        orderNumber = eoMatch[1];
+                        console.log(`   📝 Extracted from title: ${orderNumber}`);
+                    } else {
+                        console.log(`   ⚠️ Could not extract EO number from title: "${item.title}"`);
+                    }
+                } else {
+                    console.log(`   ⚠️ No title available for extraction`);
                 }
                 
-                // Extract EO number from title - must have a valid number
-                const eoMatch = item.title?.match(/Executive Order (\d+)/i) || 
-                               item.executive_order_number ||
-                               item.title?.match(/(\d{5})/);
+                console.log(`   🔍 Final orderNumber: "${orderNumber}"\n`);
                 
-                const orderNumber = eoMatch ? (eoMatch[1] || eoMatch[0]) : null;
+                // Validate the extracted number is in valid EO range (14000-15000)
+                if (orderNumber) {
+                    const orderNum = parseInt(orderNumber);
+                    if (isNaN(orderNum) || orderNum < 14000 || orderNum > 15000) {
+                        console.log(`   ⚠️ Invalid EO number ${orderNumber} - not in expected range (14000-15000)`);
+                        orderNumber = null; // Reset to null so it gets skipped
+                    }
+                }
                 
-                // CRITICAL: Skip if no order number found
+                // Skip if we absolutely cannot find a VALID EO number
                 if (!orderNumber) {
+                    console.log(`   ⚠️ No valid EO number found: ${item.title?.substring(0, 50)}...`);
+                    console.log(`      Document: ${item.document_number}, executive_order_number: ${item.executive_order_number}`);
                     skippedNonEO++;
-                    console.log(`   ⚠️ Skipping - no order number: ${item.title?.substring(0, 50)}...`);
                     continue;
                 }
                 
-                // Validate order number is in expected range (14900-15200 for 2025)
+                // Validate order number is a valid number
                 const orderNum = parseInt(orderNumber);
-                if (isNaN(orderNum) || orderNum < 14900 || orderNum > 15200) {
-                    console.log(`   ⚠️ Suspicious order number ${orderNumber} - skipping`);
+                if (isNaN(orderNum)) {
+                    console.log(`   ⚠️ Invalid order number ${orderNumber} - skipping`);
                     skippedNonEO++;
                     continue;
                 }
@@ -117,13 +165,18 @@ async function fetchFromFederalRegister() {
                 };
                 
                 orders.push(order);
-                console.log(`   ✅ Valid EO ${orderNumber}: ${order.title.substring(0, 50)}...`);
+                console.log(`   ✅ Found EO ${orderNumber}: ${order.title.substring(0, 50)}...`);
+                console.log(`      Source: ${item.document_number} | ${item.html_url}`);
             }
             
             console.log(`\n   📊 Results:`);
-            console.log(`      Processed: ${data.results.length} documents`);
-            console.log(`      Valid EOs: ${orders.length}`);
-            console.log(`      Skipped: ${skippedNonEO} (not Executive Orders)`);
+            console.log(`      Federal Register documents: ${data.results.length}`);
+            console.log(`      New EOs to add: ${orders.length}`);
+            console.log(`      Skipped: ${skippedNonEO} (no order number found)`);
+            if (orders.length > 0) {
+            const orderNums = orders.map(o => parseInt(o.order_number)).sort((a,b) => a-b);
+            console.log(`      Order numbers found: ${orderNums.join(', ')}`);
+        }
             
         } else {
             console.log('   ℹ️ No documents found in the specified date range');
@@ -132,8 +185,10 @@ async function fetchFromFederalRegister() {
         return orders;
         
     } catch (error) {
-        console.error('❌ Error fetching from Federal Register:', error.message);
-        return [];
+        console.error('❌ FATAL ERROR fetching from Federal Register:', error.message);
+        console.error('   URL:', url);
+        console.error('   This is a blocking error - manual investigation required');
+        throw error; // Re-throw to stop execution
     }
 }
 
@@ -182,7 +237,7 @@ function calculateImpactScore(item) {
     return Math.min(score, 100); // Cap at 100
 }
 
-// Save to Supabase
+// Save to Supabase with error handling
 async function saveToSupabase(orders) {
     if (!orders || orders.length === 0) {
         console.log('\n📭 No new executive orders to save');
@@ -192,8 +247,21 @@ async function saveToSupabase(orders) {
     console.log(`\n💾 Saving ${orders.length} new executive orders to Supabase...`);
     
     try {
+        // Validate all orders have required fields before attempting save
+        for (const order of orders) {
+            if (!order.order_number || !order.title || !order.date) {
+                throw new Error(`Invalid order data: missing required fields in order ${order.order_number || 'unknown'}`);
+            }
+        }
+        
         // Insert all orders at once
-        await supabaseRequest('executive_orders', 'POST', orders);
+        const result = await supabaseRequest('executive_orders', 'POST', orders);
+        
+        // Validate the insert succeeded
+        if (!result) {
+            throw new Error('Supabase insert returned null/undefined result');
+        }
+        
         console.log(`✅ Successfully saved ${orders.length} executive orders`);
         
         // Summary
@@ -202,13 +270,16 @@ async function saveToSupabase(orders) {
         console.log(`   Total new orders: ${orders.length}`);
         console.log(`   High impact orders: ${highImpact}`);
         if (orders.length > 0) {
-            console.log(`   Date range: ${orders[orders.length-1]?.date} to ${orders[0]?.date}`);
-            console.log(`   Order numbers: ${orders.map(o => o.order_number).join(', ')}`);
+            const orderNums = orders.map(o => parseInt(o.order_number)).sort((a,b) => a-b);
+            console.log(`   Order number range: ${orderNums[0]} to ${orderNums[orderNums.length-1]}`);
+            console.log(`   Order numbers: ${orderNums.join(', ')}`);
         }
         
     } catch (error) {
-        console.error('❌ Error saving to Supabase:', error.message);
-        throw error;
+        console.error('❌ FATAL ERROR saving to Supabase:', error.message);
+        console.error('   This is a blocking error - manual investigation required');
+        console.error('   Orders attempted:', orders.map(o => o.order_number).join(', '));
+        throw error; // Re-throw to stop execution
     }
 }
 
