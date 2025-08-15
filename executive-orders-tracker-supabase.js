@@ -52,9 +52,24 @@ async function fetchFromFederalRegister() {
         console.log('   ⚠️ Could not check existing records, doing full import');
     }
     
-    // Using proper endpoint for Executive Orders only
-    // presidential_document_type_id=2 specifically means Executive Orders
-    const url = `https://www.federalregister.gov/api/v1/documents.json?conditions[type]=PRESDOCU&conditions[presidential_document_type_id]=2&conditions[publication_date][gte]=${startDate}&conditions[publication_date][lte]=${today}&per_page=200&order=newest`;
+    // Using CORRECT endpoint - MUST specify fields[] to get executive_order_number!
+    const url = 'https://www.federalregister.gov/api/v1/documents.json?' +
+        'conditions[type][]=PRESDOCU&' +
+        'conditions[presidential_document_type]=executive_order&' +
+        `conditions[publication_date][gte]=${startDate}&` +
+        `conditions[publication_date][lte]=${today}&` +
+        'fields[]=executive_order_number&' +
+        'fields[]=document_number&' +
+        'fields[]=title&' +
+        'fields[]=publication_date&' +
+        'fields[]=signing_date&' +
+        'fields[]=president&' +
+        'fields[]=html_url&' +
+        'fields[]=pdf_url&' +
+        'fields[]=abstract&' +
+        'fields[]=citation&' +
+        'per_page=200&' +
+        'order=executive_order';
     
     console.log(`   Searching from ${startDate} to ${today}`);
     console.log(`   Filter: Executive Orders ONLY (type_id=2)\n`);
@@ -85,55 +100,19 @@ async function fetchFromFederalRegister() {
             console.log(`   🔍 Processing and extracting order numbers...\n`);
             
             for (const item of data.results) {
-                // DEBUG: Log what we actually get from the API
-                console.log(`   🔍 DEBUG: executive_order_number = "${item.executive_order_number}" (type: ${typeof item.executive_order_number})`);
-                console.log(`   🔍 DEBUG: title = "${item.title?.substring(0, 80)}..."`);
-                console.log(`   🔍 DEBUG: document_number = "${item.document_number}"`);
+                // Since we explicitly request executive_order_number field, it should be there
+                const orderNumber = item.executive_order_number;
                 
-                // Extract EO number - MUST be actual Executive Order number (14XXX)
-                let orderNumber = null;
-                
-                // 1. Try the dedicated executive_order_number field (most reliable)
-                if (item.executive_order_number && item.executive_order_number !== "") {
-                    orderNumber = item.executive_order_number.toString();
-                    console.log(`   🎯 Using API executive_order_number: ${orderNumber}`);
-                } 
-                // 2. Try extracting from title "Executive Order 14334" (5-digit numbers only)
-                else if (item.title) {
-                    const eoMatch = item.title.match(/Executive Order (1\d{4})/i); // Must start with 1, be 5 digits
-                    if (eoMatch) {
-                        orderNumber = eoMatch[1];
-                        console.log(`   📝 Extracted from title: ${orderNumber}`);
-                    } else {
-                        console.log(`   ⚠️ Could not extract EO number from title: "${item.title}"`);
-                    }
-                } else {
-                    console.log(`   ⚠️ No title available for extraction`);
-                }
-                
-                console.log(`   🔍 Final orderNumber: "${orderNumber}"\n`);
-                
-                // Validate the extracted number is in valid EO range (14000-15000)
-                if (orderNumber) {
-                    const orderNum = parseInt(orderNumber);
-                    if (isNaN(orderNum) || orderNum < 14000 || orderNum > 15000) {
-                        console.log(`   ⚠️ Invalid EO number ${orderNumber} - not in expected range (14000-15000)`);
-                        orderNumber = null; // Reset to null so it gets skipped
-                    }
-                }
-                
-                // Skip if we absolutely cannot find a VALID EO number
                 if (!orderNumber) {
-                    console.log(`   ⚠️ No valid EO number found: ${item.title?.substring(0, 50)}...`);
-                    console.log(`      Document: ${item.document_number}, executive_order_number: ${item.executive_order_number}`);
+                    console.log(`   ⚠️ Skipping - no EO number: ${item.title?.substring(0, 50)}...`);
                     skippedNonEO++;
                     continue;
                 }
                 
-                // Validate order number is a valid number
+                // Validate it's a real number
                 const orderNum = parseInt(orderNumber);
                 if (isNaN(orderNum)) {
-                    console.log(`   ⚠️ Invalid order number ${orderNumber} - skipping`);
+                    console.log(`   ⚠️ Invalid order number format: ${orderNumber}`);
                     skippedNonEO++;
                     continue;
                 }
