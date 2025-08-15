@@ -1,6 +1,7 @@
 // executive-orders-tracker-supabase.js
 // Fetches and stores executive orders in Supabase
 // FIXED VERSION - Only collects actual Executive Orders, not all presidential documents
+// TEMPORARY: Forced full import mode enabled (Aug 15, 2025) - see line 34
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from './supabase-config-node.js';
@@ -32,6 +33,14 @@ async function fetchFromFederalRegister() {
     // Check if this is initial import or daily update
     const today = new Date().toISOString().split('T')[0];
     
+    // TEMPORARY FORCE FULL IMPORT - Comment/uncomment this block as needed
+    // ========================================================================
+    // Uncomment the next 2 lines to FORCE a full import (backfill all EOs since inauguration)
+    let startDate = '2025-01-20';
+    console.log('   🚀 FORCED FULL IMPORT MODE - fetching ALL EOs since inauguration (Jan 20, 2025)');
+    
+    // Comment out the block below when forcing full import
+    /* NORMAL SMART DETECTION LOGIC - CURRENTLY DISABLED FOR FULL IMPORT
     // Check if we have any existing orders
     let startDate;
     try {
@@ -51,6 +60,7 @@ async function fetchFromFederalRegister() {
         startDate = '2025-01-20';
         console.log('   ⚠️ Could not check existing records, doing full import');
     }
+    END OF NORMAL LOGIC */
     
     // Using CORRECT endpoint - MUST specify fields[] to get executive_order_number!
     const url = 'https://www.federalregister.gov/api/v1/documents.json?' +
@@ -71,8 +81,14 @@ async function fetchFromFederalRegister() {
         'per_page=200&' +
         'order=executive_order';
     
-    console.log(`   Searching from ${startDate} to ${today}`);
-    console.log(`   Filter: Executive Orders ONLY (type_id=2)\n`);
+    // Calculate days being fetched for clarity
+    const start = new Date(startDate);
+    const end = new Date(today);
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    
+    console.log(`   Searching from ${startDate} to ${today} (${daysDiff} days)`);
+    console.log(`   Filter: Executive Orders ONLY\n`);
+    console.log(`   🎯 EXPECTING ~190 Executive Orders for full import\n`);
     
     try {
         const response = await fetch(url);
