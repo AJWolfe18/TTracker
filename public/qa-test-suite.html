@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Environment QA Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #3a3a3a;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .pass {
+            background: #1e4620;
+            border-left: 4px solid #4ade80;
+        }
+        .fail {
+            background: #4a1e1e;
+            border-left: 4px solid #f87171;
+        }
+        .warning {
+            background: #4a3e1e;
+            border-left: 4px solid #fbbf24;
+        }
+        .info {
+            background: #1e3a4a;
+            border-left: 4px solid #60a5fa;
+        }
+        h2 {
+            color: #60a5fa;
+            border-bottom: 2px solid #3a3a3a;
+            padding-bottom: 10px;
+        }
+        .severity {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .critical { background: #dc2626; }
+        .major { background: #ea580c; }
+        .minor { background: #ca8a04; }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .loading {
+            color: #fbbf24;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔬 TrumpyTracker Test Environment QA Suite</h1>
+    
+    <div class="test-section">
+        <h2>Environment Detection Tests</h2>
+        <div id="env-tests"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Supabase Connection Tests</h2>
+        <div id="connection-tests"></div>
+        <button onclick="testSupabaseConnection()">Run Connection Tests</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Performance Tests</h2>
+        <div id="performance-tests"></div>
+        <button onclick="runPerformanceTests()">Run Performance Tests</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Mobile Responsiveness Tests</h2>
+        <div id="mobile-tests"></div>
+        <button onclick="testMobileResponsiveness()">Test Mobile View</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Error Handling Tests</h2>
+        <div id="error-tests"></div>
+        <button onclick="testErrorHandling()">Test Error Scenarios</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Issues Found</h2>
+        <div id="issues-found"></div>
+    </div>
+
+    <script src="supabase-browser-config.js"></script>
+    <script>
+        const issues = [];
+        
+        // Test 1: Environment Detection
+        function testEnvironmentDetection() {
+            const results = document.getElementById('env-tests');
+            const tests = [];
+            
+            // Check if config loaded
+            if (window.SUPABASE_CONFIG) {
+                tests.push({
+                    name: 'Config Loading',
+                    status: 'pass',
+                    message: 'Config loaded successfully'
+                });
+            } else {
+                tests.push({
+                    name: 'Config Loading',
+                    status: 'fail',
+                    message: 'Config failed to load - CRITICAL',
+                    severity: 'critical'
+                });
+                issues.push({
+                    title: 'Config not loading',
+                    severity: 'CRITICAL',
+                    description: 'window.SUPABASE_CONFIG is undefined'
+                });
+            }
+            
+            // Check URL detection
+            const hostname = window.location.hostname;
+            const expectedTest = hostname.includes('test--') || hostname === 'localhost';
+            const actualTest = window.SUPABASE_CONFIG?.SUPABASE_URL?.includes('wnrjrywpcadwutfykflu');
+            
+            if (expectedTest === actualTest) {
+                tests.push({
+                    name: 'Environment Detection',
+                    status: 'pass',
+                    message: `Correctly detected ${expectedTest ? 'TEST' : 'PRODUCTION'} environment`
+                });
+            } else {
+                tests.push({
+                    name: 'Environment Detection',
+                    status: 'fail',
+                    message: `Environment mismatch - Expected: ${expectedTest ? 'TEST' : 'PROD'}, Got: ${actualTest ? 'TEST' : 'PROD'}`,
+                    severity: 'critical'
+                });
+                issues.push({
+                    title: 'Environment detection mismatch',
+                    severity: 'CRITICAL',
+                    description: `URL suggests ${expectedTest ? 'TEST' : 'PROD'} but config is ${actualTest ? 'TEST' : 'PROD'}`
+                });
+            }
+            
+            // Check for localhost handling
+            if (hostname === 'localhost' && !window.SUPABASE_CONFIG?.SUPABASE_URL?.includes('wnrjrywpcadwutfykflu')) {
+                tests.push({
+                    name: 'Localhost Detection',
+                    status: 'warning',
+                    message: 'Localhost should use TEST environment',
+                    severity: 'major'
+                });
+                issues.push({
+                    title: 'Localhost using production config',
+                    severity: 'MAJOR',
+                    description: 'Local development should default to test environment'
+                });
+            }
+            
+            // Check for test badge
+            setTimeout(() => {
+                const badge = document.querySelector('div[style*="TEST ENV"]');
+                if (expectedTest && !badge) {
+                    tests.push({
+                        name: 'Test Badge Display',
+                        status: 'warning',
+                        message: 'Test environment badge not showing',
+                        severity: 'minor'
+                    });
+                    issues.push({
+                        title: 'Test badge not visible',
+                        severity: 'MINOR',
+                        description: 'Visual indicator for test environment missing'
+                    });
+                } else if (expectedTest && badge) {
+                    tests.push({
+                        name: 'Test Badge Display',
+                        status: 'pass',
+                        message: 'Test badge displayed correctly'
+                    });
+                }
+            }, 100);
+            
+            // Display results
+            results.innerHTML = tests.map(test => 
+                `<div class="test-result ${test.status}">
+                    ${test.name}: ${test.message}
+                    ${test.severity ? `<span class="severity ${test.severity}">${test.severity}</span>` : ''}
+                </div>`
+            ).join('');
+        }
+        
+        // Test 2: Supabase Connection
+        async function testSupabaseConnection() {
+            const results = document.getElementById('connection-tests');
+            results.innerHTML = '<div class="loading">Testing connections...</div>';
+            const tests = [];
+            
+            if (!window.SUPABASE_CONFIG) {
+                tests.push({
+                    name: 'Connection Test',
+                    status: 'fail',
+                    message: 'Cannot test - config not loaded',
+                    severity: 'critical'
+                });
+                results.innerHTML = tests.map(formatTest).join('');
+                return;
+            }
+            
+            // Test basic connection
+            try {
+                const response = await fetch(`${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?limit=1`, {
+                    headers: {
+                        'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    tests.push({
+                        name: 'API Connection',
+                        status: 'pass',
+                        message: `Connected to ${window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PROD'} database`
+                    });
+                } else if (response.status === 401) {
+                    tests.push({
+                        name: 'API Connection',
+                        status: 'fail',
+                        message: 'Authentication failed - invalid API key',
+                        severity: 'critical'
+                    });
+                    issues.push({
+                        title: 'Invalid API key',
+                        severity: 'CRITICAL',
+                        description: 'Supabase anon key is invalid or expired'
+                    });
+                } else if (response.status === 404) {
+                    tests.push({
+                        name: 'API Connection',
+                        status: 'fail',
+                        message: 'Table not found - database schema issue',
+                        severity: 'critical'
+                    });
+                    issues.push({
+                        title: 'Missing database tables',
+                        severity: 'CRITICAL',
+                        description: 'political_entries table does not exist'
+                    });
+                } else {
+                    tests.push({
+                        name: 'API Connection',
+                        status: 'fail',
+                        message: `Connection failed with status ${response.status}`,
+                        severity: 'major'
+                    });
+                }
+                
+                // Test CORS
+                const headers = response.headers;
+                if (!headers.get('access-control-allow-origin')) {
+                    tests.push({
+                        name: 'CORS Configuration',
+                        status: 'warning',
+                        message: 'CORS headers not present',
+                        severity: 'major'
+                    });
+                    issues.push({
+                        title: 'CORS not configured',
+                        severity: 'MAJOR',
+                        description: 'Supabase CORS settings may block requests'
+                    });
+                } else {
+                    tests.push({
+                        name: 'CORS Configuration',
+                        status: 'pass',
+                        message: 'CORS properly configured'
+                    });
+                }
+                
+                // Test data presence
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.length === 0) {
+                        tests.push({
+                            name: 'Data Availability',
+                            status: 'warning',
+                            message: 'No data in political_entries table',
+                            severity: 'major'
+                        });
+                        issues.push({
+                            title: 'Empty database',
+                            severity: 'MAJOR',
+                            description: 'Test database has no political entries'
+                        });
+                    } else {
+                        tests.push({
+                            name: 'Data Availability',
+                            status: 'pass',
+                            message: `Found ${data.length} entries`
+                        });
+                    }
+                }
+                
+            } catch (error) {
+                tests.push({
+                    name: 'Network Connection',
+                    status: 'fail',
+                    message: `Network error: ${error.message}`,
+                    severity: 'critical'
+                });
+                issues.push({
+                    title: 'Network connection failed',
+                    severity: 'CRITICAL',
+                    description: error.message
+                });
+            }
+            
+            results.innerHTML = tests.map(formatTest).join('');
+            updateIssuesList();
+        }
+        
+        // Test 3: Performance
+        async function runPerformanceTests() {
+            const results = document.getElementById('performance-tests');
+            results.innerHTML = '<div class="loading">Running performance tests...</div>';
+            const tests = [];
+            
+            if (!window.SUPABASE_CONFIG) {
+                tests.push({
+                    name: 'Performance Test',
+                    status: 'fail',
+                    message: 'Cannot test - config not loaded',
+                    severity: 'critical'
+                });
+                results.innerHTML = tests.map(formatTest).join('');
+                return;
+            }
+            
+            // Test response time
+            const startTime = performance.now();
+            try {
+                const response = await fetch(`${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?limit=100`, {
+                    headers: {
+                        'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                const endTime = performance.now();
+                const loadTime = endTime - startTime;
+                
+                if (loadTime < 500) {
+                    tests.push({
+                        name: 'API Response Time',
+                        status: 'pass',
+                        message: `Excellent: ${loadTime.toFixed(0)}ms`
+                    });
+                } else if (loadTime < 1000) {
+                    tests.push({
+                        name: 'API Response Time',
+                        status: 'pass',
+                        message: `Good: ${loadTime.toFixed(0)}ms`
+                    });
+                } else if (loadTime < 2000) {
+                    tests.push({
+                        name: 'API Response Time',
+                        status: 'warning',
+                        message: `Slow: ${loadTime.toFixed(0)}ms`,
+                        severity: 'minor'
+                    });
+                    issues.push({
+                        title: 'Slow API response',
+                        severity: 'MINOR',
+                        description: `API taking ${loadTime.toFixed(0)}ms for 100 records`
+                    });
+                } else {
+                    tests.push({
+                        name: 'API Response Time',
+                        status: 'fail',
+                        message: `Very slow: ${loadTime.toFixed(0)}ms`,
+                        severity: 'major'
+                    });
+                    issues.push({
+                        title: 'Very slow API response',
+                        severity: 'MAJOR',
+                        description: `API taking ${loadTime.toFixed(0)}ms for 100 records`
+                    });
+                }
+                
+                // Test large dataset handling
+                if (response.ok) {
+                    const data = await response.json();
+                    tests.push({
+                        name: 'Large Dataset Test',
+                        status: 'info',
+                        message: `Retrieved ${data.length} records`
+                    });
+                }
+                
+                // Test cache functionality
+                const cacheKey = 'tt_cache_test';
+                try {
+                    localStorage.setItem(cacheKey, JSON.stringify({data: 'test', timestamp: Date.now()}));
+                    const cached = localStorage.getItem(cacheKey);
+                    if (cached) {
+                        tests.push({
+                            name: 'Cache Functionality',
+                            status: 'pass',
+                            message: 'LocalStorage cache working'
+                        });
+                        localStorage.removeItem(cacheKey);
+                    }
+                } catch (e) {
+                    tests.push({
+                        name: 'Cache Functionality',
+                        status: 'warning',
+                        message: 'LocalStorage not available',
+                        severity: 'minor'
+                    });
+                    issues.push({
+                        title: 'Cache not working',
+                        severity: 'MINOR',
+                        description: 'LocalStorage unavailable, may impact performance'
+                    });
+                }
+                
+            } catch (error) {
+                tests.push({
+                    name: 'Performance Test',
+                    status: 'fail',
+                    message: `Test failed: ${error.message}`,
+                    severity: 'major'
+                });
+            }
+            
+            results.innerHTML = tests.map(formatTest).join('');
+            updateIssuesList();
+        }
+        
+        // Test 4: Mobile Responsiveness
+        function testMobileResponsiveness() {
+            const results = document.getElementById('mobile-tests');
+            const tests = [];
+            
+            // Check viewport meta tag
+            const viewport = document.querySelector('meta[name="viewport"]');
+            if (viewport && viewport.content.includes('width=device-width')) {
+                tests.push({
+                    name: 'Viewport Meta',
+                    status: 'pass',
+                    message: 'Viewport meta tag present'
+                });
+            } else {
+                tests.push({
+                    name: 'Viewport Meta',
+                    status: 'warning',
+                    message: 'Missing proper viewport meta tag',
+                    severity: 'minor'
+                });
+                issues.push({
+                    title: 'Missing viewport meta',
+                    severity: 'MINOR',
+                    description: 'May cause mobile display issues'
+                });
+            }
+            
+            // Check current viewport
+            const width = window.innerWidth;
+            tests.push({
+                name: 'Current Viewport',
+                status: 'info',
+                message: `Width: ${width}px (${width < 768 ? 'Mobile' : width < 1024 ? 'Tablet' : 'Desktop'})`
+            });
+            
+            // Test badge visibility on mobile
+            if (width < 768) {
+                const badge = document.querySelector('div[style*="TEST ENV"]');
+                if (badge) {
+                    const badgeRect = badge.getBoundingClientRect();
+                    if (badgeRect.right > width) {
+                        tests.push({
+                            name: 'Badge Position',
+                            status: 'warning',
+                            message: 'Test badge may be cut off on mobile',
+                            severity: 'minor'
+                        });
+                        issues.push({
+                            title: 'Badge positioning issue',
+                            severity: 'MINOR',
+                            description: 'Test environment badge may be cut off on small screens'
+                        });
+                    } else {
+                        tests.push({
+                            name: 'Badge Position',
+                            status: 'pass',
+                            message: 'Badge positioned correctly for mobile'
+                        });
+                    }
+                }
+            }
+            
+            // Check Tailwind CSS loading
+            if (document.querySelector('script[src*="tailwindcss"]')) {
+                tests.push({
+                    name: 'Responsive Framework',
+                    status: 'pass',
+                    message: 'Tailwind CSS loaded (responsive by default)'
+                });
+            } else {
+                tests.push({
+                    name: 'Responsive Framework',
+                    status: 'info',
+                    message: 'No Tailwind detected in current page'
+                });
+            }
+            
+            results.innerHTML = tests.map(formatTest).join('');
+            updateIssuesList();
+        }
+        
+        // Test 5: Error Handling
+        async function testErrorHandling() {
+            const results = document.getElementById('error-tests');
+            results.innerHTML = '<div class="loading">Testing error scenarios...</div>';
+            const tests = [];
+            
+            // Test invalid endpoint
+            try {
+                const response = await fetch(`${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/invalid_table`, {
+                    headers: {
+                        'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.status === 404 || response.status === 400) {
+                    tests.push({
+                        name: 'Invalid Table Handling',
+                        status: 'pass',
+                        message: 'Properly returns 404/400 for invalid table'
+                    });
+                } else {
+                    tests.push({
+                        name: 'Invalid Table Handling',
+                        status: 'warning',
+                        message: `Unexpected status ${response.status} for invalid table`,
+                        severity: 'minor'
+                    });
+                }
+            } catch (error) {
+                tests.push({
+                    name: 'Network Error Handling',
+                    status: 'info',
+                    message: 'Network errors should be caught by dashboard'
+                });
+            }
+            
+            // Test malformed request
+            try {
+                const response = await fetch(`${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?invalid_param=)))`, {
+                    headers: {
+                        'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                tests.push({
+                    name: 'Malformed Query Handling',
+                    status: response.ok ? 'pass' : 'info',
+                    message: response.ok ? 'Ignores invalid params gracefully' : 'Returns error for invalid params'
+                });
+            } catch (error) {
+                tests.push({
+                    name: 'Malformed Query Handling',
+                    status: 'warning',
+                    message: 'Error on malformed query',
+                    severity: 'minor'
+                });
+            }
+            
+            // Test rate limiting (informational only)
+            tests.push({
+                name: 'Rate Limiting',
+                status: 'info',
+                message: 'Supabase free tier: 500 requests/min'
+            });
+            
+            // Cost implications
+            tests.push({
+                name: 'Cost Analysis',
+                status: 'info',
+                message: 'Free tier: 500MB DB, 2GB transfer, 50K MAU'
+            });
+            
+            results.innerHTML = tests.map(formatTest).join('');
+            updateIssuesList();
+        }
+        
+        // Helper function to format test results
+        function formatTest(test) {
+            return `<div class="test-result ${test.status}">
+                ${test.name}: ${test.message}
+                ${test.severity ? `<span class="severity ${test.severity}">${test.severity}</span>` : ''}
+            </div>`;
+        }
+        
+        // Update issues list
+        function updateIssuesList() {
+            const issuesDiv = document.getElementById('issues-found');
+            if (issues.length === 0) {
+                issuesDiv.innerHTML = '<div class="test-result pass">No issues found!</div>';
+            } else {
+                const grouped = {
+                    CRITICAL: issues.filter(i => i.severity === 'CRITICAL'),
+                    MAJOR: issues.filter(i => i.severity === 'MAJOR'),
+                    MINOR: issues.filter(i => i.severity === 'MINOR')
+                };
+                
+                issuesDiv.innerHTML = Object.entries(grouped)
+                    .filter(([_, items]) => items.length > 0)
+                    .map(([severity, items]) => 
+                        `<div>
+                            <h3>${severity} (${items.length})</h3>
+                            ${items.map(issue => 
+                                `<div class="test-result ${severity === 'CRITICAL' ? 'fail' : severity === 'MAJOR' ? 'warning' : 'info'}">
+                                    <strong>${issue.title}</strong><br>
+                                    ${issue.description}
+                                </div>`
+                            ).join('')}
+                        </div>`
+                    ).join('');
+            }
+        }
+        
+        // Run initial tests
+        testEnvironmentDetection();
+    </script>
+</body>
+</html>

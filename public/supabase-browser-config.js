@@ -3,11 +3,13 @@
 
 // Detect if we're on test environment based on URL
 const isTestEnvironment = 
+    window.location.hostname.includes('test--') ||  // Netlify branch deploy format
     window.location.hostname.includes('test.') ||
     window.location.hostname.includes('-test') ||
     window.location.hostname.includes('--test') ||
     window.location.pathname.includes('/test') ||
-    window.location.search.includes('env=test');
+    window.location.search.includes('env=test') ||
+    window.location.hostname === 'localhost';  // Local development
 
 // Configuration
 const PRODUCTION_CONFIG = {

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Environment Check</title>
+</head>
+<body>
+    <h1>Environment Detection Test</h1>
+    <div id="results"></div>
+    
+    <script src="supabase-browser-config.js"></script>
+    <script>
+        // Test the environment detection
+        const results = document.getElementById('results');
+        
+        // Display current URL info
+        results.innerHTML = `
+            <h2>Current Environment Info:</h2>
+            <p><strong>Hostname:</strong> ${window.location.hostname}</p>
+            <p><strong>Full URL:</strong> ${window.location.href}</p>
+            <p><strong>Config Loaded:</strong> ${window.SUPABASE_CONFIG ? 'YES' : 'NO'}</p>
+            <p><strong>Supabase URL:</strong> ${window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_URL : 'Not loaded'}</p>
+            <p><strong>Expected DB:</strong> ${
+                window.location.hostname.includes('test--') || window.location.hostname === 'localhost' 
+                    ? 'TEST (wnrjrywpcadwutfykflu)' 
+                    : 'PRODUCTION (osjbulmltfpcoldydexg)'
+            }</p>
+            <p><strong>Actual DB:</strong> ${
+                window.SUPABASE_CONFIG 
+                    ? (window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PRODUCTION')
+                    : 'Unknown'
+            }</p>
+            <h3 style="color: ${
+                window.SUPABASE_CONFIG && 
+                ((window.location.hostname.includes('test--') || window.location.hostname === 'localhost') === 
+                 window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu'))
+                    ? 'green' 
+                    : 'red'
+            }">
+                Status: ${
+                    window.SUPABASE_CONFIG && 
+                    ((window.location.hostname.includes('test--') || window.location.hostname === 'localhost') === 
+                     window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu'))
+                        ? '✅ CORRECT ENVIRONMENT DETECTED' 
+                        : '❌ WRONG ENVIRONMENT DETECTED'
+                }
+            </h3>
+        `;
+    </script>
+</body>
+</html>
