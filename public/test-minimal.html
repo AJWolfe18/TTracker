@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Test - Minimal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-900">
+    <div id="root"></div>
+    
+    <script src="supabase-browser-config.js"></script>
+    
+    <script type="text/babel">
+        console.log('1. Starting dashboard test');
+        
+        const TestDashboard = () => {
+            const [data, setData] = React.useState(null);
+            const [loading, setLoading] = React.useState(true);
+            const [error, setError] = React.useState(null);
+            
+            React.useEffect(() => {
+                console.log('2. Component mounted, fetching data...');
+                fetchData();
+            }, []);
+            
+            const fetchData = async () => {
+                try {
+                    if (!window.SUPABASE_CONFIG) {
+                        throw new Error('Config not loaded');
+                    }
+                    
+                    const response = await fetch(
+                        `${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?limit=5&order=date.desc`,
+                        {
+                            headers: {
+                                'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                            }
+                        }
+                    );
+                    
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('3. Data fetched:', result.length, 'entries');
+                    setData(result);
+                    setLoading(false);
+                } catch (err) {
+                    console.error('4. Error:', err);
+                    setError(err.message);
+                    setLoading(false);
+                }
+            };
+            
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center text-white">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                            <p>Loading test dashboard...</p>
+                        </div>
+                    </div>
+                );
+            }
+            
+            if (error) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="bg-red-600 text-white p-8 rounded-lg max-w-lg">
+                            <h2 className="text-2xl font-bold mb-4">Error Loading Dashboard</h2>
+                            <p className="mb-4">{error}</p>
+                            <details className="mt-4">
+                                <summary className="cursor-pointer">Debug Info</summary>
+                                <pre className="mt-2 text-xs bg-red-800 p-2 rounded">
+{JSON.stringify({
+    config: window.SUPABASE_CONFIG ? 'Loaded' : 'Missing',
+    url: window.SUPABASE_CONFIG?.SUPABASE_URL,
+    environment: window.location.hostname
+}, null, 2)}
+                                </pre>
+                            </details>
+                        </div>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="min-h-screen bg-gray-900 text-white p-8">
+                    <div className="max-w-4xl mx-auto">
+                        <h1 className="text-3xl font-bold mb-8">
+                            ✅ Dashboard Test Successful!
+                        </h1>
+                        
+                        <div className="bg-gray-800 p-6 rounded-lg mb-6">
+                            <h2 className="text-xl font-semibold mb-4">Environment Info</h2>
+                            <p>Database: {window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? '🧪 TEST' : '🚀 PRODUCTION'}</p>
+                            <p>Entries Found: {data?.length || 0}</p>
+                        </div>
+                        
+                        {data && data.length > 0 && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-semibold">Latest Entries:</h2>
+                                {data.map(entry => (
+                                    <div key={entry.id} className="bg-gray-800 p-4 rounded">
+                                        <p className="font-semibold">{entry.date}</p>
+                                        <p>{entry.title}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+        
+        // Wait for everything to load
+        function initDashboard() {
+            console.log('5. Initializing React root...');
+            try {
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<TestDashboard />);
+                console.log('6. React render complete');
+            } catch (err) {
+                console.error('7. React init error:', err);
+                document.getElementById('root').innerHTML = `
+                    <div style="color: red; padding: 20px;">
+                        <h2>React Initialization Failed</h2>
+                        <pre>${err.message}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Ensure DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDashboard);
+        } else {
+            initDashboard();
+        }
+    </script>
+</body>
+</html>

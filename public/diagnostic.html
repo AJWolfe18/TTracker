@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Diagnostic Tool</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #2d3748;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .test-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f7fafc;
+        }
+        .test-card h3 {
+            margin-bottom: 10px;
+            color: #2d3748;
+            border-bottom: 2px solid #cbd5e0;
+            padding-bottom: 5px;
+        }
+        .test-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass { background: #c6f6d5; border-left: 4px solid #48bb78; }
+        .fail { background: #fed7d7; border-left: 4px solid #f56565; }
+        .warning { background: #feebc8; border-left: 4px solid #ed8936; }
+        .info { background: #bee3f8; border-left: 4px solid #4299e1; }
+        .loading { background: #e6fffa; border-left: 4px solid #38b2ac; }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .critical { background: #f56565; color: white; }
+        .major { background: #ed8936; color: white; }
+        .minor { background: #ecc94b; color: #744210; }
+        
+        .action-buttons {
+            padding: 20px;
+            text-align: center;
+            background: #edf2f7;
+        }
+        button {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover { background: #3182ce; }
+        button:disabled { background: #a0aec0; cursor: not-allowed; }
+        
+        .issue-summary {
+            background: #2d3748;
+            color: white;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+        }
+        .issue-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .issue {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .issue.critical { border-color: #f56565; }
+        .issue.major { border-color: #ed8936; }
+        .issue.minor { border-color: #ecc94b; }
+        
+        pre {
+            background: #2d3748;
+            color: #68d391;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .error-trace {
+            background: #742a2a;
+            color: #feb2b2;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 TrumpyTracker Dashboard Diagnostic Tool</h1>
+            <p>Comprehensive analysis of dashboard loading issues</p>
+        </div>
+        
+        <div class="action-buttons">
+            <button onclick="runAllTests()">🚀 Run All Tests</button>
+            <button onclick="testMinimalReact()">⚛️ Test Minimal React</button>
+            <button onclick="clearAllCache()">🗑️ Clear All Cache</button>
+            <button onclick="location.reload()">🔄 Reload Page</button>
+        </div>
+        
+        <div class="test-grid">
+            <!-- Test 1: Environment Setup -->
+            <div class="test-card">
+                <h3>1. Environment Setup</h3>
+                <div id="env-tests"></div>
+            </div>
+            
+            <!-- Test 2: Dependencies -->
+            <div class="test-card">
+                <h3>2. Dependencies Loading</h3>
+                <div id="dep-tests"></div>
+            </div>
+            
+            <!-- Test 3: Supabase Connection -->
+            <div class="test-card">
+                <h3>3. Database Connection</h3>
+                <div id="db-tests"></div>
+            </div>
+            
+            <!-- Test 4: Dashboard Loading -->
+            <div class="test-card">
+                <h3>4. Dashboard Component</h3>
+                <div id="dashboard-tests"></div>
+            </div>
+            
+            <!-- Test 5: Performance -->
+            <div class="test-card">
+                <h3>5. Performance Metrics</h3>
+                <div id="perf-tests"></div>
+            </div>
+            
+            <!-- Test 6: Console Errors -->
+            <div class="test-card">
+                <h3>6. Console & Network</h3>
+                <div id="console-tests"></div>
+            </div>
+        </div>
+        
+        <div id="issue-summary"></div>
+        
+        <div id="test-react-container" style="display:none;"></div>
+    </div>
+    
+    <!-- Load all dependencies like main page -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="supabase-browser-config.js"></script>
+    
+    <script>
+        const issues = [];
+        const errors = [];
+        
+        // Capture all errors
+        window.addEventListener('error', (e) => {
+            errors.push({
+                message: e.message,
+                source: e.filename,
+                line: e.lineno,
+                col: e.colno,
+                stack: e.error?.stack
+            });
+            updateConsoleTests();
+        });
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            errors.push({
+                message: 'Unhandled Promise Rejection',
+                reason: e.reason
+            });
+            updateConsoleTests();
+        });
+        
+        function addTest(containerId, name, status, message, severity = null) {
+            const container = document.getElementById(containerId);
+            const div = document.createElement('div');
+            div.className = `test-item ${status}`;
+            div.innerHTML = `
+                <strong>${name}:</strong> ${message}
+                ${severity ? `<span class="severity-badge ${severity}">${severity.toUpperCase()}</span>` : ''}
+            `;
+            container.appendChild(div);
+            
+            if (severity) {
+                issues.push({ name, message, severity, category: containerId });
+            }
+        }
+        
+        async function testEnvironment() {
+            const container = document.getElementById('env-tests');
+            container.innerHTML = '<div class="test-item loading">Testing...</div>';
+            container.innerHTML = '';
+            
+            // Check URL
+            const url = window.location.hostname;
+            addTest('env-tests', 'URL', 'info', url);
+            
+            // Check environment detection
+            const isTest = url.includes('test--') || url === 'localhost';
+            addTest('env-tests', 'Expected Environment', 'info', isTest ? 'TEST' : 'PRODUCTION');
+            
+            // Check config
+            if (window.SUPABASE_CONFIG) {
+                const configEnv = window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PROD';
+                if ((isTest && configEnv === 'TEST') || (!isTest && configEnv === 'PROD')) {
+                    addTest('env-tests', 'Config Match', 'pass', `✓ Using ${configEnv} config`);
+                } else {
+                    addTest('env-tests', 'Config Mismatch', 'fail', 
+                        `Expected ${isTest ? 'TEST' : 'PROD'}, got ${configEnv}`, 'critical');
+                }
+                
+                // Show actual URLs
+                addTest('env-tests', 'Supabase URL', 'info', 
+                    window.SUPABASE_CONFIG.SUPABASE_URL.substring(0, 40) + '...');
+            } else {
+                addTest('env-tests', 'Config Loading', 'fail', 'window.SUPABASE_CONFIG undefined', 'critical');
+            }
+            
+            // Check for test badge
+            const badge = document.querySelector('div[style*="TEST ENV"]');
+            if (isTest) {
+                addTest('env-tests', 'Test Badge', badge ? 'pass' : 'warning', 
+                    badge ? '✓ Badge visible' : '⚠ Badge missing', badge ? null : 'minor');
+            }
+        }
+        
+        async function testDependencies() {
+            const container = document.getElementById('dep-tests');
+            container.innerHTML = '';
+            
+            // React
+            if (window.React) {
+                addTest('dep-tests', 'React', 'pass', `✓ v${React.version}`);
+            } else {
+                addTest('dep-tests', 'React', 'fail', 'Not loaded', 'critical');
+            }
+            
+            // ReactDOM
+            if (window.ReactDOM) {
+                addTest('dep-tests', 'ReactDOM', 'pass', '✓ Loaded');
+                
+                // Check for createRoot (React 18)
+                if (ReactDOM.createRoot) {
+                    addTest('dep-tests', 'React 18 API', 'pass', '✓ createRoot available');
+                } else {
+                    addTest('dep-tests', 'React 18 API', 'warning', '⚠ Using legacy render', 'minor');
+                }
+            } else {
+                addTest('dep-tests', 'ReactDOM', 'fail', 'Not loaded', 'critical');
+            }
+            
+            // Babel
+            if (window.Babel) {
+                addTest('dep-tests', 'Babel', 'pass', '✓ JSX transformer loaded');
+                
+                // Test transformation
+                try {
+                    const testJSX = '<div>Test</div>';
+                    const result = Babel.transform(testJSX, { presets: ['react'] });
+                    addTest('dep-tests', 'JSX Transform', 'pass', '✓ Working');
+                } catch (e) {
+                    addTest('dep-tests', 'JSX Transform', 'fail', e.message, 'major');
+                }
+            } else {
+                addTest('dep-tests', 'Babel', 'fail', 'Not loaded', 'critical');
+            }
+            
+            // Tailwind
+            if (document.querySelector('script[src*="tailwindcss"]')) {
+                addTest('dep-tests', 'Tailwind CSS', 'pass', '✓ Loaded');
+            } else {
+                addTest('dep-tests', 'Tailwind CSS', 'warning', '⚠ Not detected', 'minor');
+            }
+        }
+        
+        async function testDatabase() {
+            const container = document.getElementById('db-tests');
+            container.innerHTML = '<div class="test-item loading">Connecting...</div>';
+            
+            if (!window.SUPABASE_CONFIG) {
+                container.innerHTML = '';
+                addTest('db-tests', 'Connection', 'fail', 'No config available', 'critical');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(
+                    `${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?select=id,date,title&limit=5&order=date.desc`,
+                    {
+                        headers: {
+                            'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                const endTime = performance.now();
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addTest('db-tests', 'API Status', 'pass', `✓ Connected (${(endTime-startTime).toFixed(0)}ms)`);
+                    addTest('db-tests', 'Data Found', data.length > 0 ? 'pass' : 'warning', 
+                        `${data.length} entries`, data.length === 0 ? 'major' : null);
+                    
+                    if (data.length > 0) {
+                        addTest('db-tests', 'Latest Entry', 'info', 
+                            `${data[0].date}: ${data[0].title.substring(0, 30)}...`);
+                    }
+                    
+                    // Test CORS
+                    const corsHeader = response.headers.get('access-control-allow-origin');
+                    addTest('db-tests', 'CORS', corsHeader ? 'pass' : 'warning', 
+                        corsHeader ? '✓ Enabled' : '⚠ Not detected', corsHeader ? null : 'major');
+                } else {
+                    const errorText = await response.text();
+                    addTest('db-tests', 'API Error', 'fail', 
+                        `${response.status}: ${errorText.substring(0, 100)}`, 'critical');
+                }
+                
+                // Test executive orders table
+                const eoResponse = await fetch(
+                    `${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/executive_orders?select=id&limit=1`,
+                    {
+                        headers: {
+                            'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                addTest('db-tests', 'Executive Orders Table', eoResponse.ok ? 'pass' : 'warning',
+                    eoResponse.ok ? '✓ Accessible' : `⚠ Error ${eoResponse.status}`, 
+                    eoResponse.ok ? null : 'minor');
+                    
+            } catch (error) {
+                addTest('db-tests', 'Network Error', 'fail', error.message, 'critical');
+            }
+        }
+        
+        async function testDashboard() {
+            const container = document.getElementById('dashboard-tests');
+            container.innerHTML = '<div class="test-item loading">Analyzing dashboard.js...</div>';
+            
+            try {
+                const response = await fetch('dashboard.js');
+                if (!response.ok) {
+                    container.innerHTML = '';
+                    addTest('dashboard-tests', 'File Load', 'fail', 
+                        `HTTP ${response.status}`, 'critical');
+                    return;
+                }
+                
+                const dashboardCode = await response.text();
+                container.innerHTML = '';
+                
+                addTest('dashboard-tests', 'File Size', 'info', 
+                    `${(dashboardCode.length / 1024).toFixed(1)} KB`);
+                
+                // Check for key components
+                const checks = [
+                    { name: 'React Hooks', pattern: /useState|useEffect|useCallback/, required: true },
+                    { name: 'Config Usage', pattern: /window\.SUPABASE_CONFIG/, required: true },
+                    { name: 'Main Component', pattern: /TrumpyTrackerDashboard/, required: true },
+                    { name: 'Render Call', pattern: /ReactDOM\.createRoot|ReactDOM\.render/, required: true },
+                    { name: 'Error Handling', pattern: /try\s*{|catch\s*\(/, required: false },
+                    { name: 'Cache Logic', pattern: /localStorage|getCachedData/, required: false }
+                ];
+                
+                checks.forEach(check => {
+                    const found = check.pattern.test(dashboardCode);
+                    if (found) {
+                        addTest('dashboard-tests', check.name, 'pass', '✓ Found');
+                    } else if (check.required) {
+                        addTest('dashboard-tests', check.name, 'fail', '✗ Missing', 'major');
+                    } else {
+                        addTest('dashboard-tests', check.name, 'warning', '⚠ Not found', 'minor');
+                    }
+                });
+                
+                // Try to transform with Babel
+                try {
+                    addTest('dashboard-tests', 'Babel Transform', 'loading', 'Testing...');
+                    const transformed = Babel.transform(dashboardCode, { 
+                        presets: ['react'],
+                        filename: 'dashboard.js'
+                    });
+                    
+                    // Replace the loading message
+                    const lastItem = container.lastElementChild;
+                    lastItem.className = 'test-item pass';
+                    lastItem.innerHTML = '<strong>Babel Transform:</strong> ✓ Success';
+                    
+                    // Check if root element exists
+                    const root = document.getElementById('root');
+                    addTest('dashboard-tests', 'Root Element', root ? 'pass' : 'fail',
+                        root ? '✓ #root exists' : '✗ #root missing', root ? null : 'critical');
+                        
+                } catch (babelError) {
+                    const lastItem = container.lastElementChild;
+                    lastItem.className = 'test-item fail';
+                    lastItem.innerHTML = `<strong>Babel Transform:</strong> ${babelError.message}`;
+                    
+                    // Show error location if available
+                    if (babelError.loc) {
+                        const errorTrace = document.createElement('div');
+                        errorTrace.className = 'error-trace';
+                        errorTrace.textContent = `Line ${babelError.loc.line}, Column ${babelError.loc.column}`;
+                        container.appendChild(errorTrace);
+                    }
+                    
+                    issues.push({
+                        name: 'Babel Compilation',
+                        message: babelError.message,
+                        severity: 'critical',
+                        category: 'dashboard-tests'
+                    });
+                }
+                
+            } catch (error) {
+                container.innerHTML = '';
+                addTest('dashboard-tests', 'Load Error', 'fail', error.message, 'critical');
+            }
+        }
+        
+        function testPerformance() {
+            const container = document.getElementById('perf-tests');
+            container.innerHTML = '';
+            
+            // Page load metrics
+            if (window.performance && performance.timing) {
+                const timing = performance.timing;
+                const loadTime = timing.loadEventEnd - timing.navigationStart;
+                const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
+                
+                addTest('perf-tests', 'Page Load', loadTime < 3000 ? 'pass' : 'warning',
+                    `${loadTime}ms`, loadTime > 5000 ? 'minor' : null);
+                    
+                addTest('perf-tests', 'DOM Ready', domReady < 2000 ? 'pass' : 'warning',
+                    `${domReady}ms`, domReady > 3000 ? 'minor' : null);
+            }
+            
+            // Memory usage (if available)
+            if (performance.memory) {
+                const used = (performance.memory.usedJSHeapSize / 1048576).toFixed(1);
+                const limit = (performance.memory.jsHeapSizeLimit / 1048576).toFixed(1);
+                addTest('perf-tests', 'Memory Usage', 'info', `${used} MB / ${limit} MB`);
+            }
+            
+            // LocalStorage usage
+            try {
+                let storageSize = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        storageSize += localStorage[key].length + key.length;
+                    }
+                }
+                const sizeMB = (storageSize / 1024 / 1024).toFixed(2);
+                addTest('perf-tests', 'Cache Size', 'info', `${sizeMB} MB`);
+                
+                // Check for test/prod cache mixing
+                const cacheKeys = Object.keys(localStorage).filter(k => k.startsWith('tt_cache_'));
+                if (cacheKeys.length > 0) {
+                    addTest('perf-tests', 'Cache Entries', 'info', `${cacheKeys.length} cached items`);
+                }
+            } catch (e) {
+                addTest('perf-tests', 'LocalStorage', 'warning', 'Not accessible', 'minor');
+            }
+        }
+        
+        function updateConsoleTests() {
+            const container = document.getElementById('console-tests');
+            container.innerHTML = '';
+            
+            if (errors.length === 0) {
+                addTest('console-tests', 'Console Errors', 'pass', '✓ No errors detected');
+            } else {
+                addTest('console-tests', 'Console Errors', 'fail', 
+                    `${errors.length} error(s) found`, 'major');
+                    
+                errors.forEach((error, i) => {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-trace';
+                    errorDiv.innerHTML = `
+                        <strong>Error ${i + 1}:</strong> ${error.message}<br>
+                        ${error.source ? `Source: ${error.source}<br>` : ''}
+                        ${error.line ? `Line: ${error.line}, Col: ${error.col}<br>` : ''}
+                        ${error.stack ? `<pre style="margin-top:5px">${error.stack.substring(0, 500)}</pre>` : ''}
+                    `;
+                    container.appendChild(errorDiv);
+                });
+            }
+        }
+        
+        function updateIssueSummary() {
+            const summary = document.getElementById('issue-summary');
+            if (issues.length === 0) {
+                summary.innerHTML = `
+                    <div class="issue-summary">
+                        <h2>✅ All Tests Passed!</h2>
+                        <p>No issues detected. Dashboard should be working correctly.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const critical = issues.filter(i => i.severity === 'critical');
+            const major = issues.filter(i => i.severity === 'major');
+            const minor = issues.filter(i => i.severity === 'minor');
+            
+            summary.innerHTML = `
+                <div class="issue-summary">
+                    <h2>📊 Issue Summary</h2>
+                    <p>Total: ${issues.length} issues found</p>
+                    <div class="issue-list">
+                        ${critical.length > 0 ? `
+                            <div>
+                                <h3>🔴 Critical (${critical.length})</h3>
+                                ${critical.map(i => `
+                                    <div class="issue critical">
+                                        <strong>${i.name}:</strong> ${i.message}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        ${major.length > 0 ? `
+                            <div>
+                                <h3>🟠 Major (${major.length})</h3>
+                                ${major.map(i => `
+                                    <div class="issue major">
+                                        <strong>${i.name}:</strong> ${i.message}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        ${minor.length > 0 ? `
+                            <div>
+                                <h3>🟡 Minor (${minor.length})</h3>
+                                ${minor.map(i => `
+                                    <div class="issue minor">
+                                        <strong>${i.name}:</strong> ${i.message}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function runAllTests() {
+            issues.length = 0;
+            errors.length = 0;
+            
+            await testEnvironment();
+            await testDependencies();
+            await testDatabase();
+            await testDashboard();
+            testPerformance();
+            updateConsoleTests();
+            updateIssueSummary();
+        }
+        
+        function testMinimalReact() {
+            const container = document.getElementById('test-react-container');
+            container.style.display = 'block';
+            container.innerHTML = '<div id="test-root"></div>';
+            
+            try {
+                const TestComponent = () => {
+                    const [count, setCount] = React.useState(0);
+                    return React.createElement('div', {
+                        style: { padding: '20px', background: '#48bb78', color: 'white', margin: '20px', borderRadius: '8px' }
+                    }, [
+                        React.createElement('h3', { key: 'title' }, '✅ React is working!'),
+                        React.createElement('p', { key: 'count' }, `Count: ${count}`),
+                        React.createElement('button', {
+                            key: 'button',
+                            onClick: () => setCount(count + 1),
+                            style: { marginTop: '10px' }
+                        }, 'Click me')
+                    ]);
+                };
+                
+                const root = ReactDOM.createRoot(document.getElementById('test-root'));
+                root.render(React.createElement(TestComponent));
+                
+                alert('✅ React test successful! Component rendered below.');
+            } catch (error) {
+                alert(`❌ React test failed: ${error.message}`);
+                console.error('React test error:', error);
+            }
+        }
+        
+        function clearAllCache() {
+            if (confirm('Clear all cached data? This will force fresh data load.')) {
+                localStorage.clear();
+                alert('Cache cleared! Reload the page to fetch fresh data.');
+            }
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('DOMContentLoaded', runAllTests);
+    </script>
+</body>
+</html>

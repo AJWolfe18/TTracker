@@ -1,0 +1,139 @@
+name: Pre-Merge Test Suite
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ test ]  # Also run on test pushes
+
+jobs:
+  environment-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Check environment configs
+        run: |
+          # Ensure configs exist and are valid
+          node -e "
+          const testConfig = require('./supabase-config-test.js');
+          const prodConfig = require('./supabase-config.js');
+          
+          // Verify different URLs
+          if (testConfig.SUPABASE_URL === prodConfig.SUPABASE_URL) {
+            console.error('ERROR: Test and Prod using same database!');
+            process.exit(1);
+          }
+          
+          // Verify test URL contains 'wnrjrywpcadwutfykflu'
+          if (!testConfig.SUPABASE_URL.includes('wnrjrywpcadwutfykflu')) {
+            console.error('ERROR: Test config not pointing to test database');
+            process.exit(1);
+          }
+          
+          console.log('✅ Environment configs valid');
+          "
+          
+  api-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Test Production API
+        run: |
+          # Quick check that prod API responds
+          curl -f -X GET \
+            'https://osjbulmltfpcoldydexg.supabase.co/rest/v1/political_entries?limit=1' \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            || exit 1
+            
+      - name: Test Database Connection
+        if: github.ref == 'refs/heads/test'
+        run: |
+          # Test that test DB responds
+          curl -f -X GET \
+            'https://wnrjrywpcadwutfykflu.supabase.co/rest/v1/political_entries?limit=1' \
+            -H "apikey: ${{ secrets.TEST_SUPABASE_ANON_KEY }}" \
+            || exit 1
+            
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Check for console.logs in production code
+        run: |
+          # Warn about console.logs (not fail)
+          echo "Checking for console.logs..."
+          grep -r "console.log" public/*.js || true
+          
+      - name: Check for hardcoded credentials
+        run: |
+          # Fail if service role keys found
+          if grep -r "service_role" public/*.js; then
+            echo "ERROR: Service role key found in client code!"
+            exit 1
+          fi
+          
+      - name: Check file sizes
+        run: |
+          # Warn if any JS file > 500KB
+          find public -name "*.js" -size +500k -exec echo "WARNING: Large file {}" \;
+          
+  test-dashboard-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Test dashboard loads
+        run: |
+          # Simple check that React components compile
+          npx babel public/dashboard.js --out-file /tmp/dashboard-compiled.js
+          
+      - name: Check for React errors
+        run: |
+          # Look for common React mistakes
+          if grep -q "setState.*setState" public/dashboard.js; then
+            echo "WARNING: Possible setState in loop detected"
+          fi
+
+  required-files-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Verify required files exist
+        run: |
+          # Check critical files exist
+          files=(
+            "public/index.html"
+            "public/dashboard.js"
+            "daily-tracker-supabase.js"
+            "executive-orders-tracker-supabase.js"
+            "supabase-config.js"
+            ".github/workflows/daily-news-tracker.yml"
+          )
+          
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "ERROR: Required file missing: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All required files present"
+
+# Block merge if any job fails
+  merge-guard:
+    needs: [environment-check, api-smoke-test, code-quality, test-dashboard-build, required-files-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        run: echo "✅ All pre-merge checks passed!"

@@ -40,16 +40,87 @@
         .animate-spin {
             animation: spin 1s linear infinite;
         }
+        
+        /* Error display */
+        .error-display {
+            background: #dc2626;
+            color: white;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+        }
     </style>
+    
+    <script>
+        // Error handler to display issues
+        window.addEventListener('error', function(event) {
+            console.error('Page error:', event.error);
+            
+            // Only show error display if dashboard fails to load
+            setTimeout(() => {
+                const root = document.getElementById('root');
+                if (root && !root.hasChildNodes()) {
+                    root.innerHTML = `
+                        <div class="error-display">
+                            <h2>Dashboard Loading Error</h2>
+                            <p>Error: ${event.message}</p>
+                            <p>Source: ${event.filename}</p>
+                            <p>Line: ${event.lineno}, Column: ${event.colno}</p>
+                            <br>
+                            <p>Please check browser console for details.</p>
+                            <p>Try: <a href="/dashboard-debug.html" style="color: #60a5fa;">Debug Page</a></p>
+                        </div>
+                    `;
+                }
+            }, 1000);
+        });
+        
+        // Log loading stages
+        console.log('1. Page loading started');
+    </script>
 </head>
 <body class="bg-gray-900">
-    <div id="root"></div>
+    <div id="root">
+        <!-- Initial loading indicator -->
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+            <div style="text-align: center; color: #9ca3af;">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <p>Loading Dashboard...</p>
+            </div>
+        </div>
+    </div>
     
     <!-- Load environment config first -->
     <script src="supabase-browser-config.js"></script>
+    <script>
+        console.log('2. Config loaded:', window.SUPABASE_CONFIG ? 'YES' : 'NO');
+        if (window.SUPABASE_CONFIG) {
+            console.log('   Environment:', window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PRODUCTION');
+        }
+    </script>
     
     <!-- Load the Supabase version of the dashboard -->
     <script type="text/babel" src="dashboard.js"></script>
+    <script>
+        console.log('3. Dashboard script tag added');
+        
+        // Check if dashboard loaded after a delay
+        setTimeout(() => {
+            const root = document.getElementById('root');
+            if (root && root.querySelector('.animate-spin') && !root.querySelector('[class*="container"]')) {
+                console.error('Dashboard failed to replace loading indicator');
+                root.innerHTML += `
+                    <div style="text-align: center; margin-top: 20px; color: #ef4444;">
+                        <p>Dashboard may have failed to load.</p>
+                        <p>Check console for errors or visit:</p>
+                        <a href="/dashboard-debug.html" style="color: #60a5fa;">Debug Page</a> | 
+                        <a href="/qa-test-suite.html" style="color: #60a5fa;">QA Tests</a>
+                    </div>
+                `;
+            }
+        }, 5000);
+    </script>
     
     <!-- Fallback for users with JavaScript disabled -->
     <noscript>

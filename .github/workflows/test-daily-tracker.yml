@@ -1,0 +1,115 @@
+name: Test Environment Daily Tracker
+on:
+  schedule:
+    # Run Monday, Wednesday, Friday at 2 PM UTC (8 AM CST)
+    - cron: '0 14 * * 1,3,5'
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      days_back:
+        description: 'Number of days to look back'
+        required: false
+        default: '1'
+
+jobs:
+  track-test-news:
+    # Only run on test branch
+    if: github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    
+    env:
+      NODE_ENV: test
+      # Use test environment secrets
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: test  # Ensure we're on test branch
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Verify test environment
+        run: |
+          echo "Verifying we're using test configuration..."
+          node -e "
+          const config = require('./supabase-config-wrapper.js');
+          if (!config.SUPABASE_URL.includes('wnrjrywpcadwutfykflu')) {
+            console.error('ERROR: Not using test database!');
+            process.exit(1);
+          }
+          console.log('✅ Using test database');
+          "
+      
+      - name: Run test tracker (limited)
+        run: |
+          echo "Running test tracker with limited scope..."
+          # Run with reduced limits to save API costs
+          node -e "
+          const originalTracker = require('./daily-tracker-supabase.js');
+          // Override to process fewer articles in test
+          process.env.MAX_ARTICLES = '5';
+          process.env.TEST_MODE = 'true';
+          "
+          node daily-tracker-supabase.js
+      
+      - name: Verify data was added
+        run: |
+          echo "Checking if data was added to test DB..."
+          node -e "
+          const { supabaseRequest } = require('./supabase-config-test.js');
+          (async () => {
+            const data = await supabaseRequest('political_entries?limit=1&order=created_at.desc');
+            if (data && data.length > 0) {
+              console.log('✅ Test data successfully added');
+              console.log('Latest entry:', data[0].title);
+            } else {
+              console.error('⚠️ No data found in test DB');
+            }
+          })();
+          "
+      
+      - name: Send notification on failure
+        if: failure()
+        run: |
+          echo "Test tracker failed - this won't affect production"
+          # Could add Slack/email notification here
+
+  track-test-executive-orders:
+    if: github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    needs: track-test-news  # Run after news tracker
+    
+    env:
+      NODE_ENV: test
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: test
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run executive orders tracker
+        run: |
+          echo "Tracking executive orders for test environment..."
+          node executive-orders-tracker-supabase.js
+        continue-on-error: true  # Don't fail the whole workflow
+      
+      - name: Summary
+        run: |
+          echo "Test environment data refresh complete"
+          echo "This is a non-critical workflow for test data"

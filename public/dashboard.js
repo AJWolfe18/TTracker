@@ -7,13 +7,17 @@ const { useState, useEffect, useCallback, useMemo } = React;
 const SUPABASE_URL = window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_URL : 'https://osjbulmltfpcoldydexg.supabase.co';
 const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_ANON_KEY : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
 
+// Detect environment for cache separation
+const IS_TEST_ENV = window.SUPABASE_CONFIG ? 
+  window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') : false;
+
 // Pagination settings
 const ITEMS_PER_PAGE = 20;
 const EO_ITEMS_PER_PAGE = 25;
 
 // Cache settings - 24 hour cache since data updates once daily
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_KEY_PREFIX = 'tt_cache_';
+const CACHE_KEY_PREFIX = IS_TEST_ENV ? 'tt_test_cache_' : 'tt_cache_'; // Environment-specific cache
 const FORCE_REFRESH_HOUR = 12; // Force refresh at noon each day
 
 // Cache helper functions
@@ -39,7 +43,9 @@ const getCachedData = (key) => {
       return null;
     }
     
-    console.log(`Using cached data for ${key} (age: ${Math.round(age/1000/60)} minutes)`);
+    if (IS_TEST_ENV) {
+      console.log(`Using cached data for ${key} (age: ${Math.round(age/1000/60)} minutes)`);
+    }
     return data;
   } catch (error) {
     console.error('Cache read error:', error);
@@ -54,7 +60,9 @@ const setCachedData = (key, data) => {
       timestamp: Date.now()
     };
     localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify(cacheData));
-    console.log(`Cached data for ${key}`);
+    if (IS_TEST_ENV) {
+      console.log(`Cached data for ${key}`);
+    }
   } catch (error) {
     console.error('Cache write error:', error);
     // If localStorage is full, clear old cache entries
@@ -122,6 +130,67 @@ const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache =
   
   return { success: true };
 };
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Dashboard Error:', error, errorInfo);
+    this.setState({ error, errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
+          <div className="bg-red-900 border border-red-700 rounded-lg p-8 max-w-2xl w-full">
+            <h1 className="text-2xl font-bold mb-4 text-red-400">⚠️ Dashboard Error</h1>
+            <p className="mb-4">Something went wrong loading the dashboard.</p>
+            <details className="mb-4">
+              <summary className="cursor-pointer text-red-300 hover:text-red-200">
+                Show Error Details
+              </summary>
+              <pre className="mt-2 p-4 bg-gray-800 rounded text-xs overflow-auto">
+                {this.state.error && this.state.error.toString()}
+                {this.state.errorInfo && this.state.errorInfo.componentStack}
+              </pre>
+            </details>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => window.location.reload()} 
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded"
+              >
+                Reload Page
+              </button>
+              <button 
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }} 
+                className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded"
+              >
+                Clear Cache & Reload
+              </button>
+            </div>
+            <p className="mt-4 text-sm text-gray-400">
+              Environment: {IS_TEST_ENV ? '🧪 TEST' : '🚀 PRODUCTION'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Construction Banner Component
 const ConstructionBanner = () => (
@@ -832,6 +901,58 @@ const TrumpyTrackerDashboard = () => {
   );
 };
 
-// Render the dashboard
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<TrumpyTrackerDashboard />);
+// Render the dashboard with error boundary and proper initialization
+function initializeDashboard() {
+  try {
+    const rootElement = document.getElementById('root');
+    
+    if (!rootElement) {
+      console.error('Root element not found');
+      return;
+    }
+    
+    // Check dependencies
+    if (!window.React || !window.ReactDOM) {
+      console.error('React not loaded');
+      rootElement.innerHTML = '<div style="color: red; padding: 20px;">React failed to load. Please refresh the page.</div>';
+      return;
+    }
+    
+    // Log environment for debugging
+    console.log('Dashboard initializing...', {
+      environment: IS_TEST_ENV ? 'TEST' : 'PRODUCTION',
+      configLoaded: !!window.SUPABASE_CONFIG,
+      supabaseUrl: SUPABASE_URL ? SUPABASE_URL.substring(0, 40) + '...' : 'Not set'
+    });
+    
+    // Create React root and render with error boundary
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <ErrorBoundary>
+        <TrumpyTrackerDashboard />
+      </ErrorBoundary>
+    );
+    
+    console.log('Dashboard render initiated');
+  } catch (error) {
+    console.error('Failed to initialize dashboard:', error);
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      rootElement.innerHTML = `
+        <div style="background: #dc2626; color: white; padding: 20px; margin: 20px; border-radius: 8px;">
+          <h2>Failed to Initialize Dashboard</h2>
+          <p>${error.message}</p>
+          <p style="margin-top: 10px;">Please try refreshing the page.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+// Wait for DOM and all scripts to be ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeDashboard);
+} else {
+  // Small delay to ensure Babel has processed everything
+  setTimeout(initializeDashboard, 100);
+}

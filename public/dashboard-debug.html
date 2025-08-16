@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Debug</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #0f0;
+            padding: 20px;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+        pre { 
+            background: #000; 
+            padding: 10px; 
+            border: 1px solid #333;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dashboard Debug Console</h1>
+    <div id="debug"></div>
+    
+    <!-- Same load order as index.html -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="supabase-browser-config.js"></script>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        let output = '';
+        
+        // Check 1: Config loaded
+        output += '<h2>1. Configuration Check</h2><pre>';
+        if (window.SUPABASE_CONFIG) {
+            output += '<span class="success">✓ Config loaded</span>\n';
+            output += `URL: ${window.SUPABASE_CONFIG.SUPABASE_URL}\n`;
+            output += `Environment: ${window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PRODUCTION'}\n`;
+        } else {
+            output += '<span class="error">✗ Config not loaded</span>\n';
+        }
+        output += '</pre>';
+        
+        // Check 2: React loaded
+        output += '<h2>2. React Check</h2><pre>';
+        if (window.React) {
+            output += '<span class="success">✓ React loaded</span>\n';
+            output += `Version: ${React.version}\n`;
+        } else {
+            output += '<span class="error">✗ React not loaded</span>\n';
+        }
+        
+        if (window.ReactDOM) {
+            output += '<span class="success">✓ ReactDOM loaded</span>\n';
+        } else {
+            output += '<span class="error">✗ ReactDOM not loaded</span>\n';
+        }
+        output += '</pre>';
+        
+        // Check 3: Babel loaded
+        output += '<h2>3. Babel Check</h2><pre>';
+        if (window.Babel) {
+            output += '<span class="success">✓ Babel loaded</span>\n';
+        } else {
+            output += '<span class="error">✗ Babel not loaded</span>\n';
+        }
+        output += '</pre>';
+        
+        // Check 4: Test API connection
+        output += '<h2>4. API Connection Test</h2><pre id="api-test">';
+        output += '<span class="warning">Testing...</span>';
+        output += '</pre>';
+        
+        // Check 5: Dashboard.js load attempt
+        output += '<h2>5. Dashboard Load Test</h2><pre id="dashboard-test">';
+        output += '<span class="warning">Attempting to load dashboard.js...</span>';
+        output += '</pre>';
+        
+        // Check 6: Console errors
+        output += '<h2>6. Console Errors</h2><pre id="console-errors">';
+        output += '<span class="warning">Monitoring console...</span>';
+        output += '</pre>';
+        
+        debug.innerHTML = output;
+        
+        // Capture console errors
+        const errors = [];
+        window.onerror = function(msg, source, lineno, colno, error) {
+            errors.push(`${msg} at ${source}:${lineno}:${colno}`);
+            document.getElementById('console-errors').innerHTML = 
+                errors.length > 0 
+                    ? '<span class="error">' + errors.join('\n') + '</span>'
+                    : '<span class="success">No errors</span>';
+            return false;
+        };
+        
+        // Test API
+        async function testAPI() {
+            const apiTest = document.getElementById('api-test');
+            try {
+                const response = await fetch(
+                    `${window.SUPABASE_CONFIG.SUPABASE_URL}/rest/v1/political_entries?limit=1`,
+                    {
+                        headers: {
+                            'apikey': window.SUPABASE_CONFIG.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    apiTest.innerHTML = `<span class="success">✓ API connected</span>\n`;
+                    apiTest.innerHTML += `Status: ${response.status}\n`;
+                    apiTest.innerHTML += `Data found: ${data.length > 0 ? 'Yes' : 'No'}\n`;
+                    if (data.length > 0) {
+                        apiTest.innerHTML += `First entry date: ${data[0].date}\n`;
+                    }
+                } else {
+                    apiTest.innerHTML = `<span class="error">✗ API error: ${response.status}</span>\n`;
+                    const errorText = await response.text();
+                    apiTest.innerHTML += `Error: ${errorText}\n`;
+                }
+            } catch (error) {
+                apiTest.innerHTML = `<span class="error">✗ Network error: ${error.message}</span>\n`;
+            }
+        }
+        
+        // Test dashboard load
+        async function testDashboard() {
+            const dashTest = document.getElementById('dashboard-test');
+            try {
+                // Try to fetch dashboard.js
+                const response = await fetch('dashboard.js');
+                if (response.ok) {
+                    const text = await response.text();
+                    dashTest.innerHTML = `<span class="success">✓ dashboard.js loaded</span>\n`;
+                    dashTest.innerHTML += `File size: ${text.length} bytes\n`;
+                    
+                    // Check if it's using the config
+                    if (text.includes('window.SUPABASE_CONFIG')) {
+                        dashTest.innerHTML += '<span class="success">✓ Uses dynamic config</span>\n';
+                    } else {
+                        dashTest.innerHTML += '<span class="warning">⚠ May not use dynamic config</span>\n';
+                    }
+                    
+                    // Try to transform with Babel
+                    try {
+                        const transformed = Babel.transform(text, { presets: ['react'] });
+                        dashTest.innerHTML += '<span class="success">✓ Babel transformation successful</span>\n';
+                        
+                        // Check for root element
+                        const root = document.getElementById('root');
+                        if (root) {
+                            dashTest.innerHTML += '<span class="success">✓ Root element exists</span>\n';
+                        } else {
+                            dashTest.innerHTML += '<span class="error">✗ Root element missing</span>\n';
+                        }
+                    } catch (babelError) {
+                        dashTest.innerHTML += `<span class="error">✗ Babel error: ${babelError.message}</span>\n`;
+                    }
+                } else {
+                    dashTest.innerHTML = `<span class="error">✗ Failed to load dashboard.js: ${response.status}</span>\n`;
+                }
+            } catch (error) {
+                dashTest.innerHTML = `<span class="error">✗ Error loading dashboard: ${error.message}</span>\n`;
+            }
+        }
+        
+        // Run tests
+        if (window.SUPABASE_CONFIG) {
+            testAPI();
+        }
+        testDashboard();
+        
+        // Update console errors after a delay
+        setTimeout(() => {
+            if (errors.length === 0) {
+                document.getElementById('console-errors').innerHTML = '<span class="success">✓ No console errors detected</span>';
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

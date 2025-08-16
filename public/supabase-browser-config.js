@@ -28,9 +28,11 @@ const config = isTestEnvironment ? TEST_CONFIG : PRODUCTION_CONFIG;
 // Make available globally
 window.SUPABASE_CONFIG = config;
 
-// Log environment (visible in browser console)
-console.log(`🔧 Using ${isTestEnvironment ? 'TEST' : 'PRODUCTION'} environment`);
-console.log(`📍 Supabase URL: ${config.SUPABASE_URL}`);
+// Log environment only in test mode or localhost
+if (isTestEnvironment || window.location.hostname === 'localhost') {
+  console.log(`🔧 Using ${isTestEnvironment ? 'TEST' : 'PRODUCTION'} environment`);
+  console.log(`📍 Supabase URL: ${config.SUPABASE_URL}`);
+}
 
 // Show a small badge in the corner if in test mode
 if (isTestEnvironment) {
