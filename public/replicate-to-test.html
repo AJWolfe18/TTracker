@@ -156,7 +156,9 @@
         }
         
         async function deleteData(url, key, endpoint) {
-            const response = await fetch(`${url}/rest/v1/${endpoint}`, {
+            // Supabase requires a filter for DELETE operations
+            // Using a filter that matches all records (id greater than 0)
+            const response = await fetch(`${url}/rest/v1/${endpoint}?id=gt.0`, {
                 method: 'DELETE',
                 headers: {
                     'apikey': key,
@@ -166,7 +168,8 @@
             });
             
             if (!response.ok && response.status !== 204) {
-                throw new Error(`Failed to delete ${endpoint}: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`Failed to delete ${endpoint}: ${response.status} - ${errorText}`);
             }
         }
         
