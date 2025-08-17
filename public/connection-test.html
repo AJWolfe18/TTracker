@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Connection Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #0f0;
+            padding: 20px;
+        }
+        .test {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #0f0;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #0ff; }
+    </style>
+</head>
+<body>
+    <h1>Quick Connection Test</h1>
+    
+    <div class="test">
+        <h2>1. Config Check</h2>
+        <div id="config"></div>
+    </div>
+    
+    <div class="test">
+        <h2>2. Direct API Test</h2>
+        <div id="api-test"></div>
+    </div>
+    
+    <div class="test">
+        <h2>3. CORS Headers</h2>
+        <div id="cors"></div>
+    </div>
+
+    <script src="supabase-browser-config.js"></script>
+    <script>
+        async function runTests() {
+            const url = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL;
+            const key = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+            
+            // 1. Config check
+            document.getElementById('config').innerHTML = `
+                <p>URL: <span class="info">${url}</span></p>
+                <p>Key exists: <span class="info">${key ? 'Yes' : 'No'}</span></p>
+                <p>Environment: <span class="info">${url.includes('wnrj') ? 'TEST' : 'PRODUCTION'}</span></p>
+            `;
+            
+            // 2. API Test
+            const apiDiv = document.getElementById('api-test');
+            apiDiv.innerHTML = '<p>Testing connection...</p>';
+            
+            try {
+                const response = await fetch(`${url}/rest/v1/political_entries?select=*&limit=1`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    apiDiv.innerHTML = `
+                        <p class="success">✅ Connection successful!</p>
+                        <p>Status: ${response.status}</p>
+                        <p>Data returned: ${data.length} entries</p>
+                    `;
+                    
+                    // 3. CORS check
+                    const corsDiv = document.getElementById('cors');
+                    const headers = {};
+                    response.headers.forEach((value, key) => {
+                        if (key.toLowerCase().includes('cors') || key.toLowerCase().includes('access')) {
+                            headers[key] = value;
+                        }
+                    });
+                    corsDiv.innerHTML = `<pre>${JSON.stringify(headers, null, 2)}</pre>`;
+                    
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                apiDiv.innerHTML = `
+                    <p class="error">❌ Connection failed!</p>
+                    <p class="error">Error: ${error.message}</p>
+                    <p>Check browser console for details</p>
+                `;
+                console.error('Full error:', error);
+                
+                // Try to see if it's CORS
+                if (error.message.includes('Failed to fetch')) {
+                    apiDiv.innerHTML += '<p class="error">Likely a CORS issue - check Supabase settings</p>';
+                }
+            }
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>
