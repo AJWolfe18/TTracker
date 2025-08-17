@@ -170,16 +170,38 @@ async function runTests() {
     
     console.log('\n🎯 TESTING ENVIRONMENT DETECTION\n');
     
-    // Check for TEST_BRANCH_MARKER.md (should NOT be in test folder)
-    const markerInRoot = await testFile(join(__dirname, 'TEST_BRANCH_MARKER.md'), 'TEST_BRANCH_MARKER.md in root (for test branch)');
-    if (!markerInRoot) {
-        const markerInTest = await testFile(join(__dirname, 'test/TEST_BRANCH_MARKER.md'), 'TEST_BRANCH_MARKER.md in test folder (wrong location!)');
-        if (markerInTest) {
-            issues.push({
-                severity: 'CRITICAL',
-                description: 'TEST_BRANCH_MARKER.md is in wrong location - must be in root!'
-            });
+    // Check branch to determine if TEST_BRANCH_MARKER should exist
+    try {
+        const gitHead = await fs.readFile(join(__dirname, '.git/HEAD'), 'utf8');
+        const isTestBranch = gitHead.includes('test');
+        
+        if (isTestBranch) {
+            // On test branch, marker should be in root
+            const markerInRoot = await testFile(join(__dirname, 'TEST_BRANCH_MARKER.md'), 'TEST_BRANCH_MARKER.md in root (required for test branch)');
+            if (!markerInRoot) {
+                issues.push({
+                    severity: 'CRITICAL',
+                    description: 'TEST_BRANCH_MARKER.md missing - test environment won\'t be detected!'
+                });
+            }
+        } else {
+            // On main branch, marker should NOT exist
+            totalTests++;
+            try {
+                await fs.access(join(__dirname, 'TEST_BRANCH_MARKER.md'));
+                console.log(`${RED}❌${RESET} TEST_BRANCH_MARKER.md exists on main branch (should not!)`);
+                failedTests++;
+                issues.push({
+                    severity: 'CRITICAL',
+                    description: 'TEST_BRANCH_MARKER.md found on main branch - remove it!'
+                });
+            } catch {
+                console.log(`${GREEN}✅${RESET} TEST_BRANCH_MARKER.md not on main (correct)`);
+                passedTests++;
+            }
         }
+    } catch (error) {
+        console.log(`${YELLOW}⚠️${RESET} Cannot determine branch, skipping marker test`);
     }
     
     console.log('\n🔍 TESTING PUBLIC FILES\n');
