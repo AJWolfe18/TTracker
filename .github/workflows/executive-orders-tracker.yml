@@ -24,7 +24,7 @@ jobs:
     - name: Track Executive Orders (Supabase)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: node executive-orders-tracker-supabase.js
+      run: node scripts/executive-orders-tracker-supabase.js
       
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |

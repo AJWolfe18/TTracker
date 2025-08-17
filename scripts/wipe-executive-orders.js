@@ -1,7 +1,7 @@
 // COMPLETE WIPE - Delete ALL executive orders from production
 // This cleans the slate so we can start fresh with correct data
 
-import { supabaseRequest } from './supabase-config-node.js';
+import { supabaseRequest } from '../config/supabase-config-node.js';
 
 console.log('🗑️  COMPLETE EXECUTIVE ORDERS WIPE');
 console.log('==================================\n');

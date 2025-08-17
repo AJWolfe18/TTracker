@@ -2,10 +2,14 @@
   "name": "political-tracker",
   "version": "1.0.0",
   "description": "Automated political accountability tracker",
-  "main": "daily-tracker.js",
+  "main": "scripts/daily-tracker-supabase.js",
   "type": "module",
   "scripts": {
-    "start": "node daily-tracker.js"
+    "start": "node scripts/daily-tracker-supabase.js",
+    "daily": "node scripts/daily-tracker-supabase.js",
+    "eo": "node scripts/executive-orders-tracker-supabase.js",
+    "server": "node scripts/simple-server.js",
+    "test": "node test-verification.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"

@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/
+.nyc_output
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Backup files (keep only in backups folder)
+*.backup
+*.bak
+
+# Python (for any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Local test files that shouldn't be tracked
+test-local/
+local-test-data/
+
+# Sensitive data
+*.key
+*.pem
+*.cert
+
+# Database dumps (unless specifically tracked)
+*.sql.gz
+*.dump
+
+# Large data files
+*.csv
+*.xlsx
+*.xls
+
+# Keep these specific files
+!complete-schema-fix.sql
+!COMPLETE-TEST-SCHEMA-FIX.sql
+!fix-dashboard-stats-view.sql
+!fix-test-schema.sql
