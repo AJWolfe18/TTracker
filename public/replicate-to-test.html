@@ -268,7 +268,7 @@
                     
                     // Clean the data (remove any fields that might cause issues)
                     const cleanPolitical = prodData.political.map(entry => {
-                        const { id, ...rest } = entry; // Remove ID to let database generate new ones
+                        const { id, added_at, ...rest } = entry; // Remove ID and added_at (might not exist in test)
                         return rest;
                     });
                     
@@ -282,7 +282,7 @@
                     
                     // Clean the data
                     const cleanExecutive = prodData.executive.map(order => {
-                        const { id, ...rest } = order; // Remove ID
+                        const { id, added_at, ...rest } = order; // Remove ID and added_at
                         return rest;
                     });
                     
