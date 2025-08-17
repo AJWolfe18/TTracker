@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Environment Check</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #0f0;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .check {
+            background: #000;
+            border: 1px solid #0f0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .warning { color: #ff0; }
+        .info { color: #0ff; }
+        h1 {
+            text-align: center;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+        }
+        pre {
+            background: #111;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Environment Verification</h1>
+        
+        <div class="check">
+            <h2>Environment Detection</h2>
+            <div id="env-detection"></div>
+        </div>
+        
+        <div class="check">
+            <h2>Configuration Values</h2>
+            <div id="config-values"></div>
+        </div>
+        
+        <div class="check">
+            <h2>Database Connection Test</h2>
+            <div id="db-test"></div>
+        </div>
+        
+        <div class="check">
+            <h2>Data Counts</h2>
+            <div id="data-counts"></div>
+        </div>
+    </div>
+
+    <!-- Load Supabase configuration -->
+    <script src="supabase-browser-config.js"></script>
+    
+    <script>
+        // Check environment detection
+        function checkEnvironment() {
+            const envDiv = document.getElementById('env-detection');
+            const hostname = window.location.hostname;
+            const isTest = hostname.includes('test--') || hostname.includes('test.');
+            
+            envDiv.innerHTML = `
+                <p>Hostname: <span class="info">${hostname}</span></p>
+                <p>Environment: <span class="${isTest ? 'success' : 'warning'}">${isTest ? 'TEST' : 'PRODUCTION'}</span></p>
+                <p>URL Pattern Match: <span class="${hostname.includes('test--') ? 'success' : 'error'}">${hostname.includes('test--') ? '✓' : '✗'} test--</span></p>
+            `;
+        }
+        
+        // Check configuration
+        function checkConfig() {
+            const configDiv = document.getElementById('config-values');
+            const url = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL || 'NOT FOUND';
+            const key = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY || 'NOT FOUND';
+            
+            const isTestDB = url.includes('wnrjrywpcadwutfykflu');
+            const isProdDB = url.includes('osjbulmltfpcoldydexg');
+            
+            configDiv.innerHTML = `
+                <p>Supabase URL: <span class="${isTestDB ? 'success' : isProdDB ? 'warning' : 'error'}">${url}</span></p>
+                <p>Database: <span class="${isTestDB ? 'success' : 'warning'}">${isTestDB ? 'TEST Database' : isProdDB ? 'PRODUCTION Database' : 'Unknown'}</span></p>
+                <p>Anon Key: <span class="info">${key.substring(0, 20)}...</span></p>
+                <p>Config Source: <span class="info">${window.SUPABASE_CONFIG ? 'window.SUPABASE_CONFIG' : 'Direct window properties'}</span></p>
+            `;
+        }
+        
+        // Test database connection
+        async function testDatabase() {
+            const dbDiv = document.getElementById('db-test');
+            const url = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL;
+            const key = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+            
+            if (!url || !key) {
+                dbDiv.innerHTML = '<p class="error">❌ No configuration found</p>';
+                return;
+            }
+            
+            try {
+                dbDiv.innerHTML = '<p class="info">Testing connection...</p>';
+                
+                const response = await fetch(`${url}/rest/v1/political_entries?select=count`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'count=exact',
+                        'Range': '0-0'
+                    }
+                });
+                
+                if (response.ok) {
+                    dbDiv.innerHTML = '<p class="success">✅ Database connection successful</p>';
+                } else {
+                    dbDiv.innerHTML = `<p class="error">❌ Connection failed: ${response.status} ${response.statusText}</p>`;
+                }
+            } catch (error) {
+                dbDiv.innerHTML = `<p class="error">❌ Connection error: ${error.message}</p>`;
+            }
+        }
+        
+        // Get data counts
+        async function getDataCounts() {
+            const countsDiv = document.getElementById('data-counts');
+            const url = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL;
+            const key = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+            
+            if (!url || !key) {
+                countsDiv.innerHTML = '<p class="error">❌ No configuration found</p>';
+                return;
+            }
+            
+            try {
+                countsDiv.innerHTML = '<p class="info">Loading counts...</p>';
+                
+                // Get political entries count
+                const politicalResponse = await fetch(`${url}/rest/v1/political_entries?select=*`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`,
+                        'Prefer': 'count=exact',
+                        'Range': '0-0'
+                    }
+                });
+                
+                // Get executive orders count
+                const eoResponse = await fetch(`${url}/rest/v1/executive_orders?select=*`, {
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`,
+                        'Prefer': 'count=exact',
+                        'Range': '0-0'
+                    }
+                });
+                
+                const politicalCount = politicalResponse.headers.get('content-range')?.split('/')[1] || '0';
+                const eoCount = eoResponse.headers.get('content-range')?.split('/')[1] || '0';
+                
+                countsDiv.innerHTML = `
+                    <p>Political Entries: <span class="info">${politicalCount}</span></p>
+                    <p>Executive Orders: <span class="info">${eoCount}</span></p>
+                    <p class="${parseInt(politicalCount) > 0 || parseInt(eoCount) > 0 ? 'warning' : 'success'}">
+                        ${parseInt(politicalCount) > 0 || parseInt(eoCount) > 0 ? '⚠️ Test database contains data' : '✅ Test database is empty (clean state)'}
+                    </p>
+                `;
+            } catch (error) {
+                countsDiv.innerHTML = `<p class="error">❌ Failed to get counts: ${error.message}</p>`;
+            }
+        }
+        
+        // Run all checks
+        window.addEventListener('DOMContentLoaded', () => {
+            checkEnvironment();
+            checkConfig();
+            testDatabase();
+            getDataCounts();
+        });
+    </script>
+</body>
+</html>
