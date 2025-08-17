@@ -268,7 +268,16 @@
                     
                     // Clean the data (remove any fields that might cause issues)
                     const cleanPolitical = prodData.political.map(entry => {
-                        const { id, added_at, ...rest } = entry; // Remove ID and added_at (might not exist in test)
+                        // Remove fields that might not exist in test schema
+                        const { 
+                            id, 
+                            added_at, 
+                            archive_reason, 
+                            verified_by, 
+                            tags, 
+                            impact_score,
+                            ...rest 
+                        } = entry;
                         return rest;
                     });
                     
@@ -282,7 +291,16 @@
                     
                     // Clean the data
                     const cleanExecutive = prodData.executive.map(order => {
-                        const { id, added_at, ...rest } = order; // Remove ID and added_at
+                        // Remove fields that might not exist in test schema
+                        const { 
+                            id, 
+                            added_at, 
+                            archive_reason,
+                            agencies_affected,
+                            implementation_date,
+                            status,
+                            ...rest 
+                        } = order;
                         return rest;
                     });
                     
