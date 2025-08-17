@@ -266,19 +266,23 @@
                 if (prodData.political.length > 0) {
                     log(`Copying ${prodData.political.length} political entries...`, 'info');
                     
-                    // Clean the data (remove any fields that might cause issues)
+                    // Clean the data (remove ANY fields that might not exist in test)
                     const cleanPolitical = prodData.political.map(entry => {
-                        // Remove fields that might not exist in test schema
-                        const { 
-                            id, 
-                            added_at, 
-                            archive_reason, 
-                            verified_by, 
-                            tags, 
-                            impact_score,
-                            ...rest 
-                        } = entry;
-                        return rest;
+                        // Only keep the core fields that we KNOW exist in test
+                        return {
+                            date: entry.date,
+                            actor: entry.actor,
+                            category: entry.category,
+                            title: entry.title,
+                            description: entry.description,
+                            source: entry.source,
+                            source_url: entry.source_url,
+                            verified: entry.verified || false,
+                            severity: entry.severity,
+                            archived: entry.archived || false,
+                            created_at: entry.created_at || new Date().toISOString(),
+                            updated_at: entry.updated_at || new Date().toISOString()
+                        };
                     });
                     
                     await insertData(TEST_URL, TEST_KEY, 'political_entries', cleanPolitical);
@@ -289,19 +293,21 @@
                 if (prodData.executive.length > 0) {
                     log(`Copying ${prodData.executive.length} executive orders...`, 'info');
                     
-                    // Clean the data
+                    // Clean the data (only keep core fields)
                     const cleanExecutive = prodData.executive.map(order => {
-                        // Remove fields that might not exist in test schema
-                        const { 
-                            id, 
-                            added_at, 
-                            archive_reason,
-                            agencies_affected,
-                            implementation_date,
-                            status,
-                            ...rest 
-                        } = order;
-                        return rest;
+                        // Only keep the core fields that we KNOW exist in test
+                        return {
+                            date: order.date,
+                            order_number: order.order_number,
+                            title: order.title,
+                            description: order.description,
+                            federal_register_url: order.federal_register_url,
+                            severity: order.severity,
+                            category: order.category,
+                            archived: order.archived || false,
+                            created_at: order.created_at || new Date().toISOString(),
+                            updated_at: order.updated_at || new Date().toISOString()
+                        };
                     });
                     
                     await insertData(TEST_URL, TEST_KEY, 'executive_orders', cleanExecutive);
