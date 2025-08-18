@@ -27,6 +27,16 @@ function getDateRangePrompt() {
     return `between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`;
 }
 
+// Helper to normalize headlines for better matching
+function normalizeHeadline(title) {
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '') // Remove punctuation
+        .replace(/\b(the|a|an|and|or|but|in|on|at|to|for|with|of|from|by)\b/g, '') // Remove common words
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 // Enhanced duplicate detection for Supabase
 async function isDuplicate(title, sourceUrl, date) {
     try {
@@ -34,6 +44,7 @@ async function isDuplicate(title, sourceUrl, date) {
         if (sourceUrl) {
             const urlMatch = await supabaseRequest(`political_entries?source_url=eq.${encodeURIComponent(sourceUrl)}&limit=1`);
             if (urlMatch && urlMatch.length > 0) {
+                console.log('  ⚠️ Duplicate URL detected');
                 return true;
             }
         }
@@ -43,7 +54,44 @@ async function isDuplicate(title, sourceUrl, date) {
         const titleMatch = await supabaseRequest(
             `political_entries?title.ilike.%25${encodeURIComponent(cleanTitle)}%25&date=eq.${date}&limit=1`
         );
-        return titleMatch && titleMatch.length > 0;
+        if (titleMatch && titleMatch.length > 0) {
+            console.log('  ⚠️ Similar title on same date detected');
+            return true;
+        }
+        
+        // NEW: Check for similar headlines with different wording
+        const normalized = normalizeHeadline(title);
+        const words = normalized.split(' ').filter(w => w.length > 3);
+        
+        // Get recent entries from same date
+        const recentEntries = await supabaseRequest(
+            `political_entries?date=eq.${date}&select=title,actor`
+        );
+        
+        for (const entry of (recentEntries || [])) {
+            const existingNormalized = normalizeHeadline(entry.title);
+            const existingWords = existingNormalized.split(' ').filter(w => w.length > 3);
+            
+            // Calculate word overlap
+            const matchingWords = words.filter(w => existingWords.includes(w));
+            const matchRatio = matchingWords.length / Math.max(words.length, existingWords.length);
+            
+            // If 60% of significant words match, likely duplicate
+            if (matchRatio > 0.6) {
+                console.log(`  📰 Similar headline detected (${Math.round(matchRatio * 100)}% word match)`);
+                console.log(`     Existing: "${entry.title}"`);
+                console.log(`     New: "${title}"`);
+                return true;
+            }
+            
+            // Also check if same actor + very similar title
+            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.4) {
+                console.log(`  📰 Same actor + similar headline detected`);
+                return true;
+            }
+        }
+        
+        return false;
         
     } catch (error) {
         console.error('Error checking for duplicates:', error.message);

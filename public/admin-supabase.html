@@ -747,9 +747,9 @@
                     method: 'POST',
                     headers: ghHeaders(currentToken),
                     body: JSON.stringify({
-                        event_type: 'manual_article_submission',
+                        event_type: 'process-manual-article',
                         client_payload: {
-                            url: url,
+                            article_url: url,
                             submitted_by: 'admin',
                             submitted_at: new Date().toISOString()
                         }
@@ -812,7 +812,7 @@
                     showMessage('No entries selected', 'error');
                     return;
                 }
-                toggleArchive(Array.from(selectedEntries), true);
+                toggleArchiveEntries(Array.from(selectedEntries), true);
             });
 
             document.getElementById('restoreSelected').addEventListener('click', () => {
@@ -820,7 +820,7 @@
                     showMessage('No entries selected', 'error');
                     return;
                 }
-                toggleArchive(Array.from(selectedEntries), false);
+                toggleArchiveEntries(Array.from(selectedEntries), false);
             });
 
             document.getElementById('deleteSelected').addEventListener('click', async () => {

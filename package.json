@@ -5,10 +5,16 @@
   "main": "daily-tracker.js",
   "type": "module",
   "scripts": {
-    "start": "node daily-tracker.js"
+    "start": "node daily-tracker.js",
+    "daily": "node scripts/daily-tracker-supabase.js",
+    "eo": "node scripts/executive-orders-tracker-supabase.js",
+    "server": "node scripts/simple-server.js",
+    "test": "node test-verification.js"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "@supabase/supabase-js": "^2.39.1",
+    "playwright": "^1.40.0"
   },
   "keywords": ["political", "tracker", "accountability", "automation"],
   "author": "Political Transparency Project",
