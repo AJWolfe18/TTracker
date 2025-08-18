@@ -1,7 +1,7 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase with EXACT prompts from daily-tracker.js
 import fetch from 'node-fetch';
-import { supabaseRequest } from '../config/supabase-config-node.js';
+import { supabaseRequest } from './supabase-config-node.js';
 
 console.log('🚀 DAILY POLITICAL TRACKER - SUPABASE VERSION (EXACT PROMPTS)');
 console.log('=============================================================\n');
@@ -63,9 +63,9 @@ async function isDuplicate(title, sourceUrl, date) {
         const normalized = normalizeHeadline(title);
         const words = normalized.split(' ').filter(w => w.length > 3);
         
-        // Get recent entries from same date (limited to prevent timeout)
+        // Get recent entries from same date
         const recentEntries = await supabaseRequest(
-            `political_entries?date=eq.${date}&select=title,actor&limit=50&order=created_at.desc`
+            `political_entries?date=eq.${date}&select=title,actor`
         );
         
         for (const entry of (recentEntries || [])) {
@@ -76,8 +76,8 @@ async function isDuplicate(title, sourceUrl, date) {
             const matchingWords = words.filter(w => existingWords.includes(w));
             const matchRatio = matchingWords.length / Math.max(words.length, existingWords.length);
             
-            // If 75% of significant words match, likely duplicate (raised threshold to reduce false positives)
-            if (matchRatio > 0.75) {
+            // If 60% of significant words match, likely duplicate
+            if (matchRatio > 0.6) {
                 console.log(`  📰 Similar headline detected (${Math.round(matchRatio * 100)}% word match)`);
                 console.log(`     Existing: "${entry.title}"`);
                 console.log(`     New: "${title}"`);
@@ -85,7 +85,7 @@ async function isDuplicate(title, sourceUrl, date) {
             }
             
             // Also check if same actor + very similar title
-            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.5) {
+            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.4) {
                 console.log(`  📰 Same actor + similar headline detected`);
                 return true;
             }
