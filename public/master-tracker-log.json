@@ -1,5 +1,21 @@
 [
   {
+    "id": "1755487715106-twy4znw11",
+    "date": "2025-08-17",
+    "actor": "Donald Trump",
+    "category": "Government Oversight",
+    "title": "Live updates: Trump tells Zelensky to give up Crimea and agree to never join NATO | CNN Politics",
+    "description": "A host of European leaders will join Ukrainian President Volodymyr Zelensky for talks at the White House with US President Donald Trump tomorrow. The meeting comes on the heels of Trump’s summit in Alaska with Russia’s Vladimir Putin. Follow for live updates.",
+    "source_url": "https://www.cnn.com/politics/live-news/trump-putin-zelensky-ukraine-news-08-17-25",
+    "verified": true,
+    "severity": "high",
+    "status": "published",
+    "added_at": "2025-08-18T03:28:35.106Z",
+    "manual_submission": true,
+    "submitted_by": "admin",
+    "processed_at": "2025-08-18T03:28:35.106Z"
+  },
+  {
     "date": "2025-08-10",
     "actor": "Department of Education",
     "category": "Leadership Appointment",
