@@ -34,6 +34,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
+    - name: Detect environment
+      id: env_detect
+      run: |
+        echo "Current ref: ${{ github.ref }}"
+        echo "Current branch: ${GITHUB_REF#refs/heads/}"
+        
+        # Check if we're on test branch or if test file exists
+        if [[ "${{ github.ref }}" == "refs/heads/test" ]] || [[ -f "TEST_BRANCH_MARKER.md" ]]; then
+          echo "environment=test" >> $GITHUB_OUTPUT
+          echo "🧪 Using TEST environment"
+        else
+          echo "environment=production" >> $GITHUB_OUTPUT
+          echo "🚀 Using PRODUCTION environment"
+        fi
+      
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -48,8 +63,8 @@ jobs:
     - name: Process article
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+        SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
         INPUT_DATA: |
           {
             "url": "${{ github.event.inputs.article_url || github.event.client_payload.article_url }}",
