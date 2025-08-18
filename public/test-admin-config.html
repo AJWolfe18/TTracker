@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Admin Config</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            background: #1a202c;
+            color: white;
+        }
+        .config-box {
+            background: #2d3748;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .url {
+            background: #1a202c;
+            padding: 10px;
+            border-radius: 4px;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .test { color: #22c55e; }
+        .prod { color: #ef4444; }
+    </style>
+    <script src="supabase-browser-config.js"></script>
+</head>
+<body>
+    <h1>Admin Panel Configuration Test</h1>
+    
+    <div class="config-box">
+        <h2>Current Configuration</h2>
+        <p>Loading configuration...</p>
+        <div id="config-info"></div>
+    </div>
+    
+    <div class="config-box">
+        <h2>Admin Panel Test</h2>
+        <p>Testing admin-supabase.html configuration:</p>
+        <div id="admin-config"></div>
+    </div>
+    
+    <script>
+        // Test the configuration
+        const configDiv = document.getElementById('config-info');
+        const adminDiv = document.getElementById('admin-config');
+        
+        // Check if config is loaded
+        if (window.SUPABASE_CONFIG) {
+            const isTest = window.SUPABASE_CONFIG.SUPABASE_URL.includes('wnrjrywpcadwutfykflu');
+            configDiv.innerHTML = `
+                <p><strong>Environment:</strong> <span class="${isTest ? 'test' : 'prod'}">${isTest ? 'TEST' : 'PRODUCTION'}</span></p>
+                <p><strong>Supabase URL:</strong></p>
+                <div class="url">${window.SUPABASE_CONFIG.SUPABASE_URL}</div>
+                <p><strong>Anon Key (first 20 chars):</strong></p>
+                <div class="url">${window.SUPABASE_CONFIG.SUPABASE_ANON_KEY.substring(0, 20)}...</div>
+            `;
+            
+            // Test what admin panel would use
+            const SUPABASE_URL = window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_URL : 'https://osjbulmltfpcoldydexg.supabase.co';
+            const isAdminTest = SUPABASE_URL.includes('wnrjrywpcadwutfykflu');
+            
+            adminDiv.innerHTML = `
+                <p><strong>Admin would connect to:</strong> <span class="${isAdminTest ? 'test' : 'prod'}">${isAdminTest ? 'TEST' : 'PRODUCTION'}</span> database</p>
+                <div class="url">${SUPABASE_URL}</div>
+            `;
+        } else {
+            configDiv.innerHTML = '<p style="color: #ef4444;">ERROR: Configuration not loaded!</p>';
+        }
+        
+        // Show current hostname
+        configDiv.innerHTML += `<p><strong>Current hostname:</strong> ${window.location.hostname}</p>`;
+    </script>
+</body>
+</html>
