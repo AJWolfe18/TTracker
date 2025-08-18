@@ -1,20 +1,145 @@
-// manual-article-processor.js - FIXED VERSION
-import fs from 'fs/promises';
+/**
+ * Manual Article Processor
+ * Processes articles that are manually submitted through the admin interface
+ * Uses Playwright as fallback for sites that block normal requests
+ */
+
 import fetch from 'node-fetch';
+import { chromium } from 'playwright';
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-console.log('🔄 MANUAL ARTICLE PROCESSOR (ENHANCED)');
-console.log('======================================\n');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// ADD: Environment validation
+console.log('🔄 MANUAL ARTICLE PROCESSOR');
+console.log('============================\n');
+
+// Environment validation
 if (!process.env.OPENAI_API_KEY) {
     console.error('❌ OPENAI_API_KEY environment variable is required');
     process.exit(1);
 }
 
-// Generate simple ID
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    console.error('❌ SUPABASE_URL and SUPABASE_ANON_KEY environment variables are required');
+    process.exit(1);
+}
+
+// Detect environment and load appropriate config
+const isTestBranch = fs.existsSync(path.join(__dirname, 'TEST_BRANCH_MARKER.md'));
+const configPath = isTestBranch 
+    ? path.join(__dirname, 'supabase-config-test.js')
+    : path.join(__dirname, 'supabase-config-node.js');
+
+console.log(`📍 Environment: ${isTestBranch ? 'TEST' : 'PRODUCTION'}`);
+
+const config = await import(`file://${configPath}`);
+const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+
+// Get input from GitHub Actions or environment
+const inputData = JSON.parse(process.env.INPUT_DATA || '{}');
+const { url, title, category, submitted_by } = inputData;
+
+if (!url) {
+    console.error('❌ No URL provided');
+    process.exit(1);
+}
+
+console.log(`📋 Processing request:`);
+console.log(`  URL: ${url}`);
+console.log(`  Title: ${title || 'To be extracted'}`);
+console.log(`  Category: ${category || 'Political News'}`);
+console.log(`  Submitted by: ${submitted_by || 'admin'}\n`);
+
+// Generate unique ID
 function generateId() {
     return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+// Normalize URL to detect duplicates
+function normalizeUrl(urlString) {
+    try {
+        const u = new URL(urlString);
+        
+        // Remove common tracking parameters
+        const trackingParams = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+            'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'referer',
+            'fb_action_ids', 'fb_action_types', 'fb_source',
+            '_ga', '_gid', '__twitter_impression',
+            'amp', 's', 'sh', 'smid', 'CMP'
+        ];
+        
+        trackingParams.forEach(param => u.searchParams.delete(param));
+        
+        // Standardize hostname (remove www)
+        u.hostname = u.hostname.replace(/^www\./, '');
+        
+        // Remove trailing slash and fragment
+        let normalized = u.toString().replace(/\/$/, '').replace(/#.*$/, '');
+        
+        // Convert to lowercase for consistency
+        normalized = normalized.toLowerCase();
+        
+        return normalized;
+    } catch (error) {
+        console.error('Error normalizing URL:', error);
+        return urlString;
+    }
+}
+
+// Check for duplicate articles
+async function checkDuplicate(url, title) {
+    const normalizedUrl = normalizeUrl(url);
+    console.log(`  🔍 Checking for duplicates...`);
+    console.log(`     Normalized URL: ${normalizedUrl}`);
+    
+    // Check exact URL match
+    const { data: urlMatch, error: urlError } = await supabase
+        .from('political_entries')
+        .select('id, title, date, source_url')
+        .eq('source_url', normalizedUrl)
+        .single();
+    
+    if (urlMatch && !urlError) {
+        console.log(`  ⚠️ Duplicate URL found: "${urlMatch.title}" from ${urlMatch.date}`);
+        return { 
+            isDuplicate: true, 
+            type: 'exact_url', 
+            existing: urlMatch,
+            message: `This article already exists: "${urlMatch.title}" from ${urlMatch.date}`
+        };
+    }
+    
+    // Check for similar titles (if we have a title)
+    if (title && title.length > 20) {
+        const titleStart = title.substring(0, 50).replace(/[^a-zA-Z0-9\s]/g, '');
+        const { data: titleMatches } = await supabase
+            .from('political_entries')
+            .select('id, title, source_url, date')
+            .ilike('title', `${titleStart}%`)
+            .limit(3);
+        
+        if (titleMatches && titleMatches.length > 0) {
+            console.log(`  ℹ️ Found ${titleMatches.length} similar article(s):`);
+            titleMatches.forEach(match => {
+                console.log(`     - "${match.title.substring(0, 60)}..." from ${match.date}`);
+            });
+            // Don't block, just warn
+            return { 
+                isDuplicate: false, 
+                type: 'similar_titles',
+                similar: titleMatches,
+                message: 'Similar articles found but proceeding with new entry'
+            };
+        }
+    }
+    
+    console.log(`  ✅ No duplicates found`);
+    return { isDuplicate: false };
 }
 
 // Check if source is verified
@@ -25,7 +150,7 @@ function isVerifiedSource(url) {
         'cnn.com', 'foxnews.com', 'nbcnews.com', 'abcnews.go.com', 
         'cbsnews.com', 'msnbc.com', 'npr.org', 'pbs.org', 'politico.com',
         'thehill.com', 'axios.com', 'bloomberg.com', 'cnbc.com', 'forbes.com',
-        'propublica.org', 'courthousenews.com'
+        'propublica.org', 'courthousenews.com', 'whitehouse.gov'
     ];
     
     try {
@@ -33,70 +158,6 @@ function isVerifiedSource(url) {
         return verifiedDomains.some(verified => domain.includes(verified)) || domain.endsWith('.gov');
     } catch {
         return false;
-    }
-}
-
-// Enhanced fetch with multiple user agents and retry logic
-async function fetchArticleContent(url) {
-    const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0'
-    ];
-    
-    console.log(`  📄 Fetching content from: ${url}`);
-    
-    for (let attempt = 0; attempt < userAgents.length; attempt++) {
-        try {
-            const userAgent = userAgents[attempt];
-            console.log(`  🔄 Attempt ${attempt + 1}/${userAgents.length} with User-Agent: ${userAgent.split(' ')[2]}...`);
-            
-            // FIX: Proper timeout implementation
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': userAgent,
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Sec-Fetch-Dest': 'document',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-Site': 'none',
-                    'Cache-Control': 'max-age=0'
-                },
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (response.ok) {
-                const html = await response.text();
-                console.log(`  ✅ Successfully fetched content (${html.length} bytes)`);
-                return extractArticleData(html, url);
-            } else {
-                console.log(`  ⚠️ Attempt ${attempt + 1} failed: HTTP ${response.status}`);
-                if (attempt === userAgents.length - 1) {
-                    throw new Error(`All fetch attempts failed. Final: HTTP ${response.status}: ${response.statusText}`);
-                }
-                // Wait before next attempt
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            
-        } catch (error) {
-            console.log(`  ⚠️ Attempt ${attempt + 1} error: ${error.message}`);
-            if (attempt === userAgents.length - 1) {
-                // If all attempts fail, return manual entry
-                console.log(`  🔧 All fetch attempts failed, creating manual entry...`);
-                return createManualEntry(url);
-            }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
     }
 }
 
@@ -112,22 +173,23 @@ function extractArticleData(html, url) {
         ];
         
         const titleMatch = titleMatches.find(match => match);
-        let title = titleMatch ? titleMatch[1].trim() : '';
+        let extractedTitle = titleMatch ? titleMatch[1].trim() : '';
         
         // Clean up title
-        title = title.replace(/&quot;/g, '"')
-                   .replace(/&amp;/g, '&')
-                   .replace(/&lt;/g, '<')
-                   .replace(/&gt;/g, '>')
-                   .replace(/\s+/g, ' ')
-                   .trim();
+        extractedTitle = extractedTitle
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ')
+            .trim();
         
         // Remove site name from title
         const siteName = new URL(url).hostname.replace('www.', '');
-        title = title.replace(new RegExp(`\\s*[-|–]\\s*${siteName}.*$`, 'i'), '');
+        extractedTitle = extractedTitle.replace(new RegExp(`\\s*[-|–]\\s*${siteName}.*$`, 'i'), '');
         
-        if (!title) {
-            title = `Article from ${siteName}`;
+        if (!extractedTitle) {
+            extractedTitle = title || `Article from ${siteName}`;
         }
         
         // Extract description
@@ -141,328 +203,428 @@ function extractArticleData(html, url) {
         let description = descMatch ? descMatch[1].trim() : '';
         
         // Clean up description
-        description = description.replace(/&quot;/g, '"')
-                               .replace(/&amp;/g, '&')
-                               .replace(/&lt;/g, '<')
-                               .replace(/&gt;/g, '>')
-                               .replace(/\s+/g, ' ')
-                               .trim();
+        description = description
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ')
+            .trim();
         
         if (!description || description.length < 20) {
-            description = `Political article from ${siteName} requiring manual review`;
+            description = `Political article from ${siteName} requiring review`;
         }
         
         // Extract date
         const dateMatches = [
             html.match(/<meta[^>]+property="article:published_time"[^>]+content="([^"]+)"/i),
             html.match(/<meta[^>]+name="publish-date"[^>]+content="([^"]+)"/i),
-            html.match(/<time[^>]+datetime="([^"]+)"/i),
-            html.match(/(\d{4}-\d{2}-\d{2})/g)
+            html.match(/<time[^>]+datetime="([^"]+)"/i)
         ];
         
-        let articleDate = new Date().toISOString().split('T')[0]; // Default to today
+        let articleDate = new Date().toISOString().split('T')[0];
         
         for (const dateMatch of dateMatches) {
-            if (dateMatch) {
+            if (dateMatch && dateMatch[1]) {
                 try {
-                    let dateStr;
-                    if (Array.isArray(dateMatch)) {
-                        // Global regex match - use first result
-                        dateStr = dateMatch[0];
-                    } else if (dateMatch[1]) {
-                        // Regex capture group - use captured group
-                        dateStr = dateMatch[1];
-                    } else {
-                        // Skip this match
-                        continue;
-                    }
-                    
-                    const parsedDate = new Date(dateStr);
+                    const parsedDate = new Date(dateMatch[1]);
                     if (!isNaN(parsedDate.getTime())) {
                         articleDate = parsedDate.toISOString().split('T')[0];
                         break;
                     }
                 } catch (e) {
-                    // Continue to next match
                     continue;
                 }
             }
         }
         
-        console.log(`  ✅ Extracted: "${title.substring(0, 60)}..."`);
-        
-        return { title, description, date: articleDate };
+        return {
+            success: true,
+            title: extractedTitle,
+            description: description,
+            date: articleDate,
+            extraction_method: 'simple_fetch'
+        };
         
     } catch (error) {
         console.error(`  ❌ Error extracting article data: ${error.message}`);
-        return createManualEntry(url);
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
 
-// Create manual entry when scraping fails
-function createManualEntry(url) {
-    const domain = new URL(url).hostname.replace('www.', '');
+// Try simple fetch first (fastest method)
+async function trySimpleFetch(url) {
+    console.log('📄 Attempting simple fetch...');
     
-    return {
-        title: `Manual Article from ${domain}`,
-        description: `Article submitted manually from ${domain}. Content extraction failed - requires manual review.`,
-        date: new Date().toISOString().split('T')[0]
-    };
+    const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+    ];
+    
+    for (let attempt = 0; attempt < userAgents.length; attempt++) {
+        try {
+            const userAgent = userAgents[attempt];
+            console.log(`  🔄 Attempt ${attempt + 1}/${userAgents.length}...`);
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': userAgent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const html = await response.text();
+                console.log(`  ✅ Simple fetch successful (${html.length} bytes)`);
+                return extractArticleData(html, url);
+            } else {
+                console.log(`  ⚠️ Attempt ${attempt + 1} failed: HTTP ${response.status}`);
+            }
+            
+        } catch (error) {
+            console.log(`  ⚠️ Attempt ${attempt + 1} error: ${error.message}`);
+        }
+        
+        // Wait before next attempt
+        if (attempt < userAgents.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+    
+    return { success: false, error: 'All simple fetch attempts failed' };
 }
 
-// Analyze article with OpenAI
-async function analyzeArticleWithAI(title, description, url) {
+// Use Playwright for complex sites (fallback method)
+async function tryPlaywrightExtraction(url) {
+    console.log('🎭 Simple fetch failed, using Playwright...');
+    
+    let browser = null;
+    let page = null;
+    
     try {
-        console.log(`  🤖 Analyzing with AI: "${title.substring(0, 40)}..."`);
+        // Launch browser in headless mode
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                '--disable-blink-features=AutomationControlled',
+                '--disable-features=site-per-process'
+            ]
+        });
         
+        const context = await browser.newContext({
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            viewport: { width: 1920, height: 1080 },
+            locale: 'en-US',
+            timezoneId: 'America/New_York'
+        });
+        
+        page = await context.newPage();
+        
+        // Set additional headers
+        await page.setExtraHTTPHeaders({
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        });
+        
+        console.log(`  🔍 Navigating to: ${url}`);
+        
+        // Navigate to the page
+        const response = await page.goto(url, {
+            waitUntil: 'networkidle',
+            timeout: 30000
+        });
+        
+        // Wait for common article selectors
+        try {
+            await page.waitForSelector('article, main, [role="main"], .article-content, .story-body', {
+                timeout: 5000
+            });
+        } catch (e) {
+            console.log('  ⚠️ Standard article selectors not found, continuing...');
+        }
+        
+        // Extract content
+        const content = await page.evaluate(() => {
+            const getMeta = (name) => {
+                const meta = document.querySelector(`meta[property="${name}"], meta[name="${name}"]`);
+                return meta ? meta.content : null;
+            };
+            
+            // Get full text for analysis
+            const articleSelectors = [
+                'article', 'main article', '[role="main"]',
+                '.article-content', '.story-body', '.entry-content',
+                '.post-content', '#article-body', '.article__body'
+            ];
+            
+            let articleElement = null;
+            for (const selector of articleSelectors) {
+                articleElement = document.querySelector(selector);
+                if (articleElement) break;
+            }
+            
+            if (!articleElement) {
+                articleElement = document.body;
+            }
+            
+            const fullText = articleElement.innerText || articleElement.textContent || '';
+            
+            return {
+                title: document.title || getMeta('og:title') || getMeta('twitter:title'),
+                description: getMeta('description') || getMeta('og:description') || getMeta('twitter:description'),
+                author: getMeta('author') || getMeta('article:author'),
+                publishDate: getMeta('article:published_time') || getMeta('datePublished'),
+                fullText: fullText.substring(0, 4000), // Increased to 4000 chars for better context
+                wordCount: fullText.split(/\s+/).length
+            };
+        });
+        
+        console.log(`  ✅ Playwright extraction successful (${content.wordCount} words)`);
+        
+        // Parse the date
+        let articleDate = new Date().toISOString().split('T')[0];
+        if (content.publishDate) {
+            try {
+                const parsedDate = new Date(content.publishDate);
+                if (!isNaN(parsedDate.getTime())) {
+                    articleDate = parsedDate.toISOString().split('T')[0];
+                }
+            } catch (e) {
+                // Keep default date
+            }
+        }
+        
+        return {
+            success: true,
+            title: content.title || title || 'Article',
+            description: content.description || 'Article extracted via Playwright',
+            date: articleDate,
+            author: content.author,
+            full_content: content.fullText,
+            word_count: content.wordCount,
+            extraction_method: 'playwright'
+        };
+        
+    } catch (error) {
+        console.error(`  ❌ Playwright extraction failed: ${error.message}`);
+        return {
+            success: false,
+            error: error.message
+        };
+    } finally {
+        if (page) await page.close();
+        if (browser) await browser.close();
+    }
+}
+
+// Analyze with OpenAI
+async function analyzeWithOpenAI(articleData) {
+    console.log('🤖 Analyzing with OpenAI...');
+    
+    const prompt = `Analyze this political news article and provide comprehensive analysis:
+    
+    REQUIRED ANALYSIS:
+    1. actor: Main political actor or organization (e.g., "Donald Trump", "DOJ")
+    2. category: Financial|Civil Liberties|Platform Manipulation|Government Oversight|Election Integrity|Corporate Ethics|Legal Proceedings|Political News
+    3. severity: low|medium|high
+    4. summary: Factual summary (2-3 sentences) - What actually happened?
+    5. spin: How is this being presented/framed by the source?
+    6. reality: What does this really mean? (cut through the spin)
+    7. implications: Why does this matter for democracy/citizens?
+    8. missing_context: What important context or facts are not mentioned?
+    
+    Article (${articleData.word_count || 'unknown'} total words):
+    Title: ${articleData.title}
+    Source: ${new URL(url).hostname}
+    ${articleData.author ? `Author: ${articleData.author}` : ''}
+    ${articleData.date ? `Date: ${articleData.date}` : ''}
+    Description: ${articleData.description}
+    ${articleData.full_content ? `Content Preview:\n${articleData.full_content.substring(0, 3500)}` : ''}
+    
+    Return a JSON object with ALL fields listed above. Be objective and analytical.`;
+    
+    try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
             },
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: [
                     {
                         role: 'system',
-                        content: `You are a political accountability analyst for the Trump 2.0 Era. Analyze articles for political relevance, key actors, and accountability issues.
-
-Focus on:
-- Trump administration actions and policies
-- Federal agency activities (DOJ, FBI, ICE, DHS, Department of Education)
-- Government oversight and accountability issues
-- Civil liberties and constitutional concerns
-- Corporate ethics and lobbying issues
-- Election integrity and campaign finance
-- Legal proceedings involving political figures
-
-Return analysis as valid JSON only.`
+                        content: 'You are a political analyst providing objective analysis of news articles.'
                     },
                     {
                         role: 'user',
-                        content: `Analyze this article and return ONLY valid JSON:
-
-Title: ${title}
-Description: ${description}
-Source URL: ${url}
-
-Return exactly this JSON format:
-{
-  "actor": "main person, organization, or agency involved",
-  "category": "Financial|Civil Liberties|Platform Manipulation|Government Oversight|Election Integrity|Corporate Ethics|Legal Proceedings",
-  "severity": "low|medium|high",
-  "verified": true|false,
-  "political_relevance": "brief explanation"
-}
-
-Choose the MOST relevant category. Return ONLY the JSON object.`
+                        content: prompt
                     }
                 ],
-                max_tokens: 500,
-                temperature: 0.3
+                temperature: 0.3,
+                max_tokens: 500
             })
         });
-
-        if (!response.ok) {
-            console.warn(`  ⚠️ OpenAI API failed (${response.status}), using fallback`);
-            return getFallbackAnalysis(url);
-        }
-
-        const data = await response.json();
-        const aiResponse = data.choices[0].message.content.trim();
         
-        // Clean up JSON response
-        let jsonStr = aiResponse;
-        if (aiResponse.includes('```json')) {
-            const match = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
-            if (match) jsonStr = match[1];
+        if (response.ok) {
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+            
+            // Try to parse as JSON
+            try {
+                const analysis = JSON.parse(content);
+                console.log('  ✅ OpenAI analysis complete');
+                return analysis;
+            } catch {
+                // Fallback if not valid JSON
+                console.log('  ⚠️ OpenAI response not valid JSON, using defaults');
+                return {
+                    actor: 'Political Actor',
+                    category: 'Political News',
+                    severity: 'medium',
+                    summary: articleData.description,
+                    spin: 'Unable to analyze',
+                    reality: 'Unable to analyze',
+                    implications: 'Unable to analyze',
+                    missing_context: 'Unable to analyze'
+                };
+            }
+        } else {
+            console.log(`  ⚠️ OpenAI API error: ${response.status}`);
+            return null;
         }
-        
-        try {
-            const analysis = JSON.parse(jsonStr);
-            
-            const result = {
-                actor: analysis.actor || 'Unknown Actor',
-                category: validateCategory(analysis.category),
-                severity: validateSeverity(analysis.severity),
-                verified: analysis.verified !== undefined ? Boolean(analysis.verified) : isVerifiedSource(url),
-                political_relevance: analysis.political_relevance || 'Political development requiring analysis'
-            };
-            
-            console.log(`  ✅ AI Analysis: ${result.actor} - ${result.category} (${result.severity})`);
-            return result;
-            
-        } catch (parseError) {
-            console.warn(`  ⚠️ Failed to parse AI response, using fallback`);
-            return getFallbackAnalysis(url);
-        }
-        
     } catch (error) {
-        console.warn(`  ⚠️ AI analysis failed: ${error.message}, using fallback`);
-        return getFallbackAnalysis(url);
+        console.log(`  ⚠️ OpenAI error: ${error.message}`);
+        return null;
     }
-}
-
-// Validate category
-function validateCategory(category) {
-    const validCategories = [
-        'Financial', 'Civil Liberties', 'Platform Manipulation', 
-        'Government Oversight', 'Election Integrity', 'Corporate Ethics', 'Legal Proceedings'
-    ];
-    
-    if (validCategories.includes(category)) return category;
-    
-    const categoryLower = category?.toLowerCase() || '';
-    if (categoryLower.includes('financial') || categoryLower.includes('money')) return 'Financial';
-    if (categoryLower.includes('civil') || categoryLower.includes('rights')) return 'Civil Liberties';
-    if (categoryLower.includes('platform') || categoryLower.includes('social')) return 'Platform Manipulation';
-    if (categoryLower.includes('election') || categoryLower.includes('voting')) return 'Election Integrity';
-    if (categoryLower.includes('corporate') || categoryLower.includes('business')) return 'Corporate Ethics';
-    if (categoryLower.includes('legal') || categoryLower.includes('court')) return 'Legal Proceedings';
-    
-    return 'Government Oversight';
-}
-
-// Validate severity
-function validateSeverity(severity) {
-    const validSeverities = ['low', 'medium', 'high'];
-    return validSeverities.includes(severity?.toLowerCase()) ? severity.toLowerCase() : 'medium';
-}
-
-// Fallback analysis
-function getFallbackAnalysis(url) {
-    return {
-        actor: 'Manual Submission',
-        category: 'Government Oversight',
-        severity: 'medium',
-        verified: isVerifiedSource(url),
-        political_relevance: 'Manually submitted article - content extraction failed'
-    };
 }
 
 // Main processing function
-async function processManualSubmissions() {
-    try {
-        let pendingSubmissions;
-        try {
-            const pendingData = await fs.readFile('pending-submissions.json', 'utf8');
-            pendingSubmissions = JSON.parse(pendingData);
-        } catch (error) {
-            console.log('ℹ️ No pending submissions found');
-            return;
+async function processArticle() {
+    // Check for duplicates first (quick check before expensive processing)
+    const duplicateCheck = await checkDuplicate(url, title);
+    if (duplicateCheck.isDuplicate) {
+        console.log(`\n⚠️ Duplicate detected: ${duplicateCheck.message}`);
+        console.log('Article already in database, skipping processing.');
+        return duplicateCheck.existing;
+    }
+    if (duplicateCheck.similar) {
+        console.log(`\nℹ️ Note: ${duplicateCheck.similar.length} similar articles exist, but continuing...\n`);
+    }
+    
+    let articleData = null;
+    
+    // Step 1: Try simple fetch first (it's faster)
+    const simpleFetch = await trySimpleFetch(url);
+    
+    if (simpleFetch.success) {
+        articleData = simpleFetch;
+    } else {
+        // Step 2: If simple fetch fails, use Playwright
+        console.log('\n⚡ Escalating to Playwright for complex site...\n');
+        const playwrightResult = await tryPlaywrightExtraction(url);
+        
+        if (playwrightResult.success) {
+            articleData = playwrightResult;
+        } else {
+            // Step 3: If both fail, create manual entry
+            console.log('\n⚠️ All extraction methods failed, creating basic entry...\n');
+            const siteName = new URL(url).hostname.replace('www.', '');
+            articleData = {
+                success: true,
+                title: title || `Manual Entry from ${siteName}`,
+                description: 'Content could not be extracted automatically. Requires manual review.',
+                date: new Date().toISOString().split('T')[0],
+                extraction_method: 'manual_fallback'
+            };
         }
-        
-        if (!Array.isArray(pendingSubmissions) || pendingSubmissions.length === 0) {
-            console.log('ℹ️ No pending submissions to process');
-            return;
-        }
-        
-        console.log(`📋 Found ${pendingSubmissions.length} pending submission(s)\n`);
-        
-        let existingEntries;
-        try {
-            const masterData = await fs.readFile('master-tracker-log.json', 'utf8');
-            existingEntries = JSON.parse(masterData);
-        } catch (error) {
-            console.log('⚠️ Could not load existing entries, starting fresh');
-            existingEntries = [];
-        }
-        
-        const processedEntries = [];
-        
-        for (let i = 0; i < pendingSubmissions.length; i++) {
-            const submission = pendingSubmissions[i];
-            console.log(`\n🔄 Processing ${i + 1}/${pendingSubmissions.length}: ${submission.url}`);
-            
-            try {
-                const content = await fetchArticleContent(submission.url);
-                const analysis = await analyzeArticleWithAI(content.title, content.description, submission.url);
-                
-                const processedEntry = {
-                    id: generateId(),
-                    date: content.date,
-                    actor: analysis.actor,
-                    category: analysis.category,
-                    title: content.title,
-                    description: content.description,
-                    source_url: submission.url,
-                    verified: analysis.verified,
-                    severity: analysis.severity,
-                    added_at: new Date().toISOString(),
-                    manual_submission: true,
-                    submitted_by: submission.submitted_by || 'admin',
-                    submitted_at: submission.submitted_at,
-                    processed_at: new Date().toISOString()
-                };
-                
-                processedEntries.push(processedEntry);
-                console.log(`  ✅ Successfully processed: "${content.title.substring(0, 50)}..."`);
-                
-            } catch (error) {
-                console.error(`  ❌ FAILED to process article: ${error.message}`);
-                
-                // Create a fallback entry even for failed articles
-                const fallbackEntry = {
-                    id: generateId(),
-                    date: new Date().toISOString().split('T')[0],
-                    actor: 'Manual Submission',
-                    category: 'Government Oversight',
-                    title: `Failed Article from ${new URL(submission.url).hostname}`,
-                    description: `Article processing failed: ${error.message}. URL: ${submission.url}`,
-                    source_url: submission.url,
-                    verified: isVerifiedSource(submission.url),
-                    severity: 'medium',
-                    added_at: new Date().toISOString(),
-                    manual_submission: true,
-                    processing_failed: true,
-                    error_message: error.message,
-                    submitted_by: submission.submitted_by || 'admin',
-                    submitted_at: submission.submitted_at,
-                    processed_at: new Date().toISOString()
-                };
-                
-                processedEntries.push(fallbackEntry);
-                console.log(`  🔧 Created fallback entry for failed article`);
-            }
-        }
-        
-        // Update master tracker
-        if (processedEntries.length > 0) {
-            const updatedEntries = [...processedEntries, ...existingEntries];
-            updatedEntries.sort((a, b) => {
-                const dateA = new Date(a.date || a.added_at);
-                const dateB = new Date(b.date || b.added_at);
-                return dateB - dateA;
-            });
-            
-            await fs.writeFile('master-tracker-log.json', JSON.stringify(updatedEntries, null, 2));
-            
-            // Also update public folder
-            try {
-                await fs.mkdir('public', { recursive: true });
-                await fs.writeFile(path.join('public', 'master-tracker-log.json'), JSON.stringify(updatedEntries, null, 2));
-                console.log(`\n💾 Updated master tracker and public folder with ${processedEntries.length} entries`);
-            } catch (error) {
-                console.warn(`⚠️ Could not update public folder: ${error.message}`);
-            }
-        }
-        
-        // Clear pending submissions
-        await fs.unlink('pending-submissions.json');
-        console.log('🧹 Cleared pending submissions file');
-        
-        console.log('\n📊 PROCESSING SUMMARY:');
-        console.log('====================');
-        console.log(`✅ Total processed: ${processedEntries.length}`);
-        console.log(`📄 Total entries in tracker: ${(existingEntries.length + processedEntries.length)}`);
-        console.log(`\n🎉 All submissions processed successfully!`);
-        
-    } catch (error) {
-        console.error('❌ Fatal error in processing:', error);
+    }
+    
+    // Step 4: Analyze with OpenAI if we have content
+    let analysis = null;
+    if (articleData.success) {
+        analysis = await analyzeWithOpenAI(articleData);
+    }
+    
+    // Step 5: Prepare entry for Supabase
+    const entry = {
+        id: generateId(),
+        title: articleData.title,
+        source_url: normalizeUrl(url),  // Store normalized URL for consistent duplicate detection
+        description: analysis?.summary || articleData.description,
+        category: analysis?.category || category || 'Political News',
+        date: articleData.date,
+        timestamp: new Date().toISOString(),
+        actor: analysis?.actor || 'Political Actor',
+        severity: analysis?.severity || 'medium',
+        implications: analysis?.implications || '',
+        spin: analysis?.spin || null,
+        reality: analysis?.reality || null,
+        missing_context: analysis?.missing_context || null,
+        verified_source: isVerifiedSource(url),
+        extraction_method: articleData.extraction_method,
+        word_count: articleData.word_count || 0,
+        author: articleData.author || null,
+        manual_submission: true,
+        submitted_by: submitted_by || 'admin',
+        processed_at: new Date().toISOString()
+    };
+    
+    // Step 6: Insert to Supabase
+    console.log('\n💾 Saving to Supabase...');
+    const { data, error } = await supabase
+        .from('political_entries')
+        .insert([entry])
+        .select();
+    
+    if (error) {
+        console.error('❌ Supabase error:', error);
         process.exit(1);
     }
+    
+    console.log('✅ Entry saved successfully!');
+    console.log(`  ID: ${entry.id}`);
+    console.log(`  Title: ${entry.title}`);
+    console.log(`  Category: ${entry.category}`);
+    console.log(`  Extraction: ${entry.extraction_method}`);
+    
+    // Step 7: Get statistics
+    const { data: stats, error: statsError } = await supabase
+        .from('political_entries')
+        .select('id', { count: 'exact', head: true });
+    
+    if (!statsError) {
+        console.log(`\n📊 Total entries in database: ${stats.count || 0}`);
+    }
+    
+    return entry;
 }
 
 // Run the processor
-processManualSubmissions();
+try {
+    const result = await processArticle();
+    console.log('\n✅ Processing complete!');
+    process.exit(0);
+} catch (error) {
+    console.error('\n❌ Fatal error:', error);
+    process.exit(1);
+}
