@@ -63,9 +63,9 @@ async function isDuplicate(title, sourceUrl, date) {
         const normalized = normalizeHeadline(title);
         const words = normalized.split(' ').filter(w => w.length > 3);
         
-        // Get recent entries from same date
+        // Get recent entries from same date (limited to prevent timeout)
         const recentEntries = await supabaseRequest(
-            `political_entries?date=eq.${date}&select=title,actor`
+            `political_entries?date=eq.${date}&select=title,actor&limit=50&order=created_at.desc`
         );
         
         for (const entry of (recentEntries || [])) {
@@ -76,8 +76,8 @@ async function isDuplicate(title, sourceUrl, date) {
             const matchingWords = words.filter(w => existingWords.includes(w));
             const matchRatio = matchingWords.length / Math.max(words.length, existingWords.length);
             
-            // If 60% of significant words match, likely duplicate
-            if (matchRatio > 0.6) {
+            // If 75% of significant words match, likely duplicate (raised threshold to reduce false positives)
+            if (matchRatio > 0.75) {
                 console.log(`  📰 Similar headline detected (${Math.round(matchRatio * 100)}% word match)`);
                 console.log(`     Existing: "${entry.title}"`);
                 console.log(`     New: "${title}"`);
@@ -85,7 +85,7 @@ async function isDuplicate(title, sourceUrl, date) {
             }
             
             // Also check if same actor + very similar title
-            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.4) {
+            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.5) {
                 console.log(`  📰 Same actor + similar headline detected`);
                 return true;
             }
