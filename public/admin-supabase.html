@@ -325,11 +325,13 @@
     <div class="container">
         <!-- Header -->
         <div class="card">
-            <div class="flex items-center gap-4">
-                <div class="logo">T2</div>
-                <div>
-                    <h1 style="margin: 0; font-size: 24px;">TrumpyTracker Admin <span id="envBadge" style="display: none; background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px;">TEST</span></h1>
-                    <p style="margin: 0; color: #a0aec0; font-size: 14px;">Supabase Database Management</p>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="logo">T2</div>
+                    <div>
+                        <h1 style="margin: 0; font-size: 24px;">TrumpyTracker Admin <span id="envBadge" style="display: none; background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px;">TEST</span></h1>
+                        <p style="margin: 0; color: #a0aec0; font-size: 14px;">Supabase Database Management</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -675,7 +677,10 @@
                     
                     const contentType = response.headers.get('content-type');
                     if (contentType && contentType.includes('application/json')) {
-                        return await response.json();
+                        const data = await response.json();
+                        // Supabase returns [] for successful updates with no rows returned
+                        // This is still a success!
+                        return data || { success: true };
                     }
                     
                     return { success: true };
@@ -968,26 +973,94 @@
             document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Archive operations - Direct Supabase update (no GitHub Action needed)
+        // Archive operations - Uses Netlify Function with SERVICE_ROLE_KEY
+        async function archiveViaServerless(entryIds, tableName, archived) {
+            try {
+                showMessage(`<span class="spinner"></span> Processing ${archived ? 'archive' : 'restore'} operation...`, 'info');
+                
+                const response = await fetch('/.netlify/functions/admin-operations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        githubToken: currentToken,
+                        operation: archived ? 'archive' : 'restore',
+                        entryIds: entryIds,
+                        tableName: tableName,
+                        isTest: isTestDB
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `Server error: ${response.status}`);
+                }
+                
+                showMessage(`✅ ${result.message}`, 'success');
+                
+                // Refresh data immediately
+                localStorage.removeItem(CACHE_KEY);
+                await loadEntries(true);
+                
+                return true;
+            } catch (error) {
+                console.error('Error in serverless function:', error);
+                showMessage(`Failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // Delete operations - Uses Netlify Function with SERVICE_ROLE_KEY
+        async function deleteViaServerless(entryIds, tableName) {
+            try {
+                const response = await fetch('/.netlify/functions/admin-operations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        githubToken: currentToken,
+                        operation: 'delete',
+                        entryIds: entryIds,
+                        tableName: tableName,
+                        isTest: isTestDB
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `Server error: ${response.status}`);
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error in delete operation:', error);
+                showMessage(`Delete failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // Fallback: Direct archive (will fail if RLS blocks it)
         async function archiveDirectly(entryIds, tableName, archived) {
             try {
-                // Update entries directly in Supabase
-                // Note: Supabase doesn't support bulk updates with IN clause via REST API
-                // So we need to update each entry individually or use RPC
-                
                 const errors = [];
                 const batchSize = 10;
                 
                 for (let i = 0; i < entryIds.length; i += batchSize) {
                     const batch = entryIds.slice(i, i + batchSize);
                     
-                    // Update each entry in the batch
                     const updatePromises = batch.map(id => 
                         supabaseRequest(
                             `${tableName}?id=eq.${id}`,
                             'PATCH',
                             { archived: archived }
-                        ).catch(e => {
+                        ).then(result => {
+                            console.log(`Archive result for ${id}:`, result);
+                            return result;
+                        }).catch(e => {
                             console.error(`Failed to archive entry ${id}:`, e);
                             errors.push({ id, error: e });
                         })
@@ -1037,41 +1110,17 @@
                     }
                 });
 
-                let hasErrors = false;
-                let successCount = 0;
-                
-                // Archive political entries
+                // Archive political entries directly
                 if (politicalIds.length > 0) {
-                    const result = await archiveDirectly(politicalIds, 'political_entries', archived);
-                    if (result === true) {
-                        successCount += politicalIds.length;
-                    } else if (result === 'partial') {
-                        hasErrors = true;
-                        successCount += politicalIds.length - 1; // Approximate
-                    } else {
-                        throw new Error(`Failed to ${archived ? 'archive' : 'restore'} political entries`);
-                    }
+                    await archiveDirectly(politicalIds, 'political_entries', archived);
                 }
 
-                // Archive executive orders
+                // Archive executive orders directly
                 if (executiveIds.length > 0) {
-                    const result = await archiveDirectly(executiveIds, 'executive_orders', archived);
-                    if (result === true) {
-                        successCount += executiveIds.length;
-                    } else if (result === 'partial') {
-                        hasErrors = true;
-                        successCount += executiveIds.length - 1; // Approximate
-                    } else {
-                        throw new Error(`Failed to ${archived ? 'archive' : 'restore'} executive orders`);
-                    }
+                    await archiveDirectly(executiveIds, 'executive_orders', archived);
                 }
 
-                // Show appropriate message
-                if (hasErrors) {
-                    showMessage(`⚠️ ${archived ? 'Archived' : 'Restored'} ${successCount} entries with some errors. Please refresh.`, 'warning');
-                } else {
-                    showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${entryIds.length} entries`, 'success');
-                }
+                showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${entryIds.length} entries`, 'success');
                 
                 selectedEntries.clear();
                 
@@ -1367,7 +1416,26 @@
 
                 try {
                     showMessage(`<span class="spinner"></span> Deleting ${selectedEntries.size} entries...`, 'info');
-                    await batchDelete(Array.from(selectedEntries));
+                    
+                    // Separate by type
+                    const politicalIds = [];
+                    const executiveIds = [];
+                    Array.from(selectedEntries).forEach(id => {
+                        const entry = allEntries.find(e => e.id === id);
+                        if (entry) {
+                            if (entry.type === 'political') politicalIds.push(id);
+                            else executiveIds.push(id);
+                        }
+                    });
+                    
+                    // Delete via serverless function
+                    if (politicalIds.length > 0) {
+                        await deleteViaServerless(politicalIds, 'political_entries');
+                    }
+                    if (executiveIds.length > 0) {
+                        await deleteViaServerless(executiveIds, 'executive_orders');
+                    }
+                    
                     showMessage(`Deleted ${selectedEntries.size} entries`, 'success');
                     selectedEntries.clear();
                     
