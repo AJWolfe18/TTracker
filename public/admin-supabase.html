@@ -973,121 +973,53 @@
             document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Archive operations - Uses Netlify Function with SERVICE_ROLE_KEY
-        async function archiveViaServerless(entryIds, tableName, archived) {
-            try {
-                showMessage(`<span class="spinner"></span> Processing ${archived ? 'archive' : 'restore'} operation...`, 'info');
+        // Archive operations - Simple status toggle
+        // NOTE: Requires UPDATE policy in Supabase for this to work
+        async function archiveEntries(entryIds, tableName, archived) {
+            const errors = [];
+            const successes = [];
+            const batchSize = 10; // Process in batches to avoid timeouts
+            
+            // Process entries in batches
+            for (let i = 0; i < entryIds.length; i += batchSize) {
+                const batch = entryIds.slice(i, i + batchSize);
                 
-                const response = await fetch('/.netlify/functions/admin-operations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        githubToken: currentToken,
-                        operation: archived ? 'archive' : 'restore',
-                        entryIds: entryIds,
-                        tableName: tableName,
-                        isTest: isTestDB
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || `Server error: ${response.status}`);
-                }
-                
-                showMessage(`✅ ${result.message}`, 'success');
-                
-                // Refresh data immediately
-                localStorage.removeItem(CACHE_KEY);
-                await loadEntries(true);
-                
-                return true;
-            } catch (error) {
-                console.error('Error in serverless function:', error);
-                showMessage(`Failed: ${error.message}`, 'error');
-                return false;
-            }
-        }
-        
-        // Delete operations - Uses Netlify Function with SERVICE_ROLE_KEY
-        async function deleteViaServerless(entryIds, tableName) {
-            try {
-                const response = await fetch('/.netlify/functions/admin-operations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        githubToken: currentToken,
-                        operation: 'delete',
-                        entryIds: entryIds,
-                        tableName: tableName,
-                        isTest: isTestDB
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || `Server error: ${response.status}`);
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Error in delete operation:', error);
-                showMessage(`Delete failed: ${error.message}`, 'error');
-                return false;
-            }
-        }
-        
-        // Fallback: Direct archive (will fail if RLS blocks it)
-        async function archiveDirectly(entryIds, tableName, archived) {
-            try {
-                const errors = [];
-                const batchSize = 10;
-                
-                for (let i = 0; i < entryIds.length; i += batchSize) {
-                    const batch = entryIds.slice(i, i + batchSize);
-                    
-                    const updatePromises = batch.map(id => 
-                        supabaseRequest(
+                // Process batch in parallel for better performance
+                const batchPromises = batch.map(async (id) => {
+                    try {
+                        const response = await supabaseRequest(
                             `${tableName}?id=eq.${id}`,
                             'PATCH',
                             { archived: archived }
-                        ).then(result => {
-                            console.log(`Archive result for ${id}:`, result);
-                            return result;
-                        }).catch(e => {
-                            console.error(`Failed to archive entry ${id}:`, e);
-                            errors.push({ id, error: e });
-                        })
-                    );
-                    
-                    await Promise.all(updatePromises);
-                    
-                    // Small delay between batches to avoid rate limiting
-                    if (i + batchSize < entryIds.length) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        );
+                        
+                        // Check if update actually worked
+                        if (response && response.length > 0) {
+                            successes.push(id);
+                            return { success: true, id };
+                        } else {
+                            // Empty response means no rows were updated
+                            throw new Error('No rows updated - check RLS policies');
+                        }
+                    } catch (e) {
+                        console.error(`Failed to archive entry ${id}:`, e);
+                        errors.push({ id, error: e.message });
+                        return { success: false, id, error: e.message };
                     }
-                }
+                });
                 
-                if (errors.length > 0) {
-                    console.warn(`Archive completed with ${errors.length} errors:`, errors);
-                    if (errors.length === entryIds.length) {
-                        throw new Error('All archive operations failed');
-                    }
-                    return 'partial'; // Some succeeded, some failed
-                }
+                // Wait for batch to complete
+                await Promise.all(batchPromises);
                 
-                return true;
-            } catch (error) {
-                console.error('Error in direct archive:', error);
-                return false;
+                // Small delay between batches to avoid rate limiting
+                if (i + batchSize < entryIds.length) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
             }
+            
+            return { successes, errors };
         }
+
 
         // Toggle Archive with visual feedback
         async function toggleArchive(entryIds, archived) {
@@ -1110,17 +1042,31 @@
                     }
                 });
 
-                // Archive political entries directly
+                let totalSuccesses = 0;
+                let totalErrors = [];
+
+                // Archive political entries
                 if (politicalIds.length > 0) {
-                    await archiveDirectly(politicalIds, 'political_entries', archived);
+                    const result = await archiveEntries(politicalIds, 'political_entries', archived);
+                    totalSuccesses += result.successes.length;
+                    totalErrors = totalErrors.concat(result.errors);
                 }
 
-                // Archive executive orders directly
+                // Archive executive orders
                 if (executiveIds.length > 0) {
-                    await archiveDirectly(executiveIds, 'executive_orders', archived);
+                    const result = await archiveEntries(executiveIds, 'executive_orders', archived);
+                    totalSuccesses += result.successes.length;
+                    totalErrors = totalErrors.concat(result.errors);
                 }
 
-                showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${entryIds.length} entries`, 'success');
+                // Show results
+                if (totalErrors.length === 0) {
+                    showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${totalSuccesses} entries`, 'success');
+                } else if (totalSuccesses > 0) {
+                    showMessage(`⚠️ Partially ${archived ? 'archived' : 'restored'}: ${totalSuccesses} succeeded, ${totalErrors.length} failed. This usually means RLS policies need updating.`, 'warning');
+                } else {
+                    showMessage(`❌ Failed to ${archived ? 'archive' : 'restore'} entries. Please add an UPDATE policy in Supabase.`, 'error');
+                }
                 
                 selectedEntries.clear();
                 
@@ -1417,7 +1363,7 @@
                 try {
                     showMessage(`<span class="spinner"></span> Deleting ${selectedEntries.size} entries...`, 'info');
                     
-                    // Separate by type
+                    // Separate by type and delete directly via Supabase
                     const politicalIds = [];
                     const executiveIds = [];
                     Array.from(selectedEntries).forEach(id => {
@@ -1428,15 +1374,32 @@
                         }
                     });
                     
-                    // Delete via serverless function
-                    if (politicalIds.length > 0) {
-                        await deleteViaServerless(politicalIds, 'political_entries');
-                    }
-                    if (executiveIds.length > 0) {
-                        await deleteViaServerless(executiveIds, 'executive_orders');
+                    let errors = [];
+                    
+                    // Delete political entries directly
+                    for (const id of politicalIds) {
+                        try {
+                            await supabaseRequest(`political_entries?id=eq.${id}`, 'DELETE');
+                        } catch (e) {
+                            errors.push({ id, error: e.message });
+                        }
                     }
                     
-                    showMessage(`Deleted ${selectedEntries.size} entries`, 'success');
+                    // Delete executive orders directly
+                    for (const id of executiveIds) {
+                        try {
+                            await supabaseRequest(`executive_orders?id=eq.${id}`, 'DELETE');
+                        } catch (e) {
+                            errors.push({ id, error: e.message });
+                        }
+                    }
+                    
+                    if (errors.length === 0) {
+                        showMessage(`✅ Deleted ${selectedEntries.size} entries`, 'success');
+                    } else {
+                        showMessage(`⚠️ Deleted ${selectedEntries.size - errors.length} entries, ${errors.length} failed`, 'warning');
+                    }
+                    
                     selectedEntries.clear();
                     
                     // Clear cache and reload
