@@ -968,55 +968,61 @@
             document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Archive operations with better handling
-        async function archiveViaGitHub(entryIds, tableName, archived) {
+        // Archive operations - Direct Supabase update (no GitHub Action needed)
+        async function archiveDirectly(entryIds, tableName, archived) {
             try {
-                const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
-                    method: 'POST',
-                    headers: ghHeaders(currentToken),
-                    body: JSON.stringify({
-                        event_type: 'archive_entries',
-                        client_payload: {
-                            entry_ids: entryIds,
-                            table_name: tableName,
-                            archived: archived,
-                            action: archived ? 'archive' : 'restore'
-                        }
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`GitHub API error: ${response.status}`);
-                }
-
-                // Poll for completion instead of fixed wait
-                showMessage('Archive operation started. Checking status...', 'info');
+                // Update entries directly in Supabase
+                // Note: Supabase doesn't support bulk updates with IN clause via REST API
+                // So we need to update each entry individually or use RPC
                 
-                // Wait and check for changes
-                let attempts = 0;
-                const maxAttempts = 10;
+                const errors = [];
+                const batchSize = 10;
                 
-                while (attempts < maxAttempts) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                for (let i = 0; i < entryIds.length; i += batchSize) {
+                    const batch = entryIds.slice(i, i + batchSize);
                     
-                    // Check if entries have been updated
-                    const testResponse = await supabaseRequest(`${tableName}?id=eq.${entryIds[0]}&select=archived`);
-                    if (testResponse && testResponse.length > 0 && testResponse[0].archived === archived) {
-                        return true;
+                    // Update each entry in the batch
+                    const updatePromises = batch.map(id => 
+                        supabaseRequest(
+                            `${tableName}?id=eq.${id}`,
+                            'PATCH',
+                            { archived: archived }
+                        ).catch(e => {
+                            console.error(`Failed to archive entry ${id}:`, e);
+                            errors.push({ id, error: e });
+                        })
+                    );
+                    
+                    await Promise.all(updatePromises);
+                    
+                    // Small delay between batches to avoid rate limiting
+                    if (i + batchSize < entryIds.length) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
                     }
-                    
-                    attempts++;
                 }
                 
-                return false;
+                if (errors.length > 0) {
+                    console.warn(`Archive completed with ${errors.length} errors:`, errors);
+                    if (errors.length === entryIds.length) {
+                        throw new Error('All archive operations failed');
+                    }
+                    return 'partial'; // Some succeeded, some failed
+                }
+                
+                return true;
             } catch (error) {
-                console.error('Error triggering archive action:', error);
+                console.error('Error in direct archive:', error);
                 return false;
             }
         }
 
         // Toggle Archive with visual feedback
         async function toggleArchive(entryIds, archived) {
+            if (entryIds.length === 0) {
+                showMessage('No entries selected', 'error');
+                return;
+            }
+            
             showMessage(`<span class="spinner"></span> ${archived ? 'Archiving' : 'Restoring'} ${entryIds.length} entries...`, 'info');
             
             try {
@@ -1031,26 +1037,42 @@
                     }
                 });
 
-                // Process in batches for better performance
-                const batchSize = 10;
+                let hasErrors = false;
+                let successCount = 0;
                 
-                for (let i = 0; i < politicalIds.length; i += batchSize) {
-                    const batch = politicalIds.slice(i, i + batchSize);
-                    const success = await archiveViaGitHub(batch, 'political_entries', archived);
-                    if (!success) {
-                        throw new Error('Archive operation failed');
+                // Archive political entries
+                if (politicalIds.length > 0) {
+                    const result = await archiveDirectly(politicalIds, 'political_entries', archived);
+                    if (result === true) {
+                        successCount += politicalIds.length;
+                    } else if (result === 'partial') {
+                        hasErrors = true;
+                        successCount += politicalIds.length - 1; // Approximate
+                    } else {
+                        throw new Error(`Failed to ${archived ? 'archive' : 'restore'} political entries`);
                     }
                 }
 
-                for (let i = 0; i < executiveIds.length; i += batchSize) {
-                    const batch = executiveIds.slice(i, i + batchSize);
-                    const success = await archiveViaGitHub(batch, 'executive_orders', archived);
-                    if (!success) {
-                        throw new Error('Archive operation failed');
+                // Archive executive orders
+                if (executiveIds.length > 0) {
+                    const result = await archiveDirectly(executiveIds, 'executive_orders', archived);
+                    if (result === true) {
+                        successCount += executiveIds.length;
+                    } else if (result === 'partial') {
+                        hasErrors = true;
+                        successCount += executiveIds.length - 1; // Approximate
+                    } else {
+                        throw new Error(`Failed to ${archived ? 'archive' : 'restore'} executive orders`);
                     }
                 }
 
-                showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${entryIds.length} entries`, 'success');
+                // Show appropriate message
+                if (hasErrors) {
+                    showMessage(`⚠️ ${archived ? 'Archived' : 'Restored'} ${successCount} entries with some errors. Please refresh.`, 'warning');
+                } else {
+                    showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${entryIds.length} entries`, 'success');
+                }
+                
                 selectedEntries.clear();
                 
                 // Clear cache and reload
