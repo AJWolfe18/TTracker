@@ -927,7 +927,7 @@
         function handleCheckboxChange(e) {
             if (!e.target.classList.contains('checkbox')) return;
             
-            const id = parseInt(e.target.dataset.id);
+            const id = e.target.dataset.id; // Keep as string, don't parseInt!
             const entryElement = document.getElementById(`entry-${id}`);
             
             if (e.target.checked) {
