@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Archive Debug</title>
+    <script src="supabase-browser-config.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+        button { padding: 10px; margin: 5px; background: #333; color: #0f0; border: 1px solid #0f0; cursor: pointer; }
+        .log { background: #000; padding: 10px; margin: 10px 0; border: 1px solid #333; max-height: 600px; overflow-y: auto; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .warning { color: #ff0; }
+        .info { color: #0ff; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Final Archive Debug</h1>
+    <p>Testing the exact issue with archiving</p>
+    
+    <button onclick="testCompleteFlow()">Test Complete Archive Flow</button>
+    <button onclick="clearLog()">Clear Log</button>
+    
+    <div id="log" class="log"></div>
+
+    <script>
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+        
+        function log(msg, type = '') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${type}">[${timestamp}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testCompleteFlow() {
+            log('=== Starting Complete Archive Test ===', 'info');
+            
+            try {
+                // Step 1: Get a non-archived entry
+                log('\n1. Fetching a non-archived entry...', 'info');
+                const fetchResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?archived=eq.false&limit=1`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const entries = await fetchResponse.json();
+                log(`Found ${entries.length} non-archived entries`, 'info');
+                
+                if (entries.length === 0) {
+                    log('No non-archived entries available to test', 'error');
+                    return;
+                }
+                
+                const entry = entries[0];
+                log(`Using entry: "${entry.title}"`, 'success');
+                log(`ID: ${entry.id}`, 'info');
+                log(`Current archived status: ${entry.archived}`, 'info');
+                
+                // Step 2: Try the EXACT admin panel request
+                log('\n2. Attempting PATCH with exact admin panel headers...', 'info');
+                const patchUrl = `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`;
+                log(`URL: ${patchUrl}`, 'info');
+                log(`Body: {"archived": true}`, 'info');
+                
+                const patchResponse = await fetch(patchUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation'
+                    },
+                    body: JSON.stringify({ archived: true })
+                });
+                
+                log(`Response status: ${patchResponse.status}`, patchResponse.ok ? 'success' : 'error');
+                
+                const responseText = await patchResponse.text();
+                log(`Response body: ${responseText || '[]'}`, 'info');
+                
+                // Parse response if it's JSON
+                let responseData = null;
+                if (responseText) {
+                    try {
+                        responseData = JSON.parse(responseText);
+                        log(`Parsed response: ${JSON.stringify(responseData)}`, 'info');
+                    } catch (e) {
+                        log('Response is not JSON', 'warning');
+                    }
+                }
+                
+                // Step 3: The admin panel's check
+                log('\n3. Admin panel check (what the code does)...', 'info');
+                if (responseData && responseData.length > 0) {
+                    log('✅ Admin panel would consider this SUCCESS', 'success');
+                } else {
+                    log('❌ Admin panel considers this FAILURE (empty response)', 'error');
+                    log('This is why the admin panel thinks archiving failed!', 'error');
+                }
+                
+                // Step 4: Verify what actually happened
+                log('\n4. Verifying actual database state...', 'info');
+                const verifyResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const verifyData = await verifyResponse.json();
+                if (verifyData.length > 0) {
+                    const actualArchived = verifyData[0].archived;
+                    log(`Actual archived status in DB: ${actualArchived}`, actualArchived ? 'success' : 'warning');
+                    
+                    if (actualArchived) {
+                        log('✅ ARCHIVE ACTUALLY WORKED! But admin panel thinks it failed due to empty response', 'success');
+                    } else {
+                        log('❌ Archive really did fail - the UPDATE was blocked', 'error');
+                    }
+                } else {
+                    log('Cannot verify - entry not found', 'error');
+                }
+                
+                // Step 5: Try different Prefer headers
+                log('\n5. Testing different Prefer header options...', 'info');
+                
+                // Test with return=minimal
+                log('Testing with Prefer: return=minimal', 'info');
+                const minimalResponse = await fetch(patchUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({ archived: false }) // Toggle back
+                });
+                
+                log(`return=minimal status: ${minimalResponse.status}`, 'info');
+                const minimalText = await minimalResponse.text();
+                log(`return=minimal body: "${minimalText}"`, 'info');
+                
+                // Test without Prefer header
+                log('\nTesting without Prefer header', 'info');
+                const noPreferResponse = await fetch(patchUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ archived: true }) // Toggle again
+                });
+                
+                log(`No Prefer status: ${noPreferResponse.status}`, 'info');
+                const noPreferText = await noPreferResponse.text();
+                log(`No Prefer body: "${noPreferText}"`, 'info');
+                
+                // Final check
+                log('\n6. Final verification...', 'info');
+                const finalCheck = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const finalData = await finalCheck.json();
+                if (finalData.length > 0) {
+                    log(`Final archived status: ${finalData[0].archived}`, 'info');
+                }
+                
+                log('\n=== DIAGNOSIS ===', 'warning');
+                log('The issue is that Supabase returns an empty array [] when:', 'warning');
+                log('1. The UPDATE succeeds but no rows match the WHERE clause', 'warning');
+                log('2. OR when using return=representation but the policy blocks seeing the result', 'warning');
+                log('The admin panel interprets empty array as failure', 'warning');
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        log('Ready. Click "Test Complete Archive Flow" to diagnose the issue', 'info');
+    </script>
+</body>
+</html>
