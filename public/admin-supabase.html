@@ -3,277 +3,349 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrumpyTracker Admin - Supabase Edition</title>
+    <title>TrumpyTracker Admin - Enhanced Edition</title>
+    
+    <!-- Load Supabase configuration BEFORE the page JavaScript -->
+    <script src="supabase-browser-config.js" onerror="window.configLoadError = true;"></script>
+    
+    <!-- React for better state management -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <style>
         body {
             margin: 0;
-            font-family: system-ui, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
-            color: white;
+            color: #f7fafc;
             min-height: 100vh;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .card { 
-            background: rgba(45, 55, 72, 0.6);
-            backdrop-filter: blur(10px);
-            border-radius: 12px; 
-            padding: 24px; 
-            margin-bottom: 20px; 
-            border: 1px solid #4a5568;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
         }
-        .card:hover {
+        
+        /* Header Styles */
+        .header {
             background: rgba(45, 55, 72, 0.8);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .input { 
-            width: 100%; 
-            padding: 12px; 
-            background: #2d3748; 
-            border: 1px solid #4a5568; 
-            border-radius: 8px; 
-            color: white; 
-            font-size: 14px; 
-            box-sizing: border-box; 
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #f56565 0%, #3182ce 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            color: white;
         }
-        .input:focus { outline: none; border-color: #3182ce; }
-        .btn { 
-            min-height: 44px;
-            padding: 12px 16px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-weight: 500; 
-            transition: all 0.3s ease; 
-            font-size: 14px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-        .btn-primary { 
-            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%); 
-            color: white; 
-        }
-        .btn-primary:hover { 
-            background: linear-gradient(135deg, #2c5aa0 0%, #1d4ed8 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(49, 130, 206, 0.4);
-        }
-        .btn-success { 
-            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%); 
-            color: white; 
-        }
-        .btn-success:hover { 
-            background: linear-gradient(135deg, #2f855a 0%, #16a34a 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(56, 161, 105, 0.4);
-        }
-        .btn-danger { 
-            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%); 
-            color: white; 
-        }
-        .btn-danger:hover { 
-            background: linear-gradient(135deg, #c53030 0%, #dc2626 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(229, 62, 62, 0.4);
-        }
-        .btn-secondary { 
-            background: linear-gradient(135deg, #4a5568 0%, #6b7280 100%); 
-            color: white; 
-        }
-        .btn-secondary:hover { 
-            background: linear-gradient(135deg, #2d3748 0%, #4b5563 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(74, 85, 104, 0.4);
-        }
-        .btn-warning { 
-            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%); 
-            color: white; 
-        }
-        .btn-warning:hover { 
-            background: linear-gradient(135deg, #b7791f 0%, #d97706 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(214, 158, 46, 0.4);
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .flex { display: flex; }
-        .flex-wrap { flex-wrap: wrap; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .gap-4 { gap: 16px; }
-        .gap-2 { gap: 8px; }
-        .mb-4 { margin-bottom: 16px; }
-        .mb-2 { margin-bottom: 8px; }
-        .text-center { text-align: center; }
-        .text-sm { font-size: 14px; }
-        .text-xs { font-size: 12px; }
-        .font-bold { font-weight: 700; }
-        .grid { display: grid; }
-        .grid-2 { grid-template-columns: 1fr 1fr; }
-        .entry { 
+        
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            justify-content: center;
             background: rgba(45, 55, 72, 0.6);
             backdrop-filter: blur(10px);
-            border: 1px solid #4a5568; 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 12px; 
-            cursor: pointer; 
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .entry:hover { 
-            background: rgba(55, 65, 81, 0.8);
-            transform: translateY(-2px); 
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        }
-        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
-        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
-        .entry.failed { border-left: 4px solid #e53e3e; }
-        .entry.published { border-left: 4px solid #38a169; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
-        .badge-published { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .logo { 
-            width: 40px; 
-            height: 40px; 
-            background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); 
-            border-radius: 8px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-weight: bold; 
-        }
-        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
-        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
-        .message-warning { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .stat-card { 
-            background: rgba(55, 65, 81, 0.6);
-            backdrop-filter: blur(10px);
-            padding: 20px; 
-            border-radius: 12px; 
-            text-align: center;
-            border: 1px solid #4a5568;
+        
+        .tab {
+            padding: 12px 32px;
+            background: transparent;
+            border: none;
+            color: #a0aec0;
+            font-size: 15px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            transition: all 0.2s;
         }
-        .stat-card:hover {
-            background: rgba(55, 65, 81, 0.8);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
         }
-        .auth-section {
+        
+        .tab.active {
+            color: white;
+            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%);
+        }
+        
+        .tab.political.active {
+            background: linear-gradient(135deg, #ed8936 0%, #f97316 100%);
+        }
+        
+        /* Search and Filters */
+        .search-section {
             background: rgba(45, 55, 72, 0.6);
             backdrop-filter: blur(10px);
             border-radius: 12px;
             padding: 24px;
-            margin-bottom: 20px;
-            border: 1px solid #4a5568;
-            text-align: center;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        /* Improved checkbox for mobile touch targets */
-        .checkbox-wrapper {
-            display: inline-block;
-            position: relative;
-            padding: 10px;
-            margin: -10px;
-        }
-        .checkbox { 
-            width: 20px; 
-            height: 20px; 
-            cursor: pointer; 
-        }
-        .entry { text-align: left; }
         
-        /* Connection status indicator */
-        .connection-status {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            padding: 8px 12px;
+        .search-bar {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 14px 14px 14px 44px;
+            background: rgba(26, 32, 44, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #3182ce;
+            background: rgba(26, 32, 44, 1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #718096;
+        }
+        
+        /* Filter Chips */
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: rgba(26, 32, 44, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            color: #a0aec0;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-chip:hover {
+            background: rgba(26, 32, 44, 0.8);
+            color: white;
+            transform: translateY(-1px);
+        }
+        
+        .filter-chip.active {
+            background: #3182ce;
+            color: white;
+            border-color: #3182ce;
+        }
+        
+        .filter-chip.severity-high.active {
+            background: #e53e3e;
+            border-color: #e53e3e;
+        }
+        
+        .filter-chip.severity-medium.active {
+            background: #ed8936;
+            border-color: #ed8936;
+        }
+        
+        .filter-chip.severity-low.active {
+            background: #38a169;
+            border-color: #38a169;
+        }
+        
+        .filter-chip.archived.active {
+            background: #f59e0b;
+            border-color: #f59e0b;
+        }
+        
+        .filter-count {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Entry Cards */
+        .entries-container {
+            background: rgba(45, 55, 72, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .entry-card {
+            background: rgba(26, 32, 44, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .entry-card:hover {
+            background: rgba(26, 32, 44, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+        
+        .entry-card.selected {
+            border-color: #3182ce;
+            background: rgba(49, 130, 206, 0.1);
+        }
+        
+        .entry-card.archived {
+            border-left: 4px solid #f59e0b;
+            opacity: 0.85;
+        }
+        
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
-            z-index: 1000;
-            display: none;
-        }
-        .connection-status.online {
-            background: rgba(56, 161, 105, 0.9);
-            color: white;
-            display: block;
-        }
-        .connection-status.offline {
-            background: rgba(229, 62, 62, 0.9);
-            color: white;
-            display: block;
-        }
-        .connection-status.checking {
-            background: rgba(237, 137, 54, 0.9);
-            color: white;
-            display: block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
-        /* Pagination controls */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            margin: 20px 0;
+        .badge-high {
+            background: rgba(229, 62, 62, 0.2);
+            color: #feb2b2;
+            border: 1px solid #e53e3e;
         }
-        .pagination button {
-            min-width: 40px;
+        
+        .badge-medium {
+            background: rgba(237, 137, 54, 0.2);
+            color: #fbd38d;
+            border: 1px solid #ed8936;
         }
-        .page-info {
-            color: #a0aec0;
+        
+        .badge-low {
+            background: rgba(72, 187, 120, 0.2);
+            color: #9ae6b4;
+            border: 1px solid #48bb78;
+        }
+        
+        .badge-archived {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid #f59e0b;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
             font-size: 14px;
-        }
-        
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            animation: fadeIn 0.3s ease;
-        }
-        .modal-content {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-            padding: 24px;
-            border: 1px solid #4a5568;
-            width: 90%;
-            max-width: 500px;
-            max-height: 90vh;
-            overflow-y: auto;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            animation: slideIn 0.3s ease;
-        }
-        .modal-close {
-            color: #a0aec0;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
+            font-weight: 500;
             cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .modal-close:hover { color: white; }
         
-        /* Loading spinner */
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(74, 85, 104, 0.6);
+            color: white;
+        }
+        
+        /* Utilities */
+        .flex {
+            display: flex;
+        }
+        
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .flex-wrap {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        .gap-2 {
+            gap: 8px;
+        }
+        
+        .gap-3 {
+            gap: 12px;
+        }
+        
+        .mb-3 {
+            margin-bottom: 12px;
+        }
+        
+        .mb-4 {
+            margin-bottom: 16px;
+        }
+        
+        /* Loading Spinner */
         .spinner {
             display: inline-block;
             width: 16px;
@@ -283,354 +355,125 @@
             border-top-color: white;
             animation: spin 0.8s linear infinite;
         }
+        
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes slideIn {
-            from { transform: translateY(-50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 24px;
         }
         
-        /* Mobile responsive improvements */
+        .page-info {
+            color: #a0aec0;
+            font-size: 14px;
+        }
+        
+        /* Responsive */
         @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            .flex-mobile { flex-direction: column; }
-            .modal-content { width: 95%; }
+            .container {
+                padding: 12px;
+            }
+            
+            .tab {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            
             .bulk-actions {
-                display: flex;
                 flex-wrap: wrap;
-                gap: 8px;
             }
+            
             .bulk-actions .btn {
-                flex: 1 1 calc(50% - 4px);
-                min-width: 120px;
+                flex: 1 1 calc(50% - 6px);
             }
-            .container { padding: 10px; }
-            .card { padding: 16px; }
+        }
+        
+        /* Messages */
+        .message {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .message-success {
+            background: rgba(72, 187, 120, 0.2);
+            color: #9ae6b4;
+            border: 1px solid #48bb78;
+        }
+        
+        .message-error {
+            background: rgba(229, 62, 62, 0.2);
+            color: #feb2b2;
+            border: 1px solid #e53e3e;
+        }
+        
+        .message-warning {
+            background: rgba(237, 137, 54, 0.2);
+            color: #fbd38d;
+            border: 1px solid #ed8936;
+        }
+        
+        .message-info {
+            background: rgba(49, 130, 206, 0.2);
+            color: #90cdf4;
+            border: 1px solid #3182ce;
+        }
+        
+        /* Auth Section */
+        .auth-section {
+            max-width: 400px;
+            margin: 100px auto;
+            background: rgba(45, 55, 72, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .auth-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(26, 32, 44, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        
+        .auth-input:focus {
+            outline: none;
+            border-color: #3182ce;
         }
     </style>
-    <!-- Load Supabase configuration BEFORE the page JavaScript -->
-    <script src="supabase-browser-config.js" onerror="window.configLoadError = true;"></script>
 </head>
 <body>
-    <!-- Connection Status Indicator -->
-    <div id="connectionStatus" class="connection-status">
-        <span id="connectionText">Checking connection...</span>
-    </div>
-
-    <div class="container">
-        <!-- Header -->
-        <div class="card">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <div class="logo">T2</div>
-                    <div>
-                        <h1 style="margin: 0; font-size: 24px;">TrumpyTracker Admin <span id="envBadge" style="display: none; background: #ef4444; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 8px;">TEST</span></h1>
-                        <p style="margin: 0; color: #a0aec0; font-size: 14px;">Supabase Database Management</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Config Error Section (hidden by default) -->
-        <div id="configError" class="card" style="display: none; background: rgba(229, 62, 62, 0.2); border-color: #e53e3e;">
-            <h2>⚠️ Configuration Error</h2>
-            <p>Failed to load environment configuration. The admin panel cannot determine which database to connect to.</p>
-            <p>Please check that supabase-browser-config.js is available and reload the page.</p>
-        </div>
-
-        <!-- Authentication Section -->
-        <div id="authSection" class="auth-section">
-            <h2>🔐 Authentication Required</h2>
-            <p style="margin: 16px 0;">Enter your GitHub Personal Access Token:</p>
-            <input type="password" id="tokenInput" class="input" placeholder="ghp_xxxxxxxxxxxx" style="margin-bottom: 16px;">
-            <button id="authButton" class="btn btn-primary">Authenticate</button>
-        </div>
-
-        <!-- Main Content -->
-        <div id="mainContent" style="display: none;">
-            <div id="messageContainer"></div>
-
-            <!-- Statistics -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px;" id="statTotal">0</div>
-                    <div style="color: #a0aec0; font-size: 14px;">Total Entries</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #e53e3e;" id="statHigh">0</div>
-                    <div style="color: #a0aec0; font-size: 14px;">High Severity</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #ed8936;" id="statMedium">0</div>
-                    <div style="color: #a0aec0; font-size: 14px;">Medium Severity</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #38a169;" id="statLow">0</div>
-                    <div style="color: #a0aec0; font-size: 14px;">Low Severity</div>
-                </div>
-                <div class="stat-card">
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 8px; color: #805ad5;" id="statArchived">0</div>
-                    <div style="color: #a0aec0; font-size: 14px;">Archived</div>
-                </div>
-            </div>
-
-            <!-- Add/Edit Entry Form -->
-            <div id="entryFormCard" class="card" style="display: none;">
-                <h2 style="margin-top: 0;">📝 <span id="formTitle">Add Entry</span></h2>
-                <form id="entryForm">
-                    <input type="hidden" id="entryId">
-                    <input type="hidden" id="entryType">
-                    
-                    <div class="grid grid-2 gap-4 mb-4">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Entry Type</label>
-                            <select id="entryTypeSelect" class="input">
-                                <option value="political">Political Entry</option>
-                                <option value="executive">Executive Order</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Date</label>
-                            <input type="date" id="entryDate" class="input" required>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-2 gap-4 mb-4">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Actor</label>
-                            <input type="text" id="entryActor" class="input" placeholder="e.g., Donald Trump" required>
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Severity</label>
-                            <select id="entrySeverity" class="input">
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="mb-4">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Title</label>
-                        <input type="text" id="entryTitle" class="input" placeholder="Brief title of the action" required>
-                    </div>
-
-                    <div class="mb-4">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Description</label>
-                        <textarea id="entryDescription" class="input" rows="4" placeholder="Detailed description..." required></textarea>
-                    </div>
-
-                    <div class="grid grid-2 gap-4 mb-4">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Category</label>
-                            <select id="entryCategory" class="input">
-                                <option value="Democracy & Rule of Law">Democracy & Rule of Law</option>
-                                <option value="Authoritarian Indicators">Authoritarian Indicators</option>
-                                <option value="Corruption & Self-Dealing">Corruption & Self-Dealing</option>
-                                <option value="Disinformation & Propaganda">Disinformation & Propaganda</option>
-                                <option value="Judicial Manipulation">Judicial Manipulation</option>
-                                <option value="Power Consolidation">Power Consolidation</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Source URL</label>
-                            <input type="url" id="entrySource" class="input" placeholder="https://...">
-                        </div>
-                    </div>
-
-                    <div class="flex gap-2">
-                        <button type="submit" class="btn btn-primary">Save Entry</button>
-                        <button type="button" id="cancelEdit" class="btn btn-secondary">Cancel</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- URL Submission Modal -->
-            <div id="urlModal" class="modal">
-                <div class="modal-content">
-                    <span class="modal-close" onclick="closeModal()">&times;</span>
-                    <h2 style="margin-top: 0;">🔗 Submit Article for AI Processing</h2>
-                    <p style="color: #a0aec0; margin-bottom: 20px;">Enter a news article URL to process with AI analysis:</p>
-                    <input type="url" id="modalUrl" class="input" placeholder="https://example.com/article" style="margin-bottom: 16px;">
-                    <div class="flex gap-2">
-                        <button onclick="submitArticleFromModal()" class="btn btn-primary">Process Article</button>
-                        <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
-                    </div>
-                    <div id="modalMessage" style="margin-top: 16px;"></div>
-                </div>
-            </div>
-
-            <!-- Entries Management -->
-            <div class="card">
-                <div class="flex justify-between items-center mb-4 flex-mobile">
-                    <h2 style="margin: 0;">📊 All Entries <span id="entryCount" style="font-size: 16px; color: #a0aec0;"></span></h2>
-                    <div class="bulk-actions">
-                        <button class="btn btn-success add-new-entry">Add New</button>
-                        <button id="selectAll" class="btn btn-secondary">Select All</button>
-                        <button id="deselectAll" class="btn btn-secondary">Deselect</button>
-                        <button id="archiveSelected" class="btn btn-warning">Archive</button>
-                        <button id="restoreSelected" class="btn btn-success">Restore</button>
-                        <button id="deleteSelected" class="btn btn-danger">Delete</button>
-                        <button id="refreshEntries" class="btn btn-primary">Refresh</button>
-                    </div>
-                </div>
-                
-                <!-- Pagination Controls (Top) -->
-                <div class="pagination">
-                    <button id="prevPage" class="btn btn-secondary" disabled>← Prev</button>
-                    <span class="page-info">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
-                    <button id="nextPage" class="btn btn-secondary">Next →</button>
-                </div>
-                
-                <div id="entriesList" style="text-align: center; padding: 40px; color: #a0aec0;">Loading entries...</div>
-                
-                <!-- Pagination Controls (Bottom) -->
-                <div class="pagination">
-                    <button id="prevPageBottom" class="btn btn-secondary" disabled>← Prev</button>
-                    <span class="page-info">Page <span id="currentPageBottom">1</span> of <span id="totalPagesBottom">1</span></span>
-                    <button id="nextPageBottom" class="btn btn-secondary">Next →</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // Check for config loading error first
-        if (window.configLoadError) {
-            document.getElementById('configError').style.display = 'block';
-            document.getElementById('authSection').style.display = 'none';
-            console.error('Failed to load Supabase configuration');
-        }
-
-        // Configuration - Use dynamic environment detection from supabase-browser-config.js
-        const SUPABASE_URL = window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_URL : null;
-        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG ? window.SUPABASE_CONFIG.SUPABASE_ANON_KEY : null;
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo } = React;
+        
+        // Configuration
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
         const GITHUB_REPO = 'AJWolfe18/TTracker';
+        const ENTRIES_PER_PAGE = 50;
         
-        // Stop execution if no config
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-            if (!window.configLoadError) {
-                document.getElementById('configError').style.display = 'block';
-                document.getElementById('authSection').style.display = 'none';
-            }
-            throw new Error('Supabase configuration not available');
-        }
+        // Check if test environment
+        const isTestDB = SUPABASE_URL?.includes('wnrjrywpcadwutfykflu');
         
-        // Log which environment we're using
-        const isTestDB = SUPABASE_URL.includes('wnrjrywpcadwutfykflu');
-        console.log(`🔧 Admin panel using ${isTestDB ? 'TEST' : 'PRODUCTION'} database`);
-        
-        // Show TEST badge if on test environment
-        if (isTestDB) {
-            document.addEventListener('DOMContentLoaded', () => {
-                const badge = document.getElementById('envBadge');
-                if (badge) {
-                    badge.style.display = 'inline-block';
-                }
-            });
-        }
-
-        // Global state
-        let currentToken = '';
-        let allEntries = []; // All entries from database
-        let displayedEntries = []; // Currently displayed entries (for pagination)
-        let selectedEntries = new Set();
-        let currentPage = 1;
-        const entriesPerPage = 50;
-        let isLoading = false;
-        let lastRefreshTime = 0;
-        const refreshDebounceDelay = 2000; // 2 seconds
-        
-        // Cache management
-        const CACHE_KEY = 'admin_entries_cache';
-        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-        
-        // Connection monitoring
-        let connectionStatus = 'checking';
-        let connectionCheckInterval = null;
-
-        // Utility: HTML escape to prevent XSS
-        function escapeHtml(unsafe) {
-            if (!unsafe) return '';
-            return unsafe
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
-        // GitHub API headers helper
-        function ghHeaders(token) {
-            return {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/vnd.github+json',
-                'Content-Type': 'application/json'
-            };
-        }
-
-        // Connection status management
-        function updateConnectionStatus(status) {
-            connectionStatus = status;
-            const statusEl = document.getElementById('connectionStatus');
-            const textEl = document.getElementById('connectionText');
-            
-            statusEl.className = 'connection-status ' + status;
-            
-            switch(status) {
-                case 'online':
-                    textEl.textContent = '✅ Connected';
-                    setTimeout(() => {
-                        if (connectionStatus === 'online') {
-                            statusEl.style.display = 'none';
-                        }
-                    }, 3000);
-                    break;
-                case 'offline':
-                    textEl.textContent = '❌ Connection lost';
-                    break;
-                case 'checking':
-                    textEl.textContent = '🔄 Checking connection...';
-                    break;
-            }
-        }
-
-        // Check Supabase connection
-        async function checkConnection() {
-            try {
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-                    method: 'HEAD',
-                    headers: {
-                        'apikey': SUPABASE_ANON_KEY
-                    }
-                });
-                
-                if (response.ok || response.status === 406) { // 406 is normal for HEAD request
-                    updateConnectionStatus('online');
-                    return true;
-                } else {
-                    updateConnectionStatus('offline');
-                    return false;
-                }
-            } catch (error) {
-                updateConnectionStatus('offline');
-                return false;
-            }
-        }
-
-        // Start connection monitoring
-        function startConnectionMonitoring() {
-            checkConnection();
-            connectionCheckInterval = setInterval(checkConnection, 30000); // Check every 30 seconds
-        }
-
-        // Enhanced Supabase request helper with better error handling
-        async function supabaseRequest(endpoint, method = 'GET', body = null, retries = 3) {
+        // Supabase request helper
+        async function supabaseRequest(endpoint, method = 'GET', body = null) {
             const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
             const options = {
                 method,
@@ -641,783 +484,550 @@
                     'Prefer': 'return=representation'
                 }
             };
-
+            
             if (body) {
                 options.body = JSON.stringify(body);
             }
-
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        let errorMessage = `Request failed: ${response.status}`;
-                        
-                        // Parse specific error types
-                        if (response.status === 401) {
-                            errorMessage = 'Authentication failed. Please check your credentials.';
-                        } else if (response.status === 429) {
-                            errorMessage = 'Too many requests. Please wait a moment and try again.';
-                        } else if (response.status === 500) {
-                            errorMessage = 'Server error. Please try again later.';
-                        } else if (errorText) {
-                            try {
-                                const errorJson = JSON.parse(errorText);
-                                errorMessage = errorJson.message || errorMessage;
-                            } catch {
-                                errorMessage = errorText;
-                            }
-                        }
-                        
-                        throw new Error(errorMessage);
-                    }
-
-                    updateConnectionStatus('online');
-                    
-                    const contentType = response.headers.get('content-type');
-                    if (contentType && contentType.includes('application/json')) {
-                        const data = await response.json();
-                        // Supabase returns [] for successful updates with no rows returned
-                        // This is still a success!
-                        return data || { success: true };
-                    }
-                    
-                    return { success: true };
-                } catch (error) {
-                    if (i === retries - 1) {
-                        updateConnectionStatus('offline');
-                        throw error;
-                    }
-                    // Wait before retry with exponential backoff
-                    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
-                }
-            }
-        }
-
-        // Cache management functions
-        function saveToCache(data) {
-            try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify({
-                    data: data,
-                    timestamp: Date.now(),
-                    environment: isTestDB ? 'test' : 'production'
-                }));
-            } catch (e) {
-                console.warn('Failed to save cache:', e);
-            }
-        }
-
-        function loadFromCache() {
-            try {
-                const cached = localStorage.getItem(CACHE_KEY);
-                if (!cached) return null;
-                
-                const { data, timestamp, environment } = JSON.parse(cached);
-                const currentEnv = isTestDB ? 'test' : 'production';
-                
-                // Check if cache is valid (same environment and not expired)
-                if (environment === currentEnv && Date.now() - timestamp < CACHE_DURATION) {
-                    return data;
-                }
-                
-                // Clear invalid cache
-                localStorage.removeItem(CACHE_KEY);
-                return null;
-            } catch (e) {
-                console.warn('Failed to load cache:', e);
-                return null;
-            }
-        }
-
-        // Load entries with caching
-        async function loadEntries(forceRefresh = false) {
-            if (isLoading) return;
-            isLoading = true;
             
-            try {
-                // Try to load from cache first
-                if (!forceRefresh) {
-                    const cachedData = loadFromCache();
-                    if (cachedData) {
-                        allEntries = cachedData;
-                        updateStats();
-                        updatePagination();
-                        renderCurrentPage();
-                        showMessage('Loaded from cache. Click refresh for latest data.', 'info');
-                        isLoading = false;
-                        return;
-                    }
-                }
-                
-                // Load from database with pagination support
-                const [politicalEntries, executiveOrders] = await Promise.all([
-                    supabaseRequest('political_entries?order=date.desc,id.desc'),
-                    supabaseRequest('executive_orders?order=date.desc,id.desc')
-                ]);
-
-                allEntries = [
-                    ...politicalEntries.map(e => ({ ...e, type: 'political' })),
-                    ...executiveOrders.map(e => ({ ...e, type: 'executive' }))
-                ];
-
-                // Sort is already done by database, but ensure combined list is sorted
-                allEntries.sort((a, b) => {
-                    const dateCompare = new Date(b.date) - new Date(a.date);
-                    if (dateCompare !== 0) return dateCompare;
-                    return b.id - a.id;
-                });
-
-                // Save to cache
-                saveToCache(allEntries);
-                
-                updateStats();
-                updatePagination();
-                renderCurrentPage();
-                showMessage(`Loaded ${allEntries.length} entries`, 'success');
-            } catch (error) {
-                console.error('Error loading entries:', error);
-                showMessage(`Failed to load entries: ${error.message}`, 'error');
-                
-                // Try to use cached data if available
-                const cachedData = loadFromCache();
-                if (cachedData) {
-                    allEntries = cachedData;
-                    updateStats();
-                    updatePagination();
-                    renderCurrentPage();
-                    showMessage('Using cached data due to connection error', 'warning');
-                }
-            } finally {
-                isLoading = false;
-            }
-        }
-
-        // Pagination functions
-        function updatePagination() {
-            const totalPages = Math.ceil(allEntries.length / entriesPerPage);
+            const response = await fetch(url, options);
             
-            // Update page info
-            document.getElementById('currentPage').textContent = currentPage;
-            document.getElementById('totalPages').textContent = totalPages;
-            document.getElementById('currentPageBottom').textContent = currentPage;
-            document.getElementById('totalPagesBottom').textContent = totalPages;
-            
-            // Update entry count
-            const start = (currentPage - 1) * entriesPerPage + 1;
-            const end = Math.min(currentPage * entriesPerPage, allEntries.length);
-            document.getElementById('entryCount').textContent = `(${start}-${end} of ${allEntries.length})`;
-            
-            // Update button states
-            document.getElementById('prevPage').disabled = currentPage === 1;
-            document.getElementById('prevPageBottom').disabled = currentPage === 1;
-            document.getElementById('nextPage').disabled = currentPage === totalPages;
-            document.getElementById('nextPageBottom').disabled = currentPage === totalPages;
-        }
-
-        function renderCurrentPage() {
-            const start = (currentPage - 1) * entriesPerPage;
-            const end = start + entriesPerPage;
-            displayedEntries = allEntries.slice(start, end);
-            renderEntries();
-        }
-
-        function goToPage(page) {
-            const totalPages = Math.ceil(allEntries.length / entriesPerPage);
-            if (page < 1 || page > totalPages) return;
-            
-            currentPage = page;
-            updatePagination();
-            renderCurrentPage();
-            
-            // Scroll to top of entries list
-            document.getElementById('entriesList').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        // Update statistics
-        function updateStats() {
-            const stats = {
-                total: allEntries.length,
-                high: allEntries.filter(e => e.severity === 'high' && !e.archived).length,
-                medium: allEntries.filter(e => e.severity === 'medium' && !e.archived).length,
-                low: allEntries.filter(e => e.severity === 'low' && !e.archived).length,
-                archived: allEntries.filter(e => e.archived).length
-            };
-
-            document.getElementById('statTotal').textContent = stats.total;
-            document.getElementById('statHigh').textContent = stats.high;
-            document.getElementById('statMedium').textContent = stats.medium;
-            document.getElementById('statLow').textContent = stats.low;
-            document.getElementById('statArchived').textContent = stats.archived;
-        }
-
-        // Render entries list with XSS protection
-        function renderEntries() {
-            const entriesList = document.getElementById('entriesList');
-            
-            if (displayedEntries.length === 0) {
-                entriesList.innerHTML = '<div style="text-align: center; padding: 40px; color: #a0aec0;">No entries found</div>';
-                return;
-            }
-
-            // Clear previous event listeners
-            entriesList.innerHTML = '';
-            
-            // Build entries HTML with escaped content
-            const entriesHtml = displayedEntries.map(entry => {
-                const isSelected = selectedEntries.has(entry.id);
-                const entryDiv = document.createElement('div');
-                entryDiv.className = `entry ${isSelected ? 'selected' : ''}`;
-                entryDiv.id = `entry-${entry.id}`;
-                
-                // Create safe HTML structure
-                entryDiv.innerHTML = `
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-2">
-                            <span class="checkbox-wrapper">
-                                <input type="checkbox" 
-                                       class="checkbox" 
-                                       data-id="${entry.id}"
-                                       ${isSelected ? 'checked' : ''}>
-                            </span>
-                            <strong>${escapeHtml(entry.title || entry.actor || 'Untitled')}</strong>
-                        </div>
-                        <div class="flex gap-2">
-                            <span class="badge badge-${escapeHtml(entry.severity || 'medium')}">
-                                ${escapeHtml((entry.severity || 'medium').toUpperCase())}
-                            </span>
-                            <span class="badge" style="background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce;">
-                                ${entry.type === 'political' ? 'Political Entry' : 'Executive Order'}
-                            </span>
-                            ${entry.archived ? '<span class="badge badge-archived">ARCHIVED</span>' : ''}
-                        </div>
-                    </div>
-                    <div style="color: #a0aec0; font-size: 14px; margin-bottom: 8px;">
-                        ${new Date(entry.date).toLocaleDateString()} • ${escapeHtml(entry.actor)}
-                    </div>
-                    <div style="margin-bottom: 12px;">
-                        ${escapeHtml(entry.description || '')}
-                    </div>
-                    ${entry.source_url ? `
-                        <div style="margin-bottom: 8px;">
-                            <a href="${escapeHtml(entry.source_url)}" target="_blank" style="color: #3182ce; text-decoration: none;">
-                                🔗 View Source
-                            </a>
-                        </div>
-                    ` : ''}
-                    <div class="flex gap-2">
-                        <button class="btn btn-primary edit-btn" data-id="${entry.id}">Edit</button>
-                    </div>
-                `;
-                
-                return entryDiv;
-            });
-            
-            // Append all entries
-            entriesHtml.forEach(entryDiv => {
-                entriesList.appendChild(entryDiv);
-            });
-            
-            // Use event delegation for checkboxes and edit buttons
-            entriesList.addEventListener('change', handleCheckboxChange);
-            entriesList.addEventListener('click', handleEditClick);
-        }
-
-        // Event delegation handlers
-        function handleCheckboxChange(e) {
-            if (!e.target.classList.contains('checkbox')) return;
-            
-            const id = e.target.dataset.id; // Keep as string, don't parseInt!
-            const entryElement = document.getElementById(`entry-${id}`);
-            
-            if (e.target.checked) {
-                selectedEntries.add(id);
-                if (entryElement) entryElement.classList.add('selected');
-            } else {
-                selectedEntries.delete(id);
-                if (entryElement) entryElement.classList.remove('selected');
-            }
-        }
-
-        function handleEditClick(e) {
-            if (!e.target.classList.contains('edit-btn')) return;
-            editEntry(e.target.dataset.id);
-        }
-
-        // Edit entry with proper date validation
-        window.editEntry = function(id) {
-            const entry = allEntries.find(e => 
-                e.id === id || e.id === parseInt(id) || e.id === String(id)
-            );
-            if (!entry) return;
-
-            document.getElementById('entryFormCard').style.display = 'block';
-            document.getElementById('formTitle').textContent = 'Edit Entry';
-
-            document.getElementById('entryId').value = entry.id;
-            document.getElementById('entryType').value = entry.type;
-            document.getElementById('entryTypeSelect').value = entry.type;
-            
-            // Set date with max validation
-            const dateInput = document.getElementById('entryDate');
-            dateInput.value = (entry.date || '').slice(0, 10);
-            dateInput.max = new Date().toISOString().slice(0, 10); // Prevent future dates
-            
-            document.getElementById('entryActor').value = entry.actor || entry.title || '';
-            document.getElementById('entryTitle').value = entry.title || '';
-            document.getElementById('entryDescription').value = entry.description || '';
-            document.getElementById('entryCategory').value = entry.category || 'Democracy & Rule of Law';
-            document.getElementById('entrySeverity').value = entry.severity || 'medium';
-            document.getElementById('entrySource').value = entry.source_url || '';
-            
-            document.getElementById('entryForm').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        // Archive operations - Simple status toggle
-        // NOTE: Requires UPDATE policy in Supabase for this to work
-        async function archiveEntries(entryIds, tableName, archived) {
-            const errors = [];
-            const successes = [];
-            const batchSize = 10; // Process in batches to avoid timeouts
-            
-            // Process entries in batches
-            for (let i = 0; i < entryIds.length; i += batchSize) {
-                const batch = entryIds.slice(i, i + batchSize);
-                
-                // Process batch in parallel for better performance
-                const batchPromises = batch.map(async (id) => {
-                    try {
-                        const response = await supabaseRequest(
-                            `${tableName}?id=eq.${id}`,
-                            'PATCH',
-                            { archived: archived }
-                        );
-                        
-                        // Check if update actually worked
-                        if (response && response.length > 0) {
-                            successes.push(id);
-                            return { success: true, id };
-                        } else {
-                            // Empty response means no rows were updated
-                            throw new Error('No rows updated - check RLS policies');
-                        }
-                    } catch (e) {
-                        console.error(`Failed to archive entry ${id}:`, e);
-                        errors.push({ id, error: e.message });
-                        return { success: false, id, error: e.message };
-                    }
-                });
-                
-                // Wait for batch to complete
-                await Promise.all(batchPromises);
-                
-                // Small delay between batches to avoid rate limiting
-                if (i + batchSize < entryIds.length) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Request failed: ${response.status}`);
             }
             
-            return { successes, errors };
-        }
-
-
-        // Toggle Archive with visual feedback
-        async function toggleArchive(entryIds, archived) {
-            if (entryIds.length === 0) {
-                showMessage('No entries selected', 'error');
-                return;
+            const contentType = response.headers.get('content-type');
+            if (contentType?.includes('application/json')) {
+                return await response.json();
             }
             
-            showMessage(`<span class="spinner"></span> ${archived ? 'Archiving' : 'Restoring'} ${entryIds.length} entries...`, 'info');
-            
-            try {
-                const politicalIds = [];
-                const executiveIds = [];
-
-                entryIds.forEach(id => {
-                    const entry = allEntries.find(e => e.id === id);
-                    if (entry) {
-                        if (entry.type === 'political') politicalIds.push(id);
-                        else executiveIds.push(id);
-                    }
-                });
-
-                let totalSuccesses = 0;
-                let totalErrors = [];
-
-                // Archive political entries
-                if (politicalIds.length > 0) {
-                    const result = await archiveEntries(politicalIds, 'political_entries', archived);
-                    totalSuccesses += result.successes.length;
-                    totalErrors = totalErrors.concat(result.errors);
-                }
-
-                // Archive executive orders
-                if (executiveIds.length > 0) {
-                    const result = await archiveEntries(executiveIds, 'executive_orders', archived);
-                    totalSuccesses += result.successes.length;
-                    totalErrors = totalErrors.concat(result.errors);
-                }
-
-                // Show results
-                if (totalErrors.length === 0) {
-                    showMessage(`✅ Successfully ${archived ? 'archived' : 'restored'} ${totalSuccesses} entries`, 'success');
-                } else if (totalSuccesses > 0) {
-                    showMessage(`⚠️ Partially ${archived ? 'archived' : 'restored'}: ${totalSuccesses} succeeded, ${totalErrors.length} failed. This usually means RLS policies need updating.`, 'warning');
-                } else {
-                    showMessage(`❌ Failed to ${archived ? 'archive' : 'restore'} entries. Please add an UPDATE policy in Supabase.`, 'error');
-                }
-                
-                selectedEntries.clear();
-                
-                // Clear cache and reload
-                localStorage.removeItem(CACHE_KEY);
-                await loadEntries(true);
-            } catch (error) {
-                console.error(`Error ${archived ? 'archiving' : 'restoring'} entries:`, error);
-                showMessage(`Failed to ${archived ? 'archive' : 'restore'} entries: ${error.message}`, 'error');
-            }
-        }
-
-        // Show message helper
-        function showMessage(text, type = 'info') {
-            const container = document.getElementById('messageContainer');
-            const className = type === 'success' ? 'message-success' : 
-                             type === 'error' ? 'message-error' : 
-                             type === 'warning' ? 'message-warning' : 'message-info';
-            container.innerHTML = `<div class="message ${className}">${text}</div>`;
-            
-            if (type !== 'error') {
-                setTimeout(() => {
-                    container.innerHTML = '';
-                }, 5000);
-            }
-        }
-
-        // Modal functions
-        function showAddForm() {
-            document.getElementById('urlModal').style.display = 'block';
-            document.getElementById('modalUrl').value = '';
-            document.getElementById('modalMessage').innerHTML = '';
+            return { success: true };
         }
         
-        function closeModal() {
-            document.getElementById('urlModal').style.display = 'none';
-        }
-        
-        async function submitArticleFromModal() {
-            const url = document.getElementById('modalUrl').value.trim();
-            if (!url) {
-                document.getElementById('modalMessage').innerHTML = 
-                    '<div class="message message-error">Please enter a URL</div>';
-                return;
-            }
-            
-            const modalMessage = document.getElementById('modalMessage');
-            modalMessage.innerHTML = '<div class="message message-info"><span class="spinner"></span> Submitting article for processing...</div>';
-            
-            try {
-                const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
-                    method: 'POST',
-                    headers: ghHeaders(currentToken),
-                    body: JSON.stringify({
-                        event_type: 'process-manual-article',
-                        client_payload: {
-                            article_url: url,
-                            submitted_by: 'admin',
-                            submitted_at: new Date().toISOString()
-                        }
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`GitHub API error: ${response.status}`);
-                }
-
-                modalMessage.innerHTML = '<div class="message message-success">✅ Article submitted! Check GitHub Actions for processing status.</div>';
-                setTimeout(() => {
-                    closeModal();
-                    loadEntries(true);
-                }, 2000);
-            } catch (error) {
-                console.error('Error submitting article:', error);
-                modalMessage.innerHTML = `<div class="message message-error">❌ Failed: ${error.message}</div>`;
-            }
-        }
-
-        // Batch delete for better performance
-        async function batchDelete(entryIds) {
-            const politicalIds = [];
-            const executiveIds = [];
-            
-            entryIds.forEach(id => {
-                const entry = allEntries.find(e => e.id === id);
-                if (entry) {
-                    if (entry.type === 'political') politicalIds.push(id);
-                    else executiveIds.push(id);
-                }
-            });
-            
-            // Delete in batches
-            const batchSize = 10;
-            const errors = [];
-            
-            for (let i = 0; i < politicalIds.length; i += batchSize) {
-                const batch = politicalIds.slice(i, i + batchSize);
-                const deletePromises = batch.map(id => 
-                    supabaseRequest(`political_entries?id=eq.${id}`, 'DELETE').catch(e => errors.push(e))
-                );
-                await Promise.all(deletePromises);
-            }
-            
-            for (let i = 0; i < executiveIds.length; i += batchSize) {
-                const batch = executiveIds.slice(i, i + batchSize);
-                const deletePromises = batch.map(id => 
-                    supabaseRequest(`executive_orders?id=eq.${id}`, 'DELETE').catch(e => errors.push(e))
-                );
-                await Promise.all(deletePromises);
-            }
-            
-            if (errors.length > 0) {
-                throw new Error(`Failed to delete ${errors.length} entries`);
-            }
-        }
-
-        // Save entry with validation
-        async function saveEntry(e) {
-            e.preventDefault();
-            
-            const entryType = document.getElementById('entryTypeSelect').value;
-            const tableName = entryType === 'political' ? 'political_entries' : 'executive_orders';
-            
-            const entryData = {
-                date: document.getElementById('entryDate').value,
-                actor: document.getElementById('entryActor').value,
-                title: document.getElementById('entryTitle').value,
-                description: document.getElementById('entryDescription').value,
-                category: document.getElementById('entryCategory').value,
-                severity: document.getElementById('entrySeverity').value,
-                source_url: document.getElementById('entrySource').value,
+        // Admin Dashboard Component
+        function AdminDashboard() {
+            const [authenticated, setAuthenticated] = useState(false);
+            const [token, setToken] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [message, setMessage] = useState(null);
+            const [currentTab, setCurrentTab] = useState('political');
+            const [politicalEntries, setPoliticalEntries] = useState([]);
+            const [executiveOrders, setExecutiveOrders] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filters, setFilters] = useState({
+                severity: null,
                 archived: false
-            };
-
-            try {
-                const entryId = document.getElementById('entryId').value;
-                
-                if (entryId) {
-                    await supabaseRequest(
-                        `${tableName}?id=eq.${entryId}`,
-                        'PATCH',
-                        entryData
-                    );
-                    showMessage('Entry updated successfully', 'success');
-                } else {
-                    await supabaseRequest(tableName, 'POST', entryData);
-                    showMessage('Entry created successfully', 'success');
-                }
-
-                document.getElementById('entryForm').reset();
-                document.getElementById('entryId').value = '';
-                document.getElementById('entryFormCard').style.display = 'none';
-                
-                // Clear cache and reload
-                localStorage.removeItem(CACHE_KEY);
-                await loadEntries(true);
-            } catch (error) {
-                console.error('Error saving entry:', error);
-                showMessage(`Failed to save entry: ${error.message}`, 'error');
-            }
-        }
-
-        // Authenticate with GitHub
-        async function authenticate() {
-            const tokenValue = document.getElementById('tokenInput').value;
-            if (!tokenValue) {
-                showMessage('Please enter a GitHub token', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('https://api.github.com/user', {
-                    headers: ghHeaders(tokenValue)
-                });
-
-                if (response.ok) {
-                    currentToken = tokenValue;
-                    document.getElementById('mainContent').style.display = 'block';
-                    document.getElementById('authSection').style.display = 'none';
-                    startConnectionMonitoring();
-                    await loadEntries();
-                } else {
-                    throw new Error('Invalid token');
-                }
-            } catch (error) {
-                showMessage('Authentication failed. Please check your token.', 'error');
-            }
-        }
-
-        // Debounced refresh
-        async function refreshEntries() {
-            const now = Date.now();
-            if (now - lastRefreshTime < refreshDebounceDelay) {
-                showMessage('Please wait before refreshing again', 'warning');
-                return;
-            }
+            });
+            const [selectedIds, setSelectedIds] = useState(new Set());
+            const [currentPage, setCurrentPage] = useState(1);
             
-            lastRefreshTime = now;
-            const btn = document.getElementById('refreshEntries');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span> Refreshing...';
-            
-            try {
-                localStorage.removeItem(CACHE_KEY);
-                await loadEntries(true);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = 'Refresh';
-            }
-        }
-
-        // Initialize event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            // Set max date for date input
-            const dateInput = document.getElementById('entryDate');
-            if (dateInput) {
-                dateInput.max = new Date().toISOString().slice(0, 10);
-            }
-            
-            // Authentication
-            document.getElementById('authButton').addEventListener('click', authenticate);
-            document.getElementById('tokenInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') authenticate();
-            });
-
-            // Form submission
-            document.getElementById('entryForm').addEventListener('submit', saveEntry);
-
-            // Cancel edit
-            document.getElementById('cancelEdit').addEventListener('click', () => {
-                document.getElementById('entryForm').reset();
-                document.getElementById('entryId').value = '';
-                document.getElementById('entryFormCard').style.display = 'none';
-            });
-
-            // Add new entry button
-            document.querySelectorAll('.add-new-entry').forEach(btn => {
-                btn.addEventListener('click', showAddForm);
-            });
-            
-            // Modal close
-            window.onclick = function(event) {
-                const modal = document.getElementById('urlModal');
-                if (event.target === modal) {
-                    closeModal();
-                }
-            };
-
-            // Pagination
-            document.getElementById('prevPage').addEventListener('click', () => goToPage(currentPage - 1));
-            document.getElementById('nextPage').addEventListener('click', () => goToPage(currentPage + 1));
-            document.getElementById('prevPageBottom').addEventListener('click', () => goToPage(currentPage - 1));
-            document.getElementById('nextPageBottom').addEventListener('click', () => goToPage(currentPage + 1));
-
-            // Bulk actions
-            document.getElementById('selectAll').addEventListener('click', () => {
-                displayedEntries.forEach(e => selectedEntries.add(e.id));
-                renderCurrentPage();
-            });
-
-            document.getElementById('deselectAll').addEventListener('click', () => {
-                selectedEntries.clear();
-                renderCurrentPage();
-            });
-
-            document.getElementById('refreshEntries').addEventListener('click', refreshEntries);
-
-            document.getElementById('archiveSelected').addEventListener('click', () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected', 'error');
-                    return;
-                }
-                toggleArchive(Array.from(selectedEntries), true);
-            });
-
-            document.getElementById('restoreSelected').addEventListener('click', () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected', 'error');
-                    return;
-                }
-                toggleArchive(Array.from(selectedEntries), false);
-            });
-
-            document.getElementById('deleteSelected').addEventListener('click', async () => {
-                if (selectedEntries.size === 0) {
-                    showMessage('No entries selected', 'error');
-                    return;
-                }
-                
-                if (!confirm(`Are you sure you want to delete ${selectedEntries.size} entries? This cannot be undone.`)) {
-                    return;
-                }
-
+            // Load entries
+            const loadEntries = useCallback(async () => {
+                setLoading(true);
                 try {
-                    showMessage(`<span class="spinner"></span> Deleting ${selectedEntries.size} entries...`, 'info');
+                    const [political, executive] = await Promise.all([
+                        supabaseRequest('political_entries?order=date.desc,id.desc'),
+                        supabaseRequest('executive_orders?order=date.desc,id.desc')
+                    ]);
                     
-                    // Separate by type and delete directly via Supabase
-                    const politicalIds = [];
-                    const executiveIds = [];
-                    Array.from(selectedEntries).forEach(id => {
-                        const entry = allEntries.find(e => e.id === id);
-                        if (entry) {
-                            if (entry.type === 'political') politicalIds.push(id);
-                            else executiveIds.push(id);
+                    setPoliticalEntries(political || []);
+                    setExecutiveOrders(executive || []);
+                    showMessage('Entries loaded successfully', 'success');
+                } catch (error) {
+                    showMessage(`Failed to load entries: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            }, []);
+            
+            // Show message
+            const showMessage = (text, type = 'info') => {
+                setMessage({ text, type });
+                if (type !== 'error') {
+                    setTimeout(() => setMessage(null), 5000);
+                }
+            };
+            
+            // Authenticate
+            const authenticate = async () => {
+                const tokenInput = document.getElementById('tokenInput').value;
+                if (!tokenInput) {
+                    showMessage('Please enter a GitHub token', 'error');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('https://api.github.com/user', {
+                        headers: {
+                            'Authorization': `Bearer ${tokenInput}`,
+                            'Accept': 'application/vnd.github+json'
                         }
                     });
                     
-                    let errors = [];
-                    
-                    // Delete political entries directly
-                    for (const id of politicalIds) {
-                        try {
-                            await supabaseRequest(`political_entries?id=eq.${id}`, 'DELETE');
-                        } catch (e) {
-                            errors.push({ id, error: e.message });
-                        }
-                    }
-                    
-                    // Delete executive orders directly
-                    for (const id of executiveIds) {
-                        try {
-                            await supabaseRequest(`executive_orders?id=eq.${id}`, 'DELETE');
-                        } catch (e) {
-                            errors.push({ id, error: e.message });
-                        }
-                    }
-                    
-                    if (errors.length === 0) {
-                        showMessage(`✅ Deleted ${selectedEntries.size} entries`, 'success');
+                    if (response.ok) {
+                        setToken(tokenInput);
+                        setAuthenticated(true);
+                        await loadEntries();
                     } else {
-                        showMessage(`⚠️ Deleted ${selectedEntries.size - errors.length} entries, ${errors.length} failed`, 'warning');
+                        throw new Error('Invalid token');
+                    }
+                } catch (error) {
+                    showMessage('Authentication failed', 'error');
+                }
+            };
+            
+            // Filter entries
+            const filteredEntries = useMemo(() => {
+                const entries = currentTab === 'political' ? politicalEntries : executiveOrders;
+                
+                return entries.filter(entry => {
+                    // Search filter
+                    if (searchTerm) {
+                        const search = searchTerm.toLowerCase();
+                        const matchesSearch = 
+                            entry.title?.toLowerCase().includes(search) ||
+                            entry.description?.toLowerCase().includes(search) ||
+                            entry.summary?.toLowerCase().includes(search) ||
+                            entry.actor?.toLowerCase().includes(search) ||
+                            entry.category?.toLowerCase().includes(search);
+                        
+                        if (!matchesSearch) return false;
                     }
                     
-                    selectedEntries.clear();
+                    // Severity filter
+                    if (filters.severity) {
+                        const severity = entry.severity || entry.severity_rating;
+                        if (severity !== filters.severity) return false;
+                    }
                     
-                    // Clear cache and reload
-                    localStorage.removeItem(CACHE_KEY);
-                    await loadEntries(true);
-                } catch (error) {
-                    console.error('Error deleting entries:', error);
-                    showMessage(`Failed to delete entries: ${error.message}`, 'error');
+                    // Archive filter
+                    if (filters.archived !== null) {
+                        if (!!entry.archived !== filters.archived) return false;
+                    }
+                    
+                    return true;
+                });
+            }, [currentTab, politicalEntries, executiveOrders, searchTerm, filters]);
+            
+            // Paginated entries
+            const paginatedEntries = useMemo(() => {
+                const start = (currentPage - 1) * ENTRIES_PER_PAGE;
+                return filteredEntries.slice(start, start + ENTRIES_PER_PAGE);
+            }, [filteredEntries, currentPage]);
+            
+            const totalPages = Math.ceil(filteredEntries.length / ENTRIES_PER_PAGE);
+            
+            // Toggle selection
+            const toggleSelection = (id) => {
+                const newSelected = new Set(selectedIds);
+                if (newSelected.has(id)) {
+                    newSelected.delete(id);
+                } else {
+                    newSelected.add(id);
                 }
-            });
-        });
-
-        // Clean up on page unload
-        window.addEventListener('beforeunload', () => {
-            if (connectionCheckInterval) {
-                clearInterval(connectionCheckInterval);
+                setSelectedIds(newSelected);
+            };
+            
+            // Archive/restore entries
+            const archiveEntries = async (archive) => {
+                if (selectedIds.size === 0) {
+                    showMessage('No entries selected', 'error');
+                    return;
+                }
+                
+                setLoading(true);
+                const tableName = currentTab === 'political' ? 'political_entries' : 'executive_orders';
+                let successCount = 0;
+                
+                for (const id of selectedIds) {
+                    try {
+                        await supabaseRequest(
+                            `${tableName}?id=eq.${id}`,
+                            'PATCH',
+                            { archived: archive }
+                        );
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Failed to update entry ${id}:`, error);
+                    }
+                }
+                
+                showMessage(
+                    `Successfully ${archive ? 'archived' : 'restored'} ${successCount} entries`,
+                    successCount === selectedIds.size ? 'success' : 'warning'
+                );
+                
+                setSelectedIds(new Set());
+                await loadEntries();
+                setLoading(false);
+            };
+            
+            // Delete entries
+            const deleteEntries = async () => {
+                if (selectedIds.size === 0) {
+                    showMessage('No entries selected', 'error');
+                    return;
+                }
+                
+                if (!confirm(`Delete ${selectedIds.size} entries? This cannot be undone.`)) {
+                    return;
+                }
+                
+                setLoading(true);
+                const tableName = currentTab === 'political' ? 'political_entries' : 'executive_orders';
+                let successCount = 0;
+                
+                for (const id of selectedIds) {
+                    try {
+                        await supabaseRequest(`${tableName}?id=eq.${id}`, 'DELETE');
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Failed to delete entry ${id}:`, error);
+                    }
+                }
+                
+                showMessage(
+                    `Successfully deleted ${successCount} entries`,
+                    successCount === selectedIds.size ? 'success' : 'warning'
+                );
+                
+                setSelectedIds(new Set());
+                await loadEntries();
+                setLoading(false);
+            };
+            
+            // Count filters
+            const filterCounts = useMemo(() => {
+                const entries = currentTab === 'political' ? politicalEntries : executiveOrders;
+                return {
+                    high: entries.filter(e => (e.severity || e.severity_rating) === 'high').length,
+                    medium: entries.filter(e => (e.severity || e.severity_rating) === 'medium').length,
+                    low: entries.filter(e => (e.severity || e.severity_rating) === 'low').length,
+                    archived: entries.filter(e => e.archived).length
+                };
+            }, [currentTab, politicalEntries, executiveOrders]);
+            
+            // Render authentication screen
+            if (!authenticated) {
+                return (
+                    <div className="auth-section">
+                        <h2>🔐 Authentication Required</h2>
+                        <p style={{marginBottom: 24, color: '#a0aec0'}}>
+                            Enter your GitHub Personal Access Token:
+                        </p>
+                        <input
+                            type="password"
+                            id="tokenInput"
+                            className="auth-input"
+                            placeholder="ghp_xxxxxxxxxxxx"
+                            onKeyPress={(e) => e.key === 'Enter' && authenticate()}
+                        />
+                        <button className="btn btn-primary" onClick={authenticate}>
+                            Authenticate
+                        </button>
+                    </div>
+                );
             }
-        });
+            
+            // Render main dashboard
+            return (
+                <div className="container">
+                    {/* Header */}
+                    <div className="header">
+                        <div className="logo">T2</div>
+                        <div>
+                            <h1 style={{margin: 0, fontSize: 28}}>
+                                TrumpyTracker Admin
+                                {isTestDB && (
+                                    <span style={{
+                                        background: '#ef4444',
+                                        color: 'white',
+                                        padding: '2px 8px',
+                                        borderRadius: 4,
+                                        fontSize: 12,
+                                        marginLeft: 12
+                                    }}>TEST</span>
+                                )}
+                            </h1>
+                            <p style={{margin: 0, color: '#a0aec0'}}>
+                                Database Management System
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {/* Messages */}
+                    {message && (
+                        <div className={`message message-${message.type}`}>
+                            {message.type === 'success' && '✅'}
+                            {message.type === 'error' && '❌'}
+                            {message.type === 'warning' && '⚠️'}
+                            {message.type === 'info' && 'ℹ️'}
+                            {message.text}
+                        </div>
+                    )}
+                    
+                    {/* Tabs */}
+                    <div className="tabs">
+                        <button
+                            className={`tab political ${currentTab === 'political' ? 'active' : ''}`}
+                            onClick={() => {
+                                setCurrentTab('political');
+                                setCurrentPage(1);
+                                setSelectedIds(new Set());
+                            }}
+                        >
+                            Political Entries ({politicalEntries.length})
+                        </button>
+                        <button
+                            className={`tab ${currentTab === 'executive' ? 'active' : ''}`}
+                            onClick={() => {
+                                setCurrentTab('executive');
+                                setCurrentPage(1);
+                                setSelectedIds(new Set());
+                            }}
+                        >
+                            Executive Orders ({executiveOrders.length})
+                        </button>
+                    </div>
+                    
+                    {/* Search and Filters */}
+                    <div className="search-section">
+                        <div className="search-bar">
+                            <span className="search-icon">🔍</span>
+                            <input
+                                type="text"
+                                className="search-input"
+                                placeholder="Search by title, description, actor, or category..."
+                                value={searchTerm}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                            />
+                        </div>
+                        
+                        <div className="filters">
+                            <button
+                                className={`filter-chip severity-high ${filters.severity === 'high' ? 'active' : ''}`}
+                                onClick={() => setFilters({
+                                    ...filters,
+                                    severity: filters.severity === 'high' ? null : 'high'
+                                })}
+                            >
+                                High
+                                <span className="filter-count">{filterCounts.high}</span>
+                            </button>
+                            <button
+                                className={`filter-chip severity-medium ${filters.severity === 'medium' ? 'active' : ''}`}
+                                onClick={() => setFilters({
+                                    ...filters,
+                                    severity: filters.severity === 'medium' ? null : 'medium'
+                                })}
+                            >
+                                Medium
+                                <span className="filter-count">{filterCounts.medium}</span>
+                            </button>
+                            <button
+                                className={`filter-chip severity-low ${filters.severity === 'low' ? 'active' : ''}`}
+                                onClick={() => setFilters({
+                                    ...filters,
+                                    severity: filters.severity === 'low' ? null : 'low'
+                                })}
+                            >
+                                Low
+                                <span className="filter-count">{filterCounts.low}</span>
+                            </button>
+                            <button
+                                className={`filter-chip archived ${filters.archived ? 'active' : ''}`}
+                                onClick={() => setFilters({
+                                    ...filters,
+                                    archived: !filters.archived
+                                })}
+                            >
+                                Archived
+                                <span className="filter-count">{filterCounts.archived}</span>
+                            </button>
+                            {(filters.severity || filters.archived || searchTerm) && (
+                                <button
+                                    className="filter-chip"
+                                    style={{background: 'rgba(229, 62, 62, 0.2)', borderColor: '#e53e3e'}}
+                                    onClick={() => {
+                                        setFilters({ severity: null, archived: false });
+                                        setSearchTerm('');
+                                    }}
+                                >
+                                    Clear All ✕
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Entries */}
+                    <div className="entries-container">
+                        <div className="flex-between mb-4">
+                            <h2 style={{margin: 0}}>
+                                {currentTab === 'political' ? 'Political Entries' : 'Executive Orders'}
+                                {' '}
+                                <span style={{fontSize: 16, color: '#a0aec0'}}>
+                                    ({filteredEntries.length} results)
+                                </span>
+                            </h2>
+                            
+                            <div className="bulk-actions flex gap-2">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        const allIds = new Set(paginatedEntries.map(e => e.id));
+                                        setSelectedIds(allIds);
+                                    }}
+                                >
+                                    Select All
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setSelectedIds(new Set())}
+                                >
+                                    Deselect
+                                </button>
+                                <button
+                                    className="btn btn-warning"
+                                    onClick={() => archiveEntries(true)}
+                                    disabled={selectedIds.size === 0}
+                                >
+                                    Archive
+                                </button>
+                                <button
+                                    className="btn btn-success"
+                                    onClick={() => archiveEntries(false)}
+                                    disabled={selectedIds.size === 0}
+                                >
+                                    Restore
+                                </button>
+                                <button
+                                    className="btn btn-danger"
+                                    onClick={deleteEntries}
+                                    disabled={selectedIds.size === 0}
+                                >
+                                    Delete
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={loadEntries}
+                                    disabled={loading}
+                                >
+                                    {loading ? <span className="spinner" /> : '🔄'} Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Entry List */}
+                        {paginatedEntries.length === 0 ? (
+                            <div style={{textAlign: 'center', padding: 40, color: '#a0aec0'}}>
+                                No entries found
+                            </div>
+                        ) : (
+                            paginatedEntries.map(entry => {
+                                const isSelected = selectedIds.has(entry.id);
+                                const isEO = currentTab === 'executive';
+                                const severity = isEO ? entry.severity_rating : entry.severity;
+                                
+                                return (
+                                    <div
+                                        key={entry.id}
+                                        className={`entry-card ${isSelected ? 'selected' : ''} ${entry.archived ? 'archived' : ''}`}
+                                        onClick={() => toggleSelection(entry.id)}
+                                    >
+                                        <div className="flex-between mb-3">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => {}}
+                                                    style={{width: 20, height: 20}}
+                                                />
+                                                <strong>{entry.title || entry.actor || 'Untitled'}</strong>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {severity && (
+                                                    <span className={`badge badge-${severity}`}>
+                                                        {severity}
+                                                    </span>
+                                                )}
+                                                {isEO && entry.order_number && (
+                                                    <span className="badge" style={{
+                                                        background: 'rgba(99, 102, 241, 0.2)',
+                                                        color: '#a78bfa',
+                                                        border: '1px solid #6366f1'
+                                                    }}>
+                                                        EO {entry.order_number}
+                                                    </span>
+                                                )}
+                                                {entry.archived && (
+                                                    <span className="badge badge-archived">
+                                                        Archived
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{color: '#a0aec0', fontSize: 14, marginBottom: 12}}>
+                                            {new Date(entry.date).toLocaleDateString()}
+                                            {entry.actor && ` • ${entry.actor}`}
+                                            {entry.category && ` • ${entry.category}`}
+                                        </div>
+                                        
+                                        {(entry.description || entry.summary) && (
+                                            <div style={{marginBottom: 12, color: '#cbd5e0'}}>
+                                                {entry.description || entry.summary}
+                                            </div>
+                                        )}
+                                        
+                                        {entry.source_url && (
+                                            <a
+                                                href={entry.source_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{color: '#3182ce', textDecoration: 'none'}}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                🔗 View Source
+                                            </a>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                        
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="pagination">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                >
+                                    ← Previous
+                                </button>
+                                <span className="page-info">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    Next →
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+        
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AdminDashboard />);
     </script>
 </body>
 </html>
