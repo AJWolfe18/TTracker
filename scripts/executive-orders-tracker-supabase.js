@@ -6,7 +6,7 @@
 // STATUS: Production-ready - successfully backfilled 190 EOs on Aug 15, 2025
 
 import fetch from 'node-fetch';
-import { supabaseRequest } from './supabase-config-node.js';
+import { supabaseRequest } from '../config/supabase-config-node.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');

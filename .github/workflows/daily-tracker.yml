@@ -28,7 +28,7 @@ jobs:
     - name: Run daily tracker (Supabase)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: node daily-tracker-supabase.js
+      run: node scripts/daily-tracker-supabase.js
       
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |

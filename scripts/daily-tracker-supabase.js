@@ -1,7 +1,7 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase with EXACT prompts from daily-tracker.js
 import fetch from 'node-fetch';
-import { supabaseRequest } from './supabase-config-node.js';
+import { supabaseRequest } from '../config/supabase-config-node.js';
 
 console.log('🚀 DAILY POLITICAL TRACKER - SUPABASE VERSION (EXACT PROMPTS)');
 console.log('=============================================================\n');
