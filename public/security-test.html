@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker Security Test</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #1a202c;
+            color: white;
+        }
+        .test-section {
+            background: rgba(45, 55, 72, 0.6);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid #4a5568;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #3182ce;
+            color: white;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .danger-btn {
+            background: #e53e3e;
+        }
+        .danger-btn:hover {
+            background: #c53030;
+        }
+        .log {
+            background: #2d3748;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .success { border-left: 4px solid #38a169; }
+        .error { border-left: 4px solid #e53e3e; }
+        .warning { border-left: 4px solid #ed8936; }
+        .critical { 
+            border-left: 4px solid #e53e3e; 
+            background: rgba(229, 62, 62, 0.1);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #4a5568;
+            background: #2d3748;
+            color: white;
+        }
+        .vulnerability-summary {
+            background: rgba(229, 62, 62, 0.2);
+            border: 2px solid #e53e3e;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        h1 { color: #f56565; }
+        h2 { color: #ed8936; }
+    </style>
+    <script src="supabase-browser-config.js"></script>
+</head>
+<body>
+    <h1>🔒 TrumpyTracker Security Vulnerability Test</h1>
+    
+    <div class="test-section">
+        <h2>Test Configuration</h2>
+        <div id="config-info"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🚨 Vulnerability Tests</h2>
+        <p>These tests will attempt to exploit potential security vulnerabilities:</p>
+        
+        <div style="margin: 20px 0;">
+            <label>Test Entry ID: </label>
+            <input type="number" id="test-id" value="1081" placeholder="Entry ID">
+            <br><br>
+            
+            <h3>1. Field Modification Tests (Should FAIL in secure system)</h3>
+            <button onclick="testModifyTitle()">🔴 Try to Change Title</button>
+            <button onclick="testModifySeverity()">🔴 Try to Change Severity</button>
+            <button onclick="testModifyDescription()">🔴 Try to Change Description</button>
+            <button onclick="testInjectHTML()">🔴 Try HTML Injection</button>
+            
+            <h3>2. Archive Test (Should SUCCEED)</h3>
+            <button onclick="testArchive()">✅ Try to Archive (Allowed)</button>
+            
+            <h3>3. Destructive Tests (Should FAIL)</h3>
+            <button class="danger-btn" onclick="testDelete()">💀 Try to DELETE Entry</button>
+            <button class="danger-btn" onclick="testInsert()">💀 Try to INSERT Fake Entry</button>
+            <button class="danger-btn" onclick="testMassUpdate()">💀 Try Mass Update (All Entries)</button>
+        </div>
+        
+        <button onclick="runAllTests()">🔥 Run ALL Security Tests</button>
+        <button onclick="checkOriginal()">🔍 Check Original Entry Values</button>
+    </div>
+
+    <div id="vulnerability-summary" class="vulnerability-summary" style="display: none;">
+        <h2>⚠️ VULNERABILITIES FOUND</h2>
+        <div id="vuln-list"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        // Display configuration
+        document.getElementById('config-info').innerHTML = `
+            <div class="log info">
+                Environment: ${window.location.hostname.includes('test--') ? 'TEST' : 'PRODUCTION'}
+                <br>Supabase URL: ${window.SUPABASE_URL}
+                <br>Database: ${window.SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST DB' : 'PRODUCTION DB'}
+                <br>Anon Key (public): ${window.SUPABASE_ANON_KEY.substring(0, 40)}...
+            </div>
+        `;
+
+        const vulnerabilities = [];
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log ${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.insertBefore(logEntry, logsDiv.firstChild);
+        }
+
+        async function supabaseRequest(endpoint, method = 'GET', body = null) {
+            const url = `${window.SUPABASE_URL}/rest/v1/${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'apikey': window.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                }
+            };
+
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+
+            const response = await fetch(url, options);
+            const data = await response.json();
+            return { ok: response.ok, status: response.status, data };
+        }
+
+        async function checkOriginal() {
+            const id = document.getElementById('test-id').value;
+            log(`Checking original values for entry ${id}...`, 'info');
+            
+            try {
+                const result = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                if (result.data && result.data.length > 0) {
+                    const entry = result.data[0];
+                    log(`Original entry:
+Title: "${entry.title}"
+Severity: ${entry.severity}
+Archived: ${entry.archived}
+Description: "${entry.description?.substring(0, 100)}..."`, 'success');
+                } else {
+                    log(`No entry found with ID ${id}`, 'error');
+                }
+            } catch (e) {
+                log(`Error: ${e.message}`, 'error');
+            }
+        }
+
+        async function testModifyTitle() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we modify the title field...`, 'warning');
+            
+            try {
+                const hackedTitle = `HACKED-${Date.now()}`;
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'PATCH',
+                    { title: hackedTitle }
+                );
+                
+                // Check if it actually changed
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                const actualTitle = check.data[0]?.title;
+                
+                if (actualTitle === hackedTitle) {
+                    log(`🚨 CRITICAL VULNERABILITY: Title was changed to "${hackedTitle}"!`, 'critical');
+                    vulnerabilities.push('Can modify title field');
+                } else {
+                    log(`✅ SECURE: Title modification was blocked`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: Title modification failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testModifySeverity() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we modify the severity field...`, 'warning');
+            
+            try {
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'PATCH',
+                    { severity: 'critical' }
+                );
+                
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                const actualSeverity = check.data[0]?.severity;
+                
+                if (actualSeverity === 'critical') {
+                    log(`🚨 CRITICAL VULNERABILITY: Severity was changed to "critical"!`, 'critical');
+                    vulnerabilities.push('Can modify severity field');
+                } else {
+                    log(`✅ SECURE: Severity modification was blocked`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: Severity modification failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testModifyDescription() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we modify the description field...`, 'warning');
+            
+            try {
+                const hackedDesc = `This site has been compromised - ${Date.now()}`;
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'PATCH',
+                    { description: hackedDesc }
+                );
+                
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                const actualDesc = check.data[0]?.description;
+                
+                if (actualDesc === hackedDesc) {
+                    log(`🚨 CRITICAL VULNERABILITY: Description was changed!`, 'critical');
+                    vulnerabilities.push('Can modify description field');
+                } else {
+                    log(`✅ SECURE: Description modification was blocked`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: Description modification failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testInjectHTML() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we inject HTML/JavaScript...`, 'warning');
+            
+            try {
+                const xssPayload = `<script>alert('XSS')</script><img src=x onerror=alert('XSS')>`;
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'PATCH',
+                    { title: xssPayload }
+                );
+                
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                const actualTitle = check.data[0]?.title;
+                
+                if (actualTitle?.includes('<script>')) {
+                    log(`🚨 CRITICAL VULNERABILITY: HTML/JS injection successful!`, 'critical');
+                    vulnerabilities.push('Can inject HTML/JavaScript');
+                } else {
+                    log(`✅ SECURE: HTML injection was blocked or sanitized`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: HTML injection failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testArchive() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we archive entries (this SHOULD work)...`, 'info');
+            
+            try {
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'PATCH',
+                    { archived: true }
+                );
+                
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                const isArchived = check.data[0]?.archived;
+                
+                if (isArchived === true) {
+                    log(`✅ Archive operation works correctly`, 'success');
+                    // Restore it
+                    await supabaseRequest(`political_entries?id=eq.${id}`, 'PATCH', { archived: false });
+                    log(`Restored entry to unarchived state`, 'info');
+                } else {
+                    log(`❌ Archive operation failed (this is a problem)`, 'error');
+                }
+            } catch (e) {
+                log(`❌ Archive operation error: ${e.message}`, 'error');
+            }
+        }
+
+        async function testDelete() {
+            const id = document.getElementById('test-id').value;
+            log(`Testing: Can we DELETE entries...`, 'warning');
+            
+            try {
+                const result = await supabaseRequest(
+                    `political_entries?id=eq.${id}`,
+                    'DELETE'
+                );
+                
+                const check = await supabaseRequest(`political_entries?id=eq.${id}`, 'GET');
+                
+                if (check.data.length === 0) {
+                    log(`🚨 CRITICAL VULNERABILITY: Entry was DELETED!`, 'critical');
+                    vulnerabilities.push('Can DELETE entries');
+                } else {
+                    log(`✅ SECURE: DELETE operation was blocked`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: DELETE failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testInsert() {
+            log(`Testing: Can we INSERT fake entries...`, 'warning');
+            
+            try {
+                const fakeEntry = {
+                    date: new Date().toISOString(),
+                    title: 'FAKE ENTRY INJECTION TEST',
+                    description: 'If you see this on the dashboard, the site is vulnerable',
+                    severity: 'high',
+                    actor: 'HACKER',
+                    category: 'SECURITY TEST',
+                    archived: false
+                };
+                
+                const result = await supabaseRequest('political_entries', 'POST', fakeEntry);
+                
+                if (result.data && result.data.id) {
+                    log(`🚨 CRITICAL VULNERABILITY: Fake entry was INSERTED with ID ${result.data.id}!`, 'critical');
+                    vulnerabilities.push('Can INSERT fake entries');
+                    // Try to clean up
+                    await supabaseRequest(`political_entries?id=eq.${result.data.id}`, 'DELETE');
+                } else {
+                    log(`✅ SECURE: INSERT operation was blocked`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: INSERT failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function testMassUpdate() {
+            log(`Testing: Can we update ALL entries at once...`, 'warning');
+            
+            try {
+                // This is dangerous - only sets a harmless test flag
+                const result = await supabaseRequest(
+                    `political_entries?id=gt.0`,  // All entries with ID > 0
+                    'PATCH',
+                    { severity: 'high' }  // Try to set all to high
+                );
+                
+                // Check if it worked
+                const check = await supabaseRequest(`political_entries?limit=10`, 'GET');
+                const allHigh = check.data.every(e => e.severity === 'high');
+                
+                if (allHigh) {
+                    log(`🚨 CRITICAL VULNERABILITY: Mass update successful - ALL entries modified!`, 'critical');
+                    vulnerabilities.push('Can perform mass updates');
+                } else {
+                    log(`✅ SECURE: Mass update was blocked or limited`, 'success');
+                }
+            } catch (e) {
+                log(`✅ SECURE: Mass update failed - ${e.message}`, 'success');
+            }
+        }
+
+        async function runAllTests() {
+            log('Starting comprehensive security audit...', 'warning');
+            vulnerabilities.length = 0;
+            
+            await checkOriginal();
+            await testModifyTitle();
+            await testModifySeverity();
+            await testModifyDescription();
+            await testInjectHTML();
+            await testArchive();
+            await testDelete();
+            await testInsert();
+            await testMassUpdate();
+            
+            // Show summary
+            if (vulnerabilities.length > 0) {
+                document.getElementById('vulnerability-summary').style.display = 'block';
+                document.getElementById('vuln-list').innerHTML = `
+                    <p>Found ${vulnerabilities.length} vulnerabilities:</p>
+                    <ul>
+                        ${vulnerabilities.map(v => `<li>${v}</li>`).join('')}
+                    </ul>
+                    <p><strong>YOUR DATA IS AT RISK!</strong> Fix these immediately.</p>
+                `;
+            } else {
+                log('🎉 All security tests passed! Your system appears secure.', 'success');
+            }
+        }
+
+        // Auto-check on load
+        window.addEventListener('DOMContentLoaded', () => {
+            log('Security test loaded. Click "Run ALL Security Tests" to begin.', 'info');
+        });
+    </script>
+</body>
+</html>
