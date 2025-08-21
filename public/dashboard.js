@@ -511,95 +511,141 @@ const TrumpyTrackerDashboard = () => {
     </div>
   );
 
-  // Political entry card component
-  const PoliticalEntryCard = ({ entry }) => (
-    <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-gray-400 text-sm">{formatDate(entry.date)}</span>
-            {entry.severity && (
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(entry.severity)}`}>
-                {entry.severity.toUpperCase()}
-              </span>
+  // Political entry card component with expandable description
+  const PoliticalEntryCard = ({ entry }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const descriptionLength = entry.description?.length || 0;
+    const shouldShowToggle = descriptionLength > 500;
+    
+    const displayDescription = shouldShowToggle && !isExpanded 
+      ? entry.description.substring(0, 500) + '...'
+      : entry.description;
+    
+    return (
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-gray-400 text-sm">{formatDate(entry.date)}</span>
+              {entry.severity && (
+                <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(entry.severity)}`}>
+                  {entry.severity.toUpperCase()}
+                </span>
+              )}
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">{entry.title}</h3>
+            {entry.actor && (
+              <p className="text-blue-400 text-sm mb-2">Actor: {entry.actor}</p>
             )}
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">{entry.title}</h3>
-          {entry.actor && (
-            <p className="text-blue-400 text-sm mb-2">Actor: {entry.actor}</p>
+        </div>
+        
+        {entry.description && (
+          <div>
+            <p className="text-gray-300 text-sm mb-3">{displayDescription}</p>
+            {shouldShowToggle && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors mb-3"
+              >
+                {isExpanded ? 'Show less ↑' : 'Show more ↓'}
+              </button>
+            )}
+          </div>
+        )}
+      
+        <div className="flex justify-between items-center">
+          {entry.category && (
+            <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
+              {entry.category}
+            </span>
+          )}
+          {entry.source_url && (
+            <a 
+              href={entry.source_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+            >
+              View Source →
+            </a>
           )}
         </div>
       </div>
-      
-      {entry.description && (
-        <p className="text-gray-300 text-sm mb-3 line-clamp-3">{entry.description}</p>
-      )}
-      
-      <div className="flex justify-between items-center">
-        {entry.category && (
-          <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
-            {entry.category}
-          </span>
-        )}
-        {entry.source_url && (
-          <a 
-            href={entry.source_url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-          >
-            View Source →
-          </a>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
-  // Executive order card component
-  const ExecutiveOrderCard = ({ order }) => (
-    <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-gray-400 text-sm">{formatDate(order.date)}</span>
-            {order.order_number && (
-              <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                EO {order.order_number}
-              </span>
-            )}
-            {order.severity_rating && (
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(order.severity_rating)}`}>
-                {order.severity_rating.toUpperCase()}
-              </span>
+  // Executive order card component with expandable summary
+  const ExecutiveOrderCard = ({ order }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const summaryLength = order.summary?.length || 0;
+    const shouldShowToggle = summaryLength > 500;
+    
+    const displaySummary = shouldShowToggle && !isExpanded 
+      ? order.summary.substring(0, 500) + '...'
+      : order.summary;
+    
+    return (
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-gray-400 text-sm">{formatDate(order.date)}</span>
+              {order.order_number && (
+                <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+                  EO {order.order_number}
+                </span>
+              )}
+              {order.severity_rating && (
+                <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(order.severity_rating)}`}>
+                  {order.severity_rating.toUpperCase()}
+                </span>
+              )}
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">{order.title}</h3>
+          </div>
+        </div>
+        
+        {order.summary && (
+          <div>
+            <p className="text-gray-300 text-sm mb-3">{displaySummary}</p>
+            {shouldShowToggle && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(!isExpanded);
+                }}
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+              >
+                {isExpanded ? 'Show less ↑' : 'Show more ↓'}
+              </button>
             )}
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">{order.title}</h3>
+        )}
+      
+        <div className="flex justify-between items-center">
+          {order.category && (
+            <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
+              {order.category}
+            </span>
+          )}
+          {order.source_url && (
+            <a 
+              href={order.source_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+            >
+              View Source →
+            </a>
+          )}
         </div>
       </div>
-      
-      {order.summary && (
-        <p className="text-gray-300 text-sm mb-3">{order.summary}</p>
-      )}
-      
-      <div className="flex justify-between items-center">
-        {order.category && (
-          <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
-            {order.category}
-          </span>
-        )}
-        {order.source_url && (
-          <a 
-            href={order.source_url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-          >
-            View Source →
-          </a>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   // Loading state
   if (loading) {
