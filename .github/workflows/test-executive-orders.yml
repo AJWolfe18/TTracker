@@ -1,0 +1,48 @@
+# Test Environment - Executive Orders Tracker Manual Run
+# Manual trigger for testing the executive orders tracker in test environment
+
+name: Test Environment - Executive Orders
+
+on:
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: 'Days to backfill (0 for today only)'
+        required: false
+        default: '0'
+        type: string
+
+jobs:
+  test-executive-orders:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout test branch
+      uses: actions/checkout@v4
+      with:
+        ref: test  # Always use test branch
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run executive orders tracker in TEST
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+        BACKFILL_DAYS: ${{ github.event.inputs.backfill_days }}
+      run: |
+        echo "🧪 Running executive orders tracker in TEST environment..."
+        echo "📍 Using test database"
+        echo "📅 Backfill days: $BACKFILL_DAYS"
+        node scripts/executive-orders-tracker-supabase.js
+        
+    - name: Summary
+      run: |
+        echo "✅ Test executive orders tracker completed"
+        echo "🧪 Environment: TEST"

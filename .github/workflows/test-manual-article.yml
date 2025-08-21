@@ -1,0 +1,65 @@
+# Test Environment Workflow Trigger
+# This workflow allows manual testing in the test environment
+# It does NOT run automatically - only via manual dispatch
+
+name: Test Environment - Manual Article Process
+
+on:
+  workflow_dispatch:
+    inputs:
+      article_url:
+        description: 'Article URL to process in TEST environment'
+        required: true
+        type: string
+      title:
+        description: 'Article title (optional)'
+        required: false
+        type: string
+      category:
+        description: 'Category'
+        required: false
+        default: 'Political News'
+        type: string
+
+jobs:
+  process-test-article:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout test branch
+      uses: actions/checkout@v4
+      with:
+        ref: test  # Always use test branch
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: |
+        npm install
+        npx playwright install chromium
+        
+    - name: Process article in TEST environment
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+        INPUT_DATA: |
+          {
+            "url": "${{ github.event.inputs.article_url }}",
+            "title": "${{ github.event.inputs.title }}",
+            "category": "${{ github.event.inputs.category }}",
+            "submitted_by": "test-admin"
+          }
+      run: |
+        echo "🧪 Processing article in TEST environment..."
+        echo "📍 Using test database"
+        node scripts/manual-article-processor.js
+        
+    - name: Summary
+      run: |
+        echo "✅ Test article processed"
+        echo "📎 URL: ${{ github.event.inputs.article_url }}"
+        echo "🧪 Environment: TEST"

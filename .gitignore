@@ -64,6 +64,10 @@ local-test-data/
 *.pem
 *.cert
 
+# Admin configuration with service keys (LOCAL ONLY)
+public/admin-config.js
+admin-config.js
+
 # Database dumps (unless specifically tracked)
 *.sql.gz
 *.dump

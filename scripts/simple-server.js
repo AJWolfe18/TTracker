@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PORT = 8000;
-const PUBLIC_DIR = join(__dirname, 'public');
+// Fix: Go up one directory from scripts to get to the root, then into public
+const PUBLIC_DIR = join(__dirname, '..', 'public');
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -28,8 +29,11 @@ const MIME_TYPES = {
 
 const server = createServer(async (req, res) => {
   try {
-    // Default to index-supabase.html for root
-    let filePath = req.url === '/' ? '/index-supabase.html' : req.url;
+    // Default to index.html for root
+    let filePath = req.url === '/' ? '/index.html' : req.url;
+    
+    // Remove query parameters
+    filePath = filePath.split('?')[0];
     
     // Security: prevent directory traversal
     if (filePath.includes('..')) {
@@ -52,7 +56,7 @@ const server = createServer(async (req, res) => {
     } catch (err) {
       if (err.code === 'ENOENT') {
         res.writeHead(404);
-        res.end('File not found');
+        res.end('File not found: ' + filePath);
       } else {
         throw err;
       }
@@ -68,13 +72,15 @@ server.listen(PORT, () => {
   console.log(`
 🚀 Local server running!
 
-📍 Dashboard URLs:
-   Supabase version: http://localhost:${PORT}/index-supabase.html
-   Original version: http://localhost:${PORT}/index.html
+📍 Main URLs:
+   Dashboard: http://localhost:${PORT}/
+   Admin Panel: http://localhost:${PORT}/admin-supabase.html
    
-📊 Direct file access:
-   http://localhost:${PORT}/dashboard-supabase.js
-   http://localhost:${PORT}/dashboard.js
+📊 Test Tools:
+   Test Features: http://localhost:${PORT}/test-admin-features.html
+   Connection Test: http://localhost:${PORT}/connection-test.html
+
+📁 Serving files from: ${PUBLIC_DIR}
 
 Press Ctrl+C to stop the server
 `);

@@ -1,0 +1,55 @@
+# Test Environment - Daily Tracker Manual Run
+# Manual trigger for testing the daily tracker in test environment
+
+name: Test Environment - Daily Tracker
+
+on:
+  workflow_dispatch:
+    inputs:
+      actors:
+        description: 'Actors to track (comma-separated)'
+        required: false
+        default: 'Donald Trump,J.D. Vance,Elon Musk'
+        type: string
+      search_days:
+        description: 'Number of days to search back'
+        required: false
+        default: '1'
+        type: string
+
+jobs:
+  test-daily-tracker:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout test branch
+      uses: actions/checkout@v4
+      with:
+        ref: test  # Always use test branch
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run daily tracker in TEST
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+        SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+        ACTORS: ${{ github.event.inputs.actors }}
+        SEARCH_DAYS: ${{ github.event.inputs.search_days }}
+      run: |
+        echo "🧪 Running daily tracker in TEST environment..."
+        echo "📍 Using test database"
+        echo "🎭 Tracking: $ACTORS"
+        echo "📅 Days back: $SEARCH_DAYS"
+        node scripts/daily-tracker-supabase.js
+        
+    - name: Summary
+      run: |
+        echo "✅ Test daily tracker completed"
+        echo "🧪 Environment: TEST"

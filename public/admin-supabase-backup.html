@@ -7,8 +7,6 @@
     
     <!-- Load Supabase configuration BEFORE the page JavaScript -->
     <script src="supabase-browser-config.js" onerror="window.configLoadError = true;"></script>
-    <!-- Load admin config for service role key (local testing only) -->
-    <script src="admin-config.js" onerror="console.warn('Admin config not found - using default config');"></script>
     
     <!-- React for better state management -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -107,12 +105,10 @@
         .search-bar {
             position: relative;
             margin-bottom: 16px;
-            display: flex;
-            gap: 12px;
         }
         
         .search-input {
-            flex: 1;
+            width: 100%;
             padding: 14px 14px 14px 44px;
             background: rgba(26, 32, 44, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -134,27 +130,6 @@
             top: 50%;
             transform: translateY(-50%);
             color: #718096;
-        }
-        
-        /* Manual Article Button */
-        .manual-article-btn {
-            padding: 14px 24px;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .manual-article-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
         
         /* Filter Chips */
@@ -233,165 +208,59 @@
             border-radius: 10px;
             padding: 20px;
             margin-bottom: 16px;
-            cursor: pointer;
             transition: all 0.2s;
-            position: relative;
+            cursor: pointer;
         }
         
         .entry-card:hover {
             background: rgba(26, 32, 44, 0.8);
-            transform: translateX(4px);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         }
         
         .entry-card.selected {
-            background: rgba(49, 130, 206, 0.2);
             border-color: #3182ce;
+            background: rgba(49, 130, 206, 0.1);
         }
         
         .entry-card.archived {
-            opacity: 0.7;
-            background: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid #f59e0b;
+            opacity: 0.85;
         }
         
-        /* Edit Button */
-        .edit-btn {
-            padding: 6px 12px;
-            background: rgba(99, 102, 241, 0.2);
-            border: 1px solid #6366f1;
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
             border-radius: 6px;
-            color: #a78bfa;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-left: 8px;
-        }
-        
-        .edit-btn:hover {
-            background: rgba(99, 102, 241, 0.3);
-            color: white;
-            transform: scale(1.05);
-        }
-        
-        /* Modal Styles */
-        .modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.2s;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        .modal {
-            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 32px;
-            width: 90%;
-            max-width: 600px;
-            max-height: 90vh;
-            overflow-y: auto;
-            animation: slideUp 0.3s;
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .modal-title {
-            font-size: 24px;
+            font-size: 12px;
             font-weight: 600;
-            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
-        .modal-close {
-            width: 32px;
-            height: 32px;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid #ef4444;
-            border-radius: 8px;
-            color: #f87171;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            transition: all 0.2s;
+        .badge-high {
+            background: rgba(229, 62, 62, 0.2);
+            color: #feb2b2;
+            border: 1px solid #e53e3e;
         }
         
-        .modal-close:hover {
-            background: rgba(239, 68, 68, 0.3);
-            transform: rotate(90deg);
+        .badge-medium {
+            background: rgba(237, 137, 54, 0.2);
+            color: #fbd38d;
+            border: 1px solid #ed8936;
         }
         
-        .form-group {
-            margin-bottom: 20px;
+        .badge-low {
+            background: rgba(72, 187, 120, 0.2);
+            color: #9ae6b4;
+            border: 1px solid #48bb78;
         }
         
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            color: #a0aec0;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .form-input, .form-textarea, .form-select {
-            width: 100%;
-            padding: 12px;
-            background: rgba(26, 32, 44, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: white;
-            font-size: 15px;
-            transition: all 0.2s;
-        }
-        
-        .form-input:focus, .form-textarea:focus, .form-select:focus {
-            outline: none;
-            border-color: #3182ce;
-            background: rgba(26, 32, 44, 1);
-        }
-        
-        .form-textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        
-        .modal-footer {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        .badge-archived {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid #f59e0b;
         }
         
         /* Buttons */
@@ -403,15 +272,20 @@
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
         
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
         }
         
         .btn-primary {
@@ -419,70 +293,27 @@
             color: white;
         }
         
-        .btn-secondary {
-            background: rgba(75, 85, 99, 0.6);
-            color: white;
-        }
-        
         .btn-success {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%);
             color: white;
         }
         
         .btn-warning {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%);
             color: white;
         }
         
         .btn-danger {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%);
             color: white;
         }
         
-        /* Messages */
-        .message {
-            padding: 16px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            animation: slideDown 0.3s;
+        .btn-secondary {
+            background: rgba(74, 85, 104, 0.6);
+            color: white;
         }
         
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .message-success {
-            background: rgba(16, 185, 129, 0.2);
-            border: 1px solid #10b981;
-            color: #10b981;
-        }
-        
-        .message-error {
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid #ef4444;
-            color: #ef4444;
-        }
-        
-        .message-warning {
-            background: rgba(245, 158, 11, 0.2);
-            border: 1px solid #f59e0b;
-            color: #f59e0b;
-        }
-        
-        .message-info {
-            background: rgba(49, 130, 206, 0.2);
-            border: 1px solid #3182ce;
-            color: #3182ce;
-        }
-        
-        /* Utility Classes */
+        /* Utilities */
         .flex {
             display: flex;
         }
@@ -493,8 +324,17 @@
             align-items: center;
         }
         
+        .flex-wrap {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
         .gap-2 {
             gap: 8px;
+        }
+        
+        .gap-3 {
+            gap: 12px;
         }
         
         .mb-3 {
@@ -505,40 +345,19 @@
             margin-bottom: 16px;
         }
         
-        /* Badge Styles - Matching main dashboard */
-        .badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
         }
         
-        .badge-high {
-            background: #ef4444;
-            color: white;
-            border: none;
-        }
-        
-        .badge-medium {
-            background: #eab308;
-            color: black;
-            border: none;
-        }
-        
-        .badge-low {
-            background: #22c55e;
-            color: white;
-            border: none;
-        }
-        
-        .badge-archived {
-            background: rgba(245, 158, 11, 0.2);
-            color: #fbbf24;
-            border: 1px solid #f59e0b;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         
         /* Pagination */
@@ -546,7 +365,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 16px;
+            gap: 12px;
             margin-top: 24px;
         }
         
@@ -555,48 +374,86 @@
             font-size: 14px;
         }
         
-        /* Loading Spinner */
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .tab {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            
+            .bulk-actions {
+                flex-wrap: wrap;
+            }
+            
+            .bulk-actions .btn {
+                flex: 1 1 calc(50% - 6px);
+            }
         }
         
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        /* Messages */
+        .message {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .message-success {
+            background: rgba(72, 187, 120, 0.2);
+            color: #9ae6b4;
+            border: 1px solid #48bb78;
+        }
+        
+        .message-error {
+            background: rgba(229, 62, 62, 0.2);
+            color: #feb2b2;
+            border: 1px solid #e53e3e;
+        }
+        
+        .message-warning {
+            background: rgba(237, 137, 54, 0.2);
+            color: #fbd38d;
+            border: 1px solid #ed8936;
+        }
+        
+        .message-info {
+            background: rgba(49, 130, 206, 0.2);
+            color: #90cdf4;
+            border: 1px solid #3182ce;
         }
         
         /* Auth Section */
         .auth-section {
             max-width: 400px;
             margin: 100px auto;
-            padding: 40px;
             background: rgba(45, 55, 72, 0.8);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 32px;
             text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .auth-input {
             width: 100%;
-            padding: 14px;
-            margin-bottom: 16px;
+            padding: 12px;
             background: rgba(26, 32, 44, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
+            border-radius: 8px;
             color: white;
-            font-size: 15px;
+            font-size: 14px;
+            margin-bottom: 16px;
         }
         
         .auth-input:focus {
             outline: none;
             border-color: #3182ce;
-            background: rgba(26, 32, 44, 1);
         }
     </style>
 </head>
@@ -604,73 +461,73 @@
     <div id="root"></div>
     
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useCallback, useMemo } = React;
         
-        // Constants
-        const ENTRIES_PER_PAGE = 20;
-        const GITHUB_TOKEN_KEY = 'trumpytracker_admin_token';
+        // Configuration
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+        const GITHUB_REPO = 'AJWolfe18/TTracker';
+        const ENTRIES_PER_PAGE = 50;
         
+        // Check if test environment
+        const isTestDB = SUPABASE_URL?.includes('wnrjrywpcadwutfykflu');
+        
+        // Supabase request helper
+        async function supabaseRequest(endpoint, method = 'GET', body = null) {
+            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                }
+            };
+            
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Request failed: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (contentType?.includes('application/json')) {
+                return await response.json();
+            }
+            
+            return { success: true };
+        }
+        
+        // Admin Dashboard Component
         function AdminDashboard() {
-            // State Management
             const [authenticated, setAuthenticated] = useState(false);
             const [token, setToken] = useState('');
             const [loading, setLoading] = useState(false);
             const [message, setMessage] = useState(null);
-            
-            // Data State
+            const [currentTab, setCurrentTab] = useState('political');
             const [politicalEntries, setPoliticalEntries] = useState([]);
             const [executiveOrders, setExecutiveOrders] = useState([]);
-            const [currentTab, setCurrentTab] = useState('political');
-            
-            // UI State
             const [searchTerm, setSearchTerm] = useState('');
-            const [filters, setFilters] = useState({ severity: null, archived: false });
+            const [filters, setFilters] = useState({
+                severity: null,
+                archived: false
+            });
             const [selectedIds, setSelectedIds] = useState(new Set());
             const [currentPage, setCurrentPage] = useState(1);
-            
-            // Modal State
-            const [showEditModal, setShowEditModal] = useState(false);
-            const [showManualArticleModal, setShowManualArticleModal] = useState(false);
-            const [editingEntry, setEditingEntry] = useState(null);
-            
-            // Check if test database
-            const isTestDB = window.location.hostname.includes('test') || 
-                            window.location.hostname === 'localhost';
-            
-            // Supabase configuration
-            const supabaseUrl = window.SUPABASE_CONFIG?.url;
-            const supabaseKey = window.SUPABASE_CONFIG?.anonKey;
-            const serviceRoleKey = window.SUPABASE_CONFIG?.serviceRoleKey;
-            
-            // Supabase request helper
-            const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
-                const url = `${supabaseUrl}/rest/v1/${endpoint}`;
-                const headers = {
-                    'apikey': serviceRoleKey || supabaseKey,
-                    'Authorization': `Bearer ${serviceRoleKey || supabaseKey}`,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=representation'
-                };
-                
-                const options = { method, headers };
-                if (body) options.body = JSON.stringify(body);
-                
-                const response = await fetch(url, options);
-                if (!response.ok) {
-                    throw new Error(`Supabase error: ${response.status}`);
-                }
-                
-                if (method === 'DELETE') return null;
-                return response.json();
-            };
             
             // Load entries
             const loadEntries = useCallback(async () => {
                 setLoading(true);
                 try {
                     const [political, executive] = await Promise.all([
-                        supabaseRequest('political_entries?order=created_at.desc'),
-                        supabaseRequest('executive_orders?order=created_at.desc')
+                        supabaseRequest('political_entries?order=date.desc,id.desc'),
+                        supabaseRequest('executive_orders?order=date.desc,id.desc')
                     ]);
                     
                     setPoliticalEntries(political || []);
@@ -716,103 +573,6 @@
                     }
                 } catch (error) {
                     showMessage('Authentication failed', 'error');
-                }
-            };
-            
-            // Handle edit click
-            const handleEdit = (entry, e) => {
-                e.stopPropagation();
-                setEditingEntry(entry);
-                setShowEditModal(true);
-            };
-            
-            // Save edited entry
-            const saveEditedEntry = async (updatedEntry) => {
-                setLoading(true);
-                const tableName = currentTab === 'political' ? 'political_entries' : 'executive_orders';
-                
-                try {
-                    // Remove read-only fields
-                    const { id, created_at, updated_at, ...updateData } = updatedEntry;
-                    
-                    await supabaseRequest(
-                        `${tableName}?id=eq.${id}`,
-                        'PATCH',
-                        updateData
-                    );
-                    
-                    showMessage('Entry updated successfully', 'success');
-                    setShowEditModal(false);
-                    setEditingEntry(null);
-                    await loadEntries();
-                } catch (error) {
-                    showMessage(`Failed to update entry: ${error.message}`, 'error');
-                } finally {
-                    setLoading(false);
-                }
-            };
-            
-            // Process manual article
-            const processManualArticle = async (articleUrl) => {
-                setLoading(true);
-                try {
-                    // Determine which workflow to trigger based on environment
-                    const isTest = window.location.hostname === 'localhost' || 
-                                 window.location.hostname.includes('test');
-                    
-                    let workflowResponse;
-                    
-                    if (isTest) {
-                        // For test environment, trigger the test workflow directly
-                        console.log('🧪 Triggering TEST workflow...');
-                        workflowResponse = await fetch('https://api.github.com/repos/AJWolfe18/TTracker/actions/workflows/test-manual-article.yml/dispatches', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Accept': 'application/vnd.github+json',
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                ref: 'test', // Use test branch
-                                inputs: {
-                                    article_url: articleUrl,
-                                    category: 'Political News'
-                                }
-                            })
-                        });
-                    } else {
-                        // For production, use repository dispatch
-                        console.log('🚀 Triggering PRODUCTION workflow...');
-                        workflowResponse = await fetch('https://api.github.com/repos/AJWolfe18/TTracker/dispatches', {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Accept': 'application/vnd.github+json',
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                event_type: 'process-manual-article',
-                                client_payload: {
-                                    article_url: articleUrl,
-                                    submitted_by: 'admin'
-                                }
-                            })
-                        });
-                    }
-                    
-                    const response = workflowResponse;
-                    
-                    if (response.ok) {
-                        const env = isTest ? 'TEST' : 'PRODUCTION';
-                        showMessage(`Article submitted to ${env} for processing. Check GitHub Actions for status.`, 'success');
-                        setShowManualArticleModal(false);
-                    } else {
-                        throw new Error('Failed to trigger workflow');
-                    }
-                } catch (error) {
-                    showMessage(`Failed to process article: ${error.message}`, 'error');
-                } finally {
-                    setLoading(false);
                 }
             };
             
@@ -947,258 +707,6 @@
                 };
             }, [currentTab, politicalEntries, executiveOrders]);
             
-            // Edit Modal Component
-            const EditModal = () => {
-                if (!showEditModal || !editingEntry) return null;
-                
-                const [formData, setFormData] = useState(editingEntry);
-                const isExecutiveOrder = currentTab === 'executive';
-                
-                // Handle escape key
-                useEffect(() => {
-                    const handleEscape = (e) => {
-                        if (e.key === 'Escape') {
-                            setShowEditModal(false);
-                        }
-                    };
-                    document.addEventListener('keydown', handleEscape);
-                    return () => document.removeEventListener('keydown', handleEscape);
-                }, []);
-                
-                const handleChange = (field, value) => {
-                    setFormData(prev => ({ ...prev, [field]: value }));
-                };
-                
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    saveEditedEntry(formData);
-                };
-                
-                return (
-                    <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
-                        <div className="modal" onClick={e => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h2 className="modal-title">
-                                    Edit {isExecutiveOrder ? 'Executive Order' : 'Political Entry'}
-                                </h2>
-                                <button className="modal-close" onClick={() => setShowEditModal(false)}>
-                                    ×
-                                </button>
-                            </div>
-                            
-                            <form onSubmit={handleSubmit}>
-                                <div className="form-group">
-                                    <label className="form-label">Date</label>
-                                    <input
-                                        type="date"
-                                        className="form-input"
-                                        value={formData.date?.split('T')[0] || ''}
-                                        onChange={e => handleChange('date', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                
-                                <div className="form-group">
-                                    <label className="form-label">Title</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={formData.title || ''}
-                                        onChange={e => handleChange('title', e.target.value)}
-                                        required
-                                    />
-                                </div>
-                                
-                                {!isExecutiveOrder && (
-                                    <div className="form-group">
-                                        <label className="form-label">Actor</label>
-                                        <input
-                                            type="text"
-                                            className="form-input"
-                                            value={formData.actor || ''}
-                                            onChange={e => handleChange('actor', e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                )}
-                                
-                                {isExecutiveOrder && (
-                                    <div className="form-group">
-                                        <label className="form-label">Order Number</label>
-                                        <input
-                                            type="text"
-                                            className="form-input"
-                                            value={formData.order_number || ''}
-                                            onChange={e => handleChange('order_number', e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                                
-                                <div className="form-group">
-                                    <label className="form-label">Category</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
-                                        value={formData.category || ''}
-                                        onChange={e => handleChange('category', e.target.value)}
-                                    />
-                                </div>
-                                
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        {isExecutiveOrder ? 'Summary' : 'Description'}
-                                    </label>
-                                    <textarea
-                                        className="form-textarea"
-                                        value={formData[isExecutiveOrder ? 'summary' : 'description'] || ''}
-                                        onChange={e => handleChange(
-                                            isExecutiveOrder ? 'summary' : 'description',
-                                            e.target.value
-                                        )}
-                                        required
-                                    />
-                                </div>
-                                
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        Source {isExecutiveOrder ? '(Federal Register URL)' : 'URL'}
-                                    </label>
-                                    <input
-                                        type="url"
-                                        className="form-input"
-                                        value={formData[isExecutiveOrder ? 'federal_register_url' : 'source_url'] || ''}
-                                        onChange={e => handleChange(
-                                            isExecutiveOrder ? 'federal_register_url' : 'source_url',
-                                            e.target.value
-                                        )}
-                                    />
-                                </div>
-                                
-                                {!isExecutiveOrder && (
-                                    <div className="form-group">
-                                        <label className="form-label">Source Name</label>
-                                        <input
-                                            type="text"
-                                            className="form-input"
-                                            value={formData.source || ''}
-                                            onChange={e => handleChange('source', e.target.value)}
-                                        />
-                                    </div>
-                                )}
-                                
-                                <div className="form-group">
-                                    <label className="form-label">Severity</label>
-                                    <select
-                                        className="form-select"
-                                        value={formData[isExecutiveOrder ? 'severity_rating' : 'severity'] || ''}
-                                        onChange={e => handleChange(
-                                            isExecutiveOrder ? 'severity_rating' : 'severity',
-                                            e.target.value
-                                        )}
-                                    >
-                                        <option value="">None</option>
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
-                                    </select>
-                                </div>
-                                
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => setShowEditModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-primary"
-                                        disabled={loading}
-                                    >
-                                        {loading ? <span className="spinner" /> : 'Save Changes'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                );
-            };
-            
-            // Manual Article Modal Component
-            const ManualArticleModal = () => {
-                if (!showManualArticleModal) return null;
-                
-                const [articleUrl, setArticleUrl] = useState('');
-                
-                // Handle escape key
-                useEffect(() => {
-                    const handleEscape = (e) => {
-                        if (e.key === 'Escape') {
-                            setShowManualArticleModal(false);
-                        }
-                    };
-                    document.addEventListener('keydown', handleEscape);
-                    return () => document.removeEventListener('keydown', handleEscape);
-                }, []);
-                
-                const handleSubmit = (e) => {
-                    e.preventDefault();
-                    if (articleUrl) {
-                        processManualArticle(articleUrl);
-                    }
-                };
-                
-                return (
-                    <div className="modal-backdrop" onClick={() => setShowManualArticleModal(false)}>
-                        <div className="modal" onClick={e => e.stopPropagation()}>
-                            <div className="modal-header">
-                                <h2 className="modal-title">Process Manual Article</h2>
-                                <button className="modal-close" onClick={() => setShowManualArticleModal(false)}>
-                                    ×
-                                </button>
-                            </div>
-                            
-                            <form onSubmit={handleSubmit}>
-                                <div className="form-group">
-                                    <label className="form-label">Article URL</label>
-                                    <input
-                                        type="url"
-                                        className="form-input"
-                                        placeholder="https://example.com/article"
-                                        value={articleUrl}
-                                        onChange={e => setArticleUrl(e.target.value)}
-                                        required
-                                        autoFocus
-                                    />
-                                    <small style={{color: '#718096', marginTop: 8, display: 'block'}}>
-                                        Enter the URL of the article you want to process. 
-                                        The system will extract and analyze the content automatically.
-                                    </small>
-                                </div>
-                                
-                                <div className="modal-footer">
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => setShowManualArticleModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        className="btn btn-success"
-                                        disabled={loading || !articleUrl}
-                                    >
-                                        {loading ? <span className="spinner" /> : '🚀 Process Article'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                );
-            };
-            
             // Render authentication screen
             if (!authenticated) {
                 return (
@@ -1254,7 +762,7 @@
                             {message.type === 'error' && '❌'}
                             {message.type === 'warning' && '⚠️'}
                             {message.type === 'info' && 'ℹ️'}
-                            {' '}{message.text}
+                            {message.text}
                         </div>
                     )}
                     
@@ -1296,12 +804,6 @@
                                     setCurrentPage(1);
                                 }}
                             />
-                            <button
-                                className="manual-article-btn"
-                                onClick={() => setShowManualArticleModal(true)}
-                            >
-                                📰 Process Article
-                            </button>
                         </div>
                         
                         <div className="filters">
@@ -1440,9 +942,8 @@
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
-                                                    onChange={() => toggleSelection(entry.id)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    style={{width: 20, height: 20, cursor: 'pointer'}}
+                                                    onChange={() => {}}
+                                                    style={{width: 20, height: 20}}
                                                 />
                                                 <strong>{entry.title || entry.actor || 'Untitled'}</strong>
                                             </div>
@@ -1466,12 +967,6 @@
                                                         Archived
                                                     </span>
                                                 )}
-                                                <button
-                                                    className="edit-btn"
-                                                    onClick={(e) => handleEdit(entry, e)}
-                                                >
-                                                    ✏️ Edit
-                                                </button>
                                             </div>
                                         </div>
                                         
@@ -1483,14 +978,13 @@
                                         
                                         {(entry.description || entry.summary) && (
                                             <div style={{marginBottom: 12, color: '#cbd5e0'}}>
-                                                {(entry.description || entry.summary).substring(0, 200)}
-                                                {(entry.description || entry.summary).length > 200 && '...'}
+                                                {entry.description || entry.summary}
                                             </div>
                                         )}
                                         
-                                        {(entry.source_url || entry.federal_register_url) && (
+                                        {entry.source_url && (
                                             <a
-                                                href={entry.source_url || entry.federal_register_url}
+                                                href={entry.source_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 style={{color: '#3182ce', textDecoration: 'none'}}
@@ -1527,10 +1021,6 @@
                             </div>
                         )}
                     </div>
-                    
-                    {/* Modals */}
-                    <EditModal />
-                    <ManualArticleModal />
                 </div>
             );
         }
