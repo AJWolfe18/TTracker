@@ -578,7 +578,7 @@ const TrumpyTrackerDashboard = () => {
       </div>
       
       {order.summary && (
-        <p className="text-gray-300 text-sm mb-3 line-clamp-3">{order.summary}</p>
+        <p className="text-gray-300 text-sm mb-3">{order.summary}</p>
       )}
       
       <div className="flex justify-between items-center">
