@@ -1064,13 +1064,21 @@
                                         Source {isExecutiveOrder ? '(Federal Register URL)' : 'URL'}
                                     </label>
                                     <input
-                                        type="url"
+                                        type="text"
                                         className="form-input"
+                                        placeholder={isExecutiveOrder ? 'https://www.federalregister.gov/...' : 'https://example.com'}
                                         value={formData[isExecutiveOrder ? 'federal_register_url' : 'source_url'] || ''}
-                                        onChange={e => handleChange(
-                                            isExecutiveOrder ? 'federal_register_url' : 'source_url',
-                                            e.target.value
-                                        )}
+                                        onChange={e => {
+                                            let value = e.target.value;
+                                            // Auto-add https:// if user enters a URL without protocol
+                                            if (value && !value.startsWith('http://') && !value.startsWith('https://') && value.includes('.')) {
+                                                value = 'https://' + value;
+                                            }
+                                            handleChange(
+                                                isExecutiveOrder ? 'federal_register_url' : 'source_url',
+                                                value
+                                            );
+                                        }}
                                     />
                                 </div>
                                 
@@ -1454,9 +1462,10 @@
                                                 )}
                                                 {isEO && entry.order_number && (
                                                     <span className="badge" style={{
-                                                        background: 'rgba(99, 102, 241, 0.2)',
-                                                        color: '#a78bfa',
-                                                        border: '1px solid #6366f1'
+                                                        background: '#10b981',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        fontWeight: '600'
                                                     }}>
                                                         EO {entry.order_number}
                                                     </span>
