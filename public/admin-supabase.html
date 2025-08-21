@@ -638,9 +638,9 @@
                             window.location.hostname === 'localhost';
             
             // Supabase configuration
-            const supabaseUrl = window.SUPABASE_CONFIG?.url;
-            const supabaseKey = window.SUPABASE_CONFIG?.anonKey;
-            const serviceRoleKey = window.SUPABASE_CONFIG?.serviceRoleKey;
+            const supabaseUrl = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL;
+            const supabaseKey = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+            const serviceRoleKey = window.SERVICE_ROLE_KEY || window.SUPABASE_CONFIG?.serviceRoleKey;
             
             // Supabase request helper
             const supabaseRequest = async (endpoint, method = 'GET', body = null) => {
