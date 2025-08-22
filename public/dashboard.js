@@ -146,6 +146,129 @@ const ConstructionBanner = () => (
   </div>
 );
 
+// Content Modal Component
+const ContentModal = ({ isOpen, onClose, title, date, content, severity, category, sourceUrl, actor, orderNumber }) => {
+  // Handle escape key with proper cleanup
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscape);
+    // Properly clean up event listener to prevent memory leaks
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+  
+  if (!isOpen) return null;
+  
+  // Get severity badge color
+  const getSeverityColor = (severity) => {
+    switch (severity?.toLowerCase()) {
+      case 'critical':
+        return 'bg-red-600 text-white';
+      case 'high':
+        return 'bg-red-500 text-white';
+      case 'medium':
+        return 'bg-yellow-500 text-black';
+      case 'low':
+        return 'bg-green-500 text-white';
+      default:
+        return 'bg-gray-500 text-white';
+    }
+  };
+  
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+  
+  return (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-gray-800 rounded-lg max-w-3xl w-full"
+        style={{
+          maxHeight: '90vh',
+          overflowY: 'auto'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 pb-4">
+          <div className="flex justify-between items-start">
+            <div className="flex-1 pr-4">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-gray-400 text-sm">{formatDate(date)}</span>
+                {orderNumber && (
+                  <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+                    EO {orderNumber}
+                  </span>
+                )}
+                {severity && (
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(severity)}`}>
+                    {severity.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-white">{title}</h2>
+              {actor && (
+                <p className="text-blue-400 text-sm mt-1">Actor: {actor}</p>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors text-2xl leading-none p-1"
+              aria-label="Close modal"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        
+        {/* Modal Content */}
+        <div className="p-6">
+          <div className="text-gray-300 whitespace-pre-wrap mb-6">
+            {content}
+          </div>
+          
+          {/* Footer with metadata */}
+          <div className="flex justify-between items-center pt-4 border-t border-gray-700">
+            {category && (
+              <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
+                {category}
+              </span>
+            )}
+            {sourceUrl && (
+              <a 
+                href={sourceUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+              >
+                View Source →
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Dashboard Component
 const TrumpyTrackerDashboard = () => {
   // State management
@@ -157,6 +280,9 @@ const TrumpyTrackerDashboard = () => {
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({});
   const [activeFilter, setActiveFilter] = useState(null);
+  
+  // Modal state
+  const [modalContent, setModalContent] = useState(null);
   
   // Pagination state
   const [politicalPage, setPoliticalPage] = useState(1);
@@ -511,15 +637,10 @@ const TrumpyTrackerDashboard = () => {
     </div>
   );
 
-  // Political entry card component with expandable description
+  // Political entry card component with line-clamp
   const PoliticalEntryCard = ({ entry }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const descriptionLength = entry.description?.length || 0;
-    const shouldShowToggle = descriptionLength > 500;
-    
-    const displayDescription = shouldShowToggle && !isExpanded 
-      ? entry.description.substring(0, 500) + '...'
-      : entry.description;
+    // Use optional chaining for better null safety
+    const hasLongDescription = entry.description?.length > 200;
     
     return (
       <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
@@ -542,22 +663,35 @@ const TrumpyTrackerDashboard = () => {
         
         {entry.description && (
           <div>
-            <p className="text-gray-300 text-sm mb-3">{displayDescription}</p>
-            {shouldShowToggle && (
+            <p className="text-gray-300 text-sm mb-3" style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: '1.5'
+            }}>
+              {entry.description}
+            </p>
+            {hasLongDescription && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
-                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors mb-3"
+                onClick={() => setModalContent({
+                  title: entry.title,
+                  date: entry.date,
+                  content: entry.description,
+                  severity: entry.severity,
+                  category: entry.category,
+                  sourceUrl: entry.source_url,
+                  actor: entry.actor
+                })}
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
               >
-                {isExpanded ? 'Show less ↑' : 'Show more ↓'}
+                Read more →
               </button>
             )}
           </div>
         )}
       
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mt-3">
           {entry.category && (
             <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
               {entry.category}
@@ -578,15 +712,10 @@ const TrumpyTrackerDashboard = () => {
     );
   };
 
-  // Executive order card component with expandable summary
+  // Executive order card component with line-clamp
   const ExecutiveOrderCard = ({ order }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const summaryLength = order.summary?.length || 0;
-    const shouldShowToggle = summaryLength > 500;
-    
-    const displaySummary = shouldShowToggle && !isExpanded 
-      ? order.summary.substring(0, 500) + '...'
-      : order.summary;
+    // Use optional chaining for better null safety
+    const hasLongSummary = order.summary?.length > 200;
     
     return (
       <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
@@ -611,22 +740,35 @@ const TrumpyTrackerDashboard = () => {
         
         {order.summary && (
           <div>
-            <p className="text-gray-300 text-sm mb-3">{displaySummary}</p>
-            {shouldShowToggle && (
+            <p className="text-gray-300 text-sm mb-3" style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: '1.5'
+            }}>
+              {order.summary}
+            </p>
+            {hasLongSummary && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
+                onClick={() => setModalContent({
+                  title: order.title,
+                  date: order.date,
+                  content: order.summary,
+                  severity: order.severity_rating,
+                  category: order.category,
+                  sourceUrl: order.source_url,
+                  orderNumber: order.order_number
+                })}
                 className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
               >
-                {isExpanded ? 'Show less ↑' : 'Show more ↓'}
+                Read more →
               </button>
             )}
           </div>
         )}
       
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mt-3">
           {order.category && (
             <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
               {order.category}
@@ -874,6 +1016,13 @@ const TrumpyTrackerDashboard = () => {
           </p>
         </footer>
       </div>
+      
+      {/* Content Modal */}
+      <ContentModal 
+        isOpen={!!modalContent}
+        onClose={() => setModalContent(null)}
+        {...modalContent}
+      />
     </div>
   );
 };
