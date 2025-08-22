@@ -692,11 +692,13 @@ const TrumpyTrackerDashboard = () => {
         )}
       
         <div className="flex justify-between items-center mt-3">
-          {entry.category && (
-            <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
-              {entry.category}
-            </span>
-          )}
+          <div>
+            {entry.category && (
+              <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
+                {entry.category}
+              </span>
+            )}
+          </div>
           {entry.source_url && (
             <a 
               href={entry.source_url} 
@@ -769,11 +771,13 @@ const TrumpyTrackerDashboard = () => {
         )}
       
         <div className="flex justify-between items-center mt-3">
-          {order.category && (
-            <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
-              {order.category}
-            </span>
-          )}
+          <div>
+            {order.category && (
+              <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
+                {order.category}
+              </span>
+            )}
+          </div>
           {order.source_url && (
             <a 
               href={order.source_url} 

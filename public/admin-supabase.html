@@ -695,8 +695,8 @@
                 setLoading(true);
                 try {
                     const [political, executive] = await Promise.all([
-                        supabaseRequest('political_entries?order=created_at.desc'),
-                        supabaseRequest('executive_orders?order=created_at.desc')
+                        supabaseRequest('political_entries?order=date.desc,id.desc'),
+                        supabaseRequest('executive_orders?order=date.desc,order_number.desc')
                     ]);
                     
                     setPoliticalEntries(political || []);
