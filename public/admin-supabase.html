@@ -505,6 +505,31 @@
             margin-bottom: 16px;
         }
         
+        /* Line clamp for description truncation */
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Read more button styling */
+        .read-more-btn {
+            color: #3182ce;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            margin-top: 8px;
+            transition: color 0.2s;
+        }
+        
+        .read-more-btn:hover {
+            color: #2563eb;
+        }
+        
         /* Badge Styles - Matching main dashboard */
         .badge {
             padding: 4px 8px;
@@ -632,6 +657,7 @@
             const [showEditModal, setShowEditModal] = useState(false);
             const [showManualArticleModal, setShowManualArticleModal] = useState(false);
             const [editingEntry, setEditingEntry] = useState(null);
+            const [contentModalData, setContentModalData] = useState({ isOpen: false });
             
             // Check if test database
             const isTestDB = window.location.hostname.includes('test') || 
@@ -1133,6 +1159,134 @@
                 );
             };
             
+            // Content Modal Component - for viewing full descriptions
+            const ContentModal = () => {
+                if (!contentModalData.isOpen) return null;
+                
+                // Handle escape key with proper cleanup
+                useEffect(() => {
+                    if (!contentModalData.isOpen) return;
+                    
+                    const handleEscape = (e) => {
+                        if (e.key === 'Escape') {
+                            setContentModalData({ isOpen: false });
+                        }
+                    };
+                    document.addEventListener('keydown', handleEscape);
+                    // Properly clean up event listener to prevent memory leaks
+                    return () => document.removeEventListener('keydown', handleEscape);
+                }, [contentModalData.isOpen]);
+                
+                const formatDate = (dateString) => {
+                    if (!dateString) return '';
+                    try {
+                        return new Date(dateString).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                    } catch {
+                        return dateString;
+                    }
+                };
+                
+                const getSeverityBadgeClass = (severity) => {
+                    if (!severity) return '';
+                    return `badge badge-${severity.toLowerCase()}`;
+                };
+                
+                return (
+                    <div className="modal-backdrop" onClick={() => setContentModalData({ isOpen: false })}>
+                        <div className="modal" onClick={e => e.stopPropagation()} style={{ 
+                            maxWidth: '800px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto'
+                        }}>
+                            <div className="modal-header">
+                                <div style={{ flex: 1 }}>
+                                    <div className="flex gap-2" style={{ marginBottom: 8 }}>
+                                        <span style={{ color: '#a0aec0', fontSize: 14 }}>
+                                            {formatDate(contentModalData.date)}
+                                        </span>
+                                        {contentModalData.orderNumber && (
+                                            <span className="badge" style={{
+                                                background: '#10b981',
+                                                color: 'white',
+                                                border: 'none'
+                                            }}>
+                                                EO {contentModalData.orderNumber}
+                                            </span>
+                                        )}
+                                        {contentModalData.severity && (
+                                            <span className={getSeverityBadgeClass(contentModalData.severity)}>
+                                                {contentModalData.severity.toUpperCase()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h2 className="modal-title" style={{ marginBottom: 8 }}>
+                                        {contentModalData.title}
+                                    </h2>
+                                    {contentModalData.actor && (
+                                        <p style={{ color: '#60a5fa', fontSize: 14, margin: 0 }}>
+                                            Actor: {contentModalData.actor}
+                                        </p>
+                                    )}
+                                </div>
+                                <button className="modal-close" onClick={() => setContentModalData({ isOpen: false })}>
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <div style={{ padding: '24px 0' }}>
+                                <div style={{ 
+                                    color: '#cbd5e0', 
+                                    whiteSpace: 'pre-wrap',
+                                    lineHeight: 1.6,
+                                    fontSize: 15
+                                }}>
+                                    {contentModalData.content}
+                                </div>
+                            </div>
+                            
+                            <div className="modal-footer" style={{ 
+                                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                                paddingTop: 16,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                {contentModalData.category && (
+                                    <span style={{
+                                        background: 'rgba(251, 146, 60, 0.2)',
+                                        color: '#fb923c',
+                                        padding: '4px 12px',
+                                        borderRadius: 4,
+                                        fontSize: 12
+                                    }}>
+                                        {contentModalData.category}
+                                    </span>
+                                )}
+                                {contentModalData.sourceUrl && (
+                                    <a
+                                        href={contentModalData.sourceUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            color: '#3182ce',
+                                            textDecoration: 'none',
+                                            fontSize: 14,
+                                            fontWeight: 500
+                                        }}
+                                    >
+                                        View Source →
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+            
             // Manual Article Modal Component
             const ManualArticleModal = () => {
                 if (!showManualArticleModal) return null;
@@ -1491,11 +1645,41 @@
                                         </div>
                                         
                                         {(entry.description || entry.summary) && (
-                                            <div style={{marginBottom: 12, color: '#cbd5e0'}}>
-                                                {(entry.description || entry.summary).substring(0, 200)}
-                                                {(entry.description || entry.summary).length > 200 && '...'}
-                                            </div>
+                                        <div>
+                                        <div style={{
+                                            marginBottom: 8, 
+                                            color: '#cbd5e0',
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 3,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            lineHeight: 1.5
+                                        }}>
+                                            {entry.description || entry.summary}
+                                        </div>
+                                        {((entry.description || entry.summary)?.length > 200) && (
+                                            <button
+                                                className="read-more-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setContentModalData({
+                                                        isOpen: true,
+                                                        title: entry.title || 'Entry Details',
+                                                        date: entry.date,
+                                                        content: entry.description || entry.summary,
+                                                        severity: entry.severity || entry.severity_rating,
+                                                        category: entry.category,
+                                                        sourceUrl: entry.source_url || entry.federal_register_url,
+                                                        actor: entry.actor,
+                                                        orderNumber: entry.order_number
+                                                    });
+                                                }}
+                                            >
+                                                Read more →
+                                            </button>
                                         )}
+                                    </div>
+                                )}
                                         
                                         {(entry.source_url || entry.federal_register_url) && (
                                             <a
@@ -1540,6 +1724,7 @@
                     {/* Modals */}
                     <EditModal />
                     <ManualArticleModal />
+                    <ContentModal />
                 </div>
             );
         }
