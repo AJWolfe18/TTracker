@@ -28,16 +28,17 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
     process.exit(1);
 }
 
-// Detect environment and load appropriate config
-const isTestBranch = fs.existsSync(path.join(__dirname, 'TEST_BRANCH_MARKER.md'));
-const configPath = isTestBranch 
-    ? path.join(__dirname, 'supabase-config-test.js')
-    : path.join(__dirname, 'supabase-config-node.js');
+// Use environment variables directly from GitHub Actions
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
+// Detect environment for logging purposes
+const isTestBranch = fs.existsSync(path.join(__dirname, '..', 'TEST_BRANCH_MARKER.md'));
 console.log(`📍 Environment: ${isTestBranch ? 'TEST' : 'PRODUCTION'}`);
+console.log(`📍 Supabase URL: ${SUPABASE_URL ? SUPABASE_URL.substring(0, 30) + '...' : 'NOT SET'}`);
 
-const config = await import(`file://${configPath}`);
-const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+// Create Supabase client with environment variables
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Get input from GitHub Actions or environment
 const inputData = JSON.parse(process.env.INPUT_DATA || '{}');
@@ -45,6 +46,24 @@ const { url, title, category, submitted_by } = inputData;
 
 if (!url) {
     console.error('❌ No URL provided');
+    process.exit(1);
+}
+
+// Validate URL format
+function isValidArticleUrl(urlString) {
+    try {
+        const u = new URL(urlString);
+        if (!['http:', 'https:'].includes(u.protocol)) {
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+if (!isValidArticleUrl(url)) {
+    console.error('❌ Invalid URL format. Only HTTP/HTTPS URLs are allowed.');
     process.exit(1);
 }
 
@@ -91,18 +110,35 @@ function normalizeUrl(urlString) {
     }
 }
 
-// Check for duplicate articles
+// Check for duplicate articles with retry logic
 async function checkDuplicate(url, title) {
     const normalizedUrl = normalizeUrl(url);
     console.log(`  🔍 Checking for duplicates...`);
     console.log(`     Normalized URL: ${normalizedUrl}`);
     
-    // Check exact URL match
-    const { data: urlMatch, error: urlError } = await supabase
-        .from('political_entries')
-        .select('id, title, date, source_url')
-        .eq('source_url', normalizedUrl)
-        .single();
+    // Retry wrapper for Supabase operations
+    async function withRetry(operation, retries = 3) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                return await operation();
+            } catch (error) {
+                if (i === retries - 1) throw error;
+                console.log(`  ⚠️ Retry ${i + 1}/${retries} after error:`, error.message);
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+            }
+        }
+    }
+    
+    // Check exact URL match with retry
+    const result = await withRetry(async () => {
+        return await supabase
+            .from('political_entries')
+            .select('id, title, date, source_url')
+            .eq('source_url', normalizedUrl)
+            .single();
+    });
+    
+    const { data: urlMatch, error: urlError } = result;
     
     if (urlMatch && !urlError) {
         console.log(`  ⚠️ Duplicate URL found: "${urlMatch.title}" from ${urlMatch.date}`);
@@ -435,9 +471,27 @@ async function tryPlaywrightExtraction(url) {
     }
 }
 
+// Simple rate limiter for OpenAI API
+const rateLimiter = {
+    lastCall: 0,
+    minDelay: 1000, // Minimum 1 second between calls
+    
+    async throttle() {
+        const now = Date.now();
+        const timeSinceLastCall = now - this.lastCall;
+        if (timeSinceLastCall < this.minDelay) {
+            await new Promise(r => setTimeout(r, this.minDelay - timeSinceLastCall));
+        }
+        this.lastCall = Date.now();
+    }
+};
+
 // Analyze with OpenAI
 async function analyzeWithOpenAI(articleData) {
     console.log('🤖 Analyzing with OpenAI...');
+    
+    // Apply rate limiting
+    await rateLimiter.throttle();
     
     const prompt = `Analyze this political news article and provide comprehensive analysis:
     
@@ -589,15 +643,35 @@ async function processArticle() {
         processed_at: new Date().toISOString()
     };
     
-    // Step 6: Insert to Supabase
+    // Step 6: Insert to Supabase with retry logic
     console.log('\n💾 Saving to Supabase...');
-    const { data, error } = await supabase
-        .from('political_entries')
-        .insert([entry])
-        .select();
+    
+    // Retry wrapper for critical operations
+    async function insertWithRetry(entry, retries = 3) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const { data, error } = await supabase
+                    .from('political_entries')
+                    .insert([entry])
+                    .select();
+                
+                if (error) throw error;
+                return { data, error: null };
+            } catch (error) {
+                console.log(`  ⚠️ Insert attempt ${i + 1}/${retries} failed:`, error.message);
+                if (i === retries - 1) {
+                    return { data: null, error };
+                }
+                // Exponential backoff: 1s, 2s, 4s
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+            }
+        }
+    }
+    
+    const { data, error } = await insertWithRetry(entry);
     
     if (error) {
-        console.error('❌ Supabase error:', error);
+        console.error('❌ Supabase error after retries:', error);
         process.exit(1);
     }
     
