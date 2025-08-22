@@ -621,26 +621,15 @@ async function processArticle() {
     
     // Step 5: Prepare entry for Supabase
     const entry = {
-        id: generateId(),
         title: articleData.title,
         source_url: normalizeUrl(url),  // Store normalized URL for consistent duplicate detection
         description: analysis?.summary || articleData.description,
         category: analysis?.category || category || 'Political News',
         date: articleData.date,
-        timestamp: new Date().toISOString(),
         actor: analysis?.actor || 'Political Actor',
         severity: analysis?.severity || 'medium',
-        implications: analysis?.implications || '',
-        spin: analysis?.spin || null,
-        reality: analysis?.reality || null,
-        missing_context: analysis?.missing_context || null,
-        verified_source: isVerifiedSource(url),
-        extraction_method: articleData.extraction_method,
-        word_count: articleData.word_count || 0,
-        author: articleData.author || null,
-        manual_submission: true,
-        submitted_by: submitted_by || 'admin',
-        processed_at: new Date().toISOString()
+        verified: isVerifiedSource(url),
+        source: new URL(url).hostname.replace('www.', '')
     };
     
     // Step 6: Insert to Supabase with retry logic
