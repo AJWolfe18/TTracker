@@ -665,18 +665,21 @@ async function processArticle() {
     }
     
     console.log('✅ Entry saved successfully!');
-    console.log(`  ID: ${entry.id}`);
     console.log(`  Title: ${entry.title}`);
     console.log(`  Category: ${entry.category}`);
-    console.log(`  Extraction: ${entry.extraction_method}`);
     
     // Step 7: Get statistics
-    const { data: stats, error: statsError } = await supabase
-        .from('political_entries')
-        .select('id', { count: 'exact', head: true });
-    
-    if (!statsError) {
-        console.log(`\n📊 Total entries in database: ${stats.count || 0}`);
+    try {
+        const { count, error: statsError } = await supabase
+            .from('political_entries')
+            .select('*', { count: 'exact', head: true });
+        
+        if (!statsError && count !== null) {
+            console.log(`\n📊 Total entries in database: ${count}`);
+        }
+    } catch (statsErr) {
+        // Statistics are optional, don't fail if they error
+        console.log('  (Statistics unavailable)');
     }
     
     return entry;
