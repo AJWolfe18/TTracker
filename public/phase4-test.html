@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEST ONLY - Phase 4 Testing - TrumpyTracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        
+        /* Loading animation */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900">
+    <!-- TEST ENVIRONMENT WARNING -->
+    <div class="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50 font-bold">
+        ⚠️ TEST ENVIRONMENT ONLY - Phase 4 Testing ⚠️
+    </div>
+    
+    <div id="root" style="padding-top: 40px;"></div>
+    
+    <!-- Load Supabase configuration -->
+    <script src="supabase-browser-config.js"></script>
+    
+    <!-- Load the dashboard component -->
+    <script type="text/babel" src="dashboard.js"></script>
+</body>
+</html>
