@@ -294,6 +294,47 @@ const ContentModal = ({ isOpen, onClose, title, date, content, severity, categor
 
 // Main Dashboard Component
 const TrumpyTrackerDashboard = () => {
+  // Inject CSS animations with duplicate prevention
+  React.useEffect(() => {
+    const existingStyle = document.getElementById('tt-animations');
+    if (!existingStyle) {
+      const style = document.createElement('style');
+      style.id = 'tt-animations';
+      style.textContent = `
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        /* Smooth transitions for filter changes */
+        .filter-transition {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    return () => {
+      const style = document.getElementById('tt-animations');
+      if (style) document.head.removeChild(style);
+    };
+  }, []);
   // State management
   const [activeTab, setActiveTab] = useState('political');
   const [allPoliticalEntries, setAllPoliticalEntries] = useState([]);
@@ -304,6 +345,7 @@ const TrumpyTrackerDashboard = () => {
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({});
   const [activeFilter, setActiveFilter] = useState(null);
+  const [isFiltering, setIsFiltering] = useState(false);
   
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -584,6 +626,9 @@ const TrumpyTrackerDashboard = () => {
       clearTimeout(searchDebounceRef.current);
     }
     
+    // Show loading state immediately for better UX
+    setIsFiltering(true);
+    
     // Set new debounce
     searchDebounceRef.current = setTimeout(() => {
       if (activeTab === 'political') {
@@ -603,6 +648,8 @@ const TrumpyTrackerDashboard = () => {
         setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
         setEoPage(1); // Reset to page 1 when filtering
       }
+      // Hide loading state after filtering is complete
+      setIsFiltering(false);
     }, 300); // 300ms debounce
   }, [activeTab, allPoliticalEntries, allExecutiveOrders, applyAllFilters]);
 
@@ -690,6 +737,190 @@ const TrumpyTrackerDashboard = () => {
     } catch {
       return dateString;
     }
+  };
+
+  // Generate smart filter suggestions when no results
+  const getFilterSuggestions = useCallback(() => {
+    const suggestions = [];
+    const entries = activeTab === 'political' ? allPoliticalEntries : allExecutiveOrders;
+    
+    // Test removing each filter to see what would give results
+    if (searchTerm) {
+      // Simply test without search
+      let testFiltered = [...entries];
+      // Apply other filters
+      if (selectedCategory !== 'all') {
+        testFiltered = testFiltered.filter(e => e.category === selectedCategory);
+      }
+      if (dateRange !== 'all') {
+        const now = new Date();
+        const cutoffDate = new Date();
+        switch(dateRange) {
+          case '7days': cutoffDate.setDate(now.getDate() - 7); break;
+          case '30days': cutoffDate.setDate(now.getDate() - 30); break;
+          case '90days': cutoffDate.setDate(now.getDate() - 90); break;
+        }
+        testFiltered = testFiltered.filter(e => {
+          if (!e.date) return false;
+          const entryDate = new Date(e.date);
+          if (isNaN(entryDate.getTime())) return false;
+          return entryDate >= cutoffDate;
+        });
+      }
+      if (activeFilter) {
+        testFiltered = testFiltered.filter(e => {
+          const sev = e.severity?.toLowerCase();
+          if (activeFilter === 'high') return sev === 'high' || sev === 'critical';
+          if (activeFilter === 'medium') return sev === 'medium';
+          if (activeFilter === 'low') return sev === 'low';
+          return false;
+        });
+      }
+      
+      if (testFiltered.length > 0) {
+        suggestions.push({
+          action: 'Clear search term',
+          count: testFiltered.length,
+          filterType: 'search'
+        });
+      }
+    }
+    
+    if (selectedCategory !== 'all') {
+      // Test without category filter
+      let testFiltered = [...entries];
+      if (searchTerm) {
+        testFiltered = applySearch(testFiltered, searchTerm);
+      }
+      if (dateRange !== 'all') {
+        // Apply date filter
+        const now = new Date();
+        const cutoffDate = new Date();
+        switch(dateRange) {
+          case '7days': cutoffDate.setDate(now.getDate() - 7); break;
+          case '30days': cutoffDate.setDate(now.getDate() - 30); break;
+          case '90days': cutoffDate.setDate(now.getDate() - 90); break;
+        }
+        testFiltered = testFiltered.filter(e => {
+          if (!e.date) return false;
+          const entryDate = new Date(e.date);
+          if (isNaN(entryDate.getTime())) return false;
+          return entryDate >= cutoffDate;
+        });
+      }
+      if (activeFilter) {
+        testFiltered = testFiltered.filter(e => {
+          const sev = e.severity?.toLowerCase();
+          if (activeFilter === 'high') return sev === 'high' || sev === 'critical';
+          if (activeFilter === 'medium') return sev === 'medium';
+          if (activeFilter === 'low') return sev === 'low';
+          return false;
+        });
+      }
+      
+      if (testFiltered.length > 0) {
+        suggestions.push({
+          action: 'Remove category filter',
+          count: testFiltered.length,
+          filterType: 'category'
+        });
+      }
+    }
+    
+    if (dateRange !== 'all') {
+      // Test with expanded date range
+      const expandedRanges = {
+        '7days': { next: '30days', label: 'Expand to last 30 days' },
+        '30days': { next: '90days', label: 'Expand to last 90 days' },
+        '90days': { next: 'all', label: 'Show all dates' }
+      };
+      
+      if (expandedRanges[dateRange]) {
+        suggestions.push({
+          action: expandedRanges[dateRange].label,
+          count: null, // Don't calculate exact count for simplicity
+          filterType: 'date'
+        });
+      }
+    }
+    
+    if (activeFilter) {
+      suggestions.push({
+        action: 'Remove severity filter',
+        count: null,
+        filterType: 'severity'
+      });
+    }
+    
+    return suggestions;
+  }, [searchTerm, selectedCategory, dateRange, activeFilter, activeTab, allPoliticalEntries, allExecutiveOrders, applyAllFilters, applySearch]);
+
+  // No Results Component with smart suggestions
+  const NoResultsMessage = () => {
+    const suggestions = getFilterSuggestions();
+    
+    return (
+      <div className="text-center py-12 px-4 transition-opacity duration-300 opacity-100">
+        <div className="max-w-md mx-auto">
+          <div className="text-6xl mb-4">🔍</div>
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">
+            No results found
+          </h3>
+          <p className="text-gray-400 mb-6">
+            {searchTerm ? 
+              `No entries match "${searchTerm}" with your current filters` :
+              'No entries match your current filter combination'
+            }
+          </p>
+          
+          {suggestions.length > 0 && (
+            <div className="bg-gray-800/50 rounded-lg p-4 text-left">
+              <p className="text-sm text-gray-400 mb-3">Try adjusting your filters:</p>
+              <div className="space-y-2">
+                {suggestions.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if (suggestion.filterType === 'search') setSearchTerm('');
+                      if (suggestion.filterType === 'category') setSelectedCategory('all');
+                      if (suggestion.filterType === 'date') {
+                        if (dateRange === '7days') setDateRange('30days');
+                        else if (dateRange === '30days') setDateRange('90days');
+                        else setDateRange('all');
+                      }
+                      if (suggestion.filterType === 'severity') setActiveFilter(null);
+                    }}
+                    className="w-full text-left px-3 py-2 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors duration-200 flex justify-between items-center group"
+                  >
+                    <span className="text-blue-400 group-hover:text-blue-300">
+                      • {suggestion.action}
+                    </span>
+                    {suggestion.count && (
+                      <span className="text-gray-500 text-sm">
+                        ({suggestion.count} results)
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setSelectedCategory('all');
+              setDateRange('all');
+              setActiveFilter(null);
+              setSortOrder('newest');
+            }}
+            className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors duration-200"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      </div>
+    );
   };
 
   // Get severity badge color
@@ -797,12 +1028,16 @@ const TrumpyTrackerDashboard = () => {
   );
 
   // Political entry card component with line-clamp
-  const PoliticalEntryCard = ({ entry }) => {
+  const PoliticalEntryCard = ({ entry, index = 0 }) => {
     // Use optional chaining for better null safety
     const hasLongDescription = entry.description?.length > 200;
     
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" style={{
+        // Only animate first 10 cards for performance
+        animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
+        animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
+      }}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
@@ -874,12 +1109,16 @@ const TrumpyTrackerDashboard = () => {
   };
 
   // Executive order card component with line-clamp
-  const ExecutiveOrderCard = ({ order }) => {
+  const ExecutiveOrderCard = ({ order, index = 0 }) => {
     // Use optional chaining for better null safety
     const hasLongSummary = order.summary?.length > 200;
     
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200">
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" style={{
+        // Only animate first 10 cards for performance
+        animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
+        animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
+      }}>
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
@@ -1180,12 +1419,12 @@ const TrumpyTrackerDashboard = () => {
                 </span>
               )}
               {activeTab === 'political' && (
-                <span className="ml-2 text-gray-500">
+                <span className="ml-2 text-gray-500 transition-all duration-300">
                   • Showing {displayedPoliticalEntries.length} of {allPoliticalEntries.length} entries
                 </span>
               )}
               {activeTab === 'executive' && (
-                <span className="ml-2 text-gray-500">
+                <span className="ml-2 text-gray-500 transition-all duration-300">
                   • Showing {executiveOrders.length} of {allExecutiveOrders.length} orders
                 </span>
               )}
@@ -1238,8 +1477,27 @@ const TrumpyTrackerDashboard = () => {
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="space-y-6">
+        {/* Loading Overlay for Filtering with Accessibility */}
+        {isFiltering && (
+          <div 
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center pointer-events-none"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="bg-gray-800/90 rounded-lg px-6 py-4 flex items-center space-x-3 shadow-2xl">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              <span className="text-white font-medium">Applying filters...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Content Area with transition animations */}
+        <div className="space-y-6" style={{
+          transition: 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out',
+          opacity: isFiltering ? 0.7 : 1,
+          transform: isFiltering ? 'scale(0.98)' : 'scale(1)'
+        }}>
           {activeTab === 'political' && (
             <div>
               <h2 className="text-2xl font-bold mb-6 text-center">
@@ -1258,27 +1516,14 @@ const TrumpyTrackerDashboard = () => {
               )}
               
               {displayedPoliticalEntries.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">
-                  <p className="text-xl mb-2">
-                    {activeFilter ? 'No entries match this filter' : 'No political entries found'}
-                  </p>
-                  {activeFilter && (
-                    <button
-                      onClick={() => {
-                        setActiveFilter(null);
-                        setDisplayedPoliticalEntries(allPoliticalEntries);
-                      }}
-                      className="mt-4 text-blue-400 hover:text-blue-300"
-                    >
-                      Clear filter
-                    </button>
-                  )}
-                </div>
+                <NoResultsMessage />
               ) : (
                 <>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {displayedPoliticalEntries.map(entry => (
-                      <PoliticalEntryCard key={entry.id} entry={entry} />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{
+                    transition: 'all 0.3s ease-in-out'
+                  }}>
+                    {displayedPoliticalEntries.map((entry, index) => (
+                      <PoliticalEntryCard key={entry.id} entry={entry} index={index} />
                     ))}
                   </div>
                   
@@ -1315,15 +1560,12 @@ const TrumpyTrackerDashboard = () => {
               )}
               
               {executiveOrders.length === 0 ? (
-                <div className="text-center text-gray-400 py-12">
-                  <p className="text-xl mb-2">No executive orders found</p>
-                  <p>Check back later for updates</p>
-                </div>
+                <NoResultsMessage />
               ) : (
                 <>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {executiveOrders.map(order => (
-                      <ExecutiveOrderCard key={order.id} order={order} />
+                    {executiveOrders.map((order, index) => (
+                      <ExecutiveOrderCard key={order.id} order={order} index={index} />
                     ))}
                   </div>
                   
