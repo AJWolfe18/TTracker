@@ -79,8 +79,8 @@ const clearCache = () => {
   window.location.reload();
 };
 
-// Supabase request helper with caching
-const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache = true) => {
+// Supabase request helper with caching and retry logic
+const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache = true, retries = 3) => {
   // Try cache first for GET requests
   if (method === 'GET' && useCache) {
     const cached = getCachedData(endpoint);
@@ -102,26 +102,48 @@ const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache =
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Supabase error: ${response.status} - ${error}`);
-  }
+  // Retry logic with exponential backoff
+  let lastError;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Supabase error: ${response.status} - ${error}`);
+      }
 
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    const data = await response.json();
-    
-    // Cache successful GET requests
-    if (method === 'GET' && useCache) {
-      setCachedData(endpoint, data);
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        
+        // Cache successful GET requests
+        if (method === 'GET' && useCache) {
+          setCachedData(endpoint, data);
+        }
+        
+        return data;
+      }
+      
+      return { success: true };
+    } catch (error) {
+      lastError = error;
+      console.warn(`Attempt ${attempt + 1} failed for ${endpoint}:`, error.message);
+      
+      // Don't retry on 4xx errors (client errors)
+      if (error.message.includes('Supabase error: 4')) {
+        throw error;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < retries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-    
-    return data;
   }
   
-  return { success: true };
+  throw lastError;
 };
 
 // Construction Banner Component
@@ -438,11 +460,17 @@ const TrumpyTrackerDashboard = () => {
     const cats = new Set();
     if (activeTab === 'political') {
       allPoliticalEntries.forEach(e => {
-        if (e.category) cats.add(e.category);
+        // Only add valid string categories
+        if (e.category && typeof e.category === 'string' && e.category.trim()) {
+          cats.add(e.category.trim());
+        }
       });
     } else {
       allExecutiveOrders.forEach(e => {
-        if (e.category) cats.add(e.category);
+        // Only add valid string categories
+        if (e.category && typeof e.category === 'string' && e.category.trim()) {
+          cats.add(e.category.trim());
+        }
       });
     }
     return Array.from(cats).sort();
@@ -490,7 +518,11 @@ const TrumpyTrackerDashboard = () => {
       
       if (dateRange !== 'all') {
         filtered = filtered.filter(entry => {
+          // Handle null, undefined, or invalid dates
+          if (!entry.date) return false;
           const entryDate = new Date(entry.date);
+          // Check for invalid date
+          if (isNaN(entryDate.getTime())) return false;
           return entryDate >= cutoffDate;
         });
       }
@@ -668,7 +700,10 @@ const TrumpyTrackerDashboard = () => {
       }
       
       baseFiltered = baseFiltered.filter(e => {
+        // Handle null, undefined, or invalid dates
+        if (!e.date) return false;
         const entryDate = new Date(e.date);
+        if (isNaN(entryDate.getTime())) return false;
         return entryDate >= cutoffDate;
       });
     }
@@ -1077,13 +1112,24 @@ const TrumpyTrackerDashboard = () => {
         <div className="text-center max-w-md">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold mb-4">Connection Error</h2>
-          <p className="text-gray-400 mb-6">{error}</p>
-          <button 
-            onClick={() => loadAllData(true)}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-medium transition-colors"
-          >
-            Retry
-          </button>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <p className="text-gray-500 text-sm mb-6">
+            We'll automatically retry the connection. If the problem persists, please check your internet connection.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button 
+              onClick={() => loadAllData(true)}
+              className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-medium transition-colors"
+            >
+              Retry Now
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-gray-600 hover:bg-gray-700 px-6 py-2 rounded font-medium transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1184,15 +1230,16 @@ const TrumpyTrackerDashboard = () => {
             )}
           </div>
           
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap gap-3">
+          {/* Filter Dropdowns - Responsive Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
             {/* Category Filter */}
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+              title={uniqueCategories.length === 0 ? "No categories available" : "Filter by category"}
             >
-              <option value="all">All Categories</option>
+              <option value="all">{uniqueCategories.length === 0 ? "No Categories" : "All Categories"}</option>
               {uniqueCategories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -1232,7 +1279,7 @@ const TrumpyTrackerDashboard = () => {
               <option value="oldest">Oldest</option>
             </select>
             
-            {/* Clear All Filters Button */}
+            {/* Clear All Filters Button - Full width on mobile */}
             {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') && (
               <button
                 onClick={() => {
@@ -1242,7 +1289,7 @@ const TrumpyTrackerDashboard = () => {
                   setActiveFilter(null);
                   setSortOrder('newest');
                 }}
-                className="px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 hover:bg-red-600/30 hover:border-red-600 transition-all duration-200"
+                className="col-span-2 sm:col-span-1 px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 hover:bg-red-600/30 hover:border-red-600 transition-all duration-200"
               >
                 Clear All
               </button>
