@@ -621,16 +621,15 @@ async function processArticle() {
     
     // Step 5: Prepare entry for Supabase
     const entry = {
-        title: articleData.title,
+        title: title || articleData.title,  // Use admin-provided title first, then extracted title
         source_url: normalizeUrl(url),  // Store normalized URL for consistent duplicate detection
         description: analysis?.summary || articleData.description,
         category: analysis?.category || category || 'Political News',
         date: articleData.date,
         actor: analysis?.actor || 'Political Actor',
         severity: analysis?.severity || 'medium',
-        verified: isVerifiedSource(url)
-        // Note: 'source' field temporarily removed - will be added when schema is updated
-        // source: new URL(url).hostname.replace('www.', '')
+        verified: isVerifiedSource(url),
+        source: new URL(url).hostname.replace('www.', '')  // Extract domain name as source
     };
     
     // Step 6: Insert to Supabase with retry logic
