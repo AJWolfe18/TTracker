@@ -498,7 +498,7 @@ const TrumpyTrackerDashboard = () => {
       default:
         return entries;
     }
-  };
+  }, []);
 
   // Memoized filter counts - prevents recalculation on every render
   const filterCounts = useMemo(() => {
