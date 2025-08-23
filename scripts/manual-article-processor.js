@@ -621,6 +621,7 @@ async function processArticle() {
     
     // Step 5: Prepare entry for Supabase
     const entry = {
+        id: generateId(),  // Generate unique ID for the entry
         title: title || articleData.title,  // Use admin-provided title first, then extracted title
         source_url: normalizeUrl(url),  // Store normalized URL for consistent duplicate detection
         description: analysis?.summary || articleData.description,

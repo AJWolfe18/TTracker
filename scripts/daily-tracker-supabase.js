@@ -436,6 +436,7 @@ Return a JSON array of relevant political developments found. Only include real 
                     title: entry.title,
                     description: entry.description,
                     source_url: entry.source_url,
+                    source: entry.source_url ? new URL(entry.source_url).hostname.replace('www.', '') : 'unknown',  // Extract domain name as source
                     verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
                     severity: entry.severity || assessSeverity(entry.title, entry.description),
                     status: 'published',
