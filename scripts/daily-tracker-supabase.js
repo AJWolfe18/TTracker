@@ -13,9 +13,13 @@ if (!OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// Generate unique ID - same as daily-tracker.js
+// Generate unique ID (integer for database compatibility)
 function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    // Create a unique integer ID using timestamp + random component
+    // This ensures uniqueness while staying within integer range
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return parseInt(`${timestamp}${random}`.slice(-15)); // Keep it within safe integer range
 }
 
 // Date range helper - same as daily-tracker.js

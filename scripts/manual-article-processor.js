@@ -73,9 +73,13 @@ console.log(`  Title: ${title || 'To be extracted'}`);
 console.log(`  Category: ${category || 'Political News'}`);
 console.log(`  Submitted by: ${submitted_by || 'admin'}\n`);
 
-// Generate unique ID
+// Generate unique ID (integer for database compatibility)
 function generateId() {
-    return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    // Create a unique integer ID using timestamp + random component
+    // This ensures uniqueness while staying within integer range
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return parseInt(`${timestamp}${random}`.slice(-15)); // Keep it within safe integer range
 }
 
 // Normalize URL to detect duplicates
