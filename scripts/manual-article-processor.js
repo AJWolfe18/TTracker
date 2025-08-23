@@ -628,8 +628,9 @@ async function processArticle() {
         date: articleData.date,
         actor: analysis?.actor || 'Political Actor',
         severity: analysis?.severity || 'medium',
-        verified: isVerifiedSource(url),
-        source: new URL(url).hostname.replace('www.', '')
+        verified: isVerifiedSource(url)
+        // Note: 'source' field temporarily removed - will be added when schema is updated
+        // source: new URL(url).hostname.replace('www.', '')
     };
     
     // Step 6: Insert to Supabase with retry logic
