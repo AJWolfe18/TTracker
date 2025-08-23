@@ -14,10 +14,21 @@
     <div id="results" class="space-y-4"></div>
 
     <script>
+        // Add error details
+        window.addEventListener('error', (e) => {
+            console.error('Error:', e);
+        });
+        
         // Load dashboard.js content for analysis
         fetch('dashboard.js')
-            .then(res => res.text())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return res.text();
+            })
             .then(code => {
+                console.log('Dashboard.js loaded, length:', code.length);
                 const results = document.getElementById('results');
                 let testsPassed = 0;
                 let totalTests = 0;

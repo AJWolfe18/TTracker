@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 4 Simple Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <div class="bg-red-600 text-white p-4 mb-6 text-center font-bold">
+        🧪 PHASE 4 TEST PAGE - TEST BRANCH ONLY
+    </div>
+    
+    <div class="bg-gray-800 p-6 rounded-lg mb-6">
+        <h2 class="text-xl font-bold mb-4">Quick Test Instructions:</h2>
+        <ol class="list-decimal list-inside space-y-2">
+            <li>Open the main dashboard: <a href="/" class="text-blue-400 hover:underline">Go to Dashboard</a></li>
+            <li>Search for <code class="bg-gray-700 px-2 py-1 rounded">"asdfghjkl"</code> to test No Results UI</li>
+            <li>Apply multiple filters quickly to see loading overlay</li>
+            <li>Clear all filters and watch the animations</li>
+            <li>Check mobile view with F12 → Device Mode</li>
+        </ol>
+    </div>
+    
+    <div class="bg-gray-800 p-6 rounded-lg">
+        <h2 class="text-xl font-bold mb-4">What to Look For:</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="border border-green-600 p-4 rounded">
+                <h3 class="font-bold text-green-400 mb-2">✅ Should Work:</h3>
+                <ul class="list-disc list-inside text-sm space-y-1">
+                    <li>Loading overlay says "Applying filters..."</li>
+                    <li>No results shows smart suggestions</li>
+                    <li>First 10 cards fade in with animation</li>
+                    <li>Cards have hover effects</li>
+                    <li>Clear All button works</li>
+                </ul>
+            </div>
+            <div class="border border-red-600 p-4 rounded">
+                <h3 class="font-bold text-red-400 mb-2">❌ Report if Broken:</h3>
+                <ul class="list-disc list-inside text-sm space-y-1">
+                    <li>JavaScript errors in console</li>
+                    <li>Loading overlay stuck</li>
+                    <li>No animations visible</li>
+                    <li>Filters don't work</li>
+                    <li>Mobile layout broken</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mt-6 p-4 bg-yellow-900 border border-yellow-600 rounded">
+        <p class="text-yellow-400">
+            <strong>Note:</strong> This test page just provides instructions. 
+            The actual testing happens on the main dashboard at <a href="/" class="underline">/</a>
+        </p>
+    </div>
+</body>
+</html>
