@@ -1,7 +1,8 @@
 // TrumpyTracker Dashboard - Supabase Edition with Pagination & Caching
 // Optimized for performance and cost reduction
 
-const { useState, useEffect, useCallback, useMemo } = React;
+// Import useRef at the top
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 // Configuration - Use values from supabase-browser-config.js
 const SUPABASE_URL = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
@@ -275,11 +276,16 @@ const TrumpyTrackerDashboard = () => {
   const [activeTab, setActiveTab] = useState('political');
   const [allPoliticalEntries, setAllPoliticalEntries] = useState([]);
   const [displayedPoliticalEntries, setDisplayedPoliticalEntries] = useState([]);
+  const [allExecutiveOrders, setAllExecutiveOrders] = useState([]);
   const [executiveOrders, setExecutiveOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({});
   const [activeFilter, setActiveFilter] = useState(null);
+  
+  // Search state
+  const [searchTerm, setSearchTerm] = useState('');
+  const searchDebounceRef = useRef(null);
   
   // Modal state
   const [modalContent, setModalContent] = useState(null);
@@ -336,6 +342,7 @@ const TrumpyTrackerDashboard = () => {
       // Get paginated data
       const query = `executive_orders?order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
       const data = await supabaseRequest(query);
+      setAllExecutiveOrders(data || []);
       setExecutiveOrders(data || []);
       setEoPage(page);
     } catch (error) {
@@ -384,74 +391,158 @@ const TrumpyTrackerDashboard = () => {
     loadAllData();
   }, []);
 
-  // Memoized filter counts - prevents recalculation on every render
-  const filterCounts = useMemo(() => {
-    if (!allPoliticalEntries) return { high: 0, medium: 0, low: 0, ice: 0, trump: 0 };
+  // Apply search filter
+  const applySearch = useCallback((entries, search) => {
+    if (!search || search.trim() === '') return entries;
     
-    return {
-      high: allPoliticalEntries.filter(e => 
-        e.severity?.toLowerCase() === 'high' || e.severity?.toLowerCase() === 'critical'
-      ).length,
-      medium: allPoliticalEntries.filter(e => 
-        e.severity?.toLowerCase() === 'medium'
-      ).length,
-      low: allPoliticalEntries.filter(e => 
-        e.severity?.toLowerCase() === 'low'
-      ).length,
-      ice: allPoliticalEntries.filter(e => 
-        e.title?.toLowerCase().includes('ice') || 
-        e.description?.toLowerCase().includes('ice') ||
-        e.description?.toLowerCase().includes('immigration')
-      ).length,
-      trump: allPoliticalEntries.filter(e => 
-        e.actor?.toLowerCase().includes('trump')
-      ).length
-    };
-  }, [allPoliticalEntries]);
+    const searchLower = search.toLowerCase().trim();
+    return entries.filter(entry => {
+      return (
+        entry.title?.toLowerCase().includes(searchLower) ||
+        entry.description?.toLowerCase().includes(searchLower) ||
+        entry.summary?.toLowerCase().includes(searchLower) ||
+        entry.actor?.toLowerCase().includes(searchLower) ||
+        entry.category?.toLowerCase().includes(searchLower)
+      );
+    });
+  }, []);
 
-  // Filter function
-  const applyFilter = (filterType) => {
-    if (activeFilter === filterType) {
-      setActiveFilter(null);
-      setDisplayedPoliticalEntries(allPoliticalEntries);
-    } else {
-      setActiveFilter(filterType);
-      let filtered = [...allPoliticalEntries];
-      
+  // Handle search with debouncing
+  const handleSearch = useCallback((value) => {
+    setSearchTerm(value);
+    
+    // Clear existing debounce
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    
+    // Apply severity filter helper function (moved inline to fix scope issue)
+    const applySeverityFilter = (entries, filterType) => {
       switch(filterType) {
         case 'high':
-          filtered = allPoliticalEntries.filter(entry => 
+          return entries.filter(entry => 
             entry.severity?.toLowerCase() === 'high' || entry.severity?.toLowerCase() === 'critical'
           );
-          break;
         case 'medium':
-          filtered = allPoliticalEntries.filter(entry => 
+          return entries.filter(entry => 
             entry.severity?.toLowerCase() === 'medium'
           );
-          break;
         case 'low':
-          filtered = allPoliticalEntries.filter(entry => 
+          return entries.filter(entry => 
             entry.severity?.toLowerCase() === 'low'
           );
-          break;
         case 'ice':
-          filtered = allPoliticalEntries.filter(entry => 
+          return entries.filter(entry => 
             entry.title?.toLowerCase().includes('ice') || 
             entry.description?.toLowerCase().includes('ice') ||
             entry.description?.toLowerCase().includes('immigration') ||
             entry.category?.toLowerCase().includes('immigration')
           );
-          break;
         case 'trump':
-          filtered = allPoliticalEntries.filter(entry => 
+          return entries.filter(entry => 
             entry.actor?.toLowerCase().includes('trump') ||
             entry.title?.toLowerCase().includes('trump') ||
             entry.description?.toLowerCase().includes('trump')
           );
-          break;
         default:
-          filtered = allPoliticalEntries;
+          return entries;
       }
+    };
+    
+    // Set new debounce
+    searchDebounceRef.current = setTimeout(() => {
+      if (activeTab === 'political') {
+        let filtered = applySearch(allPoliticalEntries, value);
+        
+        // Also apply severity filter if active
+        if (activeFilter) {
+          filtered = applySeverityFilter(filtered, activeFilter);
+        }
+        
+        setDisplayedPoliticalEntries(filtered);
+      } else {
+        const filtered = applySearch(allExecutiveOrders, value);
+        setExecutiveOrders(filtered);
+      }
+    }, 300); // 300ms debounce
+  }, [activeTab, allPoliticalEntries, allExecutiveOrders, activeFilter, applySearch]);
+
+  // Apply severity filter helper
+  const applySeverityFilter = useCallback((entries, filterType) => {
+    switch(filterType) {
+      case 'high':
+        return entries.filter(entry => 
+          entry.severity?.toLowerCase() === 'high' || entry.severity?.toLowerCase() === 'critical'
+        );
+      case 'medium':
+        return entries.filter(entry => 
+          entry.severity?.toLowerCase() === 'medium'
+        );
+      case 'low':
+        return entries.filter(entry => 
+          entry.severity?.toLowerCase() === 'low'
+        );
+      case 'ice':
+        return entries.filter(entry => 
+          entry.title?.toLowerCase().includes('ice') || 
+          entry.description?.toLowerCase().includes('ice') ||
+          entry.description?.toLowerCase().includes('immigration') ||
+          entry.category?.toLowerCase().includes('immigration')
+        );
+      case 'trump':
+        return entries.filter(entry => 
+          entry.actor?.toLowerCase().includes('trump') ||
+          entry.title?.toLowerCase().includes('trump') ||
+          entry.description?.toLowerCase().includes('trump')
+        );
+      default:
+        return entries;
+    }
+  };
+
+  // Memoized filter counts - prevents recalculation on every render
+  const filterCounts = useMemo(() => {
+    if (!allPoliticalEntries) return { high: 0, medium: 0, low: 0, ice: 0, trump: 0 };
+    
+    // Apply search first if there's a search term
+    const searchFiltered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
+    
+    return {
+      high: searchFiltered.filter(e => 
+        e.severity?.toLowerCase() === 'high' || e.severity?.toLowerCase() === 'critical'
+      ).length,
+      medium: searchFiltered.filter(e => 
+        e.severity?.toLowerCase() === 'medium'
+      ).length,
+      low: searchFiltered.filter(e => 
+        e.severity?.toLowerCase() === 'low'
+      ).length,
+      ice: searchFiltered.filter(e => 
+        e.title?.toLowerCase().includes('ice') || 
+        e.description?.toLowerCase().includes('ice') ||
+        e.description?.toLowerCase().includes('immigration')
+      ).length,
+      trump: searchFiltered.filter(e => 
+        e.actor?.toLowerCase().includes('trump')
+      ).length
+    };
+  }, [allPoliticalEntries, searchTerm, applySearch]);
+
+  // Filter function
+  const applyFilter = (filterType) => {
+    if (activeFilter === filterType) {
+      setActiveFilter(null);
+      // Apply search if there's a search term
+      const filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
+      setDisplayedPoliticalEntries(filtered);
+    } else {
+      setActiveFilter(filterType);
+      
+      // Apply search first if there's a search term
+      let filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : [...allPoliticalEntries];
+      
+      // Then apply severity filter
+      filtered = applySeverityFilter(filtered, filterType);
       
       setDisplayedPoliticalEntries(filtered);
     }
@@ -882,6 +973,58 @@ const TrumpyTrackerDashboard = () => {
           </div>
         )}
 
+        {/* Search Bar - New Addition */}
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700 mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search titles, descriptions, actors, categories..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full px-4 py-3 pl-12 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+            />
+            <svg 
+              className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+              />
+            </svg>
+            {searchTerm && (
+              <button
+                onClick={() => handleSearch('')}
+                className="absolute right-4 top-3.5 text-gray-400 hover:text-white transition-colors"
+                aria-label="Clear search"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchTerm && (
+            <div className="mt-2 text-sm text-gray-400">
+              Searching for: <span className="text-blue-400 font-medium">"{searchTerm}"</span>
+              {activeTab === 'political' && (
+                <span className="ml-2">
+                  • Found {displayedPoliticalEntries.length} result{displayedPoliticalEntries.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {activeTab === 'executive' && (
+                <span className="ml-2">
+                  • Found {executiveOrders.length} result{executiveOrders.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Statistics Section with Filter Buttons */}
         <StatsSection stats={stats} />
 
@@ -892,7 +1035,9 @@ const TrumpyTrackerDashboard = () => {
               onClick={() => {
                 setActiveTab('political');
                 setActiveFilter(null);
-                setDisplayedPoliticalEntries(allPoliticalEntries);
+                // Keep search when switching tabs
+                const filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
+                setDisplayedPoliticalEntries(filtered);
               }}
               className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
                 activeTab === 'political'
@@ -903,7 +1048,12 @@ const TrumpyTrackerDashboard = () => {
               Political Entries
             </button>
             <button
-              onClick={() => setActiveTab('executive')}
+              onClick={() => {
+                setActiveTab('executive');
+                // Apply search to executive orders when switching
+                const filtered = searchTerm ? applySearch(allExecutiveOrders, searchTerm) : allExecutiveOrders;
+                setExecutiveOrders(filtered);
+              }}
               className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
                 activeTab === 'executive'
                   ? 'bg-blue-600 text-white shadow-lg'
