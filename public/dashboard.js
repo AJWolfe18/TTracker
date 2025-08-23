@@ -283,9 +283,12 @@ const TrumpyTrackerDashboard = () => {
   const [stats, setStats] = useState({});
   const [activeFilter, setActiveFilter] = useState(null);
   
-  // Search state
+  // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
   const searchDebounceRef = useRef(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [dateRange, setDateRange] = useState('all');
+  const [sortOrder, setSortOrder] = useState('newest');
   
   // Modal state
   const [modalContent, setModalContent] = useState(null);
@@ -430,7 +433,117 @@ const TrumpyTrackerDashboard = () => {
     loadAllData();
   }, []);
 
-  // Apply search filter
+  // Extract unique categories from data
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set();
+    if (activeTab === 'political') {
+      allPoliticalEntries.forEach(e => {
+        if (e.category) cats.add(e.category);
+      });
+    } else {
+      allExecutiveOrders.forEach(e => {
+        if (e.category) cats.add(e.category);
+      });
+    }
+    return Array.from(cats).sort();
+  }, [allPoliticalEntries, allExecutiveOrders, activeTab]);
+
+  // Apply all filters (search, category, date, severity)
+  const applyAllFilters = useCallback((entries) => {
+    let filtered = [...entries];
+    
+    // Apply search filter
+    if (searchTerm && searchTerm.trim() !== '') {
+      const searchLower = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(entry => {
+        return (
+          entry.title?.toLowerCase().includes(searchLower) ||
+          entry.description?.toLowerCase().includes(searchLower) ||
+          entry.summary?.toLowerCase().includes(searchLower) ||
+          entry.actor?.toLowerCase().includes(searchLower) ||
+          entry.category?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+    
+    // Apply category filter
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(entry => entry.category === selectedCategory);
+    }
+    
+    // Apply date range filter
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      const cutoffDate = new Date();
+      
+      switch(dateRange) {
+        case '7days':
+          cutoffDate.setDate(now.getDate() - 7);
+          break;
+        case '30days':
+          cutoffDate.setDate(now.getDate() - 30);
+          break;
+        case '90days':
+          cutoffDate.setDate(now.getDate() - 90);
+          break;
+      }
+      
+      if (dateRange !== 'all') {
+        filtered = filtered.filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= cutoffDate;
+        });
+      }
+    }
+    
+    // Apply severity filter if active
+    if (activeFilter) {
+      switch(activeFilter) {
+        case 'high':
+          filtered = filtered.filter(entry => 
+            entry.severity?.toLowerCase() === 'high' || entry.severity?.toLowerCase() === 'critical'
+          );
+          break;
+        case 'medium':
+          filtered = filtered.filter(entry => 
+            entry.severity?.toLowerCase() === 'medium'
+          );
+          break;
+        case 'low':
+          filtered = filtered.filter(entry => 
+            entry.severity?.toLowerCase() === 'low'
+          );
+          break;
+        case 'ice':
+          filtered = filtered.filter(entry => 
+            entry.title?.toLowerCase().includes('ice') || 
+            entry.description?.toLowerCase().includes('ice') ||
+            entry.description?.toLowerCase().includes('immigration') ||
+            entry.category?.toLowerCase().includes('immigration')
+          );
+          break;
+        case 'trump':
+          filtered = filtered.filter(entry => 
+            entry.actor?.toLowerCase().includes('trump') ||
+            entry.title?.toLowerCase().includes('trump') ||
+            entry.description?.toLowerCase().includes('trump')
+          );
+          break;
+      }
+    }
+    
+    // Apply sort order
+    if (sortOrder === 'oldest') {
+      filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+    } else {
+      // Default to newest first
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+    
+    return filtered;
+  }, [searchTerm, selectedCategory, dateRange, activeFilter, sortOrder]);
+
+  // Apply search filter (kept for backward compatibility)
   const applySearch = useCallback((entries, search) => {
     if (!search || search.trim() === '') return entries;
     
@@ -446,74 +559,46 @@ const TrumpyTrackerDashboard = () => {
     });
   }, []);
 
-  // Handle search with debouncing
-  const handleSearch = useCallback((value) => {
-    setSearchTerm(value);
-    
+  // Handle search and filters with debouncing
+  const handleFiltersChange = useCallback(() => {
     // Clear existing debounce
     if (searchDebounceRef.current) {
       clearTimeout(searchDebounceRef.current);
     }
     
-    // Apply severity filter helper function (moved inline to fix scope issue)
-    const applySeverityFilter = (entries, filterType) => {
-      switch(filterType) {
-        case 'high':
-          return entries.filter(entry => 
-            entry.severity?.toLowerCase() === 'high' || entry.severity?.toLowerCase() === 'critical'
-          );
-        case 'medium':
-          return entries.filter(entry => 
-            entry.severity?.toLowerCase() === 'medium'
-          );
-        case 'low':
-          return entries.filter(entry => 
-            entry.severity?.toLowerCase() === 'low'
-          );
-        case 'ice':
-          return entries.filter(entry => 
-            entry.title?.toLowerCase().includes('ice') || 
-            entry.description?.toLowerCase().includes('ice') ||
-            entry.description?.toLowerCase().includes('immigration') ||
-            entry.category?.toLowerCase().includes('immigration')
-          );
-        case 'trump':
-          return entries.filter(entry => 
-            entry.actor?.toLowerCase().includes('trump') ||
-            entry.title?.toLowerCase().includes('trump') ||
-            entry.description?.toLowerCase().includes('trump')
-          );
-        default:
-          return entries;
-      }
-    };
-    
     // Set new debounce
     searchDebounceRef.current = setTimeout(() => {
       if (activeTab === 'political') {
-        let filtered = applySearch(allPoliticalEntries, value);
+        const filtered = applyAllFilters(allPoliticalEntries);
         
-        // Also apply severity filter if active
-        if (activeFilter) {
-          filtered = applySeverityFilter(filtered, activeFilter);
-        }
-        
-        // Paginate search results
+        // Paginate filtered results
         const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
         setDisplayedPoliticalEntries(paginatedFiltered);
         setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
-        setPoliticalPage(1); // Reset to page 1 when searching
+        setPoliticalPage(1); // Reset to page 1 when filtering
       } else {
-        const filtered = applySearch(allExecutiveOrders, value);
+        const filtered = applyAllFilters(allExecutiveOrders);
         
-        // Paginate search results
+        // Paginate filtered results
         const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
         setExecutiveOrders(paginatedFiltered);
         setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
-        setEoPage(1); // Reset to page 1 when searching
+        setEoPage(1); // Reset to page 1 when filtering
       }
     }, 300); // 300ms debounce
-  }, [activeTab, allPoliticalEntries, allExecutiveOrders, activeFilter, applySearch]);
+  }, [activeTab, allPoliticalEntries, allExecutiveOrders, applyAllFilters]);
+
+  // Trigger filter changes when any filter changes
+  useEffect(() => {
+    if (allPoliticalEntries.length > 0 || allExecutiveOrders.length > 0) {
+      handleFiltersChange();
+    }
+  }, [searchTerm, selectedCategory, dateRange, sortOrder, activeFilter]);
+
+  // Handle search input
+  const handleSearch = useCallback((value) => {
+    setSearchTerm(value);
+  }, []);
 
   // Apply severity filter helper
   const applySeverityFilter = useCallback((entries, filterType) => {
@@ -552,29 +637,62 @@ const TrumpyTrackerDashboard = () => {
   const filterCounts = useMemo(() => {
     if (!allPoliticalEntries) return { high: 0, medium: 0, low: 0, ice: 0, trump: 0 };
     
-    // Apply search first if there's a search term
-    const searchFiltered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
+    // Apply all filters except severity to get base filtered data
+    let baseFiltered = [...allPoliticalEntries];
+    
+    // Apply search
+    if (searchTerm) {
+      baseFiltered = applySearch(baseFiltered, searchTerm);
+    }
+    
+    // Apply category
+    if (selectedCategory && selectedCategory !== 'all') {
+      baseFiltered = baseFiltered.filter(e => e.category === selectedCategory);
+    }
+    
+    // Apply date range
+    if (dateRange && dateRange !== 'all') {
+      const now = new Date();
+      const cutoffDate = new Date();
+      
+      switch(dateRange) {
+        case '7days':
+          cutoffDate.setDate(now.getDate() - 7);
+          break;
+        case '30days':
+          cutoffDate.setDate(now.getDate() - 30);
+          break;
+        case '90days':
+          cutoffDate.setDate(now.getDate() - 90);
+          break;
+      }
+      
+      baseFiltered = baseFiltered.filter(e => {
+        const entryDate = new Date(e.date);
+        return entryDate >= cutoffDate;
+      });
+    }
     
     return {
-      high: searchFiltered.filter(e => 
+      high: baseFiltered.filter(e => 
         e.severity?.toLowerCase() === 'high' || e.severity?.toLowerCase() === 'critical'
       ).length,
-      medium: searchFiltered.filter(e => 
+      medium: baseFiltered.filter(e => 
         e.severity?.toLowerCase() === 'medium'
       ).length,
-      low: searchFiltered.filter(e => 
+      low: baseFiltered.filter(e => 
         e.severity?.toLowerCase() === 'low'
       ).length,
-      ice: searchFiltered.filter(e => 
+      ice: baseFiltered.filter(e => 
         e.title?.toLowerCase().includes('ice') || 
         e.description?.toLowerCase().includes('ice') ||
         e.description?.toLowerCase().includes('immigration')
       ).length,
-      trump: searchFiltered.filter(e => 
+      trump: baseFiltered.filter(e => 
         e.actor?.toLowerCase().includes('trump')
       ).length
     };
-  }, [allPoliticalEntries, searchTerm, applySearch]);
+  }, [allPoliticalEntries, searchTerm, selectedCategory, dateRange, applySearch]);
 
   // Filter function
   const applyFilter = (filterType) => {
@@ -1029,9 +1147,10 @@ const TrumpyTrackerDashboard = () => {
           </div>
         )}
 
-        {/* Search Bar - New Addition */}
+        {/* Search and Filter Bar */}
         <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700 mb-6">
-          <div className="relative">
+          {/* Search Input */}
+          <div className="relative mb-4">
             <input
               type="text"
               placeholder="Search titles, descriptions, actors, categories..."
@@ -1064,17 +1183,104 @@ const TrumpyTrackerDashboard = () => {
               </button>
             )}
           </div>
-          {searchTerm && (
-            <div className="mt-2 text-sm text-gray-400">
-              Searching for: <span className="text-blue-400 font-medium">"{searchTerm}"</span>
+          
+          {/* Filter Dropdowns */}
+          <div className="flex flex-wrap gap-3">
+            {/* Category Filter */}
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+            >
+              <option value="all">All Categories</option>
+              {uniqueCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            
+            {/* Severity Filter - Dropdown version */}
+            <select
+              value={activeFilter || 'all'}
+              onChange={(e) => setActiveFilter(e.target.value === 'all' ? null : e.target.value)}
+              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+            >
+              <option value="all">Severity</option>
+              <option value="high">High/Critical</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            
+            {/* Date Range Filter */}
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+            >
+              <option value="all">All time</option>
+              <option value="7days">Last 7 days</option>
+              <option value="30days">Last 30 days</option>
+              <option value="90days">Last 90 days</option>
+            </select>
+            
+            {/* Sort Order */}
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+            >
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+            </select>
+            
+            {/* Clear All Filters Button */}
+            {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('all');
+                  setDateRange('all');
+                  setActiveFilter(null);
+                  setSortOrder('newest');
+                }}
+                className="px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 hover:bg-red-600/30 hover:border-red-600 transition-all duration-200"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
+          
+          {/* Active Filters Display */}
+          {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter) && (
+            <div className="mt-3 text-sm text-gray-400">
+              <span className="mr-2">Active filters:</span>
+              {searchTerm && (
+                <span className="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded mr-2">
+                  Search: "{searchTerm}"
+                </span>
+              )}
+              {selectedCategory !== 'all' && (
+                <span className="inline-block bg-orange-600/20 text-orange-400 px-2 py-1 rounded mr-2">
+                  Category: {selectedCategory}
+                </span>
+              )}
+              {dateRange !== 'all' && (
+                <span className="inline-block bg-green-600/20 text-green-400 px-2 py-1 rounded mr-2">
+                  Date: {dateRange === '7days' ? 'Last 7 days' : dateRange === '30days' ? 'Last 30 days' : 'Last 90 days'}
+                </span>
+              )}
+              {activeFilter && (
+                <span className="inline-block bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded mr-2">
+                  Severity: {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
+                </span>
+              )}
               {activeTab === 'political' && (
-                <span className="ml-2">
-                  • Found {displayedPoliticalEntries.length} result{displayedPoliticalEntries.length !== 1 ? 's' : ''}
+                <span className="ml-2 text-gray-500">
+                  • Showing {displayedPoliticalEntries.length} of {allPoliticalEntries.length} entries
                 </span>
               )}
               {activeTab === 'executive' && (
-                <span className="ml-2">
-                  • Found {executiveOrders.length} result{executiveOrders.length !== 1 ? 's' : ''}
+                <span className="ml-2 text-gray-500">
+                  • Showing {executiveOrders.length} of {allExecutiveOrders.length} orders
                 </span>
               )}
             </div>
@@ -1090,10 +1296,12 @@ const TrumpyTrackerDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab('political');
-                setActiveFilter(null);
-                // Keep search when switching tabs
-                const filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
-                setDisplayedPoliticalEntries(filtered);
+                // Apply all current filters to political entries
+                const filtered = applyAllFilters(allPoliticalEntries);
+                const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
+                setDisplayedPoliticalEntries(paginatedFiltered);
+                setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+                setPoliticalPage(1);
               }}
               className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
                 activeTab === 'political'
@@ -1106,9 +1314,12 @@ const TrumpyTrackerDashboard = () => {
             <button
               onClick={() => {
                 setActiveTab('executive');
-                // Apply search to executive orders when switching
-                const filtered = searchTerm ? applySearch(allExecutiveOrders, searchTerm) : allExecutiveOrders;
-                setExecutiveOrders(filtered);
+                // Apply all current filters to executive orders
+                const filtered = applyAllFilters(allExecutiveOrders);
+                const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
+                setExecutiveOrders(paginatedFiltered);
+                setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+                setEoPage(1);
               }}
               className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
                 activeTab === 'executive'
@@ -1165,17 +1376,13 @@ const TrumpyTrackerDashboard = () => {
                     ))}
                   </div>
                   
-                  {!activeFilter && (
-                    <PaginationControls
+                  <PaginationControls
                     currentPage={politicalPage}
                     totalPages={totalPoliticalPages}
                     onPageChange={(page) => {
-                        // If searching or filtering, handle pagination differently
-                      if (searchTerm || activeFilter) {
-                        let filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
-                        if (activeFilter) {
-                          filtered = applySeverityFilter(filtered, activeFilter);
-                        }
+                      // If any filters are active, handle pagination with filters
+                      if (searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') {
+                        const filtered = applyAllFilters(allPoliticalEntries);
                         const paginatedFiltered = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
                         setDisplayedPoliticalEntries(paginatedFiltered);
                         setPoliticalPage(page);
@@ -1184,7 +1391,6 @@ const TrumpyTrackerDashboard = () => {
                       }
                     }}
                   />
-                  )}
                 </>
               )}
             </div>
@@ -1218,7 +1424,17 @@ const TrumpyTrackerDashboard = () => {
                   <PaginationControls
                     currentPage={eoPage}
                     totalPages={totalEoPages}
-                    onPageChange={(page) => loadExecutiveOrders(page)}
+                    onPageChange={(page) => {
+                      // If any filters are active, handle pagination with filters
+                      if (searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') {
+                        const filtered = applyAllFilters(allExecutiveOrders);
+                        const paginatedFiltered = filtered.slice((page - 1) * EO_ITEMS_PER_PAGE, page * EO_ITEMS_PER_PAGE);
+                        setExecutiveOrders(paginatedFiltered);
+                        setEoPage(page);
+                      } else {
+                        loadExecutiveOrders(page);
+                      }
+                    }}
                   />
                 </>
               )}
