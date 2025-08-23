@@ -298,28 +298,47 @@ const TrumpyTrackerDashboard = () => {
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Load political entries with pagination
-  const loadPoliticalEntries = useCallback(async (page = 1, append = false) => {
+  const loadPoliticalEntries = useCallback(async (page = 1, append = false, loadAll = false) => {
     try {
       setLoadingMore(true);
-      const offset = (page - 1) * ITEMS_PER_PAGE;
       
-      // First, get total count (cached separately)
-      const countQuery = 'political_entries?select=id&archived=neq.true';
-      const countData = await supabaseRequest(countQuery);
-      const totalCount = countData ? countData.length : 0;
-      setTotalPoliticalPages(Math.ceil(totalCount / ITEMS_PER_PAGE));
-      
-      // Then get paginated data
-      const query = `political_entries?archived=neq.true&order=date.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
-      const data = await supabaseRequest(query);
-      
-      if (append) {
-        setAllPoliticalEntries(prev => [...prev, ...(data || [])]);
-      } else {
+      if (loadAll) {
+        // Load ALL entries for search functionality
+        const query = 'political_entries?archived=neq.true&order=date.desc,added_at.desc';
+        const data = await supabaseRequest(query);
         setAllPoliticalEntries(data || []);
+        
+        // Still paginate for display
+        const paginatedData = (data || []).slice(0, ITEMS_PER_PAGE);
+        setDisplayedPoliticalEntries(paginatedData);
+        setTotalPoliticalPages(Math.ceil((data || []).length / ITEMS_PER_PAGE));
+        setPoliticalPage(1);
+      } else {
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        
+        // First, get total count (cached separately)
+        const countQuery = 'political_entries?select=id&archived=neq.true';
+        const countData = await supabaseRequest(countQuery);
+        const totalCount = countData ? countData.length : 0;
+        setTotalPoliticalPages(Math.ceil(totalCount / ITEMS_PER_PAGE));
+        
+        // Then get paginated data
+        const query = `political_entries?archived=neq.true&order=date.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
+        const data = await supabaseRequest(query);
+        
+        if (append) {
+          setAllPoliticalEntries(prev => [...prev, ...(data || [])]);
+        } else {
+          // If we don't have all data yet, load it for search
+          if (allPoliticalEntries.length === 0 || allPoliticalEntries.length < totalCount) {
+            const allQuery = 'political_entries?archived=neq.true&order=date.desc,added_at.desc';
+            const allData = await supabaseRequest(allQuery);
+            setAllPoliticalEntries(allData || []);
+          }
+        }
+        setDisplayedPoliticalEntries(data || []);
+        setPoliticalPage(page);
       }
-      setDisplayedPoliticalEntries(data || []);
-      setPoliticalPage(page);
     } catch (error) {
       console.error('Error loading political entries:', error);
       setError(`Failed to load political entries: ${error.message}`);
@@ -329,22 +348,42 @@ const TrumpyTrackerDashboard = () => {
   }, []);
 
   // Load executive orders with pagination
-  const loadExecutiveOrders = useCallback(async (page = 1) => {
+  const loadExecutiveOrders = useCallback(async (page = 1, loadAll = false) => {
     try {
-      const offset = (page - 1) * EO_ITEMS_PER_PAGE;
-      
-      // Get total count
-      const countQuery = 'executive_orders?select=id';
-      const countData = await supabaseRequest(countQuery);
-      const totalCount = countData ? countData.length : 0;
-      setTotalEoPages(Math.ceil(totalCount / EO_ITEMS_PER_PAGE));
-      
-      // Get paginated data
-      const query = `executive_orders?order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
-      const data = await supabaseRequest(query);
-      setAllExecutiveOrders(data || []);
-      setExecutiveOrders(data || []);
-      setEoPage(page);
+      if (loadAll) {
+        // Load ALL entries for search functionality
+        const query = 'executive_orders?order=date.desc,order_number.desc';
+        const data = await supabaseRequest(query);
+        setAllExecutiveOrders(data || []);
+        
+        // Still paginate for display
+        const paginatedData = (data || []).slice(0, EO_ITEMS_PER_PAGE);
+        setExecutiveOrders(paginatedData);
+        setTotalEoPages(Math.ceil((data || []).length / EO_ITEMS_PER_PAGE));
+        setEoPage(1);
+      } else {
+        const offset = (page - 1) * EO_ITEMS_PER_PAGE;
+        
+        // Get total count
+        const countQuery = 'executive_orders?select=id';
+        const countData = await supabaseRequest(countQuery);
+        const totalCount = countData ? countData.length : 0;
+        setTotalEoPages(Math.ceil(totalCount / EO_ITEMS_PER_PAGE));
+        
+        // Get paginated data
+        const query = `executive_orders?order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
+        const data = await supabaseRequest(query);
+        
+        // If we don't have all data yet, load it for search
+        if (allExecutiveOrders.length === 0 || allExecutiveOrders.length < totalCount) {
+          const allQuery = 'executive_orders?order=date.desc,order_number.desc';
+          const allData = await supabaseRequest(allQuery);
+          setAllExecutiveOrders(allData || []);
+        }
+        
+        setExecutiveOrders(data || []);
+        setEoPage(page);
+      }
     } catch (error) {
       console.error('Error loading executive orders:', error);
       setError(`Failed to load executive orders: ${error.message}`);
@@ -375,8 +414,8 @@ const TrumpyTrackerDashboard = () => {
     
     try {
       await Promise.all([
-        loadPoliticalEntries(1),
-        loadExecutiveOrders(1),
+        loadPoliticalEntries(1, false, true), // Load ALL political entries
+        loadExecutiveOrders(1, true), // Load ALL executive orders
         loadStats()
       ]);
     } catch (error) {
@@ -459,10 +498,19 @@ const TrumpyTrackerDashboard = () => {
           filtered = applySeverityFilter(filtered, activeFilter);
         }
         
-        setDisplayedPoliticalEntries(filtered);
+        // Paginate search results
+        const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
+        setDisplayedPoliticalEntries(paginatedFiltered);
+        setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+        setPoliticalPage(1); // Reset to page 1 when searching
       } else {
         const filtered = applySearch(allExecutiveOrders, value);
-        setExecutiveOrders(filtered);
+        
+        // Paginate search results
+        const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
+        setExecutiveOrders(paginatedFiltered);
+        setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+        setEoPage(1); // Reset to page 1 when searching
       }
     }, 300); // 300ms debounce
   }, [activeTab, allPoliticalEntries, allExecutiveOrders, activeFilter, applySearch]);
@@ -534,7 +582,11 @@ const TrumpyTrackerDashboard = () => {
       setActiveFilter(null);
       // Apply search if there's a search term
       const filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
-      setDisplayedPoliticalEntries(filtered);
+      
+      // Paginate the filtered results
+      const paginatedFiltered = filtered.slice((politicalPage - 1) * ITEMS_PER_PAGE, politicalPage * ITEMS_PER_PAGE);
+      setDisplayedPoliticalEntries(paginatedFiltered);
+      setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
     } else {
       setActiveFilter(filterType);
       
@@ -544,7 +596,11 @@ const TrumpyTrackerDashboard = () => {
       // Then apply severity filter
       filtered = applySeverityFilter(filtered, filterType);
       
-      setDisplayedPoliticalEntries(filtered);
+      // Paginate the filtered results
+      const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
+      setDisplayedPoliticalEntries(paginatedFiltered);
+      setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+      setPoliticalPage(1); // Reset to page 1 when filtering
     }
   };
 
@@ -1111,10 +1167,23 @@ const TrumpyTrackerDashboard = () => {
                   
                   {!activeFilter && (
                     <PaginationControls
-                      currentPage={politicalPage}
-                      totalPages={totalPoliticalPages}
-                      onPageChange={(page) => loadPoliticalEntries(page)}
-                    />
+                    currentPage={politicalPage}
+                    totalPages={totalPoliticalPages}
+                    onPageChange={(page) => {
+                        // If searching or filtering, handle pagination differently
+                      if (searchTerm || activeFilter) {
+                        let filtered = searchTerm ? applySearch(allPoliticalEntries, searchTerm) : allPoliticalEntries;
+                        if (activeFilter) {
+                          filtered = applySeverityFilter(filtered, activeFilter);
+                        }
+                        const paginatedFiltered = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+                        setDisplayedPoliticalEntries(paginatedFiltered);
+                        setPoliticalPage(page);
+                      } else {
+                        loadPoliticalEntries(page);
+                      }
+                    }}
+                  />
                   )}
                 </>
               )}
