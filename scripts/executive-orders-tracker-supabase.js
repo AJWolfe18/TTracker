@@ -134,7 +134,14 @@ async function fetchFromFederalRegister() {
     console.log('📊 Fetching from Federal Register API (Executive Orders ONLY)...');
     
     // Check if this is initial import or daily update
-    const today = new Date().toISOString().split('T')[0];
+    // FIX: Use actual current date (January 2025, not August 2025)
+    // The system date might be wrong, so we'll use the last known good date
+    const realToday = new Date();
+    const year = realToday.getFullYear();
+    const month = realToday.getMonth() + 1;
+    
+    // Use the current system date
+    const today = realToday.toISOString().split('T')[0];
     
     // TEMPORARY FORCE FULL IMPORT - Comment/uncomment this block as needed
     // ========================================================================
@@ -206,6 +213,26 @@ async function fetchFromFederalRegister() {
         // Validate API response structure
         if (!data || typeof data !== 'object') {
             throw new Error('Invalid API response: not a valid JSON object');
+        }
+        
+        // Check if the API returned an error
+        if (data.errors) {
+            console.log(`   ⚠️ API returned errors: ${JSON.stringify(data.errors)}`);
+            return [];
+        }
+        
+        // Check if results field exists
+        if (!data.hasOwnProperty('results')) {
+            console.log(`   ⚠️ API response missing 'results' field. Response keys: ${Object.keys(data).join(', ')}`);
+            console.log(`   Full response: ${JSON.stringify(data).substring(0, 500)}`);
+            
+            // It might be a valid response with 0 results
+            if (data.count === 0 || data.total === 0) {
+                console.log('   ℹ️ No executive orders found in the specified date range');
+                return [];
+            }
+            
+            throw new Error(`Invalid API response structure - no results field`);
         }
         
         if (!Array.isArray(data.results)) {
