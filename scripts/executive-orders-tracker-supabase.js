@@ -7,6 +7,7 @@
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
+import { generateSpicySummary } from './spicy-summaries-integration.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
@@ -276,6 +277,28 @@ async function fetchFromFederalRegister() {
                     aiAnalysis = await generateAIAnalysis(item.title, orderNumber, item.abstract);
                 }
                 
+                // Generate spicy summary for executive order
+                let spicyEnhanced = {};
+                try {
+                    console.log(`   🌶️ Generating spicy summary for EO ${orderNumber}...`);
+                    const summaryForSpicy = aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`);
+                    const severityForSpicy = aiAnalysis ? aiAnalysis.severity_rating : 'medium';
+                    
+                    spicyEnhanced = await generateSpicySummary({
+                        title: item.title || 'Untitled Executive Order',
+                        description: summaryForSpicy,
+                        severity: severityForSpicy
+                    });
+                } catch (spicyError) {
+                    console.log(`   ⚠️ Spicy summary generation failed:`, spicyError.message);
+                    spicyEnhanced = {
+                        spicy_summary: null,
+                        shareable_hook: null,
+                        severity_label_inapp: null,
+                        severity_label_share: null
+                    };
+                }
+                
                 const order = {
                     id: generateOrderId(),
                     title: item.title || 'Untitled Executive Order',
@@ -302,7 +325,12 @@ async function fetchFromFederalRegister() {
                     full_text_available: aiAnalysis ? aiAnalysis.full_text_available : true,
                     type: 'executive_order',
                     legal_challenges: [],
-                    related_orders: []
+                    related_orders: [],
+                    // Add spicy summary fields
+                    spicy_summary: spicyEnhanced.spicy_summary,
+                    shareable_hook: spicyEnhanced.shareable_hook,
+                    severity_label_inapp: spicyEnhanced.severity_label_inapp,
+                    severity_label_share: spicyEnhanced.severity_label_share
                 };
                 
                 orders.push(order);
