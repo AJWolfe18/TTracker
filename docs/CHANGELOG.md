@@ -261,6 +261,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI - AI processing
 - Community - Bug reports and suggestions
 
+## Environment Variables
+
+### GitHub Secrets (Confirmed Active)
+- `OPENAI_API_KEY` - Active since August 2025 for AI processing
+- `SUPABASE_URL` - Database endpoint
+- `SUPABASE_SERVICE_ROLE_KEY` - Admin access for automation
+
 ## License
 
 Public Domain - See LICENSE file
