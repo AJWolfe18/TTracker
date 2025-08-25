@@ -96,9 +96,8 @@ async function updateOrder(order) {
             spicy_summary: spicyEnhanced.spicy_summary,
             shareable_hook: spicyEnhanced.shareable_hook,
             severity_label_inapp: spicyEnhanced.severity_label_inapp,
-            severity_label_share: spicyEnhanced.severity_label_share,
-            // Also update severity_rating to new format if needed
-            severity_rating: spicyEnhanced.severity
+            severity_label_share: spicyEnhanced.severity_label_share
+            // DON'T update severity_rating - database has constraint for high/medium/low only
         };
         
         if (!dryRun) {
@@ -162,6 +161,9 @@ async function main() {
                 totalCost += 0.00075; // Track actual cost
                 console.log(`   ✅ Success!`);
                 console.log(`   📊 New severity: ${result.data.severity}`);
+                if (result.data.spicy_summary) {
+                    console.log(`   📝 Spicy Summary: "${result.data.spicy_summary.substring(0, 100)}..."`);
+                }
                 if (result.data.shareable_hook) {
                     console.log(`   📱 Hook: "${result.data.shareable_hook}"`);
                 }
