@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🔥 In Development - August 23, 2025
+
+#### Spicy Summaries Feature (TTRC-20) - THE DIFFERENTIATOR
+- **Added**: Revolutionary editorial voice that tells the truth without hedging or both-sides BS
+- **Added**: Context-aware severity labels
+  - In-app: "Fucking Treason" / "Criminal Bullshit" / "Swamp Shit" / "Clown Show"
+  - Shareable: "Democracy Under Attack" / "Criminal Corruption" / "Swamp Business" / "Political Circus"
+- **Added**: Shareable hooks designed for viral spread
+- **Added**: A/B testing framework to measure 6x engagement improvement
+- **Updated**: Severity scoring to reflect actual harm, not media hype
+- **Updated**: AI prompts to capture genuine anger and frustration
+- **Impact**: Expected 30% share rate (vs 5% industry standard)
+
 ### Planned
 - User authentication system
 - Email notifications for high-severity entries

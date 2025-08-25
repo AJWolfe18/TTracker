@@ -12,11 +12,17 @@
     "test": "node test-verification.js"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2",
     "@supabase/supabase-js": "^2.39.1",
+    "dotenv": "^17.2.1",
+    "node-fetch": "^3.3.2",
     "playwright": "^1.40.0"
   },
-  "keywords": ["political", "tracker", "accountability", "automation"],
+  "keywords": [
+    "political",
+    "tracker",
+    "accountability",
+    "automation"
+  ],
   "author": "Political Transparency Project",
   "license": "MIT"
 }
