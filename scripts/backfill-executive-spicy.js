@@ -1,10 +1,35 @@
 // backfill-executive-spicy.js
 // Adds spicy summaries to existing executive orders that don't have them
-import { supabaseRequest } from '../config/supabase-config-node.js';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
+
+// Load environment variables from .env file
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '..', '.env') });
+
+// Detect which branch we're on and use appropriate config
+const isTestBranch = fs.existsSync(join(__dirname, '..', 'TEST_BRANCH_MARKER.md'));
+const configPath = isTestBranch ? '../config/supabase-config-test.js' : '../config/supabase-config-node.js';
+const { supabaseRequest } = await import(configPath);
+
 import { generateSpicySummary } from './spicy-summaries-integration.js';
 
 console.log('🔥 EXECUTIVE ORDERS SPICY SUMMARIES BACKFILL');
 console.log('==============================================\n');
+
+// Show which environment we're using
+console.log(`📍 Environment: ${isTestBranch ? 'TEST' : 'PRODUCTION'} database\n`);
+
+// Verify API key is loaded
+if (!process.env.OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY not found!');
+    console.error('   Please ensure .env file exists with: OPENAI_API_KEY=sk-...');
+    process.exit(1);
+}
+console.log('✅ OpenAI API key loaded\n');
 
 // Command line arguments
 const args = process.argv.slice(2);
@@ -16,6 +41,18 @@ console.log('📊 Configuration:');
 console.log(`   Limit: ${limit} orders`);
 console.log(`   Auto-confirm: ${autoConfirm}`);
 console.log(`   Dry run: ${dryRun}\n`);
+
+// Map old severity values to new ones
+function mapSeverity(oldSeverity) {
+    // Direct mapping - critical stays critical, high becomes severe
+    const mapping = {
+        'critical': 'critical',  // Keep critical as critical
+        'high': 'severe',        // High maps to severe
+        'medium': 'moderate',    // Medium maps to moderate
+        'low': 'minor'          // Low maps to minor
+    };
+    return mapping[oldSeverity] || oldSeverity; // If already new format, keep it
+}
 
 async function getOrdersWithoutSpicySummaries(limit) {
     try {
@@ -39,19 +76,29 @@ async function getOrdersWithoutSpicySummaries(limit) {
 
 async function updateOrder(order) {
     try {
+        // Map severity from old format to new format
+        const mappedSeverity = mapSeverity(order.severity_rating || 'medium');
+        
         // Generate spicy summary
         const spicyEnhanced = await generateSpicySummary({
             title: order.title,
             description: order.summary,
-            severity: order.severity_rating || 'medium'
+            severity: mappedSeverity
         });
+        
+        // Check if generation was successful
+        if (!spicyEnhanced) {
+            throw new Error('Spicy summary generation returned null');
+        }
         
         // Update the order in the database
         const updateData = {
             spicy_summary: spicyEnhanced.spicy_summary,
             shareable_hook: spicyEnhanced.shareable_hook,
             severity_label_inapp: spicyEnhanced.severity_label_inapp,
-            severity_label_share: spicyEnhanced.severity_label_share
+            severity_label_share: spicyEnhanced.severity_label_share,
+            // Also update severity_rating to new format if needed
+            severity_rating: spicyEnhanced.severity
         };
         
         if (!dryRun) {
@@ -106,6 +153,7 @@ async function main() {
         for (let i = 0; i < orders.length; i++) {
             const order = orders[i];
             console.log(`\n[${i + 1}/${orders.length}] Processing EO ${order.order_number}: ${order.title.substring(0, 50)}...`);
+            console.log(`   Original severity: ${order.severity_rating} → Mapped: ${mapSeverity(order.severity_rating || 'medium')}`);
             
             const result = await updateOrder(order);
             
@@ -113,11 +161,15 @@ async function main() {
                 successCount++;
                 totalCost += 0.00075; // Track actual cost
                 console.log(`   ✅ Success!`);
+                console.log(`   📊 New severity: ${result.data.severity}`);
                 if (result.data.shareable_hook) {
                     console.log(`   📱 Hook: "${result.data.shareable_hook}"`);
                 }
                 if (result.data.severity_label_inapp) {
-                    console.log(`   🏷️ Label: ${result.data.severity_label_inapp}`);
+                    console.log(`   🏷️ In-app: ${result.data.severity_label_inapp}`);
+                }
+                if (result.data.severity_label_share) {
+                    console.log(`   🏷️ Share: ${result.data.severity_label_share}`);
                 }
             } else {
                 failCount++;
@@ -137,6 +189,7 @@ async function main() {
         console.log(`   Success: ${successCount}`);
         console.log(`   Failed: ${failCount}`);
         console.log(`   Total cost: $${totalCost.toFixed(4)}`);
+        console.log(`   Database: ${isTestBranch ? 'TEST' : 'PRODUCTION'}`);
         
         if (dryRun) {
             console.log('\n   (This was a dry run - no changes were made)');
