@@ -1027,164 +1027,316 @@ const TrumpyTrackerDashboard = () => {
     </div>
   );
 
-  // Political entry card component with line-clamp
+  // Political entry card component with spicy summaries
   const PoliticalEntryCard = ({ entry, index = 0 }) => {
-    // Use optional chaining for better null safety
-    const hasLongDescription = entry.description?.length > 200;
+    const hasSpicySummary = !!entry.spicy_summary;
+    const displaySummary = entry.spicy_summary || entry.description;
+    const hasLongSummary = displaySummary?.length > 300;
+    
+    // Extract source domain from URL
+    const getSourceName = (url) => {
+      if (!url) return null;
+      try {
+        const domain = new URL(url).hostname.replace('www.', '');
+        const sourceMap = {
+          'cnn.com': 'CNN',
+          'reuters.com': 'Reuters',
+          'apnews.com': 'AP News',
+          'nytimes.com': 'NY Times',
+          'washingtonpost.com': 'Washington Post',
+          'politico.com': 'Politico',
+          'theguardian.com': 'The Guardian',
+          'foxnews.com': 'Fox News',
+          'nbcnews.com': 'NBC News',
+          'cbsnews.com': 'CBS News',
+          'axios.com': 'Axios',
+          'bloomberg.com': 'Bloomberg',
+          'wsj.com': 'WSJ',
+          'usatoday.com': 'USA Today',
+          'thehill.com': 'The Hill'
+        };
+        return sourceMap[domain] || domain.split('.')[0].toUpperCase();
+      } catch {
+        return 'Source';
+      }
+    };
+    
+    // Get clean severity label
+    const getSeverityLabel = () => {
+      if (entry.severity_label_inapp) return entry.severity_label_inapp;
+      
+      const severityMap = {
+        'critical': 'Fucking Treason 🔴',
+        'high': 'Criminal Bullshit 🟠',
+        'medium': 'Swamp Shit 🟡',
+        'low': 'Clown Show 🟢'
+      };
+      
+      return severityMap[entry.severity?.toLowerCase()] || '';
+    };
+    
+    // Share functions
+    const shareToX = () => {
+      const text = entry.shareable_hook || displaySummary?.substring(0, 200) || '';
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+    };
+    
+    const shareToFacebook = () => {
+      const text = entry.shareable_hook || '';
+      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`, '_blank');
+    };
     
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" style={{
-        // Only animate first 10 cards for performance
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl" style={{
         animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
         animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
       }}>
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-gray-400 text-sm">{formatDate(entry.date)}</span>
-              {entry.severity && (
-                <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(entry.severity)}`}>
-                  {entry.severity.toUpperCase()}
-                </span>
-              )}
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">{entry.title}</h3>
-            {entry.actor && (
-              <p className="text-blue-400 text-sm mb-2">Actor: {entry.actor}</p>
-            )}
-          </div>
+        
+        {/* Title First */}
+        <h3 className="text-lg font-bold text-white mb-3">{entry.title}</h3>
+        
+        {/* Metadata Line */}
+        <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
+          {entry.actor && <span>{entry.actor}</span>}
+          {entry.actor && entry.date && <span>•</span>}
+          <span>{formatDate(entry.date)}</span>
+          {entry.source_url && (
+            <>
+              <span>•</span>
+              <a 
+                href={entry.source_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300"
+              >
+                {getSourceName(entry.source_url)}
+              </a>
+            </>
+          )}
         </div>
         
-        {entry.description && (
-          <div>
-            <p className="text-gray-300 text-sm mb-3" style={{
+        {/* Spicy Summary */}
+        {displaySummary && (
+          <div className="mb-4">
+            <p className="text-gray-100 leading-relaxed" style={{
               display: '-webkit-box',
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 4,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              lineHeight: '1.5'
+              overflow: 'hidden'
             }}>
-              {entry.description}
+              {displaySummary}
             </p>
-            {hasLongDescription && (
+            {hasLongSummary && (
               <button
                 onClick={() => setModalContent({
                   title: entry.title,
                   date: entry.date,
-                  content: entry.description,
+                  content: displaySummary,
                   severity: entry.severity,
                   category: entry.category,
                   sourceUrl: entry.source_url,
-                  actor: entry.actor
+                  actor: entry.actor,
+                  shareableHook: entry.shareable_hook
                 })}
-                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
               >
                 Read more →
               </button>
             )}
           </div>
         )}
-      
-        <div className="flex justify-between items-center mt-3">
-          <div>
+        
+        {/* Shareable Hook as Pullquote */}
+        {entry.shareable_hook && hasSpicySummary && (
+          <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
+            <p className="text-gray-300 text-sm italic">
+              "{entry.shareable_hook}"
+            </p>
+          </div>
+        )}
+        
+        {/* Bottom Actions Bar */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Severity Badge */}
+            {hasSpicySummary && getSeverityLabel() && (
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-white">
+                {getSeverityLabel()}
+              </span>
+            )}
+            
+            {/* Category */}
             {entry.category && (
-              <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
+              <span className="text-xs text-gray-500">
                 {entry.category}
               </span>
             )}
           </div>
-          {entry.source_url && (
-            <a 
-              href={entry.source_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-            >
-              View Source →
-            </a>
+          
+          {/* Share Icons */}
+          {hasSpicySummary && (
+            <div className="flex gap-2">
+              <button
+                onClick={shareToX}
+                aria-label="Share on X"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </button>
+              <button
+                onClick={shareToFacebook}
+                aria-label="Share on Facebook"
+                className="text-gray-400 hover:text-blue-500 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </div>
     );
   };
 
-  // Executive order card component with line-clamp
+  // Executive order card component with spicy translations
   const ExecutiveOrderCard = ({ order, index = 0 }) => {
-    // Use optional chaining for better null safety
-    const hasLongSummary = order.summary?.length > 200;
+    const hasSpicySummary = !!order.spicy_summary;
+    const displaySummary = order.spicy_summary || order.summary;
+    const hasLongSummary = displaySummary?.length > 300;
+    
+    // Get impact label for EOs
+    const getImpactLabel = () => {
+      if (order.severity_label_inapp) return order.severity_label_inapp;
+      
+      const impactMap = {
+        'fascist_power_grab': 'Fascist Power Grab 🔴',
+        'authoritarian_overreach': 'Authoritarian Overreach 🟠',
+        'corrupt_grift': 'Corrupt Grift 🟡',
+        'performative_bullshit': 'Performative Bullshit 🟢'
+      };
+      
+      return impactMap[order.eo_impact_type] || '';
+    };
+    
+    // Share functions
+    const shareToX = () => {
+      const text = order.shareable_hook || displaySummary?.substring(0, 200) || '';
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+    };
+    
+    const shareToFacebook = () => {
+      const text = order.shareable_hook || '';
+      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`, '_blank');
+    };
     
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl hover:scale-[1.02]" style={{
-        // Only animate first 10 cards for performance
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl" style={{
         animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
         animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
       }}>
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-gray-400 text-sm">{formatDate(order.date)}</span>
-              {order.order_number && (
-                <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                  EO {order.order_number}
-                </span>
-              )}
-              {order.severity_rating && (
-                <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(order.severity_rating)}`}>
-                  {order.severity_rating.toUpperCase()}
-                </span>
-              )}
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">{order.title}</h3>
-          </div>
+        
+        {/* Title First */}
+        <h3 className="text-lg font-bold text-white mb-3">{order.title}</h3>
+        
+        {/* Metadata Line */}
+        <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
+          <span className="font-medium">EO {order.order_number}</span>
+          <span>•</span>
+          <span>{formatDate(order.date)}</span>
+          <span>•</span>
+          <a 
+            href={order.source_url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300"
+          >
+            WhiteHouse.gov
+          </a>
         </div>
         
-        {order.summary && (
-          <div>
-            <p className="text-gray-300 text-sm mb-3" style={{
+        {/* Spicy Translation */}
+        {displaySummary && (
+          <div className="mb-4">
+            <p className="text-gray-100 leading-relaxed" style={{
               display: '-webkit-box',
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 4,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              lineHeight: '1.5'
+              overflow: 'hidden'
             }}>
-              {order.summary}
+              {displaySummary}
             </p>
             {hasLongSummary && (
               <button
                 onClick={() => setModalContent({
                   title: order.title,
                   date: order.date,
-                  content: order.summary,
-                  severity: order.severity_rating,
+                  content: displaySummary,
+                  orderNumber: order.order_number,
                   category: order.category,
                   sourceUrl: order.source_url,
-                  orderNumber: order.order_number
+                  shareableHook: order.shareable_hook,
+                  impactType: order.eo_impact_type
                 })}
-                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
               >
                 Read more →
               </button>
             )}
           </div>
         )}
-      
-        <div className="flex justify-between items-center mt-3">
-          <div>
+        
+        {/* Shareable Hook */}
+        {order.shareable_hook && hasSpicySummary && (
+          <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
+            <p className="text-gray-300 text-sm italic">
+              "{order.shareable_hook}"
+            </p>
+          </div>
+        )}
+        
+        {/* Bottom Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Impact Badge */}
+            {hasSpicySummary && getImpactLabel() && (
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-white">
+                {getImpactLabel()}
+              </span>
+            )}
+            
+            {/* Category */}
             {order.category && (
-              <span className="text-purple-400 text-xs bg-purple-900/30 px-2 py-1 rounded">
+              <span className="text-xs text-gray-500">
                 {order.category}
               </span>
             )}
           </div>
-          {order.source_url && (
-            <a 
-              href={order.source_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-            >
-              View Source →
-            </a>
+          
+          {/* Share Icons */}
+          {hasSpicySummary && (
+            <div className="flex gap-2">
+              <button
+                onClick={shareToX}
+                aria-label="Share on X"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </button>
+              <button
+                onClick={shareToFacebook}
+                aria-label="Share on Facebook"
+                className="text-gray-400 hover:text-blue-500 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </div>
