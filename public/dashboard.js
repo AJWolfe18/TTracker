@@ -1160,7 +1160,13 @@ const TrumpyTrackerDashboard = () => {
           <div className="flex items-center gap-3">
             {/* Severity Badge */}
             {hasSpicySummary && getSeverityLabel() && (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-white">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                entry.severity?.toLowerCase() === 'critical' ? 'bg-red-600' :
+                entry.severity?.toLowerCase() === 'high' ? 'bg-orange-600' :
+                entry.severity?.toLowerCase() === 'medium' ? 'bg-yellow-600 text-black' :
+                entry.severity?.toLowerCase() === 'low' ? 'bg-green-600' :
+                'bg-gray-700'
+              } text-white`}>
                 {getSeverityLabel()}
               </span>
             )}
@@ -1302,7 +1308,13 @@ const TrumpyTrackerDashboard = () => {
           <div className="flex items-center gap-3">
             {/* Impact Badge */}
             {hasSpicySummary && getImpactLabel() && (
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-700 text-white">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                order.eo_impact_type === 'fascist_power_grab' ? 'bg-red-600' :
+                order.eo_impact_type === 'authoritarian_overreach' ? 'bg-orange-600' :
+                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-black' :
+                order.eo_impact_type === 'performative_bullshit' ? 'bg-green-600' :
+                'bg-gray-700'
+              } text-white`}>
                 {getImpactLabel()}
               </span>
             )}
@@ -1671,7 +1683,7 @@ const TrumpyTrackerDashboard = () => {
                 <NoResultsMessage />
               ) : (
                 <>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{
+                  <div className="grid grid-cols-1 gap-6" style={{
                     transition: 'all 0.3s ease-in-out'
                   }}>
                     {displayedPoliticalEntries.map((entry, index) => (
@@ -1715,7 +1727,7 @@ const TrumpyTrackerDashboard = () => {
                 <NoResultsMessage />
               ) : (
                 <>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     {executiveOrders.map((order, index) => (
                       <ExecutiveOrderCard key={order.id} order={order} index={index} />
                     ))}

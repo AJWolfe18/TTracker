@@ -7,7 +7,7 @@
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
-import { generateSpicySummary } from './spicy-summaries-integration.js';
+import { generateSpicyEOTranslation } from './spicy-eo-translator.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
@@ -277,21 +277,23 @@ async function fetchFromFederalRegister() {
                     aiAnalysis = await generateAIAnalysis(item.title, orderNumber, item.abstract);
                 }
                 
-                // Generate spicy summary for executive order
-                let spicyEnhanced = {};
+                // Generate spicy EO translation using the new system
+                let spicyTranslation = {};
                 try {
-                    console.log(`   🌶️ Generating spicy summary for EO ${orderNumber}...`);
-                    const summaryForSpicy = aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`);
-                    const severityForSpicy = aiAnalysis ? aiAnalysis.severity_rating : 'medium';
+                    console.log(`   🌶️ Generating spicy translation for EO ${orderNumber}...`);
+                    const summaryForTranslation = aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`);
                     
-                    spicyEnhanced = await generateSpicySummary({
+                    spicyTranslation = await generateSpicyEOTranslation({
                         title: item.title || 'Untitled Executive Order',
-                        description: summaryForSpicy,
-                        severity: severityForSpicy
+                        summary: summaryForTranslation,
+                        order_number: orderNumber,
+                        federal_register_number: item.document_number
                     });
+                    console.log(`   🎯 Impact type: ${spicyTranslation.eo_impact_type}`);
                 } catch (spicyError) {
-                    console.log(`   ⚠️ Spicy summary generation failed:`, spicyError.message);
-                    spicyEnhanced = {
+                    console.log(`   ⚠️ Spicy translation generation failed:`, spicyError.message);
+                    spicyTranslation = {
+                        eo_impact_type: null,
                         spicy_summary: null,
                         shareable_hook: null,
                         severity_label_inapp: null,
@@ -326,11 +328,13 @@ async function fetchFromFederalRegister() {
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
-                    // Add spicy summary fields
-                    spicy_summary: spicyEnhanced.spicy_summary,
-                    shareable_hook: spicyEnhanced.shareable_hook,
-                    severity_label_inapp: spicyEnhanced.severity_label_inapp,
-                    severity_label_share: spicyEnhanced.severity_label_share
+                    // Add spicy translation fields with EO-specific categorization
+                    eo_impact_type: spicyTranslation.eo_impact_type,
+                    spicy_summary: spicyTranslation.spicy_summary,
+                    shareable_hook: spicyTranslation.shareable_hook,
+                    severity_label_inapp: spicyTranslation.severity_label_inapp,
+                    severity_label_share: spicyTranslation.severity_label_share,
+                    editorial_summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`)
                 };
                 
                 orders.push(order);
