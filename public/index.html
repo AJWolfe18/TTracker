@@ -48,7 +48,11 @@
     <!-- Load Supabase configuration first -->
     <script src="supabase-browser-config.js"></script>
     
-    <!-- Load the Supabase version of the dashboard -->
+    <!-- Load dashboard modules in dependency order -->
+    <script src="dashboard-utils.js"></script>
+    <script src="dashboard-stats.js"></script>
+    
+    <!-- Load the main dashboard (still contains components and main logic for now) -->
     <script type="text/babel" src="dashboard.js"></script>
     
     <!-- Fallback for users with JavaScript disabled -->
