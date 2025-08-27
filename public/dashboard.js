@@ -1,6 +1,44 @@
 // TrumpyTracker Dashboard - Supabase Edition with Pagination & Caching
 // Optimized for performance and cost reduction
 
+// Module Loading Verification & Error Boundary
+(function() {
+  // Check if required modules are loaded
+  const requiredModules = [
+    { name: 'DashboardUtils', path: 'dashboard-utils.js' },
+    { name: 'DashboardStats', path: 'dashboard-stats.js' }
+  ];
+  
+  let missingModules = [];
+  requiredModules.forEach(module => {
+    if (!window[module.name]) {
+      console.error(`Critical: ${module.name} module not loaded from ${module.path}`);
+      missingModules.push(module);
+    }
+  });
+  
+  // If modules are missing, show error to user
+  if (missingModules.length > 0) {
+    const errorHtml = `
+      <div style="min-height: 100vh; background: linear-gradient(135deg, #1e3c72, #2a5298); display: flex; align-items: center; justify-content: center; color: white; font-family: system-ui;">
+        <div style="text-align: center; padding: 2rem; background: rgba(0,0,0,0.5); border-radius: 1rem; max-width: 500px;">
+          <h1 style="font-size: 2rem; margin-bottom: 1rem; color: #ff6b6b;">⚠️ Loading Error</h1>
+          <p style="margin-bottom: 1.5rem;">Some required files failed to load. This might be a temporary network issue.</p>
+          <p style="margin-bottom: 1rem; font-size: 0.9rem; opacity: 0.8;">Missing: ${missingModules.map(m => m.path).join(', ')}</p>
+          <button onclick="window.location.reload()" style="background: #4CAF50; color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; cursor: pointer;">
+            🔄 Reload Page
+          </button>
+          <div style="margin-top: 1rem; font-size: 0.8rem; opacity: 0.7;">
+            If this persists, try clearing your browser cache (Ctrl+Shift+R)
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('root').innerHTML = errorHtml;
+    throw new Error('Required modules not loaded. Dashboard cannot initialize.');
+  }
+})();
+
 // Import useRef at the top
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
@@ -12,139 +50,13 @@ const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SU
 const ITEMS_PER_PAGE = 20;
 const EO_ITEMS_PER_PAGE = 25;
 
-// Cache settings - 24 hour cache since data updates once daily
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_KEY_PREFIX = 'tt_cache_';
-const FORCE_REFRESH_HOUR = 12; // Force refresh at noon each day
+// Use utilities from DashboardUtils module
+const { getCachedData, setCachedData, clearOldCache, clearCache, supabaseRequest } = window.DashboardUtils;
 
-// Cache helper functions
-const getCachedData = (key) => {
-  try {
-    const cached = localStorage.getItem(CACHE_KEY_PREFIX + key);
-    if (!cached) return null;
-    
-    const { data, timestamp } = JSON.parse(cached);
-    const age = Date.now() - timestamp;
-    
-    // Check if cache is expired
-    if (age > CACHE_DURATION) {
-      localStorage.removeItem(CACHE_KEY_PREFIX + key);
-      return null;
-    }
-    
-    // Also expire if we've passed the daily refresh time
-    const lastRefresh = new Date(timestamp);
-    const now = new Date();
-    if (now.getDate() !== lastRefresh.getDate() && now.getHours() >= FORCE_REFRESH_HOUR) {
-      localStorage.removeItem(CACHE_KEY_PREFIX + key);
-      return null;
-    }
-    
-    console.log(`Using cached data for ${key} (age: ${Math.round(age/1000/60)} minutes)`);
-    return data;
-  } catch (error) {
-    console.error('Cache read error:', error);
-    return null;
-  }
-};
-
-const setCachedData = (key, data) => {
-  try {
-    const cacheData = {
-      data,
-      timestamp: Date.now()
-    };
-    localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify(cacheData));
-    console.log(`Cached data for ${key}`);
-  } catch (error) {
-    console.error('Cache write error:', error);
-    // If localStorage is full, clear old cache entries
-    if (error.name === 'QuotaExceededError') {
-      clearOldCache();
-    }
-  }
-};
-
-const clearOldCache = () => {
-  const keys = Object.keys(localStorage);
-  keys.forEach(key => {
-    if (key.startsWith(CACHE_KEY_PREFIX)) {
-      localStorage.removeItem(key);
-    }
-  });
-};
-
-const clearCache = () => {
-  clearOldCache();
-  window.location.reload();
-};
-
-// Supabase request helper with caching and retry logic
-const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache = true, retries = 3) => {
-  // Try cache first for GET requests
-  if (method === 'GET' && useCache) {
-    const cached = getCachedData(endpoint);
-    if (cached) return cached;
-  }
-  
-  const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
-  const options = {
-    method,
-    headers: {
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation'
-    }
-  };
-
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
-
-  // Retry logic with exponential backoff
-  let lastError;
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-      
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Supabase error: ${response.status} - ${error}`);
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await response.json();
-        
-        // Cache successful GET requests
-        if (method === 'GET' && useCache) {
-          setCachedData(endpoint, data);
-        }
-        
-        return data;
-      }
-      
-      return { success: true };
-    } catch (error) {
-      lastError = error;
-      console.warn(`Attempt ${attempt + 1} failed for ${endpoint}:`, error.message);
-      
-      // Don't retry on 4xx errors (client errors)
-      if (error.message.includes('Supabase error: 4')) {
-        throw error;
-      }
-      
-      // Wait before retrying (exponential backoff)
-      if (attempt < retries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw lastError;
-};
+// Get cache configuration from utilities module
+const CACHE_DURATION = window.DashboardUtils.CACHE_DURATION;
+const CACHE_KEY_PREFIX = window.DashboardUtils.CACHE_KEY_PREFIX;
+const FORCE_REFRESH_HOUR = window.DashboardUtils.FORCE_REFRESH_HOUR;
 
 // Construction Banner Component - Reduced padding
 const ConstructionBanner = () => (
@@ -204,18 +116,8 @@ const ContentModal = ({ isOpen, onClose, title, date, content, severity, categor
     }
   };
   
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  // Use formatDate from DashboardUtils
+  const formatDate = window.DashboardUtils.formatDate;
   
   return (
     <div 
@@ -725,19 +627,8 @@ const TrumpyTrackerDashboard = () => {
 
 
 
-  // Format date for display
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return dateString;
-    }
-  };
+  // Use formatDate from DashboardUtils
+  const formatDate = window.DashboardUtils.formatDate;
 
   // Generate smart filter suggestions when no results
   const getFilterSuggestions = useCallback(() => {
@@ -931,7 +822,7 @@ const TrumpyTrackerDashboard = () => {
       case 'high':
         return 'bg-red-500 text-white';
       case 'medium':
-        return 'bg-yellow-500 text-black';
+        return 'bg-yellow-500 text-white';
       case 'low':
         return 'bg-green-500 text-white';
       default:
@@ -996,36 +887,11 @@ const TrumpyTrackerDashboard = () => {
     );
   };
 
-  // Stats component - displays key metrics only
-  const StatsSection = ({ stats }) => (
-    <div className="space-y-4 mb-8">
-      {/* Main stats row - responsive grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-          <div className="text-2xl font-bold text-white">{stats.total_entries || 0}</div>
-          <div className="text-gray-400 text-sm">Total Political Entries</div>
-        </div>
-        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-          <div className="text-2xl font-bold text-red-400">{stats.high_severity_count || 0}</div>
-          <div className="text-gray-400 text-sm">High Severity</div>
-        </div>
-        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700">
-          <div className="text-2xl font-bold text-blue-400">{stats.total_executive_orders || 0}</div>
-          <div className="text-gray-400 text-sm">Executive Orders</div>
-        </div>
-      </div>
-      
-      {/* Cache indicator */}
-      <div className="text-center">
-        <button
-          onClick={() => loadAllData(true)}
-          className="text-xs text-gray-500 hover:text-gray-400"
-        >
-          🔄 Refresh Data (Last updated: {new Date().toLocaleDateString()})
-        </button>
-      </div>
-    </div>
-  );
+  // Use StatsSection from DashboardStats module
+  const StatsSection = window.DashboardStats.StatsSection;
+  
+  // Make loadAllData available globally for stats module
+  window.loadAllData = loadAllData;
 
   // Political entry card component with spicy summaries
   const PoliticalEntryCard = ({ entry, index = 0 }) => {
@@ -1163,7 +1029,7 @@ const TrumpyTrackerDashboard = () => {
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                 entry.severity?.toLowerCase() === 'critical' ? 'bg-red-600' :
                 entry.severity?.toLowerCase() === 'high' ? 'bg-orange-600' :
-                entry.severity?.toLowerCase() === 'medium' ? 'bg-yellow-600 text-black' :
+                entry.severity?.toLowerCase() === 'medium' ? 'bg-yellow-600 text-white' :
                 entry.severity?.toLowerCase() === 'low' ? 'bg-green-600' :
                 'bg-gray-700'
               } text-white`}>
@@ -1311,7 +1177,7 @@ const TrumpyTrackerDashboard = () => {
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                 order.eo_impact_type === 'fascist_power_grab' ? 'bg-red-600' :
                 order.eo_impact_type === 'authoritarian_overreach' ? 'bg-orange-600' :
-                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-black' :
+                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-white' :
                 order.eo_impact_type === 'performative_bullshit' ? 'bg-green-600' :
                 'bg-gray-700'
               } text-white`}>
