@@ -1,5 +1,7 @@
 // backfill-executive-spicy.js
-// Adds spicy summaries to existing executive orders that don't have them
+// Adds spicy translations to existing executive orders that don't have them
+// EXACTLY matches the structure of backfill-political-spicy.js
+
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -15,9 +17,9 @@ const isTestBranch = fs.existsSync(join(__dirname, '..', 'TEST_BRANCH_MARKER.md'
 const configPath = isTestBranch ? '../config/supabase-config-test.js' : '../config/supabase-config-node.js';
 const { supabaseRequest } = await import(configPath);
 
-import { generateSpicySummary } from './spicy-summaries-integration.js';
+import { generateEOTranslation } from './spicy-eo-translator.js';
 
-console.log('🔥 EXECUTIVE ORDERS SPICY SUMMARIES BACKFILL');
+console.log('🔥 EXECUTIVE ORDERS SPICY TRANSLATION BACKFILL');
 console.log('==============================================\n');
 
 // Show which environment we're using
@@ -42,30 +44,22 @@ console.log(`   Limit: ${limit} orders`);
 console.log(`   Auto-confirm: ${autoConfirm}`);
 console.log(`   Dry run: ${dryRun}\n`);
 
-// Map old severity values to new ones
-function mapSeverity(oldSeverity) {
-    // Direct mapping - critical stays critical, high becomes severe
-    const mapping = {
-        'critical': 'critical',  // Keep critical as critical
-        'high': 'severe',        // High maps to severe
-        'medium': 'moderate',    // Medium maps to moderate
-        'low': 'minor'          // Low maps to minor
-    };
-    return mapping[oldSeverity] || oldSeverity; // If already new format, keep it
-}
-
-async function getOrdersWithoutSpicySummaries(limit) {
+async function getOrdersWithoutSpicyTranslations(limit) {
     try {
-        // Get orders that don't have spicy summaries yet
-        const query = `executive_orders?spicy_summary=is.null&limit=${limit}&order=order_number.desc&select=id,order_number,title,summary,severity_rating,date`;
+        // Get orders that don't have spicy translations yet
+        // Note: Production doesn't have 'description' column, only test does
+        const columns = isTestBranch ? 
+            'id,order_number,title,summary,description,date' : 
+            'id,order_number,title,summary,date';
+        const query = `executive_orders?spicy_summary=is.null&limit=${limit}&order=date.desc&select=${columns}`;
         const orders = await supabaseRequest(query);
         
         if (!orders || orders.length === 0) {
-            console.log('✅ All executive orders already have spicy summaries!');
+            console.log('✅ All executive orders already have spicy translations!');
             return [];
         }
         
-        console.log(`📜 Found ${orders.length} executive orders without spicy summaries`);
+        console.log(`📜 Found ${orders.length} executive orders without spicy translations`);
         return orders;
         
     } catch (error) {
@@ -76,46 +70,44 @@ async function getOrdersWithoutSpicySummaries(limit) {
 
 async function updateOrder(order) {
     try {
-        // Map severity from old format to new format
-        const mappedSeverity = mapSeverity(order.severity_rating || 'medium');
-        
-        // Generate spicy summary
-        const spicyEnhanced = await generateSpicySummary({
+        // Generate spicy translation using GPT-5
+        const translation = await generateEOTranslation({
             title: order.title,
-            description: order.summary,
-            severity: mappedSeverity
+            summary: order.summary,
+            description: order.description // May be undefined in production
         });
         
         // Check if generation was successful
-        if (!spicyEnhanced) {
-            throw new Error('Spicy summary generation returned null');
+        if (!translation) {
+            throw new Error('Spicy translation generation returned null');
         }
         
         // Update the order in the database
         const updateData = {
-            spicy_summary: spicyEnhanced.spicy_summary,
-            shareable_hook: spicyEnhanced.shareable_hook,
-            severity_label_inapp: spicyEnhanced.severity_label_inapp,
-            severity_label_share: spicyEnhanced.severity_label_share
-            // DON'T update severity_rating - database has constraint for high/medium/low only
+            eo_impact_type: translation.eo_impact_type,
+            spicy_summary: translation.spicy_summary,
+            shareable_hook: translation.shareable_hook,
+            severity_label_inapp: translation.severity_label_inapp,
+            severity_label_share: translation.severity_label_share
+            // Note: EOs don't have editorial_summary - they use 'summary' field
         };
         
         if (!dryRun) {
             await supabaseRequest(`executive_orders?id=eq.${order.id}`, 'PATCH', updateData);
         }
         
-        return { success: true, data: spicyEnhanced };
+        return { success: true, data: translation };
         
     } catch (error) {
-        console.error(`   ❌ Error updating order ${order.order_number}:`, error.message);
+        console.error(`   ❌ Error updating order ${order.id}:`, error.message);
         return { success: false, error: error.message };
     }
 }
 
 async function main() {
     try {
-        // Get orders without spicy summaries
-        const orders = await getOrdersWithoutSpicySummaries(limit);
+        // Get orders without spicy translations
+        const orders = await getOrdersWithoutSpicyTranslations(limit);
         
         if (orders.length === 0) {
             console.log('\n✨ No orders to process!');
@@ -125,11 +117,11 @@ async function main() {
         // Show what we're about to do
         console.log('\n📋 Orders to process:');
         orders.forEach((order, idx) => {
-            console.log(`   ${idx + 1}. EO ${order.order_number}: ${order.title.substring(0, 60)}...`);
+            console.log(`   ${idx + 1}. [${order.date}] ${order.title.substring(0, 60)}...`);
         });
         
-        // Calculate cost
-        const estimatedCost = orders.length * 0.00075; // Average cost per order
+        // Calculate cost (average between GPT-5 and GPT-5-mini)
+        const estimatedCost = orders.length * 0.00075;
         console.log(`\n💰 Estimated cost: $${estimatedCost.toFixed(4)}`);
         
         // Confirm if not auto-confirmed
@@ -151,27 +143,26 @@ async function main() {
         
         for (let i = 0; i < orders.length; i++) {
             const order = orders[i];
-            console.log(`\n[${i + 1}/${orders.length}] Processing EO ${order.order_number}: ${order.title.substring(0, 50)}...`);
-            console.log(`   Original severity: ${order.severity_rating} → Mapped: ${mapSeverity(order.severity_rating || 'medium')}`);
+            console.log(`\n[${i + 1}/${orders.length}] Processing: ${order.title.substring(0, 60)}...`);
             
             const result = await updateOrder(order);
             
             if (result.success) {
                 successCount++;
-                totalCost += 0.00075; // Track actual cost
+                totalCost += result.data.processing_cost || 0.00075;
                 console.log(`   ✅ Success!`);
-                console.log(`   📊 New severity: ${result.data.severity}`);
+                console.log(`   📊 Impact: ${result.data.eo_impact_type}`);
                 if (result.data.spicy_summary) {
-                    console.log(`   📝 Spicy Summary: "${result.data.spicy_summary.substring(0, 100)}..."`);
+                    console.log(`   📝 Translation: "${result.data.spicy_summary.substring(0, 100)}..."`);
                 }
                 if (result.data.shareable_hook) {
                     console.log(`   📱 Hook: "${result.data.shareable_hook}"`);
                 }
                 if (result.data.severity_label_inapp) {
-                    console.log(`   🏷️ In-app: ${result.data.severity_label_inapp}`);
+                    console.log(`   🏷️  In-app: ${result.data.severity_label_inapp}`);
                 }
                 if (result.data.severity_label_share) {
-                    console.log(`   🏷️ Share: ${result.data.severity_label_share}`);
+                    console.log(`   🏷️  Share: ${result.data.severity_label_share}`);
                 }
             } else {
                 failCount++;
