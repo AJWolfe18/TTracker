@@ -146,24 +146,24 @@ const supabaseRequest = async (endpoint, method = 'GET', body = null, useCache =
   throw lastError;
 };
 
-// Construction Banner Component
+// Construction Banner Component - Reduced padding
 const ConstructionBanner = () => (
-  <div className="bg-gradient-to-r from-yellow-600 to-orange-600 border-l-4 border-yellow-500 p-4 mb-6 shadow-lg">
+  <div className="bg-gradient-to-r from-yellow-600 to-orange-600 border-l-4 border-yellow-500 p-2 mb-4 shadow-lg">
     <div className="flex items-center justify-center">
       <div className="flex items-center space-x-3">
-        <div className="text-2xl animate-bounce">🚧</div>
+        <div className="text-xl animate-bounce">🚧</div>
         <div className="text-center">
-          <p className="text-yellow-100 font-semibold text-lg">
+          <p className="text-yellow-100 font-semibold text-base">
             🔨 Site Under Construction
           </p>
-          <p className="text-yellow-200 text-sm">
+          <p className="text-yellow-200 text-xs">
             We're actively building new features. Have feedback? Contact us at: 
             <a href="mailto:contact.trumpytracker@gmail.com" className="text-white font-semibold underline hover:text-yellow-100 ml-1">
               contact.trumpytracker@gmail.com
             </a>
           </p>
         </div>
-        <div className="text-2xl animate-bounce" style={{animationDelay: '0.5s'}}>🚧</div>
+        <div className="text-xl animate-bounce" style={{animationDelay: '0.5s'}}>🚧</div>
       </div>
     </div>
   </div>
@@ -188,7 +188,7 @@ const ContentModal = ({ isOpen, onClose, title, date, content, severity, categor
   
   if (!isOpen) return null;
   
-  // Get severity badge color
+  // Get severity badge color - all with white text
   const getSeverityColor = (severity) => {
     switch (severity?.toLowerCase()) {
       case 'critical':
@@ -196,7 +196,7 @@ const ContentModal = ({ isOpen, onClose, title, date, content, severity, categor
       case 'high':
         return 'bg-red-500 text-white';
       case 'medium':
-        return 'bg-yellow-500 text-black';
+        return 'bg-yellow-500 text-white'; // Changed to white text
       case 'low':
         return 'bg-green-500 text-white';
       default:
