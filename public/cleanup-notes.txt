@@ -1,0 +1,11 @@
+Files to delete (moved to recycle):
+- dashboard-corrupted.js
+- dashboard-test-refactored.js  
+- test-refactored.html
+- dashboard-cards-updated.js
+- refactoring-guide.js
+- spicy-summary-card.js
+- phase2-qa-report.html
+- test-components.html
+
+These were from the failed refactoring attempt.
