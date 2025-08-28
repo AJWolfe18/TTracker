@@ -247,10 +247,12 @@
             
             // Wait for iframe to load
             await new Promise(resolve => {
-                if (iframe.contentDocument.readyState === 'complete') {
+                if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
                     resolve();
                 } else {
-                    iframe.onload = resolve;
+                    iframe.onload = () => resolve();
+                    // Fallback timeout
+                    setTimeout(() => resolve(), 3000);
                 }
             });
             

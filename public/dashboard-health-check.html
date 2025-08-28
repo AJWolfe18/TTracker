@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Health Check</title>
+    <style>
+        body {
+            font-family: system-ui;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #f5f5f5;
+        }
+        .status { 
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🏥 Dashboard Health Check</h1>
+    <p>Quick test to verify dashboard is working correctly after updates.</p>
+    
+    <button onclick="runHealthCheck()">Run Health Check</button>
+    <button onclick="clearResults()">Clear</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function runHealthCheck() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<div class="status info">Running health check...</div>';
+            
+            const checks = [];
+            
+            // Check 1: Modules loaded
+            checks.push({
+                name: 'Modules Loaded',
+                passed: !!(window.DashboardUtils && window.DashboardStats && window.DashboardComponents)
+            });
+            
+            // Check 2: Components available
+            if (window.DashboardComponents) {
+                const requiredComponents = [
+                    'ConstructionBanner', 'ContentModal', 'PaginationControls',
+                    'NoResultsMessage', 'PoliticalEntryCard', 'ExecutiveOrderCard',
+                    'TabNavigation', 'LoadingOverlay'
+                ];
+                checks.push({
+                    name: 'All Components Available',
+                    passed: requiredComponents.every(c => window.DashboardComponents[c])
+                });
+            } else {
+                checks.push({
+                    name: 'All Components Available',
+                    passed: false
+                });
+            }
+            
+            // Check 3: Supabase config
+            checks.push({
+                name: 'Supabase Configuration',
+                passed: !!(window.SUPABASE_URL && window.SUPABASE_ANON_KEY)
+            });
+            
+            // Check 4: React loaded
+            checks.push({
+                name: 'React Library',
+                passed: !!(window.React && window.ReactDOM)
+            });
+            
+            // Check 5: No console errors
+            const originalError = console.error;
+            let errorCount = 0;
+            console.error = function() {
+                errorCount++;
+                originalError.apply(console, arguments);
+            };
+            
+            // Wait a bit to catch any async errors
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            checks.push({
+                name: 'No Console Errors',
+                passed: errorCount === 0
+            });
+            
+            console.error = originalError;
+            
+            // Display results
+            let html = '<h2>Results:</h2>';
+            let allPassed = true;
+            
+            checks.forEach(check => {
+                const status = check.passed ? 'pass' : 'fail';
+                const icon = check.passed ? '✅' : '❌';
+                html += `<div class="status ${status}">${icon} ${check.name}</div>`;
+                if (!check.passed) allPassed = false;
+            });
+            
+            if (allPassed) {
+                html += '<div class="status pass" style="margin-top: 20px; font-weight: bold;">🎉 All checks passed! Dashboard is healthy.</div>';
+            } else {
+                html += '<div class="status fail" style="margin-top: 20px; font-weight: bold;">⚠️ Some checks failed. Please investigate.</div>';
+            }
+            
+            results.innerHTML = html;
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+    
+    <!-- Load the dashboard modules to test -->
+    <script src="supabase-browser-config.js"></script>
+    <script src="dashboard-utils.js"></script>
+    <script src="dashboard-stats.js"></script>
+    <script src="dashboard-components.js"></script>
+</body>
+</html>
