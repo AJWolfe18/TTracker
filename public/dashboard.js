@@ -944,6 +944,48 @@ const TrumpyTrackerDashboard = () => {
           </div>
         )}
 
+        {/* Tab Navigation - MOVED TO TOP */}
+        <div className="flex justify-center mb-6">
+          <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700">
+            <button
+              onClick={() => {
+                setActiveTab('political');
+                // Apply all current filters to political entries
+                const filtered = applyAllFilters(allPoliticalEntries);
+                const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
+                setDisplayedPoliticalEntries(paginatedFiltered);
+                setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+                setPoliticalPage(1);
+              }}
+              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                activeTab === 'political'
+                  ? 'bg-orange-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              Political Entries
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('executive');
+                // Apply all current filters to executive orders
+                const filtered = applyAllFilters(allExecutiveOrders);
+                const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
+                setExecutiveOrders(paginatedFiltered);
+                setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+                setEoPage(1);
+              }}
+              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                activeTab === 'executive'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              Executive Orders
+            </button>
+          </div>
+        </div>
+
         {/* Search and Filter Bar - Collapsible */}
         <div className="bg-gray-800/50 backdrop-blur-md rounded-lg border border-gray-700 mb-6">
           {/* Toggle Header */}
@@ -1118,48 +1160,6 @@ const TrumpyTrackerDashboard = () => {
 
         {/* Statistics Section with Filter Buttons */}
         <StatsSection stats={stats} />
-
-        {/* Tab Navigation */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700">
-            <button
-              onClick={() => {
-                setActiveTab('political');
-                // Apply all current filters to political entries
-                const filtered = applyAllFilters(allPoliticalEntries);
-                const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
-                setDisplayedPoliticalEntries(paginatedFiltered);
-                setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
-                setPoliticalPage(1);
-              }}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-                activeTab === 'political'
-                  ? 'bg-orange-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-              }`}
-            >
-              Political Entries
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('executive');
-                // Apply all current filters to executive orders
-                const filtered = applyAllFilters(allExecutiveOrders);
-                const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
-                setExecutiveOrders(paginatedFiltered);
-                setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
-                setEoPage(1);
-              }}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-                activeTab === 'executive'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-              }`}
-            >
-              Executive Orders
-            </button>
-          </div>
-        </div>
 
         {/* Loading Overlay for Filtering with Accessibility */}
         {isFiltering && (
