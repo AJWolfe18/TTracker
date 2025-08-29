@@ -49,12 +49,12 @@ const {
   ContentModal,
   NoResultsMessage,
   PaginationControls,
-  PoliticalEntryCard,
-  ExecutiveOrderCard,
-  TabNavigation,
-  LoadingOverlay,
+  // PoliticalEntryCard,  // TODO: Still local, not in module yet
+  // ExecutiveOrderCard,  // TODO: Still local, not in module yet
+  // TabNavigation,       // TODO: Not in module
+  // LoadingOverlay,      // TODO: Not in module
   getSeverityColor
-} = window.DashboardComponents;
+} = window.DashboardComponents || {};
 
 // Configuration - Use values from supabase-browser-config.js
 const SUPABASE_URL = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
@@ -141,6 +141,8 @@ const TrumpyTrackerDashboard = () => {
   const [totalPoliticalPages, setTotalPoliticalPages] = useState(1);
   const [totalEoPages, setTotalEoPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [expandedEntries, setExpandedEntries] = useState(new Set());
+  const [modalContent, setModalContent] = useState(null);
 
   // Load political entries with pagination
   const loadPoliticalEntries = useCallback(async (page = 1, append = false, loadAll = false) => {
@@ -514,6 +516,19 @@ const TrumpyTrackerDashboard = () => {
   
   // Make loadAllData available globally for stats module
   window.loadAllData = loadAllData;
+  
+  // Toggle expanded state for entries
+  const toggleExpanded = (id) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
     
     // Extract source domain from URL
     const getSourceName = (url) => {
@@ -542,6 +557,13 @@ const TrumpyTrackerDashboard = () => {
         return 'Source';
       }
     };
+    
+  // Political entry card component with spicy summaries
+  const PoliticalEntryCard = ({ entry, index = 0 }) => {
+    const isExpanded = expandedEntries.has(entry.id);
+    const hasSpicySummary = !!entry.spicy_summary;
+    const displaySummary = entry.spicy_summary || entry.summary;
+    const hasLongSummary = displaySummary?.length > 300;
     
     // Get clean severity label
     const getSeverityLabel = () => {
