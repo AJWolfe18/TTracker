@@ -43,6 +43,19 @@
 // Import useRef at the top
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
+// Import all components from DashboardComponents module
+const {
+  ConstructionBanner,
+  ContentModal,
+  NoResultsMessage,
+  PaginationControls,
+  PoliticalEntryCard,
+  ExecutiveOrderCard,
+  TabNavigation,
+  LoadingOverlay,
+  getSeverityColor
+} = window.DashboardComponents;
+
 // Configuration - Use values from supabase-browser-config.js
 const SUPABASE_URL = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
@@ -58,142 +71,6 @@ const { getCachedData, setCachedData, clearOldCache, clearCache, supabaseRequest
 const CACHE_DURATION = window.DashboardUtils.CACHE_DURATION;
 const CACHE_KEY_PREFIX = window.DashboardUtils.CACHE_KEY_PREFIX;
 const FORCE_REFRESH_HOUR = window.DashboardUtils.FORCE_REFRESH_HOUR;
-
-// Construction Banner Component - Reduced padding
-const ConstructionBanner = () => (
-  <div className="bg-gradient-to-r from-yellow-600 to-orange-600 border-l-4 border-yellow-500 p-2 mb-4 shadow-lg">
-    <div className="flex items-center justify-center">
-      <div className="flex items-center space-x-3">
-        <div className="text-xl animate-bounce">🚧</div>
-        <div className="text-center">
-          <p className="text-yellow-100 font-semibold text-base">
-            🔨 Site Under Construction
-          </p>
-          <p className="text-yellow-200 text-xs">
-            We're actively building new features. Have feedback? Contact us at: 
-            <a href="mailto:contact.trumpytracker@gmail.com" className="text-white font-semibold underline hover:text-yellow-100 ml-1">
-              contact.trumpytracker@gmail.com
-            </a>
-          </p>
-        </div>
-        <div className="text-xl animate-bounce" style={{animationDelay: '0.5s'}}>🚧</div>
-      </div>
-    </div>
-  </div>
-);
-
-// Content Modal Component
-const ContentModal = ({ isOpen, onClose, title, date, content, severity, category, sourceUrl, actor, orderNumber }) => {
-  // Handle escape key with proper cleanup - memoized to prevent recreation
-  const handleEscape = useCallback((e) => {
-    if (e.key === 'Escape' && isOpen) {
-      onClose();
-    }
-  }, [isOpen, onClose]);
-  
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    document.addEventListener('keydown', handleEscape);
-    // Properly clean up event listener to prevent memory leaks
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, handleEscape]);
-  
-  if (!isOpen) return null;
-  
-  // Get severity badge color - all with white text
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'critical':
-        return 'bg-red-600 text-white';
-      case 'high':
-        return 'bg-red-500 text-white';
-      case 'medium':
-        return 'bg-yellow-500 text-white'; // Changed to white text
-      case 'low':
-        return 'bg-green-500 text-white';
-      default:
-        return 'bg-gray-500 text-white';
-    }
-  };
-  
-  // Use formatDate from DashboardUtils
-  const formatDate = window.DashboardUtils.formatDate;
-  
-  return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-gray-800 rounded-lg max-w-3xl w-full"
-        style={{
-          maxHeight: '90vh',
-          overflowY: 'auto'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Modal Header */}
-        <div className="sticky top-0 bg-gray-800 border-b border-gray-700 p-6 pb-4">
-          <div className="flex justify-between items-start">
-            <div className="flex-1 pr-4">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-gray-400 text-sm">{formatDate(date)}</span>
-                {orderNumber && (
-                  <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                    EO {orderNumber}
-                  </span>
-                )}
-                {severity && (
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(severity)}`}>
-                    {severity.toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-xl font-bold text-white">{title}</h2>
-              {actor && (
-                <p className="text-blue-400 text-sm mt-1">Actor: {actor}</p>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors text-2xl leading-none p-1"
-              aria-label="Close modal"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        
-        {/* Modal Content */}
-        <div className="p-6">
-          <div className="text-gray-300 whitespace-pre-wrap mb-6">
-            {content}
-          </div>
-          
-          {/* Footer with metadata */}
-          <div className="flex justify-between items-center pt-4 border-t border-gray-700">
-            {category && (
-              <span className="text-orange-400 text-xs bg-orange-900/30 px-2 py-1 rounded">
-                {category}
-              </span>
-            )}
-            {sourceUrl && (
-              <a 
-                href={sourceUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-              >
-                View Source →
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Main Dashboard Component
 const TrumpyTrackerDashboard = () => {
@@ -250,7 +127,6 @@ const TrumpyTrackerDashboard = () => {
   const [activeFilter, setActiveFilter] = useState(null);
   const [isFiltering, setIsFiltering] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
-  const [expandedEntries, setExpandedEntries] = useState(new Set());
   
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -258,9 +134,6 @@ const TrumpyTrackerDashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
-  
-  // Modal state
-  const [modalContent, setModalContent] = useState(null);
   
   // Pagination state
   const [politicalPage, setPoliticalPage] = useState(1);
@@ -570,20 +443,6 @@ const TrumpyTrackerDashboard = () => {
     setSearchTerm(value);
   }, []);
 
-  // Handle expand/collapse for entries
-  const toggleExpanded = useCallback((entryId) => {
-    setExpandedEntries(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(entryId)) {
-        newSet.delete(entryId);
-      } else {
-        newSet.add(entryId);
-      }
-      return newSet;
-    });
-  }, []);
-
-
 
   // Memoized filter counts - prevents recalculation on every render
   const filterCounts = useMemo(() => {
@@ -646,275 +505,15 @@ const TrumpyTrackerDashboard = () => {
   // Use formatDate from DashboardUtils
   const formatDate = window.DashboardUtils.formatDate;
 
-  // Generate smart filter suggestions when no results
-  const getFilterSuggestions = useCallback(() => {
-    const suggestions = [];
-    const entries = activeTab === 'political' ? allPoliticalEntries : allExecutiveOrders;
-    
-    // Test removing each filter to see what would give results
-    if (searchTerm) {
-      // Simply test without search
-      let testFiltered = [...entries];
-      // Apply other filters
-      if (selectedCategory !== 'all') {
-        testFiltered = testFiltered.filter(e => e.category === selectedCategory);
-      }
-      if (dateRange !== 'all') {
-        const now = new Date();
-        const cutoffDate = new Date();
-        switch(dateRange) {
-          case '7days': cutoffDate.setDate(now.getDate() - 7); break;
-          case '30days': cutoffDate.setDate(now.getDate() - 30); break;
-          case '90days': cutoffDate.setDate(now.getDate() - 90); break;
-        }
-        testFiltered = testFiltered.filter(e => {
-          if (!e.date) return false;
-          const entryDate = new Date(e.date);
-          if (isNaN(entryDate.getTime())) return false;
-          return entryDate >= cutoffDate;
-        });
-      }
-      if (activeFilter) {
-        testFiltered = testFiltered.filter(e => {
-          const sev = e.severity?.toLowerCase();
-          if (activeFilter === 'high') return sev === 'high' || sev === 'critical';
-          if (activeFilter === 'medium') return sev === 'medium';
-          if (activeFilter === 'low') return sev === 'low';
-          return false;
-        });
-      }
-      
-      if (testFiltered.length > 0) {
-        suggestions.push({
-          action: 'Clear search term',
-          count: testFiltered.length,
-          filterType: 'search'
-        });
-      }
-    }
-    
-    if (selectedCategory !== 'all') {
-      // Test without category filter
-      let testFiltered = [...entries];
-      if (searchTerm) {
-        testFiltered = applySearch(testFiltered, searchTerm);
-      }
-      if (dateRange !== 'all') {
-        // Apply date filter
-        const now = new Date();
-        const cutoffDate = new Date();
-        switch(dateRange) {
-          case '7days': cutoffDate.setDate(now.getDate() - 7); break;
-          case '30days': cutoffDate.setDate(now.getDate() - 30); break;
-          case '90days': cutoffDate.setDate(now.getDate() - 90); break;
-        }
-        testFiltered = testFiltered.filter(e => {
-          if (!e.date) return false;
-          const entryDate = new Date(e.date);
-          if (isNaN(entryDate.getTime())) return false;
-          return entryDate >= cutoffDate;
-        });
-      }
-      if (activeFilter) {
-        testFiltered = testFiltered.filter(e => {
-          const sev = e.severity?.toLowerCase();
-          if (activeFilter === 'high') return sev === 'high' || sev === 'critical';
-          if (activeFilter === 'medium') return sev === 'medium';
-          if (activeFilter === 'low') return sev === 'low';
-          return false;
-        });
-      }
-      
-      if (testFiltered.length > 0) {
-        suggestions.push({
-          action: 'Remove category filter',
-          count: testFiltered.length,
-          filterType: 'category'
-        });
-      }
-    }
-    
-    if (dateRange !== 'all') {
-      // Test with expanded date range
-      const expandedRanges = {
-        '7days': { next: '30days', label: 'Expand to last 30 days' },
-        '30days': { next: '90days', label: 'Expand to last 90 days' },
-        '90days': { next: 'all', label: 'Show all dates' }
-      };
-      
-      if (expandedRanges[dateRange]) {
-        suggestions.push({
-          action: expandedRanges[dateRange].label,
-          count: null, // Don't calculate exact count for simplicity
-          filterType: 'date'
-        });
-      }
-    }
-    
-    if (activeFilter) {
-      suggestions.push({
-        action: 'Remove severity filter',
-        count: null,
-        filterType: 'severity'
-      });
-    }
-    
-    return suggestions;
-  }, [searchTerm, selectedCategory, dateRange, activeFilter, activeTab, allPoliticalEntries, allExecutiveOrders, applyAllFilters, applySearch]);
 
-  // No Results Component with smart suggestions
-  const NoResultsMessage = () => {
-    const suggestions = getFilterSuggestions();
-    
-    return (
-      <div className="text-center py-12 px-4 transition-opacity duration-300 opacity-100">
-        <div className="max-w-md mx-auto">
-          <div className="text-6xl mb-4">🔍</div>
-          <h3 className="text-xl font-semibold text-gray-300 mb-2">
-            No results found
-          </h3>
-          <p className="text-gray-400 mb-6">
-            {searchTerm ? 
-              `No entries match "${searchTerm}" with your current filters` :
-              'No entries match your current filter combination'
-            }
-          </p>
-          
-          {suggestions.length > 0 && (
-            <div className="bg-gray-800/50 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-400 mb-3">Try adjusting your filters:</p>
-              <div className="space-y-2">
-                {suggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      if (suggestion.filterType === 'search') setSearchTerm('');
-                      if (suggestion.filterType === 'category') setSelectedCategory('all');
-                      if (suggestion.filterType === 'date') {
-                        if (dateRange === '7days') setDateRange('30days');
-                        else if (dateRange === '30days') setDateRange('90days');
-                        else setDateRange('all');
-                      }
-                      if (suggestion.filterType === 'severity') setActiveFilter(null);
-                    }}
-                    className="w-full text-left px-3 py-2 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors duration-200 flex justify-between items-center group"
-                  >
-                    <span className="text-blue-400 group-hover:text-blue-300">
-                      • {suggestion.action}
-                    </span>
-                    {suggestion.count && (
-                      <span className="text-gray-500 text-sm">
-                        ({suggestion.count} results)
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <button
-            onClick={() => {
-              setSearchTerm('');
-              setSelectedCategory('all');
-              setDateRange('all');
-              setActiveFilter(null);
-              setSortOrder('newest');
-            }}
-            className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors duration-200"
-          >
-            Clear All Filters
-          </button>
-        </div>
-      </div>
-    );
-  };
 
-  // Get severity badge color
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'critical':
-        return 'bg-red-600 text-white';
-      case 'high':
-        return 'bg-red-500 text-white';
-      case 'medium':
-        return 'bg-yellow-500 text-white';
-      case 'low':
-        return 'bg-green-500 text-white';
-      default:
-        return 'bg-gray-500 text-white';
-    }
-  };
 
-  // Pagination Component
-  const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
-    if (totalPages <= 1) return null;
-    
-    return (
-      <div className="flex justify-center items-center gap-2 mt-8">
-        <button
-          onClick={() => onPageChange(1)}
-          disabled={currentPage === 1}
-          className={`px-3 py-1 rounded ${
-            currentPage === 1 
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-              : 'bg-gray-800 text-white hover:bg-gray-700'
-          }`}
-        >
-          First
-        </button>
-        <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          className={`px-3 py-1 rounded ${
-            currentPage === 1 
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-              : 'bg-gray-800 text-white hover:bg-gray-700'
-          }`}
-        >
-          Previous
-        </button>
-        <span className="text-gray-400 px-4">
-          Page {currentPage} of {totalPages}
-        </span>
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className={`px-3 py-1 rounded ${
-            currentPage === totalPages 
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-              : 'bg-gray-800 text-white hover:bg-gray-700'
-          }`}
-        >
-          Next
-        </button>
-        <button
-          onClick={() => onPageChange(totalPages)}
-          disabled={currentPage === totalPages}
-          className={`px-3 py-1 rounded ${
-            currentPage === totalPages 
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-              : 'bg-gray-800 text-white hover:bg-gray-700'
-          }`}
-        >
-          Last
-        </button>
-      </div>
-    );
-  };
 
   // Use StatsSection from DashboardStats module
   const StatsSection = window.DashboardStats.StatsSection;
   
   // Make loadAllData available globally for stats module
   window.loadAllData = loadAllData;
-
-  // Political entry card component with spicy summaries
-  const PoliticalEntryCard = ({ entry, index = 0 }) => {
-    const isExpanded = expandedEntries.has(entry.id);
-    const hasSpicySummary = !!entry.spicy_summary;
-    const displaySummary = entry.spicy_summary || entry.description;
-    const hasLongSummary = displaySummary?.length > 300;
     
     // Extract source domain from URL
     const getSourceName = (url) => {
@@ -1601,7 +1200,7 @@ const TrumpyTrackerDashboard = () => {
               )}
               
               {displayedPoliticalEntries.length === 0 ? (
-                <NoResultsMessage />
+                <NoResultsMessage searchTerm={searchTerm} />
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-6" style={{
@@ -1645,7 +1244,7 @@ const TrumpyTrackerDashboard = () => {
               )}
               
               {executiveOrders.length === 0 ? (
-                <NoResultsMessage />
+                <NoResultsMessage searchTerm={searchTerm} />
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-6">

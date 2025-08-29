@@ -331,7 +331,8 @@
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               } : {}}
             >
               {displaySummary}
@@ -474,7 +475,8 @@
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               } : {}}
             >
               {displaySummary}
