@@ -214,7 +214,7 @@
   };
 
   // ==================== Component: NoResultsMessage ====================
-  window.DashboardComponents.NoResultsMessage = ({ suggestions, onSuggestionClick, onClearAll }) => {
+  window.DashboardComponents.NoResultsMessage = ({ suggestions, onSuggestionClick }) => {
     return (
       <div className="text-center py-12 px-4 transition-opacity duration-300 opacity-100">
         <div className="max-w-md mx-auto">
@@ -252,23 +252,17 @@
               </div>
             </div>
           )}
-          
-          <button
-            onClick={onClearAll}
-            className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors duration-200"
-          >
-            Clear All Filters
-          </button>
         </div>
       </div>
     );
   };
 
   // ==================== Component: PoliticalEntryCard ====================
-  window.DashboardComponents.PoliticalEntryCard = ({ entry, index = 0, onReadMore, showShareButtons = false }) => {
+  window.DashboardComponents.PoliticalEntryCard = ({ entry, index = 0, showShareButtons = false }) => {
+    const [expanded, setExpanded] = useState(false);
     const hasSpicySummary = !!entry.spicy_summary;
     const displaySummary = entry.spicy_summary || entry.description;
-    const hasLongSummary = displaySummary?.length > 300;
+    const hasLongSummary = displaySummary?.length > 200;
     
     // Extract source domain from URL
     const getSourceName = (url) => {
@@ -355,29 +349,23 @@
         {/* Spicy Summary */}
         {displaySummary && (
           <div className="mb-4">
-            <p className="text-gray-100 leading-relaxed" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 4,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
-            }}>
+            <p 
+              className="text-gray-100 leading-relaxed transition-all duration-300"
+              style={!expanded ? {
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
+              } : {}}
+            >
               {displaySummary}
             </p>
             {hasLongSummary && (
               <button
-                onClick={() => onReadMore({
-                  title: entry.title,
-                  date: entry.date,
-                  content: displaySummary,
-                  severity: entry.severity,
-                  category: entry.category,
-                  sourceUrl: entry.source_url,
-                  actor: entry.actor,
-                  shareableHook: entry.shareable_hook
-                })}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                onClick={() => setExpanded(!expanded)}
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
               >
-                Read more →
+                {expanded ? 'Show less ↑' : 'Read more →'}
               </button>
             )}
           </div>
@@ -445,10 +433,11 @@
   };
 
   // ==================== Component: ExecutiveOrderCard ====================
-  window.DashboardComponents.ExecutiveOrderCard = ({ order, index = 0, onReadMore, showShareButtons = false }) => {
+  window.DashboardComponents.ExecutiveOrderCard = ({ order, index = 0, showShareButtons = false }) => {
+    const [expanded, setExpanded] = useState(false);
     const hasSpicySummary = !!order.spicy_summary;
     const displaySummary = order.spicy_summary || order.summary;
-    const hasLongSummary = displaySummary?.length > 300;
+    const hasLongSummary = displaySummary?.length > 200;
     
     // Get impact label for EOs
     const getImpactLabel = () => {
@@ -503,29 +492,23 @@
         {/* Spicy Translation */}
         {displaySummary && (
           <div className="mb-4">
-            <p className="text-gray-100 leading-relaxed" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 4,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
-            }}>
+            <p 
+              className="text-gray-100 leading-relaxed transition-all duration-300"
+              style={!expanded ? {
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden'
+              } : {}}
+            >
               {displaySummary}
             </p>
             {hasLongSummary && (
               <button
-                onClick={() => onReadMore({
-                  title: order.title,
-                  date: order.date,
-                  content: displaySummary,
-                  orderNumber: order.order_number,
-                  category: order.category,
-                  sourceUrl: order.source_url,
-                  shareableHook: order.shareable_hook,
-                  impactType: order.eo_impact_type
-                })}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                onClick={() => setExpanded(!expanded)}
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
               >
-                Read more →
+                {expanded ? 'Show less ↑' : 'Read more →'}
               </button>
             )}
           </div>
