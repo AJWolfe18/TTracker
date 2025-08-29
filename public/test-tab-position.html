@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab Position Test - TrumpyTracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8 text-white">
+        <h1 class="text-3xl font-bold text-center mb-8">Tab Position Comparison</h1>
+        
+        <!-- OPTION A: Current Position (Tabs after filters) -->
+        <div class="mb-12">
+            <h2 class="text-xl font-semibold mb-4 text-orange-400">CURRENT: Tabs After Filters</h2>
+            <div class="space-y-4">
+                <!-- Search/Filters -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400 mb-2">Search & Filters</div>
+                    <input type="text" placeholder="Search..." class="w-full px-4 py-2 bg-gray-900 rounded">
+                </div>
+                
+                <!-- Stats -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400">Statistics Section</div>
+                </div>
+                
+                <!-- Tabs -->
+                <div class="flex justify-center">
+                    <div class="bg-gray-800/50 rounded-lg p-1 border border-gray-700">
+                        <button class="px-6 py-2 bg-orange-600 text-white rounded">Political Entries</button>
+                        <button class="px-6 py-2 text-gray-400">Executive Orders</button>
+                    </div>
+                </div>
+                
+                <!-- Content -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400">Content Area</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- OPTION B: Proposed Position (Tabs at top) -->
+        <div>
+            <h2 class="text-xl font-semibold mb-4 text-green-400">PROPOSED: Tabs at Top</h2>
+            <div class="space-y-4">
+                <!-- Tabs FIRST -->
+                <div class="flex justify-center">
+                    <div class="bg-gray-800/50 rounded-lg p-1 border border-gray-700">
+                        <button class="px-6 py-2 bg-orange-600 text-white rounded">Political Entries</button>
+                        <button class="px-6 py-2 text-gray-400">Executive Orders</button>
+                    </div>
+                </div>
+                
+                <!-- Search/Filters -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400 mb-2">Search & Filters (applies to selected tab)</div>
+                    <input type="text" placeholder="Search political entries..." class="w-full px-4 py-2 bg-gray-900 rounded">
+                </div>
+                
+                <!-- Stats -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400">Statistics Section</div>
+                </div>
+                
+                <!-- Content -->
+                <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                    <div class="text-sm text-gray-400">Content Area (Political Entries)</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 p-4 bg-blue-900/30 rounded-lg border border-blue-700">
+            <h3 class="font-semibold mb-2">Benefits of Moving Tabs to Top:</h3>
+            <ul class="list-disc list-inside space-y-1 text-sm">
+                <li>Clearer hierarchy: Choose content type → Filter → View</li>
+                <li>Search placeholder can be contextual ("Search political entries...")</li>
+                <li>Users know what they're filtering before they filter</li>
+                <li>More intuitive flow - tabs are navigation, filters are refinement</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
