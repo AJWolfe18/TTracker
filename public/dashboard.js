@@ -84,20 +84,20 @@ const ConstructionBanner = () => (
 
 // Content Modal Component
 const ContentModal = ({ isOpen, onClose, title, date, content, severity, category, sourceUrl, actor, orderNumber }) => {
-  // Handle escape key with proper cleanup
+  // Handle escape key with proper cleanup - memoized to prevent recreation
+  const handleEscape = useCallback((e) => {
+    if (e.key === 'Escape' && isOpen) {
+      onClose();
+    }
+  }, [isOpen, onClose]);
+  
   useEffect(() => {
     if (!isOpen) return;
-    
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
     
     document.addEventListener('keydown', handleEscape);
     // Properly clean up event listener to prevent memory leaks
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleEscape]);
   
   if (!isOpen) return null;
   
@@ -249,6 +249,8 @@ const TrumpyTrackerDashboard = () => {
   const [stats, setStats] = useState({});
   const [activeFilter, setActiveFilter] = useState(null);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+  const [expandedEntries, setExpandedEntries] = useState(new Set());
   
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -566,6 +568,19 @@ const TrumpyTrackerDashboard = () => {
   // Handle search input
   const handleSearch = useCallback((value) => {
     setSearchTerm(value);
+  }, []);
+
+  // Handle expand/collapse for entries
+  const toggleExpanded = useCallback((entryId) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
   }, []);
 
 
@@ -896,6 +911,7 @@ const TrumpyTrackerDashboard = () => {
 
   // Political entry card component with spicy summaries
   const PoliticalEntryCard = ({ entry, index = 0 }) => {
+    const isExpanded = expandedEntries.has(entry.id);
     const hasSpicySummary = !!entry.spicy_summary;
     const displaySummary = entry.spicy_summary || entry.description;
     const hasLongSummary = displaySummary?.length > 300;
@@ -982,45 +998,45 @@ const TrumpyTrackerDashboard = () => {
           )}
         </div>
         
-        {/* Spicy Summary */}
+        {/* Spicy Summary with Inline Expansion */}
         {displaySummary && (
           <div className="mb-4">
             <p className="text-gray-100 leading-relaxed" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 4,
+              display: isExpanded ? 'block' : '-webkit-box',
+              WebkitLineClamp: isExpanded ? 'unset' : 3,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
+              overflow: isExpanded ? 'visible' : 'hidden',
+              maxHeight: isExpanded && displaySummary.length > 1000 ? '400px' : 'none',
+              overflowY: isExpanded && displaySummary.length > 1000 ? 'auto' : 'visible'
             }}>
               {displaySummary}
             </p>
             {hasLongSummary && (
               <button
-                onClick={() => setModalContent({
-                  title: entry.title,
-                  date: entry.date,
-                  content: displaySummary,
-                  severity: entry.severity,
-                  category: entry.category,
-                  sourceUrl: entry.source_url,
-                  actor: entry.actor,
-                  shareableHook: entry.shareable_hook
-                })}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                onClick={() => toggleExpanded(entry.id)}
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2 flex items-center gap-1"
               >
-                Read more →
+                {isExpanded ? (
+                  <>
+                    Show less
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    Read more
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </>
+                )}
               </button>
             )}
           </div>
         )}
         
-        {/* Shareable Hook as Pullquote */}
-        {entry.shareable_hook && hasSpicySummary && (
-          <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
-            <p className="text-gray-300 text-sm italic">
-              "{entry.shareable_hook}"
-            </p>
-          </div>
-        )}
+
         
         {/* Bottom Actions Bar */}
         <div className="flex items-center justify-between">
@@ -1046,22 +1062,25 @@ const TrumpyTrackerDashboard = () => {
             )}
           </div>
           
-          {/* Share Icons */}
+          {/* Share Icons - Coming Soon */}
           {hasSpicySummary && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-gray-500 mr-2">Share:</span>
               <button
-                onClick={shareToX}
-                aria-label="Share on X"
-                className="text-gray-400 hover:text-white transition-colors"
+                disabled
+                title="Coming soon!"
+                aria-label="Share on X - Coming soon"
+                className="text-gray-600 cursor-not-allowed opacity-50"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
               </button>
               <button
-                onClick={shareToFacebook}
-                aria-label="Share on Facebook"
-                className="text-gray-400 hover:text-blue-500 transition-colors"
+                disabled
+                title="Coming soon!"
+                aria-label="Share on Facebook - Coming soon"
+                className="text-gray-600 cursor-not-allowed opacity-50"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -1076,6 +1095,7 @@ const TrumpyTrackerDashboard = () => {
 
   // Executive order card component with spicy translations
   const ExecutiveOrderCard = ({ order, index = 0 }) => {
+    const isExpanded = expandedEntries.has(order.id);
     const hasSpicySummary = !!order.spicy_summary;
     const displaySummary = order.spicy_summary || order.summary;
     const hasLongSummary = displaySummary?.length > 300;
@@ -1130,45 +1150,45 @@ const TrumpyTrackerDashboard = () => {
           </a>
         </div>
         
-        {/* Spicy Translation */}
+        {/* Spicy Translation with Inline Expansion */}
         {displaySummary && (
           <div className="mb-4">
             <p className="text-gray-100 leading-relaxed" style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 4,
+              display: isExpanded ? 'block' : '-webkit-box',
+              WebkitLineClamp: isExpanded ? 'unset' : 3,
               WebkitBoxOrient: 'vertical',
-              overflow: 'hidden'
+              overflow: isExpanded ? 'visible' : 'hidden',
+              maxHeight: isExpanded && displaySummary.length > 1000 ? '400px' : 'none',
+              overflowY: isExpanded && displaySummary.length > 1000 ? 'auto' : 'visible'
             }}>
               {displaySummary}
             </p>
             {hasLongSummary && (
               <button
-                onClick={() => setModalContent({
-                  title: order.title,
-                  date: order.date,
-                  content: displaySummary,
-                  orderNumber: order.order_number,
-                  category: order.category,
-                  sourceUrl: order.source_url,
-                  shareableHook: order.shareable_hook,
-                  impactType: order.eo_impact_type
-                })}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2"
+                onClick={() => toggleExpanded(order.id)}
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2 flex items-center gap-1"
               >
-                Read more →
+                {isExpanded ? (
+                  <>
+                    Show less
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </>
+                ) : (
+                  <>
+                    Read more
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </>
+                )}
               </button>
             )}
           </div>
         )}
         
-        {/* Shareable Hook */}
-        {order.shareable_hook && hasSpicySummary && (
-          <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
-            <p className="text-gray-300 text-sm italic">
-              "{order.shareable_hook}"
-            </p>
-          </div>
-        )}
+
         
         {/* Bottom Actions */}
         <div className="flex items-center justify-between">
@@ -1194,22 +1214,25 @@ const TrumpyTrackerDashboard = () => {
             )}
           </div>
           
-          {/* Share Icons */}
+          {/* Share Icons - Coming Soon */}
           {hasSpicySummary && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-gray-500 mr-2">Share:</span>
               <button
-                onClick={shareToX}
-                aria-label="Share on X"
-                className="text-gray-400 hover:text-white transition-colors"
+                disabled
+                title="Coming soon!"
+                aria-label="Share on X - Coming soon"
+                className="text-gray-600 cursor-not-allowed opacity-50"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
               </button>
               <button
-                onClick={shareToFacebook}
-                aria-label="Share on Facebook"
-                className="text-gray-400 hover:text-blue-500 transition-colors"
+                disabled
+                title="Coming soon!"
+                aria-label="Share on Facebook - Coming soon"
+                className="text-gray-600 cursor-not-allowed opacity-50"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -1322,11 +1345,40 @@ const TrumpyTrackerDashboard = () => {
           </div>
         )}
 
-        {/* Search and Filter Bar */}
-        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-4 border border-gray-700 mb-6">
-          {/* Search Input */}
-          <div className="relative mb-4">
-            <input
+        {/* Search and Filter Bar - Collapsible */}
+        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg border border-gray-700 mb-6">
+          {/* Toggle Header */}
+          <button
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+            className="w-full p-4 flex items-center justify-between hover:bg-gray-700/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              <span className="text-white font-medium">Search & Filters</span>
+              {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter) && (
+                <span className="text-xs bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded">
+                  Active
+                </span>
+              )}
+            </div>
+            <svg 
+              className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isFilterExpanded ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {/* Collapsible Content */}
+          <div className={`overflow-hidden transition-all duration-300 ${isFilterExpanded ? 'max-h-96' : 'max-h-0'}`}>
+            <div className="p-4 pt-0 border-t border-gray-700">
+              {/* Search Input */}
+              <div className="relative mb-4">
+                <input
               type="text"
               placeholder="Search titles, descriptions, actors, categories..."
               value={searchTerm}
@@ -1461,6 +1513,8 @@ const TrumpyTrackerDashboard = () => {
               )}
             </div>
           )}
+            </div>
+          </div>
         </div>
 
         {/* Statistics Section with Filter Buttons */}
