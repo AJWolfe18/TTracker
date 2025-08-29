@@ -214,7 +214,7 @@
   };
 
   // ==================== Component: NoResultsMessage ====================
-  window.DashboardComponents.NoResultsMessage = ({ suggestions, onSuggestionClick }) => {
+  window.DashboardComponents.NoResultsMessage = ({ searchTerm }) => {
     return (
       <div className="text-center py-12 px-4 transition-opacity duration-300 opacity-100">
         <div className="max-w-md mx-auto">
@@ -222,36 +222,12 @@
           <h3 className="text-xl font-semibold text-gray-300 mb-2">
             No results found
           </h3>
-          <p className="text-gray-400 mb-6">
-            {suggestions.searchTerm ? 
-              `No entries match "${suggestions.searchTerm}" with your current filters` :
+          <p className="text-gray-400">
+            {searchTerm ? 
+              `No entries match "${searchTerm}" with your current filters` :
               'No entries match your current filter combination'
             }
           </p>
-          
-          {suggestions.items && suggestions.items.length > 0 && (
-            <div className="bg-gray-800/50 rounded-lg p-4 text-left">
-              <p className="text-sm text-gray-400 mb-3">Try adjusting your filters:</p>
-              <div className="space-y-2">
-                {suggestions.items.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => onSuggestionClick(suggestion)}
-                    className="w-full text-left px-3 py-2 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors duration-200 flex justify-between items-center group"
-                  >
-                    <span className="text-blue-400 group-hover:text-blue-300">
-                      • {suggestion.action}
-                    </span>
-                    {suggestion.count && (
-                      <span className="text-gray-500 text-sm">
-                        ({suggestion.count} results)
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
