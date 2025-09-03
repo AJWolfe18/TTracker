@@ -1,5 +1,5 @@
-// TrumpyTracker Dashboard - Supabase Edition with Pagination & Caching
-// Optimized for performance and cost reduction
+// TrumpyTracker Dashboard - Fully Modularized Version
+// All components loaded from modules - zero duplication
 
 // Module Loading Verification & Error Boundary
 (function() {
@@ -40,23 +40,23 @@
   }
 })();
 
-// Import useRef at the top
+// Import React hooks
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-// Import all components from DashboardComponents module
+// Import ALL components from DashboardComponents module
 const {
   ConstructionBanner,
   ContentModal,
   NoResultsMessage,
   PaginationControls,
-  // PoliticalEntryCard,  // TODO: Still local, not in module yet
-  // ExecutiveOrderCard,  // TODO: Still local, not in module yet
-  // TabNavigation,       // TODO: Not in module
-  // LoadingOverlay,      // TODO: Not in module
+  PoliticalEntryCard,  // Now using module version!
+  ExecutiveOrderCard,  // Now using module version!
+  TabNavigation,       // Now using module version!
+  LoadingOverlay,      // Now using module version!
   getSeverityColor
 } = window.DashboardComponents || {};
 
-// Configuration - Use values from supabase-browser-config.js
+// Configuration
 const SUPABASE_URL = window.SUPABASE_URL || window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
 
@@ -65,12 +65,22 @@ const ITEMS_PER_PAGE = 20;
 const EO_ITEMS_PER_PAGE = 25;
 
 // Use utilities from DashboardUtils module
-const { getCachedData, setCachedData, clearOldCache, clearCache, supabaseRequest } = window.DashboardUtils;
+const { 
+  getCachedData, 
+  setCachedData, 
+  clearOldCache, 
+  clearCache, 
+  supabaseRequest,
+  formatDate 
+} = window.DashboardUtils;
 
 // Get cache configuration from utilities module
 const CACHE_DURATION = window.DashboardUtils.CACHE_DURATION;
 const CACHE_KEY_PREFIX = window.DashboardUtils.CACHE_KEY_PREFIX;
 const FORCE_REFRESH_HOUR = window.DashboardUtils.FORCE_REFRESH_HOUR;
+
+// Use StatsSection from DashboardStats module
+const StatsSection = window.DashboardStats.StatsSection;
 
 // Main Dashboard Component
 const TrumpyTrackerDashboard = () => {
@@ -115,6 +125,7 @@ const TrumpyTrackerDashboard = () => {
       if (style) document.head.removeChild(style);
     };
   }, []);
+
   // State management
   const [activeTab, setActiveTab] = useState('political');
   const [allPoliticalEntries, setAllPoliticalEntries] = useState([]);
@@ -141,8 +152,6 @@ const TrumpyTrackerDashboard = () => {
   const [totalPoliticalPages, setTotalPoliticalPages] = useState(1);
   const [totalEoPages, setTotalEoPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [expandedEntries, setExpandedEntries] = useState(new Set());
-  const [modalContent, setModalContent] = useState(null);
 
   // Load political entries with pagination
   const loadPoliticalEntries = useCallback(async (page = 1, append = false, loadAll = false) => {
@@ -277,6 +286,9 @@ const TrumpyTrackerDashboard = () => {
     loadAllData();
   }, []);
 
+  // Make loadAllData available globally for stats module
+  window.loadAllData = loadAllData;
+
   // Extract unique categories from data
   const uniqueCategories = useMemo(() => {
     const cats = new Set();
@@ -368,7 +380,6 @@ const TrumpyTrackerDashboard = () => {
             entry.severity?.toLowerCase() === 'low'
           );
           break;
-
       }
     }
     
@@ -445,7 +456,6 @@ const TrumpyTrackerDashboard = () => {
     setSearchTerm(value);
   }, []);
 
-
   // Memoized filter counts - prevents recalculation on every render
   const filterCounts = useMemo(() => {
     if (!allPoliticalEntries) return { high: 0, medium: 0, low: 0 };
@@ -502,369 +512,11 @@ const TrumpyTrackerDashboard = () => {
     };
   }, [allPoliticalEntries, searchTerm, selectedCategory, dateRange, applySearch]);
 
-
-
-  // Use formatDate from DashboardUtils
-  const formatDate = window.DashboardUtils.formatDate;
-
-
-
-
-
-  // Use StatsSection from DashboardStats module
-  const StatsSection = window.DashboardStats.StatsSection;
-  
-  // Make loadAllData available globally for stats module
-  window.loadAllData = loadAllData;
-  
-  // Toggle expanded state for entries
-  const toggleExpanded = (id) => {
-    setExpandedEntries(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-    
-    // Extract source domain from URL
-    const getSourceName = (url) => {
-      if (!url) return null;
-      try {
-        const domain = new URL(url).hostname.replace('www.', '');
-        const sourceMap = {
-          'cnn.com': 'CNN',
-          'reuters.com': 'Reuters',
-          'apnews.com': 'AP News',
-          'nytimes.com': 'NY Times',
-          'washingtonpost.com': 'Washington Post',
-          'politico.com': 'Politico',
-          'theguardian.com': 'The Guardian',
-          'foxnews.com': 'Fox News',
-          'nbcnews.com': 'NBC News',
-          'cbsnews.com': 'CBS News',
-          'axios.com': 'Axios',
-          'bloomberg.com': 'Bloomberg',
-          'wsj.com': 'WSJ',
-          'usatoday.com': 'USA Today',
-          'thehill.com': 'The Hill'
-        };
-        return sourceMap[domain] || domain.split('.')[0].toUpperCase();
-      } catch {
-        return 'Source';
-      }
-    };
-    
-  // Political entry card component with spicy summaries
-  const PoliticalEntryCard = ({ entry, index = 0 }) => {
-    const isExpanded = expandedEntries.has(entry.id);
-    const hasSpicySummary = !!entry.spicy_summary;
-    const displaySummary = entry.spicy_summary || entry.summary;
-    const hasLongSummary = displaySummary?.length > 300;
-    
-    // Get clean severity label
-    const getSeverityLabel = () => {
-      if (entry.severity_label_inapp) return entry.severity_label_inapp;
-      
-      const severityMap = {
-        'critical': 'Fucking Treason 🔴',
-        'high': 'Criminal Bullshit 🟠',
-        'medium': 'Swamp Shit 🟡',
-        'low': 'Clown Show 🟢'
-      };
-      
-      return severityMap[entry.severity?.toLowerCase()] || '';
-    };
-    
-    // Share functions
-    const shareToX = () => {
-      const text = entry.shareable_hook || displaySummary?.substring(0, 200) || '';
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
-    };
-    
-    const shareToFacebook = () => {
-      const text = entry.shareable_hook || '';
-      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`, '_blank');
-    };
-    
-    return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl" style={{
-        animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
-        animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
-      }}>
-        
-        {/* Title First */}
-        <h3 className="text-lg font-bold text-white mb-3">{entry.title}</h3>
-        
-        {/* Metadata Line */}
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
-          {entry.actor && <span>{entry.actor}</span>}
-          {entry.actor && entry.date && <span>•</span>}
-          <span>{formatDate(entry.date)}</span>
-          {entry.source_url && (
-            <>
-              <span>•</span>
-              <a 
-                href={entry.source_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300"
-              >
-                {getSourceName(entry.source_url)}
-              </a>
-            </>
-          )}
-        </div>
-        
-        {/* Spicy Summary with Inline Expansion */}
-        {displaySummary && (
-          <div className="mb-4">
-            <p className="text-gray-100 leading-relaxed" style={{
-              display: isExpanded ? 'block' : '-webkit-box',
-              WebkitLineClamp: isExpanded ? 'unset' : 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: isExpanded ? 'visible' : 'hidden',
-              maxHeight: isExpanded && displaySummary.length > 1000 ? '400px' : 'none',
-              overflowY: isExpanded && displaySummary.length > 1000 ? 'auto' : 'visible'
-            }}>
-              {displaySummary}
-            </p>
-            {hasLongSummary && (
-              <button
-                onClick={() => toggleExpanded(entry.id)}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2 flex items-center gap-1"
-              >
-                {isExpanded ? (
-                  <>
-                    Show less
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </>
-                ) : (
-                  <>
-                    Read more
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-        
-
-        
-        {/* Bottom Actions Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Severity Badge */}
-            {hasSpicySummary && getSeverityLabel() && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                entry.severity?.toLowerCase() === 'critical' ? 'bg-red-600' :
-                entry.severity?.toLowerCase() === 'high' ? 'bg-orange-600' :
-                entry.severity?.toLowerCase() === 'medium' ? 'bg-yellow-600 text-white' :
-                entry.severity?.toLowerCase() === 'low' ? 'bg-green-600' :
-                'bg-gray-700'
-              } text-white`}>
-                {getSeverityLabel()}
-              </span>
-            )}
-            
-            {/* Category */}
-            {entry.category && (
-              <span className="text-xs text-gray-500">
-                {entry.category}
-              </span>
-            )}
-          </div>
-          
-          {/* Share Icons - Coming Soon */}
-          {hasSpicySummary && (
-            <div className="flex gap-2 items-center">
-              <span className="text-xs text-gray-500 mr-2">Share:</span>
-              <button
-                disabled
-                title="Coming soon!"
-                aria-label="Share on X - Coming soon"
-                className="text-gray-600 cursor-not-allowed opacity-50"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-              </button>
-              <button
-                disabled
-                title="Coming soon!"
-                aria-label="Share on Facebook - Coming soon"
-                className="text-gray-600 cursor-not-allowed opacity-50"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Executive order card component with spicy translations
-  const ExecutiveOrderCard = ({ order, index = 0 }) => {
-    const isExpanded = expandedEntries.has(order.id);
-    const hasSpicySummary = !!order.spicy_summary;
-    const displaySummary = order.spicy_summary || order.summary;
-    const hasLongSummary = displaySummary?.length > 300;
-    
-    // Get impact label for EOs
-    const getImpactLabel = () => {
-      if (order.severity_label_inapp) return order.severity_label_inapp;
-      
-      const impactMap = {
-        'fascist_power_grab': 'Fascist Power Grab 🔴',
-        'authoritarian_overreach': 'Authoritarian Overreach 🟠',
-        'corrupt_grift': 'Corrupt Grift 🟡',
-        'performative_bullshit': 'Performative Bullshit 🟢'
-      };
-      
-      return impactMap[order.eo_impact_type] || '';
-    };
-    
-    // Share functions
-    const shareToX = () => {
-      const text = order.shareable_hook || displaySummary?.substring(0, 200) || '';
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
-    };
-    
-    const shareToFacebook = () => {
-      const text = order.shareable_hook || '';
-      window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`, '_blank');
-    };
-    
-    return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl" style={{
-        animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
-        animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
-      }}>
-        
-        {/* Title First */}
-        <h3 className="text-lg font-bold text-white mb-3">{order.title}</h3>
-        
-        {/* Metadata Line */}
-        <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
-          <span className="font-medium">EO {order.order_number}</span>
-          <span>•</span>
-          <span>{formatDate(order.date)}</span>
-          <span>•</span>
-          <a 
-            href={order.source_url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300"
-          >
-            WhiteHouse.gov
-          </a>
-        </div>
-        
-        {/* Spicy Translation with Inline Expansion */}
-        {displaySummary && (
-          <div className="mb-4">
-            <p className="text-gray-100 leading-relaxed" style={{
-              display: isExpanded ? 'block' : '-webkit-box',
-              WebkitLineClamp: isExpanded ? 'unset' : 3,
-              WebkitBoxOrient: 'vertical',
-              overflow: isExpanded ? 'visible' : 'hidden',
-              maxHeight: isExpanded && displaySummary.length > 1000 ? '400px' : 'none',
-              overflowY: isExpanded && displaySummary.length > 1000 ? 'auto' : 'visible'
-            }}>
-              {displaySummary}
-            </p>
-            {hasLongSummary && (
-              <button
-                onClick={() => toggleExpanded(order.id)}
-                className="text-blue-400 hover:text-blue-300 text-sm mt-2 flex items-center gap-1"
-              >
-                {isExpanded ? (
-                  <>
-                    Show less
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </>
-                ) : (
-                  <>
-                    Read more
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-        
-
-        
-        {/* Bottom Actions */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Impact Badge */}
-            {hasSpicySummary && getImpactLabel() && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                order.eo_impact_type === 'fascist_power_grab' ? 'bg-red-600' :
-                order.eo_impact_type === 'authoritarian_overreach' ? 'bg-orange-600' :
-                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-white' :
-                order.eo_impact_type === 'performative_bullshit' ? 'bg-green-600' :
-                'bg-gray-700'
-              } text-white`}>
-                {getImpactLabel()}
-              </span>
-            )}
-            
-            {/* Category */}
-            {order.category && (
-              <span className="text-xs text-gray-500">
-                {order.category}
-              </span>
-            )}
-          </div>
-          
-          {/* Share Icons - Coming Soon */}
-          {hasSpicySummary && (
-            <div className="flex gap-2 items-center">
-              <span className="text-xs text-gray-500 mr-2">Share:</span>
-              <button
-                disabled
-                title="Coming soon!"
-                aria-label="Share on X - Coming soon"
-                className="text-gray-600 cursor-not-allowed opacity-50"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                </svg>
-              </button>
-              <button
-                disabled
-                title="Coming soon!"
-                aria-label="Share on Facebook - Coming soon"
-                className="text-gray-600 cursor-not-allowed opacity-50"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  // Tab counts for TabNavigation component
+  const tabCounts = useMemo(() => ({
+    political: allPoliticalEntries.length,
+    executive: allExecutiveOrders.length
+  }), [allPoliticalEntries.length, allExecutiveOrders.length]);
 
   // Loading state
   if (loading) {
@@ -966,47 +618,29 @@ const TrumpyTrackerDashboard = () => {
           </div>
         )}
 
-        {/* Tab Navigation - MOVED TO TOP */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700">
-            <button
-              onClick={() => {
-                setActiveTab('political');
-                // Apply all current filters to political entries
-                const filtered = applyAllFilters(allPoliticalEntries);
-                const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
-                setDisplayedPoliticalEntries(paginatedFiltered);
-                setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
-                setPoliticalPage(1);
-              }}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-                activeTab === 'political'
-                  ? 'bg-orange-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-              }`}
-            >
-              Political Entries
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('executive');
-                // Apply all current filters to executive orders
-                const filtered = applyAllFilters(allExecutiveOrders);
-                const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
-                setExecutiveOrders(paginatedFiltered);
-                setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
-                setEoPage(1);
-              }}
-              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-                activeTab === 'executive'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-              }`}
-            >
-              Executive Orders
-            </button>
-          </div>
-        </div>
+        {/* Tab Navigation - Using module component */}
+        <TabNavigation 
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            if (tab === 'political') {
+              // Apply all current filters to political entries
+              const filtered = applyAllFilters(allPoliticalEntries);
+              const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
+              setDisplayedPoliticalEntries(paginatedFiltered);
+              setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
+              setPoliticalPage(1);
+            } else {
+              // Apply all current filters to executive orders
+              const filtered = applyAllFilters(allExecutiveOrders);
+              const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
+              setExecutiveOrders(paginatedFiltered);
+              setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+              setEoPage(1);
+            }
+          }}
+          counts={tabCounts}
+        />
 
         {/* Search and Filter Bar - Collapsible */}
         <div className="bg-gray-800/50 backdrop-blur-md rounded-lg border border-gray-700 mb-6">
@@ -1042,140 +676,140 @@ const TrumpyTrackerDashboard = () => {
               {/* Search Input */}
               <div className="relative mb-4">
                 <input
-              type="text"
-              placeholder="Search titles, descriptions, actors, categories..."
-              value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="w-full px-4 py-3 pl-12 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-            />
-            <svg 
-              className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
-              />
-            </svg>
-            {searchTerm && (
-              <button
-                onClick={() => handleSearch('')}
-                className="absolute right-4 top-3.5 text-gray-400 hover:text-white transition-colors"
-                aria-label="Clear search"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  type="text"
+                  placeholder="Search titles, descriptions, actors, categories..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="w-full px-4 py-3 pl-12 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                />
+                <svg 
+                  className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                  />
                 </svg>
-              </button>
-            )}
-          </div>
-          
-          {/* Filter Dropdowns - Responsive Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
-            {/* Category Filter */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-              title={uniqueCategories.length === 0 ? "No categories available" : "Filter by category"}
-            >
-              <option value="all">{uniqueCategories.length === 0 ? "No Categories" : "All Categories"}</option>
-              {uniqueCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            
-            {/* Severity Filter - Dropdown version */}
-            <select
-              value={activeFilter || 'all'}
-              onChange={(e) => setActiveFilter(e.target.value === 'all' ? null : e.target.value)}
-              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-            >
-              <option value="all">Severity</option>
-              <option value="high">High/Critical</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            
-            {/* Date Range Filter */}
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-            >
-              <option value="all">All time</option>
-              <option value="7days">Last 7 days</option>
-              <option value="30days">Last 30 days</option>
-              <option value="90days">Last 90 days</option>
-            </select>
-            
-            {/* Sort Order */}
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-            </select>
-            
-            {/* Clear All Filters Button - Full width on mobile */}
-            {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedCategory('all');
-                  setDateRange('all');
-                  setActiveFilter(null);
-                  setSortOrder('newest');
-                }}
-                className="col-span-2 sm:col-span-1 px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 hover:bg-red-600/30 hover:border-red-600 transition-all duration-200"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-          
-          {/* Active Filters Display */}
-          {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter) && (
-            <div className="mt-3 text-sm text-gray-400">
-              <span className="mr-2">Active filters:</span>
-              {searchTerm && (
-                <span className="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded mr-2">
-                  Search: "{searchTerm}"
-                </span>
+                {searchTerm && (
+                  <button
+                    onClick={() => handleSearch('')}
+                    className="absolute right-4 top-3.5 text-gray-400 hover:text-white transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              
+              {/* Filter Dropdowns - Responsive Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-3">
+                {/* Category Filter */}
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                  title={uniqueCategories.length === 0 ? "No categories available" : "Filter by category"}
+                >
+                  <option value="all">{uniqueCategories.length === 0 ? "No Categories" : "All Categories"}</option>
+                  {uniqueCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                
+                {/* Severity Filter - Dropdown version */}
+                <select
+                  value={activeFilter || 'all'}
+                  onChange={(e) => setActiveFilter(e.target.value === 'all' ? null : e.target.value)}
+                  className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                >
+                  <option value="all">Severity</option>
+                  <option value="high">High/Critical</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+                
+                {/* Date Range Filter */}
+                <select
+                  value={dateRange}
+                  onChange={(e) => setDateRange(e.target.value)}
+                  className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                >
+                  <option value="all">All time</option>
+                  <option value="7days">Last 7 days</option>
+                  <option value="30days">Last 30 days</option>
+                  <option value="90days">Last 90 days</option>
+                </select>
+                
+                {/* Sort Order */}
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="px-4 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                </select>
+                
+                {/* Clear All Filters Button - Full width on mobile */}
+                {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter || sortOrder !== 'newest') && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedCategory('all');
+                      setDateRange('all');
+                      setActiveFilter(null);
+                      setSortOrder('newest');
+                    }}
+                    className="col-span-2 sm:col-span-1 px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-red-400 hover:bg-red-600/30 hover:border-red-600 transition-all duration-200"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+              
+              {/* Active Filters Display */}
+              {(searchTerm || selectedCategory !== 'all' || dateRange !== 'all' || activeFilter) && (
+                <div className="mt-3 text-sm text-gray-400">
+                  <span className="mr-2">Active filters:</span>
+                  {searchTerm && (
+                    <span className="inline-block bg-blue-600/20 text-blue-400 px-2 py-1 rounded mr-2">
+                      Search: "{searchTerm}"
+                    </span>
+                  )}
+                  {selectedCategory !== 'all' && (
+                    <span className="inline-block bg-orange-600/20 text-orange-400 px-2 py-1 rounded mr-2">
+                      Category: {selectedCategory}
+                    </span>
+                  )}
+                  {dateRange !== 'all' && (
+                    <span className="inline-block bg-green-600/20 text-green-400 px-2 py-1 rounded mr-2">
+                      Date: {dateRange === '7days' ? 'Last 7 days' : dateRange === '30days' ? 'Last 30 days' : 'Last 90 days'}
+                    </span>
+                  )}
+                  {activeFilter && (
+                    <span className="inline-block bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded mr-2">
+                      Severity: {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
+                    </span>
+                  )}
+                  {activeTab === 'political' && (
+                    <span className="ml-2 text-gray-500 transition-all duration-300">
+                      • Showing {displayedPoliticalEntries.length} of {allPoliticalEntries.length} entries
+                    </span>
+                  )}
+                  {activeTab === 'executive' && (
+                    <span className="ml-2 text-gray-500 transition-all duration-300">
+                      • Showing {executiveOrders.length} of {allExecutiveOrders.length} orders
+                    </span>
+                  )}
+                </div>
               )}
-              {selectedCategory !== 'all' && (
-                <span className="inline-block bg-orange-600/20 text-orange-400 px-2 py-1 rounded mr-2">
-                  Category: {selectedCategory}
-                </span>
-              )}
-              {dateRange !== 'all' && (
-                <span className="inline-block bg-green-600/20 text-green-400 px-2 py-1 rounded mr-2">
-                  Date: {dateRange === '7days' ? 'Last 7 days' : dateRange === '30days' ? 'Last 30 days' : 'Last 90 days'}
-                </span>
-              )}
-              {activeFilter && (
-                <span className="inline-block bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded mr-2">
-                  Severity: {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
-                </span>
-              )}
-              {activeTab === 'political' && (
-                <span className="ml-2 text-gray-500 transition-all duration-300">
-                  • Showing {displayedPoliticalEntries.length} of {allPoliticalEntries.length} entries
-                </span>
-              )}
-              {activeTab === 'executive' && (
-                <span className="ml-2 text-gray-500 transition-all duration-300">
-                  • Showing {executiveOrders.length} of {allExecutiveOrders.length} orders
-                </span>
-              )}
-            </div>
-          )}
             </div>
           </div>
         </div>
@@ -1183,20 +817,8 @@ const TrumpyTrackerDashboard = () => {
         {/* Statistics Section with Filter Buttons */}
         <StatsSection stats={stats} />
 
-        {/* Loading Overlay for Filtering with Accessibility */}
-        {isFiltering && (
-          <div 
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 flex items-center justify-center pointer-events-none"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <div className="bg-gray-800/90 rounded-lg px-6 py-4 flex items-center space-x-3 shadow-2xl">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              <span className="text-white font-medium">Applying filters...</span>
-            </div>
-          </div>
-        )}
+        {/* Loading Overlay for Filtering - Using module component */}
+        {isFiltering && <LoadingOverlay message="Applying filters..." />}
 
         {/* Content Area with transition animations */}
         <div className="space-y-6" style={{
@@ -1229,7 +851,13 @@ const TrumpyTrackerDashboard = () => {
                     transition: 'all 0.3s ease-in-out'
                   }}>
                     {displayedPoliticalEntries.map((entry, index) => (
-                      <PoliticalEntryCard key={entry.id} entry={entry} index={index} />
+                      <PoliticalEntryCard 
+                        key={entry.id} 
+                        entry={entry} 
+                        index={index}
+                        formatDate={formatDate}
+                        showShareButtons={true}
+                      />
                     ))}
                   </div>
                   
@@ -1271,7 +899,13 @@ const TrumpyTrackerDashboard = () => {
                 <>
                   <div className="grid grid-cols-1 gap-6">
                     {executiveOrders.map((order, index) => (
-                      <ExecutiveOrderCard key={order.id} order={order} index={index} />
+                      <ExecutiveOrderCard 
+                        key={order.id} 
+                        order={order} 
+                        index={index}
+                        formatDate={formatDate}
+                        showShareButtons={true}
+                      />
                     ))}
                   </div>
                   
@@ -1310,11 +944,10 @@ const TrumpyTrackerDashboard = () => {
         </footer>
       </div>
       
-      {/* Content Modal */}
+      {/* Content Modal - Using module component */}
       <ContentModal 
-        isOpen={!!modalContent}
-        onClose={() => setModalContent(null)}
-        {...modalContent}
+        isOpen={false}
+        onClose={() => {}}
       />
     </div>
   );
