@@ -334,8 +334,9 @@ async function fetchFromFederalRegister() {
                     spicy_summary: spicyTranslation.spicy_summary,
                     shareable_hook: spicyTranslation.shareable_hook,
                     severity_label_inapp: spicyTranslation.severity_label_inapp,
-                    severity_label_share: spicyTranslation.severity_label_share,
-                    editorial_summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`)
+                    severity_label_share: spicyTranslation.severity_label_share
+                    // editorial_summary field removed - not in database schema
+                    // editorial_summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`)
                 };
                 
                 orders.push(order);
