@@ -7,7 +7,8 @@
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
-import { generateSpicyEOTranslation } from './spicy-eo-translator.js';
+// FIX: Using correct function name generateEOTranslation (not generateSpicyEOTranslation)
+import { generateEOTranslation } from './spicy-eo-translator.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
@@ -283,7 +284,7 @@ async function fetchFromFederalRegister() {
                     console.log(`   🌶️ Generating spicy translation for EO ${orderNumber}...`);
                     const summaryForTranslation = aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`);
                     
-                    spicyTranslation = await generateSpicyEOTranslation({
+                    spicyTranslation = await generateEOTranslation({
                         title: item.title || 'Untitled Executive Order',
                         summary: summaryForTranslation,
                         order_number: orderNumber,
