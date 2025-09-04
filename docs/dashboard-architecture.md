@@ -31,24 +31,30 @@ public/
 
 ## File Responsibilities
 
-### dashboard-main.js (~300 lines)
+### dashboard.js (~600 lines) ✅ REFACTORED
 **Purpose:** Core application orchestration and state management
 - App initialization
 - Main state hooks (useState, useEffect)
 - Tab switching logic
 - Top-level data fetching coordination
 - Module imports and initialization
+- Integration of all modules
 
-### dashboard-components.js (~800 lines)
+**Note:** Named `dashboard.js` instead of `dashboard-main.js` to maintain backward compatibility
+
+### dashboard-components.js (~635 lines) ✅ IMPLEMENTED
 **Purpose:** All React UI components
-- `PoliticalCard` - Renders political entry cards
-- `ExecutiveOrderCard` - Renders EO cards  
-- `ContentModal` - Full content modal (to be replaced)
-- `ContentExpander` - New inline expansion component
-- `SeverityBadge` - Severity indicator badges
-- `ShareButtons` - Social sharing components
+- `PoliticalEntryCard` - Renders political entry cards with inline expansion
+- `ExecutiveOrderCard` - Renders EO cards with inline expansion
+- `ContentModal` - Legacy modal (deprecated)
+- `NoResultsMessage` - Empty state message
+- `PaginationControls` - Page navigation
+- `TabNavigation` - Tab switcher component
+- `LoadingOverlay` - Loading state indicator
+- `ConstructionBanner` - Site status banner
+- `getSeverityColor()` - Severity color helper
 
-### dashboard-filters.js (~400 lines)
+### dashboard-filters.js (~400 lines) ✅ IMPLEMENTED
 **Purpose:** All filtering and search functionality
 - Search implementation with debouncing
 - Category filter logic
@@ -58,23 +64,38 @@ public/
 - Filter state management
 - URL parameter sync
 
-### dashboard-utils.js (~300 lines)
-**Purpose:** Utility functions and helpers
-- Cache management functions
-- Data fetching wrappers
-- Date formatting utilities
-- Number formatting
-- API error handling
-- Retry logic
-- Local storage helpers
+**Components Exported:**
+- `FilterSection` - Main collapsible filter container
+- `SearchBar` - Search input with clear button
+- `CategoryDropdown` - Dynamic category filter
+- `SeverityDropdown` - High/Medium/Low filter
+- `DateRangeDropdown` - Time period filter
+- `SortOrderDropdown` - Newest/Oldest sort
+- `ActiveFiltersDisplay` - Shows active filter badges
 
-### dashboard-stats.js (~100 lines)
+**Utilities Exported:**
+- `filterUtils.applyAllFilters()` - Apply all filters to data
+- `filterUtils.calculateFilterCounts()` - Get severity counts
+- `filterUtils.extractUniqueCategories()` - Get categories from data
+- `filterUtils.getDefaultFilters()` - Reset filter state
+
+### dashboard-utils.js (~180 lines) ✅ IMPLEMENTED
+**Purpose:** Utility functions and helpers
+- Cache management functions (24-hour cache)
+- `supabaseRequest()` - Data fetching with caching
+- `formatDate()` - Date formatting utility
+- `getCachedData()` - Retrieve cached data
+- `setCachedData()` - Store data with expiry
+- `clearOldCache()` - Cleanup expired cache
+- Error handling and retry logic
+
+### dashboard-stats.js (~100 lines) ✅ IMPLEMENTED
 **Purpose:** Statistics and metrics display
-- Stats card components
-- Calculation functions
-- Chart components (if added)
-- Summary generation
-- Trend analysis
+- `StatsSection` - Main stats container component
+- Severity count displays
+- Total entries counter
+- Refresh functionality
+- Error boundary for stats failures
 
 ## When to Split Files (Guidelines)
 
@@ -141,7 +162,16 @@ Critical: Load files in dependency order:
 <script src="dashboard-filters.js"></script>
 
 <!-- Main last (uses everything) -->
-<script src="dashboard-main.js"></script>
+<script src="dashboard.js"></script>
+```
+
+**Current Implementation in index.html:**
+```html
+<script src="dashboard-utils.js"></script>
+<script src="dashboard-stats.js"></script>
+<script src="dashboard-components.js"></script>
+<script src="dashboard-filters.js"></script>
+<script src="dashboard.js"></script>
 ```
 
 ## Migration Strategy
@@ -157,10 +187,12 @@ Critical: Load files in dependency order:
 2. Ensure props interfaces remain identical
 3. Test each component individually
 
-### Phase 3: Extract Filters (Medium Risk)
-1. Move filter logic to `dashboard-filters.js`
-2. Maintain state management connection
-3. Test all filter combinations
+### Phase 3: Extract Filters (Medium Risk) ✅ COMPLETE
+1. ✅ Moved filter logic to `dashboard-filters.js`
+2. ✅ Maintained state management connection
+3. ✅ Tested all filter combinations
+4. ✅ Created reusable filter utilities
+5. ✅ Implemented proper memoization
 
 ### Phase 4: Extract Stats (Low Risk)
 1. Move statistics to `dashboard-stats.js`
@@ -257,6 +289,6 @@ As of August 2025, the admin dashboard is still under 1000 lines and doesn't req
 
 ---
 
-*Last Updated: August 26, 2025*
-*Version: 1.0*
+*Last Updated: September 3, 2025*
+*Version: 2.0*
 *Author: TrumpyTracker Development Team*
