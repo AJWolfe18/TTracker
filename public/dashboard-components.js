@@ -268,15 +268,18 @@
       }
     };
     
-    // Get clean severity label
+    // Get clean severity label (without emoji since we're using colored pills)
     const getSeverityLabel = () => {
-      if (entry.severity_label_inapp) return entry.severity_label_inapp;
+      if (entry.severity_label_inapp) {
+        // Remove emoji from the label since we're using colored backgrounds
+        return entry.severity_label_inapp.replace(/[🔴🟠🟡🟢]/g, '').trim();
+      }
       
       const severityMap = {
-        'critical': 'Fucking Treason 🔴',
-        'high': 'Criminal Bullshit 🟠',
-        'medium': 'Swamp Shit 🟡',
-        'low': 'Clown Show 🟢'
+        'critical': 'Fucking Treason',
+        'high': 'Criminal Bullshit',
+        'medium': 'Swamp Shit',
+        'low': 'Clown Show'
       };
       
       return severityMap[entry.severity?.toLowerCase()] || '';
@@ -348,14 +351,14 @@
           </div>
         )}
         
-        {/* Shareable Hook as Pullquote */}
-        {entry.shareable_hook && hasSpicySummary && (
+        {/* Shareable Hook as Pullquote - HIDDEN for now, will show on share action */}
+        {/* entry.shareable_hook && hasSpicySummary && (
           <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
             <p className="text-gray-300 text-sm italic">
               "{entry.shareable_hook}"
             </p>
           </div>
-        )}
+        ) */}
         
         {/* Bottom Actions Bar */}
         <div className="flex items-center justify-between">
@@ -416,15 +419,18 @@
     const displaySummary = order.spicy_summary || order.summary;
     const hasLongSummary = displaySummary?.length > 200;
     
-    // Get impact label for EOs
+    // Get impact label for EOs (without emoji since we're using colored pills)
     const getImpactLabel = () => {
-      if (order.severity_label_inapp) return order.severity_label_inapp;
+      if (order.severity_label_inapp) {
+        // Remove emoji from the label since we're using colored backgrounds
+        return order.severity_label_inapp.replace(/[🔴🟠🟡🟢]/g, '').trim();
+      }
       
       const impactMap = {
-        'fascist_power_grab': 'Fascist Power Grab 🔴',
-        'authoritarian_overreach': 'Authoritarian Overreach 🟠',
-        'corrupt_grift': 'Corrupt Grift 🟡',
-        'performative_bullshit': 'Performative Bullshit 🟢'
+        'fascist_power_grab': 'Fascist Power Grab',
+        'authoritarian_overreach': 'Authoritarian Overreach',
+        'corrupt_grift': 'Corrupt Grift',
+        'performative_bullshit': 'Performative Bullshit'
       };
       
       return impactMap[order.eo_impact_type] || '';
@@ -492,14 +498,14 @@
           </div>
         )}
         
-        {/* Shareable Hook */}
-        {order.shareable_hook && hasSpicySummary && (
+        {/* Shareable Hook - HIDDEN for now, will show on share action */}
+        {/* order.shareable_hook && hasSpicySummary && (
           <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
             <p className="text-gray-300 text-sm italic">
               "{order.shareable_hook}"
             </p>
           </div>
-        )}
+        ) */}
         
         {/* Bottom Actions */}
         <div className="flex items-center justify-between">
