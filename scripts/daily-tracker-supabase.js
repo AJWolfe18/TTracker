@@ -1,8 +1,16 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase with EXACT prompts from daily-tracker.js
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
 import { generateSpicySummary } from './spicy-summaries-integration.js';
+
+// Load environment variables from .env file for local testing
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 console.log('🚀 DAILY POLITICAL TRACKER - SUPABASE VERSION (EXACT PROMPTS)');
 console.log('=============================================================\n');
@@ -14,16 +22,38 @@ if (!OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// Generate unique ID - same as daily-tracker.js
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+// ID generation - Get next sequential ID from database
+async function getNextId() {
+    try {
+        // Get the highest current ID
+        const result = await supabaseRequest('political_entries?select=id&order=id.desc&limit=1');
+        if (result && result.length > 0) {
+            return result[0].id + 1;
+        }
+        // If table is empty, start at 1
+        return 1;
+    } catch (error) {
+        console.error('Error getting next ID:', error.message);
+        // Fallback to timestamp-based ID if query fails
+        return Math.floor(Date.now() / 1000);
+    }
 }
 
-// Date range helper - same as daily-tracker.js
+// Date range helper - can be overridden by command line args for backfill
 function getDateRangePrompt() {
+    const args = process.argv.slice(2);
+    const daysBack = args.find(arg => arg.startsWith('--days='));
+    
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 3); // 3-day window for fresher news
+    
+    if (daysBack) {
+        const days = parseInt(daysBack.split('=')[1]);
+        startDate.setDate(startDate.getDate() - days);
+        console.log(`📅 BACKFILL MODE: Searching ${days} days of history`);
+    } else {
+        startDate.setDate(startDate.getDate() - 3); // Default 3-day window
+    }
     
     return `between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`;
 }
@@ -348,8 +378,8 @@ Find current financial and corporate accountability news from credible business 
         try {
             console.log(`🔍 Searching real news for: ${category}`);
             
-            // Use the correct OpenAI Responses API with web search
-            const response = await fetch('https://api.openai.com/v1/responses', {
+            // Use the correct OpenAI Chat Completions API with function calling
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -357,13 +387,9 @@ Find current financial and corporate accountability news from credible business 
                 },
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
-                    tools: [
-                        {
-                            type: 'web_search_preview',
-                            search_context_size: 'medium'
-                        }
-                    ],
-                    input: `${prompt}
+                    messages: [{
+                        role: 'user',
+                        content: `${prompt}
 
 For each relevant news story found, extract and format as JSON:
 {
@@ -377,8 +403,10 @@ For each relevant news story found, extract and format as JSON:
   "severity": "low|medium|high"
 }
 
-Return a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates.`,
-                    max_output_tokens: 2000
+Return ONLY a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`
+                    }],
+                    temperature: 0.7,
+                    max_tokens: 2000
                 }),
             });
 
@@ -389,11 +417,12 @@ Return a JSON array of relevant political developments found. Only include real 
 
             const data = await response.json();
             
-            // Extract content from the correct location in response
-            const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
+            // Extract content from chat completions response
+            const content = data.choices?.[0]?.message?.content || '';
             
             console.log(`  Response length: ${content.length}`);
             console.log(`  Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
+            console.log(`  Cost: ${((data.usage?.total_tokens || 0) * 0.00000015).toFixed(5)}`);
 
             // Extract JSON from the response
             let entries = [];
@@ -507,9 +536,22 @@ async function saveToSupabase(entries) {
     console.log(`\n💾 Saving ${entries.length} new entries to Supabase...`);
     
     try {
+        // Get the starting ID for this batch
+        const startId = await getNextId();
+        console.log(`   Starting from ID: ${startId}`);
+        
+        // Add sequential IDs to entries
+        const entriesWithIds = entries.map((entry, index) => {
+            const { id, ...cleanEntry } = entry; // Remove any existing id field
+            return {
+                id: startId + index,
+                ...cleanEntry
+            };
+        });
+        
         // Insert all entries at once (Supabase handles batches well)
-        const result = await supabaseRequest('political_entries', 'POST', entries);
-        console.log(`✅ Successfully saved ${entries.length} entries to Supabase`);
+        const result = await supabaseRequest('political_entries', 'POST', entriesWithIds);
+        console.log(`✅ Successfully saved ${entriesWithIds.length} entries to Supabase`);
         
         // Enhanced summary matching daily-tracker.js
         console.log('\n=== DAILY TRACKING SUMMARY ===');

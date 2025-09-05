@@ -24,7 +24,7 @@ export async function supabaseRequest(endpoint, method = 'GET', body = null, hea
             'apikey': SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
+            'Prefer': 'return=representation,missing=default', // Add missing=default to handle auto-generated columns
             ...headers
         }
     };
