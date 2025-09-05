@@ -64,75 +64,251 @@ function getDateRangePrompt() {
     return `between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`;
 }
 
-// Helper to normalize headlines for better matching
-function normalizeHeadline(title) {
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '') // Remove punctuation
-        .replace(/\b(the|a|an|and|or|but|in|on|at|to|for|with|of|from|by)\b/g, '') // Remove common words
-        .replace(/\s+/g, ' ')
-        .trim();
+// Duplicate detection configuration with validation
+function validateConfig() {
+    const comparisonLength = parseInt(process.env.DUPLICATE_COMPARISON_LENGTH || '200');
+    const similarityThreshold = parseFloat(process.env.DUPLICATE_SIMILARITY_THRESHOLD || '0.85');
+    const wordThreshold = parseFloat(process.env.DUPLICATE_WORD_THRESHOLD || '0.60');
+    const scoreThreshold = parseInt(process.env.DUPLICATE_SCORE_THRESHOLD || '80');
+    
+    // Validate all configuration values
+    if (isNaN(comparisonLength) || comparisonLength < 50 || comparisonLength > 500) {
+        console.error(`❌ Invalid DUPLICATE_COMPARISON_LENGTH: ${process.env.DUPLICATE_COMPARISON_LENGTH}`);
+        console.log('   Must be a number between 50 and 500. Using default: 200');
+        return { error: true, field: 'DUPLICATE_COMPARISON_LENGTH' };
+    }
+    
+    if (isNaN(similarityThreshold) || similarityThreshold < 0 || similarityThreshold > 1) {
+        console.error(`❌ Invalid DUPLICATE_SIMILARITY_THRESHOLD: ${process.env.DUPLICATE_SIMILARITY_THRESHOLD}`);
+        console.log('   Must be a number between 0 and 1. Using default: 0.85');
+        return { error: true, field: 'DUPLICATE_SIMILARITY_THRESHOLD' };
+    }
+    
+    if (isNaN(wordThreshold) || wordThreshold < 0 || wordThreshold > 1) {
+        console.error(`❌ Invalid DUPLICATE_WORD_THRESHOLD: ${process.env.DUPLICATE_WORD_THRESHOLD}`);
+        console.log('   Must be a number between 0 and 1. Using default: 0.60');
+        return { error: true, field: 'DUPLICATE_WORD_THRESHOLD' };
+    }
+    
+    if (isNaN(scoreThreshold) || scoreThreshold < 0 || scoreThreshold > 100) {
+        console.error(`❌ Invalid DUPLICATE_SCORE_THRESHOLD: ${process.env.DUPLICATE_SCORE_THRESHOLD}`);
+        console.log('   Must be a number between 0 and 100. Using default: 80');
+        return { error: true, field: 'DUPLICATE_SCORE_THRESHOLD' };
+    }
+    
+    return {
+        COMPARISON_LENGTH: isNaN(comparisonLength) ? 200 : comparisonLength,
+        SIMILARITY_THRESHOLD: isNaN(similarityThreshold) ? 0.85 : similarityThreshold,
+        WORD_OVERLAP_THRESHOLD: isNaN(wordThreshold) ? 0.60 : wordThreshold,
+        SCORE_THRESHOLD: isNaN(scoreThreshold) ? 80 : scoreThreshold,
+        DEBUG_LOG: process.env.DUPLICATE_DEBUG_LOG === 'true',
+        STOP_WORDS: ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'of', 'from', 'by', 'as', 'is', 'was', 'are', 'were', 'been', 'be'],
+        COMMON_POLITICAL_TERMS: ['federal', 'state', 'announces', 'new', 'report', 'reports', 'investigation', 'investigates']
+    };
 }
 
-// Enhanced duplicate detection for Supabase
-async function isDuplicate(title, sourceUrl, date) {
+// Initialize and validate configuration
+const configResult = validateConfig();
+if (configResult.error) {
+    console.log('⚠️ Using default configuration values due to validation error\n');
+}
+const DUPLICATE_CONFIG = configResult.error ? validateConfig() : configResult;
+
+// Enhanced text normalization for better matching
+function normalizeText(text, removeCommonTerms = false) {
+    if (!text) return '';
+    
+    let normalized = text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')  // Replace punctuation with spaces
+        .replace(/\s+/g, ' ')           // Normalize whitespace
+        .trim();
+    
+    // Remove stop words
+    const words = normalized.split(' ').filter(word => 
+        word.length > 2 && !DUPLICATE_CONFIG.STOP_WORDS.includes(word)
+    );
+    
+    // Optionally remove common political terms for entity matching
+    if (removeCommonTerms) {
+        return words.filter(word => 
+            !DUPLICATE_CONFIG.COMMON_POLITICAL_TERMS.includes(word)
+        ).join(' ');
+    }
+    
+    return words.join(' ');
+}
+
+// Calculate string similarity (Dice coefficient)
+function calculateStringSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    if (str1 === str2) return 1;
+    
+    const len1 = str1.length;
+    const len2 = str2.length;
+    if (len1 < 2 || len2 < 2) return 0;
+    
+    const bigrams1 = new Set();
+    const bigrams2 = new Set();
+    
+    for (let i = 0; i < len1 - 1; i++) {
+        bigrams1.add(str1.substring(i, i + 2));
+    }
+    
+    for (let i = 0; i < len2 - 1; i++) {
+        bigrams2.add(str2.substring(i, i + 2));
+    }
+    
+    const intersection = new Set([...bigrams1].filter(x => bigrams2.has(x)));
+    
+    return (2 * intersection.size) / (bigrams1.size + bigrams2.size);
+}
+
+// Calculate comprehensive similarity score
+function calculateSimilarityScore(entry1, entry2) {
+    let score = 0;
+    let reasons = [];
+    
+    // URL similarity (0-30 points)
+    if (entry1.source_url && entry2.source_url) {
+        if (entry1.source_url === entry2.source_url) {
+            score += 30;
+            reasons.push('exact_url');
+        } else {
+            try {
+                const url1 = new URL(entry1.source_url);
+                const url2 = new URL(entry2.source_url);
+                if (url1.hostname === url2.hostname) {
+                    score += 10;
+                    reasons.push('same_domain');
+                }
+            } catch (e) {
+                // Invalid URLs, ignore
+            }
+        }
+    }
+    
+    // Title similarity using first 200 characters (0-40 points)
+    const title1 = normalizeText(entry1.title).substring(0, DUPLICATE_CONFIG.COMPARISON_LENGTH);
+    const title2 = normalizeText(entry2.title).substring(0, DUPLICATE_CONFIG.COMPARISON_LENGTH);
+    const titleSim = calculateStringSimilarity(title1, title2);
+    score += titleSim * 40;
+    
+    if (titleSim > DUPLICATE_CONFIG.SIMILARITY_THRESHOLD) {
+        reasons.push(`title_${Math.round(titleSim * 100)}%`);
+    }
+    
+    // Date proximity (0-15 points)
+    if (entry1.date && entry2.date) {
+        const date1 = new Date(entry1.date);
+        const date2 = new Date(entry2.date);
+        const daysDiff = Math.abs((date1 - date2) / (1000 * 60 * 60 * 24));
+        score += Math.max(0, 15 - (daysDiff * 5));
+        if (daysDiff === 0) reasons.push('same_date');
+        else if (daysDiff <= 1) reasons.push('adjacent_date');
+    }
+    
+    // Actor match (0-15 points)
+    if (entry1.actor && entry2.actor) {
+        const actorSim = calculateStringSimilarity(
+            normalizeText(entry1.actor),
+            normalizeText(entry2.actor)
+        );
+        score += actorSim * 15;
+        if (actorSim > 0.8) reasons.push('same_actor');
+    }
+    
+    return {
+        score: Math.round(Math.min(100, score)),
+        reasons: reasons.join(', '),
+        titleSimilarity: titleSim,
+        isDuplicate: score >= DUPLICATE_CONFIG.SCORE_THRESHOLD
+    };
+}
+
+// Enhanced duplicate detection with similarity scoring
+async function checkForDuplicate(entry) {
     try {
-        // Check exact URL match first
-        if (sourceUrl) {
-            const urlMatch = await supabaseRequest(`political_entries?source_url=eq.${encodeURIComponent(sourceUrl)}&limit=1`);
+        if (DUPLICATE_CONFIG.DEBUG_LOG) {
+            console.log(`\n🔍 Duplicate Check for: "${entry.title.substring(0, 60)}..."`);
+        }
+        
+        // Step 1: Check exact URL match
+        if (entry.source_url) {
+            const urlMatch = await supabaseRequest(
+                `political_entries?source_url=eq.${encodeURIComponent(entry.source_url)}&limit=1`
+            );
             if (urlMatch && urlMatch.length > 0) {
-                console.log('  ⚠️ Duplicate URL detected');
-                return true;
+                console.log('  ⚠️ Exact URL duplicate detected');
+                return {
+                    isDuplicate: true,
+                    originalId: urlMatch[0].id,
+                    score: 100,
+                    reason: 'exact_url'
+                };
             }
         }
         
-        // Check similar titles on same date
-        const cleanTitle = title.substring(0, 50).replace(/[^a-zA-Z0-9\s]/g, '');
-        const titleMatch = await supabaseRequest(
-            `political_entries?title.ilike.%25${encodeURIComponent(cleanTitle)}%25&date=eq.${date}&limit=1`
-        );
-        if (titleMatch && titleMatch.length > 0) {
-            console.log('  ⚠️ Similar title on same date detected');
-            return true;
-        }
+        // Step 2: Get recent entries for comparison (last 7 days)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
         
-        // NEW: Check for similar headlines with different wording
-        const normalized = normalizeHeadline(title);
-        const words = normalized.split(' ').filter(w => w.length > 3);
-        
-        // Get recent entries from same date (limited to prevent timeout)
         const recentEntries = await supabaseRequest(
-            `political_entries?date=eq.${date}&select=title,actor&limit=50&order=created_at.desc`
+            `political_entries?date=gte.${dateFilter}&select=id,title,date,actor,source_url&order=created_at.desc&limit=100`
         );
         
-        for (const entry of (recentEntries || [])) {
-            const existingNormalized = normalizeHeadline(entry.title);
-            const existingWords = existingNormalized.split(' ').filter(w => w.length > 3);
+        if (!recentEntries || recentEntries.length === 0) {
+            return { isDuplicate: false };
+        }
+        
+        if (DUPLICATE_CONFIG.DEBUG_LOG) {
+            console.log(`  Comparing against ${recentEntries.length} recent entries`);
+        }
+        
+        // Step 3: Calculate similarity scores
+        let bestMatch = null;
+        let highestScore = 0;
+        
+        for (const existing of recentEntries) {
+            const similarity = calculateSimilarityScore(entry, existing);
             
-            // Calculate word overlap
-            const matchingWords = words.filter(w => existingWords.includes(w));
-            const matchRatio = matchingWords.length / Math.max(words.length, existingWords.length);
-            
-            // If 75% of significant words match, likely duplicate (raised threshold to reduce false positives)
-            if (matchRatio > 0.75) {
-                console.log(`  📰 Similar headline detected (${Math.round(matchRatio * 100)}% word match)`);
-                console.log(`     Existing: "${entry.title}"`);
-                console.log(`     New: "${title}"`);
-                return true;
+            // Log high-scoring comparisons for debugging
+            if (DUPLICATE_CONFIG.DEBUG_LOG && similarity.score > 60) {
+                console.log(`  📊 Score: ${similarity.score}/100 with ID:${existing.id}`);
+                console.log(`     Reasons: ${similarity.reasons}`);
+                console.log(`     Title: "${existing.title.substring(0, 50)}..."`);
             }
             
-            // Also check if same actor + very similar title
-            if (entry.actor && title.toLowerCase().includes(entry.actor.toLowerCase()) && matchRatio > 0.5) {
-                console.log(`  📰 Same actor + similar headline detected`);
-                return true;
+            if (similarity.score > highestScore) {
+                highestScore = similarity.score;
+                bestMatch = {
+                    isDuplicate: similarity.isDuplicate,
+                    originalId: existing.id,
+                    score: similarity.score,
+                    reason: similarity.reasons,
+                    originalTitle: existing.title
+                };
+            }
+            
+            // Short circuit if we find a definite duplicate
+            if (similarity.score >= 95) {
+                console.log(`  ⚠️ High-confidence duplicate detected (score: ${similarity.score})`);
+                return bestMatch;
             }
         }
         
-        return false;
+        if (bestMatch && bestMatch.isDuplicate) {
+            console.log(`  ⚠️ Duplicate detected (score: ${bestMatch.score})`);
+            console.log(`     Original: "${bestMatch.originalTitle.substring(0, 60)}..."`);
+            return bestMatch;
+        }
+        
+        return { isDuplicate: false };
         
     } catch (error) {
-        console.error('Error checking for duplicates:', error.message);
-        return false; // Assume not duplicate if check fails
+        console.error('Error in duplicate detection:', error.message);
+        return { isDuplicate: false }; // Don't block on errors
     }
 }
 
@@ -377,9 +553,11 @@ Find current financial and corporate accountability news from credible business 
     };
 
     console.log(`\n=== SEARCHING FOR REAL POLITICAL NEWS ===`);
-    console.log(`📅 Date range: ${dateRange}\n`);
+    console.log(`📅 Date range: ${dateRange}`);
+    console.log(`🚀 Using BATCHED duplicate detection for efficiency\n`);
     
     const allEntries = [];
+    let totalApiCallsSaved = 0; // Track API call savings
     const promises = Object.entries(REAL_NEWS_PROMPTS).map(async ([category, prompt]) => {
         try {
             console.log(`🔍 Searching real news for: ${category}`);
@@ -450,17 +628,88 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                 entries = entries ? [entries] : [];
             }
 
-            // Process and enhance entries
-            const processedEntries = [];
+            // Validate entries first
+            const validEntries = [];
             for (const entry of entries) {
                 if (!entry || typeof entry !== 'object') continue;
+                if (validateEntry(entry)) {
+                    validEntries.push(entry);
+                }
+            }
+
+            // BATCHED DUPLICATE CHECKING - Fetch recent entries ONCE
+            console.log(`\n  🔍 Batch checking ${validEntries.length} entries for duplicates...`);
+            
+            // Track API call savings from batching
+            const savedCalls = Math.max(0, validEntries.length - 1); // We save N-1 calls by batching
+            totalApiCallsSaved += savedCalls;
+            if (savedCalls > 0) {
+                console.log(`  💰 Saving ${savedCalls} API calls by batching`);
+            }
+            
+            // Get recent entries for comparison (last 7 days) - SINGLE API CALL
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
+            
+            const recentEntries = await supabaseRequest(
+                `political_entries?date=gte.${dateFilter}&select=id,title,date,actor,source_url&order=created_at.desc&limit=100`
+            );
+            
+            // Process entries with batched duplicate detection
+            const processedEntries = [];
+            for (const entry of validEntries) {
+                // Check exact URL duplicate first
+                let isDuplicate = false;
+                let duplicateInfo = null;
                 
-                if (!validateEntry(entry)) continue;
+                if (entry.source_url) {
+                    const urlMatch = await supabaseRequest(
+                        `political_entries?source_url=eq.${encodeURIComponent(entry.source_url)}&limit=1`
+                    );
+                    if (urlMatch && urlMatch.length > 0) {
+                        isDuplicate = true;
+                        duplicateInfo = {
+                            originalId: urlMatch[0].id,
+                            score: 100,
+                            reason: 'exact_url'
+                        };
+                    }
+                }
                 
-                // Check for duplicates
-                const duplicate = await isDuplicate(entry.title, entry.source_url, entry.date);
-                if (duplicate) {
+                // If not URL duplicate, check similarity against CACHED entries
+                if (!isDuplicate && recentEntries && recentEntries.length > 0) {
+                    let bestMatch = null;
+                    let highestScore = 0;
+                    
+                    for (const existing of recentEntries) {
+                        const similarity = calculateSimilarityScore(entry, existing);
+                        
+                        if (similarity.score > highestScore) {
+                            highestScore = similarity.score;
+                            bestMatch = {
+                                isDuplicate: similarity.isDuplicate,
+                                originalId: existing.id,
+                                score: similarity.score,
+                                reason: similarity.reasons
+                            };
+                        }
+                        
+                        // Short circuit on high confidence
+                        if (similarity.score >= 95) break;
+                    }
+                    
+                    if (bestMatch && bestMatch.isDuplicate) {
+                        isDuplicate = true;
+                        duplicateInfo = bestMatch;
+                    }
+                }
+                
+                if (isDuplicate) {
                     console.log(`  ⏭️ Skipping duplicate: ${entry.title.substring(0, 50)}...`);
+                    if (duplicateInfo) {
+                        console.log(`     Duplicate of ID: ${duplicateInfo.originalId} (Score: ${duplicateInfo.score})`);
+                    }
                     continue;
                 }
                 
@@ -529,6 +778,10 @@ Return ONLY a JSON array of relevant political developments found. Only include 
     results.forEach(entries => allEntries.push(...entries));
 
     console.log(`\n=== TOTAL VALID ENTRIES FOUND: ${allEntries.length} ===`);
+    if (totalApiCallsSaved > 0) {
+        console.log(`🎉 API CALLS SAVED BY BATCHING: ${totalApiCallsSaved}`);
+        console.log(`   (Reduced from ~${allEntries.length * 2} to ~${allEntries.length + 6} calls)`);
+    }
     
     return allEntries;
 }
