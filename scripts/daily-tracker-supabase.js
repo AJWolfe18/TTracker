@@ -562,8 +562,8 @@ Find current financial and corporate accountability news from credible business 
         try {
             console.log(`🔍 Searching real news for: ${category}`);
             
-            // Use the correct OpenAI Chat Completions API with function calling
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            // Use the correct OpenAI Responses API with web search
+            const response = await fetch('https://api.openai.com/v1/responses', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${OPENAI_API_KEY}`,
@@ -571,9 +571,13 @@ Find current financial and corporate accountability news from credible business 
                 },
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
-                    messages: [{
-                        role: 'user',
-                        content: `${prompt}
+                    tools: [
+                        {
+                            type: 'web_search_preview',
+                            search_context_size: 'medium'
+                        }
+                    ],
+                    input: `${prompt}
 
 For each relevant news story found, extract and format as JSON:
 {
@@ -587,10 +591,8 @@ For each relevant news story found, extract and format as JSON:
   "severity": "low|medium|high"
 }
 
-Return ONLY a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`
-                    }],
-                    temperature: 0.7,
-                    max_tokens: 2000
+Return ONLY a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`,
+                    max_output_tokens: 2000
                 }),
             });
 
@@ -601,8 +603,8 @@ Return ONLY a JSON array of relevant political developments found. Only include 
 
             const data = await response.json();
             
-            // Extract content from chat completions response
-            const content = data.choices?.[0]?.message?.content || '';
+            // Extract content from the correct location in response
+            const content = data.output?.find(item => item.type === 'message')?.content?.[0]?.text || '';
             
             console.log(`  Response length: ${content.length}`);
             console.log(`  Tokens used: ${data.usage?.total_tokens || 'unknown'}`);
