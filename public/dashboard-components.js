@@ -270,11 +270,7 @@
     
     // Get clean severity label (without emoji since we're using colored pills)
     const getSeverityLabel = () => {
-      if (entry.severity_label_inapp) {
-        // Remove emoji from the label since we're using colored backgrounds
-        return entry.severity_label_inapp.replace(/[🔴🟠🟡🟢]/g, '').trim();
-      }
-      
+      // Map severity to spicy labels WITHOUT emojis
       const severityMap = {
         'critical': 'Fucking Treason',
         'high': 'Criminal Bullshit',
@@ -282,6 +278,7 @@
         'low': 'Clown Show'
       };
       
+      // Always use the mapped label, ignore severity_label_inapp which has emojis
       return severityMap[entry.severity?.toLowerCase()] || '';
     };
     
@@ -421,11 +418,7 @@
     
     // Get impact label for EOs (without emoji since we're using colored pills)
     const getImpactLabel = () => {
-      if (order.severity_label_inapp) {
-        // Remove emoji from the label since we're using colored backgrounds
-        return order.severity_label_inapp.replace(/[🔴🟠🟡🟢]/g, '').trim();
-      }
-      
+      // Map impact types to labels WITHOUT emojis
       const impactMap = {
         'fascist_power_grab': 'Fascist Power Grab',
         'authoritarian_overreach': 'Authoritarian Overreach',
@@ -433,6 +426,7 @@
         'performative_bullshit': 'Performative Bullshit'
       };
       
+      // Always use the mapped label, ignore severity_label_inapp which has emojis
       return impactMap[order.eo_impact_type] || '';
     };
     
