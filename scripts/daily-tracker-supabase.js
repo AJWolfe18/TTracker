@@ -1,16 +1,22 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase with EXACT prompts from daily-tracker.js
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
 import { generateSpicySummary } from './spicy-summaries-integration.js';
 
-// Load environment variables from .env file for local testing
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '..', '.env') });
+// Only load dotenv for local testing (not in GitHub Actions)
+if (!process.env.GITHUB_ACTIONS) {
+    try {
+        const dotenv = await import('dotenv');
+        const { fileURLToPath } = await import('url');
+        const { dirname, join } = await import('path');
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+        dotenv.config({ path: join(__dirname, '..', '.env') });
+    } catch (e) {
+        // dotenv not available, that's okay in production
+    }
+}
 
 console.log('🚀 DAILY POLITICAL TRACKER - SUPABASE VERSION (EXACT PROMPTS)');
 console.log('=============================================================\n');
