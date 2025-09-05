@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicate Detection Investigation</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #1a1a1a; 
+            color: #e0e0e0;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #ff6b6b; }
+        h2 { color: #4ecdc4; margin-top: 30px; }
+        .search-box {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            background: #333;
+            color: #e0e0e0;
+        }
+        button {
+            background: #4ecdc4;
+            color: #1a1a1a;
+            cursor: pointer;
+        }
+        button:hover { background: #3db5ad; }
+        .results {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .entry {
+            background: #333;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 3px solid #4ecdc4;
+        }
+        .entry-title { font-weight: bold; color: #ffd93d; }
+        .entry-meta { color: #888; font-size: 0.9em; margin: 5px 0; }
+        .highlight { background: #ff6b6b; color: #1a1a1a; padding: 2px 4px; }
+        .test-badge {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: red;
+            color: white;
+            padding: 5px 10px;
+            font-weight: bold;
+            border-radius: 3px;
+            z-index: 1000;
+        }
+        .info-box {
+            background: #2a4a4a;
+            border: 1px solid #4ecdc4;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-badge" id="envBadge">LOADING...</div>
+    <div class="container">
+        <h1>🔍 Duplicate Detection Investigation Tool</h1>
+        
+        <div class="info-box">
+            <h3>Headlines Reported as Duplicates (but not found):</h3>
+            <ul>
+                <li>Federal Court Rules on Redistricting Controversy</li>
+                <li>Supreme Court Accepts Case on Voting Rights</li>
+                <li>FEC Investigates Possible Campaign Finance Violation</li>
+                <li>New Report on Dark Money in Political Campaigns</li>
+                <li>Investigation Launched Into Defense Contracting</li>
+                <li>SEC Announces New Guidelines for Financial Disclosure</li>
+            </ul>
+        </div>
+
+        <div class="search-box">
+            <h3>Search for Headlines</h3>
+            <input type="text" id="searchInput" placeholder="Enter search terms..." style="width: 400px;">
+            <button onclick="searchHeadlines()">Search Titles</button>
+            <button onclick="searchByDate()">Search Today's Entries</button>
+            <button onclick="testDuplicateLogic()">Test Duplicate Logic</button>
+        </div>
+
+        <div id="results" class="results"></div>
+
+        <h2>Investigation Results</h2>
+        <div id="investigation" class="results"></div>
+    </div>
+
+    <script type="module">
+        // Import configuration
+        import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from './supabase-config-test.js';
+        
+        // Check environment
+        const checkEnv = () => {
+            const badge = document.getElementById('envBadge');
+            const isTestEnv = window.location.hostname.includes('test--') || 
+                            window.location.hostname === 'localhost' ||
+                            window.location.hostname === '127.0.0.1';
+            
+            if (SUPABASE_URL && SUPABASE_URL.includes('bmrxygjsizrttouwwpab')) {
+                badge.textContent = 'TEST DB';
+                badge.style.background = 'red';
+            } else {
+                badge.textContent = 'PROD DB';
+                badge.style.background = 'orange';
+            }
+        };
+        checkEnv();
+
+        // Supabase request function
+        async function supabaseRequest(endpoint, method = 'GET', body = null) {
+            const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+            const options = {
+                method,
+                headers: {
+                    'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                }
+            };
+            
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                throw new Error(`Supabase error: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // Make functions global
+        window.searchHeadlines = async function() {
+            const searchTerm = document.getElementById('searchInput').value;
+            const resultsDiv = document.getElementById('results');
+            
+            resultsDiv.innerHTML = '<h3>Searching...</h3>';
+            
+            try {
+                // Search with partial match
+                const results = await supabaseRequest(
+                    `political_entries?title=ilike.%25${encodeURIComponent(searchTerm)}%25&order=created_at.desc&limit=20`
+                );
+                
+                if (results.length > 0) {
+                    resultsDiv.innerHTML = `<h3>Found ${results.length} matches for "${searchTerm}":</h3>`;
+                    results.forEach(entry => {
+                        resultsDiv.innerHTML += `
+                            <div class="entry">
+                                <div class="entry-title">${entry.title}</div>
+                                <div class="entry-meta">
+                                    Date: ${entry.date} | Actor: ${entry.actor} | ID: ${entry.id}
+                                </div>
+                                <div class="entry-meta">URL: ${entry.source_url || 'No URL'}</div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    resultsDiv.innerHTML = `<h3>No results found for "${searchTerm}"</h3>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<h3>Error: ${error.message}</h3>`;
+            }
+        };
+
+        window.searchByDate = async function() {
+            const today = new Date().toISOString().split('T')[0];
+            const resultsDiv = document.getElementById('results');
+            
+            resultsDiv.innerHTML = '<h3>Loading today\'s entries...</h3>';
+            
+            try {
+                const results = await supabaseRequest(
+                    `political_entries?date=eq.${today}&order=created_at.desc`
+                );
+                
+                resultsDiv.innerHTML = `<h3>Today's Entries (${today}): ${results.length} found</h3>`;
+                results.forEach(entry => {
+                    resultsDiv.innerHTML += `
+                        <div class="entry">
+                            <div class="entry-title">${entry.title}</div>
+                            <div class="entry-meta">
+                                Actor: ${entry.actor} | Category: ${entry.category} | ID: ${entry.id}
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (error) {
+                resultsDiv.innerHTML = `<h3>Error: ${error.message}</h3>`;
+            }
+        };
+
+        window.testDuplicateLogic = async function() {
+            const investigationDiv = document.getElementById('investigation');
+            investigationDiv.innerHTML = '<h3>Testing Duplicate Detection Logic...</h3>';
+            
+            const problematicTitles = [
+                'Federal Court Rules on Redistricting Controversy',
+                'Supreme Court Accepts Case on Voting Rights',
+                'FEC Investigates Possible Campaign Finance Violation'
+            ];
+            
+            for (const title of problematicTitles) {
+                investigationDiv.innerHTML += `<h4>Testing: "${title}"</h4>`;
+                
+                // Extract key words for search
+                const words = title.split(' ').slice(0, 3).join(' ');
+                
+                try {
+                    // Test the same query pattern used in isDuplicate()
+                    const today = new Date().toISOString().split('T')[0];
+                    
+                    // Check 1: Similar title search
+                    const similarTitle = await supabaseRequest(
+                        `political_entries?title=ilike.%25${encodeURIComponent(words)}%25&date=eq.${today}&limit=1`
+                    );
+                    
+                    if (similarTitle.length > 0) {
+                        investigationDiv.innerHTML += `
+                            <div style="color: #ff6b6b;">
+                                ⚠️ Would be marked as duplicate! Found similar title on ${today}:<br>
+                                "${similarTitle[0].title}"
+                            </div>
+                        `;
+                    } else {
+                        investigationDiv.innerHTML += `<div style="color: #4ecdc4;">✅ Would NOT be duplicate (no similar title found on ${today})</div>`;
+                    }
+                    
+                    // Get last 7 days of entries to check for fuzzy matches
+                    const weekAgo = new Date();
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+                    
+                    const recentEntries = await supabaseRequest(
+                        `political_entries?date=gte.${weekAgoStr}&select=title,date&order=date.desc&limit=100`
+                    );
+                    
+                    // Check for word-based similarity
+                    const normalizedNew = title.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+                    const newWords = normalizedNew.split(' ').filter(w => w.length > 3);
+                    
+                    const possibleDuplicates = recentEntries.filter(entry => {
+                        const normalizedExisting = entry.title.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+                        const existingWords = normalizedExisting.split(' ').filter(w => w.length > 3);
+                        
+                        const matchingWords = newWords.filter(w => existingWords.includes(w));
+                        const matchRatio = matchingWords.length / Math.max(newWords.length, existingWords.length);
+                        
+                        return matchRatio > 0.75; // 75% threshold from the code
+                    });
+                    
+                    if (possibleDuplicates.length > 0) {
+                        investigationDiv.innerHTML += `
+                            <div style="color: #ffd93d;">
+                                📰 Found ${possibleDuplicates.length} entries with >75% word similarity:<br>
+                                ${possibleDuplicates.map(e => `- [${e.date}] "${e.title}"`).join('<br>')}
+                            </div>
+                        `;
+                    }
+                    
+                } catch (error) {
+                    investigationDiv.innerHTML += `<div style="color: red;">Error: ${error.message}</div>`;
+                }
+                
+                investigationDiv.innerHTML += '<hr>';
+            }
+        };
+
+        // Run initial investigation on load
+        setTimeout(() => {
+            window.testDuplicateLogic();
+        }, 1000);
+    </script>
+</body>
+</html>
