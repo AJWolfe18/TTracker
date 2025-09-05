@@ -45,6 +45,10 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+        DUPLICATE_COMPARISON_LENGTH: ${{ vars.DUPLICATE_COMPARISON_LENGTH || '200' }}
+        DUPLICATE_SIMILARITY_THRESHOLD: ${{ vars.DUPLICATE_SIMILARITY_THRESHOLD || '0.85' }}
+        DUPLICATE_SCORE_THRESHOLD: ${{ vars.DUPLICATE_SCORE_THRESHOLD || '80' }}
+        DUPLICATE_DEBUG_LOG: ${{ vars.DUPLICATE_DEBUG_LOG || 'false' }}
       run: node scripts/daily-tracker-supabase.js
       
     - name: Commit any changes (minimal, since data is in Supabase)
