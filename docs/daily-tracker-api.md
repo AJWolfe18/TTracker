@@ -2,7 +2,7 @@
 
 ## Overview
 
-The daily tracker uses the OpenAI Responses API with web search capability to find real political news articles. This runs daily at 9 AM EST via GitHub Actions.
+The daily tracker uses the OpenAI Responses API with web search capability to find real political news articles. This runs daily at 9 AM and 10 AM EST via GitHub Actions.
 
 ## API Configuration
 
@@ -10,6 +10,8 @@ The daily tracker uses the OpenAI Responses API with web search capability to fi
 ```
 POST https://api.openai.com/v1/responses
 ```
+
+**Note:** This is NOT the standard chat/completions endpoint. The Responses API is a special endpoint that supports web search functionality through the `web_search_preview` tool.
 
 ### Request Structure
 ```javascript
@@ -48,123 +50,132 @@ POST https://api.openai.com/v1/responses
 ## Environment Variables
 
 ### Required (Secrets)
-- `OPENAI_API_KEY` - OpenAI API key for Responses API access
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_ANON_KEY` - Supabase anonymous key for database access
+- `OPENAI_API_KEY` - Your OpenAI API key with access to Responses API
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for database operations
 
-### Optional (Variables)
-These control duplicate detection sensitivity. All have defaults if not set:
+### Optional (Duplicate Detection)
+- `DUPLICATE_LOOKBACK_DAYS` - Days to check for duplicates (default: 7)
+- `DUPLICATE_MIN_LENGTH` - Minimum description length to check (default: 200)
+- `DUPLICATE_THRESHOLD` - Similarity threshold 0-100 (default: 85)
+- `DUPLICATE_CHECK_BATCH_SIZE` - Batch size for API calls (default: 20)
+- `DUPLICATE_SKIP_CHECK` - Set to 'true' to disable duplicate checking
+- `DUPLICATE_DEBUG_LOG` - Set to 'true' for detailed logging
 
-- `DUPLICATE_COMPARISON_LENGTH` - Characters to compare (default: 200)
-- `DUPLICATE_SIMILARITY_THRESHOLD` - Similarity percentage required (default: 0.85)
-- `DUPLICATE_SCORE_THRESHOLD` - Total score to mark as duplicate (default: 80)
-- `DUPLICATE_DEBUG_LOG` - Enable detailed logging (default: false)
+## Search Categories
 
-### Setting Environment Variables
+The tracker searches for news in these political categories:
 
-#### GitHub Actions
-1. Go to Settings → Secrets and variables → Actions
-2. Add required values as **Repository secrets**
-3. Add optional values as **Repository variables** (not secrets)
+1. **Trump Administration** - Policy announcements, cabinet appointments, presidential actions
+2. **Elon Musk & DOGE** - Department of Government Efficiency, tech-government intersection
+3. **DOJ & Law Enforcement** - Justice Department actions, federal investigations
+4. **Federal Agencies** - Agency policy changes, regulatory updates
+5. **Courts & Legal** - Federal court rulings, Supreme Court decisions
+6. **Corporate & Financial** - Lobbying, campaign finance, corporate influence
 
-#### Local Development
-Create `.env` file in project root:
-```bash
-OPENAI_API_KEY=sk-...
-SUPABASE_URL=https://...
-SUPABASE_ANON_KEY=...
+## News Quality Requirements
 
-# Optional
-DUPLICATE_DEBUG_LOG=true
-DUPLICATE_COMPARISON_LENGTH=200
-```
+Each article must include:
+- **title** - Clear, factual headline
+- **description** - 2-3 sentence summary
+- **source** - Publisher name (e.g., "Reuters", "AP News")
+- **source_url** - Direct link to the article
+- **date** - Article publication date (YYYY-MM-DD format)
+- **severity** - Impact rating: "low", "medium", "high", or "critical"
 
-## Categories Searched
+## Cost Management
 
-The tracker searches for news in 6 categories:
-1. **Trump & Family** - Legal proceedings, business dealings, campaign activities
-2. **Elon Musk & DOGE** - Department of Government Efficiency, conflicts of interest
-3. **DOJ & Law Enforcement** - Prosecutions, policy shifts, civil rights
-4. **Federal Agencies** - ICE, DHS, EPA policy changes and leadership
-5. **Courts & Legal** - Supreme Court, federal court rulings, legal challenges
-6. **Corporate & Financial** - Lobbying, campaign finance, ethics violations
+### Per Run Costs
+- **API Calls:** ~681 tokens per category × 6 categories = ~4,086 tokens
+- **Cost:** ~$0.003 per run
+- **Monthly:** ~$0.10-0.15 (with 2 daily runs)
 
-## Duplicate Detection
+### Optimization Features
+- **Duplicate Detection:** Saves 50% on redundant API calls
+- **Batch Processing:** Processes 20 articles at once for efficiency
+- **Smart Caching:** Checks last 7 days to avoid republishing
 
-The system uses a multi-factor scoring system:
-
-### Scoring Components
-- **URL match**: 30 points (exact) or 10 points (same domain)
-- **Title similarity**: 0-40 points based on text comparison
-- **Date proximity**: 0-15 points (same day = 15)
-- **Actor match**: 0-15 points
-
-Total score ≥80 (configurable) = duplicate
-
-### Batched Processing
-- Fetches recent entries once for comparison
-- Reduces API calls by ~50%
-- Saves ~900 Supabase calls per month
-
-## Error Handling
+## Common Issues & Solutions
 
 ### Socket Hang Ups
-- Common with web search APIs
-- System continues processing other categories
-- Future improvement: Add retry logic (TTRC-118)
+**Issue:** Occasional "socket hang up" errors during web searches
+**Solution:** These are normal for web search APIs and self-recover. The script continues processing other categories.
 
-### API Failures
-- Non-blocking: Failed categories return empty arrays
-- Other categories continue processing
-- Errors logged but don't stop execution
+### No Articles Found
+**Issue:** API returns 0 articles
+**Possible Causes:**
+1. Using wrong endpoint (must be `/v1/responses` not `/v1/chat/completions`)
+2. Missing `web_search_preview` tool in request
+3. Prompt asking to "generate" instead of "search"
 
-## Cost Analysis
-
-### Per Run
-- ~680 tokens per category
-- 6 categories = ~4,080 tokens
-- Cost: ~$0.003 per run
-
-### Monthly
-- 30 days × 2 runs = 60 runs
-- Total: ~$0.10-0.15/month
-- Well within $50/month budget
-
-## Performance Metrics
-
-### Typical Run
-- Articles found: 10-15
-- Duplicates caught: 5-10
-- Processing time: 30-60 seconds
-- Success rate: ~95%
-
-## Known Limitations
-
-1. **Responses API** - Undocumented/beta endpoint, may change
-2. **Socket timeouts** - Occasional connection drops (self-recovers)
-3. **Web search quality** - Depends on OpenAI's web search capability
-4. **Date extraction** - Sometimes uses current date instead of article date
-
-## Future Improvements (TTRC-118)
-
-- Add retry logic for failed API calls
-- Email notifications for failures
-- Performance monitoring dashboard
-- Consider fallback to NewsAPI or Perplexity
-
-## Testing
-
-### Local Test
+### Duplicate Articles
+**Issue:** Same story appears multiple times
+**Solution:** Configure duplicate detection thresholds:
 ```bash
-node scripts/daily-tracker-supabase.js
+# In .env or GitHub Secrets
+DUPLICATE_THRESHOLD=75  # Lower = more aggressive filtering
+DUPLICATE_LOOKBACK_DAYS=14  # Check more days of history
 ```
 
-### GitHub Actions Test
-1. Go to Actions tab
-2. Select "Daily Political Tracker"
-3. Click "Run workflow"
+## Testing Locally
 
-### Verify Results
-- Check Supabase `political_entries` table
-- Look for entries with today's date
-- Verify `source_url` points to real news sites
+```bash
+# Create .env file with required keys
+echo OPENAI_API_KEY=your-key >> .env
+echo SUPABASE_URL=your-url >> .env
+echo SUPABASE_SERVICE_ROLE_KEY=your-key >> .env
+
+# Run with debug logging
+set DUPLICATE_DEBUG_LOG=true
+node scripts/daily-tracker-supabase.js
+
+# Test with limited categories
+node scripts/daily-tracker-supabase.js --test
+```
+
+## GitHub Actions Configuration
+
+The workflow runs automatically at 9 AM and 10 AM EST:
+
+```yaml
+name: Daily Political Tracker
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 9 AM EST
+    - cron: '0 15 * * *'  # 10 AM EST
+  workflow_dispatch:
+
+jobs:
+  track-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: node scripts/daily-tracker-supabase.js
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+```
+
+## Backfilling Missing Days
+
+To catch up on missed articles:
+
+```bash
+# Backfill last 14 days
+node scripts/daily-tracker-supabase.js --days 14
+
+# Or use the batch script
+backfill-2-weeks.bat
+```
+
+## Version History
+
+- **v3.0** (Sept 2025) - Fixed Responses API, enhanced duplicate detection
+- **v2.5** (Aug 2025) - Added spicy summaries integration
+- **v2.0** (July 2025) - Migrated to Supabase, added ID generation
+- **v1.0** (June 2025) - Initial JSON-based implementation

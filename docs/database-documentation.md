@@ -1,5 +1,5 @@
 # TrumpyTracker Database Documentation
-*Last Updated: September 3, 2025*
+*Last Updated: September 5, 2025*
 
 ## Overview
 
@@ -12,12 +12,15 @@ Stores political news articles and events from daily tracking.
 - **Schema**: [political-entries-schema.md](./database/political-entries-schema.md)
 - **Primary Key**: `id` (SERIAL - auto-incrementing integer)
 - **Collection**: Daily automated via RSS feeds and manual submission
+- **Severity**: 4-tier system (critical/high/medium/low) as of Sept 5, 2025
 
 ### 2. `executive_orders`  
 Stores all Executive Orders from the Federal Register API.
 - **Schema**: [executive-orders-schema.md](./database/executive-orders-schema.md)
 - **Primary Key**: `id` (TEXT - generated as `eo_timestamp_random`)
 - **Collection**: Daily automated at 11am EST via GitHub Actions
+- **Severity**: 4-tier system via `severity_rating` field
+- **Trump Attribution**: Fixed Sept 5, 2025 - AI now correctly attributes to Trump
 
 ### 3. `dashboard_stats` (View)
 Aggregated statistics view for the dashboard.
@@ -133,18 +136,36 @@ React Components
 
 ### GPT-5 Integration
 - **Models**: gpt-5-mini (default), gpt-5 (critical)
-- **Cost**: $0.00054-0.00255 per item
+- **Cost**: $1.25/1M input, $10/1M output (GPT-5); $0.25/1M input, $2/1M output (GPT-5-mini)
+- **Monthly Cost**: ~$2-3 at current volume
 - **Fields Generated**:
   - `spicy_summary` - Main angry translation
-  - `shareable_hook` - Social media text
-  - `severity_label_inapp` - In-app display
+  - `shareable_hook` - Social media text (280 char limit)
+  - `severity_label_inapp` - In-app display with emoji
   - `severity_label_share` - Clean social label
 
-### Impact Categories (EOs)
-- `fascist_power_grab` - Democracy threats
-- `authoritarian_overreach` - Control/surveillance
-- `corrupt_grift` - Self-dealing
-- `performative_bullshit` - Theater/distraction
+### 4-Tier Severity System (Updated Sept 5, 2025)
+
+**Political Entries Mapping:**
+- `critical` → "Fucking Treason 🔴" (Democracy threats, election stealing)
+- `high` → "Criminal Bullshit 🟠" (Criminal activity, policies that harm)
+- `medium` → "Swamp Shit 🟡" (Standard corruption, grift)
+- `low` → "Clown Show 🟢" (Incompetence, stupidity)
+
+**Executive Orders Impact Categories:**
+- `fascist_power_grab` → "Fascist Power Grab 🔴"
+- `authoritarian_overreach` → "Authoritarian Overreach 🟠"
+- `corrupt_grift` → "Corrupt Grift 🟡"
+- `performative_bullshit` → "Performative Bullshit 🟢"
+
+### Database Constraints (Updated Sept 5, 2025)
+```sql
+-- Political Entries
+CHECK (severity IN ('critical', 'high', 'medium', 'low'))
+
+-- Executive Orders
+CHECK (severity_rating IN ('critical', 'high', 'medium', 'low'))
+```
 
 ## Best Practices
 
@@ -177,6 +198,12 @@ All database changes should be tested on the test environment before production.
 
 ## Related Documentation
 
+### Schema Files (in /database/ folder)
+- [Complete Database Schema](./database/database-schema.md) - All fields reference
+- [Severity System Guide](./database/severity-system.md) - 4-tier implementation details
+- [Field Error Fixes](./database/FIELD-ERROR-FIXES.md) - Quick troubleshooting
+
+### Implementation Guides
 - [Executive Orders Collection](./executive-orders-collection.md)
 - [Daily Tracker Implementation](./daily-tracker-implementation.md)  
 - [Spicy Summaries Implementation](./spicy-summaries-implementation.md)
