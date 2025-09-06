@@ -482,12 +482,12 @@ CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use toda
 
 Find credible news sources and return specific, factual developments with proper citations.`,
 
-        'Elon Musk & DOGE': `Search for recent news about Elon Musk's role in government, DOGE (Department of Government Efficiency), or his political influence ${dateRange}. Focus on:
+        'DOGE & Government Efficiency': `Search for recent news about DOGE (Department of Government Efficiency) operations and government efficiency initiatives ${dateRange}. Focus on:
 - NEW DOGE operations and government efficiency recommendations
-- RECENT government contracts involving his companies (Tesla, SpaceX, etc.)
-- LATEST X/Twitter platform policy changes affecting political discourse
-- EMERGING conflicts between business interests and government responsibilities
-- CURRENT public statements on government policy
+- RECENT federal agency restructuring or elimination proposals
+- LATEST government spending cuts or efficiency measures
+- CURRENT recommendations from the efficiency commission
+- EMERGING conflicts of interest within DOGE operations
 
 IMPORTANT: Only include unique stories from the date range. No duplicate coverage of the same event.
 
@@ -583,7 +583,7 @@ For each relevant news story found, extract and format as JSON:
 {
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
-  "category": "${category.includes('Trump') ? 'Financial' : category.includes('Musk') ? 'Platform Manipulation' : category.includes('DOJ') ? 'Government Oversight' : category.includes('Courts') ? 'Legal Proceedings' : category.includes('Corporate') ? 'Corporate Ethics' : 'Government Oversight'}",
+  "category": "${category.includes('Trump') ? 'Financial' : category.includes('DOGE') ? 'Government Oversight' : category.includes('DOJ') ? 'Government Oversight' : category.includes('Courts') ? 'Legal Proceedings' : category.includes('Corporate') ? 'Corporate Ethics' : 'Government Oversight'}",
   "title": "Headline under 100 characters",
   "description": "2-3 sentence factual summary",
   "source_url": "Full URL to original article",
