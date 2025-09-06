@@ -9,7 +9,7 @@ An automated AI-powered system that tracks and documents political developments,
 ## 🎯 Purpose
 
 TrumpyTracker monitors and documents:
-- **Political Figures**: Donald Trump, Elon Musk, and other key political actors
+- **Political Figures**: Donald Trump and other key political actors
 - **Federal Agencies**: DOJ, FBI, ICE, DHS, Department of Education actions
 - **Civil Liberties**: Surveillance programs, court rulings, privacy issues
 - **Corporate Accountability**: Financial conflicts, lobbying, ethical violations
@@ -24,7 +24,7 @@ TrumpyTracker monitors and documents:
 - **Backend**: Supabase (PostgreSQL)
 - **Automation**: GitHub Actions + OpenAI API
 - **Hosting**: Netlify (static site + branch deploys)
-- **AI Processing**: OpenAI GPT-4 for content analysis
+- **AI Processing**: OpenAI GPT-5 models for content analysis and spicy summaries
 
 ### Project Structure
 ```
