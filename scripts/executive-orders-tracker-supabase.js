@@ -64,11 +64,11 @@ async function generateAIAnalysis(title, orderNumber, abstract = '') {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are a political analyst. Analyze executive orders and provide structured JSON output.'
+                        content: 'You are a political analyst. Context: Donald Trump is the current President of the United States (inaugurated January 20, 2025). You are analyzing Executive Orders issued by President Trump. Analyze executive orders and provide structured JSON output.'
                     },
                     {
                         role: 'user',
-                        content: `Analyze Executive Order ${orderNumber}: "${title}"${abstract ? `. Abstract: ${abstract}` : ''}.
+                        content: `Analyze Executive Order ${orderNumber}: "${title}" issued by President Trump.${abstract ? ` Abstract: ${abstract}` : ''}.
 
 Provide a JSON response with these exact fields:
 {
