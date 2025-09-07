@@ -203,7 +203,12 @@ async function fetchFromFederalRegister() {
     console.log(`   🎯 EXPECTING ~190 Executive Orders for full import\n`);
     
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'TrumpyTracker/1.0 (https://trumpytracker.com)',
+                'Accept': 'application/json'
+            }
+        });
         
         if (!response.ok) {
             const errorText = await response.text();

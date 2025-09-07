@@ -450,7 +450,7 @@ function isVerifiedSource(url) {
 
 // Format category for display - Convert from database format to display format
 function formatCategoryDisplay(category) {
-    if (!category) return 'Policy & Legislation';
+    if (!category) return 'Other';
     
     const displayNames = {
         'corruption_scandals': 'Corruption & Scandals',
@@ -459,15 +459,19 @@ function formatCategoryDisplay(category) {
         'justice_legal': 'Justice & Legal',
         'executive_actions': 'Executive Actions',
         'foreign_policy': 'Foreign Policy',
+        'corporate_financial': 'Corporate & Financial',
+        'civil_liberties': 'Civil Liberties',
+        'media_disinformation': 'Media & Disinformation',
+        'epstein_associates': 'Epstein & Associates',
         'other': 'Other'
     };
     
     return displayNames[category] || 'Other';
 }
 
-// Clean and validate category - Using new 7-category system
+// Clean and validate category - Using new 11-category system
 function normalizeCategory(category) {
-    if (!category) return 'policy_legislation';
+    if (!category) return 'other';
     
     // Remove any brackets or extra text
     const cleaned = category.toLowerCase()
@@ -477,7 +481,27 @@ function normalizeCategory(category) {
         .replace(/\s+/g, '_')     // Replace spaces with underscores
         .trim();
     
-    // Map old categories to new consolidated categories
+    // Valid 11 categories
+    const validCategories = [
+        'corruption_scandals',
+        'democracy_elections',
+        'policy_legislation',
+        'justice_legal',
+        'executive_actions',
+        'foreign_policy',
+        'corporate_financial',
+        'civil_liberties',
+        'media_disinformation',
+        'epstein_associates',
+        'other'
+    ];
+    
+    // Check if it's already valid
+    if (validCategories.includes(cleaned)) {
+        return cleaned;
+    }
+    
+    // Map old categories to new consolidated 11-category system
     const categoryMapping = {
         // Corruption & Scandals
         'corruption': 'corruption_scandals',
@@ -485,13 +509,19 @@ function normalizeCategory(category) {
         'ethics': 'corruption_scandals',
         'investigation': 'corruption_scandals',
         'grift': 'corruption_scandals',
+        'bribery': 'corruption_scandals',
+        'conflicts': 'corruption_scandals',
         
-        // Democracy & Elections
+        // Democracy & Elections (includes ALL election shenanigans)
         'democracy': 'democracy_elections',
         'election': 'democracy_elections',
         'voting': 'democracy_elections',
         'voter': 'democracy_elections',
         'ballot': 'democracy_elections',
+        'gerrymandering': 'democracy_elections',
+        'election_interference': 'democracy_elections',
+        'fake_electors': 'democracy_elections',
+        'subversion': 'democracy_elections',
         
         // Policy & Legislation
         'policy': 'policy_legislation',
@@ -499,6 +529,9 @@ function normalizeCategory(category) {
         'regulatory': 'policy_legislation',
         'regulation': 'policy_legislation',
         'law': 'policy_legislation',
+        'congress': 'policy_legislation',
+        'bill': 'policy_legislation',
+        'budget': 'policy_legislation',
         
         // Justice & Legal
         'justice': 'justice_legal',
@@ -508,35 +541,53 @@ function normalizeCategory(category) {
         'judge': 'justice_legal',
         'doj': 'justice_legal',
         'prosecution': 'justice_legal',
+        'indictment': 'justice_legal',
+        'lawsuit': 'justice_legal',
         
         // Executive Actions
         'executive': 'executive_actions',
         'presidential': 'executive_actions',
         'whitehouse': 'executive_actions',
         'executive_order': 'executive_actions',
+        'appointment': 'executive_actions',
         
         // Foreign Policy
         'foreign': 'foreign_policy',
         'international': 'foreign_policy',
         'trade': 'foreign_policy',
         'diplomacy': 'foreign_policy',
-        'treaty': 'foreign_policy'
+        'treaty': 'foreign_policy',
+        'sanctions': 'foreign_policy',
+        
+        // Corporate & Financial
+        'corporate': 'corporate_financial',
+        'financial': 'corporate_financial',
+        'lobbying': 'corporate_financial',
+        'pac': 'corporate_financial',
+        'campaign_finance': 'corporate_financial',
+        'dark_money': 'corporate_financial',
+        
+        // Civil Liberties
+        'civil_liberties': 'civil_liberties',
+        'surveillance': 'civil_liberties',
+        'protest': 'civil_liberties',
+        'free_speech': 'civil_liberties',
+        'censorship': 'civil_liberties',
+        'civil_rights': 'civil_liberties',
+        'fisa': 'civil_liberties',
+        
+        // Media & Disinformation
+        'media': 'media_disinformation',
+        'disinformation': 'media_disinformation',
+        'propaganda': 'media_disinformation',
+        'fake_news': 'media_disinformation',
+        'misinformation': 'media_disinformation',
+        
+        // Epstein & Associates
+        'epstein': 'epstein_associates',
+        'trafficking': 'epstein_associates',
+        'maxwell': 'epstein_associates'
     };
-    
-    // Check if it's already a valid new category
-    const validNewCategories = [
-        'corruption_scandals',
-        'democracy_elections',
-        'policy_legislation',
-        'justice_legal',
-        'executive_actions',
-        'foreign_policy',
-        'other'
-    ];
-    
-    if (validNewCategories.includes(cleaned)) {
-        return cleaned;
-    }
     
     // Try direct mapping first
     if (categoryMapping[cleaned]) {
@@ -551,7 +602,53 @@ function normalizeCategory(category) {
     }
     
     // Default fallback
+    console.warn(`Unknown category: ${category}, defaulting to 'other'`);
     return 'other';
+}
+
+// Actor normalization - keeping it informal per site tone
+function normalizeActor(actor) {
+    if (!actor) return 'Unknown';
+    
+    const actorMapping = {
+        // Trump variations - all become just "Trump"
+        'President Trump': 'Trump',
+        'Donald Trump': 'Trump',
+        'Trump Administration': 'White House',
+        'The President': 'Trump',
+        'President Donald Trump': 'Trump',
+        
+        // Department variations
+        'Department of Justice': 'DOJ',
+        'Justice Department': 'DOJ',
+        'Dept. of Defense': 'DOD',
+        'Pentagon': 'DOD',
+        'State Department': 'State',
+        'Department of State': 'State',
+        'Department of Education': 'Education',
+        'Dept. of Education': 'Education',
+        'Department of Homeland Security': 'DHS',
+        'Homeland Security': 'DHS',
+        
+        // Court variations
+        'SCOTUS': 'Supreme Court',
+        'U.S. Supreme Court': 'Supreme Court',
+        'The Supreme Court': 'Supreme Court',
+        
+        // Congress variations
+        'House Republicans': 'House GOP',
+        'Senate Dems': 'Senate Democrats',
+        'Congressional Republicans': 'Congress GOP',
+        'Congressional Democrats': 'Congress Democrats'
+    };
+    
+    // Check for exact match in normalization map
+    if (actorMapping[actor]) {
+        return actorMapping[actor];
+    }
+    
+    // Return as-is if already in correct format
+    return actor;
 }
 
 // Entry validation - same as daily-tracker.js
@@ -703,7 +800,7 @@ For each relevant news story found, extract and format as JSON:
 {
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
-  "category": "[SELECT BASED ON CONTENT - Choose ONE: corruption_scandals, democracy_elections, policy_legislation, justice_legal, executive_actions, foreign_policy, other]",
+  "category": "[SELECT BASED ON CONTENT - Choose ONE: corruption_scandals, democracy_elections, policy_legislation, justice_legal, executive_actions, foreign_policy, corporate_financial, civil_liberties, media_disinformation, epstein_associates, other]",
   "title": "Headline under 100 characters",
   "description": "2-3 sentence factual summary",
   "source_url": "Full URL to original article",
@@ -712,12 +809,16 @@ For each relevant news story found, extract and format as JSON:
 }
 
 IMPORTANT: The category must reflect the article's actual content, not the search topic. Use these exact values:
-- Articles about scandals/ethics/grift = "corruption_scandals"
-- Articles about elections/voting = "democracy_elections"
-- Articles about laws/regulations = "policy_legislation"
-- Articles about courts/DOJ/prosecutions = "justice_legal"
-- Articles about presidential actions/EOs = "executive_actions"
-- Articles about international relations = "foreign_policy"
+- Articles about scandals/ethics/grift/bribery/conflicts = "corruption_scandals"
+- Articles about elections/voting/gerrymandering/fake electors = "democracy_elections"
+- Articles about laws/regulations/budget/bills/congress = "policy_legislation"
+- Articles about courts/DOJ/prosecutions/indictments/lawsuits = "justice_legal"
+- Articles about presidential actions/EOs/appointments/directives = "executive_actions"
+- Articles about international relations/trade/sanctions/diplomacy = "foreign_policy"
+- Articles about lobbying/PACs/dark money/campaign finance = "corporate_financial"
+- Articles about surveillance/protests/civil rights/FISA/censorship = "civil_liberties"
+- Articles about propaganda/fake news/disinformation/media manipulation = "media_disinformation"
+- Articles about Epstein/trafficking/Maxwell network = "epstein_associates"
 - Articles that don't fit = "other"
 
 SEVERITY GUIDE:
@@ -873,7 +974,7 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                 const processedEntry = {
                     // Note: id is auto-generated by database (SERIAL PRIMARY KEY)
                     date: entry.date,
-                    actor: entry.actor || 'Unknown',
+                    actor: normalizeActor(entry.actor) || 'Unknown',
                     category: normalizeCategory(entry.category),
                     title: entry.title,
                     description: entry.description,
