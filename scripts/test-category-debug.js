@@ -82,12 +82,22 @@ Return ONLY a JSON array of 1-2 relevant political developments found. Only incl
         // Try to parse JSON
         let entries = [];
         try {
-            const jsonMatch = content.match(/\[[\s\S]*?\]/);
+            // Remove markdown code blocks if present
+            let cleanContent = content;
+            if (content.includes('```json')) {
+                cleanContent = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            } else if (content.includes('```')) {
+                cleanContent = content.replace(/```\s*/g, '').trim();
+            }
+            
+            const jsonMatch = cleanContent.match(/\[[\s\S]*?\]/);
             if (jsonMatch) {
                 entries = JSON.parse(jsonMatch[0]);
+            } else {
+                entries = JSON.parse(cleanContent);
             }
         } catch (parseError) {
-            console.log('❌ Could not parse JSON from response');
+            console.log('❌ Could not parse JSON from response:', parseError.message);
             return;
         }
 

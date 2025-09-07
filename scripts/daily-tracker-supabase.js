@@ -849,13 +849,21 @@ Return ONLY a JSON array of relevant political developments found. Only include 
             // Extract JSON from the response
             let entries = [];
             try {
+                // Remove markdown code blocks if present
+                let cleanContent = content;
+                if (content.includes('```json')) {
+                    cleanContent = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                } else if (content.includes('```')) {
+                    cleanContent = content.replace(/```\s*/g, '').trim();
+                }
+                
                 // Try to find JSON in the response
-                const jsonMatch = content.match(/\[[\s\S]*?\]/);
+                const jsonMatch = cleanContent.match(/\[[\s\S]*?\]/);
                 if (jsonMatch) {
                     entries = JSON.parse(jsonMatch[0]);
                 } else {
                     // If no JSON array found, try to parse the whole response
-                    entries = JSON.parse(content);
+                    entries = JSON.parse(cleanContent);
                 }
             } catch (parseError) {
                 console.log(`  ❌ Could not parse JSON response`);
