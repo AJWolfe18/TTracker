@@ -376,7 +376,9 @@
             {/* Category */}
             {entry.category && (
               <span className="text-xs text-gray-500">
-                {entry.category}
+                {window.CategoryConfig?.formatCategoryDisplay ? 
+                  window.CategoryConfig.formatCategoryDisplay(entry.category) : 
+                  entry.category}
               </span>
             )}
           </div>
@@ -520,7 +522,9 @@
             {/* Category */}
             {order.category && (
               <span className="text-xs text-gray-500">
-                {order.category}
+                {window.CategoryConfig?.formatCategoryDisplay ? 
+                  window.CategoryConfig.formatCategoryDisplay(order.category) : 
+                  order.category}
               </span>
             )}
           </div>

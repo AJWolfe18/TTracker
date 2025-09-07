@@ -28,22 +28,8 @@ if (!OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// ID generation - Get next sequential ID from database
-async function getNextId() {
-    try {
-        // Get the highest current ID
-        const result = await supabaseRequest('political_entries?select=id&order=id.desc&limit=1');
-        if (result && result.length > 0) {
-            return result[0].id + 1;
-        }
-        // If table is empty, start at 1
-        return 1;
-    } catch (error) {
-        console.error('Error getting next ID:', error.message);
-        // Fallback to timestamp-based ID if query fails
-        return Math.floor(Date.now() / 1000);
-    }
-}
+// ID generation removed - Database uses SERIAL PRIMARY KEY which auto-generates IDs
+// Per TTRC-86 fix: Never manually set ID field when inserting to political_entries
 
 // Date range helper - can be overridden by command line args for backfill
 function getDateRangePrompt() {
@@ -994,7 +980,7 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     manual_submission: false,
                     added_at: new Date().toISOString(),
                     // Add spicy summary fields
-                    editorial_summary: entry.description,  // Keep original as editorial_summary
+                    // Note: editorial_summary field removed per schema (use description instead)
                     spicy_summary: spicyEnhanced.spicy_summary,
                     shareable_hook: spicyEnhanced.shareable_hook,
                     severity_label_inapp: spicyEnhanced.severity_label_inapp,
@@ -1041,22 +1027,16 @@ async function saveToSupabase(entries) {
     console.log(`\n💾 Saving ${entries.length} new entries to Supabase...`);
     
     try {
-        // Get the starting ID for this batch
-        const startId = await getNextId();
-        console.log(`   Starting from ID: ${startId}`);
-        
-        // Add sequential IDs to entries
-        const entriesWithIds = entries.map((entry, index) => {
+        // Remove any existing id field from entries and let database auto-generate
+        const entriesWithoutIds = entries.map(entry => {
             const { id, ...cleanEntry } = entry; // Remove any existing id field
-            return {
-                id: startId + index,
-                ...cleanEntry
-            };
+            return cleanEntry;
         });
         
         // Insert all entries at once (Supabase handles batches well)
-        const result = await supabaseRequest('political_entries', 'POST', entriesWithIds);
-        console.log(`✅ Successfully saved ${entriesWithIds.length} entries to Supabase`);
+        // Database will auto-generate sequential IDs using SERIAL PRIMARY KEY
+        const result = await supabaseRequest('political_entries', 'POST', entriesWithoutIds);
+        console.log(`✅ Successfully saved ${entriesWithoutIds.length} entries to Supabase`);
         
         // Enhanced summary matching daily-tracker.js
         console.log('\n=== DAILY TRACKING SUMMARY ===');

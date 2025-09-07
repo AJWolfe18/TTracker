@@ -1062,12 +1062,24 @@
                                 
                                 <div className="form-group">
                                     <label className="form-label">Category</label>
-                                    <input
-                                        type="text"
-                                        className="form-input"
+                                    <select
+                                        className="form-select"
                                         value={formData.category || ''}
                                         onChange={e => handleChange('category', e.target.value)}
-                                    />
+                                    >
+                                        <option value="">Select Category</option>
+                                        <option value="corruption_scandals">Corruption & Scandals</option>
+                                        <option value="democracy_elections">Democracy & Elections</option>
+                                        <option value="policy_legislation">Policy & Legislation</option>
+                                        <option value="justice_legal">Justice & Legal</option>
+                                        <option value="executive_actions">Executive Actions</option>
+                                        <option value="foreign_policy">Foreign Policy</option>
+                                        <option value="corporate_financial">Corporate & Financial</option>
+                                        <option value="civil_liberties">Civil Liberties</option>
+                                        <option value="media_disinformation">Media & Disinformation</option>
+                                        <option value="epstein_associates">Epstein & Associates</option>
+                                        <option value="other">Other</option>
+                                    </select>
                                 </div>
                                 
                                 <div className="form-group">
