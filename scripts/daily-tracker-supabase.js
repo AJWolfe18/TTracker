@@ -312,23 +312,37 @@ async function checkForDuplicate(entry) {
     }
 }
 
-// Severity assessment - same as daily-tracker.js
+// Severity assessment - Updated for 4-tier system
 function assessSeverity(title, description) {
     const content = `${title} ${description}`.toLowerCase();
     
+    // Critical - Democracy threats and authoritarianism
+    const criticalSeverity = [
+        'coup', 'insurrection', 'martial law', 'suspend constitution',
+        'overturn election', 'steal election', 'voting machines',
+        'authoritarian', 'fascism', 'dictatorship', 'democracy threat',
+        'civil war', 'political violence', 'assassination'
+    ];
+    
+    // High - Criminal activity and serious violations
     const highSeverity = [
         'arrest', 'indictment', 'conviction', 'felony', 'fraud', 'corruption',
         'constitutional crisis', 'impeachment', 'treason', 'sedition',
-        'emergency', 'shutdown', 'crisis', 'violation', 'breach'
+        'emergency', 'shutdown', 'crisis', 'violation', 'breach',
+        'criminal', 'prosecute', 'jail', 'prison'
     ];
     
+    // Medium - Investigations and controversies
     const mediumSeverity = [
         'investigation', 'subpoena', 'lawsuit', 'hearing', 'testimony',
         'controversy', 'conflict', 'ethics', 'challenge', 'dispute',
-        'allegation', 'concern', 'criticism'
+        'allegation', 'concern', 'criticism', 'scandal', 'probe'
     ];
     
-    if (highSeverity.some(keyword => content.includes(keyword))) {
+    // Check in order of severity
+    if (criticalSeverity.some(keyword => content.includes(keyword))) {
+        return 'critical';
+    } else if (highSeverity.some(keyword => content.includes(keyword))) {
         return 'high';
     } else if (mediumSeverity.some(keyword => content.includes(keyword))) {
         return 'medium';
@@ -432,6 +446,112 @@ function isVerifiedSource(url) {
     } catch {
         return false;
     }
+}
+
+// Format category for display - Convert from database format to display format
+function formatCategoryDisplay(category) {
+    if (!category) return 'Policy & Legislation';
+    
+    const displayNames = {
+        'corruption_scandals': 'Corruption & Scandals',
+        'democracy_elections': 'Democracy & Elections',
+        'policy_legislation': 'Policy & Legislation',
+        'justice_legal': 'Justice & Legal',
+        'executive_actions': 'Executive Actions',
+        'foreign_policy': 'Foreign Policy',
+        'other': 'Other'
+    };
+    
+    return displayNames[category] || 'Other';
+}
+
+// Clean and validate category - Using new 7-category system
+function normalizeCategory(category) {
+    if (!category) return 'policy_legislation';
+    
+    // Remove any brackets or extra text
+    const cleaned = category.toLowerCase()
+        .replace(/\[.*?\]/g, '') // Remove brackets
+        .replace(/\(.*?\)/g, '')  // Remove parentheses
+        .replace(/&/g, 'and')     // Replace & with 'and'
+        .replace(/\s+/g, '_')     // Replace spaces with underscores
+        .trim();
+    
+    // Map old categories to new consolidated categories
+    const categoryMapping = {
+        // Corruption & Scandals
+        'corruption': 'corruption_scandals',
+        'scandal': 'corruption_scandals',
+        'ethics': 'corruption_scandals',
+        'investigation': 'corruption_scandals',
+        'grift': 'corruption_scandals',
+        
+        // Democracy & Elections
+        'democracy': 'democracy_elections',
+        'election': 'democracy_elections',
+        'voting': 'democracy_elections',
+        'voter': 'democracy_elections',
+        'ballot': 'democracy_elections',
+        
+        // Policy & Legislation
+        'policy': 'policy_legislation',
+        'legislation': 'policy_legislation',
+        'regulatory': 'policy_legislation',
+        'regulation': 'policy_legislation',
+        'law': 'policy_legislation',
+        
+        // Justice & Legal
+        'justice': 'justice_legal',
+        'judicial': 'justice_legal',
+        'legal': 'justice_legal',
+        'court': 'justice_legal',
+        'judge': 'justice_legal',
+        'doj': 'justice_legal',
+        'prosecution': 'justice_legal',
+        
+        // Executive Actions
+        'executive': 'executive_actions',
+        'presidential': 'executive_actions',
+        'whitehouse': 'executive_actions',
+        'executive_order': 'executive_actions',
+        
+        // Foreign Policy
+        'foreign': 'foreign_policy',
+        'international': 'foreign_policy',
+        'trade': 'foreign_policy',
+        'diplomacy': 'foreign_policy',
+        'treaty': 'foreign_policy'
+    };
+    
+    // Check if it's already a valid new category
+    const validNewCategories = [
+        'corruption_scandals',
+        'democracy_elections',
+        'policy_legislation',
+        'justice_legal',
+        'executive_actions',
+        'foreign_policy',
+        'other'
+    ];
+    
+    if (validNewCategories.includes(cleaned)) {
+        return cleaned;
+    }
+    
+    // Try direct mapping first
+    if (categoryMapping[cleaned]) {
+        return categoryMapping[cleaned];
+    }
+    
+    // Try to find keywords in the category string
+    for (const [keyword, mappedCategory] of Object.entries(categoryMapping)) {
+        if (cleaned.includes(keyword)) {
+            return mappedCategory;
+        }
+    }
+    
+    // Default fallback
+    return 'other';
 }
 
 // Entry validation - same as daily-tracker.js
@@ -583,13 +703,28 @@ For each relevant news story found, extract and format as JSON:
 {
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
-  "category": "${category.includes('Trump') ? 'Financial' : category.includes('DOGE') ? 'Government Oversight' : category.includes('DOJ') ? 'Government Oversight' : category.includes('Courts') ? 'Legal Proceedings' : category.includes('Corporate') ? 'Corporate Ethics' : 'Government Oversight'}",
+  "category": "[SELECT BASED ON CONTENT - Choose ONE: corruption_scandals, democracy_elections, policy_legislation, justice_legal, executive_actions, foreign_policy, other]",
   "title": "Headline under 100 characters",
   "description": "2-3 sentence factual summary",
   "source_url": "Full URL to original article",
   "verified": true,
-  "severity": "low|medium|high"
+  "severity": "critical|high|medium|low"
 }
+
+IMPORTANT: The category must reflect the article's actual content, not the search topic. Use these exact values:
+- Articles about scandals/ethics/grift = "corruption_scandals"
+- Articles about elections/voting = "democracy_elections"
+- Articles about laws/regulations = "policy_legislation"
+- Articles about courts/DOJ/prosecutions = "justice_legal"
+- Articles about presidential actions/EOs = "executive_actions"
+- Articles about international relations = "foreign_policy"
+- Articles that don't fit = "other"
+
+SEVERITY GUIDE:
+- "critical" = Democracy threats, coups, election theft attempts, authoritarianism
+- "high" = Criminal activity, arrests, indictments, major corruption
+- "medium" = Investigations, lawsuits, controversies, ethics concerns
+- "low" = Minor issues, political theater, embarrassments
 
 Return ONLY a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`,
                     max_output_tokens: 2000
@@ -739,7 +874,7 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     // Note: id is auto-generated by database (SERIAL PRIMARY KEY)
                     date: entry.date,
                     actor: entry.actor || 'Unknown',
-                    category: category,
+                    category: normalizeCategory(entry.category),
                     title: entry.title,
                     description: entry.description,
                     source_url: entry.source_url,

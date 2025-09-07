@@ -42,17 +42,8 @@ console.log(`   Limit: ${limit} articles`);
 console.log(`   Auto-confirm: ${autoConfirm}`);
 console.log(`   Dry run: ${dryRun}\n`);
 
-// Map old severity values to new ones
-function mapSeverity(oldSeverity) {
-    // Direct mapping - critical stays critical, high becomes severe
-    const mapping = {
-        'critical': 'critical',  // Keep critical as critical
-        'high': 'severe',        // High maps to severe
-        'medium': 'moderate',    // Medium maps to moderate
-        'low': 'minor'          // Low maps to minor
-    };
-    return mapping[oldSeverity] || oldSeverity; // If already new format, keep it
-}
+// No mapping needed - database now supports 4-tier directly
+// critical, high, medium, low are all valid values
 
 async function getEntriesWithoutSpicySummaries(limit) {
     try {
@@ -76,14 +67,14 @@ async function getEntriesWithoutSpicySummaries(limit) {
 
 async function updateEntry(entry) {
     try {
-        // Map severity from old format (high/medium/low) to new format (critical/severe/moderate/minor)
-        const mappedSeverity = mapSeverity(entry.severity || 'medium');
+        // Use severity directly - database supports 4-tier (critical/high/medium/low)
+        const severity = entry.severity || 'medium';
         
         // Generate spicy summary
         const spicyEnhanced = await generateSpicySummary({
             title: entry.title,
             description: entry.description,
-            severity: mappedSeverity
+            severity: severity
         });
         
         // Check if generation was successful

@@ -13,19 +13,19 @@ const GPT5_MODELS = {
   DEFAULT: 'gpt-5-mini'     // For everything else: $0.00054/article
 };
 
-// Context-aware severity labels
+// Context-aware severity labels - Updated for 4-tier database system
 const SEVERITY_LABELS = {
   inApp: {
     critical: "Fucking Treason 🔴",
-    severe: "Criminal Bullshit 🟠",
-    moderate: "Swamp Shit 🟡",
-    minor: "Clown Show 🟢"
+    high: "Criminal Bullshit 🟠",
+    medium: "Swamp Shit 🟡",
+    low: "Clown Show 🟢"
   },
   shareable: {
     critical: "Democracy Under Attack",
-    severe: "Criminal Corruption",
-    moderate: "Swamp Business",
-    minor: "Political Circus"
+    high: "Criminal Corruption",
+    medium: "Swamp Business",
+    low: "Political Circus"
   }
 };
 
@@ -57,9 +57,9 @@ VOICE RULES:
 
 SEVERITY GUIDE:
 - CRITICAL (Fucking Treason): This is fascism/authoritarianism, democracy is dying
-- SEVERE (Criminal Bullshit): People will suffer/die, this is criminal
-- MODERATE (Swamp Shit): Standard grift, follow the money
-- MINOR (Clown Show): Mock the stupidity, point and laugh
+- HIGH (Criminal Bullshit): People will suffer/die, this is criminal
+- MEDIUM (Swamp Shit): Standard grift, follow the money
+- LOW (Clown Show): Mock the stupidity, point and laugh
 
 Also provide a one-sentence shareable hook that's so good people will screenshot it.
 
@@ -81,7 +81,7 @@ CRITICAL (Fucking Treason / Democracy Under Attack):
 - Packing courts with extremists
 - Authoritarian power grabs
 
-SEVERE (Criminal Bullshit / Criminal Corruption):
+HIGH (Criminal Bullshit / Criminal Corruption):
 - Policies that will directly kill or harm people
 - Healthcare cuts affecting life-saving treatment
 - Clear criminal activity (not just shady)
@@ -89,7 +89,7 @@ SEVERE (Criminal Bullshit / Criminal Corruption):
 - Massive corruption with real victims
 - Environmental disasters for profit
 
-MODERATE (Swamp Shit / Swamp Business):
+MEDIUM (Swamp Shit / Swamp Business):
 - Self-dealing and profiteering
 - Standard political corruption
 - Nepotism and cronyism
@@ -97,7 +97,7 @@ MODERATE (Swamp Shit / Swamp Business):
 - Campaign finance violations
 - Lying for political gain
 
-MINOR (Clown Show / Political Circus):
+LOW (Clown Show / Political Circus):
 - Incompetence and stupidity
 - Twitter tantrums
 - Obvious hypocrisy
@@ -109,7 +109,7 @@ ARTICLE: {title}
 {content}
 
 OUTPUT:
-SEVERITY: critical|severe|moderate|minor
+SEVERITY: critical|high|medium|low
 REASON: [One line explaining why - be specific about the harm]`;
 
 // ============================================
