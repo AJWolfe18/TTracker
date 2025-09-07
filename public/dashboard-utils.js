@@ -150,6 +150,46 @@ window.DashboardUtils = (function() {
   };
 
   /**
+   * Category Formatting Functions - 11-Category System
+   */
+  const formatCategoryForDisplay = (category) => {
+    if (!category) return 'Other';
+    
+    const displayMap = {
+      'corruption_scandals': 'Corruption & Scandals',
+      'democracy_elections': 'Democracy & Elections',
+      'policy_legislation': 'Policy & Legislation',
+      'justice_legal': 'Justice & Legal',
+      'executive_actions': 'Executive Actions',
+      'foreign_policy': 'Foreign Policy',
+      'corporate_financial': 'Corporate & Financial',
+      'civil_liberties': 'Civil Liberties',
+      'media_disinformation': 'Media & Disinformation',
+      'epstein_associates': 'Epstein & Associates',
+      'other': 'Other'
+    };
+    
+    return displayMap[category] || category;
+  };
+
+  // Get all valid categories for filtering
+  const getValidCategories = () => {
+    return [
+      'corruption_scandals',
+      'democracy_elections',
+      'policy_legislation',
+      'justice_legal',
+      'executive_actions',
+      'foreign_policy',
+      'corporate_financial',
+      'civil_liberties',
+      'media_disinformation',
+      'epstein_associates',
+      'other'
+    ];
+  };
+
+  /**
    * Date Formatting Functions
    */
   const formatDate = (dateString) => {
@@ -190,6 +230,10 @@ window.DashboardUtils = (function() {
     
     // Supabase functions
     supabaseRequest,
+    
+    // Category functions
+    formatCategoryForDisplay,
+    getValidCategories,
     
     // Date functions
     formatDate,
