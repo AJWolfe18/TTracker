@@ -169,10 +169,9 @@ window.DashboardUtils = (function() {
       'other': 'Other'
     };
     
-    return displayMap[category] || category;
+    return displayMap[category] || 'Other';
   };
 
-  // Get all valid categories for filtering
   const getValidCategories = () => {
     return [
       'corruption_scandals',

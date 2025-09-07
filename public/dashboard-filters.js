@@ -52,6 +52,9 @@
 
   // Category Dropdown Component
   const CategoryDropdown = ({ value, onChange, categories }) => {
+    // Get formatCategoryDisplay from CategoryConfig if available
+    const formatCategory = window.CategoryConfig?.formatCategoryDisplay || ((cat) => cat);
+    
     return (
       <select
         value={value}
@@ -61,7 +64,7 @@
       >
         <option value="all">{categories.length === 0 ? "No Categories" : "All Categories"}</option>
         {categories.map(cat => (
-          <option key={cat} value={cat}>{cat}</option>
+          <option key={cat} value={cat}>{formatCategory(cat)}</option>
         ))}
       </select>
     );
@@ -131,6 +134,9 @@
   const ActiveFiltersDisplay = ({ filters, activeTab, displayCount, totalCount }) => {
     const { searchTerm, selectedCategory, dateRange, activeFilter } = filters;
     
+    // Get formatCategoryDisplay from CategoryConfig if available
+    const formatCategory = window.CategoryConfig?.formatCategoryDisplay || ((cat) => cat);
+    
     if (!searchTerm && selectedCategory === 'all' && dateRange === 'all' && !activeFilter) {
       return null;
     }
@@ -145,7 +151,7 @@
         )}
         {selectedCategory !== 'all' && (
           <span className="inline-block bg-orange-600/20 text-orange-400 px-2 py-1 rounded mr-2">
-            Category: {selectedCategory}
+            Category: {formatCategory(selectedCategory)}
           </span>
         )}
         {dateRange !== 'all' && (
