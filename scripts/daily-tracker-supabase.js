@@ -1028,8 +1028,17 @@ async function saveToSupabase(entries) {
     
     try {
         // Remove any existing id field from entries and let database auto-generate
+        // CRITICAL: Must ensure no id field is sent to Supabase (including undefined/null)
         const entriesWithoutIds = entries.map(entry => {
-            const { id, ...cleanEntry } = entry; // Remove any existing id field
+            // Create a new object without the id field
+            // Using Object.entries to ensure we only copy defined, non-id properties
+            const cleanEntry = {};
+            Object.entries(entry).forEach(([key, value]) => {
+                // Skip id field and any undefined values
+                if (key !== 'id' && value !== undefined) {
+                    cleanEntry[key] = value;
+                }
+            });
             return cleanEntry;
         });
         

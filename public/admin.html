@@ -579,7 +579,7 @@
                     title: entry.title || '',
                     description: entry.description || '',
                     actor: entry.actor || '',
-                    category: entry.category || 'Government Oversight',
+                    category: entry.category || 'other',
                     severity: entry.severity || 'medium',
                     source_url: entry.source_url || '',
                     verified: Boolean(entry.verified),
@@ -954,13 +954,17 @@
                                                             onChange={(e) => setEditForm({...editForm, category: e.target.value})}
                                                             className="input"
                                                         >
-                                                            <option value="Financial">Financial</option>
-                                                            <option value="Civil Liberties">Civil Liberties</option>
-                                                            <option value="Platform Manipulation">Platform Manipulation</option>
-                                                            <option value="Government Oversight">Government Oversight</option>
-                                                            <option value="Election Integrity">Election Integrity</option>
-                                                            <option value="Corporate Ethics">Corporate Ethics</option>
-                                                            <option value="Legal Proceedings">Legal Proceedings</option>
+                                                            <option value="corruption_scandals">Corruption & Scandals</option>
+                                                            <option value="democracy_elections">Democracy & Elections</option>
+                                                            <option value="policy_legislation">Policy & Legislation</option>
+                                                            <option value="justice_legal">Justice & Legal</option>
+                                                            <option value="executive_actions">Executive Actions</option>
+                                                            <option value="foreign_policy">Foreign Policy</option>
+                                                            <option value="corporate_financial">Corporate & Financial</option>
+                                                            <option value="civil_liberties">Civil Liberties</option>
+                                                            <option value="media_disinformation">Media & Disinformation</option>
+                                                            <option value="epstein_associates">Epstein & Associates</option>
+                                                            <option value="other">Other</option>
                                                         </select>
                                                     </div>
                                                     <div>
