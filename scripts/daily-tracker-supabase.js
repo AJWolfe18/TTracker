@@ -973,7 +973,7 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     title: entry.title,
                     description: entry.description,
                     source_url: entry.source_url,
-                    // REMOVED: source field doesn't exist in DB
+                    source: entry.source_url ? new URL(entry.source_url).hostname.replace('www.', '') : 'unknown',  // Extract domain name as source
                     verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
                     severity: entry.severity || assessSeverity(entry.title, entry.description),
                     // REMOVED: status field doesn't exist in DB
@@ -1042,6 +1042,18 @@ async function saveToSupabase(entries) {
             });
             return cleanEntry;
         });
+        
+        // EMERGENCY DEBUG: Log the exact data being sent to identify the issue
+        console.log('\n🚨 EMERGENCY DEBUG - Exact data being sent to Supabase:');
+        console.log('Number of entries:', entriesWithoutIds.length);
+        if (entriesWithoutIds.length > 0) {
+            console.log('\nFirst entry structure:');
+            console.log(JSON.stringify(entriesWithoutIds[0], null, 2));
+            console.log('\nAll entry keys:');
+            entriesWithoutIds.forEach((entry, i) => {
+                console.log(`Entry ${i}: ${Object.keys(entry).join(', ')}`);
+            });
+        }
         
         // Insert all entries at once (Supabase handles batches well)
         // Database will auto-generate sequential IDs using SERIAL PRIMARY KEY
