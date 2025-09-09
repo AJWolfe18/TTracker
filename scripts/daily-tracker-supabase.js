@@ -887,6 +887,33 @@ Return ONLY a JSON array of relevant political developments found. Only include 
             for (const entry of entries) {
                 if (!entry || typeof entry !== 'object') continue;
                 if (validateEntry(entry)) {
+                    // NEW: Add date validation (TTRC-126)
+                    const articleDate = new Date(entry.date);
+                    const today = new Date();
+                    const sevenDaysAgo = new Date();
+                    sevenDaysAgo.setDate(today.getDate() - 7);
+                    
+                    // Check if date is valid
+                    if (isNaN(articleDate.getTime())) {
+                        console.log(`  ⚠️ Invalid date format: ${entry.date} for: ${entry.title?.substring(0, 50)}...`);
+                        continue;
+                    }
+                    
+                    // Check if article is too old (more than 7 days)
+                    if (articleDate < sevenDaysAgo) {
+                        const daysDiff = Math.floor((today - articleDate) / (1000 * 60 * 60 * 24));
+                        console.log(`  ⚠️ Article too old (${daysDiff} days): ${entry.title?.substring(0, 50)}...`);
+                        continue;
+                    }
+                    
+                    // Check if date is in the future (allow 1 day for timezone issues)
+                    const oneDayFuture = new Date(today);
+                    oneDayFuture.setDate(today.getDate() + 1);
+                    if (articleDate > oneDayFuture) {
+                        console.log(`  ⚠️ Future date rejected: ${entry.date} for: ${entry.title?.substring(0, 50)}...`);
+                        continue;
+                    }
+                    
                     validEntries.push(entry);
                 }
             }
@@ -1001,8 +1028,7 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     title: entry.title,
                     description: entry.description,
                     source_url: entry.source_url,
-                    // Extract domain name as source - matching manual processor implementation
-                    source: entry.source_url ? new URL(entry.source_url).hostname.replace('www.', '') : null,
+                    // REMOVED: source field doesn't exist in DB (use source_url instead)
                     verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
                     severity: entry.severity || assessSeverity(entry.title, entry.description),
                     // REMOVED: status field doesn't exist in DB
@@ -1067,13 +1093,13 @@ async function saveToSupabase(entries) {
             };
         });
         
-        // DEBUG: Log the exact data being sent
-        console.log('\n🔍 DEBUG - Data being sent to Supabase:');
-        console.log('Number of entries:', entriesWithIds.length);
-        if (entriesWithIds.length > 0) {
-            console.log('\nFirst entry structure:');
-            console.log(JSON.stringify(entriesWithIds[0], null, 2));
-        }
+        // DEBUG: Log the exact data being sent - COMMENTED OUT (TTRC-125)
+        // console.log('\n🔍 DEBUG - Data being sent to Supabase:');
+        // console.log('Number of entries:', entriesWithIds.length);
+        // if (entriesWithIds.length > 0) {
+        //     console.log('\nFirst entry structure:');
+        //     console.log(JSON.stringify(entriesWithIds[0], null, 2));
+        // }
         
         // Insert with explicit IDs
         const { data, error } = await supabase
