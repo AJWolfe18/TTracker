@@ -809,8 +809,8 @@ For each relevant news story found, extract and format as JSON:
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
   "category": "[SELECT BASED ON CONTENT - Choose ONE: corruption_scandals, democracy_elections, policy_legislation, justice_legal, executive_actions, foreign_policy, corporate_financial, civil_liberties, media_disinformation, epstein_associates, other]",
-  "title": "Headline under 100 characters",
-  "description": "2-3 sentence factual summary",
+  "title": "[EXACT headline from the article - DO NOT modify or create your own. If over 150 chars, truncate with '...']",
+  "description": "2-3 sentence factual summary of the article content",
   "source_url": "Full URL to original article",
   "verified": true,
   "severity": "critical|high|medium|low"
@@ -835,7 +835,12 @@ SEVERITY GUIDE:
 - "medium" = Investigations, lawsuits, controversies, ethics concerns
 - "low" = Minor issues, political theater, embarrassments
 
-Return ONLY a JSON array of relevant political developments found. Only include real news from credible sources. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`,
+CRITICAL SOURCE REQUIREMENTS:
+- ONLY include articles from these approved sources: Reuters, AP, APNews, WSJ, NYTimes, Washington Post, USA Today, BBC, CNN, Fox News, NBC, ABC, CBS, MSNBC, NPR, PBS, Politico, The Hill, Axios, Bloomberg, CNBC, Forbes, ProPublica, Courthouse News, or any .gov domain
+- REJECT articles from: Medium, Substack, personal blogs, unknown sites, or any source not in the approved list
+- The 'title' field MUST be the EXACT headline from the article - do not create, modify, or paraphrase it
+
+Return ONLY a JSON array of relevant political developments found. Only include real news from approved sources listed above. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`,
                     max_output_tokens: 2000
                 }),
             });
