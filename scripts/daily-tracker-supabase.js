@@ -1,7 +1,7 @@
 // daily-tracker-supabase.js
 // Updated version that uses Supabase with EXACT prompts from daily-tracker.js
 import fetch from 'node-fetch';
-import { supabaseRequest } from '../config/supabase-config-node.js';
+import { createClient } from '@supabase/supabase-js';
 import { generateSpicySummary } from './spicy-summaries-integration.js';
 
 // Only load dotenv for local testing (not in GitHub Actions)
@@ -28,8 +28,24 @@ if (!OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// ID generation removed - Database uses SERIAL PRIMARY KEY which auto-generates IDs
-// Per TTRC-86 fix: Never manually set ID field when inserting to political_entries
+// Supabase configuration - matching manual processor setup
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
+
+// Create Supabase client using official SDK
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+console.log(`📍 Using Supabase: ${SUPABASE_URL.substring(0, 30)}...`);
+
+// Database accepts both string and integer IDs
+// We'll use string IDs since 91% of entries already use them
+
+function generateStringId() {
+    // Create a unique string ID similar to existing pattern
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `entry_${timestamp}_${random}`;
+}
 
 // Date range helper - can be overridden by command line args for backfill
 function getDateRangePrompt() {
@@ -219,12 +235,15 @@ async function checkForDuplicate(entry) {
             console.log(`\n🔍 Duplicate Check for: "${entry.title.substring(0, 60)}..."`);
         }
         
-        // Step 1: Check exact URL match
+        // Step 1: Check exact URL match using Supabase SDK
         if (entry.source_url) {
-            const urlMatch = await supabaseRequest(
-                `political_entries?source_url=eq.${encodeURIComponent(entry.source_url)}&limit=1`
-            );
-            if (urlMatch && urlMatch.length > 0) {
+            const { data: urlMatch, error: urlError } = await supabase
+                .from('political_entries')
+                .select('id')
+                .eq('source_url', entry.source_url)
+                .limit(1);
+            
+            if (!urlError && urlMatch && urlMatch.length > 0) {
                 console.log('  ⚠️ Exact URL duplicate detected');
                 return {
                     isDuplicate: true,
@@ -240,9 +259,12 @@ async function checkForDuplicate(entry) {
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
         
-        const recentEntries = await supabaseRequest(
-            `political_entries?date=gte.${dateFilter}&select=id,title,date,actor,source_url&order=created_at.desc&limit=100`
-        );
+        const { data: recentEntries, error: recentError } = await supabase
+            .from('political_entries')
+            .select('id, title, date, actor, source_url')
+            .gte('date', dateFilter)
+            .order('created_at', { ascending: false })
+            .limit(100);
         
         if (!recentEntries || recentEntries.length === 0) {
             return { isDuplicate: false };
@@ -884,9 +906,12 @@ Return ONLY a JSON array of relevant political developments found. Only include 
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
             
-            const recentEntries = await supabaseRequest(
-                `political_entries?date=gte.${dateFilter}&select=id,title,date,actor,source_url&order=created_at.desc&limit=100`
-            );
+            const { data: recentEntries, error: recentError } = await supabase
+                .from('political_entries')
+                .select('id, title, date, actor, source_url')
+                .gte('date', dateFilter)
+                .order('created_at', { ascending: false })
+                .limit(100);
             
             // Process entries with batched duplicate detection
             const processedEntries = [];
@@ -896,9 +921,12 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                 let duplicateInfo = null;
                 
                 if (entry.source_url) {
-                    const urlMatch = await supabaseRequest(
-                        `political_entries?source_url=eq.${encodeURIComponent(entry.source_url)}&limit=1`
-                    );
+                    const { data: urlMatch, error: urlError } = await supabase
+                        .from('political_entries')
+                        .select('id')
+                        .eq('source_url', entry.source_url)
+                        .limit(1);
+                    
                     if (urlMatch && urlMatch.length > 0) {
                         isDuplicate = true;
                         duplicateInfo = {
@@ -973,7 +1001,8 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     title: entry.title,
                     description: entry.description,
                     source_url: entry.source_url,
-                    source: entry.source_url ? new URL(entry.source_url).hostname.replace('www.', '') : 'unknown',  // Extract domain name as source
+                    // Extract domain name as source - matching manual processor implementation
+                    source: entry.source_url ? new URL(entry.source_url).hostname.replace('www.', '') : null,
                     verified: entry.source_url ? isVerifiedSource(entry.source_url) : false,
                     severity: entry.severity || assessSeverity(entry.title, entry.description),
                     // REMOVED: status field doesn't exist in DB
@@ -1028,37 +1057,38 @@ async function saveToSupabase(entries) {
     console.log(`\n💾 Saving ${entries.length} new entries to Supabase...`);
     
     try {
-        // Remove any existing id field from entries and let database auto-generate
-        // CRITICAL: Must ensure no id field is sent to Supabase (including undefined/null)
-        const entriesWithoutIds = entries.map(entry => {
-            // Create a new object without the id field
-            // Using Object.entries to ensure we only copy defined, non-id properties
-            const cleanEntry = {};
-            Object.entries(entry).forEach(([key, value]) => {
-                // Skip id field and any undefined values
-                if (key !== 'id' && value !== undefined) {
-                    cleanEntry[key] = value;
-                }
-            });
-            return cleanEntry;
+        // Generate unique string IDs for all entries
+        const entriesWithIds = entries.map(entry => {
+            // Remove any existing id field first, then add our string ID
+            const { id, ...entryWithoutId } = entry;
+            return {
+                id: generateStringId(),
+                ...entryWithoutId
+            };
         });
         
-        // EMERGENCY DEBUG: Log the exact data being sent to identify the issue
-        console.log('\n🚨 EMERGENCY DEBUG - Exact data being sent to Supabase:');
-        console.log('Number of entries:', entriesWithoutIds.length);
-        if (entriesWithoutIds.length > 0) {
+        // DEBUG: Log the exact data being sent
+        console.log('\n🔍 DEBUG - Data being sent to Supabase:');
+        console.log('Number of entries:', entriesWithIds.length);
+        if (entriesWithIds.length > 0) {
             console.log('\nFirst entry structure:');
-            console.log(JSON.stringify(entriesWithoutIds[0], null, 2));
-            console.log('\nAll entry keys:');
-            entriesWithoutIds.forEach((entry, i) => {
-                console.log(`Entry ${i}: ${Object.keys(entry).join(', ')}`);
-            });
+            console.log(JSON.stringify(entriesWithIds[0], null, 2));
         }
         
-        // Insert all entries at once (Supabase handles batches well)
-        // Database will auto-generate sequential IDs using SERIAL PRIMARY KEY
-        const result = await supabaseRequest('political_entries', 'POST', entriesWithoutIds);
-        console.log(`✅ Successfully saved ${entriesWithoutIds.length} entries to Supabase`);
+        // Insert with explicit IDs
+        const { data, error } = await supabase
+            .from('political_entries')
+            .insert(entriesWithIds)
+            .select();
+        
+        if (error) {
+            throw new Error(`Supabase insert error: ${error.message}`);
+        }
+        
+        console.log(`✅ Successfully saved ${entriesWithIds.length} entries to Supabase`);
+        if (data && data.length > 0) {
+            console.log(`IDs assigned: ${data.map(e => e.id).join(', ')}`);
+        }
         
         // Enhanced summary matching daily-tracker.js
         console.log('\n=== DAILY TRACKING SUMMARY ===');
