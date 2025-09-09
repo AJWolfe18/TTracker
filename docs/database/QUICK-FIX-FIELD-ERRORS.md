@@ -49,6 +49,25 @@ const entry = {
 };
 ```
 
+#### Error: "null value in column 'id' violates not-null constraint"
+**NOTE**: This error is often misleading! It usually means you're trying to insert fields that don't exist in the table.
+```javascript
+// ❌ This error often appears when using non-existent fields
+const entry = {
+  title: "Test",
+  status: "published",  // ❌ Field doesn't exist!
+  manual_submission: false  // ❌ Field doesn't exist!
+};
+
+// ✅ CORRECT - Only use fields that exist in the schema
+const entry = {
+  title: "Test",
+  description: "Test description",
+  source_url: "https://example.com",
+  // Only fields from the schema
+};
+```
+
 ## 📋 Field Quick Reference
 
 ### Fields That ACTUALLY Exist
@@ -73,6 +92,8 @@ const entry = {
 
 **Political Entries Only**:
 - ❌ `source` - Use `source_url`
+- ❌ `status` - Never existed in table
+- ❌ `manual_submission` - Never existed in table
 
 ## 🔧 Quick Debugging
 

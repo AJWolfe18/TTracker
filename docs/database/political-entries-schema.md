@@ -37,6 +37,8 @@ This table stores all political news articles and events tracked by TrumpyTracke
 - `source` - Removed in favor of `source_url`
 - `editorial_summary` - Use `description` field instead
 - `id` as string - It's SERIAL (integer), not text
+- `status` - Never existed, do not use
+- `manual_submission` - Never existed, do not use
 
 ## Important Notes
 
