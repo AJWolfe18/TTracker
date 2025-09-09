@@ -1,145 +1,130 @@
-# Quick Fix Reference - Database Field Errors
-*Last Updated: September 3, 2025*
+## Database Field Errors (Updated September 9, 2025)
 
-## ❌ Common Field Errors & Fixes
+### The ID Column Reality
+**IMPORTANT**: The `id` column accepts BOTH strings and integers!
+- 91% of production entries use string IDs (511 out of 564)
+- Database column is INTEGER but PostgreSQL coerces strings
+- Use string IDs for all new entries - they work reliably
 
-### Executive Orders Table
-
-#### Error: "Could not find 'editorial_summary' column"
+### Current ID Generation Strategy
 ```javascript
-// ❌ WRONG - Field doesn't exist
-editorial_summary: aiAnalysis.summary
-
-// ✅ CORRECT - Use summary field
-summary: aiAnalysis.summary
+function generateStringId() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `entry_${timestamp}_${random}`;
+}
 ```
 
-#### Error: "Could not find 'source' column"  
+### Error: "null value in column 'id' violates not-null constraint"
+
+**Misleading Error Message!** This error often means you're trying to insert fields that don't exist or have issues, not necessarily an ID problem.
+
+**Common Causes:**
+1. Including a `source` field when it shouldn't be used
+2. Trying to manually set an ID when database uses SERIAL
+3. Including fields that don't exist in the table
+
+**Solution:**
 ```javascript
-// ❌ WRONG - Field removed
-source: 'Federal Register'
-
-// ✅ CORRECT - Use source field with default
-source: 'Federal Register API'  // This field exists in executive_orders
-```
-
-### Political Entries Table
-
-#### Error: "Could not find 'source' column"
-```javascript
-// ❌ WRONG - Field doesn't exist
-source: new URL(url).hostname
-
-// ✅ CORRECT - Just use source_url
-source_url: normalizedUrl
-// Extract hostname in display logic if needed
-```
-
-#### Error: "value out of range for type integer" (ID field)
-```javascript
-// ❌ WRONG - Don't set ID for political_entries
-id: generateUniqueId(),
-
-// ✅ CORRECT - Let database auto-generate
-// Simply omit the id field from insert
+// ❌ WRONG - Including problematic fields
 const entry = {
-  title: data.title,
-  source_url: url,
-  // ... other fields, NO id field
+    id: 'some-id',  // Don't set this!
+    source: 'website.com',  // This field causes issues!
+    status: 'active',  // Doesn't exist!
+    // ... other fields
+};
+
+// ✅ CORRECT - Only include valid fields
+const entry = {
+    // NO id field - let database auto-generate
+    date: '2025-09-09',
+    actor: 'Political Actor',
+    category: 'corruption_scandals',
+    title: 'Article Title',
+    description: 'Summary here',
+    source_url: 'https://example.com/article',
+    verified: true,
+    severity: 'high',
+    added_at: new Date().toISOString(),
+    // Spicy summary fields (optional)
+    spicy_summary: 'Generated summary',
+    shareable_hook: 'Tweet-sized hook',
+    severity_label_inapp: 'Swamp Alert 🔴',
+    severity_label_share: 'Critical Issue'
 };
 ```
 
-#### Error: "null value in column 'id' violates not-null constraint"
-**NOTE**: This error is often misleading! It usually means you're trying to insert fields that don't exist in the table.
-```javascript
-// ❌ This error often appears when using non-existent fields
-const entry = {
-  title: "Test",
-  status: "published",  // ❌ Field doesn't exist!
-  manual_submission: false  // ❌ Field doesn't exist!
-};
+### Fields That Should NOT Be Included in Inserts
 
-// ✅ CORRECT - Only use fields that exist in the schema
-const entry = {
-  title: "Test",
-  description: "Test description",
-  source_url: "https://example.com",
-  // Only fields from the schema
-};
-```
+| Field | Why Not | Notes |
+|-------|---------|-------|
+| `id` | Auto-generated | Database uses SERIAL PRIMARY KEY |
+| `source` | Problematic | Use `source_url` instead, extract domain if needed |
+| `status` | Doesn't exist | Never existed in political_entries table |
+| `manual_submission` | Doesn't exist | Never existed in political_entries table |
+| `editorial_summary` | Doesn't exist | Use `description` field instead |
+| `impact_type` | Wrong table | That's for executive_orders, not political_entries |
 
-## 📋 Field Quick Reference
-
-### Fields That ACTUALLY Exist
-
-**Political Entries**:
-- ✅ `source_url` (NOT `source`)
-- ✅ `description` (NOT `editorial_summary`)
-- ✅ `spicy_summary`
-- ✅ `id` (SERIAL - don't set manually)
-
-**Executive Orders**:
-- ✅ `summary` (NOT `editorial_summary`)
-- ✅ `source` (default: "Federal Register API")
-- ✅ `spicy_summary`
-- ✅ `id` (TEXT - must generate)
-
-### Fields That DON'T Exist (Common Mistakes)
-
-**Both Tables**:
-- ❌ `editorial_summary` - Never implemented
-- ❌ JSONB fields - Not using JSON columns
-
-**Political Entries Only**:
-- ❌ `source` - Use `source_url`
-- ❌ `status` - Never existed in table
-- ❌ `manual_submission` - Never existed in table
-
-## 🔧 Quick Debugging
+### Valid Fields for political_entries Table
 
 ```javascript
-// Before insert, log the object to check fields
-console.log('Inserting:', JSON.stringify(dataObject, null, 2));
-
-// Check for non-existent fields
-const invalidFields = ['editorial_summary', 'source'];
-invalidFields.forEach(field => {
-  if (dataObject[field]) {
-    console.warn(`WARNING: ${field} doesn't exist in database!`);
-    delete dataObject[field];
-  }
-});
+// Complete list of valid fields for inserts:
+{
+    date: 'YYYY-MM-DD',  // Required
+    actor: 'Actor Name',  // Optional (defaults to 'Unknown')
+    category: 'category_name',  // Required (use normalized values)
+    title: 'Title',  // Required
+    description: 'Description',  // Required
+    source_url: 'https://...',  // Required
+    verified: true/false,  // Optional
+    severity: 'low/medium/high/critical',  // Required
+    added_at: 'ISO timestamp',  // Required
+    archived: false,  // Optional (defaults to false)
+    // Spicy summary fields (all optional)
+    spicy_summary: 'text',
+    shareable_hook: 'text',
+    severity_label_inapp: 'text',
+    severity_label_share: 'text'
+}
 ```
 
-## 💡 Pro Tips
+### Debug Tip: Log Your Data Before Insert
 
-1. **When in doubt, check the schema**:
-   - `/docs/database/executive-orders-schema.md`
-   - `/docs/database/political-entries-schema.md`
+Always log the exact data being sent to Supabase:
 
-2. **Use the dashboard as reference**:
-   - Check `dashboard-components.js` to see what fields are actually used
-   - If dashboard doesn't use it, you probably don't need it
+```javascript
+console.log('Data being sent:', JSON.stringify(entry, null, 2));
+console.log('Keys being sent:', Object.keys(entry).join(', '));
+```
 
-3. **Test with minimal data first**:
-   ```javascript
-   // Test with just required fields
-   const testOrder = {
-     title: "Test Order",
-     order_number: "99999",
-     date: new Date().toISOString(),
-     summary: "Test summary"
-   };
-   ```
+### The 11 Valid Categories
 
-4. **Check Supabase logs**:
-   - Go to Supabase dashboard → Logs → API
-   - Look for the exact error message
-   - Check the request body to see what was sent
+Always use these exact database values:
+- `corruption_scandals`
+- `democracy_elections`
+- `policy_legislation`
+- `justice_legal`
+- `executive_actions`
+- `foreign_policy`
+- `corporate_financial`
+- `civil_liberties`
+- `media_disinformation`
+- `epstein_associates`
+- `other`
 
-## 🚨 If All Else Fails
+## Error History
 
-1. Export current table structure from Supabase
-2. Compare with documentation
-3. Update documentation if schema changed
-4. Create JIRA ticket for schema updates needed
+### September 9, 2025
+- **Issue:** Daily tracker failing with "null value in column 'id'" error
+- **Cause:** Including `source` field in insert (field exists but causes issues)
+- **Fix:** Removed `source` field from processedEntry object
+
+### September 7, 2025
+- **Issue:** Same error message
+- **Cause:** Trying to manually set ID field
+- **Fix:** Removed ID generation, let database auto-generate
+
+### August 2025
+- **Issue:** "Could not find 'source' column"
+- **Cause:** Field was removed from schema
+- **Fix:** Removed from all insert operations

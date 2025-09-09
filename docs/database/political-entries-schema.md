@@ -34,11 +34,12 @@ This table stores all political news articles and events tracked by TrumpyTracke
 ### Fields NOT in Database (Common Mistakes)
 
 ⚠️ **These fields do NOT exist and will cause errors:**
-- `source` - Removed in favor of `source_url`
 - `editorial_summary` - Use `description` field instead
 - `id` as string - It's SERIAL (integer), not text
 - `status` - Never existed, do not use
 - `manual_submission` - Never existed, do not use
+
+**NOTE:** The `source` field status is unclear - documentation conflicts exist. Manual processor uses it successfully, suggesting it may exist.
 
 ## Important Notes
 
