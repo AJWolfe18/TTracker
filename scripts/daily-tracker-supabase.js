@@ -60,7 +60,7 @@ function getDateRangePrompt() {
         startDate.setDate(startDate.getDate() - days);
         console.log(`📅 BACKFILL MODE: Searching ${days} days of history`);
     } else {
-        startDate.setDate(startDate.getDate() - 3); // Default 3-day window
+        startDate.setDate(startDate.getDate() - 7); // Default 7-day window for better coverage
     }
     
     return `between ${startDate.toISOString().split('T')[0]} and ${endDate.toISOString().split('T')[0]}`;
@@ -444,13 +444,20 @@ function isVerifiedSource(url) {
         }
         
         // Check against the reputable sources list
-        return REPUTABLE_SOURCES.some(source => {
+        const isVerified = REPUTABLE_SOURCES.some(source => {
             // Handle .gov as special case (already checked above)
             if (source === '.gov') return false;
             
             // For other sources, check if domain includes the source
             return domain.includes(source) || domain.endsWith(source);
         });
+        
+        // Log unverified sources for investigation (TTRC-130)
+        if (!isVerified) {
+            console.log(`  ❌ Unverified source: ${domain}`);
+        }
+        
+        return isVerified;
     } catch {
         return false;
     }
@@ -703,7 +710,13 @@ async function fetchPoliticalUpdates() {
 
 IMPORTANT: Only include news from the specified date range. Each story must be unique - do not include multiple versions of the same story. Prioritize breaking news and new developments over ongoing stories.
 
-CRITICAL: Extract the ACTUAL publication date from each article. Do NOT use today's date unless the article was actually published today. Find the real date when the article was published in the article's metadata or content. If the article is older than 1 week, DO NOT include it. The 'date' field must be the article's real publication date in YYYY-MM-DD format.
+CRITICAL DATE REQUIREMENTS:
+- Extract the ACTUAL publication date from each article (not today's date)
+- The article MUST be from 2025, not 2024 or earlier
+- If an article is from September 2024, it is ONE YEAR OLD - DO NOT include it
+- Only include articles from the last 7 days
+- The 'date' field must be the article's real publication date in YYYY-MM-DD format
+- Today is 2025, so articles from 2024 are outdated - REJECT them
 
 Find credible news sources and return specific, factual developments with proper citations.`,
 
@@ -809,7 +822,7 @@ For each relevant news story found, extract and format as JSON:
   "date": "YYYY-MM-DD",
   "actor": "Person or Organization", 
   "category": "[SELECT BASED ON CONTENT - Choose ONE: corruption_scandals, democracy_elections, policy_legislation, justice_legal, executive_actions, foreign_policy, corporate_financial, civil_liberties, media_disinformation, epstein_associates, other]",
-  "title": "[EXACT headline from the article - DO NOT modify or create your own. If over 150 chars, truncate with '...']",
+  "title": "[COPY THE EXACT HEADLINE - Do NOT add 'Sept 10 news on' or any other prefix. Do NOT add dates. Do NOT paraphrase. Use the ACTUAL article headline EXACTLY as it appears. If over 150 chars, truncate at 147 chars and add '...']",
   "description": "2-3 sentence factual summary of the article content",
   "source_url": "Full URL to original article",
   "verified": true,
@@ -836,9 +849,33 @@ SEVERITY GUIDE:
 - "low" = Minor issues, political theater, embarrassments
 
 CRITICAL SOURCE REQUIREMENTS:
-- ONLY include articles from these approved sources: Reuters, AP, APNews, WSJ, NYTimes, Washington Post, USA Today, BBC, CNN, Fox News, NBC, ABC, CBS, MSNBC, NPR, PBS, Politico, The Hill, Axios, Bloomberg, CNBC, Forbes, ProPublica, Courthouse News, or any .gov domain
-- REJECT articles from: Medium, Substack, personal blogs, unknown sites, or any source not in the approved list
-- The 'title' field MUST be the EXACT headline from the article - do not create, modify, or paraphrase it
+- ONLY include articles from these EXACT domains:
+  * reuters.com, ap.org, apnews.com
+  * wsj.com, nytimes.com, washingtonpost.com, usatoday.com
+  * bbc.com, bbc.co.uk, guardian.com, theguardian.com
+  * cnn.com, foxnews.com, foxbusiness.com
+  * nbcnews.com, abcnews.go.com, cbsnews.com, msnbc.com
+  * npr.org, pbs.org
+  * politico.com, thehill.com, axios.com
+  * bloomberg.com, cnbc.com, forbes.com, businessinsider.com
+  * propublica.org, courthousenews.com
+  * Any .gov domain (whitehouse.gov, justice.gov, etc.)
+
+- REJECT ALL articles from:
+  * Medium.com, Substack.com, WordPress sites
+  * Personal blogs, unknown news sites
+  * Social media posts (Twitter/X, Facebook, etc.)
+  * Press releases not on .gov domains
+  * ANY domain not explicitly listed above
+
+- If you cannot find articles from approved sources, return FEWER results rather than using unapproved sources
+- The 'title' field MUST be the EXACT headline - do not add dates or modify in any way
+
+TITLE EXAMPLES:
+✅ CORRECT: "Trump's Tariffs' Legality in November"
+❌ WRONG: "Sept 10 news on Trump's Tariffs' Legality in November"
+❌ WRONG: "Latest: Trump's Tariffs' Legality in November"
+❌ WRONG: "Breaking - Trump's Tariffs' Legality in November"
 
 Return ONLY a JSON array of relevant political developments found. Only include real news from approved sources listed above. Each entry must be unique - no duplicates. Do not include any text before or after the JSON array.`,
                     max_output_tokens: 2000
@@ -904,6 +941,12 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                         continue;
                     }
                     
+                    // CRITICAL: Reject ANY article from 2024 or earlier
+                    if (articleDate.getFullYear() < 2025) {
+                        console.log(`  ⚠️ OLD YEAR REJECTED: ${entry.date} (from ${articleDate.getFullYear()}) - ${entry.title?.substring(0, 50)}...`);
+                        continue;
+                    }
+                    
                     // Check if article is too old (more than 7 days)
                     if (articleDate < sevenDaysAgo) {
                         const daysDiff = Math.floor((today - articleDate) / (1000 * 60 * 60 * 24));
@@ -948,9 +991,19 @@ Return ONLY a JSON array of relevant political developments found. Only include 
             // Process entries with batched duplicate detection
             const processedEntries = [];
             for (const entry of validEntries) {
-                // Check exact URL duplicate first
+                // Check exact URL duplicate first - INCLUDING in current batch
                 let isDuplicate = false;
                 let duplicateInfo = null;
+                
+                // First check if this URL already exists in the current batch being processed
+                // Only check if both URLs exist to avoid false positives with null/undefined
+                if (entry.source_url) {
+                    const duplicateInBatch = processedEntries.find(pe => pe.source_url && pe.source_url === entry.source_url);
+                    if (duplicateInBatch) {
+                        console.log(`  ⏭️ Skipping duplicate IN BATCH: ${entry.title.substring(0, 50)}...`);
+                        continue;
+                    }
+                }
                 
                 if (entry.source_url) {
                     const { data: urlMatch, error: urlError } = await supabase
@@ -1030,7 +1083,9 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     date: entry.date,
                     actor: normalizeActor(entry.actor) || 'Unknown',
                     category: normalizeCategory(entry.category),
-                    title: entry.title,
+                    title: entry.title && entry.title.length > 150 ? 
+                           entry.title.substring(0, 147) + '...' : 
+                           entry.title,
                     description: entry.description,
                     source_url: entry.source_url,
                     // REMOVED: source field doesn't exist in DB (use source_url instead)
