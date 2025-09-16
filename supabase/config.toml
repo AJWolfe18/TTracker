@@ -1,0 +1,65 @@
+# A standard Supabase project configuration file
+version: 1
+
+api:
+  enabled: true
+  # Port to use for the local API URL
+  port: 54321
+  # Schemas to expose in your API. Tables, views and functions in these schemas will be accessible from the Supabase JavaScript client.
+  schemas:
+    - public
+  # Tables and views to exclude from your API.
+  extra_search_path:
+    - public
+  # The maximum number of rows returned from a view, table, or function.
+  max_rows: 1000
+
+db:
+  # Port to use for the local database URL
+  port: 54322
+  # Major version of PostgreSQL
+  major_version: 15
+
+studio:
+  enabled: true
+  # Port to use for Supabase Studio
+  port: 54323
+  # External URL of the API server that frontend should connect to
+  api_url: http://localhost:54321
+
+# Email testing server
+inbucket:
+  enabled: true
+  # Port to use for the email testing server web interface
+  port: 54324
+
+# Additional storage buckets
+storage:
+  enabled: true
+  # The maximum file size allowed (e.g. "5MB", "500KB")
+  file_size_limit: 50MiB
+
+auth:
+  enabled: true
+  # The base URL of your website. Used as an allow-list for redirects and for constructing URLs in emails.
+  site_url: http://localhost:3000
+  # A list of *exact* URLs that auth providers are permitted to redirect to after authentication
+  additional_redirect_urls:
+    - http://localhost:3000
+  # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), max 604800 (1 week)
+  jwt_expiry: 3600
+  # Whether to enable password recovery
+  enable_signup: true
+  # Whether to enable email confirmations
+  enable_confirmations: false
+  
+# Custom Edge Functions configuration
+functions:
+  stories-active:
+    verify_jwt: false
+  stories-detail:
+    verify_jwt: false
+  stories-search:
+    verify_jwt: false
+  articles-manual:
+    verify_jwt: false
