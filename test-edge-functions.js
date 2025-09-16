@@ -3,7 +3,7 @@
 
 const SUPABASE_URL = 'https://wnrjrywpcadwutfykflu.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMjA3MzcsImV4cCI6MjA3MDc5NjczN30.n-4DboHQSivt5GWx7X5wuaUsdmjsuJe0VgB18V-GxU4';
-const ADMIN_KEY = 'test-admin-key-123'; // Change this to your actual admin key
+const ADMIN_KEY = process.env.ADMIN_API_KEY || 'my-secure-admin-key-2025'; // Use env var in production
 
 // For local testing, use: http://localhost:54321/functions/v1
 const BASE_URL = `${SUPABASE_URL}/functions/v1`;

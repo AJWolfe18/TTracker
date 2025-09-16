@@ -44,7 +44,7 @@ serve(async (req: Request) => {
       )
     }
     
-    // Get associated articles
+    // Get associated articles (changed from political_entries)
     const { data: articles, error: articlesError } = await supabase
       .from('article_story')
       .select(`
@@ -52,16 +52,18 @@ serve(async (req: Request) => {
         is_primary_source,
         similarity_score,
         matched_at,
-        political_entries (
+        articles (
           id,
-          title,
           url,
+          url_hash,
+          headline,
           source_name,
           source_domain,
           published_at,
+          content,
           content_type,
-          category,
-          severity_level
+          opinion_flag,
+          metadata
         )
       `)
       .eq('story_id', storyId)
@@ -79,7 +81,7 @@ serve(async (req: Request) => {
     
     // Format the response
     const formattedArticles = articles?.map(item => ({
-      ...item.political_entries,
+      ...item.articles,
       is_primary_source: item.is_primary_source,
       similarity_score: item.similarity_score,
       matched_at: item.matched_at,
