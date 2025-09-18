@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [test]
+  pull_request:
+    branches: [test]
 
 jobs:
   test-real-rss:
@@ -40,7 +42,7 @@ jobs:
           async function testRealRSS() {
             console.log('📡 Fetching active RSS feeds from database...');
             
-            // Get real feeds from your database
+            // Get real feeds from your database - using YOUR table names
             const { data: feeds, error } = await supabase
               .from('feed_registry')
               .select('*')
@@ -62,14 +64,19 @@ jobs:
                 for (let i = 0; i < Math.min(3, rssFeed.items.length); i++) {
                   const item = rssFeed.items[i];
                   
-                  // Create article using your atomic function
-                  const { data, error } = await supabase.rpc('upsert_article_and_enqueue_jobs', {
-                    p_url: item.link || item.guid,
-                    p_title: item.title,
-                    p_description: item.contentSnippet || item.content || '',
-                    p_source_domain: new URL(feed.feed_url).hostname,
-                    p_published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()
-                  });
+                  // Store directly in political_entries table
+                  const { data, error } = await supabase
+                    .from('political_entries')
+                    .insert({
+                      id: 'pe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                      title: item.title,
+                      url: item.link || item.guid,
+                      source_domain: new URL(feed.feed_url).hostname,
+                      published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+                      description: item.contentSnippet || item.content || '',
+                      category: 'other'
+                    })
+                    .select();
                   
                   if (!error) {
                     totalArticles++;
@@ -85,7 +92,7 @@ jobs:
             
             console.log('\\n✅ TOTAL ARTICLES STORED:', totalArticles);
             
-            // Verify they're in the database
+            // Verify they're in the database - using YOUR table name
             const { data: recent, error: checkError } = await supabase
               .from('political_entries')
               .select('title, source_domain, created_at')
