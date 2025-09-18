@@ -42,7 +42,7 @@ jobs:
           async function testRealRSS() {
             console.log('📡 Fetching active RSS feeds from database...');
             
-            // Get real feeds from your database - using YOUR table names
+            // Get real feeds from your database
             const { data: feeds, error } = await supabase
               .from('feed_registry')
               .select('*')
@@ -64,25 +64,31 @@ jobs:
                 for (let i = 0; i < Math.min(3, rssFeed.items.length); i++) {
                   const item = rssFeed.items[i];
                   
-                  // Store directly in political_entries table
+                  // Store directly in political_entries table with CORRECT columns
                   const { data, error } = await supabase
                     .from('political_entries')
                     .insert({
                       id: 'pe_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                      title: item.title,
+                      title: item.title || 'Untitled',
                       url: item.link || item.guid,
-                      source_domain: new URL(feed.feed_url).hostname,
+                      url_canonical: item.link || item.guid,
+                      source_domain: new URL(feed.feed_url).hostname.replace('www.', ''),
+                      source_name: feed.feed_name,
+                      source: feed.feed_name,
                       published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-                      description: item.contentSnippet || item.content || '',
-                      category: 'other'
+                      excerpt: (item.contentSnippet || item.content || '').substring(0, 500),
+                      category: 'other',
+                      content_type: 'article',
+                      severity_level: 'medium',
+                      processed: false
                     })
                     .select();
                   
-                  if (!error) {
+                  if (!error && data) {
                     totalArticles++;
                     console.log('  📝 Stored:', item.title.substring(0, 50) + '...');
                   } else {
-                    console.log('  ⚠️ Store failed:', error.message);
+                    console.log('  ⚠️ Store failed:', error?.message || 'Unknown error');
                   }
                 }
               } catch (err) {
@@ -92,17 +98,21 @@ jobs:
             
             console.log('\\n✅ TOTAL ARTICLES STORED:', totalArticles);
             
-            // Verify they're in the database - using YOUR table name
+            // Verify they're in the database
             const { data: recent, error: checkError } = await supabase
               .from('political_entries')
               .select('title, source_domain, created_at')
               .order('created_at', { ascending: false })
               .limit(10);
               
-            console.log('\\n📊 Latest entries in database:');
-            recent.forEach(entry => {
-              console.log(' -', entry.source_domain + ':', entry.title.substring(0, 50));
-            });
+            if (recent && recent.length > 0) {
+              console.log('\\n📊 Latest entries in database:');
+              recent.forEach(entry => {
+                console.log(' -', entry.source_domain + ':', (entry.title || '').substring(0, 50));
+              });
+            } else {
+              console.log('\\n⚠️ No recent entries found in database');
+            }
           }
           
           testRealRSS().catch(console.error);
