@@ -83,3 +83,5 @@ admin-config.js
 !COMPLETE-TEST-SCHEMA-FIX.sql
 !fix-dashboard-stats-view.sql
 !fix-test-schema.sql
+node_modules/.package-lock.json
+package-lock.json
