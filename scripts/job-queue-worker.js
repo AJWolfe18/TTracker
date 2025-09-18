@@ -1,32 +1,29 @@
-// Job Queue Worker for RSS System
+// Job Queue Worker for RSS System with P1 Production Fixes
 // Handles enrichment tasks with rate limiting and retries
 // Run with: node scripts/job-queue-worker.js
 
-const { createClient } = require('@supabase/supabase-js');
-const OpenAI = require('openai');
-require('dotenv').config();
+import { createClient } from '@supabase/supabase-js';
+import OpenAI from 'openai';
+import { handleFetchFeed } from './rss/fetch_feed.js';
+import { initializeEnvironment, safeLog } from './utils/security.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Configuration
-const config = {
-  supabase: {
-    url: process.env.SUPABASE_URL || 'https://wnrjrywpcadwutfykflu.supabase.co', // Default to TEST
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY
-  },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY
-  },
-  worker: {
-    pollInterval: 5000, // Check for jobs every 5 seconds
-    maxConcurrent: 2,   // Process 2 jobs at a time
-    rateLimit: 500,     // Min 500ms between job starts (2/second)
-    maxRetries: 3,
-    backoffBase: 2000   // Base backoff in ms
-  }
+// Initialize and validate environment on startup
+const config = initializeEnvironment();
+
+// Worker configuration
+const workerConfig = {
+  pollInterval: parseInt(process.env.WORKER_POLL_INTERVAL_MS || '5000', 10),
+  maxConcurrent: parseInt(process.env.WORKER_MAX_CONCURRENT || '2', 10),
+  rateLimit: parseInt(process.env.WORKER_RATE_LIMIT_MS || '500', 10),
+  maxRetries: parseInt(process.env.WORKER_MAX_RETRIES || '3', 10),
+  backoffBase: parseInt(process.env.WORKER_BACKOFF_BASE_MS || '2000', 10)
 };
 
 // Initialize clients
-const supabase = createClient(config.supabase.url, config.supabase.serviceKey);
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
+const supabase = createClient(config.supabaseUrl, config.serviceRoleKey);
+const openai = config.openaiKey ? new OpenAI({ apiKey: config.openaiKey }) : null;
 
 // Track active jobs
 let activeJobs = 0;
@@ -37,10 +34,32 @@ let isRunning = true;
 class JobProcessor {
   constructor() {
     this.handlers = {
+      'fetch_feed': this.fetchFeed.bind(this),
       'story.summarize': this.summarizeStory.bind(this),
       'story.classify': this.classifyStory.bind(this),
       'story.rescore': this.rescoreStory.bind(this),
-      'article.enrich': this.enrichArticle.bind(this)
+      'article.enrich': this.enrichArticle.bind(this),
+      'process_article': this.processArticle.bind(this)
+    };
+  }
+
+  async fetchFeed(payload) {
+    // Delegate to the RSS fetcher module
+    return await handleFetchFeed({ payload }, supabase);
+  }
+
+  async processArticle(payload) {
+    const { article_id, article_url, source_domain } = payload;
+    
+    // This is a placeholder for future article processing (clustering, etc.)
+    // For now, just log the article for processing
+    console.log(`📄 Processing article: ${article_url} from ${source_domain}`);
+    
+    // Future: This would trigger clustering algorithm, entity extraction, etc.
+    return { 
+      article_id, 
+      status: 'processed',
+      message: 'Article queued for clustering' 
     };
   }
 
