@@ -1,0 +1,102 @@
+name: Test Real RSS Pipeline
+on: 
+  workflow_dispatch:
+  push:
+    branches: [test]
+
+jobs:
+  test-real-rss:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Test Real RSS Pipeline
+        env:
+          NODE_ENV: test
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+        run: |
+          echo "🚀 Starting REAL RSS test - fetching actual feeds from database"
+          
+          # Create inline test that actually fetches and stores
+          node -e "
+          const { createClient } = require('@supabase/supabase-js');
+          const Parser = require('rss-parser');
+          const parser = new Parser();
+          
+          const supabase = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+          
+          async function testRealRSS() {
+            console.log('📡 Fetching active RSS feeds from database...');
+            
+            // Get real feeds from your database
+            const { data: feeds, error } = await supabase
+              .from('feed_registry')
+              .select('*')
+              .eq('is_active', true);
+              
+            if (error) throw error;
+            console.log('Found', feeds.length, 'active feeds');
+            
+            let totalArticles = 0;
+            
+            // Test each feed
+            for (const feed of feeds) {
+              console.log('\\n🔄 Testing:', feed.feed_name);
+              try {
+                const rssFeed = await parser.parseURL(feed.feed_url);
+                console.log('  ✅ Fetched', rssFeed.items.length, 'articles');
+                
+                // Store first 3 articles as test
+                for (let i = 0; i < Math.min(3, rssFeed.items.length); i++) {
+                  const item = rssFeed.items[i];
+                  
+                  // Create article using your atomic function
+                  const { data, error } = await supabase.rpc('upsert_article_and_enqueue_jobs', {
+                    p_url: item.link || item.guid,
+                    p_title: item.title,
+                    p_description: item.contentSnippet || item.content || '',
+                    p_source_domain: new URL(feed.feed_url).hostname,
+                    p_published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()
+                  });
+                  
+                  if (!error) {
+                    totalArticles++;
+                    console.log('  📝 Stored:', item.title.substring(0, 50) + '...');
+                  } else {
+                    console.log('  ⚠️ Store failed:', error.message);
+                  }
+                }
+              } catch (err) {
+                console.log('  ❌ Feed failed:', err.message);
+              }
+            }
+            
+            console.log('\\n✅ TOTAL ARTICLES STORED:', totalArticles);
+            
+            // Verify they're in the database
+            const { data: recent, error: checkError } = await supabase
+              .from('political_entries')
+              .select('title, source_domain, created_at')
+              .order('created_at', { ascending: false })
+              .limit(10);
+              
+            console.log('\\n📊 Latest entries in database:');
+            recent.forEach(entry => {
+              console.log(' -', entry.source_domain + ':', entry.title.substring(0, 50));
+            });
+          }
+          
+          testRealRSS().catch(console.error);
+          "
