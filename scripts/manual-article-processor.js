@@ -7,6 +7,7 @@
 import fetch from 'node-fetch';
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -39,6 +40,20 @@ console.log(`📍 Supabase URL: ${SUPABASE_URL ? SUPABASE_URL.substring(0, 30) +
 
 // Create Supabase client with environment variables
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Helper functions for RPC
+function sha256(text) {
+    return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+function safeHost(url) {
+    try {
+        const h = new URL(url).hostname || '';
+        return h.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
+}
 
 // Get input from GitHub Actions or environment
 const inputData = JSON.parse(process.env.INPUT_DATA || '{}');

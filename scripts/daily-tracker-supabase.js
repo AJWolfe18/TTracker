@@ -3,6 +3,7 @@
 import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { generateSpicySummary } from './spicy-summaries-integration.js';
+import crypto from 'crypto';
 
 // Only load dotenv for local testing (not in GitHub Actions)
 if (!process.env.GITHUB_ACTIONS) {
@@ -45,6 +46,21 @@ function generateStringId() {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 8);
     return `entry_${timestamp}_${random}`;
+}
+
+// Use SHA256 for URL hashing (instead of MD5)
+function sha256(text) {
+    return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+// Helper to safely get hostname from URL
+function safeHost(url) {
+    try {
+        const h = new URL(url).hostname || '';
+        return h.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
 }
 
 // Date range helper - can be overridden by command line args for backfill
@@ -235,12 +251,12 @@ async function checkForDuplicate(entry) {
             console.log(`\n🔍 Duplicate Check for: "${entry.title.substring(0, 60)}..."`);
         }
         
-        // Step 1: Check exact URL match using Supabase SDK
+        // Step 1: Check exact URL match using Supabase SDK - UPDATE TO USE articles TABLE
         if (entry.source_url) {
             const { data: urlMatch, error: urlError } = await supabase
-                .from('political_entries')
+                .from('articles')
                 .select('id')
-                .eq('source_url', entry.source_url)
+                .eq('url', entry.source_url)  // Note: 'url' not 'source_url' in articles
                 .limit(1);
             
             if (!urlError && urlMatch && urlMatch.length > 0) {
@@ -254,15 +270,14 @@ async function checkForDuplicate(entry) {
             }
         }
         
-        // Step 2: Get recent entries for comparison (last 7 days)
+        // Step 2: Get recent entries for comparison (last 7 days) - UPDATE TO USE articles TABLE
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
         
         const { data: recentEntries, error: recentError } = await supabase
-            .from('political_entries')
-            .select('id, title, date, actor, source_url')
-            .gte('date', dateFilter)
+            .from('articles')
+            .select('id, title, published_at, url')
+            .gte('published_at', sevenDaysAgo.toISOString())
             .order('created_at', { ascending: false })
             .limit(100);
         
@@ -279,7 +294,14 @@ async function checkForDuplicate(entry) {
         let highestScore = 0;
         
         for (const existing of recentEntries) {
-            const similarity = calculateSimilarityScore(entry, existing);
+            // Map articles fields to expected format
+            const mappedExisting = {
+                ...existing,
+                date: existing.published_at,
+                source_url: existing.url
+            };
+            
+            const similarity = calculateSimilarityScore(entry, mappedExisting);
             
             // Log high-scoring comparisons for debugging
             if (DUPLICATE_CONFIG.DEBUG_LOG && similarity.score > 60) {
@@ -982,9 +1004,9 @@ Return ONLY a JSON array of relevant political developments found. Only include 
             const dateFilter = sevenDaysAgo.toISOString().split('T')[0];
             
             const { data: recentEntries, error: recentError } = await supabase
-                .from('political_entries')
-                .select('id, title, date, actor, source_url')
-                .gte('date', dateFilter)
+                .from('articles')
+                .select('id, title, published_at, url')
+                .gte('published_at', dateFilter)
                 .order('created_at', { ascending: false })
                 .limit(100);
             
@@ -1007,9 +1029,9 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                 
                 if (entry.source_url) {
                     const { data: urlMatch, error: urlError } = await supabase
-                        .from('political_entries')
+                        .from('articles')
                         .select('id')
-                        .eq('source_url', entry.source_url)
+                        .eq('url', entry.source_url)
                         .limit(1);
                     
                     if (urlMatch && urlMatch.length > 0) {
@@ -1028,7 +1050,14 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                     let highestScore = 0;
                     
                     for (const existing of recentEntries) {
-                        const similarity = calculateSimilarityScore(entry, existing);
+                        // Map articles fields to expected format
+                        const mappedExisting = {
+                            ...existing,
+                            date: existing.published_at,
+                            source_url: existing.url,
+                            actor: null  // articles table doesn't have actor field
+                        };
+                        const similarity = calculateSimilarityScore(entry, mappedExisting);
                         
                         if (similarity.score > highestScore) {
                             highestScore = similarity.score;
@@ -1137,79 +1166,120 @@ Return ONLY a JSON array of relevant political developments found. Only include 
 async function saveToSupabase(entries) {
     if (!entries || entries.length === 0) {
         console.log('\n⚠️ No new entries to save');
-        return;
+        return { successful: 0, duplicates: 0, failed: 0, errors: [] };
     }
 
-    console.log(`\n💾 Saving ${entries.length} new entries to Supabase...`);
+    console.log(`\n💾 Saving ${entries.length} entries via RPC to articles table...`);
     
-    try {
-        // Generate unique string IDs for all entries
-        const entriesWithIds = entries.map(entry => {
-            // Remove any existing id field first, then add our string ID
-            const { id, ...entryWithoutId } = entry;
-            return {
-                id: generateStringId(),
-                ...entryWithoutId
+    const results = {
+        successful: 0,
+        duplicates: 0,
+        failed: 0,
+        errors: []
+    };
+
+    for (const entry of entries) {
+        try {
+            const url = entry.source_url?.trim();
+            if (!url) {
+                throw new Error('Missing source_url for entry: ' + entry.title);
+            }
+
+            // Prepare parameters for RPC - NOTE THE UNDERSCORE PREFIX!
+            const params = {
+                _url: url,
+                _url_hash: sha256(url),  // Using SHA256 not MD5
+                _headline: entry.title || '(untitled)',  // Maps to 'title' column
+                _source_name: entry.source || safeHost(url),
+                _source_domain: safeHost(url),
+                _published_at: entry.date ? new Date(entry.date).toISOString() : new Date().toISOString(),
+                _content: entry.description || null,
+                _content_type: 'news_report',
+                _opinion_flag: false,
+                _metadata: {
+                    category: entry.category || null,
+                    severity: entry.severity || null,
+                    actor: entry.actor || null,
+                    verified: Boolean(entry.verified),
+                    spicy_summary: entry.spicy_summary || null,
+                    shareable_hook: entry.shareable_hook || null,
+                    severity_label_inapp: entry.severity_label_inapp || null,
+                    severity_label_share: entry.severity_label_share || null,
+                    original_tracker: 'daily-political',
+                    added_at: entry.added_at || new Date().toISOString()
+                }
             };
-        });
-        
-        // DEBUG: Log the exact data being sent - COMMENTED OUT (TTRC-125)
-        // console.log('\n🔍 DEBUG - Data being sent to Supabase:');
-        // console.log('Number of entries:', entriesWithIds.length);
-        // if (entriesWithIds.length > 0) {
-        //     console.log('\nFirst entry structure:');
-        //     console.log(JSON.stringify(entriesWithIds[0], null, 2));
-        // }
-        
-        // Insert with explicit IDs
-        const { data, error } = await supabase
-            .from('political_entries')
-            .insert(entriesWithIds)
-            .select();
-        
-        if (error) {
-            throw new Error(`Supabase insert error: ${error.message}`);
+
+            // Call the CORRECT RPC function name with underscore parameters
+            const { data, error } = await supabase
+                .rpc('upsert_article_and_enqueue', params);  // Correct name, no '_jobs' suffix
+
+            if (error) {
+                throw error;
+            }
+
+            // Handle response - can be single row or array
+            const row = Array.isArray(data) ? data[0] : data;
+            if (row?.is_new) {
+                console.log(`✅ New: ${String(entry.title).slice(0, 60)}...`);
+                results.successful++;
+            } else {
+                console.log(`↪️ Duplicate: ${String(entry.title).slice(0, 60)}...`);
+                results.duplicates++;
+            }
+
+        } catch (error) {
+            console.error(`❌ Save error for "${entry.title}": ${error.message}`);
+            results.failed++;
+            results.errors.push({
+                title: entry.title || '(untitled)',
+                error: error.message
+            });
         }
-        
-        console.log(`✅ Successfully saved ${entriesWithIds.length} entries to Supabase`);
-        if (data && data.length > 0) {
-            console.log(`IDs assigned: ${data.map(e => e.id).join(', ')}`);
-        }
-        
-        // Enhanced summary matching daily-tracker.js
-        console.log('\n=== DAILY TRACKING SUMMARY ===');
-        console.log('📅 Date:', new Date().toDateString());
-        console.log('🕐 Time:', new Date().toLocaleTimeString());
-        console.log('📰 New entries found:', entries.length);
-        
-        // Category breakdown
-        const categoryCount = {};
-        entries.forEach(e => {
-            categoryCount[e.category] = (categoryCount[e.category] || 0) + 1;
-        });
-        
-        console.log('\n📊 By Category:');
-        Object.entries(categoryCount).forEach(([cat, count]) => {
-            console.log(`  - ${cat}: ${count}`);
-        });
-        
-        // Severity breakdown
-        const highSeverity = entries.filter(e => e.severity === 'high').length;
-        const mediumSeverity = entries.filter(e => e.severity === 'medium').length;
-        const lowSeverity = entries.filter(e => e.severity === 'low').length;
-        
-        console.log(`\n⚠️  Severity: ${highSeverity} high, ${mediumSeverity} medium, ${lowSeverity} low`);
-        
-        // Verification status
-        const verified = entries.filter(e => e.verified).length;
-        console.log(`✓ Verified sources: ${verified} of ${entries.length} (${Math.round(verified/entries.length*100)}%)`);
-        
-        console.log('================================\n');
-        
-    } catch (error) {
-        console.error('❌ Error saving to Supabase:', error.message);
-        throw error;
     }
+        
+    // Enhanced summary
+    console.log('\n=== DAILY TRACKING SUMMARY ===');
+    console.log('📅 Date:', new Date().toDateString());
+    console.log('🕐 Time:', new Date().toLocaleTimeString());
+    console.log('📰 Total entries processed:', entries.length);
+    console.log(`✅ New articles saved: ${results.successful}`);
+    console.log(`↪️ Duplicates skipped: ${results.duplicates}`);
+    console.log(`❌ Failed to save: ${results.failed}`);
+        
+    
+    // Category breakdown
+    const categoryCount = {};
+    entries.forEach(e => {
+        categoryCount[e.category] = (categoryCount[e.category] || 0) + 1;
+    });
+    
+    console.log('\n📊 By Category:');
+    Object.entries(categoryCount).forEach(([cat, count]) => {
+        console.log(`  - ${cat}: ${count}`);
+    });
+    
+    // Severity breakdown
+    const highSeverity = entries.filter(e => e.severity === 'high').length;
+    const mediumSeverity = entries.filter(e => e.severity === 'medium').length;
+    const lowSeverity = entries.filter(e => e.severity === 'low').length;
+    
+    console.log(`\n⚠️ Severity: ${highSeverity} high, ${mediumSeverity} medium, ${lowSeverity} low`);
+    
+    // Verification status
+    const verified = entries.filter(e => e.verified).length;
+    console.log(`✓ Verified sources: ${verified} of ${entries.length} (${Math.round(verified/entries.length*100)}%)`);
+    
+    if (results.errors.length > 0) {
+        console.log('\n❌ Errors encountered:');
+        results.errors.forEach(e => {
+            console.log(`  - ${e.title}: ${e.error}`);
+        });
+    }
+    
+    console.log('================================\n');
+    
+    return results;
 }
 
 async function main() {
