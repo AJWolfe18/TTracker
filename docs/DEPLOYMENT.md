@@ -17,18 +17,98 @@ Before starting, you'll need:
 ## Table of Contents
 1. [Database Setup (Supabase)](#1-database-setup-supabase)
 2. [Repository Setup (GitHub)](#2-repository-setup-github)
-3. [Hosting Setup (Netlify)](#3-hosting-setup-netlify)
-4. [Automation Setup (GitHub Actions)](#4-automation-setup-github-actions)
-5. [Test Environment Setup](#5-test-environment-setup)
-6. [Verification & Testing](#6-verification--testing)
-7. [Maintenance](#7-maintenance)
+3. [Edge Functions Setup](#3-edge-functions-setup)
+4. [Job Queue Setup](#4-job-queue-setup)
+5. [Hosting Setup (Netlify)](#5-hosting-setup-netlify)
+6. [Automation Setup (GitHub Actions)](#6-automation-setup-github-actions)
+7. [Test Environment Setup](#7-test-environment-setup)
+8. [Verification & Testing](#8-verification--testing)
+9. [Maintenance](#9-maintenance)
 
 ## 1. Database Setup (Supabase)
+
+### Migration Order (CRITICAL)
+
+Migrations MUST be run in this exact order:
+1. `001_rss_system_PRODUCTION_READY.sql` - Base RSS tables
+2. `002_job_queue_functions.sql` - Database functions
+3. `003_atomic_article_upsert_production_ready.sql` - Atomic operations
+4. `004_fix_generated_columns_and_constraints.sql` - SR dev fixes
+5. `005_queue_stats_function.sql` - Stats monitoring
+6. `006_align_job_queue_columns_p1_fixes.sql` - **REQUIRED for TTRC-137**
 
 ### Create Supabase Project
 
 1. Go to [app.supabase.com](https://app.supabase.com)
 2. Click "New Project"
+3. Set up database with migrations (see Migration Order above)
+
+## 2. Repository Setup (GitHub)
+
+[Content continues...]
+
+## 3. Edge Functions Setup
+
+### Deploy Edge Functions
+
+```bash
+# Install Supabase CLI
+npm install -g supabase
+
+# Login to Supabase
+supabase login
+
+# Deploy functions (replace with your project ref)
+supabase functions deploy rss-enqueue --project-ref YOUR_PROJECT_REF
+supabase functions deploy queue-stats --project-ref YOUR_PROJECT_REF
+supabase functions deploy stories-active --project-ref YOUR_PROJECT_REF
+supabase functions deploy stories-detail --project-ref YOUR_PROJECT_REF
+```
+
+### Configure Edge Function Secrets
+
+```bash
+# Set the cron token (generate a secure random token)
+supabase secrets set EDGE_CRON_TOKEN=your-secure-token --project-ref YOUR_PROJECT_REF
+```
+
+## 4. Job Queue Setup
+
+### Start Job Queue Worker
+
+```bash
+# Set environment variables
+export NODE_ENV=production
+export SUPABASE_URL=your-supabase-url
+export SUPABASE_SERVICE_ROLE_KEY=your-service-key
+export OPENAI_API_KEY=your-openai-key
+export EDGE_CRON_TOKEN=your-edge-token
+
+# Install dependencies
+npm install
+
+# Start worker (use PM2 for production)
+npm install -g pm2
+pm2 start scripts/job-queue-worker.js --name "job-worker"
+pm2 save
+pm2 startup
+```
+
+### Monitor Job Queue
+
+```bash
+# Check queue status
+curl https://YOUR_PROJECT.supabase.co/functions/v1/queue-stats \
+  -H "Authorization: Bearer YOUR_EDGE_TOKEN"
+
+# Check worker logs
+pm2 logs job-worker
+```
+
+## 5. Hosting Setup (Netlify)
+
+[Original Netlify content continues...]
+
 3. Configure:
    - **Organization**: Your org or create new
    - **Project Name**: `trumpytracker-prod`

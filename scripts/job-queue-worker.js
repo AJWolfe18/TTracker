@@ -35,9 +35,12 @@ class JobProcessor {
   constructor() {
     this.handlers = {
       'fetch_feed': this.fetchFeed.bind(this),
+      'fetch_all_feeds': this.fetchAllFeeds.bind(this),
       'story.summarize': this.summarizeStory.bind(this),
       'story.classify': this.classifyStory.bind(this),
       'story.rescore': this.rescoreStory.bind(this),
+      'story.close_old': this.closeOldStories.bind(this),
+      'story.archive': this.archiveOldStories.bind(this),
       'article.enrich': this.enrichArticle.bind(this),
       'process_article': this.processArticle.bind(this)
     };
@@ -250,6 +253,148 @@ Return JSON with:
       .eq('id', article_id);
 
     return { article_id, entities };
+  }
+    console.log('📡 Processing fetch_all_feeds job');
+    
+    // Get all active feeds with their IDs
+    const { data: feeds, error } = await supabase
+      .from('feed_registry')
+      .select('id, feed_url, feed_name, tier')
+      .eq('is_active', true)
+      .lte('failure_count', 4)
+      .order('tier', { ascending: true });  // Process higher priority first
+
+    if (error) throw new Error(`Failed to fetch feeds: ${error.message}`);
+
+    // Apply tier-based limits
+    const GLOBAL_LIMIT = 50;
+    const TIER_LIMITS = { 1: 100, 2: 50, 3: 20 };
+    
+    // Group feeds by tier
+    const feedsByTier = feeds?.reduce((groups, feed) => {
+      const tier = feed.tier || 2;
+      if (!groups[tier]) groups[tier] = [];
+      groups[tier].push(feed);
+      return groups;
+    }, {}) || {};
+
+    // Build jobs with tier limits
+    const jobsToEnqueue = Object.entries(feedsByTier)
+      .flatMap(([tier, tierFeeds]) => {
+        const limit = TIER_LIMITS[tier] || 50;
+        return tierFeeds.slice(0, limit).map(feed => ({
+          job_type: 'fetch_feed',
+          payload: { feed_id: feed.id },  // Only stable ID, no timestamps!
+          status: 'pending',
+          run_at: new Date().toISOString(),
+          attempts: 0,
+          max_attempts: 3
+        }));
+      })
+      .slice(0, GLOBAL_LIMIT);
+
+    // Bulk insert (let unique constraint handle duplicates)
+    let enqueuedCount = 0;
+    if (jobsToEnqueue.length > 0) {
+      const { error: insertError } = await supabase
+        .from('job_queue')
+        .insert(jobsToEnqueue);
+
+      if (!insertError || insertError.code === '23505') {
+        enqueuedCount = jobsToEnqueue.length;
+      } else {
+        console.error('Bulk insert error:', insertError);
+      }
+    }
+
+    console.log(`  Enqueued ${enqueuedCount} feed jobs across tiers`);
+    return { feeds_enqueued: enqueuedCount };
+  }
+
+  async closeOldStories(payload) {
+    const { threshold_hours = 72 } = payload;
+    // Note: payload should NOT contain timestamps for idempotency
+    
+    console.log(`📚 Closing stories older than ${threshold_hours} hours`);
+    
+    // Use batch update for performance (O(1) instead of O(n))
+    const thresholdTime = new Date(Date.now() - threshold_hours * 60 * 60 * 1000).toISOString();
+    
+    // Single batch update query
+    const { data: updatedStories, error: updateError, count } = await supabase
+      .from('stories')
+      .update({ 
+        status: 'closed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('status', 'active')
+      .lt('created_at', thresholdTime)
+      .select('id, headline');
+
+    if (updateError) {
+      throw new Error(`Failed to close old stories: ${updateError.message}`);
+    }
+
+    const closedCount = updatedStories?.length || 0;
+    
+    if (closedCount > 0) {
+      console.log(`  Batch closed ${closedCount} stories`);
+      // Log first few for visibility
+      updatedStories?.slice(0, 3).forEach(story => {
+        console.log(`    - ${story.id}: ${story.headline.substring(0, 50)}...`);
+      });
+      if (closedCount > 3) {
+        console.log(`    ... and ${closedCount - 3} more`);
+      }
+    }
+
+    return { 
+      stories_closed: closedCount,
+      threshold_hours 
+    };
+  }
+
+  async archiveOldStories(payload) {
+    const { threshold_days = 90 } = payload;
+    // Note: payload should NOT contain timestamps for idempotency
+    
+    console.log(`🗄️ Archiving stories older than ${threshold_days} days`);
+    
+    // Use batch update for performance (O(1) instead of O(n))
+    const thresholdTime = new Date(Date.now() - threshold_days * 24 * 60 * 60 * 1000).toISOString();
+    
+    // Single batch update query - archive closed or inactive stories
+    const { data: updatedStories, error: updateError } = await supabase
+      .from('stories')
+      .update({ 
+        status: 'archived',
+        updated_at: new Date().toISOString()
+      })
+      .in('status', ['closed', 'inactive'])  // Archive both closed and inactive
+      .lt('created_at', thresholdTime)
+      .select('id, headline');
+
+    if (updateError) {
+      throw new Error(`Failed to archive old stories: ${updateError.message}`);
+    }
+
+    const archivedCount = updatedStories?.length || 0;
+    
+    if (archivedCount > 0) {
+      console.log(`  Batch archived ${archivedCount} stories`);
+      // Log first few for visibility
+      updatedStories?.slice(0, 3).forEach(story => {
+        console.log(`    - ${story.id}: ${story.headline.substring(0, 50)}...`);
+      });
+      if (archivedCount > 3) {
+        console.log(`    ... and ${archivedCount - 3} more`);
+      }
+    }
+
+    return { 
+      stories_archived: archivedCount,
+      threshold_days 
+    };
   }
 }
 

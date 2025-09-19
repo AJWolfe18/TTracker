@@ -27,6 +27,88 @@ Aggregated statistics view for the dashboard.
 - Combines counts from both tables
 - Used by stats display component
 
+### 4. `job_queue`
+Background job processing with idempotency.
+- **Primary Key**: `id` (BIGSERIAL)
+- **Unique**: `(job_type, payload_hash)` for idempotency
+- **Status**: pending/processing/completed/failed
+- **Job Types**: fetch_feed, fetch_all_feeds, story.summarize, story.classify, story.close_old, story.archive
+- **Critical Columns**: job_type (NOT type), run_at (NOT run_after)
+- **Idempotency**: GENERATED payload_hash column (SHA256) ensures no duplicates
+- **Rate Limiting**: Tiered caps - T1: 100, T2: 50, T3: 20, Global: 50
+
+### 5. `stories`
+Clustered political stories from multiple articles.
+- **Primary Key**: `id` (BIGINT)
+- **Unique**: `story_hash`
+- **Status**: active/closed/archived
+- **AI Fields**: neutral_summary, spicy_summary (GPT-4 generated)
+- **Lifecycle**: Active → Closed (72h) → Archived (90d)
+- **Clustering**: Based on primary_actor and similarity scores
+- **Confidence**: 0-1 score for story quality
+
+### 6. `articles` (political_entries in RSS system)
+Individual news articles from RSS feeds and manual submission.
+- **Primary Key**: `id` (TEXT - UUID)
+- **Unique**: `(url_hash, published_at)` composite - NOT globally unique
+- **Source**: RSS feeds (automated) and manual submission
+- **Enrichment**: AI entity extraction via job queue
+- **Search**: Full-text search via search_vector (tsvector)
+
+### 7. `article_story`
+Links articles to stories (many-to-many junction table).
+- **Primary Key**: `article_id` (references political_entries)
+- **Foreign Key**: `story_id` (references stories)
+- **Similarity**: 0-1 confidence score
+- **Matching**: >80% auto-match, 60-80% review queue, <60% no match
+- **Primary Source**: Boolean flag for main article in story
+
+### 8. `feed_registry`
+RSS feed configuration and monitoring.
+- **Primary Key**: `feed_url`
+- **Tiers**: 1 (critical), 2 (important), 3 (nice-to-have)
+- **Monitoring**: failure_count, last_fetched, etag, last_modified
+- **Status**: is_active flag for enable/disable
+- **Optimization**: HTTP 304 tracking via last_304_at
+
+### 9. `budgets`
+Daily spending tracking for AI costs.
+- **Primary Key**: `day` (DATE)
+- **Limit**: cap_usd (default $50/day)
+- **Tracking**: spent_usd, openai_calls count
+- **Alerts**: 70% warn, 90% degrade, 100% stop
+
+### 4. `job_queue`
+Background job processing with idempotency.
+- **Primary Key**: `id` (BIGSERIAL)
+- **Unique**: `(job_type, payload_hash)` for idempotency
+- **Status**: pending/processing/completed/failed
+- **Job Types**: fetch_feed, story.summarize, story.classify, story.close_old, story.archive
+- **Critical Columns**: job_type (not type), run_at (not run_after)
+
+### 5. `stories`
+Clustered political stories from multiple articles.
+- **Primary Key**: `id` (BIGINT)
+- **Unique**: `story_hash`
+- **Status**: active/closed/archived
+- **AI Fields**: neutral_summary, spicy_summary (GPT-4 generated)
+- **Lifecycle**: Active → Closed (72h) → Archived (90d)
+
+### 6. `article_story`
+Links articles to stories (many-to-many).
+- **Primary Key**: `article_id` (references political_entries)
+- **Foreign Key**: `story_id` (references stories)
+- **Similarity**: 0-1 confidence score
+- **Primary Source**: Boolean flag for main article
+
+### 7. `feed_registry`
+RSS feed configuration and monitoring.
+- **Primary Key**: `feed_url`
+- **Tiers**: 1 (critical), 2 (important), 3 (nice-to-have)
+- **Active**: Can disable feeds without deleting
+- **Failure Tracking**: Auto-disable after 5 failures
+- **Caching**: Uses ETags and Last-Modified headers
+
 ## Field Naming Conventions
 
 ### Use These Field Names:

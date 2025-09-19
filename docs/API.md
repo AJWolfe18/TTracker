@@ -6,6 +6,7 @@ TrumpyTracker provides several APIs and endpoints for data access and system man
 
 ## Table of Contents
 - [Public APIs](#public-apis)
+- [Edge Functions](#edge-functions)
 - [GitHub Actions APIs](#github-actions-apis)
 - [Supabase Database API](#supabase-database-api)
 - [Admin Endpoints](#admin-endpoints)
@@ -90,6 +91,80 @@ const response = await fetch(
   }
 );
 ```
+
+## Edge Functions
+
+Supabase Edge Functions provide serverless API endpoints for the RSS system.
+
+### RSS Enqueue
+
+**Endpoint**: `POST /functions/v1/rss-enqueue`
+
+**Authentication**: Bearer token required (EDGE_CRON_TOKEN)
+
+**Request Body**:
+```json
+{
+  "kind": "fetch_all_feeds" | "lifecycle"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "enqueued": 2,
+  "kind": "lifecycle",
+  "timestamp": "2025-09-18T..."
+}
+```
+
+### Queue Stats
+
+**Endpoint**: `GET /functions/v1/queue-stats`
+
+**Authentication**: Optional (uses EDGE_CRON_TOKEN if configured)
+
+**Response**:
+```json
+{
+  "stats": [
+    {
+      "job_type": "fetch_feed",
+      "pending": 5,
+      "processing": 1,
+      "completed": 100,
+      "failed": 2,
+      "next_run_at": "2025-09-18T...",
+      "oldest_pending": "2025-09-18T...",
+      "max_pending_age_minutes": 15,
+      "is_stuck": false
+    }
+  ],
+  "totals": {
+    "total_pending": 5,
+    "total_processing": 1,
+    "total_completed": 100,
+    "total_failed": 2,
+    "has_stuck_jobs": false
+  },
+  "timestamp": "2025-09-18T..."
+}
+```
+
+**Cache**: 30 seconds
+
+### Stories Active
+
+**Endpoint**: `GET /functions/v1/stories-active`
+
+**Response**: List of active stories with articles
+
+### Stories Detail
+
+**Endpoint**: `GET /functions/v1/stories-detail/:id`
+
+**Response**: Complete story with all related articles
 
 ## GitHub Actions APIs
 

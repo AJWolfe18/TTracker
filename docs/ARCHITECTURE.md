@@ -2,7 +2,62 @@
 
 ## Overview
 
-TrumpyTracker is a serverless, event-driven political accountability tracking system built on modern cloud infrastructure with AI-powered content analysis.
+TrumpyTracker is a serverless, event-driven political accountability tracking system built on modern cloud infrastructure with AI-powered content analysis, RSS ingestion, and automated story clustering.
+
+## System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     GitHub Actions                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │Job Scheduler │  │Daily Tracker │  │  EO Tracker  │      │
+│  │(Every 2h/1h) │  │   (9am EST)  │  │  (10am EST)  │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+└─────────┼──────────────────┼──────────────────┼──────────────┘
+          │                  │                  │
+          ▼                  ▼                  ▼
+    ┌─────────────────────────────────────────────────┐
+    │          Supabase Edge Functions                 │
+    │  ┌──────────────┐  ┌──────────────────────┐    │
+    │  │ rss-enqueue  │  │   queue-stats        │    │
+    │  │stories-active│  │   stories-detail     │    │
+    │  └──────┬───────┘  └──────────────────────┘    │
+    └─────────┼─────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────┐
+    │            Job Queue System                      │
+    │  Postgres-based queue with idempotency          │
+    │  job_type | payload | run_at | status           │
+    └─────────┬─────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────┐
+    │           Job Queue Worker (Node.js)             │
+    │  - RSS Feed Fetching (Tiered: T1/T2/T3)         │
+    │  - Story Enrichment (OpenAI GPT-4)              │
+    │  - Story Clustering & Lifecycle                 │
+    └─────────┬─────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────┐
+    │            Supabase Database                     │
+    │  ┌──────────────┐  ┌──────────────────────┐    │
+    │  │   Stories    │  │  Political Entries   │    │
+    │  │   Articles   │  │  Executive Orders    │    │
+    │  │  Job Queue   │  │  Feed Registry       │    │
+    │  └──────────────┘  └──────────────────────┘    │
+    └─────────┬─────────────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────┐
+    │             Netlify Static Hosting               │
+    │  ┌──────────────┐  ┌──────────────────────┐    │
+    │  │  Production  │  │  Test Environment    │    │
+    │  │   (main)     │  │     (test)           │    │
+    │  └──────────────┘  └──────────────────────┘    │
+    └─────────────────────────────────────────────────┘
+```
 
 ## System Architecture Diagram
 
