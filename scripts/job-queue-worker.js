@@ -254,6 +254,10 @@ Return JSON with:
 
     return { article_id, entities };
   }
+
+  async fetchAllFeeds(payload) {
+    // This is typically a no-op if the Edge Function handles fan-out
+    // But we can implement it here as a backup
     console.log('📡 Processing fetch_all_feeds job');
     
     // Get all active feeds with their IDs
