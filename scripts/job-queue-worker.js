@@ -37,15 +37,16 @@ class JobProcessor {
     this.handlers = {
       'fetch_feed': this.fetchFeed.bind(this),
       'fetch_all_feeds': this.fetchAllFeeds.bind(this),
-      'story.summarize': this.summarizeStory.bind(this),
-      'story.classify': this.classifyStory.bind(this),
-      'story.rescore': this.rescoreStory.bind(this),
-      'story.close_old': this.closeOldStories.bind(this),
-      'story.archive': this.archiveOldStories.bind(this),
+      // Methods not yet implemented:
+      // 'story.summarize': this.summarizeStory.bind(this),
+      // 'story.classify': this.classifyStory.bind(this),
+      // 'story.rescore': this.rescoreStory.bind(this),
+      // 'story.close_old': this.closeOldStories.bind(this),
+      // 'story.archive': this.archiveOldStories.bind(this),
       'story.cluster': clusteringHandlers['story.cluster'],
       'story.cluster.batch': clusteringHandlers['story.cluster.batch'],
-      'story.enrich': this.enrichStory.bind(this),
-      // 'article.enrich': this.enrichArticle.bind(this), // TODO: Method not implemented yet
+      // 'story.enrich': this.enrichStory.bind(this),
+      // 'article.enrich': this.enrichArticle.bind(this), 
       'process_article': this.processArticle.bind(this)
     };
   }
