@@ -10,10 +10,11 @@
     "eo": "node scripts/executive-orders-tracker-supabase.js",
     "server": "node scripts/simple-server.js",
     "test": "node test-verification.js",
-    "qa:xml": "node scripts/tests/malformed-xml.js",
-    "qa:timeout": "node scripts/tests/timeout-retry.js",
-    "qa:concurrency": "node scripts/tests/concurrency-upsert.js",
-    "qa:smoke": "npm run qa:xml && npm run qa:timeout && npm run qa:concurrency"
+    "qa:boundaries": "node scripts/tests/clustering-boundaries.mjs",
+    "qa:integration": "node scripts/tests/attach-or-create-integration-fixed.mjs",
+    "qa:idempotency": "node scripts/tests/enqueue-idempotency.mjs",
+    "qa:concurrency": "node scripts/tests/clustering-concurrency-fixed.mjs",
+    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.1",
@@ -22,7 +23,8 @@
     "playwright": "^1.40.0",
     "rss-parser": "^3.13.0",
     "openai": "^4.28.0",
-    "pg": "^8.11.0"
+    "pg": "^8.11.0",
+    "natural": "^6.10.0"
   },
   "keywords": [
     "political",
