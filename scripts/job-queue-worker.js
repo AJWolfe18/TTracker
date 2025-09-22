@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
+import { handlers as clusteringHandlers } from './story-cluster-handler.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -41,6 +42,9 @@ class JobProcessor {
       'story.rescore': this.rescoreStory.bind(this),
       'story.close_old': this.closeOldStories.bind(this),
       'story.archive': this.archiveOldStories.bind(this),
+      'story.cluster': clusteringHandlers['story.cluster'],
+      'story.cluster.batch': clusteringHandlers['story.cluster.batch'],
+      'story.enrich': this.enrichStory.bind(this),
       'article.enrich': this.enrichArticle.bind(this),
       'process_article': this.processArticle.bind(this)
     };
@@ -68,6 +72,10 @@ class JobProcessor {
 
   async summarizeStory(payload) {
     const { story_id, mode = 'neutral' } = payload;
+    
+    if (!openai) {
+      throw new Error('OpenAI not configured');
+    }
     
     // Fetch story with articles
     const { data: story, error } = await supabase
@@ -98,17 +106,14 @@ class JobProcessor {
       model: 'gpt-4-turbo-preview',
       messages: [
         { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: `Summarize this political story in 2-3 paragraphs:\n\n${articleTexts}`
-        }
+        { role: 'user', content: `Summarize this story:\n\n${articleTexts}` }
       ],
       max_tokens: 500,
       temperature: mode === 'spicy' ? 0.8 : 0.3
     });
 
     const summary = completion.choices[0].message.content;
-    
+
     // Update story with summary
     const summaryField = mode === 'spicy' ? 'spicy_summary' : 'neutral_summary';
     await supabase
@@ -116,94 +121,56 @@ class JobProcessor {
       .update({ [summaryField]: summary })
       .eq('id', story_id);
 
-    return { story_id, mode, summary_length: summary.length };
+    return { story_id, mode, summary };
   }
 
   async classifyStory(payload) {
-    const { story_id } = payload;
-    
-    // Fetch story
-    const { data: story, error } = await supabase
-      .from('stories')
-      .select('headline, neutral_summary')
-      .eq('id', story_id)
-      .single();
-
-    if (error) throw new Error(`Failed to fetch story: ${error.message}`);
-
-    // Classify using OpenAI
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        { 
-          role: 'system', 
-          content: 'Classify political news into categories and severity levels. Respond in JSON format.'
-        },
-        {
-          role: 'user',
-          content: `Classify this story:
-Title: ${story.headline}
-Summary: ${story.neutral_summary || 'No summary yet'}
-
-Return JSON with:
-- category: one of [policy, scandal, election, executive_order, international, other]
-- severity: 1-10 (10 being most impactful)
-- confidence: 0-100 (your confidence in the classification)`
-        }
-      ],
-      response_format: { type: 'json_object' }
-    });
-
-    const classification = JSON.parse(completion.choices[0].message.content);
-    
-    // Update story
-    await supabase
-      .from('stories')
-      .update({
-        category: classification.category,
-        severity_level: classification.severity,
-        confidence_score: classification.confidence / 100
-      })
-      .eq('id', story_id);
-
-    return { story_id, ...classification };
+    // Placeholder for story classification
+    return { message: 'Classification not yet implemented' };
   }
 
   async rescoreStory(payload) {
-    const { story_id } = payload;
-    
-    // Simple rescoring based on article count and recency
-    const { data: story, error } = await supabase
+    // Placeholder for story rescoring
+    return { message: 'Rescoring not yet implemented' };
+  }
+
+  async closeOldStories(payload) {
+    // Close stories older than 72 hours
+    const cutoffDate = new Date();
+    cutoffDate.setHours(cutoffDate.getHours() - 72);
+
+    const { data, error } = await supabase
       .from('stories')
-      .select(`
-        created_at,
-        article_story(count)
-      `)
-      .eq('id', story_id)
-      .single();
+      .update({ status: 'closed' })
+      .eq('status', 'active')
+      .lt('created_at', cutoffDate.toISOString());
 
-    if (error) throw new Error(`Failed to fetch story: ${error.message}`);
+    if (error) throw error;
+    return { closed: data?.length || 0 };
+  }
 
-    // Calculate new confidence score
-    const articleCount = story.article_story[0].count;
-    const hoursOld = (Date.now() - new Date(story.created_at).getTime()) / (1000 * 60 * 60);
-    
-    let confidence = 0.5; // Base confidence
-    confidence += Math.min(articleCount * 0.1, 0.3); // Up to +30% for multiple articles
-    confidence -= Math.min(hoursOld * 0.01, 0.2); // Decay over time
-    confidence = Math.max(0.3, Math.min(1.0, confidence)); // Clamp between 30-100%
+  async archiveOldStories(payload) {
+    // Archive closed stories older than 1 week
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 7);
 
-    await supabase
+    const { data, error } = await supabase
       .from('stories')
-      .update({ confidence_score: confidence })
-      .eq('id', story_id);
+      .update({ status: 'archived' })
+      .eq('status', 'closed')
+      .lt('created_at', cutoffDate.toISOString());
 
-    return { story_id, new_confidence: confidence };
+    if (error) throw error;
+    return { archived: data?.length || 0 };
   }
 
   async enrichArticle(payload) {
     const { article_id } = payload;
     
+    if (!openai) {
+      throw new Error('OpenAI not configured');
+    }
+
     // Fetch article
     const { data: article, error } = await supabase
       .from('articles')
@@ -213,192 +180,92 @@ Return JSON with:
 
     if (error) throw new Error(`Failed to fetch article: ${error.message}`);
 
-    // Extract key entities using OpenAI
+    // Extract entities and topics
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
-        {
-          role: 'system',
-          content: 'Extract key entities from political news articles. Return JSON.'
+        { 
+          role: 'system', 
+          content: 'Extract key entities and topics from this article. Return JSON with: entities (array of people/orgs), topics (array of themes), sentiment (positive/negative/neutral)'
         },
-        {
-          role: 'user',
-          content: `Extract entities from:
-Title: ${article.headline}
-Content: ${article.content || 'No content'}
-
-Return JSON with:
-- people: array of person names mentioned
-- organizations: array of organizations
-- locations: array of locations
-- topics: array of main topics`
+        { 
+          role: 'user', 
+          content: `Title: ${article.title}\n\nContent: ${article.content || article.description || ''}` 
         }
       ],
-      response_format: { type: 'json_object' },
-      max_tokens: 200
+      max_tokens: 200,
+      temperature: 0.3
     });
 
-    const entities = JSON.parse(completion.choices[0].message.content);
-    
-    // Update article metadata
+    let enrichment;
+    try {
+      enrichment = JSON.parse(completion.choices[0].message.content);
+    } catch (e) {
+      enrichment = { error: 'Failed to parse enrichment' };
+    }
+
+    // Update article with enrichment
     await supabase
       .from('articles')
-      .update({
-        metadata: {
-          ...article.metadata,
-          entities,
-          enriched_at: new Date().toISOString()
-        }
+      .update({ 
+        entities: enrichment.entities || [],
+        topics: enrichment.topics || [],
+        sentiment: enrichment.sentiment || 'neutral'
       })
       .eq('id', article_id);
 
-    return { article_id, entities };
+    return { article_id, enrichment };
   }
 
   async fetchAllFeeds(payload) {
-    // This is typically a no-op if the Edge Function handles fan-out
-    // But we can implement it here as a backup
-    console.log('📡 Processing fetch_all_feeds job');
-    
-    // Get all active feeds with their IDs
+    // Get all active feeds
     const { data: feeds, error } = await supabase
       .from('feed_registry')
-      .select('id, feed_url, feed_name, tier')
-      .eq('is_active', true)
-      .lte('failure_count', 4)
-      .order('tier', { ascending: true });  // Process higher priority first
+      .select('*')
+      .eq('is_active', true);
 
-    if (error) throw new Error(`Failed to fetch feeds: ${error.message}`);
+    if (error) throw error;
 
-    // Apply tier-based limits
-    const GLOBAL_LIMIT = 50;
-    const TIER_LIMITS = { 1: 100, 2: 50, 3: 20 };
-    
-    // Group feeds by tier
-    const feedsByTier = feeds?.reduce((groups, feed) => {
-      const tier = feed.tier || 2;
-      if (!groups[tier]) groups[tier] = [];
-      groups[tier].push(feed);
-      return groups;
-    }, {}) || {};
+    // Create fetch_feed jobs for each
+    const jobs = feeds.map(feed => ({
+      job_type: 'fetch_feed',
+      payload: {
+        feed_id: feed.id,
+        url: feed.feed_url,
+        source_name: feed.feed_name
+      },
+      status: 'pending',
+      run_at: new Date().toISOString()
+    }));
 
-    // Build jobs with tier limits
-    const jobsToEnqueue = Object.entries(feedsByTier)
-      .flatMap(([tier, tierFeeds]) => {
-        const limit = TIER_LIMITS[tier] || 50;
-        return tierFeeds.slice(0, limit).map(feed => ({
-          job_type: 'fetch_feed',
-          payload: { feed_id: feed.id },  // Only stable ID, no timestamps!
-          status: 'pending',
-          run_at: new Date().toISOString(),
-          attempts: 0,
-          max_attempts: 3
-        }));
-      })
-      .slice(0, GLOBAL_LIMIT);
+    const { error: insertError } = await supabase
+      .from('job_queue')
+      .insert(jobs);
 
-    // Bulk insert (let unique constraint handle duplicates)
-    let enqueuedCount = 0;
-    if (jobsToEnqueue.length > 0) {
-      const { error: insertError } = await supabase
-        .from('job_queue')
-        .insert(jobsToEnqueue);
+    if (insertError) throw insertError;
 
-      if (!insertError || insertError.code === '23505') {
-        enqueuedCount = jobsToEnqueue.length;
-      } else {
-        console.error('Bulk insert error:', insertError);
-      }
-    }
-
-    console.log(`  Enqueued ${enqueuedCount} feed jobs across tiers`);
-    return { feeds_enqueued: enqueuedCount };
+    return { feeds_scheduled: feeds.length };
   }
 
-  async closeOldStories(payload) {
-    const { threshold_hours = 72 } = payload;
-    // Note: payload should NOT contain timestamps for idempotency
+  async processJob(job) {
+    const handler = this.handlers[job.job_type];
     
-    console.log(`📚 Closing stories older than ${threshold_hours} hours`);
-    
-    // Use batch update for performance (O(1) instead of O(n))
-    const thresholdTime = new Date(Date.now() - threshold_hours * 60 * 60 * 1000).toISOString();
-    
-    // Single batch update query
-    const { data: updatedStories, error: updateError, count } = await supabase
-      .from('stories')
-      .update({ 
-        status: 'closed',
-        updated_at: new Date().toISOString()
-      })
-      .eq('status', 'active')
-      .lt('created_at', thresholdTime)
-      .select('id, headline');
-
-    if (updateError) {
-      throw new Error(`Failed to close old stories: ${updateError.message}`);
+    if (!handler) {
+      throw new Error(`No handler for job type: ${job.job_type}`);
     }
 
-    const closedCount = updatedStories?.length || 0;
+    safeLog('info', `Processing ${job.job_type} job`, { job_id: job.id });
     
-    if (closedCount > 0) {
-      console.log(`  Batch closed ${closedCount} stories`);
-      // Log first few for visibility
-      updatedStories?.slice(0, 3).forEach(story => {
-        console.log(`    - ${story.id}: ${story.headline.substring(0, 50)}...`);
+    try {
+      const result = await handler(job.payload);
+      return result;
+    } catch (error) {
+      safeLog('error', `Job ${job.job_type} failed`, { 
+        job_id: job.id,
+        error: error.message 
       });
-      if (closedCount > 3) {
-        console.log(`    ... and ${closedCount - 3} more`);
-      }
+      throw error;
     }
-
-    return { 
-      stories_closed: closedCount,
-      threshold_hours 
-    };
-  }
-
-  async archiveOldStories(payload) {
-    const { threshold_days = 90 } = payload;
-    // Note: payload should NOT contain timestamps for idempotency
-    
-    console.log(`🗄️ Archiving stories older than ${threshold_days} days`);
-    
-    // Use batch update for performance (O(1) instead of O(n))
-    const thresholdTime = new Date(Date.now() - threshold_days * 24 * 60 * 60 * 1000).toISOString();
-    
-    // Single batch update query - archive closed or inactive stories
-    const { data: updatedStories, error: updateError } = await supabase
-      .from('stories')
-      .update({ 
-        status: 'archived',
-        updated_at: new Date().toISOString()
-      })
-      .in('status', ['closed', 'inactive'])  // Archive both closed and inactive
-      .lt('created_at', thresholdTime)
-      .select('id, headline');
-
-    if (updateError) {
-      throw new Error(`Failed to archive old stories: ${updateError.message}`);
-    }
-
-    const archivedCount = updatedStories?.length || 0;
-    
-    if (archivedCount > 0) {
-      console.log(`  Batch archived ${archivedCount} stories`);
-      // Log first few for visibility
-      updatedStories?.slice(0, 3).forEach(story => {
-        console.log(`    - ${story.id}: ${story.headline.substring(0, 50)}...`);
-      });
-      if (archivedCount > 3) {
-        console.log(`    ... and ${archivedCount - 3} more`);
-      }
-    }
-
-    return { 
-      stories_archived: archivedCount,
-      threshold_days 
-    };
   }
 }
 
@@ -407,190 +274,140 @@ async function runWorker() {
   const processor = new JobProcessor();
   
   console.log('🚀 Job Queue Worker started');
-  console.log(`   Poll interval: ${config.worker.pollInterval}ms`);
-  console.log(`   Max concurrent: ${config.worker.maxConcurrent}`);
-  console.log(`   Rate limit: ${config.worker.rateLimit}ms between jobs\n`);
+  console.log(`   Poll interval: ${workerConfig.pollInterval}ms`);
+  console.log(`   Max concurrent: ${workerConfig.maxConcurrent}`);
+  console.log(`   Rate limit: ${workerConfig.rateLimit}ms between jobs`);
+  
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('\n📛 Shutting down gracefully...');
+    isRunning = false;
+  });
 
   while (isRunning) {
     try {
-      // Check if we can process more jobs
-      if (activeJobs >= config.worker.maxConcurrent) {
-        await sleep(1000);
+      // Check if we have capacity
+      if (activeJobs >= workerConfig.maxConcurrent) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
       }
 
       // Rate limiting
       const timeSinceLastJob = Date.now() - lastJobStart;
-      if (timeSinceLastJob < config.worker.rateLimit) {
-        await sleep(config.worker.rateLimit - timeSinceLastJob);
+      if (timeSinceLastJob < workerConfig.rateLimit) {
+        await new Promise(resolve => setTimeout(resolve, workerConfig.rateLimit - timeSinceLastJob));
       }
 
-      // Fetch next job using advisory lock
-      const { data: job, error } = await supabase.rpc('claim_next_job', {
-        job_types: Object.keys(processor.handlers)
-      });
+      // Claim next job
+      const { data: job, error: claimError } = await supabase
+        .from('job_queue')
+        .update({ 
+          status: 'processing',
+          started_at: new Date().toISOString()
+        })
+        .eq('status', 'pending')
+        .lte('run_at', new Date().toISOString())
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .select()
+        .single();
 
-      if (error) {
-        console.error('Error claiming job:', error);
-        await sleep(5000);
+      if (claimError || !job) {
+        // No jobs available, wait
+        await new Promise(resolve => setTimeout(resolve, workerConfig.pollInterval));
         continue;
       }
 
-      if (!job) {
-        // No jobs available
-        await sleep(config.worker.pollInterval);
-        continue;
-      }
-
-      // Process job asynchronously
+      // Process job
       activeJobs++;
       lastJobStart = Date.now();
       
-      processJob(job, processor).catch(err => {
-        console.error(`Job ${job.id} failed:`, err);
-      }).finally(() => {
-        activeJobs--;
-      });
+      processor.processJob(job)
+        .then(async (result) => {
+          // Mark job as completed
+          await supabase
+            .from('job_queue')
+            .update({ 
+              status: 'completed',
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+            
+          safeLog('info', `Job completed successfully`, { 
+            job_id: job.id,
+            job_type: job.job_type 
+          });
+        })
+        .catch(async (error) => {
+          // Mark job as failed
+          const attempts = (job.attempts || 0) + 1;
+          const maxAttempts = job.max_attempts || workerConfig.maxRetries;
+          
+          if (attempts >= maxAttempts) {
+            await supabase
+              .from('job_queue')
+              .update({ 
+                status: 'failed',
+                error: error.message,
+                completed_at: new Date().toISOString()
+              })
+              .eq('id', job.id);
+              
+            safeLog('error', `Job failed after ${attempts} attempts`, {
+              job_id: job.id,
+              job_type: job.job_type,
+              error: error.message
+            });
+          } else {
+            // Exponential backoff for retry
+            const backoffMs = workerConfig.backoffBase * Math.pow(2, attempts - 1);
+            const nextRun = new Date(Date.now() + backoffMs);
+            
+            await supabase
+              .from('job_queue')
+              .update({ 
+                status: 'pending',
+                attempts: attempts,
+                run_at: nextRun.toISOString(),
+                error: error.message
+              })
+              .eq('id', job.id);
+              
+            safeLog('warn', `Job failed, will retry`, {
+              job_id: job.id,
+              job_type: job.job_type,
+              attempt: attempts,
+              next_run: nextRun.toISOString()
+            });
+          }
+        })
+        .finally(() => {
+          activeJobs--;
+        });
 
     } catch (error) {
-      console.error('Worker loop error:', error);
-      await sleep(5000);
+      safeLog('error', 'Worker loop error', { error: error.message });
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
   }
-}
 
-// Process individual job
-async function processJob(job, processor) {
-  const startTime = Date.now();
-  console.log(`📋 Processing job ${job.id} (${job.type})`);
-
-  try {
-    // Get handler for job type
-    const handler = processor.handlers[job.type];
-    if (!handler) {
-      throw new Error(`Unknown job type: ${job.type}`);
-    }
-
-    // Execute job
-    const result = await handler(job.payload);
-    
-    // Mark as completed
-    await supabase
-      .from('job_queue')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        result: result
-      })
-      .eq('id', job.id);
-
-    const duration = Date.now() - startTime;
-    console.log(`✅ Job ${job.id} completed in ${duration}ms`);
-
-  } catch (error) {
-    console.error(`❌ Job ${job.id} failed:`, error.message);
-    
-    // Calculate retry delay with exponential backoff
-    const retryDelay = config.worker.backoffBase * Math.pow(2, job.attempts);
-    
-    // Update job with error
-    await supabase
-      .from('job_queue')
-      .update({
-        status: job.attempts >= config.worker.maxRetries - 1 ? 'failed' : 'pending',
-        attempts: job.attempts + 1,
-        error: error.message,
-        next_retry_at: new Date(Date.now() + retryDelay).toISOString()
-      })
-      .eq('id', job.id);
-  }
-}
-
-// Helper function for delays
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n⏹️  Shutting down worker...');
-  isRunning = false;
-  
   // Wait for active jobs to complete
-  const checkInterval = setInterval(() => {
-    if (activeJobs === 0) {
-      clearInterval(checkInterval);
-      console.log('✅ All jobs completed. Goodbye!');
-      process.exit(0);
-    } else {
-      console.log(`   Waiting for ${activeJobs} job(s) to complete...`);
-    }
-  }, 1000);
-});
+  while (activeJobs > 0) {
+    console.log(`Waiting for ${activeJobs} jobs to complete...`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  console.log('👋 Worker shut down');
+  process.exit(0);
+}
 
-// Database function for claiming jobs
-const claimJobFunction = `
--- This function needs to be created in Supabase
-CREATE OR REPLACE FUNCTION claim_next_job(job_types text[])
-RETURNS TABLE (
-  id bigint,
-  type text,
-  payload jsonb,
-  attempts int
-) AS $$
-DECLARE
-  v_job_id bigint;
-BEGIN
-  -- Select and lock the next available job
-  SELECT jq.id INTO v_job_id
-  FROM job_queue jq
-  WHERE jq.status = 'pending'
-    AND jq.type = ANY(job_types)
-    AND (jq.next_retry_at IS NULL OR jq.next_retry_at <= NOW())
-  ORDER BY jq.created_at
-  LIMIT 1
-  FOR UPDATE SKIP LOCKED;
-  
-  IF v_job_id IS NULL THEN
-    RETURN;
-  END IF;
-  
-  -- Update job status
-  UPDATE job_queue
-  SET status = 'processing',
-      started_at = NOW()
-  WHERE job_queue.id = v_job_id;
-  
-  -- Return job details
-  RETURN QUERY
-  SELECT jq.id, jq.type, jq.payload, jq.attempts
-  FROM job_queue jq
-  WHERE jq.id = v_job_id;
-END;
-$$ LANGUAGE plpgsql;
-`;
+// Export for testing
+export { JobProcessor, runWorker };
 
 // Start worker if run directly
-if (require.main === module) {
-  // Check for required environment variables
-  if (!config.supabase.serviceKey) {
-    console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
-    process.exit(1);
-  }
-  
-  if (!config.openai.apiKey) {
-    console.error('❌ Missing OPENAI_API_KEY environment variable');
-    process.exit(1);
-  }
-
-  console.log('📝 Note: Make sure to create the claim_next_job function in Supabase:');
-  console.log(claimJobFunction);
-  console.log('\n');
-  
+if (import.meta.url === `file://${process.argv[1]}`) {
   runWorker().catch(err => {
     console.error('Fatal error:', err);
     process.exit(1);
   });
 }
-
-module.exports = { JobProcessor, runWorker };

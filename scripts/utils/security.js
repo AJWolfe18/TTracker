@@ -33,14 +33,21 @@ function assertJwtLike(name, value) {
  * @returns {Object} Validated configuration object
  */
 function validateEnvironment() {
-  // Required credentials
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Handle TEST environment
+  const isTest = process.env.NODE_ENV === 'test';
+  
+  // Required credentials - use TEST versions if in test mode
+  const supabaseUrl = isTest 
+    ? (process.env.SUPABASE_TEST_URL || process.env.SUPABASE_URL)
+    : process.env.SUPABASE_URL;
+  const serviceRoleKey = isTest
+    ? (process.env.SUPABASE_TEST_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
+    : process.env.SUPABASE_SERVICE_ROLE_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   
   // Validate Supabase URL
   if (!supabaseUrl) {
-    throw new Error('Missing required environment variable: SUPABASE_URL');
+    throw new Error(`Missing required environment variable: ${isTest ? 'SUPABASE_TEST_URL' : 'SUPABASE_URL'}`);
   }
   
   try {
@@ -48,111 +55,106 @@ function validateEnvironment() {
     if (!url.hostname.includes('supabase')) {
       console.warn('SUPABASE_URL does not appear to be a Supabase URL');
     }
-  } catch (error) {
-    throw new Error(`Invalid SUPABASE_URL format: ${error.message}`);
+  } catch (e) {
+    throw new Error(`Invalid SUPABASE_URL format: ${e.message}`);
   }
   
   // Validate service role key
-  assertJwtLike('SUPABASE_SERVICE_ROLE_KEY', serviceRoleKey);
+  if (!serviceRoleKey) {
+    throw new Error(`Missing required environment variable: ${isTest ? 'SUPABASE_TEST_SERVICE_KEY' : 'SUPABASE_SERVICE_ROLE_KEY'}`);
+  }
   
-  // Validate OpenAI key (if provided)
+  assertJwtLike(isTest ? 'SUPABASE_TEST_SERVICE_KEY' : 'SUPABASE_SERVICE_ROLE_KEY', serviceRoleKey);
+  
+  // OpenAI is optional but validate if provided
   if (openaiKey) {
     if (!openaiKey.startsWith('sk-')) {
-      throw new Error('Invalid OPENAI_API_KEY format: must start with sk-');
-    }
-    if (openaiKey.length < 20) {
-      throw new Error('Invalid OPENAI_API_KEY format: too short');
+      throw new Error('Invalid OPENAI_API_KEY format: expected sk-* format');
     }
   }
   
-  // Optional configuration with defaults
-  const config = {
+  return {
     supabaseUrl,
     serviceRoleKey,
-    openaiKey,
-    // RSS-specific settings with validation
-    rssMaxBytes: parseInt(process.env.RSS_MAX_BYTES || '1500000', 10),
-    fetchTimeoutMs: parseInt(process.env.FETCH_TIMEOUT_MS || '15000', 10),
-    failureSkipThreshold: parseInt(process.env.FAILURE_SKIP_THRESHOLD || '5', 10),
-    feedsPerRun: parseInt(process.env.FEEDS_PER_RUN || '20', 10)
+    openaiKey
   };
-  
-  // Validate numeric configurations
-  if (config.rssMaxBytes < 100000 || config.rssMaxBytes > 10000000) {
-    throw new Error('RSS_MAX_BYTES must be between 100KB and 10MB');
-  }
-  
-  if (config.fetchTimeoutMs < 5000 || config.fetchTimeoutMs > 60000) {
-    throw new Error('FETCH_TIMEOUT_MS must be between 5 and 60 seconds');
-  }
-  
-  if (config.failureSkipThreshold < 1 || config.failureSkipThreshold > 20) {
-    throw new Error('FAILURE_SKIP_THRESHOLD must be between 1 and 20');
-  }
-  
-  return config;
 }
 
 /**
- * Safe logging utility that redacts sensitive information
+ * Redact sensitive information from strings
+ * @param {string} str - String that may contain credentials
+ * @returns {string} String with credentials redacted
+ */
+function redactCredentials(str) {
+  if (!str || typeof str !== 'string') return str;
+  
+  // Redact anything that looks like a JWT
+  let redacted = str.replace(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, 'eyJ***REDACTED***');
+  
+  // Redact API keys
+  redacted = redacted.replace(/sk-[\w-]{20,}/gi, 'sk-***REDACTED***');
+  
+  // Redact bearer tokens
+  redacted = redacted.replace(/Bearer\s+[\w-]+/gi, 'Bearer ***REDACTED***');
+  
+  return redacted;
+}
+
+/**
+ * Safe logging that redacts credentials
  * @param {string} level - Log level (info, warn, error)
  * @param {string} message - Log message
- * @param {Object} context - Additional context (will be sanitized)
+ * @param {Object} metadata - Additional metadata to log
  */
-function safeLog(level, message, context = {}) {
-  // Redact sensitive fields
-  const sensitiveKeys = [
-    'password', 'secret', 'key', 'token', 'auth', 'credential',
-    'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY', 'serviceRoleKey', 'openaiKey'
-  ];
+function safeLog(level, message, metadata = {}) {
+  const timestamp = new Date().toISOString();
   
-  const sanitizedContext = { ...context };
+  // Redact any credentials in the message
+  const safeMessage = redactCredentials(message);
   
-  function redactSensitive(obj, path = '') {
-    if (typeof obj !== 'object' || obj === null) return obj;
-    
-    for (const [key, value] of Object.entries(obj)) {
-      const fullKey = path ? `${path}.${key}` : key;
-      
-      if (sensitiveKeys.some(sensitive => 
-        key.toLowerCase().includes(sensitive.toLowerCase())
-      )) {
-        obj[key] = '[REDACTED]';
-      } else if (typeof value === 'object' && value !== null) {
-        redactSensitive(value, fullKey);
-      }
+  // Redact credentials in metadata
+  const safeMetadata = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (typeof value === 'string') {
+      safeMetadata[key] = redactCredentials(value);
+    } else if (typeof value === 'object' && value !== null) {
+      // Deep redact for nested objects
+      safeMetadata[key] = JSON.parse(redactCredentials(JSON.stringify(value)));
+    } else {
+      safeMetadata[key] = value;
     }
-    
-    return obj;
   }
   
-  redactSensitive(sanitizedContext);
-  
+  // Format log entry
   const logEntry = {
-    timestamp: new Date().toISOString(),
+    timestamp,
     level: level.toUpperCase(),
-    message,
-    ...sanitizedContext
+    message: safeMessage,
+    ...safeMetadata
   };
   
-  console.log(JSON.stringify(logEntry));
+  // Output based on level
+  if (level === 'error') {
+    console.error(JSON.stringify(logEntry));
+  } else if (level === 'warn') {
+    console.warn(JSON.stringify(logEntry));
+  } else {
+    console.log(JSON.stringify(logEntry));
+  }
 }
 
 /**
- * Initialize and validate runtime environment
- * Call this at application startup to fail fast on misconfigurations
+ * Initialize and validate environment variables on startup
+ * @returns {Object} Validated configuration
  */
 function initializeEnvironment() {
   try {
     const config = validateEnvironment();
-    
     safeLog('info', 'Environment validation successful', {
-      supabaseConfigured: !!config.supabaseUrl,
-      openaiConfigured: !!config.openaiKey,
-      rssMaxBytes: config.rssMaxBytes,
-      fetchTimeoutMs: config.fetchTimeoutMs
+      supabaseUrl: config.supabaseUrl,
+      hasServiceKey: !!config.serviceRoleKey,
+      hasOpenAI: !!config.openaiKey
     });
-    
     return config;
   } catch (error) {
     safeLog('error', 'Environment validation failed', { error: error.message });
@@ -160,28 +162,11 @@ function initializeEnvironment() {
   }
 }
 
-/**
- * Create a sanitized configuration object for client use
- * Removes sensitive credentials while keeping operational settings
- */
-function getPublicConfig(config) {
-  return {
-    rssMaxBytes: config.rssMaxBytes,
-    fetchTimeoutMs: config.fetchTimeoutMs,
-    failureSkipThreshold: config.failureSkipThreshold,
-    feedsPerRun: config.feedsPerRun,
-    supabaseConfigured: !!config.supabaseUrl,
-    openaiConfigured: !!config.openaiKey
-  };
-}
-
+// Export utilities
 export {
   assertJwtLike,
   validateEnvironment,
+  redactCredentials,
   safeLog,
-  initializeEnvironment,
-  getPublicConfig
+  initializeEnvironment
 };
-
-// For testing purposes, add validateCredentials alias
-export const validateCredentials = validateEnvironment;
