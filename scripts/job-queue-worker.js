@@ -45,7 +45,7 @@ class JobProcessor {
       'story.cluster': clusteringHandlers['story.cluster'],
       'story.cluster.batch': clusteringHandlers['story.cluster.batch'],
       'story.enrich': this.enrichStory.bind(this),
-      'article.enrich': this.enrichArticle.bind(this),
+      // 'article.enrich': this.enrichArticle.bind(this), // TODO: Method not implemented yet
       'process_article': this.processArticle.bind(this)
     };
   }
