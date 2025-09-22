@@ -46,6 +46,7 @@ jobs:
         run: |
           node -e "
           const { createClient } = require('@supabase/supabase-js');
+          const fs = require('fs');
           
           const supabase = createClient(
             process.env.SUPABASE_URL,
@@ -61,7 +62,7 @@ jobs:
             
             if (articlesError) {
               console.log('❌ articles table not found:', articlesError.message);
-              console.log('::set-output name=migrations_needed::true');
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
               return;
             }
             
@@ -78,14 +79,14 @@ jobs:
               
               if (error && error.message.includes('does not exist')) {
                 console.log('❌ Atomic function missing');
-                console.log('::set-output name=migrations_needed::true');
+                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
               } else {
                 console.log('✅ All migrations applied');
-                console.log('::set-output name=migrations_needed::false');
+                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=false\\n');
               }
             } catch (e) {
               console.log('❌ Function check failed');
-              console.log('::set-output name=migrations_needed::true');
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
             }
           }
           
@@ -395,7 +396,7 @@ jobs:
       
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-test-report
           path: e2e-test-report.json
