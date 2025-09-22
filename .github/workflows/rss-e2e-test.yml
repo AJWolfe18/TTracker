@@ -238,8 +238,9 @@ jobs:
             
             console.log('Creating fetch jobs for', feeds?.length || 0, 'feeds');
             
-            // Create job for each feed
+            // Create job for each feed (use upsert to handle duplicates)
             for (const feed of (feeds || [])) {
+              // Try to insert, but ignore if duplicate exists
               const { error } = await supabase
                 .from('job_queue')
                 .insert({
@@ -251,10 +252,13 @@ jobs:
                   },
                   run_at: new Date().toISOString(),
                   status: 'pending'
-                });
+                })
+                .select();
               
               if (!error) {
                 console.log('✅ Created job for:', feed.feed_name);
+              } else if (error.message?.includes('duplicate')) {
+                console.log('⏭️  Job already exists for:', feed.feed_name);
               } else {
                 console.log('⚠️ Job creation failed:', error.message);
               }
