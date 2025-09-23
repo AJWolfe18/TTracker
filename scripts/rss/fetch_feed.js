@@ -149,7 +149,7 @@ async function handleFetchFeed(job, db) {
     if (items && items.length > 0) {
       for (const item of items) {
         try {
-          const result = await processArticleItemAtomic(item, url, source_name, db);
+          const result = await processArticleItemAtomic(item, url, source_name, feed_id, db);
           articlesProcessed++;
           if (result.is_new) {
             articlesCreated++;
@@ -215,7 +215,7 @@ async function handleFetchFeed(job, db) {
  * @param {Object} db - Database client
  * @returns {Object} - Processing result
  */
-async function processArticleItemAtomic(item, feedUrl, sourceName, db) {
+async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db) {
   const articleUrl = item.link || item.guid;
   const title = item.title || '(untitled)';
   
@@ -273,7 +273,7 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, db) {
       p_title: title.substring(0, 500), // Limit headline length
       p_content: content.substring(0, 5000), // Limit content length
       p_published_at: publishedAt,
-      p_feed_id: feed_id,
+      p_feed_id: feedId,
       p_source_name: sourceName,
       p_source_domain: sourceDomain,
       p_content_type: isOpinion ? 'opinion' : 'news_report',
