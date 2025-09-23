@@ -148,6 +148,7 @@ jobs:
                 feed_url: 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
                 feed_name: 'NYT Politics',
                 source_name: 'NYT Politics',
+                source_domain: 'nytimes.com',
                 topics: ['politics', 'congress', 'executive'],
                 source_tier: 1,
                 is_active: true
@@ -156,6 +157,7 @@ jobs:
                 feed_url: 'https://feeds.washingtonpost.com/rss/politics',
                 feed_name: 'WaPo Politics',
                 source_name: 'WaPo Politics',
+                source_domain: 'washingtonpost.com',
                 topics: ['politics', 'congress', 'executive'],
                 source_tier: 1,
                 is_active: true
@@ -164,6 +166,7 @@ jobs:
                 feed_url: 'https://feeds.reuters.com/Reuters/PoliticsNews',
                 feed_name: 'Reuters Politics',
                 source_name: 'Reuters Politics',
+                source_domain: 'reuters.com',
                 topics: ['politics', 'congress', 'executive'],
                 source_tier: 1,
                 is_active: true
@@ -172,6 +175,7 @@ jobs:
                 feed_url: 'https://feeds.apnews.com/rss/apf-usnews',
                 feed_name: 'AP News US',
                 source_name: 'AP News US',
+                source_domain: 'apnews.com',
                 topics: ['politics', 'congress', 'executive'],
                 source_tier: 1,
                 is_active: true
@@ -180,6 +184,7 @@ jobs:
                 feed_url: 'https://www.politico.com/rss/politicopicks.xml',
                 feed_name: 'Politico Top',
                 source_name: 'Politico Top',
+                source_domain: 'politico.com',
                 topics: ['politics', 'congress', 'executive'],
                 source_tier: 2,
                 is_active: true
