@@ -51,11 +51,19 @@ class JobProcessor {
   async processArticle(payload) {
     const { article_id, article_url, source_domain } = payload;
     console.log(`📄 Processing article: ${article_url} from ${source_domain}`);
-    return { 
-      article_id, 
-      status: 'processed',
-      message: 'Article queued for clustering' 
-    };
+    
+    // Actually do the clustering - call the story.cluster handler
+    if (clusteringHandlers && clusteringHandlers['story.cluster']) {
+      // Pass the payload to the clustering handler
+      return await clusteringHandlers['story.cluster']({ payload }, supabase);
+    } else {
+      console.warn('Story clustering handler not available');
+      return { 
+        article_id, 
+        status: 'skipped',
+        message: 'Clustering handler not available' 
+      };
+    }
   }
 
   async fetchAllFeeds(payload) {

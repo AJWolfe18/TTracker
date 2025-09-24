@@ -41,7 +41,7 @@ async function handleFetchFeed(job, db) {
     const { data: feedRecord, error: feedError } = await db
       .from('feed_registry')
       .select('etag, last_modified, failure_count')
-      .eq('url', url)
+      .eq('feed_url', url)
       .single();
 
     if (feedError) {
@@ -82,7 +82,7 @@ async function handleFetchFeed(job, db) {
           failure_count: 0,
           last_304_at: new Date().toISOString()
         })
-        .eq('url', url);
+        .eq('feed_url', url);
 
       return {
         feed_id,
@@ -114,7 +114,7 @@ async function handleFetchFeed(job, db) {
         failure_count: 0,
         last_fetched: new Date().toISOString()
       })
-      .eq('url', url);
+      .eq('feed_url', url);
 
     // 8) Parse RSS/Atom content
     const feed = await parser.parseString(xmlContent);
@@ -316,7 +316,7 @@ async function incrementFailureCount(db, url, currentCount = 0) {
     .update({
       failure_count: newCount
     })
-    .eq('url', url);
+    .eq('feed_url', url);
 
   if (newCount >= 5) {
     safeLog('warn', 'Feed failure threshold reached', {
