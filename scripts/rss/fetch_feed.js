@@ -271,9 +271,9 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db) {
     .rpc('upsert_article_and_enqueue_jobs', {
       p_url: articleUrl,
       p_title: title.substring(0, 500), // Limit headline length
-      p_content: content.substring(0, 5000), // Limit content length
+      p_content: content.substring(0, 5000), // Limit content length  
       p_published_at: publishedAt,
-      p_feed_id: feedId,
+      p_feed_id: String(feedId), // Ensure it's a string
       p_source_name: sourceName,
       p_source_domain: sourceDomain,
       p_content_type: isOpinion ? 'opinion' : 'news_report',
@@ -320,7 +320,8 @@ async function incrementFailureCount(db, url, currentCount = 0) {
 
   if (newCount >= 5) {
     safeLog('warn', 'Feed failure threshold reached', {
-      feed_url: new URL(url).hostname,
+      feed_url: url,  // Keep the full URL
+      source_domain: new URL(url).hostname,  // Add domain separately
       failure_count: newCount,
       status: 'will_be_skipped'
     });
