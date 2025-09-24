@@ -1,4 +1,4 @@
-name: RSS E2E Test (Articles Table)
+name: RSS E2E Test (Production-Ready)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         default: "test"
         type: choice
-        options: [test]  # Only test for now, add 'production' when ready
+        options: [test]  # Only test for now
 
 permissions:
   contents: read
@@ -18,17 +18,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check-migrations:
-    name: Check Database Migrations
+  seed-test-feeds:
+    name: Seed RSS Feeds
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.target_env }}
-    outputs:
-      migrations_needed: ${{ steps.check.outputs.migrations_needed }}
     steps:
       - name: Checkout test branch
         uses: actions/checkout@v4
         with:
-          ref: test  # Always use test branch code for now
+          ref: test
       
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -38,181 +36,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Check if migrations are applied
-        id: check
+      - name: Seed RSS feeds in registry
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          const fs = require('fs');
-          
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-          
-          async function checkMigrations() {
-            // Check if articles table exists
-            const { error: articlesError } = await supabase
-              .from('articles')
-              .select('id')
-              .limit(1);
-            
-            if (articlesError) {
-              console.log('❌ articles table not found:', articlesError.message);
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
-              return;
-            }
-            
-            // Check if atomic function exists
-            try {
-              const { error } = await supabase.rpc('upsert_article_and_enqueue_jobs', {
-                p_article: {
-                  title: 'Migration Check',
-                  url: 'https://test.local/check',
-                  source_name: 'System',
-                  published_at: new Date().toISOString()
-                }
-              });
-              
-              if (error && error.message.includes('does not exist')) {
-                console.log('❌ Atomic function missing');
-                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
-              } else {
-                console.log('✅ All migrations applied');
-                fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=false\\n');
-              }
-            } catch (e) {
-              console.log('❌ Function check failed');
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'migrations_needed=true\\n');
-            }
-          }
-          
-          checkMigrations().catch(console.error);
-          "
+        run: node scripts/seed-feeds-ci.js
 
-  report-migration-status:
-    name: Report Migration Status
-    needs: check-migrations
-    if: needs.check-migrations.outputs.migrations_needed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Migration Required Notice
-        run: |
-          echo "⚠️ MIGRATIONS REQUIRED"
-          echo "====================="
-          echo ""
-          echo "The TEST database is missing required migrations."
-          echo "Please apply the following migrations to your TEST Supabase instance:"
-          echo ""
-          echo "1. Go to Supabase Dashboard → SQL Editor"
-          echo "2. Run migrations/003_atomic_article_upsert_production_ready.sql"
-          echo "3. Run migrations/004_fix_generated_columns_and_constraints.sql"
-          echo ""
-          echo "After applying migrations, re-run this workflow."
-          exit 1
-
-  seed-test-feeds:
-    name: Seed RSS Feeds
-    needs: [check-migrations]
-    if: needs.check-migrations.outputs.migrations_needed != 'true'
-    runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.target_env }}
-    steps:
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      
-      - name: Install Supabase JS
-        run: npm install @supabase/supabase-js
-      
-      - name: Seed RSS feeds in feed_registry
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-          
-          async function seedFeeds() {
-            const feeds = [
-              {
-                feed_url: 'https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml',
-                feed_name: 'NYT Politics',
-                source_name: 'NYT Politics',
-                topics: ['politics', 'congress', 'executive'],
-                source_tier: 1,
-                is_active: true
-              },
-              {
-                feed_url: 'https://feeds.washingtonpost.com/rss/politics',
-                feed_name: 'WaPo Politics',
-                source_name: 'WaPo Politics',
-                topics: ['politics', 'congress', 'executive'],
-                source_tier: 1,
-                is_active: true
-              },
-              {
-                feed_url: 'https://feeds.reuters.com/Reuters/PoliticsNews',
-                feed_name: 'Reuters Politics',
-                source_name: 'Reuters Politics',
-                topics: ['politics', 'congress', 'executive'],
-                source_tier: 1,
-                is_active: true
-              },
-              {
-                feed_url: 'https://feeds.apnews.com/rss/apf-usnews',
-                feed_name: 'AP News US',
-                source_name: 'AP News US',
-                topics: ['politics', 'congress', 'executive'],
-                source_tier: 1,
-                is_active: true
-              },
-              {
-                feed_url: 'https://www.politico.com/rss/politicopicks.xml',
-                feed_name: 'Politico Top',
-                source_name: 'Politico Top',
-                topics: ['politics', 'congress', 'executive'],
-                source_tier: 2,
-                is_active: true
-              }
-            ];
-            
-            for (const feed of feeds) {
-              const { error } = await supabase
-                .from('feed_registry')
-                .upsert(feed, { onConflict: 'feed_url' });
-              
-              if (!error) {
-                console.log('✅ Seeded:', feed.feed_name);
-              } else {
-                console.log('⚠️ Feed seed issue:', error.message);
-              }
-            }
-            
-            // List all active feeds
-            const { data: activeFeeds } = await supabase
-              .from('feed_registry')
-              .select('*')
-              .eq('is_active', true);
-            
-            console.log('\\nActive feeds:', activeFeeds?.length || 0);
-            activeFeeds?.forEach(f => console.log(' -', f.feed_name, f.feed_url));
-          }
-          
-          seedFeeds().catch(console.error);
-          "
-
-  run-rss-e2e-test:
-    name: Run RSS End-to-End Test
+  verify-rpcs:
+    name: Verify Atomic RPCs
     needs: [seed-test-feeds]
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.target_env }}
@@ -230,201 +61,58 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Run RSS fetch via Edge Function
+      - name: Verify atomic RPCs exist
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          echo "🚀 Triggering RSS fetch..."
-          
-          # Option 1: Try Edge Function if it exists
-          response=$(curl -sS -X POST \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Content-Type: application/json" \
-            "$SUPABASE_URL/functions/v1/fetch_all_feeds" \
-            -d '{}' 2>&1) || true
-          
-          echo "Edge Function response: $response"
-          
-          # Option 2: Create job queue entries directly
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-          
-          async function createFetchJobs() {
-            // Get active feeds
-            const { data: feeds } = await supabase
-              .from('feed_registry')
-              .select('*')
-              .eq('is_active', true);
-            
-            console.log('Creating fetch jobs for', feeds?.length || 0, 'feeds');
-            
-            // Create job for each feed (use upsert to handle duplicates)
-            for (const feed of (feeds || [])) {
-              // Try to insert, but ignore if duplicate exists
-              const { error } = await supabase
-                .from('job_queue')
-                .insert({
-                  job_type: 'fetch_feed',
-                  payload: {
-                    feed_id: feed.id,
-                    url: feed.feed_url,
-                    source_name: feed.feed_name
-                  },
-                  run_at: new Date().toISOString(),
-                  status: 'pending'
-                })
-                .select();
-              
-              if (!error) {
-                console.log('✅ Created job for:', feed.feed_name);
-              } else if (error.message?.includes('duplicate')) {
-                console.log('⏭️  Job already exists for:', feed.feed_name);
-              } else {
-                console.log('⚠️ Job creation failed:', error.message);
-              }
-            }
-          }
-          
-          createFetchJobs().catch(console.error);
-          "
+        run: node scripts/verify-atomic-rpcs.js
+
+  run-rss-e2e-test:
+    name: Run RSS End-to-End Test
+    needs: [verify-rpcs]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target_env }}
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+        with:
+          ref: test
       
-      - name: Process RSS jobs with worker
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Create RSS fetch jobs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+        run: node scripts/seed-fetch-jobs.js
+      
+      - name: Process RSS jobs with atomic worker
         env:
           NODE_ENV: test
           SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WORKER_POLL_INTERVAL_MS: "2000"
+          WORKER_MAX_CONCURRENT: "3"
         run: |
-          echo "🔄 Processing RSS feed jobs..."
+          echo "🔄 Processing RSS feed jobs with atomic worker..."
           
-          # Run the job queue worker for up to 2 minutes
-          timeout 120 node scripts/job-queue-worker.js || true
+          # Run worker for up to 2 minutes (will fail CI if it crashes)
+          timeout 120 node scripts/job-queue-worker-atomic.js
           
-          echo "✅ Worker processing complete"
+          echo "✅ Worker completed successfully"
       
       - name: Verify articles were created
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-          
-          async function verifyResults() {
-            // Check articles table (NOT political_entries!)
-            const { data: articles, count } = await supabase
-              .from('articles')
-              .select('*', { count: 'exact' })
-              .gte('created_at', new Date(Date.now() - 3600000).toISOString())
-              .order('created_at', { ascending: false })
-              .limit(10);
-            
-            console.log('\\n📊 TEST RESULTS:');
-            console.log('=================');
-            console.log('Articles created in last hour:', count || 0);
-            
-            if (articles && articles.length > 0) {
-              console.log('\\nSample articles:');
-              articles.slice(0, 5).forEach(a => {
-                console.log(' - [' + a.source_name + ']', (a.title || '').substring(0, 60) + '...');
-              });
-            }
-            
-            // Check for clustering jobs
-            const { data: clusterJobs, count: jobCount } = await supabase
-              .from('job_queue')
-              .select('*', { count: 'exact' })
-              .eq('job_type', 'story.cluster');
-            
-            console.log('\\nClustering jobs created:', jobCount || 0);
-            
-            // Check stories created
-            const { count: storyCount } = await supabase
-              .from('stories')
-              .select('*', { count: 'exact', head: true });
-            
-            console.log('Total stories:', storyCount || 0);
-            
-            // Summary
-            if (count > 0) {
-              console.log('\\n✅ E2E TEST PASSED - Articles are being ingested!');
-            } else {
-              console.log('\\n⚠️ No articles created - check worker logs above');
-            }
-          }
-          
-          verifyResults().catch(console.error);
-          "
-      
-      - name: Generate test report
-        if: always()
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          node -e "
-          const { createClient } = require('@supabase/supabase-js');
-          const fs = require('fs');
-          
-          const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY
-          );
-          
-          async function generateReport() {
-            const report = {
-              timestamp: new Date().toISOString(),
-              environment: 'TEST',
-              database: 'wnrjrywpcadwutfykflu',
-              results: {}
-            };
-            
-            // Get table counts
-            const tables = ['articles', 'stories', 'article_story', 'feed_registry', 'job_queue'];
-            
-            for (const table of tables) {
-              const { count, error } = await supabase
-                .from(table)
-                .select('*', { count: 'exact', head: true });
-              
-              report.results[table] = {
-                exists: !error,
-                count: count || 0,
-                error: error?.message
-              };
-            }
-            
-            // Check for political_entries (should NOT exist in TEST)
-            const { error: peError } = await supabase
-              .from('political_entries')
-              .select('id')
-              .limit(1);
-            
-            report.legacy_table_check = {
-              political_entries_found: !peError,
-              message: peError ? 'Good - legacy table not in use' : 'WARNING - legacy table still exists'
-            };
-            
-            fs.writeFileSync('e2e-test-report.json', JSON.stringify(report, null, 2));
-            console.log('\\n📝 Test report saved to e2e-test-report.json');
-            console.log(JSON.stringify(report, null, 2));
-          }
-          
-          generateReport().catch(console.error);
-          "
+        run: node scripts/verify-e2e-results.js
       
       - name: Upload test report
         if: always()
@@ -432,3 +120,34 @@ jobs:
         with:
           name: e2e-test-report
           path: e2e-test-report.json
+          retention-days: 7
+
+  report-status:
+    name: Report Test Status
+    needs: [run-rss-e2e-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download report
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-test-report
+      
+      - name: Display results
+        run: |
+          if [ -f "e2e-test-report.json" ]; then
+            echo "📊 E2E Test Report:"
+            cat e2e-test-report.json | jq '.'
+            
+            # Check if test passed
+            if jq -e '.success' e2e-test-report.json > /dev/null; then
+              echo "✅ RSS E2E Test PASSED"
+              exit 0
+            else
+              echo "❌ RSS E2E Test FAILED"
+              exit 1
+            fi
+          else
+            echo "❌ No test report found"
+            exit 1
+          fi
