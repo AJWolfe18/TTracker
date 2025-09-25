@@ -40,7 +40,13 @@ class JobProcessor {
       'fetch_all_feeds': this.fetchAllFeeds.bind(this),
       'story.cluster': clusteringHandlers?.['story.cluster'],
       'story.cluster.batch': clusteringHandlers?.['story.cluster.batch'],
-      'process_article': this.processArticle.bind(this)
+      'process_article': this.processArticle.bind(this),
+      // Stub handler for enrichment (not implemented - see TTRC-148)
+      'story.enrich': async (payload) => {
+        const storyId = payload?.story_id;
+        console.log('⏭️ Enrichment not implemented yet - skipping', { storyId });
+        return { status: 'skipped', reason: 'not_implemented' };
+      }
     };
   }
 
@@ -192,19 +198,24 @@ async function runWorker() {
       
       processor.processJob(job)
         .then(async (result) => {
+          // Treat 'skipped' status as success (non-error)
+          const isSkipped = result?.status === 'skipped';
+          
           // Mark job as done using atomic function
           const { error: finishError } = await supabase.rpc('finish_job', {
             p_id: job.id,
-            p_success: true,
-            p_error: null
+            p_success: true,  // Always true for successful processing (including skipped)
+            p_error: isSkipped ? `Skipped: ${result?.reason || 'not_implemented'}` : null
           });
 
           if (finishError) {
             console.error(`❌ Error finishing job ${job.id}:`, finishError);
           } else {
-            safeLog('info', `✅ Job done successfully`, { 
+            const emoji = isSkipped ? '⏭️' : '✅';
+            safeLog('info', `${emoji} Job ${isSkipped ? 'skipped' : 'done'} successfully`, { 
               job_id: job.id,
-              job_type: job.job_type 
+              job_type: job.job_type,
+              ...(isSkipped && { reason: result?.reason })
             });
           }
         })
