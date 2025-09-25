@@ -14,10 +14,13 @@ import { withDatabaseRetry } from './utils/retry.js';
  * @param {Object} supabase - Supabase client instance
  */
 export async function processStoryClusterJob(job, supabase) {
-  const { article_id } = job.payload;
+  // Defensive: handle if called with just payload or with job object
+  const payload = job?.payload || job;
+  const { article_id } = payload;
   
   if (!article_id) {
-    throw new Error('Missing article_id in job payload');
+    console.log('[story.cluster] Skipping job with missing article_id');
+    return { status: 'skipped', reason: 'missing_article_id' };
   }
   
   console.log(`[story.cluster] Processing clustering for article: ${article_id}`);

@@ -108,6 +108,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           WORKER_POLL_INTERVAL_MS: "2000"
           WORKER_MAX_CONCURRENT: "3"
+          MAX_EMPTY_POLLS: "30"  # Exit after 30 empty polls (~1 minute)
         run: |
           echo "🔄 Processing RSS feed jobs..."
           # Simple: just run the script that's been created

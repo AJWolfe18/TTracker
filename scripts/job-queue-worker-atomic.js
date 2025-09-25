@@ -22,6 +22,9 @@ const workerConfig = {
   backoffBase: parseInt(process.env.WORKER_BACKOFF_BASE_MS || '2000', 10)
 };
 
+// Max empty polls before exit (for CI)
+const MAX_EMPTY_POLLS = parseInt(process.env.MAX_EMPTY_POLLS || '30', 10);
+
 // Initialize clients
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey);
 const openai = config.openaiKey ? new OpenAI({ apiKey: config.openaiKey }) : null;
@@ -60,7 +63,7 @@ class JobProcessor {
     
     // Actually do the clustering - call the story.cluster handler
     if (clusteringHandlers && clusteringHandlers['story.cluster']) {
-      // Pass the payload to the clustering handler
+      // Fixed: Pass job object with payload property, not wrapped in another object
       return await clusteringHandlers['story.cluster']({ payload }, supabase);
     } else {
       console.warn('Story clustering handler not available');
@@ -177,6 +180,12 @@ async function runWorker() {
       if (!job || !job.id) {
         // No jobs available
         consecutiveEmptyPolls++;
+        
+        // Check if we should exit due to idle timeout (for CI)
+        if (consecutiveEmptyPolls >= MAX_EMPTY_POLLS) {
+          console.log(`🛑 No jobs for ${MAX_EMPTY_POLLS} polls - exiting cleanly`);
+          break;
+        }
         
         // Log occasionally to show worker is alive
         if (consecutiveEmptyPolls % 10 === 0) {
