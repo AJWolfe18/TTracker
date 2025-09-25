@@ -41,8 +41,19 @@ class JobProcessor {
     this.handlers = {
       'fetch_feed': this.fetchFeed.bind(this),
       'fetch_all_feeds': this.fetchAllFeeds.bind(this),
-      'story.cluster': clusteringHandlers?.['story.cluster'],
-      'story.cluster.batch': clusteringHandlers?.['story.cluster.batch'],
+      // Fix: Wrap clustering handlers to pass supabase correctly
+      'story.cluster': async (payload) => {
+        if (clusteringHandlers?.['story.cluster']) {
+          return await clusteringHandlers['story.cluster']({ payload }, supabase);
+        }
+        return { status: 'skipped', reason: 'handler_not_available' };
+      },
+      'story.cluster.batch': async (payload) => {
+        if (clusteringHandlers?.['story.cluster.batch']) {
+          return await clusteringHandlers['story.cluster.batch']({ payload }, supabase);
+        }
+        return { status: 'skipped', reason: 'handler_not_available' };
+      },
       'process_article': this.processArticle.bind(this),
       // Stub handler for enrichment (not implemented - see TTRC-148)
       'story.enrich': async (payload) => {

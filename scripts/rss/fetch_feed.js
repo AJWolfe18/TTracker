@@ -251,14 +251,18 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db) {
   }
 
   // Check if article is within freshness window (3 days)
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  // TODO: Make this configurable via MAX_ARTICLE_AGE_HOURS env var (TTRC-170)
+  const maxAgeHours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || '72', 10); // Default 3 days
+  const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+  const cutoffDate = new Date(Date.now() - maxAgeMs);
   const articleDate = new Date(publishedAt);
   
-  if (articleDate < threeDaysAgo) {
+  if (articleDate < cutoffDate) {
     safeLog('info', 'Skipping old article', {
       article_url: articleUrl,
       published_at: publishedAt,
-      age_hours: Math.round((Date.now() - articleDate.getTime()) / (1000 * 60 * 60))
+      age_hours: Math.round((Date.now() - articleDate.getTime()) / (1000 * 60 * 60)),
+      max_age_hours: maxAgeHours
     });
     return { is_new: false, skipped: true, reason: 'too_old' };
   }
