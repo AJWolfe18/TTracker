@@ -36,9 +36,11 @@ async function handleFetchFeed(job, db) {
     url_domain: new URL(url).hostname
   });
 
+  let feedRecord = null; // Declare at function scope
+
   try {
     // 1) Read ETag/Last-Modified from feed_registry for conditional GET
-    const { data: feedRecord, error: feedError } = await db
+    const { data: record, error: feedError } = await db
       .from('feed_registry')
       .select('etag, last_modified, failure_count')
       .eq('feed_url', url)
@@ -48,10 +50,14 @@ async function handleFetchFeed(job, db) {
       throw new Error(`Failed to fetch feed record: ${feedError.message}`);
     }
 
-    // 2) Build conditional headers
+    feedRecord = record; // Assign to outer scope variable
+
+    // 2) Build conditional headers with better User-Agent for strict feeds
     const headers = {
-      'User-Agent': 'TrumpyTracker/1.0 RSS Fetcher',
-      'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml'
+      'User-Agent': 'TrumpyTracker/1.0 (RSS Reader; Compatible; +http://trumpytracker.com/bot)',
+      'Accept': 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+      'Accept-Encoding': 'gzip, deflate',
+      'Cache-Control': 'no-cache'
     };
 
     if (feedRecord?.etag) {
@@ -200,8 +206,20 @@ async function handleFetchFeed(job, db) {
       duration_ms: duration
     });
     
-    // Increment failure count in database
-    await incrementFailureCount(db, url, feedRecord?.failure_count || 0);
+    // FIX: Only increment failure count if we have the feed URL
+    // feedRecord might be null if the initial query failed
+    if (url) {
+      try {
+        // Use feedRecord's failure_count if available, otherwise 0
+        const currentCount = feedRecord?.failure_count || 0;
+        await incrementFailureCount(db, url, currentCount);
+      } catch (incError) {
+        safeLog('error', 'Failed to increment failure count', {
+          url,
+          error: incError.message
+        });
+      }
+    }
 
     throw error;
   }
