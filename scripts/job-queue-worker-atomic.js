@@ -2,13 +2,18 @@
 // Uses server-side atomic functions to prevent race conditions
 // Run with: node scripts/job-queue-worker-atomic.js
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
-import dotenv from 'dotenv';
-dotenv.config();
+
+// Validate environment variables immediately
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
 // Initialize and validate environment on startup
 const config = initializeEnvironment();
@@ -28,6 +33,30 @@ const MAX_EMPTY_POLLS = parseInt(process.env.MAX_EMPTY_POLLS || '30', 10);
 // Initialize clients
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey);
 const openai = config.openaiKey ? new OpenAI({ apiKey: config.openaiKey }) : null;
+
+// ---- RPC helpers (match deployed signatures) ----
+async function claimNextJob(pJobType = null) {
+  // DB: claim_and_start_job(p_job_type TEXT) RETURNS job_queue%ROWTYPE
+  const { data, error } = await supabase.rpc('claim_and_start_job', { p_job_type: pJobType });
+  if (error) throw new Error(`claim_and_start_job failed: ${error.message}`);
+  return data || null; // null when no job available
+}
+
+async function claimNextFetchJob() {
+  return claimNextJob('fetch_feed');
+}
+
+async function finishJob(jobId, success, errorMsg = null) {
+  // DB: finish_job(p_job_id UUID, p_success BOOLEAN, p_error_message TEXT)
+  const { error } = await supabase.rpc('finish_job', {
+    p_job_id: jobId,               // UUID (string) is fine
+    p_success: !!success,
+    p_error_message: errorMsg || null,
+  });
+  if (error) {
+    throw new Error(`Failed to finish job ${jobId}: ${error.message}`);
+  }
+}
 
 // Track active jobs
 let activeJobs = 0;
@@ -152,9 +181,9 @@ async function runWorker() {
 
   // First, check if the atomic functions exist
   try {
-    const { error: testError } = await supabase.rpc('claim_next_job', { p_job_type: null });
+    const { error: testError } = await supabase.rpc('claim_and_start_job', { p_job_type: null });
     if (testError && testError.message.includes('function') && testError.message.includes('does not exist')) {
-      console.error('⚠️ Atomic claiming functions not found. Please run migration 009_atomic_job_claiming.sql');
+      console.error('⚠️ Atomic claiming functions not found. Please run the required migrations');
       console.log('Falling back to legacy claiming mode...');
       // Fall back to legacy mode
       return runLegacyWorker();
@@ -178,17 +207,18 @@ async function runWorker() {
       }
 
       // ATOMIC CLAIM - race-safe job claiming
-      const { data: job, error: claimError } = await supabase.rpc('claim_next_job', {
-        p_job_type: null  // null means claim any job type
-      });
-
-      if (claimError) {
-        console.error('❌ Error claiming job:', claimError);
+      let job;
+      try {
+        // Try to claim any job type (null = any)
+        // For a specialized worker, use claimNextFetchJob() instead
+        job = await claimNextJob(null);
+      } catch (error) {
+        console.error('❌ Error claiming job:', error.message);
         await new Promise(resolve => setTimeout(resolve, 5000));
         continue;
       }
 
-      if (!job || !job.id) {
+      if (!job) {
         // No jobs available
         consecutiveEmptyPolls++;
         
@@ -221,44 +251,32 @@ async function runWorker() {
           // Treat 'skipped' status as success (non-error)
           const isSkipped = result?.status === 'skipped';
           
-          // Mark job as done using atomic function
-          const { error: finishError } = await supabase.rpc('finish_job', {
-            p_job_id: job.id,
-            p_status: 'done',  // Use 'done' for successful processing
-            p_result: result ? { ...result } : null,
-            p_error: isSkipped ? `Skipped: ${result?.reason || 'not_implemented'}` : null
-          });
-
-          if (finishError) {
-            console.error(`❌ Error finishing job ${job.id}:`, finishError);
-          } else {
+          // Mark job as done using new helper
+          try {
+            await finishJob(job.id, true, null);
             const emoji = isSkipped ? '⏭️' : '✅';
             safeLog('info', `${emoji} Job ${isSkipped ? 'skipped' : 'done'} successfully`, { 
               job_id: job.id,
               job_type: job.job_type,
               ...(isSkipped && { reason: result?.reason })
             });
+          } catch (finishError) {
+            console.error(`❌ Error finishing job ${job.id}:`, finishError);
           }
         })
         .catch(async (error) => {
-          // Mark job as failed using atomic function
+          // Mark job as failed using new helper
           const errorMessage = error.message || 'Unknown error';
-          const { error: finishError } = await supabase.rpc('finish_job', {
-            p_job_id: job.id,
-            p_status: 'failed',  // Use 'failed' status
-            p_result: null,
-            p_error: errorMessage.slice(0, 1000)  // Truncate to 1000 chars
-          });
-
-          if (finishError) {
-            console.error(`❌ Error marking job ${job.id} as failed:`, finishError);
-          } else {
+          try {
+            await finishJob(job.id, false, errorMessage.slice(0, 1000));
             safeLog('error', `❌ Job failed`, {
               job_id: job.id,
               job_type: job.job_type,
               error: errorMessage,
               attempts: job.attempts
             });
+          } catch (finishError) {
+            console.error(`❌ Error marking job ${job.id} as failed:`, finishError);
           }
         })
         .finally(() => {

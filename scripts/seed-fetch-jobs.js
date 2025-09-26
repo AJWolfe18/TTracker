@@ -2,8 +2,15 @@
 // scripts/seed-fetch-jobs.js
 // Production-ready RSS feed job seeder using atomic RPC + partial unique index
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+
+// Validate environment variables immediately
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

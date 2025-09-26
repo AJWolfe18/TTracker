@@ -7,24 +7,31 @@
   - [x] RPC created: `claim_and_start_job`  
   - [x] RPC created: `finish_job`
 
-## 📋 Code Updates Needed:
+## ✅ Code Updates COMPLETED:
 
 ### File 1: scripts/seed-fetch-jobs.js
-- [ ] Add `import 'dotenv/config';` at the very top of file
-- [ ] Add runnable guard section before the final success log (around line 50-60)
-- [ ] Ensure catch block has `process.exit(1)`
+- [x] Add `import 'dotenv/config';` at the very top of file
+- [x] Add environment variable validation (exits if missing)
+- [x] Add runnable guard section before the final success log (already present)
+- [x] Ensure catch block has `process.exit(1)` (already present)
 
 ### File 2: scripts/job-queue-worker-atomic.js  
-- [ ] Add helper functions after Supabase client creation:
-  - [ ] `claimNextFetchJob()` function
-  - [ ] `finishJob()` function
-- [ ] Replace job claim logic in main polling loop with RPC calls
-- [ ] Update success path to call `finishJob(job.id, true, null)`
-- [ ] Update error path to call `finishJob(job.id, false, error.message)`
+- [x] Add `import 'dotenv/config';` with proper placement
+- [x] Add environment variable validation (exits if missing)
+- [x] Add helper functions with correct RPC signatures:
+  - [x] `claimNextJob(pJobType)` - General claim function
+  - [x] `claimNextFetchJob()` - Claims fetch_feed jobs via RPC
+  - [x] `finishJob()` - Completes jobs via RPC with better error messages
+- [x] Fix legacy RPC reference (claim_next_job → claim_and_start_job)
+- [x] Simplify job claim logic (removed complex fallback)
+- [x] Add null job handling (gracefully handles no jobs available)
+- [x] Update success path to call `finishJob(job.id, true, null)`
+- [x] Update error path to call `finishJob(job.id, false, error.message)`
 
 ### File 3: scripts/verify-e2e-results.js
-- [ ] Verify all queries use `.select()` before `.eq()` (Supabase v2 pattern)
-- [ ] Add `import 'dotenv/config';` at top if missing
+- [x] Verify all queries use `.select()` before `.eq()` (Supabase v2 pattern) - CONFIRMED
+- [x] Add `import 'dotenv/config';` at top
+- [x] Add environment variable validation (exits if missing)
 
 ## 📝 Reference:
 Full implementation details in: `docs/rss-e2e-fix-plan-final.md`
