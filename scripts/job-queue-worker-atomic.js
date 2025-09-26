@@ -223,8 +223,9 @@ async function runWorker() {
           
           // Mark job as done using atomic function
           const { error: finishError } = await supabase.rpc('finish_job', {
-            p_id: job.id,
-            p_success: true,  // Always true for successful processing (including skipped)
+            p_job_id: job.id,
+            p_status: 'done',  // Use 'done' for successful processing
+            p_result: result ? { ...result } : null,
             p_error: isSkipped ? `Skipped: ${result?.reason || 'not_implemented'}` : null
           });
 
@@ -243,8 +244,9 @@ async function runWorker() {
           // Mark job as failed using atomic function
           const errorMessage = error.message || 'Unknown error';
           const { error: finishError } = await supabase.rpc('finish_job', {
-            p_id: job.id,
-            p_success: false,
+            p_job_id: job.id,
+            p_status: 'failed',  // Use 'failed' status
+            p_result: null,
             p_error: errorMessage.slice(0, 1000)  // Truncate to 1000 chars
           });
 
