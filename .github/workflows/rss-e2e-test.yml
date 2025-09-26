@@ -98,7 +98,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
         run: |
           echo "🔍 Checking for runnable jobs..."
-          node -e "const {createClient} = require('@supabase/supabase-js'); const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('job_queue').select('id').eq('job_type', 'fetch_feed').eq('status', 'pending').then(r => { console.log('Found', r.data?.length || 0, 'pending fetch_feed jobs'); process.exit(r.data?.length > 0 ? 0 : 1); });"
+          node scripts/check-runnable-jobs.js
       
       - name: Process RSS jobs with atomic worker
         env:

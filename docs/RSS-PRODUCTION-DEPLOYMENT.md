@@ -148,11 +148,23 @@ These are test/development only:
 
 ## Total Production Files
 
-Only 4 files actually go to production:
-1. `migrations/008_job_queue_critical_columns.sql`
-2. `migrations/009_atomic_job_claiming.sql`
-3. `scripts/fix-job-queue-status-PRODUCTION.sql`
-4. `scripts/job-queue-worker-atomic.js`
+Migrations (apply in order):
+1. `migrations/001_rss_system_PRODUCTION_READY.sql`
+2. `migrations/002_job_queue_functions.sql`
+3. `migrations/003_atomic_article_upsert.sql`
+4. `migrations/004_fix_generated_columns_and_constraints.sql`
+5. `migrations/005_fix_rss_schema_drift.sql`
+6. `migrations/006_PROD_clustering_complete.sql`
+7. `migrations/007_articles_canonical_final.sql`
+8. `migrations/008_job_queue_critical_columns.sql`
+9. `migrations/009_atomic_job_claiming.sql`
+10. `migrations/010_fix_rpc_generated_column.sql`
+11. `migrations/011_fix_story_headlines_ttrc169_SENIOR_DEV_VERSION.sql`
+12. `migrations/012_fix_job_queue_ttrc172.sql`
+13. `migrations/013_fix_payload_hash_partial_unique.sql` (NEW - partial unique for re-queuing)
+
+Worker file:
+- `scripts/job-queue-worker-atomic.js` (with fixed finish_job parameters)
 
 ## Cost Impact
 
