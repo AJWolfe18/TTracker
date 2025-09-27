@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-09-27T02:28:53.683Z",
+  "environment": "TEST",
+  "metrics": {
+    "feeds": 5,
+    "runnable": 1,
+    "processing": 1,
+    "articles1h": 42,
+    "totalStories": 86,
+    "jobStatusLastHour": {
+      "pending": 84,
+      "processing": 1,
+      "done": 2,
+      "failed": 2
+    }
+  },
+  "success": true,
+  "reason": "Pipeline functioning normally"
+}

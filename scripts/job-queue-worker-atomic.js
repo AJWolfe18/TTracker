@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
+import { fileURLToPath } from 'url';
 
 // Validate environment variables immediately
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -34,24 +35,14 @@ const MAX_EMPTY_POLLS = parseInt(process.env.MAX_EMPTY_POLLS || '30', 10);
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey);
 const openai = config.openaiKey ? new OpenAI({ apiKey: config.openaiKey }) : null;
 
-// ---- RPC helpers (match deployed signatures) ----
-async function claimNextJob(pJobType = null) {
-  // DB: claim_and_start_job(p_job_type TEXT) RETURNS job_queue%ROWTYPE
-  const { data, error } = await supabase.rpc('claim_and_start_job', { p_job_type: pJobType });
-  if (error) throw new Error(`claim_and_start_job failed: ${error.message}`);
-  return data || null; // null when no job available
-}
-
-async function claimNextFetchJob() {
-  return claimNextJob('fetch_feed');
-}
-
+// RPC helper for finishing jobs
 async function finishJob(jobId, success, errorMsg = null) {
-  // DB: finish_job(p_job_id UUID, p_success BOOLEAN, p_error_message TEXT)
+  // DB: finish_job(p_job_id BIGINT, p_success BOOLEAN, p_error_message TEXT)
+  // NOTE: Supabase uses named parameters - order doesn't matter, names do!
   const { error } = await supabase.rpc('finish_job', {
-    p_job_id: jobId,               // UUID (string) is fine
-    p_success: !!success,
     p_error_message: errorMsg || null,
+    p_job_id: jobId,               // BIGINT in schema
+    p_success: !!success
   });
   if (error) {
     throw new Error(`Failed to finish job ${jobId}: ${error.message}`);
@@ -172,6 +163,15 @@ async function runWorker() {
   console.log(`   Poll interval: ${workerConfig.pollInterval}ms`);
   console.log(`   Max concurrent: ${workerConfig.maxConcurrent}`);
   console.log(`   Rate limit: ${workerConfig.rateLimit}ms between jobs`);
+  console.log(`   Environment: ${process.env.SUPABASE_URL?.includes('supabase.co') ? 'TEST' : 'UNKNOWN'}`);
+  
+  // Debug: Check for jobs before starting loop
+  const { count } = await supabase
+    .from('job_queue')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_type', 'fetch_feed')
+    .is('processed_at', null);
+  console.log(`   Jobs available at start: ${count || 0}`);
   
   // Graceful shutdown
   process.on('SIGINT', () => {
@@ -192,6 +192,17 @@ async function runWorker() {
     // Functions exist, continue
   }
 
+  // Clean up any stuck jobs from previous runs
+  try {
+    const { data: resetCount, error } = await supabase.rpc('reset_stuck_jobs');
+    if (resetCount && resetCount > 0) {
+      console.log(`🧾 Reset ${resetCount} stuck jobs`);
+    }
+  } catch (e) {
+    // If function doesn't exist, just continue
+    console.log('⚠️ reset_stuck_jobs not available, continuing...');
+  }
+
   while (isRunning) {
     try {
       // Check if we have capacity
@@ -206,40 +217,34 @@ async function runWorker() {
         await new Promise(resolve => setTimeout(resolve, workerConfig.rateLimit - timeSinceLastJob));
       }
 
-      // ATOMIC CLAIM - race-safe job claiming
-      let job;
-      try {
-        // Try to claim any job type (null = any)
-        // For a specialized worker, use claimNextFetchJob() instead
-        job = await claimNextJob(null);
-      } catch (error) {
-        console.error('❌ Error claiming job:', error.message);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        continue;
-      }
-
-      if (!job) {
-        // No jobs available
-        consecutiveEmptyPolls++;
-        
-        // Check if we should exit due to idle timeout (for CI)
-        if (consecutiveEmptyPolls >= MAX_EMPTY_POLLS) {
-          console.log(`🛑 No jobs for ${MAX_EMPTY_POLLS} polls - exiting cleanly`);
-          break;
-        }
-        
-        // Log occasionally to show worker is alive
-        if (consecutiveEmptyPolls % 10 === 0) {
-          console.log(`⏳ No jobs available (checked ${consecutiveEmptyPolls} times)`);
-        }
-        
+      // ATOMIC CLAIM - race-safe job claiming for fetch_feed jobs
+      console.log('🔍 Attempting to claim a fetch_feed job...');
+      const { data: job, error: claimErr } = await supabase.rpc('claim_and_start_job', { 
+        p_job_type: 'fetch_feed' 
+      });
+      
+      if (claimErr) {
+        console.error('❌ claim_and_start_job failed:', claimErr.message);
         await new Promise(resolve => setTimeout(resolve, workerConfig.pollInterval));
         continue;
       }
 
-      // Reset empty poll counter
+      // Nothing to do this tick — DO NOT log "claimed"
+      if (!job) {
+        consecutiveEmptyPolls++;
+        if (consecutiveEmptyPolls >= MAX_EMPTY_POLLS) {
+          console.log(`🛑 No jobs for ${MAX_EMPTY_POLLS} polls - exiting cleanly`);
+          break;
+        }
+        if (consecutiveEmptyPolls % 10 === 0) {
+          console.log(`⏳ No jobs available (checked ${consecutiveEmptyPolls} times)`);
+        }
+        await new Promise(resolve => setTimeout(resolve, workerConfig.pollInterval));
+        continue;
+      }
+
+      // From here on we definitely have a job
       consecutiveEmptyPolls = 0;
-      
       console.log(`✅ Claimed job #${job.id} (${job.job_type})`);
 
       // Process job asynchronously
@@ -311,10 +316,13 @@ async function runLegacyWorker() {
 // Export for testing
 export { JobProcessor, runWorker };
 
-// Start worker if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check if this file is being run directly
+const isMain = process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  console.log('🔧 Starting worker from command line...');
   runWorker().catch(err => {
-    console.error('Fatal error:', err);
+    console.error('❌ Fatal error:', err);
     process.exit(1);
   });
 }
