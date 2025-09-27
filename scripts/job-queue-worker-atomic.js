@@ -165,12 +165,14 @@ async function runWorker() {
   console.log(`   Rate limit: ${workerConfig.rateLimit}ms between jobs`);
   console.log(`   Environment: ${process.env.SUPABASE_URL?.includes('supabase.co') ? 'TEST' : 'UNKNOWN'}`);
   
-  // Debug: Check for jobs before starting loop
+  // Debug: Check for jobs before starting loop (match claim predicate)
+  const nowIso = new Date().toISOString();
   const { count } = await supabase
     .from('job_queue')
     .select('*', { count: 'exact', head: true })
-    .eq('job_type', 'fetch_feed')
-    .is('processed_at', null);
+    .eq('job_type', 'fetch_feed')                    // same type as claim
+    .eq('status', 'pending')                          // must be pending
+    .lte('run_at', nowIso);                          // runnable by time
   console.log(`   Jobs available at start: ${count || 0}`);
   
   // Graceful shutdown
@@ -229,8 +231,8 @@ async function runWorker() {
         continue;
       }
 
-      // Nothing to do this tick — DO NOT log "claimed"
-      if (!job) {
+      // NOTHING TO DO THIS TICK — DO NOT LOG "claimed" OR TOUCH HANDLERS
+      if (!job || (typeof job === 'object' && Object.keys(job).length === 0)) {
         consecutiveEmptyPolls++;
         if (consecutiveEmptyPolls >= MAX_EMPTY_POLLS) {
           console.log(`🛑 No jobs for ${MAX_EMPTY_POLLS} polls - exiting cleanly`);
@@ -243,9 +245,16 @@ async function runWorker() {
         continue;
       }
 
-      // From here on we definitely have a job
+      // From here on we DEFINITELY have a valid job object
       consecutiveEmptyPolls = 0;
       console.log(`✅ Claimed job #${job.id} (${job.job_type})`);
+      
+      // Defensive assertion before dispatch
+      if (typeof job.id !== 'number' || !job.job_type) {
+        console.warn('⚠️ Skipping job with invalid shape:', job);
+        await finishJob(job.id ?? -1, false, 'Invalid job shape');
+        continue;
+      }
 
       // Process job asynchronously
       activeJobs++;
