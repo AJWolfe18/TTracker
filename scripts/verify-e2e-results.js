@@ -30,9 +30,32 @@ async function main() {
   console.log('════════════════════════════════════════');
 
   const feeds = await getCount('feed_registry', (q) => q.eq('is_active', true));
-  const runnable = await getCount('job_queue', (q) =>
-    q.eq('job_type', 'fetch_feed').is('processed_at', null).lte('run_at', nowIso)
+  
+  // Count runnable jobs matching the exact claim predicate
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  
+  // Pending jobs that are runnable (matches SQL exactly)
+  const pendingRunnable = await getCount('job_queue', (q) =>
+    q.eq('job_type', 'fetch_feed')
+     .eq('status', 'pending')
+     .is('processed_at', null)
+     .or(`run_at.is.null,run_at.lte.${nowIso}`)
+     .or('max_attempts.is.null,attempts.lt.max_attempts')
   );
+  
+  // Stale processing jobs (older than 5 minutes, matches SQL exactly)
+  const staleProcessing = await getCount('job_queue', (q) =>
+    q.eq('job_type', 'fetch_feed')
+     .eq('status', 'processing')
+     .is('processed_at', null)
+     .lt('started_at', fiveMinutesAgo)
+     .or(`run_at.is.null,run_at.lte.${nowIso}`)
+     .or('max_attempts.is.null,attempts.lt.max_attempts')
+  );
+  
+  const runnable = pendingRunnable + staleProcessing;
+  
+  // All processing jobs (for monitoring)
   const processing = await getCount('job_queue', (q) =>
     q.eq('job_type', 'fetch_feed').eq('status', 'processing')
   );

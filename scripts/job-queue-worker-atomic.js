@@ -163,19 +163,40 @@ async function runWorker() {
   console.log(`   Poll interval: ${workerConfig.pollInterval}ms`);
   console.log(`   Max concurrent: ${workerConfig.maxConcurrent}`);
   console.log(`   Rate limit: ${workerConfig.rateLimit}ms between jobs`);
-  console.log(`   Environment: ${process.env.SUPABASE_URL?.includes('supabase.co') ? 'TEST' : 'UNKNOWN'}`);
   
-  // Debug: Check for jobs before starting loop (match claim predicate)
+  // Better environment display
+  const host = (() => { try { return new URL(process.env.SUPABASE_URL).host; } catch { return 'unknown-host'; } })();
+  console.log(`   Host: ${host}`);
+  
+  // Debug: Check for jobs before starting loop (match claim predicate exactly)
   const nowIso = new Date().toISOString();
-  const { count: available } = await supabase
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  
+  // Pending & runnable (matches SQL exactly)
+  const { count: pendingCount, error: pErr } = await supabase
     .from('job_queue')
     .select('*', { count: 'exact', head: true })
     .eq('job_type', 'fetch_feed')
     .eq('status', 'pending')
-    .is('processed_at', null)                     // active job
-    .lte('run_at', nowIso)                         // runnable by time
-    .or('max_attempts.is.null,attempts.lt.max_attempts'); // attempts ok
-  console.log(`   Jobs available at start: ${available || 0}`);
+    .is('processed_at', null)
+    .or(`run_at.is.null,run_at.lte.${nowIso}`)
+    .or('max_attempts.is.null,attempts.lt.max_attempts');
+  if (pErr) console.error('pendingCount error:', pErr);
+  
+  // Stale processing & runnable (matches SQL exactly)
+  const { count: staleCount, error: sErr } = await supabase
+    .from('job_queue')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_type', 'fetch_feed')
+    .eq('status', 'processing')
+    .is('processed_at', null)
+    .lt('started_at', fiveMinutesAgo)
+    .or(`run_at.is.null,run_at.lte.${nowIso}`)
+    .or('max_attempts.is.null,attempts.lt.max_attempts');
+  if (sErr) console.error('staleCount error:', sErr);
+  
+  const available = (pendingCount || 0) + (staleCount || 0);
+  console.log(`   Jobs available at start: ${available} (${pendingCount || 0} pending, ${staleCount || 0} stale processing)`);
   
   // Graceful shutdown
   process.on('SIGINT', () => {
