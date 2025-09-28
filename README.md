@@ -6,6 +6,16 @@
 
 An automated AI-powered system that tracks and documents political developments, government actions, and accountability issues with daily monitoring and public transparency.
 
+## 🔧 Development Tools
+
+### MCP Servers Active
+This project has Model Context Protocol (MCP) servers configured for enhanced development:
+- **Filesystem Access**: Direct file operations in project directory
+- **Supabase TEST Database**: Read-only access for development queries
+- **Supabase PROD Database**: Read-only access for production verification
+
+See `/docs/MCP-SERVER-STATUS.md` for details on using these capabilities during development sessions.
+
 ## 🎯 Purpose
 
 TrumpyTracker monitors and documents:
