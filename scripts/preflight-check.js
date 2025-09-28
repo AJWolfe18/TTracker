@@ -98,7 +98,14 @@ async function runPreflight() {
     const { data } = await supabase.rpc('claim_and_start_job', { 
       p_job_type: 'preflight-test-nonexistent' 
     });
-    if (data !== null) throw new Error(`Expected NULL, got ${JSON.stringify(data)}`);
+    
+    // PostgREST sometimes returns row-of-nulls even when function returns NULL
+    // Accept either true null OR an object with null id
+    if (data === null || (data && data.id === null)) {
+      return; // Success - either pattern is acceptable
+    }
+    
+    throw new Error(`Expected NULL or null id, got ${JSON.stringify(data)}`);
   });
 
   // 4. Check feed registry
