@@ -84,16 +84,10 @@ async function createFetchJobs() {
   console.log(`   Skipped (active): ${skipped}`);
   console.log(`   Failed: ${failed}`);
 
-  // Verify runnable jobs
+  // Verify runnable jobs using server-side function
   console.log('\n🔍 Checking for runnable jobs...');
-  const nowIso = new Date().toISOString();
-  const { count: runnableCount, error: runErr } = await supabase
-    .from('job_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('job_type', 'fetch_feed')
-    .is('processed_at', null)
-    .lte('run_at', nowIso);
-
+  const { data: runnableCount, error: runErr } = await supabase.rpc('count_runnable_fetch_jobs');
+  
   if (runErr) {
     console.error('❌ Failed to check runnable jobs:', runErr.message);
     process.exit(1);
