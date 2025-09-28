@@ -30,20 +30,28 @@ async function enqueueFeed(feed) {
   };
   const payloadHash = hash({ job: 'fetch_feed', feed_id: feed.id });
 
+  // ATOMIC: Let the database handle duplicate detection
   const { data: jobId, error } = await supabase.rpc('enqueue_fetch_job', {
     p_type: 'fetch_feed',
     p_payload: payload,
     p_hash: payloadHash
   });
+  
   if (error) {
     console.error(`❌ Error enqueueing ${feed.feed_name}:`, error.message);
     throw error;
   }
+  
+  // jobId is NULL if duplicate exists (partial unique index prevented insert)
   return jobId ? 'created' : 'skipped';
 }
 
 async function createFetchJobs() {
   console.log('📋 Creating RSS fetch jobs (atomic mode)...\n');
+
+  // Check current runnable jobs count using RPC
+  const { data: runnableBefore } = await supabase.rpc('count_runnable_fetch_jobs');
+  console.log(`Runnable jobs before seeding: ${runnableBefore || 0}\n`);
 
   // Active feeds
   const { data: feeds, error: feedError } = await supabase

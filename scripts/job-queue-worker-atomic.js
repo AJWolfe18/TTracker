@@ -169,12 +169,41 @@ async function runWorker() {
   console.log(`   Host: ${host}`);
   
   // Use server-side function to count runnable jobs (single source of truth)
-  const { data: runnable, error: rcErr } = await supabase.rpc('count_runnable_fetch_jobs');
+  const { data: initialCount, error: rcErr } = await supabase.rpc('count_runnable_fetch_jobs');
   if (rcErr) {
     console.error('⚠️  count_runnable_fetch_jobs error:', rcErr);
-    console.log('   Note: Run migration 017 to add the count function');
+    console.log('   Note: Run migration 018 to add the count function');
   }
-  console.log(`   Jobs available at start: ${runnable || 0}`);
+  console.log(`   Jobs available at start: ${initialCount || 0}`);
+  
+  // Only show detailed breakdown in debug mode to reduce DB load
+  if (initialCount > 0 && process.env.DEBUG_COUNTS === 'true') {
+    const nowIso = new Date().toISOString();
+    const fiveMinAgo = new Date(Date.now() - 5*60*1000).toISOString();
+    
+    // Count pending jobs
+    const { count: pendingCount, error: pErr } = await supabase
+      .from('job_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('job_type', 'fetch_feed')
+      .is('processed_at', null)
+      .eq('status', 'pending')
+      .or(`run_at.is.null,run_at.lte.${nowIso}`);
+    
+    // Count stale processing jobs
+    const { count: staleCount, error: sErr } = await supabase
+      .from('job_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('job_type', 'fetch_feed')
+      .is('processed_at', null)
+      .eq('status', 'processing')
+      .lt('started_at', fiveMinAgo);
+    
+    if (pErr) console.log('⚠️ Pending count error:', pErr.message);
+    if (sErr) console.log('⚠️ Stale count error:', sErr.message);
+    
+    console.log(`   Details: ${pendingCount || 0} pending, ${staleCount || 0} stale processing`);
+  }
   
   // Graceful shutdown
   process.on('SIGINT', () => {
@@ -221,9 +250,12 @@ async function runWorker() {
       }
 
       // ATOMIC CLAIM - race-safe job claiming for fetch_feed jobs
-      console.log('🔍 Attempting to claim a fetch_feed job...');
+      if (process.env.LOG_LEVEL === 'debug') {
+        console.log('🔍 Attempting to claim a fetch_feed job...');
+      }
       const { data, error: claimErr } = await supabase.rpc('claim_and_start_job', { 
-        p_job_type: 'fetch_feed' 
+        p_job_type: 'fetch_feed',
+        p_stale_minutes: parseInt(process.env.STALE_JOB_MINUTES || '5', 10)
       });
       
       if (claimErr) {

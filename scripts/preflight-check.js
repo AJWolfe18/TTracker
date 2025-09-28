@@ -119,6 +119,23 @@ async function runPreflight() {
     console.log(`   Found ${count} active feeds`);
   });
 
+  // 5. Check runnable jobs count
+  await check('Checking runnable jobs count', async () => {
+    const { data: runnableCount, error: countError } = await supabase.rpc('count_runnable_fetch_jobs');
+    if (countError) {
+      throw new Error(`count_runnable_fetch_jobs failed: ${countError.message}`);
+    }
+    console.log(`   Runnable jobs: ${runnableCount || 0}`);
+  });
+
+  // 6. Verify claim returns NULL properly
+  await check('claim_and_start_job returns NULL for nonexistent job type', async () => {
+    const { data: testClaim } = await supabase.rpc('claim_and_start_job', { p_job_type: 'nonexistent' });
+    if (testClaim !== null && !(testClaim && testClaim.id === null)) {
+      throw new Error('claim_and_start_job not returning NULL for empty queue!');
+    }
+  });
+
   // Summary
   console.log('\n════════════════════════════════════');
   console.log(`PREFLIGHT: ${passed} passed, ${failed} failed`);
