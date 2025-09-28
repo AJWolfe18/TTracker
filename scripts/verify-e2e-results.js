@@ -31,29 +31,12 @@ async function main() {
 
   const feeds = await getCount('feed_registry', (q) => q.eq('is_active', true));
   
-  // Count runnable jobs matching the exact claim predicate
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
-  
-  // Pending jobs that are runnable (matches SQL exactly)
-  const pendingRunnable = await getCount('job_queue', (q) =>
-    q.eq('job_type', 'fetch_feed')
-     .eq('status', 'pending')
-     .is('processed_at', null)
-     .or(`run_at.is.null,run_at.lte.${nowIso}`)
-     .or('max_attempts.is.null,attempts.lt.max_attempts')
-  );
-  
-  // Stale processing jobs (older than 5 minutes, matches SQL exactly)
-  const staleProcessing = await getCount('job_queue', (q) =>
-    q.eq('job_type', 'fetch_feed')
-     .eq('status', 'processing')
-     .is('processed_at', null)
-     .lt('started_at', fiveMinutesAgo)
-     .or(`run_at.is.null,run_at.lte.${nowIso}`)
-     .or('max_attempts.is.null,attempts.lt.max_attempts')
-  );
-  
-  const runnable = pendingRunnable + staleProcessing;
+  // Use server-side function to count runnable jobs (single source of truth)
+  const { data: runnable, error } = await supabase.rpc('count_runnable_fetch_jobs');
+  if (error) {
+    console.error('Error calling count_runnable_fetch_jobs:', error);
+    throw error;
+  }
   
   // All processing jobs (for monitoring)
   const processing = await getCount('job_queue', (q) =>

@@ -168,35 +168,13 @@ async function runWorker() {
   const host = (() => { try { return new URL(process.env.SUPABASE_URL).host; } catch { return 'unknown-host'; } })();
   console.log(`   Host: ${host}`);
   
-  // Debug: Check for jobs before starting loop (match claim predicate exactly)
-  const nowIso = new Date().toISOString();
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-  
-  // Pending & runnable (matches SQL exactly)
-  const { count: pendingCount, error: pErr } = await supabase
-    .from('job_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('job_type', 'fetch_feed')
-    .eq('status', 'pending')
-    .is('processed_at', null)
-    .or(`run_at.is.null,run_at.lte.${nowIso}`)
-    .or('max_attempts.is.null,attempts.lt.max_attempts');
-  if (pErr) console.error('pendingCount error:', pErr);
-  
-  // Stale processing & runnable (matches SQL exactly)
-  const { count: staleCount, error: sErr } = await supabase
-    .from('job_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('job_type', 'fetch_feed')
-    .eq('status', 'processing')
-    .is('processed_at', null)
-    .lt('started_at', fiveMinutesAgo)
-    .or(`run_at.is.null,run_at.lte.${nowIso}`)
-    .or('max_attempts.is.null,attempts.lt.max_attempts');
-  if (sErr) console.error('staleCount error:', sErr);
-  
-  const available = (pendingCount || 0) + (staleCount || 0);
-  console.log(`   Jobs available at start: ${available} (${pendingCount || 0} pending, ${staleCount || 0} stale processing)`);
+  // Use server-side function to count runnable jobs (single source of truth)
+  const { data: runnable, error: rcErr } = await supabase.rpc('count_runnable_fetch_jobs');
+  if (rcErr) {
+    console.error('⚠️  count_runnable_fetch_jobs error:', rcErr);
+    console.log('   Note: Run migration 017 to add the count function');
+  }
+  console.log(`   Jobs available at start: ${runnable || 0}`);
   
   // Graceful shutdown
   process.on('SIGINT', () => {
