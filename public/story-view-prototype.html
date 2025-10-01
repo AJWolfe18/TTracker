@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker - Story View Prototype</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 900;
+            color: #1a1a1a;
+            text-decoration: none;
+        }
+
+        .tagline {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .search-bar {
+            flex: 1;
+            max-width: 400px;
+            margin: 0 32px;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            font-size: 14px;
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0 24px;
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-tab {
+            padding: 12px 0;
+            border-bottom: 3px solid transparent;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            background: white;
+            padding: 12px 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .filter-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .filter-chip {
+            padding: 4px 12px;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            background: white;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip:hover {
+            background: #f0f0f0;
+        }
+
+        .filter-chip.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .stories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+        }
+
+        /* Story Card */
+        .story-card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: box-shadow 0.2s;
+        }
+
+        .story-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .story-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .category-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .category-corruption { background: #fee2e2; color: #dc2626; }
+        .category-democracy { background: #dbeafe; color: #2563eb; }
+        .category-justice { background: #f3e8ff; color: #9333ea; }
+        .category-policy { background: #ecfdf5; color: #16a34a; }
+
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        .severity-critical { background: #dc2626; color: white; }
+        .severity-severe { background: #ea580c; color: white; }
+        .severity-moderate { background: #ca8a04; color: white; }
+        .severity-minor { background: #16a34a; color: white; }
+
+        .timestamp {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .story-headline {
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .story-topic {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .topic-icon {
+            width: 14px;
+            height: 14px;
+            opacity: 0.5;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid;
+            background: white;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-summary {
+            color: #2563eb;
+            border-color: #2563eb;
+        }
+
+        .btn-summary:hover {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-editorial {
+            color: #ea580c;
+            border-color: #ea580c;
+        }
+
+        .btn-editorial:hover {
+            background: #ea580c;
+            color: white;
+        }
+
+        .summary-preview {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #4a5568;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #e0e0e0;
+            display: none;
+        }
+
+        .summary-preview.active {
+            display: block;
+        }
+
+        .summary-preview.editorial {
+            background: #f8f9fa;
+            color: #2d3748;
+            font-style: normal;
+            border-left-color: #9ca3af;
+        }
+
+        .story-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .sources-count {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .source-logos {
+            display: flex;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .source-logo {
+            padding: 2px 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .footer-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-small:hover {
+            background: #f0f0f0;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        /* Sources Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 70vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .source-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .source-info {
+            flex: 1;
+        }
+
+        .source-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .source-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .source-link {
+            color: #2563eb;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .stories-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-bar {
+                display: none;
+            }
+
+            .filter-bar {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div>
+                <a href="#" class="logo">TrumpyTracker</a>
+                <div class="tagline">Tracking the Corruption. Every Damn Day.</div>
+            </div>
+            <div class="search-bar">
+                <input type="text" placeholder="Search stories...">
+            </div>
+            <div>
+                <!-- User menu would go here -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+        <div class="nav-content">
+            <div class="nav-tab active">📰 Stories</div>
+            <div class="nav-tab">🏛️ Executive Orders</div>
+        </div>
+    </nav>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-content">
+            <span class="filter-label">Filter:</span>
+            <div class="filter-chip active">All Categories</div>
+            <div class="filter-chip">Democracy & Elections</div>
+            <div class="filter-chip">Justice & Legal</div>
+            <div class="filter-chip">Corruption & Scandals</div>
+            <div class="filter-chip">Policy & Legislation</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="container">
+        <div class="stories-grid">
+            <!-- Story Card 1 - Critical -->
+            <div class="story-card">
+                <div class="story-header">
+                    <span class="category-badge category-democracy">Democracy & Elections</span>
+                    <span class="timestamp">Jan 15, 08:30 AM</span>
+                </div>
+                <h2 class="story-headline">Major GOP States Push Voter Suppression Laws Ahead of 2026 Midterms</h2>
+                <div class="story-topic">
+                    <span class="topic-icon">👤</span>
+                    Main actor: State GOP Legislators
+                    <span class="severity-badge severity-critical">FUCKING TREASON</span>
+                </div>
+                <div class="summary-preview active editorial">
+                    The GOP isn't even hiding it anymore. They're openly admitting they can't win fair elections, so they're rigging the game. These aren't 'election security' measures - they're Jim Crow 2.0 designed to stop Black and Brown voters from exercising their constitutional rights...
+                </div>
+                <div class="story-footer">
+                    <div style="display: flex; align-items: center;">
+                        <span class="sources-count">Sources (5):</span>
+                        <div class="source-logos">
+                            <span class="source-logo">CNN</span>
+                            <span class="source-logo">WP</span>
+                            <span class="source-logo">NYT</span>
+                            <span class="source-logo">+2</span>
+                        </div>
+                    </div>
+                    <div class="footer-buttons">
+                        <button class="btn-small" onclick="showSources()">View Sources</button>
+                        <button class="btn-small btn-primary">Read More →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Story Card 2 - Severe -->
+            <div class="story-card">
+                <div class="story-header">
+                    <span class="category-badge category-corruption">Corruption & Scandals</span>
+                    <span class="timestamp">Jan 15, 10:45 AM</span>
+                </div>
+                <h2 class="story-headline">Trump's Cabinet Pick Under Investigation for $50M Foreign Bribery Scheme</h2>
+                <div class="story-topic">
+                    <span class="topic-icon">👤</span>
+                    Main actor: Trump Cabinet
+                    <span class="severity-badge severity-severe">CRIMINAL BULLSHIT</span>
+                </div>
+                <div class="summary-preview active editorial">
+                    Another day, another Trump crony caught with their hand in the Saudi cookie jar. Remember when taking foreign money was considered treason? Now it's just a Tuesday in MAGA world. The swamp isn't being drained - it's being upgraded to a sewage treatment plant...
+                </div>
+                <div class="story-footer">
+                    <div style="display: flex; align-items: center;">
+                        <span class="sources-count">Sources (3):</span>
+                        <div class="source-logos">
+                            <span class="source-logo">WSJ</span>
+                            <span class="source-logo">REU</span>
+                            <span class="source-logo">POL</span>
+                        </div>
+                    </div>
+                    <div class="footer-buttons">
+                        <button class="btn-small" onclick="showSources()">View Sources</button>
+                        <button class="btn-small btn-primary">Read More →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Story Card 3 - Moderate -->
+            <div class="story-card">
+                <div class="story-header">
+                    <span class="category-badge category-justice">Justice & Legal</span>
+                    <span class="timestamp">Jan 15, 06:15 AM</span>
+                </div>
+                <h2 class="story-headline">Federal Judge Blocks Trump's Attempt to Fire Special Prosecutor</h2>
+                <div class="story-topic">
+                    <span class="topic-icon">⚖️</span>
+                    Main actor: Federal Courts
+                    <span class="severity-badge severity-moderate">SWAMP SHIT</span>
+                </div>
+                <div class="summary-preview active editorial">
+                    Trump thought he could just fire anyone investigating him like it's The Apprentice. Surprise! The Constitution still exists, barely. This is what passes for good news these days - a court doing its basic job while democracy hangs by a thread...
+                </div>
+                <div class="story-footer">
+                    <div style="display: flex; align-items: center;">
+                        <span class="sources-count">Sources (4):</span>
+                        <div class="source-logos">
+                            <span class="source-logo">AP</span>
+                            <span class="source-logo">CNN</span>
+                            <span class="source-logo">NBC</span>
+                            <span class="source-logo">+1</span>
+                        </div>
+                    </div>
+                    <div class="footer-buttons">
+                        <button class="btn-small" onclick="showSources()">View Sources</button>
+                        <button class="btn-small btn-primary">Read More →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Story Card 4 - Minor -->
+            <div class="story-card">
+                <div class="story-header">
+                    <span class="category-badge category-policy">Policy & Legislation</span>
+                    <span class="timestamp">Jan 14, 02:30 PM</span>
+                </div>
+                <h2 class="story-headline">Congress Passes Bipartisan Infrastructure Repair Bill Despite MAGA Opposition</h2>
+                <div class="story-topic">
+                    <span class="topic-icon">🏛️</span>
+                    Main actor: Congress
+                    <span class="severity-badge severity-minor">CLOWN SHOW</span>
+                </div>
+                <div class="summary-preview active editorial">
+                    MAGA Republicans voted against fixing bridges. BRIDGES. You know, those things that keep you from falling into rivers. But sure, let's spend another trillion on tax cuts for billionaires while our infrastructure crumbles. At least some adults showed up to work today...
+                </div>
+                <div class="story-footer">
+                    <div style="display: flex; align-items: center;">
+                        <span class="sources-count">Sources (2):</span>
+                        <div class="source-logos">
+                            <span class="source-logo">POL</span>
+                            <span class="source-logo">HIL</span>
+                        </div>
+                    </div>
+                    <div class="footer-buttons">
+                        <button class="btn-small" onclick="showSources()">View Sources</button>
+                        <button class="btn-small btn-primary">Read More →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Sources Modal -->
+    <div class="modal-overlay" id="sourcesModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Sources for: <span style="color: #2563eb;">Democracy & Elections</span></h3>
+                <button class="modal-close" onclick="hideSources()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="source-item">
+                    <div class="source-info">
+                        <div class="source-name">CNN Politics</div>
+                        <div class="source-time">Jan 15, 08:20 AM</div>
+                        <div style="margin-top: 4px; font-size: 14px;">GOP-led states introduce voter restriction bills</div>
+                    </div>
+                    <a href="#" class="source-link">Read →</a>
+                </div>
+                <div class="source-item">
+                    <div class="source-info">
+                        <div class="source-name">Washington Post</div>
+                        <div class="source-time">Jan 15, 08:25 AM</div>
+                        <div style="margin-top: 4px; font-size: 14px;">Analysis: New voting laws target urban areas</div>
+                    </div>
+                    <a href="#" class="source-link">Read →</a>
+                </div>
+                <div class="source-item">
+                    <div class="source-info">
+                        <div class="source-name">New York Times</div>
+                        <div class="source-time">Jan 15, 08:30 AM</div>
+                        <div style="margin-top: 4px; font-size: 14px;">12 states coordinate on election law changes</div>
+                    </div>
+                    <a href="#" class="source-link">Read →</a>
+                </div>
+                <div class="source-item">
+                    <div class="source-info">
+                        <div class="source-name">Reuters</div>
+                        <div class="source-time">Jan 15, 08:35 AM</div>
+                        <div style="margin-top: 4px; font-size: 14px;">Voting rights groups prepare legal challenges</div>
+                    </div>
+                    <a href="#" class="source-link">Read →</a>
+                </div>
+                <div class="source-item">
+                    <div class="source-info">
+                        <div class="source-name">Associated Press</div>
+                        <div class="source-time">Jan 15, 08:40 AM</div>
+                        <div style="margin-top: 4px; font-size: 14px;">State legislatures fast-track voting bills</div>
+                    </div>
+                    <a href="#" class="source-link">Read →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSummary(button) {
+            const card = button.closest('.story-card');
+            const summary = card.querySelector('.summary-preview:not(.editorial)');
+            const editorial = card.querySelector('.summary-preview.editorial');
+            
+            // Hide editorial if showing
+            if (editorial) editorial.classList.remove('active');
+            
+            // Toggle summary
+            summary.classList.toggle('active');
+            
+            // Update button state
+            if (summary.classList.contains('active')) {
+                button.style.background = '#2563eb';
+                button.style.color = 'white';
+            } else {
+                button.style.background = 'white';
+                button.style.color = '#2563eb';
+            }
+        }
+
+        function toggleEditorial(button) {
+            const card = button.closest('.story-card');
+            const editorial = card.querySelector('.summary-preview.editorial');
+            const summary = card.querySelector('.summary-preview:not(.editorial)');
+            
+            // Hide summary if showing
+            if (summary) summary.classList.remove('active');
+            
+            // Toggle editorial
+            editorial.classList.toggle('active');
+            
+            // Update button state
+            if (editorial.classList.contains('active')) {
+                button.style.background = '#ea580c';
+                button.style.color = 'white';
+            } else {
+                button.style.background = 'white';
+                button.style.color = '#ea580c';
+            }
+        }
+
+        function showSources() {
+            document.getElementById('sourcesModal').classList.add('active');
+        }
+
+        function hideSources() {
+            document.getElementById('sourcesModal').classList.remove('active');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('sourcesModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideSources();
+            }
+        });
+    </script>
+</body>
+</html>

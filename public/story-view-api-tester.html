@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker API Tester</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .config {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .results {
+            background: #1e293b;
+            color: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .error {
+            color: #ef4444;
+        }
+        .success {
+            color: #10b981;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+        .test-section {
+            margin: 20px 0;
+        }
+        .story-preview {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #2563eb;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            margin-left: 10px;
+        }
+        .severity-critical { background: #dc2626; }
+        .severity-severe { background: #ea580c; }
+        .severity-moderate { background: #ca8a04; }
+        .severity-minor { background: #16a34a; }
+    </style>
+</head>
+<body>
+    <h1>🔧 TrumpyTracker API Tester</h1>
+    <p>Test the Supabase API endpoints before implementing the UI</p>
+
+    <div class="config">
+        <h2>Configuration</h2>
+        <label>
+            Supabase URL (ask team lead):
+            <input type="text" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
+        </label>
+        <label>
+            Supabase Anon Key (ask team lead):
+            <input type="text" id="supabaseKey" placeholder="eyJ...">
+        </label>
+        <button onclick="saveConfig()">Save Config</button>
+        <button onclick="testConnection()">Test Connection</button>
+    </div>
+
+    <div class="test-section">
+        <h2>API Tests</h2>
+        <button onclick="testActiveStories()">1. Get Active Stories</button>
+        <button onclick="testSingleStory()">2. Get Single Story</button>
+        <button onclick="testStoryWithArticles()">3. Get Story + Articles</button>
+        <button onclick="testPagination()">4. Test Pagination</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Data Preview</h2>
+        <div id="storyPreview"></div>
+    </div>
+
+    <div class="results">
+        <pre id="output">Results will appear here...</pre>
+    </div>
+
+    <script>
+        // Load saved config
+        window.onload = () => {
+            const savedUrl = localStorage.getItem('supabaseUrl');
+            const savedKey = localStorage.getItem('supabaseKey');
+            if (savedUrl) document.getElementById('supabaseUrl').value = savedUrl;
+            if (savedKey) document.getElementById('supabaseKey').value = savedKey;
+        };
+
+        function saveConfig() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+            localStorage.setItem('supabaseUrl', url);
+            localStorage.setItem('supabaseKey', key);
+            log('✅ Config saved!', 'success');
+        }
+
+        function getConfig() {
+            return {
+                url: document.getElementById('supabaseUrl').value,
+                key: document.getElementById('supabaseKey').value
+            };
+        }
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function makeRequest(endpoint, options = {}) {
+            const config = getConfig();
+            if (!config.url || !config.key) {
+                log('❌ Please enter Supabase URL and Key', 'error');
+                return null;
+            }
+
+            const url = `${config.url}/rest/v1/${endpoint}`;
+            log(`📡 Requesting: ${url}`);
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'apikey': config.key,
+                        'Authorization': `Bearer ${config.key}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                log(`✅ Success! Got ${Array.isArray(data) ? data.length : 1} items`, 'success');
+                return data;
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        async function testConnection() {
+            log('🔄 Testing connection...');
+            const data = await makeRequest('stories?limit=1');
+            if (data) {
+                log('✅ Connection successful!', 'success');
+                log('📊 Database has stories available', 'success');
+            }
+        }
+
+        async function testActiveStories() {
+            log('\n📰 Testing: Get Active Stories');
+            const data = await makeRequest('stories?status=eq.active&order=last_updated_at.desc&limit=5');
+            
+            if (data && data.length > 0) {
+                log(`\n📊 Found ${data.length} active stories:`);
+                data.forEach(story => {
+                    log(`\n  Story #${story.id}: "${story.primary_headline}"`);
+                    log(`    Severity: ${story.severity} → ${getSeverityLabel(story.severity)}`);
+                    log(`    Category: ${story.category || 'none'} → ${getCategoryLabel(story.category)}`);
+                    log(`    Sources: ${story.source_count || 0}`);
+                    log(`    Summary: ${story.summary_spicy ? '✅ Has spicy summary' : '❌ No spicy summary'}`);
+                });
+                
+                displayStoryPreview(data[0]);
+                
+                log('\n📋 Full response:');
+                log(JSON.stringify(data, null, 2));
+            }
+        }
+
+        async function testSingleStory() {
+            log('\n📄 Testing: Get Single Story');
+            const storyId = prompt('Enter story ID to fetch (or leave blank for ID 1):', '1');
+            const data = await makeRequest(`stories?id=eq.${storyId || 1}`);
+            
+            if (data && data.length > 0) {
+                const story = data[0];
+                log('\n📊 Story details:');
+                log(JSON.stringify(story, null, 2));
+                displayStoryPreview(story);
+            }
+        }
+
+        async function testStoryWithArticles() {
+            log('\n🗞️ Testing: Get Story with Articles');
+            const data = await makeRequest('stories?id=eq.1&select=*,article_story(*)');
+            
+            if (data && data.length > 0) {
+                const story = data[0];
+                log(`\n📊 Story: "${story.primary_headline}"`);
+                log(`   Articles linked: ${story.article_story ? story.article_story.length : 0}`);
+                log('\n📋 Full response with articles:');
+                log(JSON.stringify(data, null, 2));
+            }
+        }
+
+        async function testPagination() {
+            log('\n📚 Testing: Pagination');
+            
+            // First page
+            const page1 = await makeRequest('stories?status=eq.active&limit=10&offset=0');
+            log(`  Page 1: ${page1 ? page1.length : 0} stories`);
+            
+            // Second page
+            const page2 = await makeRequest('stories?status=eq.active&limit=10&offset=10');
+            log(`  Page 2: ${page2 ? page2.length : 0} stories`);
+            
+            // Count total
+            const countResponse = await fetch(
+                `${getConfig().url}/rest/v1/stories?status=eq.active&select=count`,
+                {
+                    headers: {
+                        'apikey': getConfig().key,
+                        'Prefer': 'count=exact'
+                    }
+                }
+            );
+            
+            const total = countResponse.headers.get('content-range');
+            log(`  Total stories: ${total || 'unknown'}`);
+        }
+
+        function getSeverityLabel(severity) {
+            const labels = {
+                'critical': '🔴 FUCKING TREASON',
+                'severe': '🟠 CRIMINAL BULLSHIT',
+                'moderate': '🟡 SWAMP SHIT',
+                'minor': '🟢 CLOWN SHOW'
+            };
+            return labels[severity] || severity;
+        }
+
+        function getCategoryLabel(category) {
+            const labels = {
+                'corruption_scandals': 'Corruption & Scandals',
+                'democracy_elections': 'Democracy & Elections',
+                'policy_legislation': 'Policy & Legislation',
+                'justice_legal': 'Justice & Legal',
+                'executive_actions': 'Executive Actions',
+                'foreign_policy': 'Foreign Policy',
+                'corporate_financial': 'Corporate & Financial',
+                'civil_liberties': 'Civil Liberties',
+                'media_disinformation': 'Media & Disinformation',
+                'epstein_associates': 'Epstein & Associates',
+                'other': 'Other'
+            };
+            return labels[category] || category || 'Other';
+        }
+
+        function displayStoryPreview(story) {
+            if (!story) return;
+            
+            const preview = document.getElementById('storyPreview');
+            const severityClass = `severity-${story.severity || 'moderate'}`;
+            const severityLabel = getSeverityLabel(story.severity);
+            const categoryLabel = getCategoryLabel(story.category);
+            
+            preview.innerHTML = `
+                <div class="story-preview">
+                    <h3>Preview: How This Story Should Look</h3>
+                    <hr style="margin: 10px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            ${categoryLabel}
+                        </span>
+                        <span style="color: #999; font-size: 12px;">
+                            ${new Date(story.last_updated_at).toLocaleString()}
+                        </span>
+                    </div>
+                    <h2 style="margin: 10px 0;">${story.primary_headline || 'No headline'}</h2>
+                    <div style="margin: 10px 0;">
+                        <span>Main actor: ${story.primary_actor || 'Unknown'}</span>
+                        <span class="severity-badge ${severityClass}">${severityLabel.replace(/[🔴🟠🟡🟢] /, '')}</span>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 10px 0; border-left: 3px solid #9ca3af;">
+                        ${story.summary_spicy || 'No spicy summary available'}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                        <span>Sources (${story.source_count || 0})</span>
+                        <div>
+                            <button style="margin-right: 10px;">View Sources</button>
+                            <button>Read More →</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
