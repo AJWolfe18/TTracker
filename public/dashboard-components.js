@@ -559,39 +559,56 @@
 
   // ==================== Component: TabNavigation ====================
   window.DashboardComponents.TabNavigation = ({ activeTab, onTabChange, counts }) => {
+    const tabs = [
+      { id: 'stories', label: 'Stories', color: 'red' },
+      { id: 'political', label: 'Political Entries', color: 'orange' },
+      { id: 'executive', label: 'Executive Orders', color: 'blue' }
+    ];
+
+    const handleKeyDown = (e, tabId) => {
+      const currentIndex = tabs.findIndex(t => t.id === tabId);
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const nextIndex = (currentIndex + 1) % tabs.length;
+        onTabChange(tabs[nextIndex].id);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        onTabChange(tabs[prevIndex].id);
+      }
+    };
+
     return (
       <div className="flex justify-center mb-8">
-        <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700">
-          <button
-            onClick={() => onTabChange('political')}
-            className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-              activeTab === 'political'
-                ? 'bg-orange-600 text-white shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-            }`}
-          >
-            Political Entries
-            {counts?.political && (
-              <span className="ml-2 text-xs bg-gray-900/50 px-2 py-0.5 rounded">
-                {counts.political}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => onTabChange('executive')}
-            className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
-              activeTab === 'executive'
-                ? 'bg-blue-600 text-white shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-            }`}
-          >
-            Executive Orders
-            {counts?.executive && (
-              <span className="ml-2 text-xs bg-gray-900/50 px-2 py-0.5 rounded">
-                {counts.executive}
-              </span>
-            )}
-          </button>
+        <div 
+          className="bg-gray-800/50 backdrop-blur-md rounded-lg p-1 border border-gray-700"
+          role="tablist"
+          aria-label="Content sections"
+        >
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              onClick={() => onTabChange(tab.id)}
+              onKeyDown={(e) => handleKeyDown(e, tab.id)}
+              className={`px-6 py-2 rounded-md font-medium transition-all duration-200 ${
+                activeTab === tab.id
+                  ? `bg-${tab.color}-600 text-white shadow-lg`
+                  : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              {tab.label}
+              {counts?.[tab.id] && (
+                <span className="ml-2 text-xs bg-gray-900/50 px-2 py-0.5 rounded">
+                  {counts[tab.id]}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       </div>
     );

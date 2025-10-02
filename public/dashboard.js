@@ -57,6 +57,9 @@ const {
   getSeverityColor
 } = window.DashboardComponents || {};
 
+// Import Story components
+const { StoryFeed } = window.StoryComponents || {};
+
 // Import filter components and utilities from DashboardFilters module
 const {
   FilterSection,
@@ -134,7 +137,7 @@ const TrumpyTrackerDashboard = () => {
   }, []);
 
   // State management
-  const [activeTab, setActiveTab] = useState('political');
+  const [activeTab, setActiveTab] = useState('stories');
   const [allPoliticalEntries, setAllPoliticalEntries] = useState([]);
   const [displayedPoliticalEntries, setDisplayedPoliticalEntries] = useState([]);
   const [allExecutiveOrders, setAllExecutiveOrders] = useState([]);
@@ -356,6 +359,7 @@ const TrumpyTrackerDashboard = () => {
 
   // Tab counts for TabNavigation component
   const tabCounts = useMemo(() => ({
+    stories: null, // Story count handled by StoryFeed component
     political: allPoliticalEntries.length,
     executive: allExecutiveOrders.length
   }), [allPoliticalEntries.length, allExecutiveOrders.length]);
@@ -465,7 +469,9 @@ const TrumpyTrackerDashboard = () => {
           activeTab={activeTab}
           onTabChange={(tab) => {
             setActiveTab(tab);
-            if (tab === 'political') {
+            if (tab === 'stories') {
+              // Stories tab - no filter handling needed (handled by StoryFeed component)
+            } else if (tab === 'political') {
               // Apply all current filters to political entries
               const filtered = filterUtils.applyAllFilters(allPoliticalEntries, filters);
               const paginatedFiltered = filtered.slice(0, ITEMS_PER_PAGE);
@@ -484,20 +490,22 @@ const TrumpyTrackerDashboard = () => {
           counts={tabCounts}
         />
 
-        {/* Filter Section - NOW USING MODULE COMPONENT */}
-        <FilterSection 
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          uniqueCategories={uniqueCategories}
-          isExpanded={isFilterExpanded}
-          onToggleExpand={() => setIsFilterExpanded(!isFilterExpanded)}
-          activeTab={activeTab}
-          displayCount={activeTab === 'political' ? displayedPoliticalEntries.length : executiveOrders.length}
-          totalCount={activeTab === 'political' ? allPoliticalEntries.length : allExecutiveOrders.length}
-        />
+        {/* Filter Section - Only show for political and executive tabs */}
+        {activeTab !== 'stories' && (
+          <FilterSection 
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            uniqueCategories={uniqueCategories}
+            isExpanded={isFilterExpanded}
+            onToggleExpand={() => setIsFilterExpanded(!isFilterExpanded)}
+            activeTab={activeTab}
+            displayCount={activeTab === 'political' ? displayedPoliticalEntries.length : executiveOrders.length}
+            totalCount={activeTab === 'political' ? allPoliticalEntries.length : allExecutiveOrders.length}
+          />
+        )}
 
-        {/* Statistics Section with Filter Buttons */}
-        <StatsSection stats={stats} />
+        {/* Statistics Section - Only show for political and executive tabs */}
+        {activeTab !== 'stories' && <StatsSection stats={stats} />}
 
         {/* Loading Overlay for Filtering - Using module component */}
         {isFiltering && <LoadingOverlay message="Applying filters..." />}
@@ -508,8 +516,38 @@ const TrumpyTrackerDashboard = () => {
           opacity: isFiltering ? 0.7 : 1,
           transform: isFiltering ? 'scale(0.98)' : 'scale(1)'
         }}>
+          {activeTab === 'stories' && (
+            <div
+              id="panel-stories"
+              role="tabpanel"
+              aria-labelledby="tab-stories"
+            >
+              {StoryFeed ? (
+                <StoryFeed />
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                  <h3 className="text-xl font-bold mb-2">Story Components Not Loaded</h3>
+                  <p className="text-gray-400 mb-4">
+                    The story view components failed to load. Please refresh the page.
+                  </p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded font-medium transition-colors"
+                  >
+                    Refresh Page
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'political' && (
-            <div>
+            <div
+              id="panel-political"
+              role="tabpanel"
+              aria-labelledby="tab-political"
+            >
               <h2 className="text-2xl font-bold mb-6 text-center">
                 Recent Political Accountability Entries
                 {filters.activeFilter && (
@@ -564,7 +602,11 @@ const TrumpyTrackerDashboard = () => {
           )}
 
           {activeTab === 'executive' && (
-            <div>
+            <div
+              id="panel-executive"
+              role="tabpanel"
+              aria-labelledby="tab-executive"
+            >
               <h2 className="text-2xl font-bold mb-6 text-center">
                 Recent Executive Orders
               </h2>

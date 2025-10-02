@@ -7,6 +7,9 @@
   const { useState, useMemo, useEffect, useRef } = React;
 
   // Time ago helper - NULL SAFE
+  // TIMEZONE NOTE: Assumes published_at is ISO UTC from API (standard)
+  // Relative time computed against Date.now() (browser local time)
+  // If timestamps aren't normalized, convert server-side with 'Z' suffix
   function timeAgo(iso) {
     if (!iso) return '—';
     const ms = Date.now() - new Date(iso).getTime();
@@ -102,11 +105,11 @@
       },
       React.createElement(
         'div',
-        { className: 'tt-modal', tabIndex: -1, ref: trapRef },
+        { className: 'tt-modal', tabIndex: -1, ref: trapRef, 'aria-labelledby': 'sources-modal-title' },
         React.createElement(
           'div',
           { className: 'tt-modal-header' },
-          React.createElement('h3', { className: 'tt-modal-title' }, 'Sources'),
+          React.createElement('h3', { className: 'tt-modal-title', id: 'sources-modal-title' }, 'Sources'),
           React.createElement(
             'button',
             {
@@ -156,7 +159,8 @@
                   className: 'tt-source-link',
                   href: latest.url,
                   target: '_blank',
-                  rel: 'noopener noreferrer'
+                  rel: 'noopener noreferrer',
+                  'data-test': 'source-article'
                 },
                 'Read ↗'
               ) : React.createElement(
@@ -259,7 +263,8 @@
       {
         className: 'tt-card',
         style: { borderTop: `3px solid ${severity.ribbon}` },
-        'aria-labelledby': `story-${story.id}-title`
+        'aria-labelledby': `story-${story.id}-title`,
+        'data-test': 'story-card'
       },
       React.createElement(
         'div',
@@ -357,7 +362,8 @@
             'button',
             {
               className: 'tt-btn',
-              onClick: () => setShowSources(true)
+              onClick: () => setShowSources(true),
+              'data-test': 'view-sources-btn'
             },
             `View Sources (${story.source_count ?? 0})`
           ),
