@@ -7,6 +7,8 @@ import OpenAI from 'openai';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
+import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -26,6 +28,23 @@ const workerConfig = {
 const supabase = createClient(config.supabaseUrl, config.serviceRoleKey);
 const openai = config.openaiKey ? new OpenAI({ apiKey: config.openaiKey }) : null;
 
+// Category mapping: UI labels → DB enum values
+const UI_TO_DB = {
+  'Corruption & Scandals': 'corruption_scandals',
+  'Democracy & Elections': 'democracy_elections',
+  'Policy & Legislation': 'policy_legislation',
+  'Justice & Legal': 'justice_legal',
+  'Executive Actions': 'executive_actions',
+  'Foreign Policy': 'foreign_policy',
+  'Corporate & Financial': 'corporate_financial',
+  'Civil Liberties': 'civil_liberties',
+  'Media & Disinformation': 'media_disinformation',
+  'Epstein & Associates': 'epstein_associates',
+  'Other': 'other',
+};
+
+const toDbCategory = (label) => UI_TO_DB[label] || 'other';
+
 // Track active jobs
 let activeJobs = 0;
 let lastJobStart = 0;
@@ -34,7 +53,9 @@ let isRunning = true;
 // Job processor class
 class JobProcessor {
   constructor() {
+    // Use spread operator to preserve existing handlers
     this.handlers = {
+      ...(this.handlers || {}),
       'fetch_feed': this.fetchFeed.bind(this),
       'fetch_all_feeds': this.fetchAllFeeds.bind(this),
       // Methods not yet implemented:
@@ -45,7 +66,7 @@ class JobProcessor {
       // 'story.archive': this.archiveOldStories.bind(this),
       'story.cluster': clusteringHandlers['story.cluster'],
       'story.cluster.batch': clusteringHandlers['story.cluster.batch'],
-      // 'story.enrich': this.enrichStory.bind(this),
+      'story.enrich': this.enrichStory.bind(this),
       // 'article.enrich': this.enrichArticle.bind(this), 
       'process_article': this.processArticle.bind(this)
     };
@@ -218,6 +239,181 @@ class JobProcessor {
     return { article_id, enrichment };
   }
 
+  /**
+   * Fetch up to 6 articles for a story, ordered by relevance
+   */
+  async fetchStoryArticles(story_id) {
+    const { data, error } = await supabase
+      .from('article_story')
+      .select('is_primary_source, similarity_score, matched_at, articles(*)')
+      .eq('story_id', story_id)
+      .order('is_primary_source', { ascending: false })
+      .order('similarity_score', { ascending: false })
+      .order('matched_at', { ascending: false })
+      .limit(6);
+      
+    if (error) throw new Error(`Failed to fetch articles: ${error.message}`);
+    return (data || []).filter(r => r.articles);
+  }
+
+  /**
+   * Phase 1: Story Enrichment Handler
+   * Generates summaries, categorizes, and updates story
+   */
+  async enrichStory(payload) {
+    const { story_id } = payload || {};
+    if (!story_id) throw new Error('story_id required');
+
+    if (!openai) {
+      throw new Error('OpenAI not configured');
+    }
+
+    // ========================================
+    // 1. COOLDOWN CHECK (12 hours)
+    // ========================================
+    const { data: story, error: sErr } = await supabase
+      .from('stories')
+      .select('id, primary_headline, last_enriched_at')
+      .eq('id', story_id)
+      .single();
+      
+    if (sErr) throw new Error(`Failed to fetch story: ${sErr.message}`);
+    
+    const cooldownMs = 12 * 60 * 60 * 1000; // 12 hours
+    if (story.last_enriched_at) {
+      const elapsed = Date.now() - new Date(story.last_enriched_at).getTime();
+      if (elapsed < cooldownMs) {
+        return { 
+          status: 429, 
+          message: 'Cooldown active',
+          retry_after: cooldownMs - elapsed 
+        };
+      }
+    }
+
+    // ========================================
+    // 2. BUDGET CHECK (Optional - Phase 2)
+    // ========================================
+    // TODO: Add budget soft/hard stop once migration 008 is deployed
+
+    // ========================================
+    // 3. FETCH ARTICLES & BUILD CONTEXT
+    // ========================================
+    const links = await this.fetchStoryArticles(story_id);
+    if (!links.length) {
+      console.error(`❌ No articles found for story ${story_id}`);
+      throw new Error('No articles found for story');
+    }
+
+    // Build article snippets (strip HTML, truncate to ~300 chars)
+    const articles = links.map(({ articles }) => ({
+      title: articles.title || '',
+      source_name: articles.source_name || '',
+      excerpt: (articles.content || articles.excerpt || '')
+        .replace(/<[^>]+>/g, ' ')    // strip HTML tags
+        .replace(/\s+/g, ' ')         // collapse whitespace
+        .trim()
+        .slice(0, 300)
+    }));
+
+    const userPayload = buildUserPayload({
+      primary_headline: story.primary_headline || '',
+      articles
+    });
+
+    // ========================================
+    // 4. OPENAI CALL (JSON MODE)
+    // ========================================
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPayload }
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 500,
+      temperature: 0.7
+    });
+
+    // ========================================
+    // 5. PARSE & VALIDATE JSON
+    // ========================================
+    const text = completion.choices?.[0]?.message?.content || '{}';
+    let obj;
+    try {
+      obj = JSON.parse(text);
+    } catch (e) {
+      console.error('❌ JSON parse failed. Raw response:', text.slice(0, 500));
+      throw new Error('Model did not return valid JSON');
+    }
+
+    // Extract and validate fields
+    const summary_neutral = obj.summary_neutral?.trim();
+    const summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
+    const category_db = obj.category ? toDbCategory(obj.category) : null;
+    const severity = ['critical', 'severe', 'moderate', 'minor'].includes(obj.severity) 
+      ? obj.severity 
+      : 'moderate';
+    const primary_actor = (obj.primary_actor || '').trim() || null;
+
+    if (!summary_neutral) {
+      throw new Error('Missing summary_neutral in response');
+    }
+
+    // ========================================
+    // 6. UPDATE STORY
+    // ========================================
+    const { error: uErr } = await supabase
+      .from('stories')
+      .update({
+        summary_neutral,
+        summary_spicy,
+        category: category_db,
+        severity,
+        primary_actor,
+        last_enriched_at: new Date().toISOString()
+      })
+      .eq('id', story_id);
+      
+    if (uErr) throw new Error(`Failed to update story: ${uErr.message}`);
+
+    // ========================================
+    // 7. COST TRACKING (with guards)
+    // ========================================
+    const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0 };
+    const costInput = (usage.prompt_tokens / 1000) * 0.00015;  // GPT-4o-mini input
+    const costOutput = (usage.completion_tokens / 1000) * 0.0006; // GPT-4o-mini output
+    const totalCost = costInput + costOutput;
+
+    // Optional: Track in budgets table (Phase 2)
+    // if (Phase 2 RPC exists) {
+    //   const today = new Date().toISOString().slice(0, 10);
+    //   await supabase.rpc('increment_budget', {
+    //     p_day: today,
+    //     p_cost: totalCost,
+    //     p_calls: 1
+    //   });
+    // }
+
+    console.log(`✅ Enriched story ${story_id}:`, {
+      tokens: usage,
+      cost: `$${totalCost.toFixed(6)}`,
+      category: category_db,
+      severity
+    });
+
+    return { 
+      story_id, 
+      tokens: usage, 
+      cost: totalCost,
+      summary_neutral,
+      summary_spicy,
+      category: category_db,
+      severity,
+      primary_actor
+    };
+  }
+
   async fetchAllFeeds(payload) {
     // Get all active feeds
     const { data: feeds, error } = await supabase
@@ -279,13 +475,30 @@ async function runWorker() {
   console.log(`   Max concurrent: ${workerConfig.maxConcurrent}`);
   console.log(`   Rate limit: ${workerConfig.rateLimit}ms between jobs`);
   
+  // Verify database connection
+  const { count, error: countError } = await supabase
+    .from('job_queue')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending');
+  
+  if (countError) {
+    console.error('❌ Database connection error:', countError.message);
+    process.exit(1);
+  }
+  console.log(`   Database connected - ${count} pending jobs found\n`);
+  
   // Graceful shutdown
   process.on('SIGINT', () => {
     console.log('\n📛 Shutting down gracefully...');
     isRunning = false;
   });
 
+  let loopCount = 0;
   while (isRunning) {
+    loopCount++;
+    if (loopCount % 12 === 0) {
+      console.log(`💓 Worker alive - ${loopCount} loops, ${activeJobs} active jobs`);
+    }
     try {
       // Check if we have capacity
       if (activeJobs >= workerConfig.maxConcurrent) {
@@ -300,6 +513,7 @@ async function runWorker() {
       }
 
       // Claim next job
+      console.log('🔍 Polling for jobs...');
       const { data: job, error: claimError } = await supabase
         .from('job_queue')
         .update({ 
@@ -313,8 +527,16 @@ async function runWorker() {
         .select()
         .single();
 
+      if (job) {
+        console.log(`✅ Claimed job ${job.id} - ${job.job_type}`);
+      }
+
       if (claimError || !job) {
         // No jobs available, wait
+        if (claimError && claimError.code !== 'PGRST116') {
+          // PGRST116 = no rows returned (expected when no jobs)
+          console.log('⚠️  Job claim error:', claimError.message, claimError.code);
+        }
         await new Promise(resolve => setTimeout(resolve, workerConfig.pollInterval));
         continue;
       }
@@ -406,7 +628,10 @@ async function runWorker() {
 export { JobProcessor, runWorker };
 
 // Start worker if run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Fixed for Windows compatibility
+const __filename = fileURLToPath(import.meta.url);
+
+if (process.argv[1]?.includes('job-queue-worker.js')) {
   runWorker().catch(err => {
     console.error('Fatal error:', err);
     process.exit(1);
