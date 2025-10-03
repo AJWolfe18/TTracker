@@ -9,7 +9,7 @@
 ## JOSH'S CONTEXT
 - **Role:** Product Manager (non-developer)
 - **Communication:** Business impact first, simple language, single recommendations
-- **Budget:** <$50/month hard limit (current: ~$35)
+- **Budget:** <$50/month hard limit (current: ~$20)
 - **Repo:** `C:\Users\Josh\OneDrive\Desktop\GitHub\TTracker`
 - **Workflow:** Propose → Confirm → Implement → Auto-QA → Report
 
@@ -25,6 +25,8 @@
 3. **Update immediately** - Use Atlassian tools to update JIRA/Confluence (don't say "needs update")
 4. **Auto-QA always** - Check edge cases, regressions, cost after every change
 5. **Handoffs to /docs/handoffs/** - Never add to project knowledge
+6. **File editing** - ALWAYS use `filesystem:edit_file` for edits, NEVER use `str_replace` (it fails)
+7. **Context reporting** - Always report token usage at end of each response
 
 ## MY TOOLS (Verify Before Claiming Limitations)
 ✅ Update JIRA/Confluence directly (Atlassian MCP)
@@ -57,6 +59,7 @@
 - **Cost-aware:** Always state $ implications
 - **Explicit:** State environment, risk level, breaking changes
 - **Concise:** Brief unless complexity requires detail
+- **Context aware:** End every response with token usage (e.g., "Used: 50K/190K (26%) | Remaining: 140K (74%)")
 
 ## END SESSION
 1. Update JIRA (use tools)
