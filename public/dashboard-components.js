@@ -561,7 +561,7 @@
   window.DashboardComponents.TabNavigation = ({ activeTab, onTabChange, counts }) => {
     const tabs = [
       { id: 'stories', label: 'Stories', color: 'red' },
-      { id: 'political', label: 'Political Entries', color: 'orange' },
+      // { id: 'political', label: 'Political Entries', color: 'orange' }, // HIDDEN - Old system being migrated
       { id: 'executive', label: 'Executive Orders', color: 'blue' }
     ];
 

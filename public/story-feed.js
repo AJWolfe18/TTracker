@@ -150,5 +150,7 @@
     );
   }
 
-  window.StoryFeed = StoryFeed;
+  window.StoryComponents = Object.assign({}, window.StoryComponents || {}, {
+    StoryFeed
+  });
 })();
