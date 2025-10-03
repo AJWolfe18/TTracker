@@ -9,11 +9,11 @@ Fixed 3 blocking UI bugs in TEST: Political tab schema mismatch, Story Sources m
 
 ### Code Changes
 **Branch:** test  
-**Commit Message:** `fix(ui): resolve political tab schema error and story sources modal`  
+**Commit Message:** `fix(ui): resolve political tab schema + story sources with polish`  
 **Files Changed:**
 - `public/dashboard.js` - Changed 3 queries from `date.desc` to `published_at.desc` (lines 177, 196, 205)
-- `public/story-api.js` - Added `fetchStoryArticles()` function with article_story join query
-- `public/story-card.js` - Implemented lazy-load pattern, added loading state for sources modal
+- `public/story-api.js` - Added `fetchStoryArticles()` function + defensive null filtering
+- `public/story-card.js` - Lazy-load pattern + race condition fix + error state + dead code removal
 
 ### Testing Status
 - ⏳ **Pending:** Josh needs to test Political tab loads + Story Sources modal populates
@@ -52,11 +52,22 @@ Fixed 3 blocking UI bugs in TEST: Political tab schema mismatch, Story Sources m
 **Alternatives Considered:** None - this was a schema alignment fix, not a design choice  
 **Cost Impact:** No cost impact
 
+**Decision:** Add race condition prevention + error state (10-min polish)  
+**Rationale:** Prevents duplicate API calls on double-click, provides clear error messaging to users  
+**Changes:** 
+- Added `loadingArticles` check in fetch guard
+- Added `articleError` state with red error display in modal
+- Removed dead fallback code (`story.articles` doesn't exist)
+- Added defensive null filtering in API response mapping
+**Cost Impact:** No cost impact
+
 ### Watch Out For
 - **Gotcha:** Story cards show "No summary available" because enrichment handler is commented out (TTRC-148)
 - **Gotcha:** `political_entries` table is deprecated (READ-ONLY per schema comment), only has 5 rows in TEST
 - **Dependency:** Story enrichment (TTRC-148) must be implemented next to fill 82 blank summaries
 - **Risk:** LOW - Changes are schema alignment and standard lazy-load pattern
+- **Improved:** Race condition fixed - double-clicking "View Sources" no longer triggers duplicate fetches
+- **Improved:** Error UX - Network failures now show clear red error message instead of misleading "No sources available"
 
 ---
 
@@ -107,12 +118,16 @@ Fixed 3 blocking UI bugs in TEST: Political tab schema mismatch, Story Sources m
 **Commit command for Josh:**
 ```bash
 git add public/dashboard.js public/story-api.js public/story-card.js
-git commit -m "fix(ui): resolve political tab schema error and story sources modal
+git commit -m "fix(ui): resolve political tab schema + story sources with polish
 
-- Changed political_entries queries from date.desc to published_at.desc
-- Added fetchStoryArticles() API function for lazy-loading
-- Implemented sources modal lazy-load pattern with loading state
-- Fixes TTRC-184 (Political tab error + empty sources modal)"
+- Political tab: Changed queries from date.desc to published_at.desc (schema alignment)
+- Story sources: Implemented lazy-load with fetchStoryArticles() API
+- Story sources: Added race condition prevention (loadingArticles check)
+- Story sources: Added error state with user-facing messaging
+- Story sources: Defensive null filtering in article mapping
+- Story sources: Removed dead fallback code
+
+Fixes TTRC-184 (Political tab error + empty sources modal)"
 git push origin test
 ```
 
@@ -135,6 +150,8 @@ git push origin test
 - [ ] Button shows "Loading..." briefly
 - [ ] Modal opens with article list (source name, title, "Read ↗" link)
 - [ ] Click "Read ↗" opens article in new tab
+- [ ] **NEW:** Double-click "View Sources" → Second click ignored (no duplicate loading)
+- [ ] **NEW:** If network fails → Red error message: "Failed to load sources. Please try again."
 - [ ] Close modal and test another story
 
 **Console:**
