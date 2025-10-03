@@ -90,7 +90,10 @@ window.DashboardUtils = (function() {
       if (cached) return cached;
     }
     
-    const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+    const base = (SUPABASE_URL || '').replace(/\/+$/,'');
+    const ep   = (endpoint || '').trim().replace(/^\/+/, '');
+    const url  = `${base}/rest/v1/${ep}`;
+    if (!ep) throw new Error('Supabase error: empty endpoint');
     const options = {
       method,
       headers: {
@@ -105,6 +108,9 @@ window.DashboardUtils = (function() {
       options.body = JSON.stringify(body);
     }
 
+    // Debug logging
+    console.debug('[Supabase]', method, url);
+    
     // Retry logic with exponential backoff
     let lastError;
     for (let attempt = 0; attempt < retries; attempt++) {
