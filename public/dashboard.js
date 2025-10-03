@@ -175,7 +175,7 @@ const TrumpyTrackerDashboard = () => {
       
       if (loadAll) {
         // Load ALL entries for search functionality
-        const query = 'political_entries?order=published_at.desc,added_at.desc';
+        const query = 'political_entries?order=published_at.desc,created_at.desc';
         const data = await supabaseRequest(query);
         setAllPoliticalEntries(data || []);
         
@@ -194,7 +194,7 @@ const TrumpyTrackerDashboard = () => {
         setTotalPoliticalPages(Math.ceil(totalCount / ITEMS_PER_PAGE));
         
         // Then get paginated data
-        const query = `political_entries?order=published_at.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
+        const query = `political_entries?order=published_at.desc,created_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
         const data = await supabaseRequest(query);
         
         if (append) {
@@ -202,7 +202,7 @@ const TrumpyTrackerDashboard = () => {
         } else {
           // If we don't have all data yet, load it for search
           if (allPoliticalEntries.length === 0 || allPoliticalEntries.length < totalCount) {
-            const allQuery = 'political_entries?order=published_at.desc,added_at.desc';
+            const allQuery = 'political_entries?order=published_at.desc,created_at.desc';
             const allData = await supabaseRequest(allQuery);
             setAllPoliticalEntries(allData || []);
           }
