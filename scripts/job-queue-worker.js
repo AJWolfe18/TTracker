@@ -64,8 +64,8 @@ class JobProcessor {
       // 'story.rescore': this.rescoreStory.bind(this),
       // 'story.close_old': this.closeOldStories.bind(this),
       // 'story.archive': this.archiveOldStories.bind(this),
-      'story.cluster': clusteringHandlers['story.cluster'],
-      'story.cluster.batch': clusteringHandlers['story.cluster.batch'],
+      'story.cluster': (payload) => clusteringHandlers['story.cluster'](payload, supabase),
+      'story.cluster.batch': (payload) => clusteringHandlers['story.cluster.batch'](payload, supabase),
       'story.enrich': this.enrichStory.bind(this),
       // 'article.enrich': this.enrichArticle.bind(this), 
       'process_article': this.processArticle.bind(this)
@@ -116,7 +116,7 @@ class JobProcessor {
     // Prepare article texts
     const articleTexts = story.article_story
       .map(as => as.articles)
-      .map(a => `Title: ${a.headline}\nSource: ${a.source_name}\n${a.content || ''}`)
+      .map(a => `Title: ${a.title}\nSource: ${a.source_name}\n${a.content || a.excerpt || ''}`)
       .join('\n\n---\n\n');
 
     // Generate summary based on mode
@@ -125,7 +125,7 @@ class JobProcessor {
       : "You are a neutral news summarizer. Present facts without bias or opinion.";
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Summarize this story:\n\n${articleTexts}` }
@@ -137,7 +137,7 @@ class JobProcessor {
     const summary = completion.choices[0].message.content;
 
     // Update story with summary
-    const summaryField = mode === 'spicy' ? 'spicy_summary' : 'neutral_summary';
+    const summaryField = mode === 'spicy' ? 'summary_spicy' : 'summary_neutral';
     await supabase
       .from('stories')
       .update({ [summaryField]: summary })
@@ -165,7 +165,7 @@ class JobProcessor {
       .from('stories')
       .update({ status: 'closed' })
       .eq('status', 'active')
-      .lt('created_at', cutoffDate.toISOString());
+      .lt('first_seen_at', cutoffDate.toISOString());
 
     if (error) throw error;
     return { closed: data?.length || 0 };
@@ -180,7 +180,7 @@ class JobProcessor {
       .from('stories')
       .update({ status: 'archived' })
       .eq('status', 'closed')
-      .lt('created_at', cutoffDate.toISOString());
+      .lt('first_seen_at', cutoffDate.toISOString());
 
     if (error) throw error;
     return { archived: data?.length || 0 };
@@ -512,20 +512,38 @@ async function runWorker() {
         await new Promise(resolve => setTimeout(resolve, workerConfig.rateLimit - timeSinceLastJob));
       }
 
-      // Claim next job
+      // Claim next job - First SELECT to find it, then UPDATE to claim it
       console.log('🔍 Polling for jobs...');
-      const { data: job, error: claimError } = await supabase
+      
+      // Step 1: Find next available job
+      const { data: candidateJobs, error: findError } = await supabase
+        .from('job_queue')
+        .select('*')
+        .eq('status', 'pending')
+        .lte('run_at', new Date().toISOString())
+        .order('created_at', { ascending: true })
+        .limit(1);
+      
+      if (findError || !candidateJobs?.length) {
+        // No jobs available
+        await new Promise(resolve => setTimeout(resolve, workerConfig.pollInterval));
+        continue;
+      }
+      
+      const candidate = candidateJobs[0];
+      
+      // Step 2: Try to claim it (race condition possible, but acceptable)
+      const { data: claimedJobs, error: claimError } = await supabase
         .from('job_queue')
         .update({ 
           status: 'processing',
           started_at: new Date().toISOString()
         })
-        .eq('status', 'pending')
-        .lte('run_at', new Date().toISOString())
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .select()
-        .single();
+        .eq('id', candidate.id)
+        .eq('status', 'pending')  // Double-check it's still pending
+        .select();
+      
+      const job = claimedJobs?.[0] || null;
 
       if (job) {
         console.log(`✅ Claimed job ${job.id} - ${job.job_type}`);
