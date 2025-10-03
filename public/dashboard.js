@@ -175,7 +175,7 @@ const TrumpyTrackerDashboard = () => {
       
       if (loadAll) {
         // Load ALL entries for search functionality
-        const query = 'political_entries?archived=neq.true&order=date.desc,added_at.desc';
+        const query = 'political_entries?order=date.desc,added_at.desc';
         const data = await supabaseRequest(query);
         setAllPoliticalEntries(data || []);
         
@@ -188,13 +188,13 @@ const TrumpyTrackerDashboard = () => {
         const offset = (page - 1) * ITEMS_PER_PAGE;
         
         // First, get total count (cached separately)
-        const countQuery = 'political_entries?select=id&archived=neq.true';
+        const countQuery = 'political_entries?select=id';
         const countData = await supabaseRequest(countQuery);
         const totalCount = countData ? countData.length : 0;
         setTotalPoliticalPages(Math.ceil(totalCount / ITEMS_PER_PAGE));
         
         // Then get paginated data
-        const query = `political_entries?archived=neq.true&order=date.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
+        const query = `political_entries?order=date.desc,added_at.desc&limit=${ITEMS_PER_PAGE}&offset=${offset}`;
         const data = await supabaseRequest(query);
         
         if (append) {
@@ -202,7 +202,7 @@ const TrumpyTrackerDashboard = () => {
         } else {
           // If we don't have all data yet, load it for search
           if (allPoliticalEntries.length === 0 || allPoliticalEntries.length < totalCount) {
-            const allQuery = 'political_entries?archived=neq.true&order=date.desc,added_at.desc';
+            const allQuery = 'political_entries?order=date.desc,added_at.desc';
             const allData = await supabaseRequest(allQuery);
             setAllPoliticalEntries(allData || []);
           }
@@ -270,6 +270,8 @@ const TrumpyTrackerDashboard = () => {
       }
     } catch (error) {
       console.error('Error loading stats:', error);
+      // Stats table doesn't exist in TEST - gracefully fail
+      setStats({});
     }
   }, []);
 

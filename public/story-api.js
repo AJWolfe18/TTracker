@@ -46,7 +46,7 @@ window.StoryAPI = (function() {
     });
     
     try {
-      const response = await supabaseRequest(`/rest/v1/stories?${params.toString()}`);
+      const response = await supabaseRequest(`stories?${params.toString()}`);
       return response || [];
     } catch (error) {
       console.error('StoryAPI.fetchStories error:', error);
@@ -66,7 +66,7 @@ window.StoryAPI = (function() {
     });
     
     try {
-      const response = await supabaseRequest(`/rest/v1/stories?${params.toString()}`);
+      const response = await supabaseRequest(`stories?${params.toString()}`);
       return response?.[0] || null;
     } catch (error) {
       console.error('StoryAPI.fetchStoryWithArticles error:', error);
