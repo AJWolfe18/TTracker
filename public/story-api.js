@@ -74,9 +74,37 @@ window.StoryAPI = (function() {
     }
   }
 
+  /**
+   * Fetch articles for a story via article_story join table
+   * @param {number} storyId - Story ID
+   * @returns {Promise<Array>} Array of article objects with metadata
+   */
+  async function fetchStoryArticles(storyId) {
+    const params = new URLSearchParams({
+      story_id: `eq.${storyId}`,
+      select: 'article_id,is_primary_source,similarity_score,articles(*)'
+    });
+    
+    try {
+      const response = await supabaseRequest(`article_story?${params.toString()}`);
+      // Transform to flat article objects with metadata
+      return (response || [])
+        .filter(row => row && row.articles)
+        .map(row => ({
+          ...row.articles,
+          is_primary_source: row.is_primary_source,
+          similarity_score: row.similarity_score,
+        }));
+    } catch (error) {
+      console.error('StoryAPI.fetchStoryArticles error:', error);
+      throw error;
+    }
+  }
+
   // Public API
   return {
     fetchStories,
-    fetchStoryWithArticles
+    fetchStoryWithArticles,
+    fetchStoryArticles
   };
 })();

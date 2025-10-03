@@ -55,6 +55,7 @@ __pycache__/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Local test files that shouldn't be tracked
 test-local/

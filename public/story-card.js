@@ -5,6 +5,7 @@
   'use strict';
   
   const { useState, useMemo, useEffect, useRef } = React;
+  const { fetchStoryArticles } = window.StoryAPI || {};
 
   // Time ago helper - NULL SAFE
   // TIMEZONE NOTE: Assumes published_at is ISO UTC from API (standard)
@@ -74,7 +75,7 @@
   /**
    * SourcesModal - Accessible modal showing all sources for a story
    */
-  function SourcesModal({ story, grouped, onClose }) {
+  function SourcesModal({ story, grouped, onClose, error }) {
     const trapRef = useRef(null);
     
     useEffect(() => {
@@ -128,7 +129,12 @@
             { className: 'tt-modal-headline' },
             story.primary_headline
           ),
-          grouped.length === 0 && React.createElement(
+          error && React.createElement(
+            'div',
+            { className: 'tt-modal-note', style: { color: '#ef4444' } },
+            error
+          ),
+          grouped.length === 0 && !error && React.createElement(
             'div',
             { className: 'tt-modal-note' },
             'No sources available for this story yet.'
@@ -192,12 +198,15 @@
 
     const [expanded, setExpanded] = useState(false);
     const [showSources, setShowSources] = useState(false);
+    const [articles, setArticles] = useState([]);
+    const [loadingArticles, setLoadingArticles] = useState(false);
+    const [articleError, setArticleError] = useState(null);
 
     const severity = SEVERITY_CONFIG[story.severity] || SEVERITY_CONFIG.moderate;
     const categoryLabel = CATEGORY_LABELS[story.category] || 'Other';
 
-    // SAFE: Handle missing articles array
-    const safeArticles = Array.isArray(story.articles) ? story.articles : [];
+    // Use fetched articles (will be empty array until lazy-loaded)
+    const safeArticles = articles;
 
     // Sort articles by published date (newest first) - NULL SAFE
     const sortedArticles = useMemo(() => {
@@ -222,6 +231,28 @@
     }, [sortedArticles]);
 
     const shareUrl = `${location.href.split('#')[0]}#${story.id}`;
+
+    // Lazy-load articles when "View Sources" is clicked
+    async function handleViewSources() {
+      setShowSources(true);
+      
+      // Skip fetch if articles already loaded or currently loading
+      if (articles.length > 0 || loadingArticles || !fetchStoryArticles) {
+        return;
+      }
+      
+      setLoadingArticles(true);
+      try {
+        const fetchedArticles = await fetchStoryArticles(story.id);
+        setArticles(fetchedArticles || []);
+        setArticleError(null);
+      } catch (error) {
+        console.error('Failed to load story articles:', error);
+        setArticleError('Failed to load sources. Please try again.');
+      } finally {
+        setLoadingArticles(false);
+      }
+    }
 
     // HARDENED: Share with fallbacks for older browsers
     async function handleShare() {
@@ -362,10 +393,11 @@
             'button',
             {
               className: 'tt-btn',
-              onClick: () => setShowSources(true),
-              'data-test': 'view-sources-btn'
+              onClick: handleViewSources,
+              'data-test': 'view-sources-btn',
+              disabled: loadingArticles
             },
-            `View Sources (${story.source_count ?? 0})`
+            loadingArticles ? 'Loading...' : `View Sources (${story.source_count ?? 0})`
           ),
           React.createElement(
             'button',
@@ -401,7 +433,8 @@
         React.createElement(SourcesModal, {
           story,
           grouped: groupedSources,
-          onClose: () => setShowSources(false)
+          onClose: () => setShowSources(false),
+          error: articleError
         })
     );
   }
