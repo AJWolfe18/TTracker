@@ -44,6 +44,7 @@ CREATE OR REPLACE FUNCTION increment_budget(
   p_cost NUMERIC,
   p_calls INTEGER
 ) RETURNS VOID AS $$
+BEGIN
   INSERT INTO public.budgets (day, spent_usd, openai_calls, cap_usd)
   VALUES (p_day, p_cost, p_calls, 50.00)
   ON CONFLICT (day) DO UPDATE 
