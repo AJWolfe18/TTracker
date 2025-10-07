@@ -7,6 +7,7 @@
 
 import { extractPrimaryActor } from './rss/clustering.js';
 import { withDatabaseRetry } from './utils/retry.js';
+import { enqueueStoryEnrichment } from './utils/job-helpers.js';
 
 /**
  * Process a story clustering job
@@ -74,32 +75,31 @@ export async function processStoryClusterJob(job, supabase) {
     }
     
     // 4. Log the result
-    const { story_id, created_new, score, status } = result;
+    const { story_id, created_new, reopened, score, status } = result;
     
     console.log(`[story.cluster] Article ${article_id} ${status}:`, {
       story_id,
       created_new,
+      reopened,
       score,
       status
     });
     
-    // 5. If this created a new story, we might want to enqueue enrichment (idempotent)
-    if (created_new && story_id) {
-      // Optional: Enqueue enrichment job for the new story
-      // Using upsert to prevent duplicate jobs
-      const { error: enrichError } = await supabase
-        .from('job_queue')
-        .upsert({
-          job_type: 'story.enrich',
-          payload: { story_id },
-          status: 'pending',
-          run_at: new Date(Date.now() + 5000).toISOString() // Delay 5 seconds
-        }, {
-          onConflict: 'job_type,payload_hash'
-        });
-      
-      if (!enrichError) {
-        console.log(`[story.cluster] Enqueued enrichment for new story ${story_id}`);
+    // 5. Trigger enrichment for new or reopened stories
+    
+    if ((created_new || reopened) && story_id) {
+      try {
+        const enrichResult = await enqueueStoryEnrichment(supabase, story_id, 5000);
+        
+        if (enrichResult.status === 'queued') {
+          const action = created_new ? 'new' : 'reopened';
+          console.log(`[story.cluster] ✅ Enqueued enrichment for ${action} story ${story_id}`);
+        } else if (enrichResult.status === 'duplicate') {
+          console.log(`[story.cluster] ℹ️ Enrichment already queued for story ${story_id}`);
+        }
+      } catch (enrichError) {
+        console.error(`[story.cluster] ⚠️ Failed to enqueue enrichment for story ${story_id}:`, enrichError);
+        // Don't fail the clustering job if enrichment enqueue fails
       }
     }
     
