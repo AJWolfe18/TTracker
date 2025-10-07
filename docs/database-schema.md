@@ -32,7 +32,7 @@ CREATE TABLE stories (
   ai_summary jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
-  article_count integer DEFAULT 0 NOT NULL
+  source_count integer DEFAULT 0 NOT NULL
 );
 ```
 

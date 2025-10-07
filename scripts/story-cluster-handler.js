@@ -75,13 +75,13 @@ export async function processStoryClusterJob(job, supabase) {
     }
     
     // 4. Log the result
-    const { story_id, created_new, reopened, score, status } = result;
-    
+    const { story_id, created_new, reopened, similarity_score, status } = result;
+
     console.log(`[story.cluster] Article ${article_id} ${status}:`, {
       story_id,
       created_new,
       reopened,
-      score,
+      similarity_score,
       status
     });
     
