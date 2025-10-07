@@ -85,13 +85,11 @@ jobs:
           BASE=$(jq -r .baseRefName pr.json)
           AUTHOR=$(jq -r .author.login pr.json)
 
-          cat > prompt_header.txt <<'EOF'
-You are a senior staff engineer performing a code review for ONLY the latest commit in this PR.
-Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX.
-Be specific; cite filenames and line ranges from the provided diff hunks.
-Return two sections: BLOCKERS (must-fix) and NON-BLOCKING (nits).
-Hard caps: max 10 findings total, ≤3 per file. If more exist, end with "Overflow: <approximate count>".
-EOF
+          echo "You are a senior staff engineer performing a code review for ONLY the latest commit in this PR." > prompt_header.txt
+          echo "Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX." >> prompt_header.txt
+          echo "Be specific; cite filenames and line ranges from the provided diff hunks." >> prompt_header.txt
+          echo "Return two sections: BLOCKERS (must-fix) and NON-BLOCKING (nits)." >> prompt_header.txt
+          echo "Hard caps: max 10 findings total, ≤3 per file. If more exist, end with \"Overflow: <approximate count>\"." >> prompt_header.txt
 
           {
             echo "PR Title: ${TITLE}"
