@@ -41,7 +41,8 @@ jobs:
 
       - name: Ensure we have PR metadata
         id: meta
-        env: { GH_TOKEN: ${{ github.token }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR=${{ steps.prnum.outputs.num }}
           gh pr view "$PR" --json title,body,headRefName,baseRefName,author,headRefOid > pr.json
@@ -178,14 +179,16 @@ EOF
           fi
 
       - name: Post PR comment
-        env: { GH_TOKEN: ${{ github.token }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR=${{ steps.prnum.outputs.num }}
           gh pr comment "$PR" --body-file review.md
 
       - name: Add ai-reviewed label
         if: always()
-        env: { GH_TOKEN: ${{ github.token }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR=${{ steps.prnum.outputs.num }}
           gh pr edit "$PR" --add-label "ai-reviewed" || true
