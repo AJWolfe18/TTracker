@@ -21,7 +21,6 @@ jobs:
       LLM_API_BASE: https://api.openai.com/v1
       LLM_MODEL: gpt-5
       MAX_CHUNK_BYTES: "60000"
-      TEMPERATURE: "0.2"
 
     steps:
       - name: Resolve PR number
@@ -131,7 +130,6 @@ jobs:
                   -H "Content-Type: application/json" \
                   -d "{
                     \"model\": \"${LLM_MODEL}\",
-                    \"temperature\": ${TEMPERATURE},
                     \"input\": [
                       {\"role\": \"system\", \"content\": ${HEADER}},
                       {\"role\": \"user\", \"content\": ${CONTEXT}},
