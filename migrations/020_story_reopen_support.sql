@@ -90,10 +90,9 @@ BEGIN
       )
       ON CONFLICT (story_hash) DO UPDATE
       SET last_updated_at = GREATEST(public.stories.last_updated_at, EXCLUDED.last_updated_at)
-      RETURNING id INTO v_story_id;
+      RETURNING id, (xmax = 0) AS inserted INTO v_story_id, v_is_new;
 
-      -- Since we only insert when no candidate was found, treat this as new.
-      v_is_new := TRUE;
+      -- xmax=0 indicates insert, xmax!=0 indicates update
       v_similarity_score := 100.0;
     EXCEPTION WHEN unique_violation THEN
       SELECT id INTO v_story_id FROM public.stories WHERE story_hash = v_story_hash;

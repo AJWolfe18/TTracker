@@ -32,7 +32,7 @@ CREATE TABLE stories (
   ai_summary jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
-  article_count integer DEFAULT 0 NOT NULL
+  source_count integer DEFAULT 0 NOT NULL
 );
 ```
 
@@ -177,17 +177,17 @@ CREATE TABLE articles (
 | # | Date | Description | Tables Affected |
 |---|------|-------------|-----------------|
 | 018 | 2024-09-XX | RSS story clustering system | stories, story_articles, sources, rss_queue |
-| 019 | 2024-10-XX | Add story backfill support | stories (added article_count) |
+| 019 | 2024-10-XX | Add story backfill support | stories (added source_count) |
 
 ---
 
 ## Common Queries
 
-### Get Stories with Article Count
+### Get Stories with Source Count
 ```sql
-SELECT 
+SELECT
   s.*,
-  COUNT(sa.id) as article_count
+  COUNT(sa.id) as source_count
 FROM stories s
 LEFT JOIN story_articles sa ON sa.story_id = s.id
 GROUP BY s.id
