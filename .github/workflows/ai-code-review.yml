@@ -1,0 +1,191 @@
+name: AI Code Review (Latest Commit Only)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      LLM_API_BASE: https://api.openai.com/v1
+      LLM_MODEL: gpt-5
+      MAX_CHUNK_BYTES: "60000"
+      TEMPERATURE: "0.2"
+
+    steps:
+      - name: Resolve PR number
+        id: prnum
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "num=${{ inputs.pr_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "num=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout PR HEAD commit (not merge)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || '' }}
+
+      - name: Ensure we have PR metadata
+        id: meta
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: |
+          PR=${{ steps.prnum.outputs.num }}
+          gh pr view "$PR" --json title,body,headRefName,baseRefName,author,headRefOid > pr.json
+
+      - name: Compute latest-commit diff (HEAD^..HEAD)
+        id: diff
+        run: |
+          # Determine HEAD (for workflow_dispatch we need to check out the PR head explicitly)
+          if [ -s pr.json ]; then
+            HEAD_SHA=$(jq -r .headRefOid pr.json)
+          else
+            HEAD_SHA=$(git rev-parse HEAD)
+          fi
+
+          # Make sure HEAD_SHA exists locally (checkout step should have it)
+          git checkout --detach "$HEAD_SHA"
+
+          # Parent commit of the latest commit
+          PARENT_SHA=$(git rev-parse "${HEAD_SHA}^") || true
+
+          if [ -z "$PARENT_SHA" ]; then
+            echo "Only one commit found; using initial commit diff."
+            # If no parent (edge case), compare against empty tree
+            git diff --patch $(git hash-object -t tree /dev/null) "$HEAD_SHA" > pr.diff || true
+          else
+            git diff --patch "$PARENT_SHA" "$HEAD_SHA" > pr.diff || true
+          fi
+
+          # Split diff by file to avoid huge payloads
+          csplit -s -f chunk_ -b "%03d.diff" pr.diff '/^diff --git /' '{*}' || true
+          [ -s chunk_000.diff ] || rm -f chunk_000.diff
+          echo "chunks=$(ls -1 chunk_*.diff 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
+
+      - name: Build prompt header
+        id: header
+        run: |
+          TITLE=$(jq -r .title pr.json)
+          BODY=$(jq -r .body pr.json)
+          HEAD=$(jq -r .headRefName pr.json)
+          BASE=$(jq -r .baseRefName pr.json)
+          AUTHOR=$(jq -r .author.login pr.json)
+
+          cat > prompt_header.txt <<'EOF'
+You are a senior staff engineer performing a code review for ONLY the latest commit in this PR.
+Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX.
+Be specific; cite filenames and line ranges from the provided diff hunks.
+Return two sections: BLOCKERS (must-fix) and NON-BLOCKING (nits).
+Hard caps: max 10 findings total, ≤3 per file. If more exist, end with "Overflow: <approximate count>".
+EOF
+
+          {
+            echo "PR Title: ${TITLE}"
+            echo "Branch: ${HEAD} -> ${BASE}"
+            echo "Author: ${AUTHOR}"
+            echo
+            echo "PR Description:"
+            echo "${BODY}"
+          } > pr_context.txt
+
+      - name: Review chunks with GPT-5
+        id: review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # Validate API key
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "ERROR: OPENAI_API_KEY not configured"
+            exit 1
+          fi
+
+          echo "## 🤖 AI Code Review (Latest Commit Only)" > review.md
+          echo >> review.md
+
+          review_one() {
+            FILE="$1"
+            # Cap each chunk to ~MAX_CHUNK_BYTES
+            split -b "${MAX_CHUNK_BYTES}" -a 2 -d "$FILE" "${FILE}."
+            for part in ${FILE}.*; do
+              [ -s "$part" ] || continue
+              DIFF_CONTENT=$(jq -Rs . < "$part")
+              HEADER=$(jq -Rs . < prompt_header.txt)
+              CONTEXT=$(jq -Rs . < pr_context.txt)
+
+              ATTEMPTS=0
+              while :; do
+                RESP=$(curl -sS -X POST "$LLM_API_BASE/responses" \
+                  -H "Authorization: Bearer $OPENAI_API_KEY" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \"model\": \"${LLM_MODEL}\",
+                    \"temperature\": ${TEMPERATURE},
+                    \"input\": [
+                      {\"role\": \"system\", \"content\": ${HEADER}},
+                      {\"role\": \"user\", \"content\": ${CONTEXT}},
+                      {\"role\": \"user\", \"content\": \"Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets.\"},
+                      {\"role\": \"user\", \"content\": ${DIFF_CONTENT}}
+                    ],
+                    \"max_output_tokens\": 1800
+                  }")
+
+                # Check for API error first
+                if echo "$RESP" | jq -e '.error' >/dev/null 2>&1; then
+                  ERR_MSG=$(echo "$RESP" | jq -r '.error.message // "unknown error"')
+                  echo "> API error: $ERR_MSG" >> review.md
+                  exit 0
+                fi
+
+                TEXT=$(echo "$RESP" | jq -r '.output[0].content[0].text // empty')
+
+                if [ -n "$TEXT" ]; then
+                  echo "$TEXT" >> review.md
+                  echo >> review.md
+                  break
+                fi
+
+                ATTEMPTS=$((ATTEMPTS+1))
+                if [ $ATTEMPTS -ge 3 ]; then
+                  echo "> (LLM error after retries on chunk ${part})" >> review.md
+                  break
+                fi
+                sleep $((ATTEMPTS*2))
+              done
+            done
+          }
+
+          shopt -s nullglob
+          for f in chunk_*.diff; do
+            echo "### File chunk: $f" >> review.md
+            review_one "$f"
+          done
+
+          if ! grep -q '[A-Za-z0-9]' review.md; then
+            echo "_No diff content to review or all chunks failed._" >> review.md
+          fi
+
+      - name: Post PR comment
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: |
+          PR=${{ steps.prnum.outputs.num }}
+          gh pr comment "$PR" --body-file review.md
+
+      - name: Add ai-reviewed label
+        if: always()
+        env: { GH_TOKEN: ${{ github.token }} }
+        run: |
+          PR=${{ steps.prnum.outputs.num }}
+          gh pr edit "$PR" --add-label "ai-reviewed" || true
