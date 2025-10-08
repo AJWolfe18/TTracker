@@ -48,7 +48,10 @@
       "Bash(sed:*)",
       "Bash(git add:*)"
     ],
-    "deny": [],
+    "deny": [
+      "Bash(git checkout main)",
+      "Bash(git push origin main)"
+    ],
     "ask": []
   },
   "mcpServers": {

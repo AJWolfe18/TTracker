@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL BRANCH RULES ⚠️
+
+### 🚨 NEVER TOUCH MAIN BRANCH 🚨
+- **ALWAYS WORK ON `test` BRANCH**
+- **NEVER `git checkout main`**
+- **NEVER `git push origin main`** (unless explicitly told)
+- **NEVER edit files on main branch**
+
+### ✅ Correct workflow:
+1. Always work on `test` branch
+2. Commit to `test` branch
+3. Push to `test` branch
+4. User will handle main branch deployments
+
+### ❌ If you touch main branch, the user will be pissed
+
+---
+
 ## Project Context
 
 **TrumpyTracker** is an AI-powered political accountability tracker that aggregates news from RSS feeds, clusters related articles into stories, and enriches them with AI summaries.
