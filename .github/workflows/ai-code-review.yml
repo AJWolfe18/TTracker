@@ -121,7 +121,6 @@ jobs:
           PROBE=$(jq -n --arg model "${LLM_MODEL}" '
             {
               model: $model,
-              text: { format: "markdown" },
               max_output_tokens: 16,
               input: "ping"
             }
@@ -175,7 +174,6 @@ jobs:
               --argjson diff "$DIFF_CONTENT" '
               {
                 model: $model,
-                text: { format: "markdown" },
                 max_output_tokens: 8000,
                 input: [
                   {role:"system", content:[{type:"input_text", text: $header}]},
