@@ -119,7 +119,7 @@ jobs:
           set -e
           # Minimal, spec-compliant probe (string input)
           PROBE=$(jq -n --arg model "${LLM_MODEL}" '
-            { model: $model, input: "ping", max_output_tokens: 5 }
+            { model: $model, input: "ping", max_output_tokens: 16 }
           ')
 
           RESP_FILE=$(mktemp)
