@@ -117,9 +117,15 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -e
-          # Minimal, spec-compliant probe (string input)
+          # Minimal probe matching review payload structure
           PROBE=$(jq -n --arg model "${LLM_MODEL}" '
-            { model: $model, input: "ping", max_output_tokens: 16 }
+            {
+              model: $model,
+              modalities: ["text"],
+              text: { format: "markdown" },
+              max_output_tokens: 16,
+              input: "ping"
+            }
           ')
 
           RESP_FILE=$(mktemp)
@@ -171,13 +177,13 @@ jobs:
               {
                 model: $model,
                 modalities: ["text"],
-                text: { format: "text" },
+                text: { format: "markdown" },
                 max_output_tokens: 8000,
                 input: [
-                  {role:"system", content:[{type:"input_text", text: ( $header )}]},
-                  {role:"user",   content:[{type:"input_text", text: ( $context )}]},
+                  {role:"system", content:[{type:"input_text", text: $header}]},
+                  {role:"user",   content:[{type:"input_text", text: $context}]},
                   {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets. Hard cap: 10 findings total, ≤3 per file. Output sections: BLOCKERS and NON-BLOCKING."}]},
-                  {role:"user",   content:[{type:"input_text", text: ( $diff )}]}
+                  {role:"user",   content:[{type:"input_text", text: $diff}]}
                 ]
               }')
 
