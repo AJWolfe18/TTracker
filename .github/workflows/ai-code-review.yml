@@ -85,11 +85,31 @@ jobs:
           BASE=$(jq -r .baseRefName pr.json)
           AUTHOR=$(jq -r .author.login pr.json)
 
-          echo "You are a senior staff engineer performing a code review for ONLY the latest commit in this PR." > prompt_header.txt
-          echo "Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX." >> prompt_header.txt
-          echo "Be specific; cite filenames and line ranges from the provided diff hunks." >> prompt_header.txt
-          echo "Return two sections: BLOCKERS (must-fix) and NON-BLOCKING (nits)." >> prompt_header.txt
-          echo "Hard caps: max 10 findings total, ≤3 per file. If more exist, end with \"Overflow: <approximate count>\"." >> prompt_header.txt
+          cat > prompt_header.txt <<'EOF'
+Role: Senior Staff Engineer reviewer
+Scope: Review ONLY the latest commit (diff provided). Do not discuss files not shown.
+Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX
+Constraints:
+- Cite filename:line ranges for every finding.
+- Max 10 findings total, ≤3 per file.
+- Prefer surgical, copy-pasteable patch suggestions.
+
+Repo context for relevance:
+- Project: TrumpyTracker (RSS + Story clustering). TEST env only, cost cap <$50/mo.
+- Stack: Node.js (ESM), Supabase (Postgres), vanilla JS frontend, Netlify static hosting.
+- Style: small pure functions, early returns, cursor pagination (NO offset), UTC timestamps.
+- Security: never log secrets; SQL must be parameterized; RLS respected; idempotent jobs via (job_type,payload_hash) unique.
+- UX: keep dashboards responsive; avoid heavy client bundles.
+
+Output format (JSON in markdown code block):
+```json
+{
+  "BLOCKERS": [{"file": "path/to/file.js", "lines": "128-140", "type": "security|bug|perf", "why": "explanation", "patch": "suggested fix"}],
+  "NON_BLOCKING": [{"file": "path/to/file.js", "lines": "50-52", "type": "style|test", "why": "explanation", "patch": "suggested fix"}]
+}
+```
+If nothing to report, return empty arrays for both sections.
+EOF
 
           {
             echo "PR Title: ${TITLE}"
