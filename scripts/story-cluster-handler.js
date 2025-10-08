@@ -1,8 +1,10 @@
 /**
  * TTRC-142: Story Clustering Job Handler (ESM)
- * 
+ *
  * Handles 'story.cluster' jobs from the queue
  * Integrates with the clustering algorithm and database function
+ *
+ * Test: Verify TTRC-198 expert hardening works with GPT-5
  */
 
 import { extractPrimaryActor } from './rss/clustering.js';
