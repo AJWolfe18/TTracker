@@ -170,7 +170,7 @@ jobs:
               --argjson diff "$DIFF_CONTENT" '
               {
                 model: $model,
-                max_output_tokens: 1500,
+                max_output_tokens: 8000,
                 input: [
                   {role:"system", content:[{type:"input_text", text: ( $header )}]},
                   {role:"user",   content:[{type:"input_text", text: ( $context )}]},
@@ -203,17 +203,22 @@ jobs:
               return 1
             fi
 
-            # Debug: show response structure
-            echo "DEBUG Response for $part:" >&2
-            jq . < "$RESP_FILE" | head -50 >&2
+            # Check if response is incomplete
+            STATUS=$(jq -r '.status // "unknown"' < "$RESP_FILE")
+            if [ "$STATUS" = "incomplete" ]; then
+              REASON=$(jq -r '.incomplete_details.reason // "unknown"' < "$RESP_FILE")
+              echo "> Incomplete response on $part: $REASON (increase max_output_tokens)" >> review.md
+              return 1
+            fi
 
-            # Extract Responses text (handle multiple formats)
+            # Extract text from GPT-5 Responses output
+            # GPT-5 returns: .output[0].content[0].text when complete
             TEXT=$(jq -r '
               .output[0].content[0].text // .output_text // empty
             ' < "$RESP_FILE")
 
             if [ -z "$TEXT" ]; then
-              echo "> Empty model output on $part (HTTP $HTTP_CODE)" >> review.md
+              echo "> Empty model output on $part (status: $STATUS)" >> review.md
               echo "> Response structure:" >> review.md
               jq . < "$RESP_FILE" | head -20 >> review.md
               return 1
