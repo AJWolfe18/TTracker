@@ -171,7 +171,7 @@ jobs:
               {
                 model: $model,
                 modalities: ["text"],
-                response_format: { type: "text" },
+                text: { format: "text" },
                 max_output_tokens: 8000,
                 input: [
                   {role:"system", content:[{type:"input_text", text: ( $header )}]},
