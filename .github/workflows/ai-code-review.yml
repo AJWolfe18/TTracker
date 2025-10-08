@@ -171,6 +171,7 @@ jobs:
               {
                 model: $model,
                 max_output_tokens: 8000,
+                reasoning: {effort: "none"},
                 input: [
                   {role:"system", content:[{type:"input_text", text: ( $header )}]},
                   {role:"user",   content:[{type:"input_text", text: ( $context )}]},
