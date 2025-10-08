@@ -203,6 +203,10 @@ jobs:
               return 1
             fi
 
+            # Debug: show response structure
+            echo "DEBUG Response for $part:" >&2
+            jq . < "$RESP_FILE" | head -50 >&2
+
             # Extract Responses text (handle multiple formats)
             TEXT=$(jq -r '
               .output[0].content[0].text // .output_text // empty
@@ -210,6 +214,8 @@ jobs:
 
             if [ -z "$TEXT" ]; then
               echo "> Empty model output on $part (HTTP $HTTP_CODE)" >> review.md
+              echo "> Response structure:" >> review.md
+              jq . < "$RESP_FILE" | head -20 >> review.md
               return 1
             fi
 
