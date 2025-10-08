@@ -170,12 +170,13 @@ jobs:
               --argjson diff "$DIFF_CONTENT" '
               {
                 model: $model,
+                modalities: ["text"],
+                response_format: { type: "text" },
                 max_output_tokens: 8000,
-                reasoning: {effort: "none"},
                 input: [
                   {role:"system", content:[{type:"input_text", text: ( $header )}]},
                   {role:"user",   content:[{type:"input_text", text: ( $context )}]},
-                  {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets."}]},
+                  {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets. Hard cap: 10 findings total, ≤3 per file. Output sections: BLOCKERS and NON-BLOCKING."}]},
                   {role:"user",   content:[{type:"input_text", text: ( $diff )}]}
                 ]
               }')
@@ -204,24 +205,18 @@ jobs:
               return 1
             fi
 
-            # Check if response is incomplete
-            STATUS=$(jq -r '.status // "unknown"' < "$RESP_FILE")
-            if [ "$STATUS" = "incomplete" ]; then
-              REASON=$(jq -r '.incomplete_details.reason // "unknown"' < "$RESP_FILE")
-              echo "> Incomplete response on $part: $REASON (increase max_output_tokens)" >> review.md
-              return 1
-            fi
-
-            # Extract text from GPT-5 Responses output
-            # GPT-5 returns: .output[0].content[0].text when complete
+            # Extract text, preferring output_text; fallback to content array
             TEXT=$(jq -r '
-              .output[0].content[0].text // .output_text // empty
+              ( .output_text // "" ) as $ot
+              | if ($ot|type=="string" and ($ot|length)>0) then $ot
+                else ([ .output[]?.content[]? | select(.type=="output_text") | .text ] | join("\n\n"))
+                end
             ' < "$RESP_FILE")
 
+            # If still empty, show a trimmed raw body to debug (captures reasoning-only cases)
             if [ -z "$TEXT" ]; then
-              echo "> Empty model output on $part (status: $STATUS)" >> review.md
-              echo "> Response structure:" >> review.md
-              jq . < "$RESP_FILE" | head -20 >> review.md
+              echo "> Empty text output on $part (HTTP $HTTP_CODE). Raw body (first 200 lines):" >> review.md
+              sed -n '1,200p' "$RESP_FILE" >> review.md
               return 1
             fi
 
