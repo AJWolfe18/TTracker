@@ -36,7 +36,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || '' }}
+          # Only set ref when event has pull_request context
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
 
       - name: Ensure we have PR metadata
         id: meta
@@ -99,75 +100,148 @@ jobs:
             echo "${BODY}"
           } > pr_context.txt
 
+      - name: Validate API key & model access
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -e
+          [ -n "$OPENAI_API_KEY" ] || { echo "OPENAI_API_KEY missing"; exit 1; }
+          # cheap model probe (don't spam): list once
+          curl -sS --connect-timeout 10 --max-time 20 \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            "$LLM_API_BASE/models" >/dev/null || {
+              echo "⚠️ Unable to reach $LLM_API_BASE/models"; exit 1; }
+
+      - name: Probe Responses API (lightweight)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -e
+          PROBE=$(jq -n --arg model "${LLM_MODEL}" '{model:$model, input:[{role:"user", content:"ping"}], max_output_tokens: 5, response_format:{type:"text"}}')
+          HTTP=$(curl -sS --fail-with-body --connect-timeout 10 --max-time 20 \
+            -X POST "$LLM_API_BASE/responses" \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$PROBE" -w "%{http_code}" -o /dev/null || true)
+          [ "$HTTP" = "200" ] || { echo "Responses probe failed (HTTP $HTTP)"; exit 1; }
+
       - name: Review chunks with GPT-5
         id: review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          # Validate API key
-          if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "ERROR: OPENAI_API_KEY not configured"
-            exit 1
-          fi
-
           echo "## 🤖 AI Code Review (Latest Commit Only)" > review.md
           echo >> review.md
 
-          review_one() {
-            FILE="$1"
-            # Cap each chunk to ~MAX_CHUNK_BYTES
-            split -b "${MAX_CHUNK_BYTES}" -a 2 -d "$FILE" "${FILE}."
-            for part in ${FILE}.*; do
-              [ -s "$part" ] || continue
-              DIFF_CONTENT=$(jq -Rs . < "$part")
-              HEADER=$(jq -Rs . < prompt_header.txt)
-              CONTEXT=$(jq -Rs . < pr_context.txt)
+          call_llm() {
+            local part="$1"
+            local DIFF_CONTENT HEADER CONTEXT PAYLOAD RESP_FILE HTTP_CODE TEXT
 
-              ATTEMPTS=0
-              while :; do
-                RESP=$(curl -sS -X POST "$LLM_API_BASE/responses" \
-                  -H "Authorization: Bearer $OPENAI_API_KEY" \
-                  -H "Content-Type: application/json" \
-                  -d "{
-                    \"model\": \"${LLM_MODEL}\",
-                    \"input\": [
-                      {\"role\": \"system\", \"content\": ${HEADER}},
-                      {\"role\": \"user\", \"content\": ${CONTEXT}},
-                      {\"role\": \"user\", \"content\": \"Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets.\"},
-                      {\"role\": \"user\", \"content\": ${DIFF_CONTENT}}
-                    ],
-                    \"max_output_tokens\": 1800
-                  }")
+            DIFF_CONTENT=$(jq -Rs . < "$part")
+            HEADER=$(jq -Rs . < prompt_header.txt)
+            CONTEXT=$(jq -Rs . < pr_context.txt)
 
-                # Check for API error first
-                if echo "$RESP" | jq -e '.error' >/dev/null 2>&1; then
-                  ERR_MSG=$(echo "$RESP" | jq -r '.error.message // "unknown error"')
-                  echo "> API error: $ERR_MSG" >> review.md
-                  exit 0
-                fi
+            # Build Responses payload (no temperature for gpt-5)
+            # Make 'reasoning' optional via env switch; default OFF to avoid 400s.
+            if [ "${LLM_REASONING_EFFORT:-off}" = "low" ]; then
+              PAYLOAD=$(jq -n \
+                --arg model "${LLM_MODEL}" \
+                --argjson header "$HEADER" \
+                --argjson context "$CONTEXT" \
+                --argjson diff "$DIFF_CONTENT" '
+                {
+                  model: $model,
+                  response_format: { type: "text" },
+                  reasoning: { effort: "low" },
+                  max_output_tokens: 1500,
+                  input: [
+                    {role:"system", content: $header},
+                    {role:"user", content: $context},
+                    {role:"user", content: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets."},
+                    {role:"user", content: $diff}
+                  ]
+                }')
+            else
+              PAYLOAD=$(jq -n \
+                --arg model "${LLM_MODEL}" \
+                --argjson header "$HEADER" \
+                --argjson context "$CONTEXT" \
+                --argjson diff "$DIFF_CONTENT" '
+                {
+                  model: $model,
+                  response_format: { type: "text" },
+                  max_output_tokens: 1500,
+                  input: [
+                    {role:"system", content: $header},
+                    {role:"user", content: $context},
+                    {role:"user", content: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets."},
+                    {role:"user", content: $diff}
+                  ]
+                }')
+            fi
 
-                TEXT=$(echo "$RESP" | jq -r '.output[0].content[0].text // empty')
+            # Call with strong timeouts + retries and capture status + body separately
+            RESP_FILE=$(mktemp)
+            HTTP_CODE=$(
+              timeout 140s curl -sS --fail-with-body \
+                --connect-timeout 10 --max-time 120 \
+                --retry 2 --retry-delay 2 --retry-connrefused \
+                -X POST "$LLM_API_BASE/responses" \
+                -H "Authorization: Bearer $OPENAI_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD" \
+                -w "%{http_code}" -o "$RESP_FILE" || true
+            )
 
-                if [ -n "$TEXT" ]; then
-                  echo "$TEXT" >> review.md
-                  echo >> review.md
-                  break
-                fi
+            # Non-2xx ⇒ show the JSON error (don't swallow it)
+            if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              echo "> API error on $part (HTTP ${HTTP_CODE:-unknown}):" >> review.md
+              if jq -e .error >/dev/null 2>&1 < "$RESP_FILE"; then
+                jq -r '.error | "  type: \(.type // "n/a")\n  message: \(.message // "n/a")"' < "$RESP_FILE" >> review.md
+              else
+                sed -n '1,200p' "$RESP_FILE" >> review.md
+              fi
+              return 1
+            fi
 
-                ATTEMPTS=$((ATTEMPTS+1))
-                if [ $ATTEMPTS -ge 3 ]; then
-                  echo "> (LLM error after retries on chunk ${part})" >> review.md
-                  break
-                fi
-                sleep $((ATTEMPTS*2))
-              done
-            done
+            # Extract Responses text (join any text segments defensively)
+            TEXT=$(jq -r '
+              if .output then
+                (.output[].content[]? | select(.type=="output_text") | .text) // empty
+              else empty end
+            ' < "$RESP_FILE")
+
+            if [ -z "$TEXT" ]; then
+              echo "> Empty model output on $part (HTTP $HTTP_CODE)" >> review.md
+              return 1
+            fi
+
+            echo "$TEXT" >> review.md
+            echo >> review.md
           }
 
           shopt -s nullglob
           for f in chunk_*.diff; do
             echo "### File chunk: $f" >> review.md
-            review_one "$f"
+
+            # Split to MAX_CHUNK_BYTES subparts
+            split -b "${MAX_CHUNK_BYTES}" -a 2 -d "$f" "$f."
+            for part in $f.*; do
+              [ -s "$part" ] || continue
+              tries=0
+              until call_llm "$part"; do
+                tries=$((tries+1))
+                [ $tries -ge 3 ] && { echo "> (Giving up on $part)"; break; }
+                sleep $((tries*2))
+              done
+
+              # Circuit breaker (improved counting)
+              FINDINGS=$(grep -E '^(### |[-*] )' review.md | wc -l | tr -d ' ')
+              if [ "$FINDINGS" -gt 10 ]; then
+                echo "> (Hit findings cap; summarizing rest…)" >> review.md
+                break 2
+              fi
+            done
           done
 
           if ! grep -q '[A-Za-z0-9]' review.md; then
