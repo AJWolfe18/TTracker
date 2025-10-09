@@ -131,7 +131,14 @@
     // Get unique categories from stories
     const uniqueCategories = useMemo(() => {
       const cats = new Set(allStories.map(s => s.category).filter(Boolean));
-      return Array.from(cats).sort();
+      const sortedCats = Array.from(cats).sort();
+      // Move 'other' to the end if it exists
+      const otherIndex = sortedCats.indexOf('other');
+      if (otherIndex > -1) {
+        sortedCats.splice(otherIndex, 1);
+        sortedCats.push('other');
+      }
+      return sortedCats;
     }, [allStories]);
 
     const storyList = useMemo(() => displayedStories, [displayedStories]);
@@ -182,7 +189,7 @@
             'button',
             {
               onClick: () => { setSelectedCategory('all'); setPage(1); },
-              className: `px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              className: `px-3 py-1 rounded-full text-xs font-medium transition-all ${
                 selectedCategory === 'all'
                   ? 'bg-blue-600 text-white'
                   : 'bg-white text-gray-800 border border-gray-300 hover:border-blue-500'
@@ -197,7 +204,7 @@
               {
                 key: cat,
                 onClick: () => { setSelectedCategory(cat); setPage(1); },
-                className: `px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                className: `px-3 py-1 rounded-full text-xs font-medium transition-all ${
                   selectedCategory === cat
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-800 border border-gray-300 hover:border-blue-500'
