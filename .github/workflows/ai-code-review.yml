@@ -102,13 +102,8 @@ Repo context for relevance:
 - Security: never log secrets; SQL must be parameterized; RLS respected; idempotent jobs via (job_type,payload_hash) unique.
 - UX: keep dashboards responsive; avoid heavy client bundles.
 
-Output format (JSON in markdown code block):
-```json
-{
-  "BLOCKERS": [{"file": "path/to/file.js", "lines": "128-140", "type": "security|bug|perf", "why": "explanation", "patch": "suggested fix"}],
-  "NON_BLOCKING": [{"file": "path/to/file.js", "lines": "50-52", "type": "style|test", "why": "explanation", "patch": "suggested fix"}]
-}
-```
+Output format: Return JSON with two arrays - BLOCKERS and NON_BLOCKING.
+Each finding should have: file, lines, type, why, and patch fields.
 If nothing to report, return empty arrays for both sections.
 EOF
 
