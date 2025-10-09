@@ -3,6 +3,7 @@ name: AI Code Review (Latest Commit Only)
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    branches: [main, test]
   workflow_dispatch:
     inputs:
       pr_number:
