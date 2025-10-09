@@ -411,9 +411,6 @@ const TrumpyTrackerDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Construction Banner */}
-        <ConstructionBanner />
-        
         {/* Hero Header with Logo */}
         <header className="text-center mb-8">
           <div className="flex items-center justify-center mb-6">
@@ -448,7 +445,7 @@ const TrumpyTrackerDashboard = () => {
                 <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
                   TRUMPYTRACKER
                 </h1>
-                <p className="text-gray-300 text-lg">Real-time Political Accountability Dashboard</p>
+                <p className="text-gray-300 text-lg">Tracking the Corruption. Every Damn Day.</p>
               </div>
             </div>
           </div>
