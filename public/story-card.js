@@ -75,7 +75,7 @@
   /**
    * SourcesModal - Accessible modal showing all sources for a story
    */
-  function SourcesModal({ story, grouped, onClose, error }) {
+  function SourcesModal({ story, grouped, onClose, error, onRetry }) {
     const trapRef = useRef(null);
     
     useEffect(() => {
@@ -131,13 +131,42 @@
           ),
           error && React.createElement(
             'div',
-            { className: 'tt-modal-note', style: { color: '#ef4444' } },
-            error
+            {
+              className: 'tt-error',
+              style: { marginTop: 0 }
+            },
+            React.createElement('span', null, error),
+            React.createElement(
+              'button',
+              {
+                className: 'tt-btn',
+                onClick: onRetry
+              },
+              'Retry'
+            )
           ),
           grouped.length === 0 && !error && React.createElement(
             'div',
-            { className: 'tt-modal-note' },
-            'No sources available for this story yet.'
+            {
+              className: 'tt-modal-note',
+              style: {
+                color: '#64748b',
+                textAlign: 'center',
+                padding: '24px 16px'
+              }
+            },
+            React.createElement('p', { style: { margin: 0 } }, 'No sources available for this story.'),
+            React.createElement(
+              'p',
+              {
+                style: {
+                  margin: '4px 0 0 0',
+                  fontSize: '12px',
+                  color: '#94a3b8'
+                }
+              },
+              'This may be a manually created entry.'
+            )
           ),
           grouped.map(([source, articles]) => {
             const latest = articles[0] || {};
@@ -361,7 +390,7 @@
         React.createElement(
           'p',
           { className: 'tt-summary' },
-          story.summary_spicy || 'No summary available.'
+          story.summary_spicy || story.summary_neutral || story.primary_headline || 'No summary available.'
         ),
 
         React.createElement(
@@ -434,7 +463,22 @@
           story,
           grouped: groupedSources,
           onClose: () => setShowSources(false),
-          error: articleError
+          error: articleError,
+          onRetry: () => {
+            setArticleError(null);
+            setArticles([]);
+            setLoadingArticles(true);
+            fetchStoryArticles(story.id)
+              .then(fetchedArticles => {
+                setArticles(fetchedArticles || []);
+                setArticleError(null);
+              })
+              .catch(error => {
+                console.error('Failed to load story articles:', error);
+                setArticleError('Failed to load sources. Please try again.');
+              })
+              .finally(() => setLoadingArticles(false));
+          }
         })
     );
   }
