@@ -4,7 +4,7 @@
 .tt-feed {
   max-width: 1500px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 8px 24px 24px 24px; /* Reduced top padding from 24px to 8px */
 }
 
 /* Single Column Grid */

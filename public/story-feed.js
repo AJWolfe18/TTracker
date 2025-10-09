@@ -160,11 +160,11 @@
       // Search and Filters Section
       React.createElement(
         'div',
-        { className: 'mb-6' },
-        // Search Bar - Right aligned
+        { className: 'mb-4' },
+        // Search Bar - Left aligned
         React.createElement(
           'div',
-          { className: 'flex justify-end mb-4' },
+          { className: 'mb-3' },
           React.createElement('input', {
             type: 'text',
             placeholder: 'Search stories...',
@@ -177,11 +177,6 @@
         React.createElement(
           'div',
           { className: 'flex items-center gap-3 flex-wrap' },
-          React.createElement(
-            'span',
-            { className: 'text-gray-400 text-sm font-medium' },
-            'Filter:'
-          ),
           // All Categories Button
           React.createElement(
             'button',
