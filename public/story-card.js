@@ -1,16 +1,13 @@
-// Story Card Component - Story-first card with severity, receipts, and actions
-// Includes inline SourcesModal for viewing all article sources
+// Story Card Component - Production-style single-column card with all RSS enrichment fields
+// TTRC-193: Revert to production styling + display all enrichment data
 
 (function() {
   'use strict';
-  
-  const { useState, useMemo, useEffect, useRef } = React;
+
+  const { useState, useMemo } = React;
   const { fetchStoryArticles } = window.StoryAPI || {};
 
-  // Time ago helper - NULL SAFE
-  // TIMEZONE NOTE: Assumes published_at is ISO UTC from API (standard)
-  // Relative time computed against Date.now() (browser local time)
-  // If timestamps aren't normalized, convert server-side with 'Z' suffix
+  // Time ago helper
   function timeAgo(iso) {
     if (!iso) return '—';
     const ms = Date.now() - new Date(iso).getTime();
@@ -24,7 +21,7 @@
       [3600, 'h'],
       [60, 'm']
     ];
-    
+
     for (const [sec, unit] of intervals) {
       if (s >= sec) {
         return `${Math.floor(s / sec)}${unit} ago`;
@@ -33,29 +30,12 @@
     return `${s}s ago`;
   }
 
-  // Severity configuration matching TTRC-145 requirements
-  const SEVERITY_CONFIG = {
-    critical: { 
-      label: 'FUCKING TREASON',  
-      ribbon: '#fecaca', 
-      badge: '#dc2626' 
-    },
-    severe: { 
-      label: 'CRIMINAL BULLSHIT', 
-      ribbon: '#fed7aa', 
-      badge: '#ea580c' 
-    },
-    moderate: { 
-      label: 'SWAMP SHIT',        
-      ribbon: '#fde68a', 
-      badge: '#ca8a04' 
-    },
-    minor: { 
-      label: 'CLOWN SHOW',        
-      ribbon: '#bbf7d0', 
-      badge: '#16a34a' 
-    }
-  };
+  // Format date helper (matches production)
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 
   // Category labels matching 11-category system
   const CATEGORY_LABELS = {
@@ -73,142 +53,107 @@
   };
 
   /**
-   * SourcesModal - Accessible modal showing all sources for a story
+   * SourcesModal - Modal for viewing all sources with error handling
    */
   function SourcesModal({ story, grouped, onClose, error, onRetry }) {
-    const trapRef = useRef(null);
-    
-    useEffect(() => {
-      const previouslyFocused = document.activeElement;
-      setTimeout(() => trapRef.current?.focus(), 0);
-      
-      function handleKeyDown(e) {
-        if (e.key === 'Escape') onClose();
-      }
-      
-      document.addEventListener('keydown', handleKeyDown);
-      
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-        previouslyFocused && previouslyFocused.focus?.();
-      };
-    }, [onClose]);
-
     return React.createElement(
       'div',
       {
-        className: 'tt-modal-overlay',
-        role: 'dialog',
-        'aria-modal': 'true',
-        onClick: (e) => {
-          if (e.target === e.currentTarget) onClose();
-        }
+        className: 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4',
+        onClick: (e) => e.target === e.currentTarget && onClose()
       },
       React.createElement(
         'div',
-        { className: 'tt-modal', tabIndex: -1, ref: trapRef, 'aria-labelledby': 'sources-modal-title' },
+        {
+          className: 'bg-gray-800 rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 border border-gray-700'
+        },
+        // Header
         React.createElement(
           'div',
-          { className: 'tt-modal-header' },
-          React.createElement('h3', { className: 'tt-modal-title', id: 'sources-modal-title' }, 'Sources'),
+          { className: 'flex justify-between items-start mb-4' },
+          React.createElement(
+            'h3',
+            { className: 'text-xl font-bold text-white' },
+            'Sources'
+          ),
           React.createElement(
             'button',
             {
-              className: 'tt-modal-close',
               onClick: onClose,
-              'aria-label': 'Close'
+              className: 'text-gray-400 hover:text-white text-2xl leading-none'
             },
             '×'
           )
         ),
-        React.createElement(
+
+        // Error State
+        error && React.createElement(
           'div',
-          { className: 'tt-modal-body' },
+          {
+            className: 'bg-red-500/10 border border-red-500 rounded p-4 mb-4'
+          },
           React.createElement(
-            'div',
-            { className: 'tt-modal-headline' },
-            story.primary_headline
+            'p',
+            { className: 'text-red-400 mb-2' },
+            error
           ),
-          error && React.createElement(
-            'div',
+          React.createElement(
+            'button',
             {
-              className: 'tt-error',
-              style: { marginTop: 0 }
+              onClick: onRetry,
+              className: 'px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors'
             },
-            React.createElement('span', null, error),
-            React.createElement(
-              'button',
-              {
-                className: 'tt-btn',
-                onClick: onRetry
-              },
-              'Retry'
-            )
+            'Retry'
+          )
+        ),
+
+        // Empty State
+        !error && grouped.length === 0 && React.createElement(
+          'div',
+          { className: 'text-center py-8' },
+          React.createElement(
+            'p',
+            { className: 'text-gray-400 mb-2' },
+            'No sources available for this story.'
           ),
-          grouped.length === 0 && !error && React.createElement(
-            'div',
-            {
-              className: 'tt-modal-note',
-              style: {
-                color: '#64748b',
-                textAlign: 'center',
-                padding: '24px 16px'
-              }
-            },
-            React.createElement('p', { style: { margin: 0 } }, 'No sources available for this story.'),
+          React.createElement(
+            'p',
+            { className: 'text-gray-500 text-sm' },
+            'This may be a manually created entry.'
+          )
+        ),
+
+        // Sources List
+        !error && grouped.length > 0 && React.createElement(
+          'div',
+          { className: 'space-y-4' },
+          grouped.map(([sourceName, articles]) =>
             React.createElement(
-              'p',
-              {
-                style: {
-                  margin: '4px 0 0 0',
-                  fontSize: '12px',
-                  color: '#94a3b8'
-                }
-              },
-              'This may be a manually created entry.'
-            )
-          ),
-          grouped.map(([source, articles]) => {
-            const latest = articles[0] || {};
-            return React.createElement(
               'div',
-              { key: source, className: 'tt-source-row' },
+              { key: sourceName, className: 'border-l-2 border-gray-600 pl-4' },
+              React.createElement(
+                'h4',
+                { className: 'font-bold text-white mb-2' },
+                `${sourceName} (${articles.length})`
+              ),
               React.createElement(
                 'div',
-                null,
-                React.createElement('div', { className: 'tt-source-name' }, source),
-                React.createElement(
-                  'div',
-                  { className: 'tt-source-meta' },
-                  `${timeAgo(latest.published_at)} • ${articles.length} article${articles.length > 1 ? 's' : ''}`
-                ),
-                React.createElement(
-                  'div',
-                  { className: 'tt-source-title' },
-                  latest.title || ''
+                { className: 'space-y-2' },
+                articles.map((article, idx) =>
+                  React.createElement(
+                    'a',
+                    {
+                      key: idx,
+                      href: article.url,
+                      target: '_blank',
+                      rel: 'noopener noreferrer',
+                      className: 'block text-blue-400 hover:text-blue-300 text-sm'
+                    },
+                    article.title || 'Untitled'
+                  )
                 )
-              ),
-              latest.url ? React.createElement(
-                'a',
-                {
-                  className: 'tt-source-link',
-                  href: latest.url,
-                  target: '_blank',
-                  rel: 'noopener noreferrer',
-                  'data-test': 'source-article'
-                },
-                'Read ↗'
-              ) : React.createElement(
-                'span',
-                { className: 'tt-source-meta' },
-                'No link'
               )
-            );
-          }),
-          grouped.length > 0 && React.createElement(
-            'div',
-            { className: 'tt-modal-note' },
-            'Showing latest link per source. Open to view full coverage.'
+            )
           )
         )
       )
@@ -216,61 +161,60 @@
   }
 
   /**
-   * StoryCard - Main card component for displaying a story
+   * StoryCard - Production-style single-column card with all enrichment fields
    */
-  function StoryCard({ story, onShare }) {
-    // GUARD: Ensure valid story object with ID
-    if (!story || !story.id) {
-      console.error('StoryCard: Invalid story object', story);
-      return null;
-    }
-
+  function StoryCard({ story, index = 0 }) {
     const [expanded, setExpanded] = useState(false);
     const [showSources, setShowSources] = useState(false);
     const [articles, setArticles] = useState([]);
     const [loadingArticles, setLoadingArticles] = useState(false);
     const [articleError, setArticleError] = useState(null);
 
-    const severity = SEVERITY_CONFIG[story.severity] || SEVERITY_CONFIG.moderate;
-    const categoryLabel = CATEGORY_LABELS[story.category] || 'Other';
+    // Summary fallback chain: spicy → neutral → headline
+    const displaySummary = story.summary_spicy || story.summary_neutral || story.primary_headline || 'No summary available.';
+    const hasLongSummary = displaySummary?.length > 200;
 
-    // Use fetched articles (will be empty array until lazy-loaded)
-    const safeArticles = articles;
+    // Get category label
+    const categoryLabel = CATEGORY_LABELS[story.category] || 'Uncategorized';
 
-    // Sort articles by published date (newest first) - NULL SAFE
-    const sortedArticles = useMemo(() => {
-      return [...safeArticles].sort((a, b) => 
-        new Date(b?.published_at || 0) - new Date(a?.published_at || 0)
-      );
-    }, [safeArticles]);
+    // Get severity label
+    const getSeverityLabel = () => {
+      const severityMap = {
+        'critical': 'Fucking Treason',
+        'severe': 'Criminal Bullshit',
+        'moderate': 'Swamp Shit',
+        'minor': 'Clown Show'
+      };
+      return severityMap[story.severity?.toLowerCase()] || '';
+    };
 
-    // Group articles by source name - NULL SAFE
+    const sortedArticles = useMemo(
+      () =>
+        (articles || []).sort((a, b) => {
+          if (a.is_primary_source !== b.is_primary_source) {
+            return b.is_primary_source - a.is_primary_source;
+          }
+          return (b.similarity_score || 0) - (a.similarity_score || 0);
+        }),
+      [articles]
+    );
+
     const groupedSources = useMemo(() => {
-      const sourceMap = new Map();
-      sortedArticles.forEach(article => {
-        const sourceName = article?.source_name || 'Other';
-        if (!sourceMap.has(sourceName)) {
-          sourceMap.set(sourceName, []);
-        }
-        sourceMap.get(sourceName).push(article);
+      const groups = {};
+      sortedArticles.forEach((a) => {
+        const name = a.source_name || 'Unknown';
+        (groups[name] = groups[name] || []).push(a);
       });
-      return Array.from(sourceMap.entries()).sort((a, b) => 
-        a[0].localeCompare(b[0])
-      );
+      return Object.entries(groups);
     }, [sortedArticles]);
 
-    const shareUrl = `${location.href.split('#')[0]}#${story.id}`;
+    const handleViewSources = async () => {
+      if (!fetchStoryArticles) return;
+      // Guard: Don't fetch if already loading or loaded
+      if (articles.length > 0 || loadingArticles) return;
 
-    // Lazy-load articles when "View Sources" is clicked
-    async function handleViewSources() {
-      setShowSources(true);
-      
-      // Skip fetch if articles already loaded or currently loading
-      if (articles.length > 0 || loadingArticles || !fetchStoryArticles) {
-        return;
-      }
-      
       setLoadingArticles(true);
+      setShowSources(true);
       try {
         const fetchedArticles = await fetchStoryArticles(story.id);
         setArticles(fetchedArticles || []);
@@ -281,204 +225,131 @@
       } finally {
         setLoadingArticles(false);
       }
-    }
+    };
 
-    // HARDENED: Share with fallbacks for older browsers
-    async function handleShare() {
-      const url = shareUrl;
-      const payload = { title: 'TrumpyTracker Story', text: story.primary_headline, url };
-      
-      // Try native share first
-      if (navigator.share) {
-        try {
-          await navigator.share(payload);
-          return;
-        } catch (err) {
-          // User cancelled or error - fall through to clipboard
-        }
-      }
-      
-      // Clipboard fallback
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(url);
-        } else {
-          // Legacy copy method
-          const textarea = document.createElement('textarea');
-          textarea.value = url;
-          textarea.style.position = 'fixed';
-          textarea.style.opacity = '0';
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textarea);
-        }
-      } catch (err) {
-        console.error('Share/copy failed:', err);
-      }
-    }
+    const handleRetry = () => {
+      setArticleError(null);
+      setArticles([]);
+      setLoadingArticles(true);
+      fetchStoryArticles(story.id)
+        .then(fetchedArticles => {
+          setArticles(fetchedArticles || []);
+          setArticleError(null);
+        })
+        .catch(error => {
+          console.error('Failed to load story articles:', error);
+          setArticleError('Failed to load sources. Please try again.');
+        })
+        .finally(() => setLoadingArticles(false));
+    };
 
+    // Production-style card with dark theme and all enrichment fields
     return React.createElement(
-      'section',
+      'div',
       {
-        className: 'tt-card',
-        style: { borderTop: `3px solid ${severity.ribbon}` },
-        'aria-labelledby': `story-${story.id}-title`,
-        'data-test': 'story-card'
+        className: 'bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl',
+        style: {
+          animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
+          animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
+        }
       },
+
+      // Title First
+      React.createElement(
+        'h3',
+        { className: 'text-lg font-bold text-white mb-3' },
+        story.primary_headline
+      ),
+
+      // Metadata Line: Actor • Date • Source Count
       React.createElement(
         'div',
-        {
-          className: 'tt-card-head',
-          onClick: () => setExpanded(v => !v),
-          role: 'button',
-          'aria-expanded': expanded,
-          tabIndex: 0,
-          onKeyPress: (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setExpanded(v => !v);
-            }
-          }
-        },
+        { className: 'flex items-center gap-2 text-sm text-gray-400 mb-3' },
+        story.primary_actor && React.createElement('span', null, story.primary_actor),
+        story.primary_actor && story.last_updated_at && React.createElement('span', null, '•'),
         React.createElement(
-          'div',
-          { className: 'tt-card-headline' },
-          React.createElement(
-            'h2',
-            { id: `story-${story.id}-title` },
-            story.primary_headline
-          ),
-          React.createElement(
-            'div',
-            { className: 'tt-meta' },
-            React.createElement(
-              'span',
-              { className: 'tt-badge', style: { background: severity.badge } },
-              severity.label
-            ),
-            React.createElement('span', null, ` • ${categoryLabel}`),
-            React.createElement('span', null, ` • ${story.source_count ?? 0} sources`),
-            React.createElement(
-              'span',
-              { title: story.last_updated_at ? new Date(story.last_updated_at).toLocaleString() : '' },
-              ` • Updated ${timeAgo(story.last_updated_at)}`
-            ),
-            story.status && React.createElement(
-              'span',
-              { className: 'tt-status' },
-              story.status === 'active' ? 'Active' : 'Closed'
-            )
-          )
+          'span',
+          { title: story.last_updated_at ? new Date(story.last_updated_at).toLocaleString() : '' },
+          `Updated ${timeAgo(story.last_updated_at)}`
         ),
+        React.createElement('span', null, '•'),
         React.createElement(
-          'div',
+          'button',
           {
-            className: `tt-chevron ${expanded ? 'rot' : ''}`,
-            'aria-hidden': 'true'
+            onClick: handleViewSources,
+            className: 'text-blue-400 hover:text-blue-300 cursor-pointer transition-colors',
+            disabled: loadingArticles
           },
-          '⌄'
+          loadingArticles ? 'Loading...' : `${story.source_count ?? 0} sources`
         )
       ),
 
-      React.createElement(
+      // Summary with expand/collapse
+      displaySummary && React.createElement(
         'div',
-        {
-          className: `tt-card-body ${expanded ? 'open' : ''}`,
-          id: `story-${story.id}-panel`
-        },
+        { className: 'mb-4' },
         React.createElement(
           'p',
-          { className: 'tt-summary' },
-          story.summary_spicy || story.summary_neutral || story.primary_headline || 'No summary available.'
+          {
+            className: 'text-gray-100 leading-relaxed transition-all duration-300',
+            style: !expanded ? {
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            } : {}
+          },
+          displaySummary
         ),
-
-        React.createElement(
-          'div',
-          { className: 'tt-actions' },
-          // CONDITIONAL: Disable "Read Original" when no articles
-          sortedArticles.length === 0 ? (
-            React.createElement(
-              'button',
-              {
-                className: 'tt-btn tt-btn-primary',
-                disabled: true
-              },
-              'No Article Available'
-            )
-          ) : (
-            React.createElement(
-              'a',
-              {
-                className: 'tt-btn tt-btn-primary',
-                href: sortedArticles[0].url,
-                target: '_blank',
-                rel: 'noopener noreferrer'
-              },
-              'Read Original'
-            )
-          ),
-          React.createElement(
-            'button',
-            {
-              className: 'tt-btn',
-              onClick: handleViewSources,
-              'data-test': 'view-sources-btn',
-              disabled: loadingArticles
-            },
-            loadingArticles ? 'Loading...' : `View Sources (${story.source_count ?? 0})`
-          ),
-          React.createElement(
-            'button',
-            {
-              className: 'tt-btn',
-              onClick: handleShare
-            },
-            'Share'
-          )
-        ),
-
-        React.createElement(
-          'div',
-          { className: 'tt-receipts' },
-          React.createElement('strong', null, 'Receipts:'),
-          groupedSources.slice(0, 4).map(([name, articles]) =>
-            React.createElement(
-              'span',
-              { key: name, className: 'tt-chip' },
-              `${name} (${articles.length})`
-            )
-          ),
-          groupedSources.length > 4 &&
-            React.createElement(
-              'span',
-              { className: 'tt-more' },
-              `+${groupedSources.length - 4} more`
-            )
+        hasLongSummary && React.createElement(
+          'button',
+          {
+            onClick: () => setExpanded(!expanded),
+            className: 'text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors'
+          },
+          expanded ? 'Show less ↑' : 'Read more →'
         )
       ),
 
+      // Bottom Actions Bar: Severity Badge + Category
+      React.createElement(
+        'div',
+        { className: 'flex items-center justify-between' },
+        React.createElement(
+          'div',
+          { className: 'flex items-center gap-3' },
+          // Severity Badge
+          getSeverityLabel() && React.createElement(
+            'span',
+            {
+              className: `px-3 py-1 rounded-full text-xs font-bold text-white ${
+                story.severity?.toLowerCase() === 'critical' ? 'bg-red-600' :
+                story.severity?.toLowerCase() === 'severe' ? 'bg-orange-600' :
+                story.severity?.toLowerCase() === 'moderate' ? 'bg-yellow-600' :
+                story.severity?.toLowerCase() === 'minor' ? 'bg-green-600' :
+                'bg-gray-700'
+              }`
+            },
+            getSeverityLabel()
+          ),
+          // Category
+          categoryLabel && React.createElement(
+            'span',
+            { className: 'text-xs text-gray-500' },
+            categoryLabel
+          )
+        )
+      ),
+
+      // Sources Modal
       showSources &&
         React.createElement(SourcesModal, {
           story,
           grouped: groupedSources,
           onClose: () => setShowSources(false),
           error: articleError,
-          onRetry: () => {
-            setArticleError(null);
-            setArticles([]);
-            setLoadingArticles(true);
-            fetchStoryArticles(story.id)
-              .then(fetchedArticles => {
-                setArticles(fetchedArticles || []);
-                setArticleError(null);
-              })
-              .catch(error => {
-                console.error('Failed to load story articles:', error);
-                setArticleError('Failed to load sources. Please try again.');
-              })
-              .finally(() => setLoadingArticles(false));
-          }
+          onRetry: handleRetry
         })
     );
   }
