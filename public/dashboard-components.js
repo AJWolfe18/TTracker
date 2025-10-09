@@ -602,7 +602,8 @@
               }`}
             >
               {tab.label}
-              {counts?.[tab.id] && (
+              {/* Only show count for stories tab */}
+              {tab.id === 'stories' && counts?.[tab.id] && (
                 <span className="ml-2 text-xs bg-gray-900/50 px-2 py-0.5 rounded">
                   {counts[tab.id]}
                 </span>
