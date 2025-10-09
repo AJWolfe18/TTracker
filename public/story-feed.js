@@ -231,7 +231,7 @@
         'div',
         { className: 'tt-empty' },
         React.createElement('h3', null, 'No Stories Found'),
-        React.createElement('p', null, searchTerm || selectedCategory !== 'all' || selectedSeverity !== 'all' ? 'Try adjusting your filters' : 'Check back soon for updates on political accountability.')
+        React.createElement('p', null, searchTerm || selectedCategory !== 'all' ? 'Try adjusting your filters' : 'Check back soon for updates on political accountability.')
       ),
 
       // Stories Grid
