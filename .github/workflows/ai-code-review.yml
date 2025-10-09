@@ -1,4 +1,4 @@
-name: AI Code Review (Latest Commit Only)
+name: AI Code Review (Latest Commit Only) 
 
 on:
   pull_request:
