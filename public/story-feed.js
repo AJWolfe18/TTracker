@@ -43,8 +43,6 @@
     // Filter state
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [selectedSeverity, setSelectedSeverity] = useState('all');
-    const [sortBy, setSortBy] = useState('recent');
 
     const searchDebounceRef = useRef(null);
 
@@ -77,7 +75,7 @@
       searchDebounceRef.current = setTimeout(() => {
         applyFiltersAndPagination();
       }, 300);
-    }, [searchTerm, selectedCategory, selectedSeverity, sortBy, page, allStories]);
+    }, [searchTerm, selectedCategory, page, allStories]);
 
     function applyFiltersAndPagination() {
       let filtered = [...allStories];
@@ -99,24 +97,8 @@
         filtered = filtered.filter(story => story.category === selectedCategory);
       }
 
-      // Apply severity filter
-      if (selectedSeverity !== 'all') {
-        filtered = filtered.filter(story => story.severity?.toLowerCase() === selectedSeverity);
-      }
-
-      // Apply sorting
-      if (sortBy === 'recent') {
-        filtered.sort((a, b) => new Date(b.last_updated_at) - new Date(a.last_updated_at));
-      } else if (sortBy === 'oldest') {
-        filtered.sort((a, b) => new Date(a.last_updated_at) - new Date(b.last_updated_at));
-      } else if (sortBy === 'severity') {
-        const severityOrder = { critical: 0, severe: 1, moderate: 2, minor: 3 };
-        filtered.sort((a, b) => {
-          const aVal = severityOrder[a.severity?.toLowerCase()] ?? 4;
-          const bVal = severityOrder[b.severity?.toLowerCase()] ?? 4;
-          return aVal - bVal;
-        });
-      }
+      // Default sorting: Most recent first
+      filtered.sort((a, b) => new Date(b.last_updated_at) - new Date(a.last_updated_at));
 
       // Calculate pagination
       const total = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -135,8 +117,6 @@
     function clearFilters() {
       setSearchTerm('');
       setSelectedCategory('all');
-      setSelectedSeverity('all');
-      setSortBy('recent');
       setPage(1);
     }
 
@@ -180,77 +160,57 @@
       // Search and Filters Section
       React.createElement(
         'div',
-        { className: 'bg-gray-800/50 backdrop-blur-md rounded-lg p-6 mb-6 border border-gray-700' },
-        // Search Bar
+        { className: 'mb-6' },
+        // Search Bar - Right aligned
         React.createElement(
           'div',
-          { className: 'mb-4' },
+          { className: 'flex justify-end mb-4' },
           React.createElement('input', {
             type: 'text',
-            placeholder: 'Search stories by headline, summary, actor, or category...',
+            placeholder: 'Search stories...',
             value: searchTerm,
             onChange: (e) => setSearchTerm(e.target.value),
-            className: 'w-full px-4 py-3 bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors'
+            className: 'w-full md:w-96 px-6 py-2 bg-white text-gray-800 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all'
           })
         ),
-        // Filters Row
+        // Category Filter Pills
         React.createElement(
           'div',
-          { className: 'grid grid-cols-1 md:grid-cols-4 gap-4' },
-          // Category Filter
+          { className: 'flex items-center gap-3 flex-wrap' },
           React.createElement(
-            'select',
-            {
-              value: selectedCategory,
-              onChange: (e) => { setSelectedCategory(e.target.value); setPage(1); },
-              className: 'px-4 py-2 bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors'
-            },
-            React.createElement('option', { value: 'all' }, 'All Categories'),
-            uniqueCategories.map(cat =>
-              React.createElement('option', { key: cat, value: cat }, CATEGORY_LABELS[cat] || cat)
-            )
+            'span',
+            { className: 'text-gray-400 text-sm font-medium' },
+            'Filter:'
           ),
-          // Severity Filter
-          React.createElement(
-            'select',
-            {
-              value: selectedSeverity,
-              onChange: (e) => { setSelectedSeverity(e.target.value); setPage(1); },
-              className: 'px-4 py-2 bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors'
-            },
-            React.createElement('option', { value: 'all' }, 'All Severity'),
-            React.createElement('option', { value: 'critical' }, 'Fucking Treason'),
-            React.createElement('option', { value: 'severe' }, 'Criminal Bullshit'),
-            React.createElement('option', { value: 'moderate' }, 'Swamp Shit'),
-            React.createElement('option', { value: 'minor' }, 'Clown Show')
-          ),
-          // Sort By
-          React.createElement(
-            'select',
-            {
-              value: sortBy,
-              onChange: (e) => { setSortBy(e.target.value); setPage(1); },
-              className: 'px-4 py-2 bg-gray-900 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors'
-            },
-            React.createElement('option', { value: 'recent' }, 'Most Recent'),
-            React.createElement('option', { value: 'oldest' }, 'Oldest First'),
-            React.createElement('option', { value: 'severity' }, 'By Severity')
-          ),
-          // Clear Filters Button
+          // All Categories Button
           React.createElement(
             'button',
             {
-              onClick: clearFilters,
-              className: 'px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors'
+              onClick: () => { setSelectedCategory('all'); setPage(1); },
+              className: `px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                selectedCategory === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-800 border border-gray-300 hover:border-blue-500'
+              }`
             },
-            'Clear Filters'
+            'All Categories'
+          ),
+          // Individual Category Buttons
+          uniqueCategories.map(cat =>
+            React.createElement(
+              'button',
+              {
+                key: cat,
+                onClick: () => { setSelectedCategory(cat); setPage(1); },
+                className: `px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  selectedCategory === cat
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-800 border border-gray-300 hover:border-blue-500'
+                }`
+              },
+              CATEGORY_LABELS[cat] || cat
+            )
           )
-        ),
-        // Results Count
-        React.createElement(
-          'div',
-          { className: 'mt-4 text-sm text-gray-400' },
-          `Showing ${storyList.length} of ${allStories.length} stories`
         )
       ),
 
