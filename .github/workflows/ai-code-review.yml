@@ -4,6 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main, test]
+  push:
+    branches: [test]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -29,62 +31,106 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "num=${{ inputs.pr_number }}" >> $GITHUB_OUTPUT
-          else
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "num=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            # push event - find most recent PR for this branch
+            echo "num=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Checkout PR HEAD commit (not merge)
+      - name: Checkout PR HEAD commit (robust; supports forks)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Only set ref when event has pull_request context
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+
+      - name: Fetch PR head ref (works for same-repo & forks)
+        id: fetchpr
+        if: steps.prnum.outputs.num != ''
+        env:
+          PR: ${{ steps.prnum.outputs.num }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Try native PR ref first (same-repo PRs)
+          if git fetch origin "pull/${PR}/head:pr_head" 2>/dev/null; then
+            echo "ref=pr_head" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Fallback: use GitHub API to discover remote for fork PRs
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRepository,headRefName > pr_head.json
+          FORK_REPO=$(jq -r '.headRepository.nameWithOwner' pr_head.json)
+          FORK_BRANCH=$(jq -r '.headRefName' pr_head.json)
+          git remote add prfork "https://github.com/${FORK_REPO}.git" || true
+          git fetch prfork "${FORK_BRANCH}:pr_head"
+          echo "ref=pr_head" >> $GITHUB_OUTPUT
+
+      - name: Checkout detached HEAD at latest commit
+        if: steps.prnum.outputs.num != ''
+        run: |
+          set -euo pipefail
+          git checkout --detach "${{ steps.fetchpr.outputs.ref }}"
 
       - name: Ensure we have PR metadata
         id: meta
+        if: steps.prnum.outputs.num != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           PR=${{ steps.prnum.outputs.num }}
-          gh pr view "$PR" --json title,body,headRefName,baseRefName,author,headRefOid > pr.json
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" \
+            --json title,body,headRefName,baseRefName,author,headRefOid > pr.json
 
       - name: Compute latest-commit diff (HEAD^..HEAD)
         id: diff
         run: |
-          # Determine HEAD (for workflow_dispatch we need to check out the PR head explicitly)
+          set -euo pipefail
           if [ -s pr.json ]; then
             HEAD_SHA=$(jq -r .headRefOid pr.json)
           else
             HEAD_SHA=$(git rev-parse HEAD)
           fi
 
-          # Make sure HEAD_SHA exists locally (checkout step should have it)
-          git checkout --detach "$HEAD_SHA"
+          # Ensure we are at that commit
+          git rev-parse --verify "$HEAD_SHA" >/dev/null
+          git checkout --detach "$HEAD_SHA" 2>/dev/null || true
 
-          # Parent commit of the latest commit
-          PARENT_SHA=$(git rev-parse "${HEAD_SHA}^") || true
-
-          if [ -z "$PARENT_SHA" ]; then
-            echo "Only one commit found; using initial commit diff."
-            # If no parent (edge case), compare against empty tree
-            git diff --patch $(git hash-object -t tree /dev/null) "$HEAD_SHA" > pr.diff || true
-          else
+          if git rev-parse "${HEAD_SHA}^" >/dev/null 2>&1; then
+            PARENT_SHA=$(git rev-parse "${HEAD_SHA}^")
             git diff --patch "$PARENT_SHA" "$HEAD_SHA" > pr.diff || true
+          else
+            echo "Initial commit; diffing against empty tree"
+            git diff --patch "$(git hash-object -t tree /dev/null)" "$HEAD_SHA" > pr.diff || true
           fi
 
-          # Split diff by file to avoid huge payloads
+          # If no changes, short-circuit nicely
+          if ! [ -s pr.diff ]; then
+            echo "No changes in the latest commit." > review.md
+            echo "chunks=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           csplit -s -f chunk_ -b "%03d.diff" pr.diff '/^diff --git /' '{*}' || true
-          [ -s chunk_000.diff ] || rm -f chunk_000.diff
+          [ -s chunk_000.diff ] || rm -f chunk_000.diff || true
           echo "chunks=$(ls -1 chunk_*.diff 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
 
       - name: Build prompt header
         id: header
+        if: steps.diff.outputs.chunks != '0'
         run: |
-          TITLE=$(jq -r .title pr.json)
-          BODY=$(jq -r .body pr.json)
-          HEAD=$(jq -r .headRefName pr.json)
-          BASE=$(jq -r .baseRefName pr.json)
-          AUTHOR=$(jq -r .author.login pr.json)
+          if [ -s pr.json ]; then
+            TITLE=$(jq -r .title pr.json)
+            BODY=$(jq -r .body pr.json)
+            HEAD=$(jq -r .headRefName pr.json)
+            BASE=$(jq -r .baseRefName pr.json)
+            AUTHOR=$(jq -r .author.login pr.json)
+          else
+            TITLE="Push to test branch"
+            BODY="Direct push (no PR)"
+            HEAD="test"
+            BASE="main"
+            AUTHOR="${{ github.actor }}"
+          fi
 
           cat > prompt_header.txt <<'EOF'
 Role: Senior Staff Engineer reviewer
@@ -94,6 +140,8 @@ Constraints:
 - Cite filename:line ranges for every finding.
 - Max 10 findings total, ≤3 per file.
 - Prefer surgical, copy-pasteable patch suggestions.
+- Output STRICT JSON with arrays: BLOCKERS, NON_BLOCKING.
+- Each item must have: file, lines, type (bug|security|perf|test|style), why, patch.
 
 Repo context for relevance:
 - Project: TrumpyTracker (RSS + Story clustering). TEST env only, cost cap <$50/mo.
@@ -101,15 +149,6 @@ Repo context for relevance:
 - Style: small pure functions, early returns, cursor pagination (NO offset), UTC timestamps.
 - Security: never log secrets; SQL must be parameterized; RLS respected; idempotent jobs via (job_type,payload_hash) unique.
 - UX: keep dashboards responsive; avoid heavy client bundles.
-
-Output format (JSON in markdown code block):
-```json
-{
-  "BLOCKERS": [{"file": "path/to/file.js", "lines": "128-140", "type": "security|bug|perf", "why": "explanation", "patch": "suggested fix"}],
-  "NON_BLOCKING": [{"file": "path/to/file.js", "lines": "50-52", "type": "style|test", "why": "explanation", "patch": "suggested fix"}]
-}
-```
-If nothing to report, return empty arrays for both sections.
 EOF
 
           {
@@ -122,56 +161,50 @@ EOF
           } > pr_context.txt
 
       - name: Validate API key & model access
+        if: steps.diff.outputs.chunks != '0'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          set -e
-          [ -n "$OPENAI_API_KEY" ] || { echo "OPENAI_API_KEY missing"; exit 1; }
-          # cheap model probe (don't spam): list once
+          set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "::error ::OPENAI_API_KEY is not set in repository or org secrets"
+            exit 1
+          fi
           curl -sS --connect-timeout 10 --max-time 20 \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             "$LLM_API_BASE/models" >/dev/null || {
-              echo "⚠️ Unable to reach $LLM_API_BASE/models"; exit 1; }
+              echo "::error ::Cannot reach $LLM_API_BASE/models"
+              exit 1
+            }
 
-      - name: Probe Responses API (lightweight)
+      - name: Probe Responses API (lightweight, with retry)
+        if: steps.diff.outputs.chunks != '0'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          set -e
-          # Minimal probe matching review payload structure
-          PROBE=$(jq -n --arg model "${LLM_MODEL}" '
-            {
-              model: $model,
-              max_output_tokens: 16,
-              input: "ping"
-            }
-          ')
-
-          RESP_FILE=$(mktemp)
-          HTTP_CODE=$(
-            curl -sS --fail-with-body \
-              --connect-timeout 10 --max-time 20 \
+          set -euo pipefail
+          PROBE=$(jq -n --arg model "${LLM_MODEL}" '{model:$model, max_output_tokens:16, input:"ping"}')
+          for i in 1 2 3; do
+            RESP_FILE=$(mktemp)
+            if curl -sS --fail-with-body --connect-timeout 10 --max-time 20 \
               -X POST "$LLM_API_BASE/responses" \
               -H "Authorization: Bearer $OPENAI_API_KEY" \
               -H "Content-Type: application/json" \
-              -d "$PROBE" \
-              -w "%{http_code}" -o "$RESP_FILE" || true
-          )
-
-          echo "HTTP=$HTTP_CODE"
-          echo "RAW:"
-          sed -n '1,120p' "$RESP_FILE"
-
-          # If error, print structured message (helps triage)
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            if jq -e .error >/dev/null 2>&1 < "$RESP_FILE"; then
-              jq .error < "$RESP_FILE"
+              -d "$PROBE" -o "$RESP_FILE" >/dev/null 2>&1; then
+              echo "✓ Responses API probe successful"
+              jq -r '.output[0].content[0].text // "ok"' < "$RESP_FILE" || true
+              exit 0
             fi
-            exit 1
-          fi
+            echo "Probe attempt $i failed, retrying..."
+            sleep $((i*2))
+          done
+          echo "::error ::Responses API probe failed after 3 attempts"
+          sed -n '1,200p' "$RESP_FILE"
+          exit 1
 
-      - name: Review chunks with GPT-5
+      - name: Review chunks with GPT-5 (TTRC-199 structured output)
         id: review
+        if: steps.diff.outputs.chunks != '0'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
@@ -180,31 +213,74 @@ EOF
 
           call_llm() {
             local part="$1"
-            local DIFF_CONTENT HEADER CONTEXT PAYLOAD RESP_FILE HTTP_CODE TEXT
+            local PAYLOAD RESP_FILE HTTP_CODE JSON_OUT TEXT
 
-            DIFF_CONTENT=$(jq -Rs . < "$part")
-            HEADER=$(jq -Rs . < prompt_header.txt)
-            CONTEXT=$(jq -Rs . < pr_context.txt)
-
-            # Build Responses payload (no temperature for gpt-5)
-            # Use content parts format for safer input handling
+            # Build payload with json_schema (TTRC-199)
             PAYLOAD=$(jq -n \
               --arg model "${LLM_MODEL}" \
-              --argjson header "$HEADER" \
-              --argjson context "$CONTEXT" \
-              --argjson diff "$DIFF_CONTENT" '
+              --arg header "$(cat prompt_header.txt)" \
+              --arg context "$(cat pr_context.txt)" \
+              --arg diff "$(cat "$part")" '
               {
                 model: $model,
-                max_output_tokens: 8000,
+                max_output_tokens: 3000,
+                reasoning: { effort: "low" },
                 input: [
                   {role:"system", content:[{type:"input_text", text: $header}]},
-                  {role:"user",   content:[{type:"input_text", text: $context}]},
-                  {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets. Hard cap: 10 findings total, ≤3 per file. Output sections: BLOCKERS and NON-BLOCKING."}]},
+                  {role:"user",   content:[{type:"input_text", text:
+                    ("PR context:\n" + $context + "\n\nReview ONLY this latest-commit unified diff chunk.\n" +
+                     "Provide: Risks, Bugs, Perf, Style, Tests, Suggested patch snippets.\n" +
+                     "Hard caps: 10 findings total, ≤3 per file.\n" +
+                     "Output STRICT JSON with arrays: BLOCKERS, NON_BLOCKING. Each item: file, lines, type, why, patch.")}]},
                   {role:"user",   content:[{type:"input_text", text: $diff}]}
-                ]
+                ],
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: "CodeReview",
+                    strict: true,
+                    schema: {
+                      type: "object",
+                      required: ["BLOCKERS","NON_BLOCKING"],
+                      additionalProperties: false,
+                      properties: {
+                        BLOCKERS: {
+                          type:"array",
+                          items: {
+                            type:"object",
+                            required:["file","lines","type","why","patch"],
+                            additionalProperties: false,
+                            properties:{
+                              file: {type:"string"},
+                              lines: {type:"string"},
+                              type: {type:"string"},
+                              why: {type:"string"},
+                              patch: {type:"string"}
+                            }
+                          }
+                        },
+                        NON_BLOCKING: {
+                          type:"array",
+                          items: {
+                            type:"object",
+                            required:["file","lines","type","why","patch"],
+                            additionalProperties: false,
+                            properties:{
+                              file: {type:"string"},
+                              lines: {type:"string"},
+                              type: {type:"string"},
+                              why: {type:"string"},
+                              patch: {type:"string"}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }')
 
-            # Call with strong timeouts + retries and capture status + body separately
+            # Call API with retries
             RESP_FILE=$(mktemp)
             HTTP_CODE=$(
               timeout 140s curl -sS --fail-with-body \
@@ -217,7 +293,7 @@ EOF
                 -w "%{http_code}" -o "$RESP_FILE" || true
             )
 
-            # Non-2xx ⇒ show the JSON error (don't swallow it)
+            # Non-2xx ⇒ show the JSON error
             if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
               echo "> API error on $part (HTTP ${HTTP_CODE:-unknown}):" >> review.md
               if jq -e .error >/dev/null 2>&1 < "$RESP_FILE"; then
@@ -228,22 +304,41 @@ EOF
               return 1
             fi
 
-            # Extract text, preferring output_text; fallback to content array
-            TEXT=$(jq -r '
-              ( .output_text // "" ) as $ot
-              | if ($ot|type=="string" and ($ot|length)>0) then $ot
-                else ([ .output[]?.content[]? | select(.type=="output_text") | .text ] | join("\n\n"))
-                end
-            ' < "$RESP_FILE")
+            # Extract JSON output (schema → text fallback)
+            JSON_OUT=$(jq -e '.output[0].content[]? | select(.type=="output_json") | .json' < "$RESP_FILE" 2>/dev/null) || true
 
-            # If still empty, show a trimmed raw body to debug (captures reasoning-only cases)
-            if [ -z "$TEXT" ]; then
-              echo "> Empty text output on $part (HTTP $HTTP_CODE). Raw body (first 200 lines):" >> review.md
-              sed -n '1,200p' "$RESP_FILE" >> review.md
-              return 1
+            if [ -n "$JSON_OUT" ]; then
+              # Format structured JSON nicely
+              echo "$JSON_OUT" | jq -r '
+                def format_finding: "**\(.file):\(.lines)** [\(.type)]\n> \(.why)\n```suggestion\n\(.patch)\n```";
+                (
+                  if (.BLOCKERS | length) > 0 then
+                    "### 🚨 BLOCKERS\n" + (.BLOCKERS | map(format_finding) | join("\n\n"))
+                  else "" end
+                ),
+                (
+                  if (.NON_BLOCKING | length) > 0 then
+                    "\n### ℹ️ NON-BLOCKING\n" + (.NON_BLOCKING | map(format_finding) | join("\n\n"))
+                  else "" end
+                ),
+                (
+                  if (.BLOCKERS | length) == 0 and (.NON_BLOCKING | length) == 0 then
+                    "✅ No issues found in this chunk."
+                  else "" end
+                )
+              ' >> review.md
+            else
+              # Fallback to text extraction
+              TEXT=$(jq -r '(.output_text // "") + "\n" + ([.output[]?.content[]? | select(.type=="output_text") | .text] | join("\n"))' < "$RESP_FILE")
+              if [ -n "$TEXT" ] && [ "$TEXT" != $'\n' ]; then
+                echo "$TEXT" >> review.md
+              else
+                echo "> Empty response body" >> review.md
+                sed -n '1,200p' "$RESP_FILE" >> review.md
+                return 1
+              fi
             fi
 
-            echo "$TEXT" >> review.md
             echo >> review.md
           }
 
@@ -258,14 +353,14 @@ EOF
               tries=0
               until call_llm "$part"; do
                 tries=$((tries+1))
-                [ $tries -ge 3 ] && { echo "> (Giving up on $part)"; break; }
+                [ $tries -ge 3 ] && { echo "> (Giving up on $part after 3 tries)" >> review.md; break; }
                 sleep $((tries*2))
               done
 
-              # Circuit breaker (improved counting)
+              # Circuit breaker
               FINDINGS=$(grep -E '^(### |[-*] )' review.md | wc -l | tr -d ' ')
               if [ "$FINDINGS" -gt 10 ]; then
-                echo "> (Hit findings cap; summarizing rest…)" >> review.md
+                echo "> (Hit findings cap; skipping remaining chunks)" >> review.md
                 break 2
               fi
             done
@@ -276,16 +371,29 @@ EOF
           fi
 
       - name: Post PR comment
+        if: steps.prnum.outputs.num != '' && steps.diff.outputs.chunks != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR=${{ steps.prnum.outputs.num }}
-          gh pr comment "$PR" --body-file review.md
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file review.md
+
+      - name: Post commit comment (push events without PR)
+        if: steps.prnum.outputs.num == '' && steps.diff.outputs.chunks != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/$GITHUB_REPOSITORY/commits/$COMMIT_SHA/comments" \
+            -f body="$(cat review.md)" || echo "Failed to post commit comment"
 
       - name: Add ai-reviewed label
-        if: always()
+        if: always() && steps.prnum.outputs.num != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR=${{ steps.prnum.outputs.num }}
-          gh pr edit "$PR" --add-label "ai-reviewed" || true
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label "ai-reviewed" || true
