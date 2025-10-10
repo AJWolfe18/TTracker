@@ -40,165 +40,29 @@ jobs:
           [ -s chunk_000.diff ] || rm -f chunk_000.diff || true
           echo "chunks=$(ls -1 chunk_*.diff 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
 
-      - name: Review with GPT-5 (TTRC-199 hardened)
+      - name: Create prompt header
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          cat > prompt_header.txt <<'ENDPROMPT'
+          Role: Senior Staff Engineer reviewer
+          Focus: (1) Correctness & security (2) Performance (3) Code quality
+          Constraints:
+          - Cite filename:line ranges
+          - Max 10 findings total, ≤3 per file
+          - Return STRICT JSON with arrays: BLOCKERS and NON_BLOCKING
+          - Each item has: file, lines, type, why, patch
+          - DO NOT include prose outside JSON
+
+          Context: TrumpyTracker (Node.js, Supabase, vanilla JS, cost cap <$50/mo)
+
+          Review ONLY this diff chunk. Return STRICT JSON. Each item: file, lines, type, why, patch. DO NOT include prose.
+          ENDPROMPT
+
+      - name: Run AI review script
         if: steps.diff.outputs.has_changes == 'true' && steps.diff.outputs.chunks != '0'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          set -euo pipefail
-          echo "## 🤖 AI Code Review (Latest Commit Only)" > review.md
-          echo >> review.md
-
-          call_llm() {
-            local part="$1"
-            local PAYLOAD RESP_FILE HTTP_CODE JSON_OUT RAW_TEXT TOTAL
-
-            cat > prompt.txt <<'ENDPROMPT'
-Role: Senior Staff Engineer reviewer
-Focus: (1) Correctness & security (2) Performance (3) Code quality
-Constraints:
-- Cite filename:line ranges
-- Max 10 findings total, <=3 per file
-- Return STRICT JSON with arrays: BLOCKERS and NON_BLOCKING
-- Each item has: file, lines, type, why, patch
-- DO NOT include prose outside JSON
-
-Context: TrumpyTracker (Node.js, Supabase, vanilla JS, cost cap <$50/mo)
-
-Review ONLY this diff chunk. Return STRICT JSON. Each item: file, lines, type, why, patch. DO NOT include prose.
-ENDPROMPT
-
-            # Build JSON payload using separate file to avoid YAML parser issues
-            cat > filter.jq <<'ENDJQ'
-{
-  model: $model,
-  max_output_tokens: $max_tokens,
-  reasoning: { effort: $effort },
-  input: [
-    {
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: ($prompt + "\n\n" + $diff)
-        }
-      ]
-    }
-  ]
-}
-ENDJQ
-            jq -n \
-              --arg model "$LLM_MODEL" \
-              --arg prompt "$(cat prompt.txt)" \
-              --arg diff "$(cat "$part")" \
-              --argjson max_tokens 3000 \
-              --arg effort "low" \
-              -f filter.jq > payload.json
-            PAYLOAD=$(cat payload.json)
-
-            RESP_FILE=$(mktemp)
-            HTTP_CODE=$(
-              timeout 140s curl -sS --fail-with-body \
-                --connect-timeout 10 --max-time 120 \
-                --retry 2 --retry-delay 2 \
-                -X POST "$LLM_API_BASE/responses" \
-                -H "Authorization: Bearer $OPENAI_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "$PAYLOAD" \
-                -w "%{http_code}" -o "$RESP_FILE" || true
-            )
-
-            if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-              echo "> API error (HTTP ${HTTP_CODE:-unknown}):" >> review.md
-              if jq -e .error >/dev/null 2>&1 < "$RESP_FILE"; then
-                jq -r '.error | "  \(.type // "n/a"): \(.message // "n/a")"' < "$RESP_FILE" >> review.md
-              else
-                sed -n '1,100p' "$RESP_FILE" >> review.md
-              fi
-              return 1
-            fi
-
-            # Parse & validate (schema-if-present → JSON-in-text → fail with clear error)
-            JSON_OUT=$(jq -e '.output[0].content[]? | select(.type=="output_json") | .json' < "$RESP_FILE" 2>/dev/null) || true
-
-            if [ -z "$JSON_OUT" ]; then
-              # Fallback: parse JSON embedded in text
-              RAW_TEXT=$(jq -r '(.output_text // "") + "\n" + ([.output[]?.content[]? | select(.type=="output_text") | .text] | join("\n"))' < "$RESP_FILE")
-              JSON_OUT=$(printf '%s' "$RAW_TEXT" | awk '
-                BEGIN{start=0; depth=0; buf=""}
-                {
-                  for(i=1;i<=length($0);i++){
-                    c=substr($0,i,1)
-                    if(c=="{"){
-                      depth++
-                      if(depth==1){start=1; buf=c; next}
-                    }
-                    if(start){buf=buf c}
-                    if(c=="}" && start){
-                      depth--
-                      if(depth==0){print buf; exit}
-                    }
-                  }
-                }') || true
-            fi
-
-            if [ -z "$JSON_OUT" ] || ! echo "$JSON_OUT" | jq -e . >/dev/null 2>&1; then
-              echo "> Unable to parse JSON from model output" >> review.md
-              sed -n '1,200p' "$RESP_FILE" >> review.md
-              return 1
-            fi
-
-            # Enforce shape
-            if ! echo "$JSON_OUT" | jq -e 'has("BLOCKERS") and has("NON_BLOCKING") and (.BLOCKERS|type=="array") and (.NON_BLOCKING|type=="array")' >/dev/null 2>&1; then
-              echo "> JSON shape invalid" >> review.md
-              echo "$JSON_OUT" | jq . >> review.md
-              return 1
-            fi
-
-            # Enforce caps
-            TOTAL=$(echo "$JSON_OUT" | jq '(.BLOCKERS|length) + (.NON_BLOCKING|length)')
-            if [ "$TOTAL" -gt 10 ]; then
-              echo "> Findings exceed cap (10): $TOTAL" >> review.md
-              echo "$JSON_OUT" | jq . >> review.md
-              return 1
-            fi
-
-            # Format output
-            echo "$JSON_OUT" | jq -r '
-              def fmt: "**\(.file):\(.lines)** [\(.type)]\n> \(.why)\n```\n\(.patch)\n```";
-              (if (.BLOCKERS | length) > 0 then "### 🚨 BLOCKERS\n" + (.BLOCKERS | map(fmt) | join("\n\n")) else "" end),
-              (if (.NON_BLOCKING | length) > 0 then "\n### ℹ️ NON-BLOCKING\n" + (.NON_BLOCKING | map(fmt) | join("\n\n")) else "" end),
-              (if (.BLOCKERS | length) == 0 and (.NON_BLOCKING | length) == 0 then "✅ No issues found" else "" end)
-            ' >> review.md
-
-            echo >> review.md
-          }
-
-          shopt -s nullglob
-          for f in chunk_*.diff; do
-            echo "### Chunk: $f" >> review.md
-
-            split -b "${MAX_CHUNK_BYTES}" -a 2 -d "$f" "$f."
-            for part in $f.*; do
-              [ -s "$part" ] || continue
-              tries=0
-              until call_llm "$part"; do
-                tries=$((tries+1))
-                [ $tries -ge 3 ] && { echo "> Gave up on $part" >> review.md; break; }
-                sleep $((tries*2))
-              done
-
-              FINDINGS=$(grep -cE '^###' review.md || true)
-              if [ "$FINDINGS" -gt 10 ]; then
-                echo "> Hit findings cap" >> review.md
-                break 2
-              fi
-            done
-          done
-
-          if ! grep -q '[A-Za-z]' review.md 2>/dev/null; then
-            echo "_No content to review_" >> review.md
-          fi
+        run: .github/scripts/ai_review.sh
 
       - name: Show review
         if: always() && steps.diff.outputs.has_changes == 'true'
