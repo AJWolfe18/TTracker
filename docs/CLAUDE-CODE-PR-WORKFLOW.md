@@ -57,13 +57,44 @@ When using Claude Code, instruct it to:
 ## 3. AI Code Review System
 
 ### How It Works
-1. **Automatic Trigger**: Reviews run on every PR open/update
-2. **Manual Trigger**: Can be triggered via workflow_dispatch
-3. **Review Process**:
-   - Extracts PR diff (up to 15KB)
-   - Sends to ChatGPT for analysis
-   - Posts review as PR comment
-   - Adds "ai-reviewed" label
+
+**Automatic Reviews** (90% cost reduction via path filtering):
+- Triggered ONLY when risky files change:
+  - `scripts/**/*.js` (Edge functions, workers)
+  - `supabase/functions/**/*.js` (Supabase Edge Functions)
+  - `migrations/**/*.sql` (Database schema changes)
+  - `.github/workflows/**` (CI/CD changes)
+  - `.github/scripts/**` (Build/automation scripts)
+- Skips:
+  - Documentation (*.md)
+  - Assets (images, media)
+  - Tests (*test*)
+- **Cost**: ~$0.30 per review (low effort mode)
+
+**Manual Trigger** (label-based):
+- Add `ai:review` label to ANY PR to force review
+- Add `thorough` label for deeper analysis (medium effort mode)
+  - Costs ~$1.00 per review
+  - Higher token limit (6000 vs 2000)
+  - More comprehensive analysis
+- Use for:
+  - Frontend changes not in auto-review paths
+  - Complex refactors needing extra scrutiny
+  - When you want AI second opinion on any code
+
+**Review Process**:
+1. Computes diff between PR commits
+2. Splits diff into chunks if needed
+3. Sends to GPT-5 via Responses API
+4. Generates GitHub annotations for blockers
+5. Posts formatted review as PR comment
+6. Auto-removes `ai:review` label after completion
+
+**Additional Safeguards**:
+- Fork protection (requires `ai:review` label for untrusted contributors)
+- Size guard (skips reviews <5 lines changed)
+- Concurrency control (cancels duplicate runs on rapid pushes)
+- Findings cap (≤10 total, ≤3 per file)
 
 ### Review Focus Areas
 - Security vulnerabilities
@@ -71,12 +102,22 @@ When using Claude Code, instruct it to:
 - Code quality
 - Potential bugs
 - Best practices
-- TrumpyTracker-specific patterns
+- TrumpyTracker-specific patterns (cost optimization, cursor pagination, etc.)
 
-### Cost Estimation
-- GPT-4: ~$0.03-0.10 per review
-- GPT-3.5-turbo: ~$0.01 per review
-- Monthly estimate (50 PRs): $1.50-$5.00
+### Cost Estimation (Optimized)
+
+**With path filtering + size guards:**
+- Auto-reviews triggered: ~2-5/month (only risky changes)
+- Manual reviews: ~10-15/month (via `ai:review` label)
+- **Total monthly cost: $1-2/month**
+
+**Breakdown:**
+- Low effort review: $0.30 each
+- Medium effort (thorough): $1.00 each
+- Previous cost (no filtering): $10-15/month
+- **Savings: 90%**
+
+**For unlimited analysis:** Paste PR link to Claude directly (no cost limit)
 
 ## 4. Setup Checklist
 
