@@ -146,7 +146,55 @@ jobs:
           } >> review.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
 
-      - name: Remove label after review
+      - name: Analyze findings and add labels
+        if: steps.diff.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        id: findings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PR_NUM=${{ github.event.pull_request.number }}
+          
+          # Count findings
+          BLOCKERS=$(grep -c "### 🚨 BLOCKERS" review.md 2>/dev/null || echo 0)
+          SUGGESTIONS=$(grep -c "### ℹ️ NON-BLOCKING" review.md 2>/dev/null || echo 0)
+          
+          echo "blockers=$BLOCKERS" >> $GITHUB_OUTPUT
+          echo "suggestions=$SUGGESTIONS" >> $GITHUB_OUTPUT
+          
+          # Remove old AI labels
+          gh pr edit $PR_NUM --remove-label "ai:blockers" 2>/dev/null || true
+          gh pr edit $PR_NUM --remove-label "ai:suggestions" 2>/dev/null || true
+          gh pr edit $PR_NUM --remove-label "ai:clean" 2>/dev/null || true
+          
+          # Add appropriate label
+          if [ "$BLOCKERS" -gt 0 ]; then
+            gh pr edit $PR_NUM --add-label "ai:blockers"
+            echo "::warning ::Found $BLOCKERS blocker(s) - review required"
+          elif [ "$SUGGESTIONS" -gt 0 ]; then
+            gh pr edit $PR_NUM --add-label "ai:suggestions"
+            echo "::notice ::Found $SUGGESTIONS suggestion(s) - optional improvements"
+          else
+            gh pr edit $PR_NUM --add-label "ai:clean"
+            echo "::notice ::No issues found - AI review passed"
+          fi
+
+      - name: Fail on blockers (unless overridden)
+        if: steps.findings.outputs.blockers != '' && fromJSON(steps.findings.outputs.blockers) > 0
+        run: |
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          HAS_OVERRIDE=$(echo "$LABELS" | grep -q '"ai:override"' && echo yes || echo no)
+          
+          if [ "$HAS_OVERRIDE" = "yes" ]; then
+            echo "::warning ::Blockers found but ai:override label present - allowing merge"
+            exit 0
+          else
+            echo "::error ::AI review found ${{ steps.findings.outputs.blockers }} blocker(s)"
+            echo "::error ::Please address blockers or add 'ai:override' label to bypass"
+            exit 1
+          fi
+
+      - name: Remove ai:review label after review
         if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ai:review')
         env:
           GH_TOKEN: ${{ github.token }}
