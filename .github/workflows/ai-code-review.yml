@@ -4,36 +4,8 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     branches: [main, test]
-    paths:
-      # Auto-review: risky areas
-      - 'scripts/**/*.js'
-      - 'supabase/functions/**/*.js'
-      - 'migrations/**/*.sql'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-    paths-ignore:
-      # Skip: docs/assets/tests
-      - '**/*.md'
-      - 'public/assets/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*test*'
   push:
     branches: [test]
-    paths:
-      # Auto-review: risky areas  
-      - 'scripts/**/*.js'
-      - 'supabase/functions/**/*.js'
-      - 'migrations/**/*.sql'
-      - '.github/workflows/**'
-      - '.github/scripts/**'
-    paths-ignore:
-      # Skip: docs/assets/tests
-      - '**/*.md'
-      - 'public/assets/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*test*'
 
 concurrency:
   group: ai-review-${{ github.event.pull_request.number || github.run_id }}
@@ -41,31 +13,66 @@ concurrency:
 
 jobs:
   review:
-    # Run if (A) labeled ai:review OR (B) path matched above OR (C) push to test
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ai:review')) ||
-      (github.event_name == 'pull_request' && github.event.action != 'labeled')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-
-    env:
-      LLM_API_BASE: https://api.openai.com/v1
-      LLM_MODEL: gpt-5
-      MAX_CHUNK_BYTES: "60000"
-      FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
+      # Detect risky-path changes (works for opened/synchronize/reopened)
+      - name: Paths filter
+        id: pf
+        if: github.event_name == 'pull_request' && github.event.action != 'labeled'
+        uses: dorny/paths-filter@v3
+        with:
+          token: ${{ github.token }}
+          filters: |
+            risky:
+              - 'scripts/**/*.js'
+              - 'supabase/functions/**/*.js'
+              - 'migrations/**/*.sql'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
+
+      # Decide whether to run:
+      # - If labeled ai:review -> run
+      # - If not labeled -> run only when risky paths changed
+      - name: Decide run
+        id: gate
+        run: |
+          set -euo pipefail
+          EVENT="${{ github.event_name }}"
+          ACTION="${{ github.event.action || '' }}"
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          RISKY='${{ steps.pf.outputs.risky || '' }}'
+          RUN="no"
+
+          if [ "$EVENT" = "push" ]; then
+            RUN="yes"
+          elif [ "$EVENT" = "pull_request" ]; then
+            if [ "$ACTION" = "labeled" ] && echo "$LABELS" | grep -q '"ai:review"'; then
+              RUN="yes"
+            elif [ "$ACTION" != "labeled" ] && [ "$RISKY" = "true" ]; then
+              RUN="yes"
+            fi
+          fi
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+
+      - name: Stop if gate closed
+        if: steps.gate.outputs.run != 'yes'
+        run: echo "::notice ::AI review skipped (no label and no risky path changes)."; exit 0
+
+      # Guard secrets for forks (only for PRs without explicit label)
       - name: Guard secrets for forks
         if: github.event_name == 'pull_request'
         run: |
-          if [ "${FROM_FORK}" = "true" ] && ! grep -q '"ai:review"' <<< '${{ toJson(github.event.pull_request.labels.*.name) }}'; then
+          FROM_FORK='${{ github.event.pull_request.head.repo.fork }}'
+          HAS_LABEL=$(echo '${{ toJson(github.event.pull_request.labels.*.name) }}' | grep -q '"ai:review"' && echo yes || echo no)
+          if [ "$FROM_FORK" = "true" ] && [ "$HAS_LABEL" != "yes" ]; then
             echo "::notice ::Fork PR without ai:review label; skipping to protect secrets."
             exit 0
           fi
@@ -75,12 +82,10 @@ jobs:
         run: |
           set -euo pipefail
           git diff HEAD^ HEAD > pr.diff || git diff --root HEAD > pr.diff
-
           if ! [ -s pr.diff ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-
           echo "has_changes=true" >> $GITHUB_OUTPUT
           csplit -s -f chunk_ -b "%03d.diff" pr.diff '/^diff --git /' '{*}' || true
           [ -s chunk_000.diff ] || rm -f chunk_000.diff || true
@@ -96,7 +101,7 @@ jobs:
       - name: Skip tiny changes
         if: steps.size.outputs.lines != '' && fromJSON(steps.size.outputs.lines) < 5
         run: |
-          echo "::notice ::Tiny change (${LINES} lines); skipping AI review."
+          echo "::notice ::Tiny change (${{ steps.size.outputs.lines }}) lines; skipping AI review."
           exit 0
 
       - name: Create prompt header
@@ -109,18 +114,23 @@ jobs:
           - Cite filename:line ranges
           - Max 10 findings total, ≤3 per file
           - Return STRICT JSON with arrays: BLOCKERS and NON_BLOCKING
-          - Each item has: file, lines, type, why, patch
+          - Each item: file, lines, type, why, patch
           - DO NOT include prose outside JSON
-
           Context: TrumpyTracker (Node.js, Supabase, vanilla JS, cost cap <$50/mo)
-
-          Review ONLY this diff chunk. Return STRICT JSON. Each item: file, lines, type, why, patch. DO NOT include prose.
+          Review ONLY this diff chunk. Return STRICT JSON.
           ENDPROMPT
+
+      - name: Create minimal pr_context (optional)
+        run: |
+          echo "PR #${{ github.event.pull_request.number || '' }} - ${{ github.event.pull_request.title || '' }}" > pr_context.txt || true
 
       - name: Run AI review script
         if: steps.diff.outputs.has_changes == 'true' && steps.diff.outputs.chunks != '0'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_API_BASE: https://api.openai.com/v1
+          LLM_MODEL: gpt-5
+          MAX_CHUNK_BYTES: "60000"
         run: .github/scripts/ai_review.sh
 
       - name: Post PR comment
@@ -128,25 +138,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Check review.md exists before posting
           if [ ! -f review.md ]; then
-            echo "::warning ::review.md not found, skipping PR comment"
-            exit 0
-          fi
-          
-          # Add workflow run link to review
-          echo "" >> review.md
-          echo "---" >> review.md
-          echo "_[View full workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> review.md
-          
-          # Post comment to PR
+            echo "::warning ::review.md not found, skipping PR comment"; exit 0; fi
+          {
+            echo; echo '---'
+            echo "_[View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+          } >> review.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
 
       - name: Remove label after review
-        if: contains(github.event.pull_request.labels.*.name, 'ai:review')
-        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label "ai:review"
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ai:review')
         env:
           GH_TOKEN: ${{ github.token }}
+        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label "ai:review"
 
       - name: Show review
         if: always() && steps.diff.outputs.has_changes == 'true'
