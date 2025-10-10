@@ -64,6 +64,19 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: .github/scripts/ai_review.sh
 
+      - name: Post PR comment
+        if: steps.diff.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Add workflow run link to review
+          echo "" >> review.md
+          echo "---" >> review.md
+          echo "_[View full workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_" >> review.md
+          
+          # Post comment to PR
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
+
       - name: Show review
         if: always() && steps.diff.outputs.has_changes == 'true'
         run: cat review.md || echo "No review file"

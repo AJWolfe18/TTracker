@@ -6,6 +6,9 @@ Copy this template and fill it out at the end of each session.
 
 # Project Handoff - [DATE] [TIME] [TIMEZONE] - [BRIEF DESCRIPTION]
 
+## **BUSINESS OUTCOME:**
+[What business value does this work deliver? Why does it matter to users/Josh/the product?]
+
 ## **SESSION SUMMARY:**
 [2-3 sentences describing what was accomplished and current state]
 

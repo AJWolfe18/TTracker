@@ -40,6 +40,7 @@
 ❌ Make breaking changes without approval
 
 ## DEFINITION OF DONE
+✅ Business outcome clearly stated
 ✅ Feature working
 ✅ Edge cases handled
 ✅ No regressions

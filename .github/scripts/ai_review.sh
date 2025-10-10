@@ -103,6 +103,10 @@ call_llm() {
     return 1
   }
 
+  # Generate GitHub annotations for blockers
+  echo "$JSON_OUT" | jq -r '
+    .BLOCKERS[]? | "::error file=\(.file),line=\(.lines)::BLOCKER - \(.type): \(.why)"'
+
   # Format output
   echo "$JSON_OUT" | jq -r '
     def fmt: "**\(.file):\(.lines)** [\(.type)]\n> \(.why)\n```\n\(.patch)\n```";

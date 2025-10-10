@@ -258,6 +258,7 @@ UI labels → Database enum values (defined in job-queue-worker.js):
 4. Reference: `/docs/STARTUP_PROMPT.md` for full checklist
 
 ### Definition of Done
+- ✅ Business outcome clearly stated
 - ✅ Feature working
 - ✅ Edge cases handled
 - ✅ No regressions
