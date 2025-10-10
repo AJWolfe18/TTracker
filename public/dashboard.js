@@ -606,9 +606,6 @@ const TrumpyTrackerDashboard = () => {
           />
         )}
 
-        {/* Statistics Section - Only show for political and executive tabs */}
-        {activeTab !== 'stories' && <StatsSection stats={stats} />}
-
         {/* Loading Overlay for Filtering - Using module component */}
         {isFiltering && <LoadingOverlay message="Applying filters..." />}
 
