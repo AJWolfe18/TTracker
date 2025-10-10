@@ -68,22 +68,32 @@ Context: TrumpyTracker (Node.js, Supabase, vanilla JS, cost cap <$50/mo)
 Review ONLY this diff chunk. Return STRICT JSON. Each item: file, lines, type, why, patch. DO NOT include prose.
 ENDPROMPT
 
+            # Build JSON payload using separate file to avoid YAML parser issues
+            cat > filter.jq <<'ENDJQ'
+{
+  model: $model,
+  max_output_tokens: $max_tokens,
+  reasoning: { effort: $effort },
+  input: [
+    {
+      role: "user",
+      content: [
+        {
+          type: "input_text",
+          text: ($prompt + "\n\n" + $diff)
+        }
+      ]
+    }
+  ]
+}
+ENDJQ
             jq -n \
               --arg model "$LLM_MODEL" \
               --arg prompt "$(cat prompt.txt)" \
               --arg diff "$(cat "$part")" \
               --argjson max_tokens 3000 \
               --arg effort "low" \
-              '.model = $model |
-               .max_output_tokens = $max_tokens |
-               .reasoning.effort = $effort |
-               .input = [{
-                 role: "user",
-                 content: [{
-                   type: "input_text",
-                   text: ($prompt + "\n\n" + $diff)
-                 }]
-               }]' > payload.json
+              -f filter.jq > payload.json
             PAYLOAD=$(cat payload.json)
 
             RESP_FILE=$(mktemp)
