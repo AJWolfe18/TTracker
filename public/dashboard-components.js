@@ -633,6 +633,72 @@
     );
   };
 
+  // ==================== Helper: Filter Pill Button Class ====================
+  const getFilterPillClass = (isSelected) => {
+    return `px-3 py-1 rounded-full text-xs font-medium transition-all ${
+      isSelected
+        ? 'bg-blue-600 text-white'
+        : 'bg-white text-gray-800 border border-gray-300 hover:border-blue-500'
+    }`;
+  };
+
+  // ==================== Component: TabSearchFilter ====================
+  window.DashboardComponents.TabSearchFilter = ({
+    searchTerm,
+    onSearchChange,
+    selectedFilter,
+    onFilterChange,
+    filterConfig,
+    placeholder = 'Search...'
+  }) => {
+    return React.createElement(
+      'div',
+      { className: 'mb-4' },
+
+      // Search Bar
+      React.createElement(
+        'div',
+        { className: 'mb-3' },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: placeholder,
+          value: searchTerm,
+          onChange: (e) => onSearchChange(e.target.value),
+          className: 'w-full md:w-96 px-6 py-2 bg-white text-gray-800 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all'
+        })
+      ),
+
+      // Filter Pills
+      React.createElement(
+        'div',
+        { className: 'flex items-center gap-3 flex-wrap' },
+
+        // "All" button
+        React.createElement(
+          'button',
+          {
+            onClick: () => onFilterChange('all'),
+            className: getFilterPillClass(selectedFilter === 'all')
+          },
+          filterConfig.allLabel
+        ),
+
+        // Individual filter buttons
+        filterConfig.filters.map(filter =>
+          React.createElement(
+            'button',
+            {
+              key: filter.value,
+              onClick: () => onFilterChange(filter.value),
+              className: getFilterPillClass(selectedFilter === filter.value)
+            },
+            filter.label
+          )
+        )
+      )
+    );
+  };
+
   // ==================== Helper: Get Severity Color ====================
   window.DashboardComponents.getSeverityColor = (severity) => {
     switch (severity?.toLowerCase()) {

@@ -54,6 +54,7 @@ const {
   ExecutiveOrderCard,
   TabNavigation,
   LoadingOverlay,
+  TabSearchFilter,
   getSeverityColor
 } = window.DashboardComponents || {};
 
@@ -73,6 +74,22 @@ const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || window.SUPABASE_CONFIG?.SU
 // Pagination settings
 const ITEMS_PER_PAGE = 20;
 const EO_ITEMS_PER_PAGE = 25;
+
+// Filter configurations per tab
+const FILTER_CONFIGS = {
+  executive: {
+    filterKey: 'eo_impact_type',
+    allLabel: 'All Types',
+    placeholder: 'Search executive orders...',
+    filters: [
+      { value: 'fascist_power_grab', label: 'Fascist Power Grab' },
+      { value: 'authoritarian_overreach', label: 'Authoritarian Overreach' },
+      { value: 'corrupt_grift', label: 'Corrupt Grift' },
+      { value: 'performative_bullshit', label: 'Performative Bullshit' }
+    ]
+  }
+  // Add 'political' config later if tab is re-enabled
+};
 
 // Use utilities from DashboardUtils module
 const { 
@@ -148,9 +165,13 @@ const TrumpyTrackerDashboard = () => {
   const [isFiltering, setIsFiltering] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
   
-  // Filter state - now managed as an object
-  const [filters, setFilters] = useState(filterUtils.getDefaultFilters());
+  // Unified search/filter state (replaces old filters object)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState('all');
   const searchDebounceRef = useRef(null);
+  
+  // OLD filter state - kept for political tab (will migrate later)
+  const [filters, setFilters] = useState(filterUtils.getDefaultFilters());
   
   // Pagination state
   const [politicalPage, setPoliticalPage] = useState(1);
@@ -159,7 +180,80 @@ const TrumpyTrackerDashboard = () => {
   const [totalEoPages, setTotalEoPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Handle filter changes
+  // Unified filter function for Executive Orders
+  const applyUnifiedFilters = useCallback((data, searchTerm, selectedFilter, filterKey) => {
+    let filtered = [...data];
+
+    // 1. Search filter (searches across title, summary fields)
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(item =>
+        item.title?.toLowerCase().includes(term) ||
+        item.summary?.toLowerCase().includes(term) ||
+        item.spicy_summary?.toLowerCase().includes(term) ||
+        item.description?.toLowerCase().includes(term)
+      );
+    }
+
+    // 2. Category/Type filter
+    if (selectedFilter !== 'all') {
+      filtered = filtered.filter(item => item[filterKey] === selectedFilter);
+    }
+
+    // 3. Default sort: Most recent first
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.date || a.last_updated_at);
+      const dateB = new Date(b.date || b.last_updated_at);
+      return dateB - dateA;
+    });
+
+    return filtered;
+  }, []);
+
+  // Handle search with debouncing
+  const handleSearchChange = useCallback((value) => {
+    setSearchTerm(value);
+    // Note: Debouncing is handled by useEffect dependency on searchTerm
+    // The useEffect will only run after user stops typing for React's batching period
+  }, []);
+
+  // Apply filters when search/filter changes (Executive Orders only) with debouncing
+  useEffect(() => {
+    if (activeTab === 'executive' && allExecutiveOrders.length > 0) {
+      // Clear existing timeout
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+
+      // Debounce search (300ms), but apply filter changes immediately
+      const delay = searchTerm ? 300 : 0;
+      
+      searchDebounceRef.current = setTimeout(() => {
+        const config = FILTER_CONFIGS.executive;
+        const filtered = applyUnifiedFilters(
+          allExecutiveOrders,
+          searchTerm,
+          selectedFilter,
+          config.filterKey
+        );
+
+        // Paginate filtered results
+        const paginated = filtered.slice(0, EO_ITEMS_PER_PAGE);
+        setExecutiveOrders(paginated);
+        setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+        setEoPage(1);
+      }, delay);
+
+      // Cleanup timeout on unmount or dependency change
+      return () => {
+        if (searchDebounceRef.current) {
+          clearTimeout(searchDebounceRef.current);
+        }
+      };
+    }
+  }, [searchTerm, selectedFilter, allExecutiveOrders, activeTab, applyUnifiedFilters]);
+
+  // Handle filter changes (OLD - for political tab)
   const handleFilterChange = useCallback((key, value) => {
     if (key === 'clearAll') {
       setFilters(filterUtils.getDefaultFilters());
@@ -312,7 +406,7 @@ const TrumpyTrackerDashboard = () => {
     return filterUtils.extractUniqueCategories(entries);
   }, [allPoliticalEntries, allExecutiveOrders, activeTab]);
 
-  // Handle search and filters with debouncing
+  // Handle search and filters with debouncing (Political tab only)
   const handleFiltersApply = useCallback(() => {
     // Clear existing debounce
     if (searchDebounceRef.current) {
@@ -332,19 +426,12 @@ const TrumpyTrackerDashboard = () => {
         setDisplayedPoliticalEntries(paginatedFiltered);
         setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
         setPoliticalPage(1); // Reset to page 1 when filtering
-      } else {
-        const filtered = filterUtils.applyAllFilters(allExecutiveOrders, filters);
-        
-        // Paginate filtered results
-        const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
-        setExecutiveOrders(paginatedFiltered);
-        setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
-        setEoPage(1); // Reset to page 1 when filtering
       }
+      // Executive tab now uses unified filtering via useEffect (lines 132-165)
       // Hide loading state after filtering is complete
       setIsFiltering(false);
     }, 300); // 300ms debounce
-  }, [activeTab, allPoliticalEntries, allExecutiveOrders, filters]);
+  }, [activeTab, allPoliticalEntries, filters]);
 
   // Trigger filter changes when any filter changes
   useEffect(() => {
@@ -468,6 +555,11 @@ const TrumpyTrackerDashboard = () => {
           activeTab={activeTab}
           onTabChange={(tab) => {
             setActiveTab(tab);
+            
+            // Reset search/filter state when switching tabs
+            setSearchTerm('');
+            setSelectedFilter('all');
+            
             if (tab === 'stories') {
               // Stories tab - no filter handling needed (handled by StoryFeed component)
             } else if (tab === 'political') {
@@ -478,19 +570,18 @@ const TrumpyTrackerDashboard = () => {
               setTotalPoliticalPages(Math.ceil(filtered.length / ITEMS_PER_PAGE));
               setPoliticalPage(1);
             } else {
-              // Apply all current filters to executive orders
-              const filtered = filterUtils.applyAllFilters(allExecutiveOrders, filters);
-              const paginatedFiltered = filtered.slice(0, EO_ITEMS_PER_PAGE);
-              setExecutiveOrders(paginatedFiltered);
-              setTotalEoPages(Math.ceil(filtered.length / EO_ITEMS_PER_PAGE));
+              // Executive tab - show all results initially (filtering handled by useEffect)
+              const paginatedData = allExecutiveOrders.slice(0, EO_ITEMS_PER_PAGE);
+              setExecutiveOrders(paginatedData);
+              setTotalEoPages(Math.ceil(allExecutiveOrders.length / EO_ITEMS_PER_PAGE));
               setEoPage(1);
             }
           }}
           counts={tabCounts}
         />
 
-        {/* Filter Section - Only show for political and executive tabs */}
-        {activeTab !== 'stories' && (
+        {/* Filter Section - Political tab uses old FilterSection, Executive uses new TabSearchFilter */}
+        {activeTab === 'political' && (
           <FilterSection 
             filters={filters}
             onFilterChange={handleFilterChange}
@@ -498,8 +589,20 @@ const TrumpyTrackerDashboard = () => {
             isExpanded={isFilterExpanded}
             onToggleExpand={() => setIsFilterExpanded(!isFilterExpanded)}
             activeTab={activeTab}
-            displayCount={activeTab === 'political' ? displayedPoliticalEntries.length : executiveOrders.length}
-            totalCount={activeTab === 'political' ? allPoliticalEntries.length : allExecutiveOrders.length}
+            displayCount={displayedPoliticalEntries.length}
+            totalCount={allPoliticalEntries.length}
+          />
+        )}
+        
+        {/* New unified search/filter for Executive Orders */}
+        {activeTab === 'executive' && (
+          <TabSearchFilter
+            searchTerm={searchTerm}
+            onSearchChange={handleSearchChange}
+            selectedFilter={selectedFilter}
+            onFilterChange={setSelectedFilter}
+            filterConfig={FILTER_CONFIGS.executive}
+            placeholder={FILTER_CONFIGS.executive.placeholder}
           />
         )}
 
@@ -617,7 +720,7 @@ const TrumpyTrackerDashboard = () => {
               )}
               
               {executiveOrders.length === 0 ? (
-                <NoResultsMessage searchTerm={filters.searchTerm} />
+                <NoResultsMessage searchTerm={searchTerm} />
               ) : (
                 <>
                   <div className="grid grid-cols-1 gap-6">
@@ -636,15 +739,17 @@ const TrumpyTrackerDashboard = () => {
                     currentPage={eoPage}
                     totalPages={totalEoPages}
                     onPageChange={(page) => {
-                      // If any filters are active, handle pagination with filters
-                      if (filterUtils.hasActiveFilters(filters)) {
-                        const filtered = filterUtils.applyAllFilters(allExecutiveOrders, filters);
-                        const paginatedFiltered = filtered.slice((page - 1) * EO_ITEMS_PER_PAGE, page * EO_ITEMS_PER_PAGE);
-                        setExecutiveOrders(paginatedFiltered);
-                        setEoPage(page);
-                      } else {
-                        loadExecutiveOrders(page);
-                      }
+                      // Handle pagination with unified filters
+                      const config = FILTER_CONFIGS.executive;
+                      const filtered = applyUnifiedFilters(
+                        allExecutiveOrders,
+                        searchTerm,
+                        selectedFilter,
+                        config.filterKey
+                      );
+                      const paginatedFiltered = filtered.slice((page - 1) * EO_ITEMS_PER_PAGE, page * EO_ITEMS_PER_PAGE);
+                      setExecutiveOrders(paginatedFiltered);
+                      setEoPage(page);
                     }}
                   />
                 </>
