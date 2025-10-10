@@ -6,43 +6,36 @@ on:
     branches: [main, test]
   push:
     branches: [test]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to review'
-        required: true
-        type: number
 
 jobs:
   review:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      - name: Compute diff
-        id: diff
-        run: |
-          git diff HEAD^ HEAD > pr.diff || git diff --root HEAD > pr.diff
-          if [ -s pr.diff ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Test TTRC-199 - Workflow triggered successfully
-        if: steps.diff.outputs.has_changes == 'true'
+      - name: Test GPT-5 structured output (TTRC-199)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "✓ TTRC-199: Workflow now runs on push to test branch"
-          echo "✓ Next: Add GPT-5 structured output parameters"
-          echo "✓ Cost optimization: reasoning.effort=low, max_output_tokens=3000"
+          echo "Testing TTRC-199 structured output parameters..."
+
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error ::OPENAI_API_KEY not set"
+            exit 1
+          fi
+
+          # Test probe
+          PROBE='{"model":"gpt-5","max_output_tokens":16,"input":"ping"}'
+
+          echo "Calling Responses API..."
+          curl -sS -X POST https://api.openai.com/v1/responses \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$PROBE" > response.json || true
+
           echo ""
-          echo "Parameters to test:"
-          echo "  - response_format with json_schema"
-          echo "  - reasoning.effort (low/medium/high)"
-          echo "  - seed for determinism"
+          echo "Response:"
+          cat response.json | jq . || cat response.json
