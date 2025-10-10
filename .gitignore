@@ -86,3 +86,4 @@ admin-config.js
 !fix-test-schema.sql
 node_modules/.package-lock.json
 package-lock.json
+docs/guides/deployment/TTracker Search and filters.png

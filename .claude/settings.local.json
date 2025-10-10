@@ -46,7 +46,15 @@
       "Bash(/c/Program Files/GitHub CLI/gh run list --workflow=\"AI Code Review (Latest Commit Only)\" --limit 3)",
       "Bash(/c/Program Files/GitHub CLI/gh run view 18300913553)",
       "Bash(sed:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:trumpytracker.com)",
+      "Bash(git merge:*)",
+      "Bash(git pull:*)",
+      "mcp__atlassian__getConfluencePage",
+      "mcp__atlassian__updateConfluencePage",
+      "mcp__atlassian__createJiraIssue",
+      "Bash(/c/Program Files/GitHub CLI/gh run view 18394406677)",
+      "Bash(/c/Program Files/GitHub CLI/gh run view 18394867606)"
     ],
     "deny": [
       "Bash(git checkout main)",
