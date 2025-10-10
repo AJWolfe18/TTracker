@@ -69,6 +69,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Check review.md exists before posting
+          if [ ! -f review.md ]; then
+            echo "::warning ::review.md not found, skipping PR comment"
+            exit 0
+          fi
+          
           # Add workflow run link to review
           echo "" >> review.md
           echo "---" >> review.md
