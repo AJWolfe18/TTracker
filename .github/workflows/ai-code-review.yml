@@ -20,6 +20,20 @@ on:
       - '**/*test*'
   push:
     branches: [test]
+    paths:
+      # Auto-review: risky areas  
+      - 'scripts/**/*.js'
+      - 'supabase/functions/**/*.js'
+      - 'migrations/**/*.sql'
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+    paths-ignore:
+      # Skip: docs/assets/tests
+      - '**/*.md'
+      - 'public/assets/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*test*'
 
 concurrency:
   group: ai-review-${{ github.event.pull_request.number || github.run_id }}
