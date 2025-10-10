@@ -15,13 +15,14 @@ dotenv.config();
 // Initialize and validate environment on startup
 const config = initializeEnvironment();
 
-// Worker configuration
+// Worker configuration - Controls job processing behavior
+// Defaults optimized for <$50/month cost constraint
 const workerConfig = {
-  pollInterval: parseInt(process.env.WORKER_POLL_INTERVAL_MS || '5000', 10),
-  maxConcurrent: parseInt(process.env.WORKER_MAX_CONCURRENT || '2', 10),
-  rateLimit: parseInt(process.env.WORKER_RATE_LIMIT_MS || '500', 10),
-  maxRetries: parseInt(process.env.WORKER_MAX_RETRIES || '3', 10),
-  backoffBase: parseInt(process.env.WORKER_BACKOFF_BASE_MS || '2000', 10)
+  pollInterval: parseInt(process.env.WORKER_POLL_INTERVAL_MS || '5000', 10),  // How often to check for new jobs
+  maxConcurrent: parseInt(process.env.WORKER_MAX_CONCURRENT || '2', 10),      // Max parallel job execution
+  rateLimit: parseInt(process.env.WORKER_RATE_LIMIT_MS || '500', 10),        // Delay between job starts
+  maxRetries: parseInt(process.env.WORKER_MAX_RETRIES || '3', 10),           // Retry attempts before marking failed
+  backoffBase: parseInt(process.env.WORKER_BACKOFF_BASE_MS || '2000', 10)    // Base delay for exponential backoff
 };
 
 // Initialize clients
