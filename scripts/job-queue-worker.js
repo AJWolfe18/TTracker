@@ -15,7 +15,8 @@ dotenv.config();
 // Initialize and validate environment on startup
 const config = initializeEnvironment();
 
-// Worker configuration
+// Worker configuration - Controls job processing behavior
+// Defaults optimized for <$50/month cost constraint
 const workerConfig = {
   pollInterval: parseInt(process.env.WORKER_POLL_INTERVAL_MS || '5000', 10),
   maxConcurrent: parseInt(process.env.WORKER_MAX_CONCURRENT || '2', 10),
