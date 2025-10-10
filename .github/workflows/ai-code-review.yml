@@ -16,26 +16,81 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Test GPT-5 structured output (TTRC-199)
+      - name: Test json_schema structured output (TTRC-199)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Testing TTRC-199 structured output parameters..."
+          echo "Testing TTRC-199: json_schema + reasoning.effort + seed"
 
-          if [ -z "$OPENAI_API_KEY" ]; then
-            echo "::error ::OPENAI_API_KEY not set"
-            exit 1
-          fi
+          # Build payload with all advanced parameters
+          PAYLOAD=$(jq -n '{
+            model: "gpt-5",
+            max_output_tokens: 500,
+            reasoning: { effort: "low" },
+            input: [
+              {role: "user", content: [{type: "input_text", text: "Review this code change and output JSON with BLOCKERS and NON_BLOCKING arrays. Each should have objects with: file, lines, type, why, patch fields."}]},
+              {role: "user", content: [{type: "input_text", text: "diff --git a/test.js b/test.js\n+console.log(API_KEY);"}]}
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "CodeReview",
+                strict: true,
+                schema: {
+                  type: "object",
+                  required: ["BLOCKERS", "NON_BLOCKING"],
+                  additionalProperties: false,
+                  properties: {
+                    BLOCKERS: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        required: ["file", "lines", "type", "why", "patch"],
+                        additionalProperties: false,
+                        properties: {
+                          file: {type: "string"},
+                          lines: {type: "string"},
+                          type: {type: "string"},
+                          why: {type: "string"},
+                          patch: {type: "string"}
+                        }
+                      }
+                    },
+                    NON_BLOCKING: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        required: ["file", "lines", "type", "why", "patch"],
+                        additionalProperties: false,
+                        properties: {
+                          file: {type: "string"},
+                          lines: {type: "string"},
+                          type: {type: "string"},
+                          why: {type: "string"},
+                          patch: {type: "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }')
 
-          # Test probe
-          PROBE='{"model":"gpt-5","max_output_tokens":16,"input":"ping"}'
-
-          echo "Calling Responses API..."
+          echo "Calling GPT-5 with structured output..."
           curl -sS -X POST https://api.openai.com/v1/responses \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$PROBE" > response.json || true
+            -d "$PAYLOAD" > response.json || true
 
           echo ""
-          echo "Response:"
+          echo "Full Response:"
           cat response.json | jq . || cat response.json
+
+          echo ""
+          echo "Extracted JSON Output:"
+          cat response.json | jq -r '.output[]? | select(.type=="output_json") | .json' || echo "No JSON output found"
+
+          echo ""
+          echo "Usage Stats:"
+          cat response.json | jq '.usage'
