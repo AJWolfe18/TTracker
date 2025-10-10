@@ -27,8 +27,11 @@ concurrency:
 
 jobs:
   review:
-    # Run if (A) labeled ai:review OR (B) path matched above
-    if: (github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ai:review')) || github.event.action != 'labeled'
+    # Run if (A) labeled ai:review OR (B) path matched above OR (C) push to test
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ai:review')) ||
+      (github.event_name == 'pull_request' && github.event.action != 'labeled')
     runs-on: ubuntu-latest
     permissions:
       contents: read
