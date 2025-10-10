@@ -10,6 +10,18 @@ require() { command -v "$1" >/dev/null || { echo "::error ::Missing $1"; exit 1;
 require jq
 require curl
 
+# Dynamic effort based on 'thorough' label
+EFFORT="low"
+MAXTOK=2000
+
+if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH}" ]; then
+  if jq -e '.pull_request.labels[]? | select(.name=="thorough")' < "$GITHUB_EVENT_PATH" >/dev/null 2>&1; then
+    EFFORT="medium"
+    MAXTOK=6000
+    echo "::notice ::Thorough label detected - using effort='medium', max_tokens=6000"
+  fi
+fi
+
 echo "## 🤖 AI Code Review (Latest Commit Only)" > review.md
 echo >> review.md
 
@@ -22,10 +34,12 @@ call_llm() {
     --arg model "${LLM_MODEL}" \
     --arg prompt "$(cat prompt_header.txt)" \
     --arg diff "$(cat "$part")" \
+    --arg effort "${EFFORT}" \
+    --argjson maxtok "${MAXTOK}" \
     '{
       model: $model,
-      max_output_tokens: 3000,
-      reasoning: { effort: "low" },
+      max_output_tokens: $maxtok,
+      reasoning: { effort: $effort },
       input: [
         {role:"user", content:[{type:"input_text", text: ($prompt + "\n\n" + $diff)}]}
       ]

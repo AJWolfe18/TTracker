@@ -2,13 +2,35 @@ name: AI Code Review (Latest Commit Only)
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
     branches: [main, test]
+    paths:
+      # Auto-review: risky areas
+      - 'scripts/**/*.js'
+      - 'supabase/functions/**/*.js'
+      - 'migrations/**/*.sql'
+      - '.github/workflows/**'
+      - '.github/scripts/**'
+    paths-ignore:
+      # Skip: docs/assets/tests
+      - '**/*.md'
+      - 'public/assets/**'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*test*'
   push:
     branches: [test]
 
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   review:
+    # Run if (A) labeled ai:review OR (B) path matched above
+    if: >
+      github.event.action == 'labeled' && contains(github.event.pull_request.labels.*.name, 'ai:review')
+      || github.event.action != 'labeled'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,11 +40,20 @@ jobs:
       LLM_API_BASE: https://api.openai.com/v1
       LLM_MODEL: gpt-5
       MAX_CHUNK_BYTES: "60000"
+      FROM_FORK: ${{ github.event.pull_request.head.repo.fork }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+
+      - name: Guard secrets for forks
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${FROM_FORK}" = "true" ] && ! grep -q '"ai:review"' <<< '${{ toJson(github.event.pull_request.labels.*.name) }}'; then
+            echo "::notice ::Fork PR without ai:review label; skipping to protect secrets."
+            exit 0
+          fi
 
       - name: Compute diff
         id: diff
@@ -39,6 +70,19 @@ jobs:
           csplit -s -f chunk_ -b "%03d.diff" pr.diff '/^diff --git /' '{*}' || true
           [ -s chunk_000.diff ] || rm -f chunk_000.diff || true
           echo "chunks=$(ls -1 chunk_*.diff 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
+
+      - name: Size guard
+        id: size
+        if: steps.diff.outputs.has_changes == 'true'
+        run: |
+          LINES=$(git diff --shortstat HEAD^ HEAD | awk '{print $(NF-1)}')
+          echo "lines=${LINES:-0}" >> $GITHUB_OUTPUT
+
+      - name: Skip tiny changes
+        if: steps.size.outputs.lines != '' && fromJSON(steps.size.outputs.lines) < 5
+        run: |
+          echo "::notice ::Tiny change (${LINES} lines); skipping AI review."
+          exit 0
 
       - name: Create prompt header
         if: steps.diff.outputs.has_changes == 'true'
@@ -82,6 +126,12 @@ jobs:
           
           # Post comment to PR
           gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
+
+      - name: Remove label after review
+        if: contains(github.event.pull_request.labels.*.name, 'ai:review')
+        run: gh pr edit ${{ github.event.pull_request.number }} --remove-label "ai:review"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Show review
         if: always() && steps.diff.outputs.has_changes == 'true'
