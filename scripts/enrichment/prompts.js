@@ -174,3 +174,111 @@ export function buildUserPayload({ primary_headline, articles }) {
   }
   return lines.join('\n');
 }
+
+// ============================================================================
+// EXECUTIVE ORDER ENRICHMENT (TTRC-217)
+// ============================================================================
+
+/**
+ * Executive Order enrichment prompt (4-part analysis framework)
+ * Used by enrich-executive-orders.js worker
+ */
+export const EO_ENRICHMENT_PROMPT = `You are a political analyst. Return ONLY valid JSON.
+
+Generate 4-part analysis for this Executive Order:
+
+1. **What They Say** (100-160 words):
+   - Official language/framing from the EO
+   - MAY include SHORT quoted phrases (cited, <20 words each)
+   - Only from: official EO text, Federal Register abstract
+   - NO third-party sources
+
+2. **What It Means** (100-160 words):
+   - Plain English translation
+   - Cut through euphemisms
+   - Real-world impact for regular people
+
+3. **Reality Check** (100-160 words):
+   - Fact verification
+   - Contradictions with official claims
+   - Historical precedent
+
+4. **Why It Matters** (100-160 words):
+   - Long-term implications
+   - Power shifts
+   - Who wins/loses
+
+**Metadata (required):**
+- category: ONE of [immigration_border, environment_energy, health_care, education, justice_civil_rights_voting, natsec_foreign, economy_jobs_taxes, technology_data_privacy, infra_housing_transport, gov_ops_workforce]
+- severity: one of [critical, severe, moderate, minor]
+- regions: max 3 strings (e.g. ["Texas", "Border States"] or ["National"])
+- policy_areas: max 3 (e.g. ["Immigration", "Civil Rights"])
+- affected_agencies: top 3 (e.g. ["DHS", "DOJ", "ICE"])
+
+**Action Framework (3-tier):**
+
+**Tier 1 (DIRECT):** 2-4 specific actions with URLs or phone numbers
+- Examples: "Donate to RAICES bond fund" + URL, "Call Congress (202-224-3121)"
+- Must have specificity ≥7/10
+- Requires at least one URL or phone number
+
+**Tier 2 (SYSTEMIC):** Long-term organizing/advocacy
+- When damage done OR no direct path
+- Examples: "Vote in 2026", "Support accountability journalism"
+- Focus on infrastructure building
+
+**Tier 3 (TRACKING):** No actions available
+- Ceremonial orders, internal ops, completed acts
+- action_section = null
+- UI shows "Tracking only" note
+
+**Quality gates:**
+- If <2 specific Tier-1 actions → downgrade to Tier 2
+- If action_confidence <7 → downgrade to Tier 2 or 3
+- NEVER fabricate URLs or organizations
+
+**Output JSON format:**
+{
+  "section_what_they_say": "...",
+  "section_what_it_means": "...",
+  "section_reality_check": "...",
+  "section_why_it_matters": "...",
+  "category": "...",
+  "severity": "...",
+  "regions": [...],
+  "policy_areas": [...],
+  "affected_agencies": [...],
+  "action_tier": "direct|systemic|tracking",
+  "action_confidence": 0-10,
+  "action_reasoning": "brief explanation",
+  "action_section": {
+    "title": "What We Can Do" | "How We Fight Back",
+    "actions": [
+      {
+        "type": "donate|call|attend|support|organize|vote",
+        "description": "specific action",
+        "specificity": 0-10,
+        "url": "https://..." (optional),
+        "deadline": "YYYY-MM-DD" (optional)
+      }
+    ]
+  } | null
+}`;
+
+/**
+ * Build user payload for EO enrichment
+ * @param {Object} eo - Executive order object
+ * @param {string} eo.order_number - EO number (e.g., "14145")
+ * @param {string} eo.title - Official title
+ * @param {string} eo.date - Signed date
+ * @param {string} eo.summary - AI summary or official abstract
+ * @returns {string} Formatted payload string
+ */
+export function buildEOPayload(eo) {
+  return `Executive Order ${eo.order_number}: "${eo.title}"
+
+Signed: ${eo.date}
+Official Summary: ${eo.summary || 'Not available'}
+
+Analyze this order and provide the 4-part analysis with metadata and action recommendations.`;
+}
