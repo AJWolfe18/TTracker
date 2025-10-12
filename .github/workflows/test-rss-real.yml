@@ -1,10 +1,11 @@
 name: Test Real RSS Pipeline
-on: 
+on:
   workflow_dispatch:
-  push:
-    branches: [test]
-  pull_request:
-    branches: [test]
+  # Disabled automatic triggers - run manually when needed
+  # push:
+  #   branches: [test]
+  # pull_request:
+  #   branches: [test]
 
 jobs:
   test-real-rss:
