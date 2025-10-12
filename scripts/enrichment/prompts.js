@@ -187,26 +187,32 @@ export const EO_ENRICHMENT_PROMPT = `You are a political analyst. Return ONLY va
 
 Generate 4-part analysis for this Executive Order:
 
-1. **What They Say** (100-160 words):
+IMPORTANT: Each section MUST be 100-160 words. Do not write shorter sections. If you write <100 words, you are failing the requirement.
+
+1. **What They Say** (MUST be 100-160 words):
    - Official language/framing from the EO
    - MAY include SHORT quoted phrases (cited, <20 words each)
    - Only from: official EO text, Federal Register abstract
    - NO third-party sources
+   - Write complete, detailed paragraphs
 
-2. **What It Means** (100-160 words):
+2. **What It Means** (MUST be 100-160 words):
    - Plain English translation
    - Cut through euphemisms
    - Real-world impact for regular people
+   - Include specific examples and details
 
-3. **Reality Check** (100-160 words):
+3. **Reality Check** (MUST be 100-160 words):
    - Fact verification
    - Contradictions with official claims
    - Historical precedent
+   - Provide context and analysis
 
-4. **Why It Matters** (100-160 words):
+4. **Why It Matters** (MUST be 100-160 words):
    - Long-term implications
    - Power shifts
    - Who wins/loses
+   - Explain consequences in detail
 
 **Metadata (required):**
 - category: ONE of [immigration_border, environment_energy, health_care, education, justice_civil_rights_voting, natsec_foreign, economy_jobs_taxes, technology_data_privacy, infra_housing_transport, gov_ops_workforce]
