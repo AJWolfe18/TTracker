@@ -27,16 +27,16 @@ jobs:
       
       - name: Run preflight check
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "🚀 Running preflight check..."
           node scripts/preflight-check.js
-          
+
       - name: Check job queue state
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "📊 Checking job queue state..."
           node scripts/diagnose-job-queue.js
