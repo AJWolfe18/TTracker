@@ -6,9 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 
 // Check for required environment variables
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.log('⏭️  Skipping preflight check - environment variables not configured');
-  console.log('   This is expected in CI without secrets.');
-  process.exit(0);
+  if (process.env.CI === 'true') {
+    console.log('⏭️  Skipping preflight check - environment variables not configured');
+    console.log('   This is expected in CI without secrets.');
+    process.exit(0);
+  } else {
+    console.error('❌ Missing required env vars: SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY');
+    process.exit(1);
+  }
 }
 
 const supabase = createClient(
