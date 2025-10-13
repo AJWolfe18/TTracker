@@ -15,10 +15,18 @@ import { generateCandidates } from './candidate-generation.js';
 import { updateCentroid, initializeCentroid, getArticleCount } from './centroid-tracking.js';
 import { extractPrimaryActor } from './clustering.js';  // Keep legacy actor extraction
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Lazy-initialize Supabase client (don't create at module load time)
+let supabase = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return supabase;
+}
 
 // ============================================================================
 // Main Clustering Function
@@ -37,7 +45,7 @@ export async function clusterArticle(articleId) {
   console.log(`[hybrid-clustering] Clustering article: ${articleId}`);
 
   // 1. Fetch article with all metadata
-  const { data: article, error: fetchError } = await supabase
+  const { data: article, error: fetchError } = await getSupabaseClient()
     .from('articles')
     .select('*')
     .eq('id', articleId)
@@ -48,7 +56,7 @@ export async function clusterArticle(articleId) {
   }
 
   // 2. Check if already clustered
-  const { data: existing, error: existingError } = await supabase
+  const { data: existing, error: existingError } = await getSupabaseClient()
     .from('article_story')
     .select('story_id')
     .eq('article_id', articleId)
@@ -70,7 +78,7 @@ export async function clusterArticle(articleId) {
     article.primary_actor = extractPrimaryActor(article.title);
 
     if (article.primary_actor) {
-      await supabase
+      await getSupabaseClient()
         .from('articles')
         .update({ primary_actor: article.primary_actor })
         .eq('id', articleId);
@@ -147,7 +155,7 @@ async function attachToStory(article, story, score) {
   const currentCount = await getArticleCount(storyId);
 
   // 2. Insert into article_story junction table
-  const { error: insertError } = await supabase
+  const { error: insertError } = await getSupabaseClient()
     .from('article_story')
     .insert({
       article_id: article.id,
@@ -185,7 +193,7 @@ async function attachToStory(article, story, score) {
     updates.lifecycle_state = 'growing';
   }
 
-  await supabase
+  await getSupabaseClient()
     .from('stories')
     .update(updates)
     .eq('id', storyId);
@@ -206,7 +214,7 @@ async function attachToStory(article, story, score) {
  */
 async function createNewStory(article) {
   // 1. Create story
-  const { data: story, error: createError } = await supabase
+  const { data: story, error: createError } = await getSupabaseClient()
     .from('stories')
     .insert({
       primary_headline: article.title,
@@ -230,7 +238,7 @@ async function createNewStory(article) {
   const storyId = story.id;
 
   // 2. Insert article-story link
-  const { error: insertError } = await supabase
+  const { error: insertError } = await getSupabaseClient()
     .from('article_story')
     .insert({
       article_id: article.id,
@@ -242,7 +250,7 @@ async function createNewStory(article) {
 
   if (insertError) {
     // Rollback story creation if link fails
-    await supabase.from('stories').delete().eq('id', storyId);
+    await getSupabaseClient().from('stories').delete().eq('id', storyId);
     throw new Error(`Failed to link article to story: ${insertError.message}`);
   }
 
@@ -272,12 +280,12 @@ export async function clusterBatch(limit = 50) {
   console.log(`[hybrid-clustering] Starting batch clustering (limit: ${limit})`);
 
   // Get unclustered articles
-  const { data: articles, error: fetchError } = await supabase
+  const { data: articles, error: fetchError } = await getSupabaseClient()
     .from('articles')
     .select('id')
     .is('embedding_v1', null)  // Articles without embeddings can't be clustered
     .not('id', 'in',
-      supabase.from('article_story').select('article_id')
+      getSupabaseClient().from('article_story').select('article_id')
     )
     .order('published_at', { ascending: true })  // Oldest first
     .limit(limit);

@@ -11,10 +11,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Lazy-initialize Supabase client (don't create at module load time)
+let supabase = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return supabase;
+}
 
 // ============================================================================
 // Configuration
@@ -83,7 +91,7 @@ async function getTimeBlockCandidates(article) {
   const startTime = new Date(publishedAt.getTime() - TIME_WINDOW_HOURS * 60 * 60 * 1000);
   const endTime = new Date(publishedAt.getTime() + 1 * 60 * 60 * 1000); // +1 hour buffer
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('stories')
     .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, last_updated_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
@@ -115,7 +123,7 @@ async function getEntityBlockCandidates(article) {
 
   // Query using array overlap operator (&&)
   // Note: Supabase PostgREST uses cs (contains) operator for array overlap
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from('stories')
     .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, last_updated_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
@@ -143,7 +151,7 @@ async function getAnnBlockCandidates(article) {
   // Note: Supabase PostgREST doesn't directly support vector operators yet
   // We need to use RPC for this
 
-  const { data, error } = await supabase.rpc('find_similar_stories', {
+  const { data, error } = await getSupabaseClient().rpc('find_similar_stories', {
     query_embedding: article.embedding_v1,
     match_limit: ANN_LIMIT
   });

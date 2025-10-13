@@ -12,10 +12,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Lazy-initialize Supabase client (don't create at module load time)
+let supabase = null;
+
+function getSupabaseClient() {
+  if (!supabase) {
+    supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+  }
+  return supabase;
+}
 
 // ============================================================================
 // Real-Time Centroid Updates
@@ -34,7 +42,7 @@ export async function updateCentroid(storyId, article, currentArticleCount) {
 
   try {
     // 1. Get current story data
-    const { data: story, error: fetchError } = await supabase
+    const { data: story, error: fetchError } = await getSupabaseClient()
       .from('stories')
       .select('centroid_embedding_v1, entity_counter, top_entities')
       .eq('id', storyId)
@@ -77,7 +85,7 @@ export async function updateCentroid(storyId, article, currentArticleCount) {
       .map(([id]) => id);
 
     // 5. Update database
-    const { error: updateError } = await supabase
+    const { error: updateError } = await getSupabaseClient()
       .from('stories')
       .update({
         centroid_embedding_v1: updatedCentroid,
@@ -124,7 +132,7 @@ export async function initializeCentroid(storyId, article) {
     const topEntities = Object.keys(entityCounter).slice(0, 5);
 
     // Update database
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('stories')
       .update({
         centroid_embedding_v1: article.embedding_v1 || null,
@@ -160,7 +168,7 @@ export async function triggerNightlyRecompute() {
   try {
     console.log('[centroid-tracking] Starting nightly centroid recompute...');
 
-    const { error } = await supabase.rpc('recompute_story_centroids');
+    const { error } = await getSupabaseClient().rpc('recompute_story_centroids');
 
     if (error) {
       console.error('[centroid-tracking] Nightly recompute failed:', error.message);
@@ -189,7 +197,7 @@ export async function getArticleCount(storyId) {
   if (!storyId) return 0;
 
   try {
-    const { count, error } = await supabase
+    const { count, error } = await getSupabaseClient()
       .from('article_story')
       .select('*', { count: 'exact', head: true })
       .eq('story_id', storyId);
