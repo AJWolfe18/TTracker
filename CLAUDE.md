@@ -247,8 +247,10 @@ UI labels → Database enum values (defined in job-queue-worker.js):
 4. **Auto-QA always** - Check edge cases, regressions, cost after every change
 5. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
 6. **State cost implications** - Always mention $ impact for new features
-7. **Test before marking complete** - Use Task tool with general-purpose agent to validate code changes before marking todos complete or creating PRs
-8. **Report token usage** - End every response with usage stats
+7. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
+8. **Test before marking complete** - Use Task tool with general-purpose agent to validate code changes before marking todos complete or creating PRs
+9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + JIRA + handoff) in todos
+10. **Report token usage** - End every response with usage stats
 
 ## Session Workflow
 
