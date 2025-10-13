@@ -29,6 +29,25 @@ function getSupabaseClient() {
 }
 
 // ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Simple string hash function (djb2 algorithm)
+ * Used for generating story_hash from headline
+ * @param {string} str - String to hash
+ * @returns {string} - Hash as hex string
+ */
+function hashString(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) + str.charCodeAt(i); // hash * 33 + c
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(16);
+}
+
+// ============================================================================
 // Main Clustering Function
 // ============================================================================
 
@@ -213,11 +232,15 @@ async function attachToStory(article, story, score) {
  * @returns {object} - Result object
  */
 async function createNewStory(article) {
+  // Generate story_hash from headline (simple hash for uniqueness)
+  const storyHash = hashString(article.title || 'untitled');
+
   // 1. Create story
   const { data: story, error: createError } = await getSupabaseClient()
     .from('stories')
     .insert({
       primary_headline: article.title,
+      story_hash: storyHash,
       primary_source: article.source_name,
       primary_source_url: article.url,
       primary_source_domain: article.source_domain,
