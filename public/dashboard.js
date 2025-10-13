@@ -78,14 +78,13 @@ const EO_ITEMS_PER_PAGE = 25;
 // Filter configurations per tab
 const FILTER_CONFIGS = {
   executive: {
-    filterKey: 'eo_impact_type',
-    allLabel: 'All Types',
+    filterKey: 'action_tier', // Using new enriched schema
+    allLabel: 'All Actions',
     placeholder: 'Search executive orders...',
     filters: [
-      { value: 'fascist_power_grab', label: 'Fascist Power Grab' },
-      { value: 'authoritarian_overreach', label: 'Authoritarian Overreach' },
-      { value: 'corrupt_grift', label: 'Corrupt Grift' },
-      { value: 'performative_bullshit', label: 'Performative Bullshit' }
+      { value: 'direct', label: 'Direct Action' },
+      { value: 'systemic', label: 'Systemic Change' },
+      { value: 'tracking', label: 'Tracking Only' }
     ]
   }
   // Add 'political' config later if tab is re-enabled
@@ -184,18 +183,20 @@ const TrumpyTrackerDashboard = () => {
   const applyUnifiedFilters = useCallback((data, searchTerm, selectedFilter, filterKey) => {
     let filtered = [...data];
 
-    // 1. Search filter (searches across title, summary fields)
+    // 1. Search filter (searches across title and enriched sections)
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(item =>
         item.title?.toLowerCase().includes(term) ||
-        item.summary?.toLowerCase().includes(term) ||
-        item.spicy_summary?.toLowerCase().includes(term) ||
-        item.description?.toLowerCase().includes(term)
+        item.section_what_they_say?.toLowerCase().includes(term) ||
+        item.section_what_it_means?.toLowerCase().includes(term) ||
+        item.section_reality_check?.toLowerCase().includes(term) ||
+        item.section_why_it_matters?.toLowerCase().includes(term) ||
+        item.order_number?.toString().includes(term)
       );
     }
 
-    // 2. Category/Type filter
+    // 2. Action tier filter (using new enriched schema)
     if (selectedFilter !== 'all') {
       filtered = filtered.filter(item => item[filterKey] === selectedFilter);
     }
@@ -537,18 +538,6 @@ const TrumpyTrackerDashboard = () => {
             </div>
           </div>
 
-          {/* Navigation Links */}
-          <div className="flex justify-center gap-4 mt-4">
-            <a
-              href="/executive-orders.html"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Executive Orders Tracker
-            </a>
-          </div>
         </header>
 
         {/* Error banner if there's an error but we have cached data */}

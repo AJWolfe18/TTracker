@@ -414,66 +414,84 @@
   // ==================== Component: ExecutiveOrderCard ====================
   window.DashboardComponents.ExecutiveOrderCard = ({ order, index = 0, showShareButtons = false }) => {
     const [expanded, setExpanded] = useState(false);
-    const hasSpicySummary = !!order.spicy_summary;
-    const displaySummary = order.spicy_summary || order.summary;
-    const hasLongSummary = displaySummary?.length > 200;
-    
-    // Get impact label for EOs (without emoji since we're using colored pills)
-    const getImpactLabel = () => {
-      // Map impact types to labels WITHOUT emojis
-      const impactMap = {
-        'fascist_power_grab': 'Fascist Power Grab',
-        'authoritarian_overreach': 'Authoritarian Overreach',
-        'corrupt_grift': 'Corrupt Grift',
-        'performative_bullshit': 'Performative Bullshit'
+
+    // Check if this EO has enriched data (TTRC-219 backfill)
+    const hasEnrichedData = !!order.enriched_at;
+
+    // Use "What It Means" section as high-level summary (best overview for dashboard)
+    const summary = order.section_what_it_means || '';
+    const hasLongSummary = summary?.length > 300;
+
+    // Map category enum to display label
+    const getCategoryLabel = () => {
+      const categoryMap = {
+        'immigration_border': 'Immigration & Border',
+        'economy_jobs_taxes': 'Economy, Jobs & Taxes',
+        'environment_energy': 'Environment & Energy',
+        'justice_civil_rights_voting': 'Justice & Civil Rights',
+        'health_care': 'Health Care',
+        'education': 'Education',
+        'natsec_foreign': 'National Security & Foreign Policy',
+        'gov_ops_workforce': 'Government Operations',
+        'technology_data_privacy': 'Technology & Data Privacy',
+        'infra_housing_transport': 'Infrastructure & Housing'
       };
-      
-      // Always use the mapped label, ignore severity_label_inapp which has emojis
-      return impactMap[order.eo_impact_type] || '';
+      return categoryMap[order.category] || order.category;
     };
-    
+
+    // Map action tier to display label with color
+    const getActionTierInfo = () => {
+      const tierMap = {
+        'direct': { label: 'Direct Action', color: 'bg-red-600' },
+        'systemic': { label: 'Systemic Change', color: 'bg-orange-600' },
+        'tracking': { label: 'Tracking Only', color: 'bg-blue-600' }
+      };
+      return tierMap[order.action_tier] || { label: order.action_tier, color: 'bg-gray-700' };
+    };
+
     // Share functions
     const shareToX = () => {
-      const text = order.shareable_hook || displaySummary?.substring(0, 200) || '';
+      const text = `Executive Order ${order.order_number}: ${order.title}\n\n${summary.substring(0, 200)}...\n\nLearn more at TrumpyTracker.com`;
       window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
     };
-    
+
     const shareToFacebook = () => {
-      const text = order.shareable_hook || '';
+      const text = `Executive Order ${order.order_number}: ${order.title}`;
       window.open(`https://www.facebook.com/sharer/sharer.php?quote=${encodeURIComponent(text)}`, '_blank');
     };
-    
+
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl" style={{
+      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl cursor-pointer" style={{
         animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
         animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
       }}>
-        
-        {/* Title First */}
+
+        {/* Title */}
         <h3 className="text-lg font-bold text-white mb-3">{order.title}</h3>
-        
+
         {/* Metadata Line */}
         <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
           <span className="font-medium">EO {order.order_number}</span>
           <span>•</span>
           <span>{formatDate(order.date)}</span>
           <span>•</span>
-          <a 
-            href={order.source_url} 
-            target="_blank" 
+          <a
+            href={order.source_url}
+            target="_blank"
             rel="noopener noreferrer"
             className="text-blue-400 hover:text-blue-300"
+            onClick={(e) => e.stopPropagation()}
           >
             WhiteHouse.gov
           </a>
         </div>
-        
-        {/* Spicy Translation */}
-        {displaySummary && (
+
+        {/* High-Level Summary */}
+        {hasEnrichedData && summary ? (
           <div className="mb-4">
-            <p 
+            <p
               className="text-gray-100 leading-relaxed transition-all duration-300"
-              style={!expanded ? {
+              style={!expanded && hasLongSummary ? {
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
@@ -481,59 +499,55 @@
                 textOverflow: 'ellipsis'
               } : {}}
             >
-              {displaySummary}
+              {summary}
             </p>
             {hasLongSummary && (
               <button
-                onClick={() => setExpanded(!expanded)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(!expanded);
+                }}
                 className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
               >
                 {expanded ? 'Show less ↑' : 'Read more →'}
               </button>
             )}
           </div>
-        )}
-        
-        {/* Shareable Hook - HIDDEN for now, will show on share action */}
-        {/* order.shareable_hook && hasSpicySummary && (
-          <div className="bg-gray-900/30 border-l-4 border-gray-600 pl-4 py-2 mb-4">
+        ) : (
+          /* Non-enriched fallback */
+          <div className="mb-4">
             <p className="text-gray-300 text-sm italic">
-              "{order.shareable_hook}"
+              AI enrichment coming soon for this executive order.
             </p>
           </div>
-        ) */}
-        
-        {/* Bottom Actions */}
+        )}
+
+        {/* Bottom Metadata & Actions */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Impact Badge */}
-            {hasSpicySummary && getImpactLabel() && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                order.eo_impact_type === 'fascist_power_grab' ? 'bg-red-600' :
-                order.eo_impact_type === 'authoritarian_overreach' ? 'bg-orange-600' :
-                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-white' :
-                order.eo_impact_type === 'performative_bullshit' ? 'bg-green-600' :
-                'bg-gray-700'
-              } text-white`}>
-                {getImpactLabel()}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Action Tier Badge */}
+            {hasEnrichedData && order.action_tier && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${getActionTierInfo().color}`}>
+                {getActionTierInfo().label}
               </span>
             )}
-            
+
             {/* Category */}
-            {order.category && (
-              <span className="text-xs text-gray-500">
-                {window.CategoryConfig?.formatCategoryDisplay ? 
-                  window.CategoryConfig.formatCategoryDisplay(order.category) : 
-                  order.category}
+            {hasEnrichedData && order.category && (
+              <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-1 rounded">
+                {getCategoryLabel()}
               </span>
             )}
           </div>
-          
-          {/* Share Icons - Configurable via prop */}
-          {showShareButtons && hasSpicySummary && (
+
+          {/* Share Icons - Only show for enriched EOs */}
+          {showShareButtons && hasEnrichedData && (
             <div className="flex gap-2">
               <button
-                onClick={shareToX}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  shareToX();
+                }}
                 aria-label="Share on X"
                 className="text-gray-400 hover:text-white transition-colors"
               >
@@ -542,7 +556,10 @@
                 </svg>
               </button>
               <button
-                onClick={shareToFacebook}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  shareToFacebook();
+                }}
                 aria-label="Share on Facebook"
                 className="text-gray-400 hover:text-blue-500 transition-colors"
               >
