@@ -503,16 +503,16 @@ const TrumpyTrackerDashboard = () => {
           <div className="flex items-center justify-center mb-6">
             <div className="flex items-center space-x-4">
               <div className="w-20 h-20 flex items-center justify-center">
-                <a 
-                  href="./trumpytracker-logo.jpeg" 
-                  target="_blank" 
+                <a
+                  href="./trumpytracker-logo.jpeg"
+                  target="_blank"
                   rel="noopener noreferrer"
                   title="Click to view logo full size"
                   className="cursor-pointer hover:opacity-80 transition-opacity"
                 >
-                  <img 
-                    src="./trumpytracker-logo.jpeg" 
-                    alt="TrumpyTracker Logo" 
+                  <img
+                    src="./trumpytracker-logo.jpeg"
+                    alt="TrumpyTracker Logo"
                     className="w-full h-full object-contain rounded-lg shadow-lg hover:shadow-xl transition-shadow"
                     onError={(e) => {
                       e.target.style.display = 'none';
@@ -520,14 +520,14 @@ const TrumpyTrackerDashboard = () => {
                     }}
                   />
                 </a>
-                <div 
-                  className="w-full h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg" 
+                <div
+                  className="w-full h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center shadow-lg"
                   style={{display: 'none'}}
                 >
                   <span className="text-2xl font-bold">T2</span>
                 </div>
               </div>
-              
+
               <div className="text-left">
                 <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent mb-2">
                   TRUMPYTRACKER
@@ -535,6 +535,19 @@ const TrumpyTrackerDashboard = () => {
                 <p className="text-gray-300 text-lg">Tracking the Corruption. Every Damn Day.</p>
               </div>
             </div>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="flex justify-center gap-4 mt-4">
+            <a
+              href="/executive-orders.html"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Executive Orders Tracker
+            </a>
           </div>
         </header>
 
