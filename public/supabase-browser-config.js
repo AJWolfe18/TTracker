@@ -4,11 +4,17 @@
 
 (function() {
     // Detect if we're on test environment based on URL
+    // Use precise matching to avoid false positives (e.g., 'latest.example.com' matching 'test.')
+    const host = window.location.hostname;
+    const labels = host.split('.');
+    const firstLabel = labels[0] || '';
+    const hasTestSubdomain = labels.slice(0, -1).includes('test');
+    const searchParams = new URLSearchParams(window.location.search);
     const isTestEnvironment =
-        window.location.hostname.includes('test--') ||  // Netlify branch deploy (test--...)
-        window.location.hostname.includes('test.') ||   // Test subdomain
-        window.location.hostname.includes('deploy-preview-') || // Netlify PR previews
-        window.location.search.includes('env=test');
+        hasTestSubdomain ||                            // 'test' as a subdomain label (e.g., sub.test.example.com)
+        firstLabel.startsWith('test--') ||             // Netlify branch deploy 'test--...'
+        firstLabel.startsWith('deploy-preview-') ||    // Netlify PR previews
+        searchParams.get('env') === 'test';            // Query parameter exact match
 
     // Configuration (NO SERVICE KEYS IN BROWSER!)
     const PRODUCTION_CONFIG = {
