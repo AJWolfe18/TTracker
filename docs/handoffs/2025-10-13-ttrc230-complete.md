@@ -161,7 +161,6 @@ These articles should cluster together and can be used to validate clustering ac
 
 ```bash
 # Run stale reopening test
-cd C:\Users\Josh\OneDrive\Desktop\GitHub\TTracker
 node scripts/test-stale-reopening.js
 
 # Expected output:
