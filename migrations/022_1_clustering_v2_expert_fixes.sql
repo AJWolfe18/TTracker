@@ -123,51 +123,106 @@ CENTROID UPDATE STRATEGY:
 - Nightly (2am): Exact recompute via AVG(embedding_v1) to fix drift';
 
 -- ============================================================================
--- Helper Function: Nightly Centroid Recompute
+-- Helper Function: Nightly Centroid Recompute (FIXED)
 -- ============================================================================
 -- Fixes drift from running averages by recomputing exact centroids
+-- Also rebuilds entity_counter and top_entities (null-safe)
 
 CREATE OR REPLACE FUNCTION recompute_story_centroids()
 RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  UPDATE stories s
-  SET 
-    centroid_embedding_v1 = agg.exact_centroid,
-    entity_counter = agg.counter,
-    top_entities = agg.top5
-  FROM (
-    SELECT
-      st.id,
-      AVG(a.embedding_v1) AS exact_centroid,  -- pgvector supports AVG
-      jsonb_object_agg(
-        entity_id, 
-        entity_count
-      ) AS counter,
-      ARRAY(
-        SELECT entity_id 
-        FROM jsonb_each_text(jsonb_object_agg(entity_id, entity_count))
-        ORDER BY value::int DESC 
-        LIMIT 5
-      ) AS top5
+  WITH sa AS (  -- story ⇄ article embeddings
+    SELECT st.id AS story_id, a.embedding_v1
     FROM stories st
     JOIN article_story asg ON asg.story_id = st.id
-    JOIN articles a ON a.id = asg.article_id
-    CROSS JOIN LATERAL (
-      SELECT jsonb_array_elements(a.entities)->>'id' AS entity_id
-    ) entities
+    JOIN articles a        ON a.id = asg.article_id
     WHERE a.embedding_v1 IS NOT NULL
-    GROUP BY st.id
-  ) agg
-  WHERE s.id = agg.id;
+  ),
+  centroids AS (  -- exact centroid per story (pgvector supports AVG)
+    SELECT story_id, AVG(embedding_v1) AS exact_centroid
+    FROM sa
+    GROUP BY story_id
+  ),
+  ent_raw AS (  -- flatten entities: [{"id": "..."}]
+    SELECT st.id AS story_id,
+           (ent->>'id') AS entity_id
+    FROM stories st
+    JOIN article_story asg ON asg.story_id = st.id
+    JOIN articles a        ON a.id = asg.article_id
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(a.entities, '[]'::jsonb)) ent
+    WHERE a.entities IS NOT NULL
+  ),
+  ent_counts AS (  -- count entities per story
+    SELECT story_id, entity_id, COUNT(*)::int AS cnt
+    FROM ent_raw
+    WHERE entity_id IS NOT NULL AND entity_id <> ''
+    GROUP BY story_id, entity_id
+  ),
+  counters AS (   -- build jsonb counter and top-5 list
+    SELECT
+      story_id,
+      jsonb_object_agg(entity_id, cnt)           AS counter,
+      ARRAY(
+        SELECT ec2.entity_id
+        FROM ent_counts ec2
+        WHERE ec2.story_id = ec.story_id
+        ORDER BY ec2.cnt DESC, ec2.entity_id ASC
+        LIMIT 5
+      )                                          AS top5
+    FROM ent_counts ec
+    GROUP BY story_id
+  ),
+  agg AS (
+    SELECT c.story_id,
+           c.exact_centroid,
+           COALESCE(k.counter, '{}'::jsonb)      AS counter,
+           COALESCE(k.top5, ARRAY[]::text[])     AS top5
+    FROM centroids c
+    LEFT JOIN counters k USING (story_id)
+  )
+  UPDATE stories s
+  SET centroid_embedding_v1 = agg.exact_centroid,
+      entity_counter        = agg.counter,
+      top_entities          = agg.top5
+  FROM agg
+  WHERE s.id = agg.story_id;
 END;
 $$;
 
-COMMENT ON FUNCTION recompute_story_centroids IS 
-  'Nightly job (cron at 2am) to recompute exact centroids and fix drift from running averages. Updates centroid_embedding_v1, entity_counter, and top_entities.';
+COMMENT ON FUNCTION recompute_story_centroids IS
+  'Nightly job (2am) to recompute exact centroids and fix drift. Also rebuilds entity_counter (jsonb map) and top_entities (top-5 ids).';
 
 GRANT EXECUTE ON FUNCTION recompute_story_centroids TO service_role, authenticated;
+
+-- ============================================================================
+-- Helper Function: Hamming Distance for SimHash (Optional but Recommended)
+-- ============================================================================
+-- Computes Hamming distance between two bigint SimHash values
+-- Used for near-duplicate detection: distance ≤3 = 90%+ similar
+
+CREATE OR REPLACE FUNCTION hamming_distance_bigint(a bigint, b bigint)
+RETURNS int
+LANGUAGE plpgsql IMMUTABLE STRICT
+AS $$
+DECLARE
+  x bigint := a # b;  -- XOR
+  c int := 0;
+BEGIN
+  -- popcount loop (fast enough for small candidate sets)
+  WHILE x <> 0 LOOP
+    x := x & (x - 1);  -- clear lowest set bit
+    c := c + 1;
+  END LOOP;
+  RETURN c;
+END;
+$$;
+
+COMMENT ON FUNCTION hamming_distance_bigint IS
+  'Computes Hamming distance (number of differing bits) between two bigint values. Used for SimHash near-duplicate detection.';
+
+GRANT EXECUTE ON FUNCTION hamming_distance_bigint TO service_role, authenticated, anon;
 
 -- ============================================================================
 -- Migration 022.1 Complete
@@ -175,14 +230,24 @@ GRANT EXECUTE ON FUNCTION recompute_story_centroids TO service_role, authenticat
 
 -- Summary of changes:
 -- ✅ Added stories.top_entities for fast entity filtering
--- ✅ Added articles.text_simhash for duplicate detection  
+-- ✅ Added articles.text_simhash for duplicate detection
 -- ✅ Made stories.entity_counter NOT NULL (safe-by-default)
 -- ✅ Added cost cap documentation to openai_usage table
 -- ✅ Added production-ready candidate generation SQL to centroid comment
--- ✅ Added recompute_story_centroids() for nightly drift correction
+-- ✅ Added recompute_story_centroids() for nightly drift correction (FIXED)
+-- ✅ Added hamming_distance_bigint() for SimHash duplicate detection
 
 -- Next steps:
 -- 1. Apply this migration to TEST database
--- 2. Update openai-client.js with $5/day pipeline cap
--- 3. Update extraction-utils.js to calculate text_simhash
+-- 2. Update openai-client.js with $5/day pipeline cap (✅ DONE)
+-- 3. Update extraction-utils.js to calculate text_simhash (✅ DONE)
 -- 4. Backfill top_entities from entity_counter (if any exist)
+-- 5. For duplicate detection: Pull candidate pool (same domain/time), then:
+--    SELECT * WHERE hamming_distance_bigint(text_simhash, $1) <= 3
+
+-- Performance notes:
+-- - text_simhash index only accelerates equality lookups
+-- - For "Hamming ≤ 3" queries, consider bucketing by top-N bits in application
+--   (e.g., group by 8-12 MSBs) to reduce comparison candidates before Hamming test
+-- - top_entities sync: Call recompute_story_centroids() after large backfills
+--   or add worker hook when entity_counter is updated
