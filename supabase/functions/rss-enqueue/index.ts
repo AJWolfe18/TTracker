@@ -22,11 +22,11 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
+
     if (!supabaseUrl || !serviceKey) {
       return new Response(
-        JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }), 
-        { 
+        JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }),
+        {
           status: 500,
           headers: { ...corsHeaders, "content-type": "application/json" }
         }
@@ -35,10 +35,98 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // Parse request body to check for job type
+    let requestBody: any = {};
+    try {
+      const text = await req.text();
+      if (text) {
+        requestBody = JSON.parse(text);
+      }
+    } catch {
+      // Default to RSS fetch if no body provided
+      requestBody = {};
+    }
+
+    // Handle lifecycle job enqueue (TTRC-231)
+    if (requestBody.kind === 'lifecycle' || requestBody.kind === 'story.lifecycle') {
+      const { error } = await supabase
+        .from("job_queue")
+        .insert({
+          job_type: "story.lifecycle",
+          payload: {
+            triggered_by: "github_actions_cron",
+            triggered_at: new Date().toISOString()
+          },
+          priority: 5,
+          run_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: `Failed to enqueue lifecycle job: ${error.message}` }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "content-type": "application/json" }
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          enqueued: 1,
+          job_type: "story.lifecycle",
+          message: "Lifecycle update job enqueued successfully",
+          timestamp: new Date().toISOString()
+        }),
+        {
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        }
+      );
+    }
+
+    // Handle story merge job enqueue (TTRC-231)
+    if (requestBody.kind === 'story.merge') {
+      const { error } = await supabase
+        .from("job_queue")
+        .insert({
+          job_type: "story.merge",
+          payload: {
+            triggered_by: "github_actions_cron",
+            triggered_at: new Date().toISOString(),
+            limit: 10,
+            threshold: 0.70
+          },
+          priority: 5,
+          run_at: new Date().toISOString(),
+        });
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: `Failed to enqueue merge job: ${error.message}` }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "content-type": "application/json" }
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          enqueued: 1,
+          job_type: "story.merge",
+          message: "Story merge job enqueued successfully",
+          timestamp: new Date().toISOString()
+        }),
+        {
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        }
+      );
+    }
+
     // Pull active feeds that aren't in heavy backoff (failure_count < 5)
     const { data: feeds, error: feedError } = await supabase
       .from("feed_registry")
-      .select("id, url, source_name, failure_count")
+      .select("id, feed_url, source_name, failure_count")
       .eq("is_active", true)
       .lt("failure_count", 5)
       .order("source_name");
@@ -76,9 +164,9 @@ serve(async (req) => {
             .from("job_queue")
             .insert({
               job_type: "fetch_feed",
-              payload: { 
-                feed_id: feed.id, 
-                url: feed.url,
+              payload: {
+                feed_id: feed.id,
+                url: feed.feed_url,
                 source_name: feed.source_name
               },
               run_at: new Date().toISOString(),

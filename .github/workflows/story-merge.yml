@@ -1,0 +1,20 @@
+name: Story Merge Detection
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2am UTC
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  merge-stories:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger story merge detection
+        run: |
+          curl -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/rss-enqueue" \
+               -H "Authorization: Bearer ${{ secrets.EDGE_CRON_TOKEN }}" \
+               -H "Content-Type: application/json" \
+               -d '{"kind":"story.merge"}' \
+               --fail-with-body
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

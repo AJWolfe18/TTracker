@@ -7,6 +7,9 @@ import OpenAI from 'openai';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
+import { updateLifecycleStates } from './rss/lifecycle.js';
+import { checkAndSplitStory } from './rss/auto-split.js';
+import { runMergeDetection } from './rss/periodic-merge.js';
 import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -67,7 +70,10 @@ class JobProcessor {
       'story.cluster': (payload) => clusteringHandlers['story.cluster'](payload, supabase),
       'story.cluster.batch': (payload) => clusteringHandlers['story.cluster.batch'](payload, supabase),
       'story.enrich': this.enrichStory.bind(this),
-      // 'article.enrich': this.enrichArticle.bind(this), 
+      'story.lifecycle': this.updateLifecycle.bind(this),
+      'story.split': this.splitStory.bind(this),
+      'story.merge': this.mergeStories.bind(this),
+      // 'article.enrich': this.enrichArticle.bind(this),
       'process_article': this.processArticle.bind(this)
     };
   }
@@ -188,7 +194,7 @@ class JobProcessor {
 
   async enrichArticle(payload) {
     const { article_id } = payload;
-    
+
     if (!openai) {
       throw new Error('OpenAI not configured');
     }
@@ -206,13 +212,13 @@ class JobProcessor {
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
-        { 
-          role: 'system', 
+        {
+          role: 'system',
           content: 'Extract key entities and topics from this article. Return JSON with: entities (array of people/orgs), topics (array of themes), sentiment (positive/negative/neutral)'
         },
-        { 
-          role: 'user', 
-          content: `Title: ${article.title}\n\nContent: ${article.content || article.description || ''}` 
+        {
+          role: 'user',
+          content: `Title: ${article.title}\n\nContent: ${article.content || article.description || ''}`
         }
       ],
       max_tokens: 200,
@@ -229,7 +235,7 @@ class JobProcessor {
     // Update article with enrichment
     await supabase
       .from('articles')
-      .update({ 
+      .update({
         entities: enrichment.entities || [],
         topics: enrichment.topics || [],
         sentiment: enrichment.sentiment || 'neutral'
@@ -237,6 +243,56 @@ class JobProcessor {
       .eq('id', article_id);
 
     return { article_id, enrichment };
+  }
+
+  /**
+   * TTRC-231: Update story lifecycle states
+   * Calls updateLifecycleStates() which uses SQL function
+   */
+  async updateLifecycle(payload) {
+    console.log('[job-queue-worker] Running lifecycle update...');
+    const result = await updateLifecycleStates();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Lifecycle update failed');
+    }
+
+    return result;
+  }
+
+  /**
+   * TTRC-231: Auto-split story detection
+   * Checks if story has low coherence and splits if needed
+   */
+  async splitStory(payload) {
+    const { story_id, threshold } = payload || {};
+    if (!story_id) throw new Error('story_id required');
+
+    console.log(`[job-queue-worker] Checking split for story ${story_id}...`);
+    const result = await checkAndSplitStory(story_id, threshold);
+
+    if (!result.success) {
+      throw new Error(result.error || 'Split check failed');
+    }
+
+    return result;
+  }
+
+  /**
+   * TTRC-231: Periodic merge detection
+   * Finds and merges duplicate stories
+   */
+  async mergeStories(payload) {
+    const { limit, threshold } = payload || {};
+
+    console.log('[job-queue-worker] Running merge detection...');
+    const result = await runMergeDetection(limit, threshold);
+
+    if (!result.success) {
+      throw new Error(result.error || 'Merge detection failed');
+    }
+
+    return result;
   }
 
   /**
