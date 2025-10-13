@@ -53,6 +53,11 @@ export async function updateCentroid(storyId, article, currentArticleCount) {
       return false;
     }
 
+    // Parse centroid if it's a JSON string (Supabase returns vectors as strings)
+    if (story.centroid_embedding_v1 && typeof story.centroid_embedding_v1 === 'string') {
+      story.centroid_embedding_v1 = JSON.parse(story.centroid_embedding_v1);
+    }
+
     // 2. Calculate new centroid (running average)
     let updatedCentroid = null;
     if (article.embedding_v1 && article.embedding_v1.length > 0) {

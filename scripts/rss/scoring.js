@@ -67,42 +67,60 @@ export function calculateHybridScore(article, story) {
     article.embedding_v1,
     story.centroid_embedding_v1
   );
-  score += WEIGHTS.embedding * embeddingScore;
+  const embeddingWeighted = WEIGHTS.embedding * embeddingScore;
+  score += embeddingWeighted;
 
   // 2. Entity overlap (25%)
   const entityScore = calculateEntityScore(
     article.entities,
     story.entity_counter
   );
-  score += WEIGHTS.entities * entityScore;
+  const entityWeighted = WEIGHTS.entities * entityScore;
+  score += entityWeighted;
 
   // 3. Title TF-IDF similarity (15%)
   const titleScore = calculateTitleScore(
     article.title,
     story.primary_headline
   );
-  score += WEIGHTS.title * titleScore;
+  const titleWeighted = WEIGHTS.title * titleScore;
+  score += titleWeighted;
 
   // 4. Time decay factor (10%)
   const timeScore = calculateTimeScore(
     article.published_at,
     story.last_updated_at
   );
-  score += WEIGHTS.time * timeScore;
+  const timeWeighted = WEIGHTS.time * timeScore;
+  score += timeWeighted;
 
   // 5. Keyphrase overlap (5%)
   const keyphraseScore = calculateKeyphraseScore(
     article.keyphrases,
     story.top_entities  // Use top entities as proxy for keyphrases
   );
-  score += WEIGHTS.keyphrases * keyphraseScore;
+  const keyphraseWeighted = WEIGHTS.keyphrases * keyphraseScore;
+  score += keyphraseWeighted;
 
   // 6. Geography overlap (5%)
   const geoScore = calculateGeoScore(
     article.geo,
     story.geography  // Assume stories have aggregated geography
   );
-  score += WEIGHTS.geography * geoScore;
+  const geoWeighted = WEIGHTS.geography * geoScore;
+  score += geoWeighted;
+
+  // Debug logging for story #290
+  if (story.id === 290) {
+    console.log(`[scoring] Story #290 score breakdown:`);
+    console.log(`  Embedding: ${embeddingScore.toFixed(3)} × ${WEIGHTS.embedding} = ${embeddingWeighted.toFixed(3)}`);
+    console.log(`  Entities: ${entityScore.toFixed(3)} × ${WEIGHTS.entities} = ${entityWeighted.toFixed(3)}`);
+    console.log(`  Title: ${titleScore.toFixed(3)} × ${WEIGHTS.title} = ${titleWeighted.toFixed(3)}`);
+    console.log(`  Time: ${timeScore.toFixed(3)} × ${WEIGHTS.time} = ${timeWeighted.toFixed(3)}`);
+    console.log(`  Keyphrases: ${keyphraseScore.toFixed(3)} × ${WEIGHTS.keyphrases} = ${keyphraseWeighted.toFixed(3)}`);
+    console.log(`  Geography: ${geoScore.toFixed(3)} × ${WEIGHTS.geography} = ${geoWeighted.toFixed(3)}`);
+    console.log(`  Subtotal: ${score.toFixed(3)}`);
+  }
 
   // Bonuses
   let bonuses = 0.0;

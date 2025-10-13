@@ -61,6 +61,7 @@ export async function clusterArticle(articleId) {
     throw new Error('articleId required');
   }
 
+  const totalStart = Date.now();
   console.log(`[hybrid-clustering] Clustering article: ${articleId}`);
 
   // 1. Fetch article with all metadata
@@ -104,10 +105,22 @@ export async function clusterArticle(articleId) {
     }
   }
 
-  // 4. Generate candidate stories
+  // 4. Parse embeddings if they're JSON strings (Supabase returns vectors as strings)
+  if (article.embedding_v1 && typeof article.embedding_v1 === 'string') {
+    article.embedding_v1 = JSON.parse(article.embedding_v1);
+  }
+
+  // 5. Generate candidate stories
   const startTime = Date.now();
   const candidates = await generateCandidates(article);
   const candidateTime = Date.now() - startTime;
+
+  // Parse candidate story centroids
+  candidates.forEach(story => {
+    if (story.centroid_embedding_v1 && typeof story.centroid_embedding_v1 === 'string') {
+      story.centroid_embedding_v1 = JSON.parse(story.centroid_embedding_v1);
+    }
+  });
 
   console.log(`[hybrid-clustering] Found ${candidates.length} candidates in ${candidateTime}ms`);
 
@@ -116,18 +129,32 @@ export async function clusterArticle(articleId) {
   }
 
   // 5. Score each candidate
+  const scoringStart = Date.now();
   const scoredCandidates = candidates
     .map(story => ({
       story,
       score: calculateHybridScore(article, story)
     }))
     .sort((a, b) => b.score - a.score);  // Sort by score descending
+  const scoringTime = Date.now() - scoringStart;
+
+  console.log(`[hybrid-clustering] Scored ${candidates.length} candidates in ${scoringTime}ms (${(scoringTime / candidates.length).toFixed(1)}ms avg per candidate)`);
+
+  if (scoringTime > 50 * candidates.length) {
+    console.warn(`[hybrid-clustering] ⚠️ Scoring slow: ${scoringTime}ms for ${candidates.length} candidates (target: <50ms per candidate)`);
+  }
 
   // 6. Get adaptive threshold for this article
   const threshold = getThreshold(article);
 
   // 7. Find best match above threshold
   const bestMatch = scoredCandidates[0];
+
+  // Debug logging for threshold comparison
+  console.log(`[hybrid-clustering] Best match: score=${bestMatch?.score?.toFixed(3) || 'N/A'}, threshold=${threshold.toFixed(3)}`);
+  if (bestMatch) {
+    console.log(`[hybrid-clustering] Best story: ID=${bestMatch.story.id}, headline="${bestMatch.story.primary_headline}"`);
+  }
 
   if (bestMatch && bestMatch.score >= threshold) {
     // Check if story is stale and needs special permission
@@ -141,7 +168,13 @@ export async function clusterArticle(articleId) {
       // Attach to existing story
       const result = await attachToStory(article, story, bestMatch.score);
 
+      const totalTime = Date.now() - totalStart;
       console.log(`[hybrid-clustering] ✅ Attached article ${articleId} to story ${story.id} (score: ${bestMatch.score.toFixed(3)}, threshold: ${threshold})`);
+      console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+
+      if (totalTime > 500) {
+        console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+      }
 
       return result;
     }
@@ -150,7 +183,13 @@ export async function clusterArticle(articleId) {
   // 8. No match found - create new story
   const result = await createNewStory(article);
 
+  const totalTime = Date.now() - totalStart;
   console.log(`[hybrid-clustering] 🆕 Created new story ${result.story_id} for article ${articleId} (best score: ${bestMatch?.score?.toFixed(3) || 'N/A'}, threshold: ${threshold})`);
+  console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+
+  if (totalTime > 500) {
+    console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+  }
 
   return result;
 }
@@ -210,6 +249,15 @@ async function attachToStory(article, story, score) {
   // Reopen stale story if needed
   if (reopened) {
     updates.lifecycle_state = 'growing';
+    
+    // Get current reopen_count to increment it
+    const { data: currentStory } = await getSupabaseClient()
+      .from('stories')
+      .select('reopen_count')
+      .eq('id', storyId)
+      .single();
+    
+    updates.reopen_count = (currentStory?.reopen_count || 0) + 1;
   }
 
   await getSupabaseClient()
@@ -302,16 +350,13 @@ async function createNewStory(article) {
 export async function clusterBatch(limit = 50) {
   console.log(`[hybrid-clustering] Starting batch clustering (limit: ${limit})`);
 
-  // Get unclustered articles
+  // Get articles with embeddings (we'll skip already clustered ones in the loop)
   const { data: articles, error: fetchError } = await getSupabaseClient()
     .from('articles')
     .select('id')
-    .is('embedding_v1', null)  // Articles without embeddings can't be clustered
-    .not('id', 'in',
-      getSupabaseClient().from('article_story').select('article_id')
-    )
-    .order('published_at', { ascending: true })  // Oldest first
-    .limit(limit);
+    .not('embedding_v1', 'is', null)  // Articles with embeddings
+    .order('published_at', { ascending: false })  // Newest first
+    .limit(limit * 2);  // Get extra to account for already clustered
 
   if (fetchError) {
     throw new Error(`Failed to fetch articles: ${fetchError.message}`);
@@ -337,10 +382,17 @@ export async function clusterBatch(limit = 50) {
     errors: 0
   };
 
+  const timings = [];
+  const batchStart = Date.now();
+
   // Process each article
   for (const { id } of articles) {
     try {
+      const articleStart = Date.now();
       const result = await clusterArticle(id);
+      const articleTime = Date.now() - articleStart;
+
+      timings.push(articleTime);
 
       results.processed++;
       if (result.created_new) {
@@ -361,7 +413,23 @@ export async function clusterBatch(limit = 50) {
     }
   }
 
+  const batchTime = Date.now() - batchStart;
+
+  // Calculate percentiles
+  timings.sort((a, b) => a - b);
+  const p50 = timings[Math.floor(timings.length * 0.50)] || 0;
+  const p95 = timings[Math.floor(timings.length * 0.95)] || 0;
+  const p99 = timings[Math.floor(timings.length * 0.99)] || 0;
+  const avg = timings.length > 0 ? timings.reduce((a, b) => a + b, 0) / timings.length : 0;
+
   console.log('[hybrid-clustering] Batch clustering complete:', results);
+  console.log(`[PERF] Batch performance: ${batchTime}ms total, ${avg.toFixed(0)}ms avg`);
+  console.log(`[PERF] Latency percentiles: p50=${p50}ms, p95=${p95}ms, p99=${p99}ms`);
+
+  if (p95 > 500) {
+    console.warn(`[PERF] ⚠️ p95 latency ${p95}ms exceeds target (500ms)`);
+  }
+
   return results;
 }
 

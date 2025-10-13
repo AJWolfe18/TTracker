@@ -32,7 +32,9 @@ const TIME_WINDOW_HOURS = 72;   // 3 days
 const ANN_LIMIT = 60;            // Top-K nearest neighbors
 const MAX_CANDIDATES = 200;      // Total candidate limit
 
-const ACTIVE_LIFECYCLE_STATES = ['emerging', 'growing', 'stable'];
+// Include 'stale' to enable stale story reopening
+// canReopenStaleStory() will enforce stricter criteria (score >=0.80)
+const ACTIVE_LIFECYCLE_STATES = ['emerging', 'growing', 'stable', 'stale'];
 
 // ============================================================================
 // Main Candidate Generation
@@ -153,7 +155,8 @@ async function getAnnBlockCandidates(article) {
 
   const { data, error } = await getSupabaseClient().rpc('find_similar_stories', {
     query_embedding: article.embedding_v1,
-    match_limit: ANN_LIMIT
+    match_limit: ANN_LIMIT,
+    min_similarity: 0.0  // New parameter from migration 024
   });
 
   if (error) {
@@ -203,7 +206,7 @@ async function getAnnBlockCandidates(article) {
  *     1 - (s.centroid_embedding_v1 <=> query_embedding) AS similarity
  *   FROM stories s
  *   WHERE s.centroid_embedding_v1 IS NOT NULL
- *     AND s.lifecycle_state IN ('emerging', 'growing', 'stable')
+ *     AND s.lifecycle_state IN ('emerging', 'growing', 'stable', 'stale')
  *   ORDER BY s.centroid_embedding_v1 <=> query_embedding
  *   LIMIT match_limit;
  * END;
