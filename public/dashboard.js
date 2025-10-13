@@ -317,11 +317,11 @@ const TrumpyTrackerDashboard = () => {
   const loadExecutiveOrders = useCallback(async (page = 1, loadAll = false) => {
     try {
       if (loadAll) {
-        // Load ALL entries for search functionality
-        const query = 'executive_orders?order=date.desc,order_number.desc';
+        // Load ALL entries with enriched fields for search functionality
+        const query = 'executive_orders?select=*&order=date.desc,order_number.desc';
         const data = await supabaseRequest(query);
         setAllExecutiveOrders(data || []);
-        
+
         // Still paginate for display
         const paginatedData = (data || []).slice(0, EO_ITEMS_PER_PAGE);
         setExecutiveOrders(paginatedData);
@@ -329,24 +329,24 @@ const TrumpyTrackerDashboard = () => {
         setEoPage(1);
       } else {
         const offset = (page - 1) * EO_ITEMS_PER_PAGE;
-        
+
         // Get total count
         const countQuery = 'executive_orders?select=id';
         const countData = await supabaseRequest(countQuery);
         const totalCount = countData ? countData.length : 0;
         setTotalEoPages(Math.ceil(totalCount / EO_ITEMS_PER_PAGE));
-        
-        // Get paginated data
-        const query = `executive_orders?order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
+
+        // Get paginated data with all enriched fields
+        const query = `executive_orders?select=*&order=date.desc,order_number.desc&limit=${EO_ITEMS_PER_PAGE}&offset=${offset}`;
         const data = await supabaseRequest(query);
-        
+
         // If we don't have all data yet, load it for search
         if (allExecutiveOrders.length === 0 || allExecutiveOrders.length < totalCount) {
-          const allQuery = 'executive_orders?order=date.desc,order_number.desc';
+          const allQuery = 'executive_orders?select=*&order=date.desc,order_number.desc';
           const allData = await supabaseRequest(allQuery);
           setAllExecutiveOrders(allData || []);
         }
-        
+
         setExecutiveOrders(data || []);
         setEoPage(page);
       }
