@@ -247,7 +247,8 @@ UI labels → Database enum values (defined in job-queue-worker.js):
 4. **Auto-QA always** - Check edge cases, regressions, cost after every change
 5. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
 6. **State cost implications** - Always mention $ impact for new features
-7. **Report token usage** - End every response with usage stats
+7. **Test before marking complete** - Use Task tool with general-purpose agent to validate code changes before marking todos complete or creating PRs
+8. **Report token usage** - End every response with usage stats
 
 ## Session Workflow
 

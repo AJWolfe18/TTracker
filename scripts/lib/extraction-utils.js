@@ -293,3 +293,143 @@ export function getFirstSentences(content, n = 3) {
   const sentences = content.split(/[.!?]+/);
   return sentences.slice(0, n).join('. ').trim() + '.';
 }
+
+// ============================================================================
+// SimHash for Duplicate Detection
+// ============================================================================
+
+/**
+ * Calculate SimHash of text for near-duplicate detection
+ * Based on Charikar's SimHash algorithm
+ *
+ * @param {string} text - Text to hash
+ * @returns {bigint} - 64-bit SimHash value
+ *
+ * How it works:
+ * 1. Extract features (tokens/shingles) from text
+ * 2. Hash each feature to 64-bit value
+ * 3. For each bit position, add +1 if bit is 1, -1 if bit is 0
+ * 4. Final hash has 1 where sum is positive, 0 where negative
+ *
+ * Properties:
+ * - Similar documents have similar hashes (low Hamming distance)
+ * - Hamming distance ≤3 bits ≈ 90%+ similarity
+ * - Fast to compute and compare
+ */
+export function calculateSimHash(text) {
+  if (!text) return BigInt(0);
+
+  // Clean and normalize text
+  const normalized = text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')  // Remove punctuation
+    .replace(/\s+/g, ' ')       // Collapse whitespace
+    .trim();
+
+  // Extract features (3-grams/shingles)
+  const shingles = [];
+  const words = normalized.split(' ');
+
+  // Use 3-word shingles for better similarity detection
+  for (let i = 0; i < words.length - 2; i++) {
+    shingles.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+
+  // Also add individual words as features
+  shingles.push(...words.filter(w => w.length >= 4));
+
+  if (shingles.length === 0) return BigInt(0);
+
+  // Initialize bit vector (64 bits)
+  const vector = new Int32Array(64);
+
+  // For each feature, hash and update vector
+  for (const shingle of shingles) {
+    const hash = simpleHash64(shingle);
+
+    // For each bit position
+    for (let i = 0; i < 64; i++) {
+      const bit = (hash >> BigInt(i)) & BigInt(1);
+      if (bit === BigInt(1)) {
+        vector[i] += 1;
+      } else {
+        vector[i] -= 1;
+      }
+    }
+  }
+
+  // Generate final SimHash
+  let simhash = BigInt(0);
+  for (let i = 0; i < 64; i++) {
+    if (vector[i] > 0) {
+      simhash |= (BigInt(1) << BigInt(i));
+    }
+  }
+
+  return simhash;
+}
+
+/**
+ * Simple 64-bit hash function (MurmurHash-inspired)
+ * Used by SimHash for feature hashing
+ *
+ * @param {string} str - String to hash
+ * @returns {bigint} - 64-bit hash value
+ */
+function simpleHash64(str) {
+  let h1 = BigInt(0xdeadbeef);
+  let h2 = BigInt(0x41c6ce57);
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = BigInt(str.charCodeAt(i));
+
+    // Mix with constants
+    h1 = (h1 ^ ch) * BigInt(2654435761);
+    h2 = (h2 ^ ch) * BigInt(1597334677);
+
+    // Keep in 32-bit range
+    h1 &= BigInt(0xFFFFFFFF);
+    h2 &= BigInt(0xFFFFFFFF);
+  }
+
+  // Avalanche mixing
+  h1 ^= h1 >> BigInt(16);
+  h1 *= BigInt(2246822507);
+  h1 ^= h1 >> BigInt(13);
+
+  h2 ^= h2 >> BigInt(16);
+  h2 *= BigInt(3266489909);
+  h2 ^= h2 >> BigInt(13);
+
+  h1 &= BigInt(0xFFFFFFFF);
+  h2 &= BigInt(0xFFFFFFFF);
+
+  // Combine into 64-bit value
+  return (h2 << BigInt(32)) | h1;
+}
+
+/**
+ * Calculate Hamming distance between two SimHashes
+ *
+ * @param {bigint} hash1 - First SimHash
+ * @param {bigint} hash2 - Second SimHash
+ * @returns {number} - Number of differing bits (0-64)
+ *
+ * Usage:
+ *   const dist = hammingDistance(hash1, hash2);
+ *   if (dist <= 3) {
+ *     // Articles are 90%+ similar (likely duplicates)
+ *   }
+ */
+export function hammingDistance(hash1, hash2) {
+  let xor = hash1 ^ hash2;
+  let count = 0;
+
+  // Count set bits in XOR result
+  while (xor > 0) {
+    count += Number(xor & BigInt(1));
+    xor >>= BigInt(1);
+  }
+
+  return count;
+}

@@ -37,11 +37,13 @@ const supabase = createClient(
 // ============================================================================
 
 const CONFIG = {
-  DAILY_CAP_USD: 50.0,           // Maximum daily spend
+  DAILY_CAP_USD: 50.0,           // Maximum daily spend (global)
+  PIPELINE_CAP_USD: 5.0,         // Maximum daily spend for clustering pipeline
   PER_MINUTE_LIMIT: 60,          // Max requests per minute
   MAX_RETRIES: 3,                // Exponential backoff retries
   INITIAL_BACKOFF_MS: 1000,      // 1 second initial delay
   BATCH_SIZE: 25,                // Articles per batch
+  MAX_CONSECUTIVE_FAILURES: 3,   // Halt after N failures
 
   // Model pricing (per 1K tokens)
   PRICING: {
@@ -97,10 +99,12 @@ class OpenAIClient {
   constructor() {
     this.rateLimiter = new RateLimiter(CONFIG.PER_MINUTE_LIMIT);
     this.cache = new Map();  // In-memory cache for idempotency
+    this.consecutiveFailures = 0;  // Track consecutive failures for halt logic
   }
 
   /**
    * Check daily budget before making API call
+   * Enforces both global cap ($50/day) and pipeline cap ($5/day)
    */
   async checkBudget() {
     const { data, error } = await supabase
@@ -113,9 +117,17 @@ class OpenAIClient {
 
     const dailySpend = parseFloat(data || 0);
 
+    // Check global cap
     if (dailySpend >= CONFIG.DAILY_CAP_USD) {
       throw new Error(
-        `Daily OpenAI budget exceeded: $${dailySpend.toFixed(2)} / $${CONFIG.DAILY_CAP_USD}`
+        `Daily OpenAI budget exceeded (global): $${dailySpend.toFixed(2)} / $${CONFIG.DAILY_CAP_USD}`
+      );
+    }
+
+    // Check pipeline-specific cap (for clustering metadata)
+    if (dailySpend >= CONFIG.PIPELINE_CAP_USD) {
+      throw new Error(
+        `Daily OpenAI budget exceeded (pipeline): $${dailySpend.toFixed(2)} / $${CONFIG.PIPELINE_CAP_USD}. Manual resume required.`
       );
     }
 
@@ -209,7 +221,9 @@ class OpenAIClient {
     // Prepare prompt
     const text = `${article.title}\n\n${article.content?.substring(0, 1000) || ''}`;
 
-    const result = await this.retryWithBackoff(async () => {
+    let result;
+    try {
+      result = await this.retryWithBackoff(async () => {
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
@@ -244,16 +258,32 @@ Use canonical IDs like: US-TRUMP, US-DOD, US-CONGRESS, etc.`
       });
 
       return response;
-    });
+      });
+
+      // Reset failure counter on success
+      this.consecutiveFailures = 0;
+    } catch (error) {
+      // Increment failure counter
+      this.consecutiveFailures++;
+
+      // Halt if max consecutive failures reached
+      if (this.consecutiveFailures >= CONFIG.MAX_CONSECUTIVE_FAILURES) {
+        throw new Error(
+          `OpenAI pipeline halted after ${CONFIG.MAX_CONSECUTIVE_FAILURES} consecutive failures. Manual resume required. Last error: ${error.message}`
+        );
+      }
+
+      throw error;
+    }
 
     // Parse response (strip markdown code fences if present)
     let content = result.choices[0].message.content.trim();
-    
+
     // Remove markdown code fences
     if (content.startsWith('```')) {
       content = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
-    
+
     let parsed;
     try {
       parsed = JSON.parse(content);
@@ -300,14 +330,32 @@ Use canonical IDs like: US-TRUMP, US-DOD, US-CONGRESS, etc.`
     const sentences = article.content?.split(/[.!?]+/).slice(0, 3).join('. ') || '';
     const text = `${article.title}\n\n${sentences}`.substring(0, 2000);
 
-    const result = await this.retryWithBackoff(async () => {
+    let result;
+    try {
+      result = await this.retryWithBackoff(async () => {
       const response = await openai.embeddings.create({
         model: 'text-embedding-ada-002',
         input: text
       });
 
       return response;
-    });
+      });
+
+      // Reset failure counter on success
+      this.consecutiveFailures = 0;
+    } catch (error) {
+      // Increment failure counter
+      this.consecutiveFailures++;
+
+      // Halt if max consecutive failures reached
+      if (this.consecutiveFailures >= CONFIG.MAX_CONSECUTIVE_FAILURES) {
+        throw new Error(
+          `OpenAI pipeline halted after ${CONFIG.MAX_CONSECUTIVE_FAILURES} consecutive failures. Manual resume required. Last error: ${error.message}`
+        );
+      }
+
+      throw error;
+    }
 
     // Extract embedding
     const embedding = result.data[0].embedding;

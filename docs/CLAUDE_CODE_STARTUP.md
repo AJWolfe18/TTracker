@@ -92,6 +92,67 @@ If issues found:
 
 ### 4. Testing - Pre-PR Checklist (MANDATORY)
 
+#### 4a. Automated Testing via Task Tool (REQUIRED)
+
+**Use Task tool with general-purpose agent to validate code before marking todos complete:**
+
+**When to use:**
+1. ✅ After writing new functions
+2. ✅ After modifying critical logic (budget caps, database queries, etc.)
+3. ✅ Before marking any todo as "completed"
+4. ✅ Before creating PRs
+
+**How to use:**
+```javascript
+// Example 1: Test new function
+Task({
+  subagent_type: "general-purpose",
+  description: "Test SimHash function",
+  prompt: `Test the calculateSimHash() function in scripts/lib/extraction-utils.js:
+
+  1. Test with identical text (should return same hash)
+  2. Test with similar text (should have low Hamming distance)
+  3. Test with different text (should have high Hamming distance)
+  4. Test edge cases: empty string, single word, very long text
+
+  Return: Pass/fail for each test case with actual hash values`
+});
+
+// Example 2: Test budget enforcement
+Task({
+  subagent_type: "general-purpose",
+  description: "Verify budget cap logic",
+  prompt: `Review scripts/lib/openai-client.js budget enforcement:
+
+  1. Verify checkBudget() enforces $5/day pipeline cap
+  2. Verify consecutive failure halt logic (3 failures max)
+  3. Check edge cases: exactly at cap, just under cap, way over cap
+
+  Return: Analysis of logic correctness and any issues found`
+});
+
+// Example 3: Test migration
+Task({
+  subagent_type: "general-purpose",
+  description: "Validate migration syntax",
+  prompt: `Review migrations/022_1_clustering_v2_expert_fixes.sql:
+
+  1. Check all ALTER TABLE statements use IF NOT EXISTS
+  2. Verify index names don't conflict with existing indexes
+  3. Confirm default values are appropriate
+  4. Check for any syntax errors
+
+  Return: Any issues found or "Migration looks good"`
+});
+```
+
+**What NOT to test with Task tool:**
+- ❌ Simple documentation updates (no logic to test)
+- ❌ Trivial changes (one-line comment additions)
+- ❌ Already tested by existing test suite
+
+#### 4b. Manual Testing Checklist
+
 **Run this checklist before EVERY PR:**
 
 ```markdown
@@ -103,6 +164,7 @@ If issues found:
 - [ ] No new dependencies without approval
 - [ ] Follows existing code patterns
 - [ ] Used `filesystem:edit_file` (NOT str_replace)
+- [ ] **Task tool used to validate new code** (see 4a above)
 
 ## Schema Checks (if applicable)
 - [ ] Migration tested on TEST
@@ -110,6 +172,7 @@ If issues found:
 - [ ] Indexes created for queries
 - [ ] RLS policies enabled
 - [ ] Updated /docs/database-schema.md
+- [ ] **Task tool reviewed migration SQL** (if new migration)
 
 ## Documentation Updates
 - [ ] Updated /docs/database-schema.md (if schema changed)
