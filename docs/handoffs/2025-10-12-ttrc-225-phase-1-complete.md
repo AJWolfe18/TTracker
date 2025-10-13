@@ -380,16 +380,71 @@ UPDATE articles SET embedding_v1 = NULL WHERE id = 'problem-id';
 
 ---
 
-## Next Session Plan
+## Continuation Session Summary (2025-10-12)
 
-1. Apply Migration 022 ✅
-2. Test on 5 sample articles ✅
-3. Full backfill 180 articles ✅
-4. Verify data quality ✅
-5. Begin Phase 2 (hybrid scoring implementation) →
+### What Happened
+
+1. **Phase 1 Code Committed** ✅
+   - Commit f7a0305: "feat(clustering): implement TTRC-225 Phase 1 - extraction pipeline"
+   - All Phase 1 files committed to test branch
+   - JIRA ticket TTRC-225 updated with completion comment
+
+2. **File Cleanup** ✅
+   - Removed old clustering test files:
+     - `scripts/analyze-story-114.js`
+     - `scripts/recluster-today.js`
+     - `scripts/test-clustering-scores.js`
+     - `scripts/apply-migration-021.js`
+   - Preserved enrichment work (separate Claude instance)
+   - Moved planning doc to `docs/planning/`
+
+3. **Workflow Optimization** ✅
+   - Disabled automatic RSS test workflow
+   - Changed `.github/workflows/test-rss-real.yml` to manual-only
+   - Commit cded8fe: "chore: disable automatic RSS test workflow triggers"
+
+4. **AI Code Review Investigation** ✅
+   - GitHub Actions AI review failing with HTTP 500 error
+   - Root cause: Using GPT-5 Responses API (`${LLM_API_BASE}/responses`)
+   - Payload structure correct for GPT-5 extended thinking:
+     - `max_output_tokens` instead of `max_tokens`
+     - `reasoning: { effort: $effort }` for thinking feature
+     - `input` array format instead of `messages`
+   - **Assessment**: Likely temporary OpenAI API issue, not configuration problem
+   - **Action**: Monitor for persistent failures, no immediate fix needed
+
+### Current State
+
+**Code Status:**
+- ✅ All Phase 1 code committed to test branch
+- ✅ JIRA ticket updated
+- ✅ Old clustering files removed
+- ✅ Workflows optimized
+
+**Clustering Status:**
+- ⚠️ Current clustering NOT working (all articles create separate stories)
+- ⚠️ source_count=1 for all stories (broken pg_trgm similarity)
+- ✅ Phase 1 foundation ready for Phase 2 implementation
+
+**AI Review Status:**
+- ⚠️ Failing with 500 error from OpenAI Responses API
+- ✅ Configuration correct (using GPT-5 with proper payload)
+- 📊 Monitor for persistent issues
+
+### Next Session Plan
+
+1. Monitor AI code review for persistent failures
+2. Begin Phase 2: Hybrid Scoring Clustering Engine
+   - Implement weighted scoring formula
+   - Add candidate generation (OR-blocking)
+   - Implement centroid tracking
+   - Add adaptive thresholds by content type
+3. Test clustering on real articles
+4. Verify story grouping works properly
 
 ---
 
 **Handoff created**: 2025-10-12
-**Next steps**: Ready to apply migration and test
-**Questions**: OpenAI API key configured? Supabase access working?
+**Continuation completed**: 2025-10-12
+**Next steps**: Begin Phase 2 implementation
+**Known issue**: AI code review 500 error (monitoring)
