@@ -4,9 +4,10 @@
 
 (function() {
     // Detect if we're on test environment based on URL
-    const isTestEnvironment = 
-        window.location.hostname.includes('test--') ||  // Netlify branch deploy
-        window.location.hostname.includes('test.') ||
+    const isTestEnvironment =
+        window.location.hostname.includes('test--') ||  // Netlify branch deploy (test--...)
+        window.location.hostname.includes('test.') ||   // Test subdomain
+        window.location.hostname.includes('deploy-preview-') || // Netlify PR previews
         window.location.search.includes('env=test');
 
     // Configuration (NO SERVICE KEYS IN BROWSER!)
