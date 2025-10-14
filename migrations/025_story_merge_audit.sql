@@ -7,8 +7,8 @@
 
 CREATE TABLE IF NOT EXISTS story_merge_actions (
   id BIGSERIAL PRIMARY KEY,
-  source_story_id BIGINT NOT NULL,
-  target_story_id BIGINT NOT NULL,
+  source_story_id BIGINT,
+  target_story_id BIGINT,
   coherence_score NUMERIC(5,3),
   shared_entities TEXT[],
   articles_moved INT DEFAULT 0,

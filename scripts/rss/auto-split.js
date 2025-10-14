@@ -216,32 +216,42 @@ export async function splitStory(storyId) {
     const articles = links.map(l => l.articles);
     console.log(`[auto-split] Found ${articles.length} articles to re-cluster`);
 
-    // 2. Remove articles from original story
-    const { error: deleteError } = await getSupabaseClient()
-      .from('article_story')
-      .delete()
-      .eq('story_id', storyId);
-
-    if (deleteError) {
-      console.error('[auto-split] Failed to remove articles from story:', deleteError.message);
-      return {
-        success: false,
-        error: deleteError.message,
-        originalStory: storyId,
-      };
-    }
-
-    // 3. Re-cluster each article using hybrid clustering
+    // 2. Re-cluster each article using hybrid clustering
+    // IMPORTANT: Re-cluster BEFORE deleting links to prevent data loss
+    const newLinks = [];
     const newStoryIds = new Set();
     for (const article of articles) {
       try {
         const result = await clusterArticle(article.id);
         if (result.success && result.story_id) {
           newStoryIds.add(result.story_id);
+          newLinks.push({ article_id: article.id, new_story_id: result.story_id });
+        } else {
+          console.warn(`[auto-split] Article ${article.id} clustering failed - will keep in original story`);
         }
       } catch (err) {
         console.error(`[auto-split] Failed to cluster article ${article.id}:`, err.message);
+        // Keep article in original story on failure
       }
+    }
+
+    // 3. Only remove successfully re-clustered articles from original story
+    if (newLinks.length > 0) {
+      for (const link of newLinks) {
+        const { error: deleteError } = await getSupabaseClient()
+          .from('article_story')
+          .delete()
+          .eq('story_id', storyId)
+          .eq('article_id', link.article_id);
+
+        if (deleteError) {
+          console.error(`[auto-split] Failed to remove article ${link.article_id} from story:`, deleteError.message);
+          // Continue processing other articles
+        }
+      }
+      console.log(`[auto-split] Successfully removed ${newLinks.length}/${articles.length} articles from original story`);
+    } else {
+      console.warn('[auto-split] No articles successfully re-clustered - original story unchanged');
     }
 
     // 4. Mark original story as split (update status)
