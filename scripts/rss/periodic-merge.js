@@ -298,9 +298,24 @@ export async function runMergeDetection(limit = 10, threshold = 0.70) {
 
     console.log(`[periodic-merge] Processing ${candidates.length} merge candidates...`);
 
-    // 2. Execute merges
+    // 2. Execute merges with deduplication tracking
     const results = [];
+    const mergedStoryIds = new Set(); // Track already-merged stories to prevent chains
+
     for (const candidate of candidates) {
+      // Skip if either story has already been merged in this run
+      if (mergedStoryIds.has(candidate.story1_id) || mergedStoryIds.has(candidate.story2_id)) {
+        console.log(`[periodic-merge] Skipping merge ${candidate.story1_id} → ${candidate.story2_id}: already merged`);
+        results.push({
+          source: candidate.story1_id,
+          target: candidate.story2_id,
+          success: false,
+          skipped: true,
+          reason: 'Story already merged in this run',
+        });
+        continue;
+      }
+
       const mergeResult = await mergeStories(
         candidate.story1_id,
         candidate.story2_id,
@@ -318,6 +333,12 @@ export async function runMergeDetection(limit = 10, threshold = 0.70) {
         articlesMoved: mergeResult.articlesMoved,
         error: mergeResult.error,
       });
+
+      // Track merged stories to prevent chains (A→B, then B→C)
+      if (mergeResult.success) {
+        mergedStoryIds.add(candidate.story1_id);
+        mergedStoryIds.add(candidate.story2_id);
+      }
 
       // Small delay between merges to avoid overwhelming DB
       await new Promise(resolve => setTimeout(resolve, 100));

@@ -100,14 +100,20 @@ export async function calculateInternalCoherence(storyId, sampleSize = 20) {
     }
 
     // Sample if too many articles (performance optimization)
+    // Use random sampling to avoid bias from fixed-step sampling
     let sampled = embeddings;
     if (embeddings.length > sampleSize) {
       sampled = [];
-      const step = Math.floor(embeddings.length / sampleSize);
-      for (let i = 0; i < embeddings.length; i += step) {
-        sampled.push(embeddings[i]);
-        if (sampled.length >= sampleSize) break;
+      const indices = new Set();
+
+      // Generate random unique indices
+      while (indices.size < sampleSize) {
+        const randomIndex = Math.floor(Math.random() * embeddings.length);
+        indices.add(randomIndex);
       }
+
+      // Sample embeddings at random indices
+      sampled = Array.from(indices).map(i => embeddings[i]);
     }
 
     // Calculate pairwise similarities
@@ -193,9 +199,10 @@ export async function shouldSplitStory(storyId, threshold = 0.50) {
  * Returns new stories created
  *
  * @param {bigint} storyId - Story ID to split
+ * @param {number} coherenceScore - Coherence score that triggered split (for audit)
  * @returns {Promise<{success: boolean, newStories?: number[], originalStory: bigint, error?: string}>}
  */
-export async function splitStory(storyId) {
+export async function splitStory(storyId, coherenceScore = null) {
   try {
     console.log(`[auto-split] Splitting story ${storyId}...`);
 
@@ -270,6 +277,26 @@ export async function splitStory(storyId) {
     const newStories = Array.from(newStoryIds);
     console.log(`[auto-split] Split complete: ${articles.length} articles → ${newStories.length} stories`);
 
+    // 5. Log split to audit table
+    try {
+      const { error: auditError } = await getSupabaseClient()
+        .from('story_split_actions')
+        .insert({
+          original_story_id: storyId,
+          coherence_score: coherenceScore,
+          articles_count: articles.length,
+          new_stories_created: newStories.length,
+          new_story_ids: newStories,
+          reason: coherenceScore ? `Low coherence (${coherenceScore.toFixed(3)})` : 'Manual split',
+        });
+
+      if (auditError) {
+        console.warn('[auto-split] Failed to log split to audit table:', auditError.message);
+      }
+    } catch (auditErr) {
+      console.warn('[auto-split] Audit logging failed:', auditErr.message);
+    }
+
     return {
       success: true,
       originalStory: storyId,
@@ -308,8 +335,8 @@ export async function checkAndSplitStory(storyId, threshold = 0.50) {
     };
   }
 
-  // 2. Execute split
-  const result = await splitStory(storyId);
+  // 2. Execute split (pass coherence score for audit)
+  const result = await splitStory(storyId, check.coherence);
 
   return {
     success: result.success,
