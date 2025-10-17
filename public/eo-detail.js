@@ -57,6 +57,19 @@
   };
 
   /**
+   * Map severity to spicy display labels (matches stories)
+   */
+  const getSeverityLabel = (severity) => {
+    const labelMap = {
+      'critical': 'Fucking Treason',
+      'severe': 'Criminal Bullshit',
+      'moderate': 'Swamp Shit',
+      'minor': 'Clown Show'
+    };
+    return labelMap[severity?.toLowerCase()] || severity;
+  };
+
+  /**
    * Map category enum to display label
    */
   const getCategoryLabel = (category) => {
@@ -163,6 +176,22 @@
       };
 
       fetchEO();
+    }, []);
+
+    // Add Escape key handler to close detail page
+    useEffect(() => {
+      const handleEscapeKey = (event) => {
+        if (event.key === 'Escape') {
+          handleBack();
+        }
+      };
+
+      document.addEventListener('keydown', handleEscapeKey);
+
+      // Cleanup on unmount
+      return () => {
+        document.removeEventListener('keydown', handleEscapeKey);
+      };
     }, []);
 
     // Handle share functionality
@@ -277,7 +306,7 @@
         {/* Main Content Card */}
         <article className={`bg-gray-800/50 backdrop-blur-md rounded-lg border-2 ${severityColors.ring} shadow-xl`}>
           {/* Header Section */}
-          <header className="p-6 border-b border-gray-700">
+          <header className="relative p-6 border-b border-gray-700">
             {/* EO Badge & Title */}
             <div className="mb-4">
               <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold mb-3 ${severityColors.badge}`}>
@@ -297,7 +326,7 @@
               )}
               {order.severity && (
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${severityColors.badge}`}>
-                  {order.severity.charAt(0).toUpperCase() + order.severity.slice(1)}
+                  {getSeverityLabel(order.severity)}
                 </span>
               )}
               {order.date && (
@@ -310,15 +339,27 @@
                   Agencies: {order.affected_agencies.slice(0, 3).join(', ')}
                 </span>
               )}
+              {order.source_url && (
+                <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-xs font-medium">
+                  Source:{' '}
+                  <a
+                    href={order.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    WhiteHouse.gov
+                  </a>
+                </span>
+              )}
             </div>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                <span>📤</span>
                 Share
               </button>
               {order.source_url && (
@@ -326,20 +367,21 @@
                   href={order.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  <span>🔗</span>
                   View Official Order
                 </a>
               )}
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                <span>←</span>
-                Back
-              </button>
             </div>
+
+            {/* Close Button (X in top right) */}
+            <button
+              onClick={handleBack}
+              className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-gray-800/50 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              aria-label="Close"
+            >
+              <span className="text-2xl leading-none">×</span>
+            </button>
           </header>
 
           {/* Body - 4-Part Analysis (All Fully Visible) */}
