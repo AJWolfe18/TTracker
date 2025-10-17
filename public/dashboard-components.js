@@ -449,6 +449,13 @@
       return tierMap[order.action_tier] || { label: order.action_tier, color: 'bg-gray-700' };
     };
 
+    // Navigate to detail page
+    const handleCardClick = () => {
+      // Store return URL for back button
+      sessionStorage.setItem('eoReturnTo', window.location.pathname);
+      window.location.href = `/eo-detail.html?id=${order.id}`;
+    };
+
     // Share functions
     const shareToX = () => {
       const text = `Executive Order ${order.order_number}: ${order.title}\n\n${summary.substring(0, 200)}...\n\nLearn more at TrumpyTracker.com`;
@@ -461,10 +468,14 @@
     };
 
     return (
-      <div className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:shadow-xl cursor-pointer" style={{
-        animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
-        animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
-      }}>
+      <div
+        className="bg-gray-800/50 backdrop-blur-md rounded-lg p-6 border border-gray-700 hover:border-blue-500 transition-all duration-200 hover:shadow-xl cursor-pointer"
+        style={{
+          animation: index < 10 ? 'fadeIn 0.4s ease-in-out' : 'none',
+          animationDelay: index < 10 ? `${index * 0.05}s` : '0s'
+        }}
+        onClick={handleCardClick}
+      >
 
         {/* Title */}
         <h3 className="text-lg font-bold text-white mb-3">{order.title}</h3>
@@ -501,15 +512,26 @@
             >
               {summary}
             </p>
-            {hasLongSummary && (
+            {hasLongSummary && !expanded && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setExpanded(!expanded);
+                  handleCardClick();
+                }}
+                className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors font-medium"
+              >
+                View Full Analysis →
+              </button>
+            )}
+            {hasLongSummary && expanded && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded(false);
                 }}
                 className="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
               >
-                {expanded ? 'Show less ↑' : 'Read more →'}
+                Show less ↑
               </button>
             )}
           </div>
