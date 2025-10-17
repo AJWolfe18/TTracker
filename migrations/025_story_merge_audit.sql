@@ -37,23 +37,12 @@ CREATE INDEX IF NOT EXISTS idx_story_merge_actions_target ON story_merge_actions
 CREATE INDEX IF NOT EXISTS idx_story_merge_actions_merged_at ON story_merge_actions(merged_at DESC);
 
 -- ============================================================================
--- PART 3: Add 'merged_into' Status to Stories
+-- PART 3: NOTE - Status Field Uses TEXT (Not Enum)
 -- ============================================================================
 
--- Check if enum value already exists before adding
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_enum
-    WHERE enumlabel = 'merged_into'
-      AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'story_status')
-  ) THEN
-    ALTER TYPE story_status ADD VALUE IF NOT EXISTS 'merged_into';
-  END IF;
-END$$;
-
-COMMENT ON TYPE story_status IS 'Story status: active, closed, archived, merged_into';
+-- No enum modification needed - status field is TEXT in this database
+-- The value 'merged_into' can be used directly as a string
+-- Valid status values: 'active', 'closed', 'archived', 'merged_into'
 
 -- ============================================================================
 -- PART 4: Add merged_into_story_id Column

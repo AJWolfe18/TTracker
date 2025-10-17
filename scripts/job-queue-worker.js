@@ -73,7 +73,7 @@ class JobProcessor {
       'story.lifecycle': this.updateLifecycle.bind(this),
       'story.split': this.splitStory.bind(this),
       'story.merge': this.mergeStories.bind(this),
-      // 'article.enrich': this.enrichArticle.bind(this),
+      'article.enrich': this.enrichArticle.bind(this), // TTRC-234: Article embedding generation
       'process_article': this.processArticle.bind(this)
     };
   }
@@ -192,6 +192,11 @@ class JobProcessor {
     return { archived: data?.length || 0 };
   }
 
+  /**
+   * TTRC-234: Article Embedding Generation
+   * Generates semantic embeddings for articles using OpenAI text-embedding-3-small
+   * Cost: ~$0.0002 per article
+   */
   async enrichArticle(payload) {
     const { article_id } = payload;
 
@@ -199,50 +204,66 @@ class JobProcessor {
       throw new Error('OpenAI not configured');
     }
 
-    // Fetch article
+    // 1. Fetch article
     const { data: article, error } = await supabase
       .from('articles')
-      .select('*')
+      .select('id, title, content, excerpt, embedding_v1')
       .eq('id', article_id)
       .single();
 
     if (error) throw new Error(`Failed to fetch article: ${error.message}`);
 
-    // Extract entities and topics
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'Extract key entities and topics from this article. Return JSON with: entities (array of people/orgs), topics (array of themes), sentiment (positive/negative/neutral)'
-        },
-        {
-          role: 'user',
-          content: `Title: ${article.title}\n\nContent: ${article.content || article.description || ''}`
-        }
-      ],
-      max_tokens: 200,
-      temperature: 0.3
-    });
-
-    let enrichment;
-    try {
-      enrichment = JSON.parse(completion.choices[0].message.content);
-    } catch (e) {
-      enrichment = { error: 'Failed to parse enrichment' };
+    // Skip if already has embedding (idempotency)
+    if (article.embedding_v1 && article.embedding_v1.length > 0) {
+      console.log(`ℹ️ Article ${article_id} already has embedding, skipping`);
+      return {
+        article_id,
+        embedding_dimensions: article.embedding_v1.length,
+        tokens: 0,
+        cost: 0,
+        skipped: true
+      };
     }
 
-    // Update article with enrichment
-    await supabase
+    // 2. Build embedding input (title + first 2000 chars of content)
+    const content = article.content || article.excerpt || '';
+    if (!content.trim()) {
+      console.warn(`⚠️ Article ${article_id} has no content, using title only for embedding`);
+    }
+    const embeddingInput = `${article.title}\n\n${content.slice(0, 2000)}`;
+
+    // 3. Generate embedding using OpenAI text-embedding-3-small
+    const embeddingResponse = await openai.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: embeddingInput
+    });
+
+    const embedding = embeddingResponse.data[0].embedding;
+
+    // 4. Update article with embedding
+    const { error: updateError } = await supabase
       .from('articles')
-      .update({
-        entities: enrichment.entities || [],
-        topics: enrichment.topics || [],
-        sentiment: enrichment.sentiment || 'neutral'
-      })
+      .update({ embedding_v1: embedding })
       .eq('id', article_id);
 
-    return { article_id, enrichment };
+    if (updateError) throw new Error(`Failed to update article: ${updateError.message}`);
+
+    // 5. Cost tracking
+    const usage = embeddingResponse.usage || { prompt_tokens: 0, total_tokens: 0 };
+    const cost = (usage.total_tokens / 1000000) * 0.02; // $0.02 per 1M tokens
+
+    console.log(`✅ Generated embedding for article ${article_id}:`, {
+      tokens: usage.total_tokens,
+      cost: `$${cost.toFixed(6)}`,
+      dimensions: embedding.length
+    });
+
+    return {
+      article_id,
+      embedding_dimensions: embedding.length,
+      tokens: usage.total_tokens,
+      cost
+    };
   }
 
   /**
@@ -293,6 +314,43 @@ class JobProcessor {
     }
 
     return result;
+  }
+
+  /**
+   * TTRC-235: Build entity counter from entities array
+   * Creates jsonb {id: count} map for tracking entity frequency
+   */
+  buildEntityCounter(entities) {
+    const counts = {};
+    for (const e of entities || []) {
+      if (!e?.id) continue;
+      counts[e.id] = (counts[e.id] || 0) + 1;
+    }
+    return counts; // jsonb
+  }
+
+  /**
+   * TTRC-235: Convert entities to top_entities text[] of canonical IDs
+   * Sorts by confidence desc, then by id for deterministic ordering
+   * Deduplicates and caps at max entities
+   */
+  toTopEntities(entities, max = 8) {
+    // Sort by confidence desc, then by id for determinism
+    const ids = (entities || [])
+      .filter(e => e?.id)
+      .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || a.id.localeCompare(b.id))
+      .map(e => e.id);
+
+    // Stable dedupe
+    const seen = new Set();
+    const out = [];
+    for (const id of ids) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+    return out.slice(0, max); // text[]
   }
 
   /**
@@ -407,10 +465,15 @@ class JobProcessor {
     const summary_neutral = obj.summary_neutral?.trim();
     const summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
     const category_db = obj.category ? toDbCategory(obj.category) : null;
-    const severity = ['critical', 'severe', 'moderate', 'minor'].includes(obj.severity) 
-      ? obj.severity 
+    const severity = ['critical', 'severe', 'moderate', 'minor'].includes(obj.severity)
+      ? obj.severity
       : 'moderate';
     const primary_actor = (obj.primary_actor || '').trim() || null;
+
+    // TTRC-235: Extract entities and format correctly
+    const entities = obj.entities || [];
+    const top_entities = this.toTopEntities(entities);  // text[] of IDs
+    const entity_counter = this.buildEntityCounter(entities);  // jsonb {id: count}
 
     if (!summary_neutral) {
       throw new Error('Missing summary_neutral in response');
@@ -427,10 +490,12 @@ class JobProcessor {
         category: category_db,
         severity,
         primary_actor,
+        top_entities,        // TTRC-235: text[] of canonical IDs
+        entity_counter,      // TTRC-235: jsonb {id: count}
         last_enriched_at: new Date().toISOString()
       })
       .eq('id', story_id);
-      
+
     if (uErr) throw new Error(`Failed to update story: ${uErr.message}`);
 
     // ========================================

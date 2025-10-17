@@ -2,14 +2,15 @@
  * Periodic Merge Detection for Story Clustering (TTRC-231)
  *
  * Daily job to identify and merge duplicate stories
- * Merge criteria:
- * - Centroid similarity >0.70
- * - Share 3+ entities
- * - Within 5-day time window
- * - Same primary_actor
+ * Merge criteria (from shared logic):
+ * - Multi-signal gating: 2 entities @ high sim OR 3+ entities @ lower sim
+ * - Within 7-day time window
+ * - Optional: Same primary_actor and category
+ * - Media org discount (exclude ORG-NYT/WAPO/etc from entity counts)
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { shouldMerge } from '../lib/merge-logic.js';
 
 // Lazy-initialize Supabase client
 let supabase = null;
@@ -45,7 +46,7 @@ export async function findMergeCandidates(limit = 10, threshold = 0.70) {
       .from('stories')
       .select('id, primary_headline, primary_actor, centroid_embedding_v1, top_entities, first_seen_at, last_updated_at')
       .in('status', ['active', 'closed'])
-      .neq('centroid_embedding_v1', null)
+      .not('centroid_embedding_v1', 'is', null)
       .order('last_updated_at', { ascending: false })
       .limit(100); // Consider recent stories only
 
@@ -66,40 +67,31 @@ export async function findMergeCandidates(limit = 10, threshold = 0.70) {
 
     console.log(`[periodic-merge] Evaluating ${stories.length} stories for merge candidates...`);
 
-    // Find pairs with high similarity
+    // Find pairs with high similarity using shared merge logic
     const candidates = [];
-    const fiveDaysAgo = new Date();
-    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
     for (let i = 0; i < stories.length; i++) {
       for (let j = i + 1; j < stories.length; j++) {
         const story1 = stories[i];
         const story2 = stories[j];
 
-        // 1. Check time window (within 5 days)
-        const time1 = new Date(story1.first_seen_at || story1.last_updated_at);
-        const time2 = new Date(story2.first_seen_at || story2.last_updated_at);
-        const daysDiff = Math.abs(time1 - time2) / (1000 * 60 * 60 * 24);
-        if (daysDiff > 5) continue;
-
-        // 2. Check primary actor match
-        if (story1.primary_actor && story2.primary_actor && story1.primary_actor !== story2.primary_actor) {
-          continue;
-        }
-
-        // 3. Check entity overlap (need 3+ shared entities)
-        const entities1 = story1.top_entities || [];
-        const entities2 = story2.top_entities || [];
-        const sharedEntities = entities1.filter(e => entities2.includes(e));
-        if (sharedEntities.length < 3) continue;
-
-        // 4. Calculate centroid similarity (cosine)
+        // Calculate centroid similarity (cosine)
         const similarity = cosineSimilarity(
           story1.centroid_embedding_v1,
           story2.centroid_embedding_v1
         );
 
-        if (similarity >= threshold) {
+        // Use shared merge logic (handles entity overlap, time window, category/actor match)
+        if (shouldMerge(story1, story2, similarity)) {
+          // Calculate shared entities for audit trail
+          const entities1 = story1.top_entities || [];
+          const entities2 = story2.top_entities || [];
+          const sharedEntities = entities1.filter(e => entities2.includes(e));
+
+          const time1 = new Date(story1.first_seen_at || story1.last_updated_at);
+          const time2 = new Date(story2.first_seen_at || story2.last_updated_at);
+          const daysDiff = Math.abs(time1 - time2) / (1000 * 60 * 60 * 24);
+
           candidates.push({
             story1_id: story1.id,
             story2_id: story2.id,
@@ -136,18 +128,23 @@ export async function findMergeCandidates(limit = 10, threshold = 0.70) {
 
 /**
  * Calculate cosine similarity between two vectors
+ * Handles both array and string (PostgreSQL text) formats
  */
 function cosineSimilarity(a, b) {
-  if (!a || !b || a.length !== b.length) return 0;
+  // Parse if string format (PostgreSQL text representation)
+  const vecA = typeof a === 'string' ? JSON.parse(a) : a;
+  const vecB = typeof b === 'string' ? JSON.parse(b) : b;
+
+  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
 
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
 
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
   }
 
   if (normA === 0 || normB === 0) return 0;

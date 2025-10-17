@@ -12,11 +12,31 @@ Also extract:
 - category: one of [Corruption & Scandals; Democracy & Elections; Policy & Legislation; Justice & Legal; Executive Actions; Foreign Policy; Corporate & Financial; Civil Liberties; Media & Disinformation; Epstein & Associates; Other]
 - severity: one of [critical, severe, moderate, minor]
 - primary_actor: main person or organization (string)
+- entities: array of 3-8 key entities using CANONICAL IDs with stable prefixes:
+  * PERSON: US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
+  * ORG: ORG-<CANONICAL_SNAKE> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT, ORG-NYT)
+  * LOCATION: LOC-<REGION> (e.g., LOC-USA, LOC-TEXAS, LOC-CALIFORNIA)
+  * EVENT: EVT-<CANONICAL> (e.g., EVT-JAN6, EVT-IMPEACHMENT-2, EVT-HB-1234)
+
+  Entity format:
+  {
+    "id": "US-TRUMP",           // REQUIRED: Canonical ID
+    "name": "Donald Trump",      // Display name
+    "type": "PERSON",            // PERSON | ORG | LOCATION | EVENT
+    "confidence": 0.95           // 0.0-1.0 salience score
+  }
+
+  Guidelines:
+  - Only include high-confidence entities (≥0.70)
+  - If you cannot assign a canonical ID, omit that entity
+  - Prefer fewer, higher-quality entities over many weak ones
+  - Keep diverse entity types (avoid all PERSONs unless justified)
+  - Sort by salience/importance
 
 Rules:
 - Use ONLY the provided snippets; do not speculate. If uncertain, keep it neutral.
 - Do not include citations or URLs in summaries.
-- Output must be valid JSON with these exact keys: summary_neutral, summary_spicy, category, severity, primary_actor.`;
+- Output must be valid JSON with these exact keys: summary_neutral, summary_spicy, category, severity, primary_actor, entities.`;
 
 // Enhanced enrichment prompt with action framework (TTRC-61 & TTRC-62)
 export const ENHANCED_SYSTEM_PROMPT = `You are a political analyst. Return ONLY valid JSON (a single JSON object), no prose.

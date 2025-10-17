@@ -18,13 +18,14 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.1",
+    "csv-parse": "^6.1.0",
     "dotenv": "^17.2.1",
+    "natural": "^6.10.0",
     "node-fetch": "^3.3.2",
-    "playwright": "^1.40.0",
-    "rss-parser": "^3.13.0",
     "openai": "^4.28.0",
     "pg": "^8.11.0",
-    "natural": "^6.10.0"
+    "playwright": "^1.40.0",
+    "rss-parser": "^3.13.0"
   },
   "keywords": [
     "political",

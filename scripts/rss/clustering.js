@@ -16,20 +16,20 @@ function safeJaroWinkler(a, b) {
 
 /**
  * TTRC-142: Story Clustering Algorithm (ESM)
- * 
+ *
  * Clusters articles into stories based on similarity scoring:
- * - URL match: 30 points (exact), 10 points (same domain)
- * - Title similarity (Jaro-Winkler): 0-45 points  
- * - Date proximity: 0-15 points (24h: 15, 48h: 10, 96h: 5)
- * - Actor match: 10 points
- * - Same source bonus: 5 points (same domain + same day)
- * - Threshold: ≥75% auto-attach, <75% new story
+ * - URL match: 30 points (exact duplicate only)
+ * - Title similarity (Jaro-Winkler): 0-45 points
+ * - Date proximity: 0-10 points (24h: 10, 48h: 5, 96h: 0)
+ * - Actor match: 5 points
+ * - Max realistic score: 60 points
+ * - Threshold: ≥65 auto-attach, <65 new story
  */
 
 import natural from 'natural';
 
 // Clustering threshold constant
-export const CLUSTER_ATTACH_THRESHOLD = 75;
+export const CLUSTER_ATTACH_THRESHOLD = 65;
 
 // Common political actors for extraction
 export const POLITICAL_ACTORS = {
@@ -113,90 +113,102 @@ export function extractPrimaryActor(title) {
  * Calculate similarity score between article and story
  * Returns score from 0-100
  */
-export function calculateSimilarity(article, story) {
+export function calculateSimilarity(article, story, debug = false) {
   let score = 0;
-  
-  // 1. URL match (30 points)
+  const breakdown = {};
+
+  // 1. URL match (30 points for exact duplicate only)
   if (article.url_canonical && story.primary_source_url) {
     if (article.url_canonical === story.primary_source_url) {
       score += 30;
-    } else if (article.source_domain === story.primary_source_domain) {
-      score += 10; // Same domain gets partial credit
+      breakdown.url = 30;
+    } else {
+      breakdown.url = 0;
     }
   }
-  
+
   // 2. Title similarity using Jaro-Winkler (0-45 points)
+  let titlePoints = 0;
+  let jaroScore = 0;
   if (article.title && story.primary_headline) {
     // Normalize titles for comparison
     const title1 = normalizeText(article.title);
     const title2 = normalizeText(story.primary_headline);
-    
+
     // Check for exact match first (after normalization)
     if (title1 === title2) {
-      score += 45; // Full points for exact match
+      titlePoints = 45; // Full points for exact match
+      jaroScore = 1.0;
     } else {
       // Calculate Jaro-Winkler distance with crash protection
-      const similarity = safeJaroWinkler(title1, title2);
-      
+      jaroScore = safeJaroWinkler(title1, title2);
+
       // Scoring curve:
       // >0.85 = 40-45 points (very similar)
       // 0.70-0.85 = 28-40 points (similar)
       // 0.50-0.70 = 15-28 points (somewhat similar)
       // <0.50 = 0-15 points (different)
-      if (similarity > 0.85) {
-        score += Math.floor(40 + (similarity - 0.85) * 33); // 40-45 points
-      } else if (similarity > 0.70) {
-        score += Math.floor(28 + (similarity - 0.70) * 80); // 28-40 points
-      } else if (similarity > 0.50) {
-        score += Math.floor(15 + (similarity - 0.50) * 65); // 15-28 points
+      if (jaroScore > 0.85) {
+        titlePoints = Math.floor(40 + (jaroScore - 0.85) * 33); // 40-45 points
+      } else if (jaroScore > 0.70) {
+        titlePoints = Math.floor(28 + (jaroScore - 0.70) * 80); // 28-40 points
+      } else if (jaroScore > 0.50) {
+        titlePoints = Math.floor(15 + (jaroScore - 0.50) * 65); // 15-28 points
       } else {
-        score += Math.floor(similarity * 30); // 0-15 points
+        titlePoints = Math.floor(jaroScore * 30); // 0-15 points
       }
     }
+    score += titlePoints;
+    breakdown.title = titlePoints;
+    breakdown.jaro = jaroScore.toFixed(3);
   }
-  
-  // 3. Date proximity (0-15 points)
+
+  // 3. Date proximity (0-10 points - REDUCED from 15)
+  let datePoints = 0;
   if (article.published_at && story.first_seen_at) {
     const articleDate = new Date(article.published_at);
     const storyDate = new Date(story.first_seen_at);
     const hoursDiff = Math.abs(articleDate - storyDate) / (1000 * 60 * 60);
-    
+
     if (hoursDiff <= 24) {
-      score += 15; // Same day
+      datePoints = 10; // Same day (was 15)
     } else if (hoursDiff <= 48) {
-      score += 10; // ±1 day
+      datePoints = 5; // ±1 day (was 10)
     } else if (hoursDiff <= 96) {
-      score += 5;  // ±3 days
+      datePoints = 0;  // ±3 days (was 5)
     }
-    // else 0 points
+    score += datePoints;
+    breakdown.date = datePoints;
+    breakdown.hours_diff = Math.round(hoursDiff);
   }
-  
-  // 4. Actor match (10 points)
+
+  // 4. Actor match (5 points - REDUCED from 10)
+  let actorPoints = 0;
   if (article.primary_actor && story.primary_actor) {
     const actor1 = normalizeActor(article.primary_actor);
     const actor2 = normalizeActor(story.primary_actor);
-    
+
     if (actor1 === actor2) {
-      score += 10;
+      actorPoints = 5; // Reduced from 10
+      score += actorPoints;
+      breakdown.actor = actorPoints;
+      breakdown.actor_name = article.primary_actor;
+    } else {
+      breakdown.actor = 0;
     }
   }
-  // 5. Bonus for same source + same day (5 points)
-  // This helps cluster updates from the same outlet
-  if (article.source_domain && story.primary_source_domain) {
-    if (article.source_domain === story.primary_source_domain) {
-      // Check if published on same day
-      if (article.published_at && story.first_seen_at) {
-        const articleDate = new Date(article.published_at);
-        const storyDate = new Date(story.first_seen_at);
-        const hoursDiff = Math.abs(articleDate - storyDate) / (1000 * 60 * 60);
-        
-        if (hoursDiff <= 24) {
-          score += 5; // Bonus for same source, same day
-        }
-      }
-    }
+
+  // Removed: same source + same day bonus (not a reliable clustering signal)
+
+  if (debug) {
+    console.log('[clustering] Score breakdown:', {
+      article: article.title?.substring(0, 60),
+      story: story.primary_headline?.substring(0, 60),
+      total: score,
+      ...breakdown
+    });
   }
-  
+
   return score;
 }
 
@@ -227,28 +239,35 @@ export function normalizeActor(actor) {
  * Find best matching story for an article from candidates
  * Returns { story_id, score } or null if no good match
  */
-export function findBestMatch(article, candidateStories) {
+export function findBestMatch(article, candidateStories, debug = false) {
   let bestMatch = null;
   let bestScore = 0;
-  
+
   for (const story of candidateStories) {
-    const score = calculateSimilarity(article, story);
-    
+    const score = calculateSimilarity(article, story, debug);
+
     if (score > bestScore) {
       bestScore = score;
       bestMatch = story;
     }
   }
-  
+
   // Only return match if score meets threshold
   if (bestScore >= CLUSTER_ATTACH_THRESHOLD) {
+    if (debug) {
+      console.log(`[clustering] ✅ MATCH FOUND: score=${bestScore}, threshold=${CLUSTER_ATTACH_THRESHOLD}`);
+    }
     return {
       story_id: bestMatch.id,
       story: bestMatch,
       score: bestScore
     };
   }
-  
+
+  if (debug) {
+    console.log(`[clustering] ❌ NO MATCH: best=${bestScore}, threshold=${CLUSTER_ATTACH_THRESHOLD}`);
+  }
+
   return null;
 }
 
