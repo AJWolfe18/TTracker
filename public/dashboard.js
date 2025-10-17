@@ -78,13 +78,14 @@ const EO_ITEMS_PER_PAGE = 25;
 // Filter configurations per tab
 const FILTER_CONFIGS = {
   executive: {
-    filterKey: 'action_tier', // Using new enriched schema
-    allLabel: 'All Actions',
+    filterKey: 'eo_impact_type', // Filter by severity/impact type
+    allLabel: 'All Severity Levels',
     placeholder: 'Search executive orders...',
     filters: [
-      { value: 'direct', label: 'Direct Action' },
-      { value: 'systemic', label: 'Systemic Change' },
-      { value: 'tracking', label: 'Tracking Only' }
+      { value: 'fascist_power_grab', label: 'Fascist Power Grab' },
+      { value: 'authoritarian_overreach', label: 'Authoritarian Overreach' },
+      { value: 'corrupt_grift', label: 'Corrupt Grift' },
+      { value: 'performative_bullshit', label: 'Performative Bullshit' }
     ]
   }
   // Add 'political' config later if tab is re-enabled
