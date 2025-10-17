@@ -547,13 +547,6 @@
         {/* Bottom Metadata & Actions */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Action Tier Badge */}
-            {hasEnrichedData && order.action_tier && (
-              <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${getActionTierInfo().color}`}>
-                {getActionTierInfo().label}
-              </span>
-            )}
-
             {/* Category */}
             {hasEnrichedData && order.category && (
               <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-1 rounded">

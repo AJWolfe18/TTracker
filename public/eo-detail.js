@@ -57,16 +57,16 @@
   };
 
   /**
-   * Map severity to spicy display labels (matches stories)
+   * Get severity label - uses production field severity_label_inapp
+   * Removes emoji from the label for cleaner display
    */
-  const getSeverityLabel = (severity) => {
-    const labelMap = {
-      'critical': 'Fucking Treason',
-      'severe': 'Criminal Bullshit',
-      'moderate': 'Swamp Shit',
-      'minor': 'Clown Show'
-    };
-    return labelMap[severity?.toLowerCase()] || severity;
+  const getSeverityLabel = (order) => {
+    // Production has severity_label_inapp with emojis like "Fascist Power Grab 🔴"
+    if (order.severity_label_inapp) {
+      // Remove emoji (last 2 characters) for display
+      return order.severity_label_inapp.replace(/\s*[🔴🟠🟡🟢]\s*$/,'').trim();
+    }
+    return null;
   };
 
   /**
@@ -324,9 +324,9 @@
                   {getCategoryLabel(order.category)}
                 </span>
               )}
-              {order.severity && (
+              {getSeverityLabel(order) && (
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${severityColors.badge}`}>
-                  {getSeverityLabel(order.severity)}
+                  {getSeverityLabel(order)}
                 </span>
               )}
               {order.date && (
