@@ -32,41 +32,41 @@
   };
 
   /**
-   * Map severity to color classes
+   * Get impact label for EOs (without emoji since we're using colored pills)
+   * Matches production implementation
    */
-  const getSeverityColors = (severity) => {
-    const colorMap = {
-      'critical': {
-        badge: 'bg-red-600 text-white',
-        ring: 'ring-red-500'
-      },
-      'severe': {
-        badge: 'bg-orange-600 text-white',
-        ring: 'ring-orange-500'
-      },
-      'moderate': {
-        badge: 'bg-yellow-600 text-white',
-        ring: 'ring-yellow-500'
-      },
-      'minor': {
-        badge: 'bg-gray-600 text-white',
-        ring: 'ring-gray-500'
-      }
+  const getImpactLabel = (order) => {
+    // Map impact types to labels WITHOUT emojis
+    const impactMap = {
+      'fascist_power_grab': 'Fascist Power Grab',
+      'authoritarian_overreach': 'Authoritarian Overreach',
+      'corrupt_grift': 'Corrupt Grift',
+      'performative_bullshit': 'Performative Bullshit'
     };
-    return colorMap[severity?.toLowerCase()] || { badge: 'bg-gray-600 text-white', ring: 'ring-gray-500' };
+    
+    // Always use the mapped label, ignore severity_label_inapp which has emojis
+    return impactMap[order.eo_impact_type] || '';
   };
 
   /**
-   * Get severity label - uses production field severity_label_inapp
-   * Removes emoji from the label for cleaner display
+   * Get severity color classes based on eo_impact_type
    */
-  const getSeverityLabel = (order) => {
-    // Production has severity_label_inapp with emojis like "Fascist Power Grab 🔴"
-    if (order.severity_label_inapp) {
-      // Remove emoji (last 2 characters) for display
-      return order.severity_label_inapp.replace(/\s*[🔴🟠🟡🟢]\s*$/,'').trim();
+  const getSeverityColors = (order) => {
+    // Map based on eo_impact_type field (production pattern)
+    if (order.eo_impact_type === 'fascist_power_grab') {
+      return { badge: 'bg-red-600 text-white', ring: 'ring-red-500' };
     }
-    return null;
+    if (order.eo_impact_type === 'authoritarian_overreach') {
+      return { badge: 'bg-orange-600 text-white', ring: 'ring-orange-500' };
+    }
+    if (order.eo_impact_type === 'corrupt_grift') {
+      return { badge: 'bg-yellow-600 text-white', ring: 'ring-yellow-500' };
+    }
+    if (order.eo_impact_type === 'performative_bullshit') {
+      return { badge: 'bg-green-600 text-white', ring: 'ring-green-500' };
+    }
+
+    return { badge: 'bg-gray-600 text-white', ring: 'ring-gray-500' };
   };
 
   /**
@@ -277,7 +277,7 @@
       );
     }
 
-    const severityColors = getSeverityColors(order.severity);
+    const severityColors = getSeverityColors(order);
     const hasEnrichedData = !!order.enriched_at;
 
     // ==================== Render Detail Page ====================
@@ -324,9 +324,9 @@
                   {getCategoryLabel(order.category)}
                 </span>
               )}
-              {getSeverityLabel(order) && (
+              {getImpactLabel(order) && (
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${severityColors.badge}`}>
-                  {getSeverityLabel(order)}
+                  {getImpactLabel(order)}
                 </span>
               )}
               {order.date && (

@@ -439,6 +439,20 @@
       return categoryMap[order.category] || order.category;
     };
 
+    // Get impact label for EOs (without emoji since we're using colored pills)
+    const getImpactLabel = () => {
+      // Map impact types to labels WITHOUT emojis
+      const impactMap = {
+        'fascist_power_grab': 'Fascist Power Grab',
+        'authoritarian_overreach': 'Authoritarian Overreach',
+        'corrupt_grift': 'Corrupt Grift',
+        'performative_bullshit': 'Performative Bullshit'
+      };
+      
+      // Always use the mapped label, ignore severity_label_inapp which has emojis
+      return impactMap[order.eo_impact_type] || '';
+    };
+
     // Map action tier to display label with color
     const getActionTierInfo = () => {
       const tierMap = {
@@ -547,6 +561,19 @@
         {/* Bottom Metadata & Actions */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Impact Badge */}
+            {hasEnrichedData && getImpactLabel() && (
+              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                order.eo_impact_type === 'fascist_power_grab' ? 'bg-red-600' :
+                order.eo_impact_type === 'authoritarian_overreach' ? 'bg-orange-600' :
+                order.eo_impact_type === 'corrupt_grift' ? 'bg-yellow-600 text-white' :
+                order.eo_impact_type === 'performative_bullshit' ? 'bg-green-600' :
+                'bg-gray-700'
+              } text-white`}>
+                {getImpactLabel()}
+              </span>
+            )}
+
             {/* Category */}
             {hasEnrichedData && order.category && (
               <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-1 rounded">
