@@ -351,15 +351,15 @@
               )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3">
+            {/* Action Buttons - Hidden for now */}
+            {/* <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleShare}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 Share
               </button>
-            </div>
+            </div> */}
 
             {/* Close Button (X in top right) */}
             <button
@@ -378,8 +378,7 @@
                 {/* Section 1: What They Say */}
                 {order.section_what_they_say && (
                   <section>
-                    <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                      <span>📜</span>
+                    <h2 className="text-xl font-bold text-white mb-3">
                       What They Say
                     </h2>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
@@ -391,8 +390,7 @@
                 {/* Section 2: What It Actually Means */}
                 {order.section_what_it_means && (
                   <section>
-                    <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                      <span>🔍</span>
+                    <h2 className="text-xl font-bold text-white mb-3">
                       What It Actually Means
                     </h2>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
@@ -404,8 +402,7 @@
                 {/* Section 3: Reality Check */}
                 {order.section_reality_check && (
                   <section>
-                    <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                      <span>✅</span>
+                    <h2 className="text-xl font-bold text-white mb-3">
                       Reality Check
                     </h2>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
@@ -417,8 +414,7 @@
                 {/* Section 4: Why This Matters */}
                 {order.section_why_it_matters && (
                   <section>
-                    <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                      <span>⚠️</span>
+                    <h2 className="text-xl font-bold text-white mb-3">
                       Why This Matters
                     </h2>
                     <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">
@@ -430,8 +426,7 @@
                 {/* Action Section (Tier-Aware) */}
                 {order.action_tier !== 'tracking' && order.action_section && order.action_section.actions && order.action_section.actions.length > 0 ? (
                   <section className="bg-gray-900/50 rounded-lg p-6 border border-gray-700">
-                    <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                      <span>💪</span>
+                    <h2 className="text-xl font-bold text-white mb-4">
                       {order.action_section.title || 'What We Can Do'}
                     </h2>
                     <ul className="space-y-4">
