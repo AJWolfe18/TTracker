@@ -346,7 +346,7 @@
                   rel="noopener noreferrer"
                   className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-blue-400 hover:text-blue-300 rounded-full text-xs font-medium transition-colors"
                 >
-                  WhiteHouse.gov →
+                  WhiteHouse.gov
                 </a>
               )}
             </div>
