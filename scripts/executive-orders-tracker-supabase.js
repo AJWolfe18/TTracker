@@ -50,7 +50,6 @@ async function generateAIAnalysis(title, orderNumber, abstract = '') {
             policy_direction: 'modify',
             implementation_timeline: 'ongoing',
             impact_areas: [],
-            full_text_available: true
         };
     }
     
@@ -78,8 +77,7 @@ Provide a JSON response with these exact fields:
   "severity_rating": "low|medium|high based on scope and impact",
   "policy_direction": "expand|restrict|modify|create|eliminate",
   "implementation_timeline": "immediate|30_days|90_days|ongoing",
-  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"],
-  "full_text_available": true
+  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"]
 }
 
 Respond ONLY with valid JSON.`
@@ -98,8 +96,7 @@ Respond ONLY with valid JSON.`
                 policy_direction: 'modify',
                 implementation_timeline: 'ongoing',
                 impact_areas: [],
-                full_text_available: true
-            };
+                };
         }
 
         const data = await response.json();
@@ -116,8 +113,7 @@ Respond ONLY with valid JSON.`
                 policy_direction: 'modify',
                 implementation_timeline: 'ongoing',
                 impact_areas: [],
-                full_text_available: true
-            };
+                };
         }
         
     } catch (error) {
@@ -128,7 +124,6 @@ Respond ONLY with valid JSON.`
             policy_direction: 'modify',
             implementation_timeline: 'ongoing',
             impact_areas: [],
-            full_text_available: true
         };
     }
 }
@@ -333,7 +328,6 @@ async function fetchFromFederalRegister() {
                     policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
                     implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
                     impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
-                    full_text_available: aiAnalysis ? aiAnalysis.full_text_available : true,
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
