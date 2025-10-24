@@ -374,18 +374,19 @@ function extractAgencies(item) {
 // Determine category based on content
 function determineCategory(title, abstract) {
     const text = `${title} ${abstract}`.toLowerCase();
-    
-    if (text.includes('immigration') || text.includes('border')) return 'immigration';
-    if (text.includes('climate') || text.includes('energy') || text.includes('environment')) return 'environment';
-    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid')) return 'healthcare';
-    if (text.includes('defense') || text.includes('military')) return 'defense';
-    if (text.includes('trade') || text.includes('tariff')) return 'trade';
+
+    // Map to valid eo_category enum values (from migration 023)
+    if (text.includes('immigration') || text.includes('border')) return 'immigration_border';
+    if (text.includes('climate') || text.includes('energy') || text.includes('environment')) return 'environment_energy';
+    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid')) return 'health_care';
+    if (text.includes('defense') || text.includes('military') || text.includes('foreign')) return 'natsec_foreign';
+    if (text.includes('trade') || text.includes('tariff') || text.includes('tax') || text.includes('economy') || text.includes('jobs')) return 'economy_jobs_taxes';
     if (text.includes('education')) return 'education';
-    if (text.includes('court') || text.includes('judicial')) return 'judicial';
-    if (text.includes('tax') || text.includes('economy')) return 'economic';
-    if (text.includes('regulation') || text.includes('deregulation')) return 'regulatory';
-    
-    return 'government_operations';
+    if (text.includes('court') || text.includes('judicial') || text.includes('justice') || text.includes('civil rights') || text.includes('voting')) return 'justice_civil_rights_voting';
+    if (text.includes('technology') || text.includes('data') || text.includes('privacy') || text.includes('cyber')) return 'technology_data_privacy';
+    if (text.includes('infrastructure') || text.includes('housing') || text.includes('transport')) return 'infra_housing_transport';
+
+    return 'gov_ops_workforce';
 }
 
 // Calculate impact score
