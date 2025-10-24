@@ -265,7 +265,7 @@ class EOEnrichmentWorker {
       }
     }
 
-    // Word count validation (100-160 words per section)
+    // Word count validation (max 160 words per section)
     const sections = [
       'section_what_they_say',
       'section_what_it_means',
@@ -277,8 +277,8 @@ class EOEnrichmentWorker {
       const text = data[section].trim();
       const words = text.split(/\s+/).filter(w => w.length > 0).length;
 
-      if (words < 100 || words > 160) {
-        throw new Error(`${section} must be 100-160 words (got ${words})`);
+      if (words > 160) {
+        throw new Error(`${section} must be at most 160 words (got ${words})`);
       }
     }
 
