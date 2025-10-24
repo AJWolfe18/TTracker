@@ -48,8 +48,7 @@ async function generateAIAnalysis(title, orderNumber, abstract = '') {
             summary: `Executive Order ${orderNumber}: ${title}`,
             severity_rating: 'medium',
             policy_direction: 'modify',
-            implementation_timeline: 'ongoing',
-            impact_areas: [],
+            implementation_timeline: 'ongoing'
         };
     }
     
@@ -76,8 +75,7 @@ Provide a JSON response with these exact fields:
   "summary": "2-3 sentence summary of what this order does and its key impacts",
   "severity_rating": "low|medium|high based on scope and impact",
   "policy_direction": "expand|restrict|modify|create|eliminate",
-  "implementation_timeline": "immediate|30_days|90_days|ongoing",
-  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"]
+  "implementation_timeline": "immediate|30_days|90_days|ongoing"
 }
 
 Respond ONLY with valid JSON.`
@@ -94,8 +92,7 @@ Respond ONLY with valid JSON.`
                 summary: `Executive Order ${orderNumber}: ${title}`,
                 severity_rating: 'medium',
                 policy_direction: 'modify',
-                implementation_timeline: 'ongoing',
-                impact_areas: [],
+                implementation_timeline: 'ongoing'
                 };
         }
 
@@ -111,8 +108,7 @@ Respond ONLY with valid JSON.`
                 summary: content || `Executive Order ${orderNumber}: ${title}`,
                 severity_rating: 'medium',
                 policy_direction: 'modify',
-                implementation_timeline: 'ongoing',
-                impact_areas: [],
+                implementation_timeline: 'ongoing'
                 };
         }
         
@@ -122,8 +118,7 @@ Respond ONLY with valid JSON.`
             summary: `Executive Order ${orderNumber}: ${title}`,
             severity_rating: 'medium',
             policy_direction: 'modify',
-            implementation_timeline: 'ongoing',
-            impact_areas: [],
+            implementation_timeline: 'ongoing'
         };
     }
 }
@@ -327,7 +322,6 @@ async function fetchFromFederalRegister() {
                     severity_rating: aiAnalysis ? aiAnalysis.severity_rating : 'medium',
                     policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
                     implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
-                    impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
