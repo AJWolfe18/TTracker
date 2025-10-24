@@ -9,6 +9,8 @@ import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
 // FIX: Using correct function name generateEOTranslation (not generateSpicyEOTranslation)
 import { generateEOTranslation } from './spicy-eo-translator.js';
+// TTRC-223: Auto-enrich new EOs after collection
+import { enrichExecutiveOrder } from './enrichment/enrich-executive-orders.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
@@ -469,25 +471,80 @@ async function getDatabaseStats() {
         const allOrders = await supabaseRequest('executive_orders?select=order_number,date&order=order_number.asc');
         const withNumber = allOrders.filter(o => o.order_number);
         const withoutNumber = allOrders.filter(o => !o.order_number);
-        
+
         console.log('\n📊 Current Database Status:');
         console.log(`   Total records: ${allOrders.length}`);
         console.log(`   With order number: ${withNumber.length}`);
         console.log(`   WITHOUT order number: ${withoutNumber.length} ${withoutNumber.length > 0 ? '⚠️' : '✅'}`);
-        
+
         if (withNumber.length > 0) {
             const orderNums = withNumber.map(o => parseInt(o.order_number)).filter(n => !isNaN(n)).sort((a,b) => a-b);
             console.log(`   Order number range: ${orderNums[0]} to ${orderNums[orderNums.length-1]}`);
         }
-        
+
         if (withoutNumber.length > 0) {
             console.log('\n   ⚠️ WARNING: Database contains records without order numbers!');
             console.log('   These are likely NOT Executive Orders and should be cleaned.');
             console.log('   Run safe-eo-cleanup.bat to remove them.');
         }
-        
+
     } catch (error) {
         console.error('Error getting database stats:', error.message);
+    }
+}
+
+// TTRC-223: Enrich newly collected EOs
+async function enrichNewEOs(orders) {
+    if (!orders || orders.length === 0) {
+        return;
+    }
+
+    console.log(`\n🎨 Enriching ${orders.length} new executive orders...`);
+    console.log('='.repeat(60));
+
+    let enrichedCount = 0;
+    let failedCount = 0;
+    const errors = [];
+
+    for (const order of orders) {
+        try {
+            console.log(`\n🤖 Enriching EO ${order.order_number}: ${order.title.substring(0, 50)}...`);
+            // Skip idempotency check since these are newly collected EOs
+            const result = await enrichExecutiveOrder(order, true);
+
+            if (result.success && result.enriched) {
+                console.log(`✅ Successfully enriched EO ${order.order_number}`);
+                enrichedCount++;
+            } else if (result.success && result.skipped) {
+                console.log(`⏭️  Skipped EO ${order.order_number} (${result.reason})`);
+                // Don't count as success or failure - just skipped
+            } else {
+                console.error(`❌ Failed to enrich EO ${order.order_number}: ${result.error}`);
+                failedCount++;
+                errors.push({ order_number: order.order_number, error: result.error });
+            }
+        } catch (error) {
+            console.error(`❌ Error enriching EO ${order.order_number}:`, error.message);
+            failedCount++;
+            errors.push({ order_number: order.order_number, error: error.message });
+            // Continue with other EOs - don't let one failure block the rest
+        }
+    }
+
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 Enrichment Summary:');
+    console.log(`   New EOs collected: ${orders.length}`);
+    console.log(`   Successfully enriched: ${enrichedCount} ✅`);
+    console.log(`   Failed enrichment: ${failedCount} ${failedCount > 0 ? '⚠️' : ''}`);
+
+    if (errors.length > 0) {
+        console.log('\n⚠️  Failed orders:');
+        errors.forEach(e => {
+            console.log(`   - EO ${e.order_number}: ${e.error}`);
+        });
+        console.log('\n   Note: Failed EOs saved without enrichment (can be enriched later)');
+        console.log('   💡 Check dead-letter queue for details:');
+        console.log('      SELECT * FROM eo_enrichment_errors ORDER BY created_at DESC LIMIT 10;');
     }
 }
 
@@ -495,27 +552,33 @@ async function getDatabaseStats() {
 async function main() {
     try {
         console.log('🔍 Starting executive orders collection...\n');
-        
+
         // Show current database state
         await getDatabaseStats();
-        
+
         // Fetch from Federal Register (with proper filtering)
         console.log('\n' + '='.repeat(60));
         const federalOrders = await fetchFromFederalRegister();
-        
+
         // Save to Supabase
         console.log('='.repeat(60));
         if (federalOrders.length > 0) {
             await saveToSupabase(federalOrders);
-            console.log('\n✨ Executive orders tracking complete!');
+
+            // TTRC-223: Auto-enrich new EOs after collection
+            // This runs enrichment on all newly collected orders
+            // Errors don't block collection - failed EOs saved without enrichment
+            await enrichNewEOs(federalOrders);
+
+            console.log('\n✨ Executive orders collection and enrichment complete!');
         } else {
             console.log('\n📭 No new executive orders to add');
         }
-        
+
         // Show updated stats
         console.log('\n' + '='.repeat(60));
         await getDatabaseStats();
-        
+
     } catch (error) {
         console.error('\n❌ Fatal error:', error);
         process.exit(1);

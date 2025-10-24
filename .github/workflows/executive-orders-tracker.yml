@@ -8,7 +8,8 @@ on:
 jobs:
   track-orders:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 20  # TTRC-223: Increased from 10 to 20 for enrichment step
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -41,6 +42,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_ROLE_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
       run: node scripts/executive-orders-tracker-supabase.js
       
     - name: Commit any changes (minimal, since data is in Supabase)

@@ -160,10 +160,11 @@ class EOEnrichmentWorker {
    * Enrich single EO with retry logic
    * @param {Object} eo - Executive order database record
    * @param {number} attempt - Current attempt number (0-indexed)
+   * @param {boolean} skipIdempotencyCheck - Skip already-enriched check (used when called from export function)
    */
-  async enrichWithRetry(eo, attempt = 0) {
+  async enrichWithRetry(eo, attempt = 0, skipIdempotencyCheck = false) {
     // Skip if already enriched at this version (idempotency)
-    if (eo.enriched_at && eo.prompt_version === PROMPT_VERSION) {
+    if (!skipIdempotencyCheck && eo.enriched_at && eo.prompt_version === PROMPT_VERSION) {
       console.log(`✓ Skip EO ${eo.order_number} - already enriched at ${PROMPT_VERSION}`);
       return;
     }
@@ -466,6 +467,49 @@ class EOEnrichmentWorker {
 }
 
 // ============================================================================
+// EXPORTED FUNCTIONS (for integration with collection script)
+// ============================================================================
+
+/**
+ * Enrich a single executive order
+ * Used by collection script to auto-enrich new EOs
+ * @param {Object} eo - Executive order object (must have id, order_number, title)
+ * @param {boolean} skipIdempotencyCheck - Skip the already-enriched check (for new EOs from collection)
+ * @returns {Promise<{success: boolean, enriched?: boolean, skipped?: boolean, error?: string}>}
+ */
+export async function enrichExecutiveOrder(eo, skipIdempotencyCheck = false) {
+  const worker = new EOEnrichmentWorker();
+
+  try {
+    // Check daily cap before enriching
+    await worker.checkDailyCap();
+
+    // Skip if already enriched at this version (unless caller says skip this check)
+    if (!skipIdempotencyCheck && eo.enriched_at && eo.prompt_version === PROMPT_VERSION) {
+      return { success: true, skipped: true, reason: 'already_enriched' };
+    }
+
+    // Rate limit
+    await worker.rateLimiter.consume();
+
+    // Enrich with retry (skip idempotency check since we just did it)
+    const initialSuccessCount = worker.successCount;
+    await worker.enrichWithRetry(eo, 0, true);
+
+    // Check if enrichment actually succeeded
+    if (worker.successCount > initialSuccessCount) {
+      return { success: true, enriched: true };
+    } else {
+      // enrichWithRetry logged to dead-letter queue
+      return { success: false, error: 'Enrichment failed after retries' };
+    }
+  } catch (error) {
+    // Cap exceeded or other fatal error
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================================================
 // MAIN EXECUTION
 // ============================================================================
 
@@ -499,9 +543,17 @@ async function main() {
   await worker.enrichBatch(batchSize);
 }
 
-// Run with error handling
-main().catch(err => {
-  console.error('\n❌ Fatal error:', err.message);
-  console.error(err.stack);
-  process.exit(1);
-});
+// Only run main if executed directly (not imported)
+// Check if this file is being run directly vs imported
+const isMainModule = process.argv[1] && (
+  import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/')) ||
+  process.argv[1].includes('enrich-executive-orders.js')
+);
+
+if (isMainModule) {
+  main().catch(err => {
+    console.error('\n❌ Fatal error:', err.message);
+    console.error(err.stack);
+    process.exit(1);
+  });
+}
