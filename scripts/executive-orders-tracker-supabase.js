@@ -298,7 +298,7 @@ async function fetchFromFederalRegister() {
                 const order = {
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
-                    date: item.publication_date || today,
+                    date: item.signing_date || item.publication_date || today,
                     summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`),
                     category: determineCategory(item.title, item.abstract),
                     agencies_affected: extractAgencies(item),
