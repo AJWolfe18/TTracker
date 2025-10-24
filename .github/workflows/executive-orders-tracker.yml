@@ -3,23 +3,26 @@ name: Track Executive Orders
 on:
   schedule:
     - cron: '0 16 * * *'  # 11:00 AM EST daily (2 hours after main tracker)
-  workflow_dispatch:      # Manual trigger
+  workflow_dispatch:      # Manual trigger (works on any branch)
 
 jobs:
   track-orders:
+    # Skip scheduled runs on test branch (only run on main)
+    # Manual triggers (workflow_dispatch) work on any branch
+    if: github.event_name != 'schedule' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20  # TTRC-223: Increased from 10 to 20 for enrichment step
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Detect environment
       id: env_detect
       run: |
         echo "Current ref: ${{ github.ref }}"
         echo "Current branch: ${GITHUB_REF#refs/heads/}"
-        
+
         # Check if we're on test branch or if test file exists
         if [[ "${{ github.ref }}" == "refs/heads/test" ]] || [[ -f "TEST_BRANCH_MARKER.md" ]]; then
           echo "environment=test" >> $GITHUB_OUTPUT
