@@ -164,10 +164,11 @@ async function fetchFromFederalRegister() {
             startDate = '2025-01-20';
             console.log('   🚀 INITIAL IMPORT MODE - fetching all EOs since inauguration');
         } else {
-            // Daily update - only last 3 days
-            const threeDaysAgo = new Date(Date.now() - 3*24*60*60*1000).toISOString().split('T')[0];
-            startDate = threeDaysAgo;
-            console.log('   📅 DAILY UPDATE MODE - fetching last 3 days only');
+            // Daily update - configurable lookback (default 3 days, TEST env uses 30 days)
+            const lookbackDays = parseInt(process.env.EO_LOOKBACK_DAYS || '3', 10);
+            const lookbackDate = new Date(Date.now() - lookbackDays*24*60*60*1000).toISOString().split('T')[0];
+            startDate = lookbackDate;
+            console.log(`   📅 DAILY UPDATE MODE - fetching last ${lookbackDays} days only`);
         }
     } catch (error) {
         // If check fails, default to full import
