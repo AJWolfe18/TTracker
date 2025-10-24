@@ -422,14 +422,14 @@ async function saveToSupabase(orders) {
         
         // Insert all orders at once
         const result = await supabaseRequest('executive_orders', 'POST', orders);
-        
+
         // Validate the insert succeeded
-        if (!result) {
+        if (!result || !Array.isArray(result)) {
             throw new Error('Supabase insert returned null/undefined result');
         }
-        
+
         console.log(`✅ Successfully saved ${orders.length} executive orders`);
-        
+
         // Summary
         const highImpact = orders.filter(o => o.impact_score >= 70).length;
         console.log(`\n📊 Summary:`);
@@ -440,7 +440,10 @@ async function saveToSupabase(orders) {
             console.log(`   Order number range: ${orderNums[0]} to ${orderNums[orderNums.length-1]}`);
             console.log(`   Order numbers: ${orderNums.join(', ')}`);
         }
-        
+
+        // Return the inserted records (with auto-generated IDs) for enrichment
+        return result;
+
     } catch (error) {
         console.error('❌ FATAL ERROR saving to Supabase:', error.message);
         console.error('   This is a blocking error - manual investigation required');
@@ -548,12 +551,13 @@ async function main() {
         // Save to Supabase
         console.log('='.repeat(60));
         if (federalOrders.length > 0) {
-            await saveToSupabase(federalOrders);
+            // Save and get back the inserted records WITH auto-generated IDs
+            const insertedOrders = await saveToSupabase(federalOrders);
 
             // TTRC-223: Auto-enrich new EOs after collection
-            // This runs enrichment on all newly collected orders
+            // Pass the inserted records (with IDs) to enrichment
             // Errors don't block collection - failed EOs saved without enrichment
-            await enrichNewEOs(federalOrders);
+            await enrichNewEOs(insertedOrders);
 
             console.log('\n✨ Executive orders collection and enrichment complete!');
         } else {
