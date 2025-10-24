@@ -508,7 +508,8 @@ async function enrichNewEOs(orders) {
 
     for (const order of orders) {
         try {
-            console.log(`\n🤖 Enriching EO ${order.order_number}: ${order.title.substring(0, 50)}...`);
+            const titlePreview = (order.title || '').substring(0, 50);
+            console.log(`\n🤖 Enriching EO ${order.order_number}: ${titlePreview}...`);
             // Skip idempotency check since these are newly collected EOs
             const result = await enrichExecutiveOrder(order, true);
 
