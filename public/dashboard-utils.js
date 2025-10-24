@@ -200,7 +200,21 @@ window.DashboardUtils = (function() {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      // Handle date-only strings (YYYY-MM-DD) to avoid timezone issues
+      // When parsing "2025-10-15", JS treats it as UTC midnight,
+      // which becomes previous day in CT (UTC-6)
+      const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(dateString);
+      
+      let date;
+      if (dateOnly) {
+        // Parse as local date to avoid timezone conversion
+        const [year, month, day] = dateString.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(dateString);
+      }
+      
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'

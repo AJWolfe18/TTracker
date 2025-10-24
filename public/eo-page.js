@@ -149,7 +149,10 @@
         }
 
         filtered = filtered.filter(eo => {
-          const eoDate = new Date(eo.date);
+          // Parse date as local to avoid timezone issues
+          // "2025-10-15" parsed as UTC becomes Oct 14 in CT
+          const [year, month, day] = eo.date.split('-').map(Number);
+          const eoDate = new Date(year, month - 1, day);
           return eoDate >= cutoffDate;
         });
       }
