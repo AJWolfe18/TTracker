@@ -23,11 +23,6 @@ if (!OPENAI_KEY) {
     console.log('✅ OpenAI API key found - will generate AI summaries');
 }
 
-// Generate unique ID for executive orders
-function generateOrderId() {
-    return `eo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
 // Check if order already exists in database
 async function orderExists(orderNumber) {
     try {
@@ -301,7 +296,6 @@ async function fetchFromFederalRegister() {
                 }
                 
                 const order = {
-                    id: generateOrderId(),
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
                     date: item.publication_date || today,
