@@ -235,9 +235,11 @@ LIMIT 5;
 
 ### PROD Deployment Steps
 
-**DO NOT use `git merge test → main`** - Always cherry-pick tested commits.
+**IMPORTANT: Main branch is protected** - Must use PR workflow (cannot push directly).
 
-#### Step 1: Cherry-Pick Commits to Main
+**DO NOT use `git merge test → main`** - Always cherry-pick tested commits via PR.
+
+#### Step 1: Create Deployment Branch
 
 ```bash
 # Switch to main branch
@@ -246,17 +248,82 @@ git checkout main
 # Pull latest
 git pull origin main
 
-# Cherry-pick the tested commits from test branch
-# (Find commit hashes from PR #20)
-git cherry-pick <commit-hash-1>
-git cherry-pick <commit-hash-2>
-# ... repeat for all commits in PR #20
+# Create deployment branch
+git checkout -b deploy/ttrc-223-to-prod
+```
 
-# OR cherry-pick the merge commit (safer)
-git cherry-pick -m 1 <merge-commit-hash>
+#### Step 2: Cherry-Pick Tested Commits
 
-# Push to main (triggers auto-deploy to trumpytracker.com)
-git push origin main
+```bash
+# Cherry-pick all commits from test branch
+# Commit range: 4a16804 (last main commit) to 516047c (latest test)
+git cherry-pick 4a16804..516047c
+
+# OR cherry-pick individual commits if needed
+# git cherry-pick <commit-hash-1>
+# git cherry-pick <commit-hash-2>
+# ... etc
+```
+
+#### Step 3: Push and Create PR
+
+```bash
+# Push deployment branch
+git push origin deploy/ttrc-223-to-prod
+
+# Create PR to main
+gh pr create --base main --head deploy/ttrc-223-to-prod \
+  --title "Deploy: TTRC-223 Auto-Enrich Executive Orders to PROD" \
+  --body "$(cat <<'EOF'
+## Deployment to PROD
+
+**Feature:** Auto-enrich executive orders after collection
+**JIRA:** TTRC-223
+**Test Branch Commits:** 4a16804..516047c (10 commits)
+**Test Stability:** 7+ days on TEST environment
+
+### Changes Included
+
+1. Auto-enrichment integration
+2. Schema fixes (5 fixes)
+3. RLS policy fix
+4. Signing date correction
+5. Word count validation fix
+6. Timezone display fix
+
+### Pre-Deployment Checklist
+
+- [x] TEST stable for 7+ days
+- [x] Zero critical errors on TEST
+- [x] Cost projections confirmed (<$3/month)
+- [x] User approval obtained
+- [x] No database migrations required
+
+### Verification Plan
+
+1. Netlify deployment completes successfully
+2. Manual workflow run (collect + enrich)
+3. Verify dates display correctly
+4. Check cost tracking
+5. Monitor first 24 hours
+
+See deployment guide for full details.
+EOF
+)"
+```
+
+#### Step 4: Merge PR (Triggers PROD Deployment)
+
+```bash
+# Merge the PR (use squash to keep main clean)
+gh pr merge deploy/ttrc-223-to-prod --squash
+
+# OR merge via GitHub UI:
+# 1. Go to PR page
+# 2. Click "Squash and merge"
+# 3. Confirm merge
+
+# Netlify will auto-deploy to trumpytracker.com
 ```
 
 #### Step 2: Verify PROD Environment Variables

@@ -4,19 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ⚠️ CRITICAL BRANCH RULES ⚠️
 
-### 🚨 NEVER TOUCH MAIN BRANCH 🚨
+### 🔒 MAIN BRANCH IS PROTECTED
+- **Main branch requires PRs** - Direct pushes are BLOCKED by GitHub
 - **ALWAYS WORK ON `test` BRANCH**
-- **NEVER `git checkout main`**
-- **NEVER `git push origin main`** (unless explicitly told)
-- **NEVER edit files on main branch**
+- **NEVER `git push origin main`** - It will fail (protected)
+- **Use PR workflow for PROD deployments** (see below)
 
 ### ✅ Correct workflow:
+
+**For TEST (normal work):**
 1. Always work on `test` branch
 2. Commit to `test` branch
-3. Push to `test` branch
-4. User will handle main branch deployments
+3. Push to `test` branch (`git push origin test`)
+4. Auto-deploys to Netlify TEST site
 
-### ❌ If you touch main branch, the user will be pissed
+**For PROD (deployments only):**
+1. Create deployment branch from `main`
+2. Cherry-pick tested commits from `test`
+3. Push deployment branch
+4. Create PR to `main` via `gh pr create`
+5. Merge PR (auto-deploys to trumpytracker.com)
+
+### ❌ What will break:
+- `git push origin main` → ❌ BLOCKED (protected branch)
+- `git merge test` into main → ❌ WRONG (use cherry-pick)
+- Editing files on main → ❌ BLOCKED (must use PR)
 
 ---
 
