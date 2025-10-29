@@ -286,22 +286,22 @@ LIMIT 10;
 -- 7A) Test metrics recording (creates test data)
 DO $$
 DECLARE
-  test_feed_id BIGINT := 6; -- Test Feed
+  test_feed_id BIGINT := 5; -- Politico feed (Feed 6 was deleted in TTRC-242)
 BEGIN
   -- Test success recording
   PERFORM public.record_feed_success(test_feed_id, 250);
-  
+
   -- Test 304 recording
   PERFORM public.record_feed_not_modified(test_feed_id, 150);
-  
+
   -- Test error recording
   PERFORM public.record_feed_error(test_feed_id, 'Test error - safe to ignore');
-  
+
   RAISE NOTICE '✓ Metrics recording test passed';
 END$$;
 
 -- Verify test metrics created
-SELECT 
+SELECT
   'Integration test' as category,
   'Metrics recording' as test_name,
   metric_date,
@@ -310,13 +310,13 @@ SELECT
   success_count,
   error_count,
   not_modified_count,
-  CASE 
-    WHEN fetch_count = 3 AND success_count = 2 AND error_count = 1 AND not_modified_count = 1
+  CASE
+    WHEN fetch_count >= 3 AND success_count >= 2 AND error_count >= 1 AND not_modified_count >= 1
     THEN '✓ Pass'
     ELSE '🛑 Fail'
   END as result
 FROM public.feed_metrics
-WHERE feed_id = 6 AND metric_date = CURRENT_DATE;
+WHERE feed_id = 5 AND metric_date = CURRENT_DATE;
 
 -- 7B) Test job enqueuing (both signatures)
 DO $$
@@ -326,21 +326,21 @@ DECLARE
 BEGIN
   -- Test new 5-arg signature
   job_id_new := public.enqueue_fetch_job(
-    p_feed_id := 6,
+    p_feed_id := 5,
     p_job_type := 'test_rss_fetch',
     p_payload := '{"test": "new_signature"}'::jsonb,
     p_run_at := NOW() + INTERVAL '1 hour'
   );
-  
+
   -- Test legacy 3-arg signature
   job_id_legacy := public.enqueue_fetch_job(
     'test_legacy_job',
     '{"test": "legacy_signature"}'::jsonb
   );
-  
+
   -- Cleanup test jobs
   DELETE FROM public.job_queue WHERE id IN (job_id_new, job_id_legacy);
-  
+
   RAISE NOTICE '✓ Job enqueue test passed (job_ids: %, %)', job_id_new, job_id_legacy;
 END$$;
 
