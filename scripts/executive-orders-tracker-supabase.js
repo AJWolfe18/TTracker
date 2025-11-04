@@ -188,7 +188,6 @@ async function fetchFromFederalRegister() {
     
     console.log(`   Searching from ${startDate} to ${today} (${daysDiff} days)`);
     console.log(`   Filter: Executive Orders ONLY\n`);
-    console.log(`   🎯 EXPECTING ~190 Executive Orders for full import\n`);
     
     try {
         const response = await fetch(url, {
@@ -218,15 +217,15 @@ async function fetchFromFederalRegister() {
         
         // Check if results field exists
         if (!data.hasOwnProperty('results')) {
-            console.log(`   ⚠️ API response missing 'results' field. Response keys: ${Object.keys(data).join(', ')}`);
-            console.log(`   Full response: ${JSON.stringify(data).substring(0, 500)}`);
-            
-            // It might be a valid response with 0 results
+            // Federal Register API omits 'results' field when count=0
             if (data.count === 0 || data.total === 0) {
-                console.log('   ℹ️ No executive orders found in the specified date range');
+                console.log('   ✅ No executive orders published in the specified date range (this is normal for daily checks)');
                 return [];
             }
-            
+
+            // If count > 0 but no results field, that's an actual error
+            console.log(`   ⚠️ API response missing 'results' field. Response keys: ${Object.keys(data).join(', ')}`);
+            console.log(`   Full response: ${JSON.stringify(data).substring(0, 500)}`);
             throw new Error(`Invalid API response structure - no results field`);
         }
         
