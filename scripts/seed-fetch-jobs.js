@@ -17,9 +17,26 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Stable 32-char hash per feed
+// Strip nulls from object for stable hashing (matches DB jsonb_strip_nulls behavior)
+const stripNulls = (obj) => {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripNulls);
+
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== null && value !== undefined) {
+      result[key] = typeof value === 'object' ? stripNulls(value) : value;
+    }
+  }
+  return result;
+};
+
+// Stable 64-char SHA-256 hash (matches database digest() with jsonb_strip_nulls)
 const hash = (obj) =>
-  crypto.createHash('sha256').update(JSON.stringify(obj)).digest('hex').slice(0, 32);
+  crypto.createHash('sha256')
+    .update(JSON.stringify(stripNulls(obj)))
+    .digest('hex');
 
 async function enqueueFeed(feed) {
   const payload = {
@@ -28,7 +45,10 @@ async function enqueueFeed(feed) {
     feed_url: feed.feed_url,  // worker compatibility
     source_name: feed.feed_name
   };
-  const payloadHash = hash({ job: 'fetch_feed', feed_id: feed.id });
+
+  // Let DB compute hash from payload for consistency (or pass explicit hash)
+  // Using explicit hash for deterministic seeding (matches what DB would compute)
+  const payloadHash = hash(payload);
 
   // ATOMIC: Let the database handle duplicate detection
   const { data: jobId, error } = await supabase.rpc('enqueue_fetch_job', {

@@ -2,9 +2,10 @@
 
 **Date:** 2025-10-29
 **JIRA:** TTRC-248
-**Status:** ✅ ROOT CAUSE IDENTIFIED - Ready to Fix
+**Status:** ✅ ROOT CAUSE CONFIRMED - Fix Ready to Apply
 **Environment:** TEST (then PROD)
 **Priority:** HIGH (blocking feed expansion)
+**Last Update:** 2025-10-29 @ 23:30 UTC - pgcrypto missing confirmed via test
 
 ---
 
@@ -24,7 +25,18 @@
 
 ### Step 1: Enable pgcrypto Extension in TEST
 
-**Run in Supabase TEST SQL Editor:**
+**Option A: Run SQL file (recommended)**
+
+A ready-to-use SQL file is available at: `temp_enable_pgcrypto.sql`
+
+1. Go to Supabase Dashboard: https://supabase.com/dashboard/project/wnrjrywpcadwutfykflu/sql/new
+2. Copy contents of `temp_enable_pgcrypto.sql`
+3. Click "Run"
+4. Verify output shows pgcrypto enabled and test hash generated
+
+**Option B: Quick SQL command**
+
+Run in Supabase TEST SQL Editor:
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ```

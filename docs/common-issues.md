@@ -104,6 +104,97 @@ CREATE INDEX idx_stories_created_at ON stories(created_at);
 
 ---
 
+### Issue: Job Queue RPC Returns NULL Despite No Active Jobs
+**Symptom:** RSS pipeline frozen - `enqueue_fetch_job()` RPC returns NULL for all feeds claiming "job already active" when database shows no active jobs exist
+
+**Root Causes (Multiple):**
+1. **SECURITY DEFINER search_path vulnerability** - Unqualified `digest()` call allowed search_path hijacking
+2. **Hash instability** - `{"k":null}` vs `{"k":null,"x":null}` produced different hashes causing spurious deduplication misses
+3. **Type mismatches** - `name[]` vs `text[]` in constraint cleanup query
+4. **Failed job retry blocking** - Legacy cleanup marked failed jobs as processed, preventing retries
+5. **Execution order** - Pre-flight dedupe ran AFTER index creation, causing TEST failures
+6. **Silent PROD failures** - Missing index guard allowed broken deploys
+
+**Solution (Migration 029):**
+```sql
+-- 1. SECURITY: Explicitly qualify digest() to prevent hijacking
+CREATE OR REPLACE FUNCTION enqueue_fetch_job(...)
+SET search_path = public  -- Tighten search_path
+AS $$
+  v_hash := encode(
+    extensions.digest(  -- Explicitly qualified, not search_path-resolved
+      convert_to(
+        COALESCE(jsonb_strip_nulls(p_payload), '{}'::jsonb)::text,  -- Strip nulls for stability
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  INSERT INTO job_queue (...)
+  ON CONFLICT (job_type, payload_hash) WHERE (processed_at IS NULL) DO NOTHING
+  RETURNING id INTO v_id;
+$$;
+
+-- 2. CORRECTNESS: Only mark done/completed as processed, NOT failed
+UPDATE job_queue
+SET processed_at = COALESCE(processed_at, completed_at, NOW())
+WHERE processed_at IS NULL
+  AND status IN ('done', 'completed');  -- Removed 'failed' - must stay retryable
+
+-- 3. EXECUTION ORDER: Dedupe BEFORE index creation
+-- Pre-flight dedupe runs first, then CREATE UNIQUE INDEX succeeds
+
+-- 4. PROD SAFETY: Fail-fast index guard
+DO $$
+BEGIN
+  IF COALESCE(current_setting('app.env', true), 'prod') <> 'test' THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='ux_job_queue_payload_hash_active') THEN
+      RAISE EXCEPTION 'Required index missing in PROD';
+    END IF;
+  END IF;
+END$$;
+```
+
+**Client-Side Fix (seed script):**
+```javascript
+// Strip nulls from payload for stable hashing (matches DB jsonb_strip_nulls)
+const stripNulls = (obj) => {
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== null && value !== undefined) {
+      result[key] = typeof value === 'object' ? stripNulls(value) : value;
+    }
+  }
+  return result;
+};
+
+const hash = (obj) =>
+  crypto.createHash('sha256')
+    .update(JSON.stringify(stripNulls(obj)))
+    .digest('hex');
+```
+
+**Debugging Steps Used:**
+1. ✅ Found blocking jobs (2574, 2575) from previous test session
+2. ✅ Discovered RPC using old broken version from migration 013
+3. ✅ Verified hash logic difference between client (32-char) and server (64-char expected)
+4. ✅ Traced 11 rounds of issues: security, types, order, stability
+
+**Fixed in:** TTRC-248, Migration 029
+**Date:** November 3, 2025
+**Review Rounds:** 11 (architectural, security, bytea, comprehensive, production, Supabase-specific, critical-7, ultra-critical-3, final hardening, PostgreSQL syntax, type compliance)
+**Prevention:**
+- Always use `extensions.digest()` explicitly in SECURITY DEFINER functions
+- Always use `jsonb_strip_nulls()` for hash stability
+- Always run deduplication BEFORE unique index creation
+- Always add PROD index guard to fail-fast if prerequisites missing
+- Always use GET DIAGNOSTICS for row counts, not temp table references
+- Always check `pg_proc` for function existence, not `IF EXISTS` (unsupported)
+
+---
+
 ## Frontend Issues
 
 ### Issue: Infinite Re-renders in useEffect

@@ -1,8 +1,10 @@
 # Next Session: Phase 2/3 Planning - Feed Expansion JIRA Cards
 
-**Prerequisites:** TTRC-247 complete, all Phase 1 tickets in PROD
+**Prerequisites:** Phase 1 tickets deployed to TEST (Migrations 027-029). PROD deployment pending TTRC-145 (frontend QA).
 **Environment:** Planning session (no code execution)
 **Goal:** Create JIRA epic and stories for RSS feed expansion (Phases 2-4)
+
+**⚠️ STATUS UPDATE:** Phase 1 infrastructure is in TEST only, NOT in PROD yet. PROD deployment blocked by TTRC-145 (frontend QA). Feed expansion will proceed in TEST environment.
 
 ---
 
