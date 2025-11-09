@@ -1,8 +1,26 @@
 # TTRC-258 Deployment Guide
 
-**Feature:** Article Scraping for Story Enrichment  
-**JIRA:** TTRC-258  
+**Feature:** Article Scraping for Story Enrichment
+**JIRA:** TTRC-258
 **Date:** November 7, 2025
+
+---
+
+## ⚠️ CRITICAL: PROD System Status
+
+**IMPORTANT:** This feature is for the **NEW RSS story clustering system** (`stories` + `articles` tables).
+
+### Check Your PROD Environment:
+
+**If PROD is still using the OLD system** (`political_entries` table):
+- ❌ **DO NOT DEPLOY TTRC-258 to PROD yet**
+- ✅ **Deploy to TEST only** (test branch already has new system)
+- ⏳ **Wait for full system migration** before deploying scraping
+
+**If PROD already has the NEW system** (`stories` + `articles` tables):
+- ✅ **Safe to deploy** - Follow deployment steps below
+
+**To check:** Look for `stories` and `articles` tables in PROD Supabase. If they don't exist, PROD is still on old system.
 
 ---
 
@@ -10,7 +28,7 @@
 
 **NO DATABASE CHANGES REQUIRED.** ✅
 
-This feature uses existing schema. The only Supabase update needed is **adding new RSS feeds** (optional, to test scraping).
+This feature uses existing `stories` and `articles` schema. The only Supabase update needed is **adding new RSS feeds** (optional, to test scraping).
 
 ---
 
