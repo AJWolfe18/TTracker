@@ -1,5 +1,17 @@
 # TrumpyTracker Environment Variables & Secrets Documentation
 
+**Last Updated:** November 2025
+**Version:** 3.0
+
+## Table of Contents
+1. [Critical Database Info](#critical-database-schema-update)
+2. [Required Secrets](#github-secrets-required)
+3. [Optional Configuration](#optional-configuration-variables)
+4. [Local Development Setup](#local-development-setup)
+5. [Verification & Testing](#verifying-your-setup)
+
+---
+
 ## ⚠️ CRITICAL DATABASE SCHEMA UPDATE
 **As of September 2025:**
 - **TEST Environment**: Uses `articles` table (NEW schema)
@@ -50,6 +62,94 @@ SUPABASE_TEST_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 - Can add approval requirements
 - Better security isolation
 - Clear separation between TEST and PROD
+
+---
+
+## Optional Configuration Variables
+
+These environment variables are **optional** and have sensible defaults. Set them only if you need to customize behavior.
+
+### Article Scraping (TTRC-258)
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `SCRAPE_MAX_CHARS` | `5000` | Max characters per scraped article | `SCRAPE_MAX_CHARS=10000` |
+| `SCRAPE_MIN_GAP_MS` | `1000` | Min milliseconds between same-host requests | `SCRAPE_MIN_GAP_MS=2000` |
+| `SCRAPE_DOMAINS` | `csmonitor.com,pbs.org,...` | Comma-separated allow-list | `SCRAPE_DOMAINS=csmonitor.com,propublica.org` |
+
+**Default allow-list:**
+```
+csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com
+```
+
+**Documentation:** See `docs/architecture/article-scraping.md` for full details
+
+---
+
+### RSS Feed Processing
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `RSS_MAX_BYTES` | `5000000` (5MB) | Max bytes per RSS feed | `RSS_MAX_BYTES=10000000` |
+| `RSS_MAX_ITEMS` | `50` | Max items to process per feed | `RSS_MAX_ITEMS=100` |
+| `MAX_ARTICLE_AGE_HOURS` | `72` | Skip articles older than this | `MAX_ARTICLE_AGE_HOURS=48` |
+| `FETCH_TIMEOUT_MS` | `10000` (10s) | HTTP fetch timeout | `FETCH_TIMEOUT_MS=15000` |
+| `FETCH_MAX_RETRIES` | `3` | Max retries for failed fetches | `FETCH_MAX_RETRIES=5` |
+| `FETCH_BASE_DELAY_MS` | `1000` (1s) | Base delay between retries | `FETCH_BASE_DELAY_MS=2000` |
+
+---
+
+### Job Queue Worker
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `MAX_EMPTY_POLLS` | `120` | Worker exits after this many empty polls | `MAX_EMPTY_POLLS=240` |
+| `STALE_JOB_MINUTES` | `10` | Reclaim jobs stuck in 'claimed' state | `STALE_JOB_MINUTES=15` |
+| `LOG_LEVEL` | `info` | Logging verbosity (debug/info/warn/error) | `LOG_LEVEL=debug` |
+
+---
+
+### Executive Orders Tracking
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `EO_LOOKBACK_DAYS` | `7` | How many days to check for new EOs | `EO_LOOKBACK_DAYS=14` |
+
+---
+
+### Duplicate Detection (Advanced)
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `DUPLICATE_SIMILARITY_THRESHOLD` | `0.85` | Cosine similarity threshold (0-1) | `DUPLICATE_SIMILARITY_THRESHOLD=0.90` |
+| `DUPLICATE_WORD_THRESHOLD` | `10` | Min word count for comparison | `DUPLICATE_WORD_THRESHOLD=15` |
+| `DUPLICATE_COMPARISON_LENGTH` | `500` | Max chars to compare | `DUPLICATE_COMPARISON_LENGTH=1000` |
+| `DUPLICATE_SCORE_THRESHOLD` | `0.80` | Overall duplicate score threshold | `DUPLICATE_SCORE_THRESHOLD=0.85` |
+| `DUPLICATE_DEBUG_LOG` | `false` | Enable debug logging | `DUPLICATE_DEBUG_LOG=true` |
+
+---
+
+### Testing & Debugging
+
+| Variable | Default | Description | Example |
+|----------|---------|-------------|---------|
+| `NODE_ENV` | `development` | Environment mode (test/development/production) | `NODE_ENV=test` |
+| `DEBUG_COUNTS` | `false` | Log detailed counts in clustering | `DEBUG_COUNTS=true` |
+| `DRY_RUN` | `false` | Simulate operations without writing to DB | `DRY_RUN=true` |
+
+---
+
+### System Variables (Auto-Set)
+
+These are typically set automatically by the system or CI/CD:
+
+| Variable | Set By | Description |
+|----------|--------|-------------|
+| `CI` | GitHub Actions | Indicates running in CI environment |
+| `GITHUB_ACTIONS` | GitHub Actions | Indicates running in GitHub Actions |
+| `DATABASE_URL` | Supabase | Auto-generated connection string (if needed) |
+
+---
 
 ## Local Development Setup
 
@@ -133,6 +233,68 @@ node scripts/check-schema.js
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: September 2025  
+---
+
+## Quick Reference: Common Configurations
+
+### Increase Scraping Quality
+```bash
+# Get more context per article (costs more)
+SCRAPE_MAX_CHARS=10000
+
+# Be more polite to servers
+SCRAPE_MIN_GAP_MS=2000
+```
+
+### Speed Up Development
+```bash
+# Process fewer articles per feed
+RSS_MAX_ITEMS=10
+
+# Shorter timeouts
+FETCH_TIMEOUT_MS=5000
+
+# More verbose logging
+LOG_LEVEL=debug
+```
+
+### Debug Clustering Issues
+```bash
+# Enable detailed logging
+DEBUG_COUNTS=true
+DUPLICATE_DEBUG_LOG=true
+
+# Adjust similarity thresholds
+DUPLICATE_SIMILARITY_THRESHOLD=0.90
+```
+
+### Test Without Writing to DB
+```bash
+# Dry run mode
+DRY_RUN=true
+```
+
+---
+
+## All Environment Variables Summary
+
+**Required (must be set in `.env`):**
+- `OPENAI_API_KEY` - For AI clustering and enrichment
+- `SUPABASE_URL` (or `SUPABASE_TEST_URL`) - Database URL
+- `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_TEST_SERVICE_KEY`) - Database auth
+
+**Optional (have defaults):**
+- **Scraping:** `SCRAPE_MAX_CHARS`, `SCRAPE_MIN_GAP_MS`, `SCRAPE_DOMAINS`
+- **RSS:** `RSS_MAX_BYTES`, `RSS_MAX_ITEMS`, `MAX_ARTICLE_AGE_HOURS`, `FETCH_TIMEOUT_MS`, `FETCH_MAX_RETRIES`, `FETCH_BASE_DELAY_MS`
+- **Worker:** `MAX_EMPTY_POLLS`, `STALE_JOB_MINUTES`, `LOG_LEVEL`
+- **EO:** `EO_LOOKBACK_DAYS`
+- **Dedup:** `DUPLICATE_*` variables
+- **Debug:** `NODE_ENV`, `DEBUG_COUNTS`, `DRY_RUN`
+
+**Total count:** 3 required + 25+ optional
+
+---
+
+**Document Version**: 3.0
+**Last Updated**: November 2025
 **Critical**: Always use `articles` table in TEST, never `political_entries`
