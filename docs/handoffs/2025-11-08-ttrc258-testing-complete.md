@@ -145,16 +145,26 @@ that could secure three extra seats..."
 
 ## Cost Analysis
 
-**Current Cost:** ~$0.18/month (300 tokens per story enrichment)
-**With TTRC-258:** ~$0.60/month (1200 tokens per story enrichment)
-**Increase:** +$0.42/month (~$5/year)
+**UPDATED (2025-11-08):** Increased limit from 2K to 5K for better summary quality
 
-**Budget Status:** ✅ Well under $50/month limit
+**Current Cost (RSS-only):** ~$0.01/month (300 tokens per story)
+**With TTRC-258 (5K limit):** ~$0.12/month (7,500 tokens per story)
+**Increase:** +$0.11/month (~$1.32/year)
+
+**Budget Status:** ✅ Well under $50/month limit (headroom: $49.88)
 
 **Token Breakdown:**
-- RSS-only: ~300 tokens (short excerpts)
-- With scraping: ~1200 tokens (2000 char full articles)
-- 4x increase in token usage, 4x more detailed summaries
+- RSS-only: ~300 tokens (200 chars × 6 articles)
+- With scraping (2K): ~3,000 tokens (2000 chars × 6 articles) [OLD]
+- **With scraping (5K): ~7,500 tokens (5000 chars × 6 articles) [CURRENT]**
+- **25x increase vs RSS-only** for significantly better summary quality
+
+**Why 5K instead of 2K:**
+- Typical news article: 800-1500 words (~4000-7500 chars)
+- 2K limit = only first ~400 words (often misses conclusion/key facts)
+- 5K limit = first ~1000 words (captures full article context)
+- Cost difference vs 2K: only $0.07/month ($0.84/year)
+- **Priority: Summary quality > minor cost savings**
 
 ---
 

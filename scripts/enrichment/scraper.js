@@ -1,6 +1,15 @@
 // Article scraper for story enrichment with legal/cost guardrails
-// Node.js v22+ (uses native fetch + AbortController)
-// No external dependencies needed
+//
+// SCRAPING APPROACH:
+// - Tool: Node.js v22 native fetch + regex-based HTML parsing
+// - Better alternatives: Cheerio (DOM parsing) or Mozilla Readability (intelligent extraction)
+// - Current: Zero dependencies, simple regex extraction
+// - Future: Consider upgrading to @mozilla/readability for better quality
+//
+// DOCUMENTATION:
+// - Why regex? Zero dependencies, fast for simple sites
+// - Limitations: Can't render JavaScript (PBS fails), may grab nav/ads
+// - For JS-heavy sites: Would need Playwright/Puppeteer (not worth cost/complexity)
 
 // ---------- Configuration ----------
 // Default allow-list includes:
@@ -13,7 +22,7 @@ const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,p
   .filter(Boolean);
 
 const MAX_SCRAPED_PER_CLUSTER = 2;
-const MAX_EXCERPT_CHARS = 2000;
+const MAX_EXCERPT_CHARS = Number(process.env.SCRAPE_MAX_CHARS ?? 5000);  // Increased from 2000 to 5000 for better summary quality
 const MAX_BYTES = 1_500_000;       // 1.5 MB
 const FETCH_TIMEOUT_MS = 8000;
 const PER_HOST_MIN_GAP_MS = Number(process.env.SCRAPE_MIN_GAP_MS ?? 1000);
