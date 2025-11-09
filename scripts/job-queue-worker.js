@@ -11,6 +11,7 @@ import { updateLifecycleStates } from './rss/lifecycle.js';
 import { checkAndSplitStory } from './rss/auto-split.js';
 import { runMergeDetection } from './rss/periodic-merge.js';
 import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
+import { enrichArticlesForSummary } from './enrichment/scraper.js';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -419,15 +420,26 @@ class JobProcessor {
       throw new Error('No articles found for story');
     }
 
-    // Build article snippets (strip HTML, truncate to ~300 chars)
-    const articles = links.map(({ articles }) => ({
+    // Prepare articles for enrichment (with scraping where allowed)
+    const articlesForEnrichment = links.map(({ articles }) => ({
+      url: articles.url,
+      source_domain: articles.source_domain,
       title: articles.title || '',
       source_name: articles.source_name || '',
-      excerpt: (articles.content || articles.excerpt || '')
-        .replace(/<[^>]+>/g, ' ')    // strip HTML tags
+      description: articles.content || articles.excerpt || ''
+    }));
+
+    // TTRC-258: Enrich with article scraping (max 2 articles from allow-list)
+    const enriched = await enrichArticlesForSummary(articlesForEnrichment);
+
+    // Build final article context for OpenAI
+    const articles = enriched.map(a => ({
+      title: a.title,
+      source_name: a.source_name,
+      excerpt: a.excerpt
+        .replace(/<[^>]+>/g, ' ')    // strip any remaining HTML tags
         .replace(/\s+/g, ' ')         // collapse whitespace
         .trim()
-        .slice(0, 300)
     }));
 
     const userPayload = buildUserPayload({

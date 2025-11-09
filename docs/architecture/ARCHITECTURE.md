@@ -100,26 +100,61 @@ TrumpyTracker is a serverless, event-driven political accountability tracking sy
 - Writes to `executive_orders` table  
 - Will be deprecated after frontend migration
 
-### 2. Edge Functions Layer (Supabase)
+### 2. Edge Functions Layer (Supabase Deno)
 
-**rss-enqueue**
+**rss-enqueue** (Trigger Handler)
 - **Purpose:** Creates RSS fetch jobs for all active feeds
-- **Input:** Triggered by GitHub Actions or manual calls
-- **Output:** Jobs added to `job_queue` table
-- **Features:** Deduplication, priority scheduling, tiered feed processing
+- **Trigger:** GitHub Actions cron (every 1-2 hours) OR manual invoke
+- **Input:** `{"kind": "fetch_all_feeds"}` or `{"kind": "lifecycle"}`
+- **Output:** Jobs added to `job_queue` table via `enqueue_fetch_job()` RPC
+- **Features:**
+  - Tiered feed processing (T1 → T2 → T3)
+  - Deduplication via payload hash
+  - Lifecycle state management jobs
+- **Auth:** Protected by EDGE_CRON_TOKEN
 
-**stories-active**
-- **Purpose:** Returns active stories for frontend display
-- **Features:** Pagination, sorting, filtering by category
-- **Response:** Story summaries with article counts
+**stories-active** (Frontend API)
+- **Purpose:** Returns active stories with pagination for dashboard
+- **Method:** GET
+- **Query Params:** `limit` (default 20), `cursor` (pagination token)
+- **Response:** Array of story summaries with metadata
+- **Features:**
+  - Cursor-based pagination (timestamp + id)
+  - Status filter (active only)
+  - Ordered by last_updated_at DESC
 
-**stories-detail**
-- **Purpose:** Returns detailed story view with all sources
-- **Features:** Full article list, timeline, enrichment data
+**stories-detail** (Frontend API)
+- **Purpose:** Returns full story details with all linked articles
+- **Method:** GET
+- **Path Param:** `/story_id`
+- **Response:** Story object with articles array, timeline, enrichment
+- **Features:** Article sources with similarity scores, primary source flagging
 
-**queue-stats**
-- **Purpose:** Monitoring endpoint for job queue health
-- **Returns:** Pending/processing/failed job counts
+**stories-search** (Frontend API)
+- **Purpose:** Full-text search across stories using PostgreSQL tsvector
+- **Method:** GET
+- **Query Params:** `q` (search query), `limit`, `cursor`
+- **Features:**
+  - Searches headline + summary + actors
+  - Ranked by relevance
+  - Same pagination as stories-active
+
+**articles-manual** (Admin Tool)
+- **Purpose:** Manual article submission endpoint
+- **Method:** POST
+- **Body:** `{"url": "https://..."}`
+- **Process:** Scrapes article → Creates story → Enriches
+- **Auth:** Requires service role key
+
+**queue-stats** (Monitoring)
+- **Purpose:** Job queue health metrics for admin dashboard
+- **Method:** GET
+- **Response:** Job counts by type/status, stuck job detection
+- **Features:**
+  - Aggregates by job_type and status
+  - Detects jobs stuck >10 minutes
+  - Optional RPC fallback if `get_queue_stats()` exists
+- **Auth:** Optional EDGE_CRON_TOKEN protection
 
 ### 3. Job Queue System (Postgres)
 
@@ -141,26 +176,71 @@ pending → processing → completed
                     → failed → pending (retry)
 ```
 
-### 4. Worker Layer (Node.js)
+### 4. Worker Layer (Node.js v22)
 
-**RSS Feed Fetching**
-- Polls `job_queue` for `rss_fetch_feed` jobs
-- Fetches RSS feeds via HTTP
-- Parses XML to extract articles
-- Creates/updates stories based on article content
-- Handles feed errors and marks feeds as failed
+**Location:** `scripts/job-queue-worker.js`
+**Runtime:** Node.js ESM module (package.json: "type": "module")
+**Clients:** Supabase (service role), OpenAI (GPT-4o-mini)
 
-**Story Enrichment**
-- Calls OpenAI API for story summaries
-- Generates spicy takes and analysis
-- Extracts actors and categories
-- Updates story enrichment status
+**Job Processing Loop:**
+1. Poll `job_queue` table every 5s (configurable via WORKER_POLL_INTERVAL_MS)
+2. Claim jobs atomically via `claim_runnable_job()` RPC
+3. Execute job handler based on `job_type`
+4. Update job status (completed/failed)
+5. Retry failed jobs with exponential backoff (max 3 retries)
 
-**Story Clustering**
-- Groups related articles into stories
-- Manages story lifecycle (active → archived)
-- Deduplicates content across feeds
-- Tracks source diversity
+**RSS Feed Fetching** (`handleFetchFeed`)
+- **Job Type:** `fetch_feed`
+- **Process:**
+  1. Fetch RSS feed via HTTP (with etag/last-modified caching)
+  2. Parse XML using `rss-parser` library
+  3. Extract articles with deduplication (url_hash + published_date)
+  4. Call `attach_or_create_article()` RPC for each article
+  5. Create `story.cluster` jobs for new articles
+  6. Handle HTTP 304 (Not Modified) efficiently
+  7. Track feed failures (disable after 5 consecutive failures)
+- **Timeout:** 15s per feed
+- **Error Handling:** Increments `failure_count` in feed_registry
+
+**Story Enrichment** (`enrichStory` - lines 377-536)
+- **Job Type:** `story.enrich`
+- **Process:**
+  1. **Cooldown Check:** Skip if enriched <12 hours ago (prevents cost spam)
+  2. **Article Fetch:** Get up to 6 linked articles via `fetchStoryArticles()`
+  3. **Context Building:** Extract titles, sources, excerpts (~300 chars each)
+  4. **OpenAI Call:** Send to GPT-4o-mini with JSON mode
+  5. **Parse Response:** Extract summary_neutral, summary_spicy, category, severity, entities
+  6. **Update Story:** Write enrichment results to stories table
+  7. **Cost Tracking:** Log token usage and cost (~$0.0002/story)
+- **Model:** gpt-4o-mini
+- **Input:** ~300 tokens (6 articles × 50 tokens)
+- **Output:** ~100 tokens (summaries + metadata)
+- **Category Mapping:** UI labels → DB enum (11 categories)
+- **Entity Extraction (TTRC-235):** Canonical IDs with confidence scores
+
+**Story Clustering** (`story.cluster.*`)
+- **Job Types:** `story.cluster`, `story.cluster.batch`
+- **Algorithm:**
+  1. Extract primary_actor from article headline
+  2. Calculate similarity scores vs existing active stories
+  3. Match thresholds: >80% auto-match, 60-80% review, <60% new story
+  4. Create story_hash from primary_headline (prevents duplicates)
+- **Deduplication:** UNIQUE constraint on story_hash
+
+**Story Lifecycle** (`story.lifecycle`)
+- **Job Type:** `story.lifecycle`
+- **Trigger:** GitHub Actions cron (daily)
+- **Process:**
+  - Active → Closed (72+ hours since last_updated_at)
+  - Closed → Archived (90+ days, future)
+- **RPC:** `updateLifecycleStates()`
+
+**Configuration (Environment Variables):**
+- `WORKER_POLL_INTERVAL_MS` - Poll frequency (default: 5000ms)
+- `WORKER_MAX_CONCURRENT` - Parallel jobs (default: 2)
+- `WORKER_RATE_LIMIT_MS` - Delay between jobs (default: 500ms)
+- `WORKER_MAX_RETRIES` - Retry attempts (default: 3)
+- `WORKER_BACKOFF_BASE_MS` - Backoff multiplier (default: 2000ms)
 
 ### 5. Database Layer (Supabase PostgreSQL)
 

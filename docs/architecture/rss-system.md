@@ -132,6 +132,127 @@ const parser = new Parser({
 - Severity: 1-10 scale
 - Confidence: 0-100%
 
+## Story Enrichment (Current Implementation)
+
+### Where Enrichment Happens
+
+**Location:** Node.js Worker (`scripts/job-queue-worker.js`), NOT in Supabase Edge Functions
+
+**Why Worker vs Edge Function:**
+- Edge Functions are lightweight HTTP handlers (timeouts, limited dependencies)
+- Worker has full Node.js ecosystem, unlimited runtime, local OpenAI client
+- Worker handles long-running enrichment jobs with retry logic
+- More cost-effective (no per-request charges)
+
+### Enrichment Flow
+
+```
+RSS Enqueue (Edge Function)
+    ↓ Creates job
+job_queue table
+    ↓ Worker polls
+Node.js Worker
+    ├─ enrichStory() method
+    │   ├─ 1. Cooldown check (12h)
+    │   ├─ 2. Fetch story articles (max 6)
+    │   ├─ 3. Build context (~300 chars/article)
+    │   ├─ 4. Call OpenAI GPT-4o-mini
+    │   ├─ 5. Parse JSON response
+    │   ├─ 6. Update stories table
+    │   └─ 7. Track cost/tokens
+    └─ Result
+Stories table updated
+```
+
+### Current Input Context
+
+**Per Article (from RSS):**
+- Title: Full headline
+- Source: Publication name
+- Excerpt: RSS `<description>` tag (~200 chars)
+  - ⚠️ **Limitation:** RSS feeds only provide 1-2 sentence teasers
+  - No full article content available
+
+**Total Context Sent to OpenAI:**
+- 6 articles × ~50 tokens each = **~300 input tokens**
+- Cost: ~$0.000045 per story
+
+### Current Output
+
+**Fields Generated:**
+- `summary_neutral` - Factual 2-3 sentence summary
+- `summary_spicy` - Engaging version with perspective
+- `category` - One of 11 categories (corruption_scandals, democracy_elections, etc.)
+- `severity` - critical | severe | moderate | minor
+- `primary_actor` - Main person/organization in story
+- `top_entities` - Array of canonical entity IDs (TTRC-235)
+- `entity_counter` - JSONB map of entity frequencies
+
+**Category Mapping (UI → Database):**
+```javascript
+const UI_TO_DB = {
+  'Corruption & Scandals': 'corruption_scandals',
+  'Democracy & Elections': 'democracy_elections',
+  'Policy & Legislation': 'policy_legislation',
+  'Justice & Legal': 'justice_legal',
+  'Executive Actions': 'executive_actions',
+  'Foreign Policy': 'foreign_policy',
+  'Corporate & Financial': 'corporate_financial',
+  'Civil Liberties': 'civil_liberties',
+  'Media & Disinformation': 'media_disinformation',
+  'Epstein & Associates': 'epstein_associates',
+  'Other': 'other'
+};
+```
+
+### Enrichment Safeguards
+
+**Cooldown (12 hours):**
+- Prevents duplicate enrichment costs
+- Stories can only be re-enriched after 12h from `last_enriched_at`
+- Returns 429 status if cooldown active
+
+**Budget Protection (Phase 2):**
+- Daily budget tracking in `budgets` table
+- RPC: `increment_budget(day, cost, calls)`
+- Hard stop at $50/day (configurable)
+
+**Error Handling:**
+- JSON parse failures logged with raw response
+- Missing required fields throw errors (fail fast)
+- Failed jobs retry with exponential backoff (max 3 attempts)
+
+### Cost Tracking
+
+**Per Story:**
+```javascript
+const usage = completion.usage;
+const costInput = (usage.prompt_tokens / 1000) * 0.00015;   // GPT-4o-mini
+const costOutput = (usage.completion_tokens / 1000) * 0.0006;
+const totalCost = costInput + costOutput;  // ~$0.0002/story
+```
+
+**Monthly Estimate:**
+- 100 stories/day × $0.0002 = $0.02/day
+- ~$0.60/month for enrichment
+- Well under $50/month budget
+
+### Improvement Opportunities (TTRC-258)
+
+**Problem:** RSS excerpts are too short (~200 chars) for deep analysis
+
+**Solution:** Scrape full articles from allowed domains
+- Add `scripts/enrichment/scraper.js` module
+- Scrape 2 articles/story from allow-list (CSM, PBS, ProPublica)
+- Increase context to ~1200 tokens (4× current)
+- Cost increase: $0.0002 → $0.00034 per story (still negligible)
+
+**Benefits:**
+- Richer summaries with more context
+- Better entity extraction
+- More accurate category classification
+- Minimal cost increase (<$10/month)
+
 ## Testing RSS Feeds
 
 ### Manual Test
