@@ -262,8 +262,8 @@ export async function enrichArticlesForSummary(articles) {
       continue;
     }
 
-    const host = new URL(a.url).hostname;
     try {
+      const host = new URL(a.url).hostname;
       const scraped = await scrapeArticleBody(a.url);
       if (scraped && scraped.length > 300) {
         // Success already logged in scrapeArticleBody with method info
@@ -273,6 +273,9 @@ export async function enrichArticlesForSummary(articles) {
         results.push({ ...a, excerpt: fallback });
       }
     } catch (e) {
+      // Safe host extraction for logging (handles invalid URLs)
+      let host = 'unknown';
+      try { host = new URL(a.url).hostname; } catch {}
       console.log(`scraped_fail host=${host} err=${e.message}`);
       results.push({ ...a, excerpt: fallback });
     }
