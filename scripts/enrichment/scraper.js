@@ -18,9 +18,9 @@ import { JSDOM } from 'jsdom';
 // ---------- Configuration ----------
 // Default allow-list includes:
 // - CSM, PBS, ProPublica (public, non-paywalled)
-// - Reuters, AP, Politico (test - may hit paywalls, will fallback)
-// - NYT, WaPo excluded (known paywalls, but can test via env var)
-const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com')
+// - Reuters, AP, Politico (may hit rate limits, will fallback)
+// - NYT, WaPo (paywalled, will extract what's available before paywall)
+const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com,nytimes.com,washingtonpost.com')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
