@@ -231,54 +231,67 @@ async function scrapeArticleBody(url) {
 
 /**
  * Enrich articles for story enrichment
- * Scrapes up to 2 articles from allowed domains, falls back to RSS for others
+ * Tries to scrape articles from allow-list until 2 successful scrapes or exhausts candidates
  *
  * @param {Array} articles - Array of article objects with url, source_domain, title, description
  * @returns {Promise<Array>} Articles with enriched excerpts
  */
 export async function enrichArticlesForSummary(articles) {
-  // Choose up to 2 allowed domains (distinct hosts)
-  const picks = [];
-  const seen = new Set();
-
-  for (let i = 0; i < articles.length && picks.length < MAX_SCRAPED_PER_CLUSTER; i++) {
-    const a = articles[i];
-    if (!a?.url || !domainAllowed(a.url)) continue;
-    const host = new URL(a.url).hostname;
-    if (seen.has(host)) continue;
-    seen.add(host);
-    picks.push(i);
-  }
+  const results = [];
+  const triedHosts = new Set(); // Track attempted hosts to avoid duplicates
+  let successfulScrapes = 0;
 
   // Process sequentially to avoid race conditions in rate limiting
-  // (max 2 articles scraped, performance impact negligible)
-  const results = [];
   for (let idx = 0; idx < articles.length; idx++) {
     const a = articles[idx];
     const fallback = (a.excerpt ?? a.description ?? '').slice(0, MAX_EXCERPT_CHARS);
 
-    if (!picks.includes(idx)) {
+    // Check if article is scrapable
+    if (!a?.url || !domainAllowed(a.url)) {
       results.push({ ...a, excerpt: fallback });
       continue;
     }
 
+    // Extract host safely
+    let host;
     try {
-      const host = new URL(a.url).hostname;
+      host = new URL(a.url).hostname;
+    } catch {
+      results.push({ ...a, excerpt: fallback });
+      continue;
+    }
+
+    // Skip if we already tried this host (dedup by host)
+    if (triedHosts.has(host)) {
+      results.push({ ...a, excerpt: fallback });
+      continue;
+    }
+
+    // Stop scraping if we already have 2 successes
+    if (successfulScrapes >= MAX_SCRAPED_PER_CLUSTER) {
+      results.push({ ...a, excerpt: fallback });
+      continue;
+    }
+
+    // Try to scrape this article
+    triedHosts.add(host);
+    try {
       const scraped = await scrapeArticleBody(a.url);
       if (scraped && scraped.length > 300) {
         // Success already logged in scrapeArticleBody with method info
         results.push({ ...a, excerpt: scraped });
+        successfulScrapes++;
       } else {
         console.log(`scrape_fallback_to_rss host=${host} reason=too_short`);
         results.push({ ...a, excerpt: fallback });
+        // Don't increment successfulScrapes - will try next candidate
       }
     } catch (e) {
-      // Safe host extraction for logging (handles invalid URLs)
-      let host = 'unknown';
-      try { host = new URL(a.url).hostname; } catch {}
       console.log(`scraped_fail host=${host} err=${e.message}`);
       results.push({ ...a, excerpt: fallback });
+      // Don't increment successfulScrapes - will try next candidate
     }
   }
+
   return results;
 }
