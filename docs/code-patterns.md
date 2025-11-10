@@ -426,6 +426,113 @@ function SearchComponent() {
 
 ---
 
+## Content Extraction Patterns
+
+### Mozilla Readability with Three-Tier Fallback
+**ALWAYS use this pattern for article scraping**
+
+```javascript
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
+
+/**
+ * Tier 1: Mozilla Readability (intelligent extraction)
+ */
+function extractMainTextWithReadability(html, articleUrl) {
+  // JSDOM with secure defaults: no script execution, no external resources
+  const dom = new JSDOM(html, { url: articleUrl });
+
+  const reader = new Readability(dom.window.document, {
+    keepClasses: false // Cleaner text output
+  });
+
+  const article = reader.parse();
+  if (!article || !article.textContent) return '';
+
+  return article.textContent.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Tier 2: Regex fallback (proven method)
+ */
+function extractFallbackWithRegex(html) {
+  // Look for <article> or common content containers
+  let m = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
+  let chunk = m?.[1];
+  if (!chunk) {
+    m = html.match(/<(div|section)\b[^>]*(article-body|story-body|entry-content)[^>]*>([\s\S]*?)<\/\1>/i);
+    chunk = m?.[3];
+  }
+  if (!chunk) return '';
+
+  // Strip HTML tags and clean
+  return chunk
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Main scraper: Try Readability → Regex → RSS
+ */
+async function scrapeArticleBody(url) {
+  const html = await fetchHTML(url);
+  let text = '';
+
+  // Tier 1: Try Readability
+  try {
+    text = extractMainTextWithReadability(html, url);
+    if (text && text.length >= 300) {
+      console.log(`scraped_ok method=readability host=${host} len=${text.length}`);
+      return text;
+    }
+  } catch (e) {
+    console.log(`readability_fail host=${host} err=${e.message}`);
+  }
+
+  // Tier 2: Try regex fallback
+  const alt = extractFallbackWithRegex(html);
+  if (alt && alt.length >= 300) {
+    console.log(`scraped_ok method=regex_fallback host=${host} len=${alt.length}`);
+    return alt;
+  }
+
+  // Tier 3: Return empty (RSS fallback handled by caller)
+  return '';
+}
+```
+
+**Why:**
+- **Readability:** Battle-tested Firefox Reader Mode algorithm, 70-80% success rate
+- **Regex fallback:** Proven method for sites where Readability fails
+- **RSS fallback:** Always works, uses article description
+- **Observable:** Logs which method succeeded for monitoring
+
+**Security:**
+- JSDOM uses secure defaults (no script execution, no external resources)
+- Never use `runScripts: "outside-only"` or similar (too permissive)
+- Only pass `url` option to JSDOM for context
+
+**When to use:**
+- Scraping news articles from allow-listed domains
+- Need clean, ad-free article text
+- Want graceful degradation (Readability → Regex → RSS)
+
+**When NOT to use:**
+- JavaScript-rendered content (need Playwright/Puppeteer)
+- Paywalled sites (will fail gracefully to RSS)
+- Non-article pages (use regex patterns only)
+
+**Created:** 2025-11-09 (TTRC-260)  
+**Used in:** `scripts/enrichment/scraper.js`  
+**Dependencies:** `jsdom`, `@mozilla/readability`  
+**Reference:** [Mozilla Readability](https://github.com/mozilla/readability)
+
+---
+
 ## Adding New Patterns
 
 **When Code implements something reusable:**
