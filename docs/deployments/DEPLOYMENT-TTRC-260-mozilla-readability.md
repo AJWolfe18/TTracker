@@ -79,55 +79,120 @@ Then run worker and watch scraper logs.
 
 ## Monitoring & Success Criteria
 
-### What to Monitor (2-3 Days)
+### What to Monitor (48-72 Hours on TEST)
 
-**1. Scraper Success Rates**
+**1. Scraper Success Rates by Source**
 ```bash
+# On TEST server, monitor worker logs
+tail -f worker.log | grep "scraped"
+
+# After 48 hours, calculate success rates:
+# Success rate = (readability + regex) / total attempts * 100
+
 # Count successes by method
 grep "scraped_ok method=readability" worker.log | wc -l
 grep "scraped_ok method=regex_fallback" worker.log | wc -l
+grep "scraped_fail" worker.log | wc -l
 grep "scrape_fallback_to_rss" worker.log | wc -l
 
-# Target: >70% success rate (readability + regex)
+# Target: >70% success rate (readability + regex combined)
 ```
 
-**2. Worker Memory**
+**2. Worker Memory Stability**
 ```bash
-# Check memory usage (should be stable)
+# Check memory usage every 6 hours
 ps aux | grep job-queue-worker | awk '{print $6/1024 " MB"}'
 
-# Expected: 100-200MB stable
-# If >500MB after 24h: Memory leak investigation needed
+# Create memory log
+while true; do
+  echo "$(date): $(ps aux | grep job-queue-worker | awk '{print $6/1024}') MB"
+  sleep 3600
+done >> memory.log
+
+# Expected: 100-200MB stable, <100MB growth per day
+# RED FLAG: >500MB after 24h = Memory leak
 ```
 
-**3. Summary Quality**
+**3. Cost Impact Tracking**
 ```sql
--- Check enriched stories
+-- Check OpenAI spend (daily)
+SELECT day, spent_usd, openai_calls
+FROM budgets
+WHERE day >= CURRENT_DATE - 7
+ORDER BY day DESC;
+
+-- Target: <$1/day increase ($30/month total)
+-- RED FLAG: >$2/day increase
+```
+
+**4. Summary Quality Validation**
+```sql
+-- Check enriched stories (random sample)
 SELECT id, primary_headline, LENGTH(summary_neutral), summary_neutral
 FROM stories
-WHERE status = 'active' 
+WHERE status = 'active'
   AND summary_neutral IS NOT NULL
   AND updated_at > NOW() - INTERVAL '24 hours'
-ORDER BY updated_at DESC
+ORDER BY RANDOM()
 LIMIT 10;
 
--- Verify: Specific facts, 100-200 words, no ads/nav text
+-- Manual review: Specific facts, 100-200 words, no ads/nav text
 ```
 
-### Success Criteria
+**5. Error Patterns**
+```bash
+# Check for rate limiting
+grep "HTTP 429" worker.log | wc -l  # Should be 0
+
+# Check for crashes
+grep "Worker crashed" worker.log | wc -l  # Should be 0
+
+# Check for timeout patterns
+grep "timeout" worker.log | wc -l
+```
+
+### Success Criteria (All Must Pass)
 
 **✅ Ready for PROD:**
-- Success rate >70%
-- Worker memory stable (<300MB for 24+ hours)
-- Zero HTTP 429 errors
-- Summary quality improved
-- Zero crashes
+- [ ] Success rate >70% across non-blocking sources
+- [ ] Worker memory stable (<300MB for 48+ hours)
+- [ ] Zero HTTP 429 rate limit errors
+- [ ] Cost increase <$5/month
+- [ ] At least 3 sources validated (PBS ✅, need 2 more)
+- [ ] Zero worker crashes
+- [ ] Summary quality improved (manual review)
+- [ ] Rollback procedure tested
 
-**❌ Need Investigation:**
+**❌ Need Investigation (Stay on TEST):**
 - Success rate <70%
-- Memory growing continuously
+- Memory growing >100MB/day
 - HTTP 429 errors
 - Worker crashes
+- Cost >$30/month
+
+**🚨 Rollback Triggers (If in PROD):**
+- Success rate drops to <50%
+- Memory >500MB
+- HTTP 429 rate limiting
+- Worker crashes repeatedly
+- Cost >$40/month
+
+### Monitoring Schedule
+
+**First 24 Hours (Critical)**:
+- Check every 2 hours
+- Log: Success rate, memory, errors
+- Alert if any red flags
+
+**24-48 Hours**:
+- Check every 6 hours
+- Calculate trends
+- Prepare go/no-go decision
+
+**48+ Hours**:
+- Final metrics collection
+- Make PROD deployment decision
+- Update JIRA with results
 
 ---
 
