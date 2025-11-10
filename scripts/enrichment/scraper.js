@@ -1,15 +1,19 @@
 // Article scraper for story enrichment with legal/cost guardrails
 //
 // SCRAPING APPROACH:
-// - Tool: Node.js v22 native fetch + regex-based HTML parsing
-// - Better alternatives: Cheerio (DOM parsing) or Mozilla Readability (intelligent extraction)
-// - Current: Zero dependencies, simple regex extraction
-// - Future: Consider upgrading to @mozilla/readability for better quality
+// - Tool: Mozilla Readability (intelligent extraction) with regex fallback
+// - Three-tier fallback: Readability → Regex → RSS
+// - Readability: Firefox Reader Mode algorithm, filters ads/nav automatically
+// - Regex fallback: Simple pattern matching for sites where Readability fails
+// - RSS fallback: Always works, uses article description
 //
 // DOCUMENTATION:
-// - Why regex? Zero dependencies, fast for simple sites
-// - Limitations: Can't render JavaScript (PBS fails), may grab nav/ads
+// - Why Readability? Battle-tested, 70-80% success rate, clean text
+// - Limitations: Can't render JavaScript (PBS fails), falls back to regex
 // - For JS-heavy sites: Would need Playwright/Puppeteer (not worth cost/complexity)
+
+import { Readability } from '@mozilla/readability';
+import { JSDOM } from 'jsdom';
 
 // ---------- Configuration ----------
 // Default allow-list includes:
@@ -112,7 +116,65 @@ async function respectPerHostRate(url) {
 }
 
 /**
- * Scrape article body from URL
+ * Extract article content using Mozilla Readability (Tier 1)
+ * Uses Firefox's Reader Mode algorithm to intelligently extract article text
+ * Filters ads, navigation, and sidebars automatically
+ *
+ * @param {string} html - Raw HTML content
+ * @param {string} articleUrl - Article URL for context
+ * @returns {string} Cleaned article text or empty string
+ */
+function extractMainTextWithReadability(html, articleUrl) {
+  // JSDOM with secure defaults: no script execution, no external resources
+  const dom = new JSDOM(html, { url: articleUrl });
+
+  const reader = new Readability(dom.window.document, {
+    keepClasses: false // Cleaner text output
+  });
+
+  const article = reader.parse();
+  if (!article || !article.textContent) return '';
+
+  return article.textContent.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Extract article content using regex patterns (Tier 2 fallback)
+ * Looks for common article containers like <article> or divs with article-related classes
+ *
+ * @param {string} html - Raw HTML content
+ * @returns {string} Cleaned article text or empty string
+ */
+function extractFallbackWithRegex(html) {
+  // Prefer <article>, then common content containers
+  let m = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
+  let chunk = m?.[1];
+  if (!chunk) {
+    m = html.match(/<(div|section)\b[^>]*(article-body|story-body|entry-content|content__article-body)[^>]*>([\s\S]*?)<\/\1>/i);
+    chunk = m?.[3];
+  }
+  if (!chunk) return '';
+
+  const text = decodeEntities(
+    chunk
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
+  return text;
+}
+
+/**
+ * Scrape article body from URL with three-tier fallback
+ * Tier 1: Mozilla Readability (intelligent extraction)
+ * Tier 2: Regex patterns (proven fallback)
+ * Tier 3: RSS description (handled by caller)
+ *
  * Returns cleaned text excerpt or empty string on failure
  */
 async function scrapeArticleBody(url) {
@@ -137,27 +199,29 @@ async function scrapeArticleBody(url) {
 
   const html = await readTextWithCap(res, MAX_BYTES);
 
-  // Prefer <article>, then common content containers
-  let m = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
-  let chunk = m?.[1];
-  if (!chunk) {
-    m = html.match(/<(div|section)\b[^>]*(article-body|story-body|entry-content|content__article-body)[^>]*>([\s\S]*?)<\/\1>/i);
-    chunk = m?.[3];
+  const host = new URL(url).hostname;
+  let text = '';
+
+  // Tier 1: Try Mozilla Readability (intelligent extraction)
+  try {
+    text = extractMainTextWithReadability(html, res.url ?? url);
+    if (text && text.length >= 300) {
+      console.log(`scraped_ok method=readability host=${host} len=${text.length}`);
+      return text.slice(0, MAX_EXCERPT_CHARS);
+    }
+  } catch (e) {
+    console.log(`readability_fail host=${host} err=${e.message}`);
   }
-  if (!chunk) return '';
 
-  const text = decodeEntities(
-    chunk
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  // Tier 2: Try regex fallback (proven method)
+  const alt = extractFallbackWithRegex(html);
+  if (alt && alt.length >= 300) {
+    console.log(`scraped_ok method=regex_fallback host=${host} len=${alt.length}`);
+    return alt.slice(0, MAX_EXCERPT_CHARS);
+  }
 
-  return text.slice(0, MAX_EXCERPT_CHARS);
+  // Tier 3: Return empty (RSS fallback handled by caller)
+  return '';
 }
 
 /**
@@ -187,15 +251,17 @@ export async function enrichArticlesForSummary(articles) {
     if (!picks.includes(idx)) {
       return { ...a, excerpt: fallback };
     }
+
+    const host = new URL(a.url).hostname;
     try {
       const scraped = await scrapeArticleBody(a.url);
       if (scraped && scraped.length > 300) {
-        console.log(`scraped_ok host=${new URL(a.url).hostname} len=${scraped.length}`);
+        // Success already logged in scrapeArticleBody with method info
         return { ...a, excerpt: scraped };
       }
-      console.log(`scraped_too_short host=${new URL(a.url).hostname}`);
+      console.log(`scrape_fallback_to_rss host=${host} reason=too_short`);
     } catch (e) {
-      console.log(`scraped_fail host=${new URL(a.url).hostname} err=${e.message}`);
+      console.log(`scraped_fail host=${host} err=${e.message}`);
     }
     return { ...a, excerpt: fallback };
   }));
