@@ -128,14 +128,19 @@ function extractMainTextWithReadability(html, articleUrl) {
   // JSDOM with secure defaults: no script execution, no external resources
   const dom = new JSDOM(html, { url: articleUrl });
 
-  const reader = new Readability(dom.window.document, {
-    keepClasses: false // Cleaner text output
-  });
+  try {
+    const reader = new Readability(dom.window.document, {
+      keepClasses: false // Cleaner text output
+    });
 
-  const article = reader.parse();
-  if (!article || !article.textContent) return '';
+    const article = reader.parse();
+    if (!article || !article.textContent) return '';
 
-  return article.textContent.replace(/\s+/g, ' ').trim();
+    return article.textContent.replace(/\s+/g, ' ').trim();
+  } finally {
+    // Critical: Close JSDOM window to prevent memory leaks
+    dom.window.close();
+  }
 }
 
 /**
@@ -245,11 +250,16 @@ export async function enrichArticlesForSummary(articles) {
     picks.push(i);
   }
 
-  return await Promise.all(articles.map(async (a, idx) => {
+  // Process sequentially to avoid race conditions in rate limiting
+  // (max 2 articles scraped, performance impact negligible)
+  const results = [];
+  for (let idx = 0; idx < articles.length; idx++) {
+    const a = articles[idx];
     const fallback = (a.excerpt ?? a.description ?? '').slice(0, MAX_EXCERPT_CHARS);
 
     if (!picks.includes(idx)) {
-      return { ...a, excerpt: fallback };
+      results.push({ ...a, excerpt: fallback });
+      continue;
     }
 
     const host = new URL(a.url).hostname;
@@ -257,12 +267,15 @@ export async function enrichArticlesForSummary(articles) {
       const scraped = await scrapeArticleBody(a.url);
       if (scraped && scraped.length > 300) {
         // Success already logged in scrapeArticleBody with method info
-        return { ...a, excerpt: scraped };
+        results.push({ ...a, excerpt: scraped });
+      } else {
+        console.log(`scrape_fallback_to_rss host=${host} reason=too_short`);
+        results.push({ ...a, excerpt: fallback });
       }
-      console.log(`scrape_fallback_to_rss host=${host} reason=too_short`);
     } catch (e) {
       console.log(`scraped_fail host=${host} err=${e.message}`);
+      results.push({ ...a, excerpt: fallback });
     }
-    return { ...a, excerpt: fallback };
-  }));
+  }
+  return results;
 }

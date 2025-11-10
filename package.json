@@ -17,7 +17,7 @@
     "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency"
   },
   "dependencies": {
-    "@mozilla/readability": "^0.6.0",
+    "@mozilla/readability": "0.6.0",
     "@supabase/supabase-js": "^2.39.1",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.1",
