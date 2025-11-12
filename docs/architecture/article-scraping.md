@@ -281,6 +281,164 @@ return { ...article, excerpt: rssFallback }; // Always falls back to RSS
 
 ---
 
+## Article Selection Algorithm
+
+**Key Question:** When a story has multiple articles (e.g., 3 PBS + 2 NYT), which ones get scraped?
+
+### Configuration
+
+```javascript
+const MAX_SCRAPED_PER_CLUSTER = 2;  // Max 2 articles scraped per story
+```
+
+**Why 2?** Cost/benefit sweet spot - 2 articles provide sufficient context for high-quality AI summaries, more articles show diminishing returns.
+
+### Selection Logic
+
+**Function:** `enrichArticlesForSummary()` in `scripts/enrichment/scraper.js` (lines 239-297)
+
+**Algorithm (Sequential with Smart Retry):**
+
+1. Loop through ALL articles in the story (in order received)
+2. For each article:
+   - ✅ Check if URL is on allow-list (csmonitor.com, pbs.org, etc.)
+   - ✅ Check if hostname already tried (deduplicates by domain)
+   - ✅ Check if already have 2 successful scrapes
+   - If all checks pass: **Attempt scrape**
+   - If scrape **succeeds** (>300 chars): Count as success, continue to next
+   - If scrape **fails**: Don't count, keep trying next articles
+3. Stop when: Either 2 successful scrapes OR exhausted all articles
+
+**Key Improvement (TTRC-260):**
+- **Before:** Pre-selected 2 articles, gave up if both failed
+- **After:** Keeps trying allow-listed articles until 2 successes or runs out
+
+### Examples
+
+#### Scenario 1: Story with 4 articles
+**Articles:** [PBS-A, NYT-A, Politico-A, CSM-A]
+
+**Process:**
+1. Try PBS-A → ✅ Success (1/2)
+2. Try NYT-A → ✅ Success (2/2)
+3. **Stop** (already have 2 successes)
+4. Politico-A and CSM-A skipped (use RSS descriptions)
+
+**Result:** PBS + NYT scraped, Politico + CSM use RSS
+
+---
+
+#### Scenario 2: Story with duplicate hosts
+**Articles:** [Politico-A, Politico-B, PBS-A, NYT-A]
+
+**Process:**
+1. Try Politico-A → ❌ Failed (HTTP 403 - blocks automation)
+2. **Skip** Politico-B (same host = politico.com already tried)
+3. Try PBS-A → ✅ Success (1/2)
+4. Try NYT-A → ✅ Success (2/2)
+
+**Result:** Only PBS + NYT scraped (1 failure, 2 successes)
+
+**Why dedup by host?** Ensures variety of sources, avoids rate limiting same domain.
+
+---
+
+#### Scenario 3: Story with only failed attempts
+**Articles:** [Politico-A, WaPo-A, Politico-B]
+
+**Process:**
+1. Try Politico-A → ❌ Failed (HTTP 403)
+2. Try WaPo-A → ❌ Failed (paywall/blocking)
+3. **Skip** Politico-B (politico.com already tried)
+4. No more articles to try
+
+**Result:** 0 scraped, all use RSS descriptions (graceful degradation)
+
+---
+
+### Deduplication Strategy
+
+**Deduplicates by hostname, NOT full URL:**
+
+```javascript
+// Two articles from same host
+const articles = [
+  { url: 'https://www.pbs.org/article-1' },  // hostname: www.pbs.org
+  { url: 'https://www.pbs.org/article-2' }   // hostname: www.pbs.org (SKIP)
+];
+```
+
+**Why?** Prevents:
+- Rate limiting (1 request per host per second minimum)
+- Redundant content (same source perspective)
+- Wasted scraping attempts
+
+---
+
+### Configuring Selection Behavior
+
+**Max articles per story** (default: 2):
+```bash
+# In .env or environment variables
+SCRAPE_MAX_PER_STORY=3  # Would scrape up to 3 articles
+```
+
+**Increase if:** You want more detailed summaries (costs more OpenAI tokens)
+
+**Decrease to 1 if:** Budget concerns or sources are very verbose
+
+---
+
+### Monitoring Article Selection
+
+**Log messages to watch:**
+
+```bash
+# Worker logs show selection process:
+scraped_ok method=readability host=www.pbs.org len=4397     # Success (counted)
+scraped_fail host=www.politico.com err=HTTP 403             # Failure (keep trying)
+scrape_fallback_to_rss host=www.pbs.org reason=too_short   # <300 chars (keep trying)
+```
+
+**Analyze selection success:**
+
+```bash
+# Count successful scrapes per story
+grep "scraped_ok" worker.log | wc -l
+
+# Count failures (should keep trying next article)
+grep "scraped_fail" worker.log | wc -l
+
+# Check deduplication working (same host skipped)
+grep "already tried host" worker.log  # Should see dedup messages
+```
+
+---
+
+### Edge Cases Handled
+
+**1. All articles from same blocked source:**
+- Story with 5 Politico articles
+- Result: All fail (expected), falls back to RSS for all
+- No infinite loops, graceful degradation
+
+**2. Mixed allow-list and non-allow-list:**
+- Story with 2 Medium articles + 2 PBS articles
+- Medium skipped (not on allow-list)
+- PBS both tried (different URLs, same host)
+- Result: 1 PBS scraped (second skipped due to dedup)
+
+**3. No articles on allow-list:**
+- Story with only NYT, WaPo (paywalled, not on default allow-list)
+- Result: All use RSS (graceful fallback)
+
+**4. All scrapes fail:**
+- Story with allow-listed sources that all return errors
+- Result: All use RSS descriptions
+- No breaking errors, enrichment proceeds normally
+
+---
+
 ## Future Improvements
 
 ### Short-term (Next Quarter)

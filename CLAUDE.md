@@ -238,6 +238,40 @@ UI labels → Database enum values (defined in job-queue-worker.js):
 - 'Epstein & Associates' → 'epstein_associates'
 - 'Other' → 'other'
 
+### RSS Feed Compliance Rules
+**IMPORTANT:** All RSS feeds MUST have compliance rules configured in the database.
+
+**Current Standard:**
+- Content limit: 5000 chars (matches article scraping limit from TTRC-258/260)
+- Full text: `allow_full_text = false` (excerpts only for fair use)
+- Enforcement: Automatic via RSS fetcher (`scripts/rss/fetch_feed.js`)
+
+**When Adding New Feeds:**
+```sql
+-- Add compliance rule (REQUIRED)
+INSERT INTO feed_compliance_rules (feed_id, max_chars, allow_full_text, source_name, notes)
+VALUES (
+  <feed_id>,
+  5000,
+  false,
+  '<Source Name>',
+  '5K char limit for RSS content - matches article scraping limit'
+);
+```
+
+**How It Works:**
+1. RSS fetcher queries `feed_compliance_rules` at fetch start
+2. Extracts content from RSS fields: `content:encoded` OR `description` OR `summary`
+3. Truncates to `max_chars` limit (5000) before database insert
+4. Falls back to 5000 if no rule exists
+
+**RSS Content Fields Priority:**
+- `content:encoded` - Full article HTML (~2K-10K chars) - **checked first**
+- `description` - Standard summary (~200-500 chars) - **fallback**
+- `summary` - Atom feed summary - **fallback for Atom feeds**
+
+**Note:** Even with 5K RSS limit, we also scrape full articles (TTRC-258/260) for better AI summaries.
+
 ## MCP Tools Available
 
 **Supabase TEST Database:** Full query access via `mcp__supabase-test__query`
