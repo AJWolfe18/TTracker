@@ -4,8 +4,10 @@
 
 import Parser from 'rss-parser';
 import crypto from 'node:crypto';
+import he from 'he';
 import { fetchWithTimeout, readLimitedResponse, withRetry, getNetworkConfig } from '../utils/network.js';
 import { safeLog } from '../utils/security.js';
+import { scoreGovRelevance } from './scorer.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -18,6 +20,45 @@ const parser = new Parser({
     ]
   }
 });
+
+/**
+ * Normalize RSS item by decoding HTML entities
+ * @param {Object} raw - Raw RSS item
+ * @returns {Object} - Normalized RSS item
+ */
+function normalizeRssItem(raw) {
+  const title = he.decode(raw.title || '').trim();
+  const summary = he.decode(raw.contentSnippet || raw.content || raw.summary || '').trim();
+
+  return {
+    ...raw,
+    title,
+    contentSnippet: summary
+  };
+}
+
+/**
+ * Check if RSS item should be kept based on filtering rules
+ * @param {Object} item - Normalized RSS item
+ * @param {Object} feedConfig - Feed configuration with filter_config
+ * @returns {boolean} - True if item should be kept
+ */
+function shouldKeepItem(item, feedConfig) {
+  const result = scoreGovRelevance(item, feedConfig?.filter_config || {});
+
+  if (!result.keep) {
+    console.log(JSON.stringify({
+      action: 'DROP',
+      feed: feedConfig?.source_name,
+      url: item.link,
+      title: item.title,
+      score: result.score,
+      signals: result.signals
+    }));
+  }
+
+  return result.keep;
+}
 
 /**
  * Handle fetch_feed job from the job queue with P1 production fixes
@@ -39,10 +80,10 @@ async function handleFetchFeed(job, db) {
   let feedRecord = null; // Declare at function scope
 
   try {
-    // 1) Read ETag/Last-Modified from feed_registry for conditional GET
+    // 1) Read ETag/Last-Modified from feed_registry AND compliance rules for conditional GET
     const { data: record, error: feedError } = await db
       .from('feed_registry')
-      .select('etag, last_modified, failure_count')
+      .select('etag, last_modified, failure_count, filter_config, source_name')
       .eq('feed_url', url)
       .single();
 
@@ -51,6 +92,24 @@ async function handleFetchFeed(job, db) {
     }
 
     feedRecord = record; // Assign to outer scope variable
+
+    // 1b) Fetch compliance rules for this feed
+    const { data: complianceRule, error: complianceError } = await db
+      .from('feed_compliance_rules')
+      .select('max_chars, allow_full_text')
+      .eq('feed_id', feed_id)
+      .single();
+
+    // Store compliance settings (default to 5000 if no rule exists)
+    const maxContentChars = complianceRule?.max_chars || 5000;
+    const allowFullText = complianceRule?.allow_full_text ?? true;
+
+    safeLog('info', 'Compliance rules loaded', {
+      feed_id,
+      max_chars: maxContentChars,
+      allow_full_text: allowFullText,
+      has_custom_rule: !!complianceRule
+    });
 
     // 2) Build conditional headers with better User-Agent for strict feeds
     const headers = {
@@ -136,7 +195,7 @@ async function handleFetchFeed(job, db) {
     // 9) Apply RSS item limit protection (P1 requirement)
     const maxItems = parseInt(process.env.RSS_MAX_ITEMS || '500', 10);
     const items = (feed.items ?? []).slice(0, maxItems);
-    
+
     if (items.length < (feed.items?.length || 0)) {
       safeLog('warn', 'RSS feed truncated due to item limit', {
         feed_id,
@@ -147,15 +206,25 @@ async function handleFetchFeed(job, db) {
       });
     }
 
-    // 10) Process articles using atomic database function
+    // 9b) Normalize items (decode HTML entities)
+    const normalizedItems = items.map(normalizeRssItem);
+
+    // 10) Process articles using atomic database function with filtering
     let articlesProcessed = 0;
     let articlesCreated = 0;
     let articlesUpdated = 0;
+    let articlesDropped = 0;
 
-    if (items && items.length > 0) {
-      for (const item of items) {
+    if (normalizedItems && normalizedItems.length > 0) {
+      for (const item of normalizedItems) {
         try {
-          const result = await processArticleItemAtomic(item, url, source_name, feed_id, db);
+          // Apply filtering before processing
+          if (!shouldKeepItem(item, feedRecord)) {
+            articlesDropped++;
+            continue;
+          }
+
+          const result = await processArticleItemAtomic(item, url, source_name, feed_id, db, maxContentChars);
           articlesProcessed++;
           if (result.is_new) {
             articlesCreated++;
@@ -182,6 +251,7 @@ async function handleFetchFeed(job, db) {
       articles_processed: articlesProcessed,
       articles_created: articlesCreated,
       articles_updated: articlesUpdated,
+      articles_dropped: articlesDropped,
       duration_ms: duration
     });
 
@@ -192,6 +262,7 @@ async function handleFetchFeed(job, db) {
       articles_processed: articlesProcessed,
       articles_created: articlesCreated,
       articles_updated: articlesUpdated,
+      articles_dropped: articlesDropped,
       feed_title: feed.title,
       duration_ms: duration
     };
@@ -230,10 +301,12 @@ async function handleFetchFeed(job, db) {
  * @param {Object} item - RSS item
  * @param {string} feedUrl - Original feed URL
  * @param {string} sourceName - Source name
+ * @param {number} feedId - Feed ID
  * @param {Object} db - Database client
+ * @param {number} maxContentChars - Maximum content length from compliance rules
  * @returns {Object} - Processing result
  */
-async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db) {
+async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, maxContentChars = 5000) {
   const articleUrl = item.link || item.guid;
   const title = item.title || '(untitled)';
   
@@ -293,7 +366,7 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db) {
     .rpc('upsert_article_and_enqueue_jobs', {
       p_url: articleUrl,
       p_title: title.substring(0, 500), // Limit headline length
-      p_content: content.substring(0, 5000), // Limit content length  
+      p_content: content.substring(0, maxContentChars), // Use compliance rule limit
       p_published_at: publishedAt,
       p_feed_id: String(feedId), // Ensure it's a string
       p_source_name: sourceName,
