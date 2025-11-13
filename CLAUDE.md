@@ -16,7 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. Always work on `test` branch
 2. Commit to `test` branch
 3. Push to `test` branch (`git push origin test`)
-4. Auto-deploys to Netlify TEST site
+4. **🚨 MANDATORY: Check AI code review** (`bash scripts/check-code-review.sh`)
+5. Auto-deploys to Netlify TEST site
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -296,7 +297,8 @@ VALUES (
 7. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
 8. **Test before marking complete** - Use Task tool with general-purpose agent to validate code changes before marking todos complete or creating PRs
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + JIRA + handoff) in todos
-10. **Report token usage** - End every response with usage stats
+10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
+11. **Report token usage** - End every response with usage stats
 
 ## Session Workflow
 
