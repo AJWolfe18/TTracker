@@ -112,6 +112,86 @@ function safeCategories(item) {
 }
 
 /**
+ * Safely normalize published date from RSS item
+ * Handles object/array shapes, invalid dates, and future clock skew
+ * @param {Object} item - RSS item
+ * @returns {string} - ISO 8601 date string
+ */
+function normalizePublishedAt(item) {
+  const raw =
+    toPrimitiveStr(item.isoDate) ??
+    toPrimitiveStr(item.pubDate) ??
+    null;
+
+  // Fallback: now, if missing or unparsable
+  if (!raw) return new Date().toISOString();
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString();
+
+  // Guard against future-dated feeds (clock skew)
+  const now = Date.now();
+  const ts = d.getTime();
+  return new Date(Math.min(ts, now + 5 * 60 * 1000)).toISOString();
+}
+
+/**
+ * Safely convert value to boolean
+ * Avoids String(...) === 'true' edge cases with RSS parser objects
+ * @param {*} v - Value to coerce to boolean
+ * @returns {boolean} - True if value represents truthy boolean
+ */
+function toBool(v) {
+  const s = toPrimitiveStr(v);
+  if (!s) return false;
+  const lower = s.trim().toLowerCase();
+  return lower === 'true' || lower === '1' || lower === 'yes';
+}
+
+/**
+ * Safely convert value to string array
+ * Handles arrays, single values, filters empty strings
+ * @param {*} arr - Value to coerce to string array
+ * @returns {string[]} - Array of clean strings
+ */
+function toStrArray(arr) {
+  const input = Array.isArray(arr) ? arr : [arr];
+  return input
+    .map(toPrimitiveStr)
+    .filter(Boolean)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Deep sanitize metadata object to ensure JSON-serializable primitives
+ * Prevents "Cannot convert object to primitive value" errors during RPC calls
+ * @param {Object} meta - Raw metadata object
+ * @returns {Object} - Sanitized metadata with all primitive values
+ */
+function sanitizeMetadata(meta) {
+  // Cap string lengths defensively
+  const cap = (s, n) => (s && s.length > n ? s.slice(0, n) : s);
+
+  // Dedup and limit categories to 25 items
+  const dedupCats = Array.from(new Set(toStrArray(meta.categories))).slice(0, 25);
+
+  // Force ISO date format, fallback to now() if invalid
+  let processedISO = toPrimitiveStr(meta.processed_at);
+  const d = new Date(processedISO || Date.now());
+  processedISO = Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+
+  return {
+    feed_url: cap(toPrimitiveStr(meta.feed_url), 2048),
+    original_guid: cap(toPrimitiveStr(meta.original_guid), 1024),
+    guid_is_permalink: !!toBool(meta.guid_is_permalink),
+    author: cap(toPrimitiveStr(meta.author), 512),
+    categories: dedupCats,
+    processed_at: processedISO,
+  };
+}
+
+/**
  * Check if RSS item should be kept based on filtering rules
  * @param {Object} item - Normalized RSS item
  * @param {Object} feedConfig - Feed configuration with filter_config
@@ -388,14 +468,8 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
     throw new Error('Article has no URL');
   }
 
-  // Parse published date (try multiple formats)
-  let publishedAt;
-  try {
-    publishedAt = item.isoDate || item.pubDate || new Date().toISOString();
-    publishedAt = new Date(publishedAt).toISOString();
-  } catch (error) {
-    publishedAt = new Date().toISOString();
-  }
+  // Parse published date using safe coercion (TTRC-268/269/270 final fix)
+  const publishedAt = normalizePublishedAt(item);
 
   // Check if article is within freshness window (3 days)
   // TODO: Make this configurable via MAX_ARTICLE_AGE_HOURS env var (TTRC-170)
@@ -433,11 +507,25 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   const metadata = {
     feed_url: feedUrl,
     original_guid: safeGuid(item) ?? '',
-    guid_is_permalink: String(item?.guid?.$?.isPermaLink ?? '').toLowerCase() === 'true',
+    guid_is_permalink: toBool(item?.guid?.$?.isPermaLink ?? ''),  // ✅ Use toBool for safe boolean coercion
     author: safeAuthor(item) ?? '',
     categories: safeCategories(item),
     processed_at: new Date().toISOString()
   };
+
+  // Deep sanitize metadata to prevent "Cannot convert object to primitive value" errors
+  const safeMetadata = sanitizeMetadata(metadata);
+
+  // Verify serialization won't fail (defensive check)
+  try {
+    JSON.stringify(safeMetadata);
+  } catch (e) {
+    console.error('INGEST_METADATA_SERIALIZE_ERROR', {
+      error: String(e),
+      shape: Object.keys(safeMetadata)
+    });
+    throw e;
+  }
 
   // Use atomic database function for upsert + enqueue
   const { data: result, error } = await db
@@ -451,7 +539,7 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
       p_source_domain: sourceDomain,
       p_content_type: isOpinion ? 'opinion' : 'news_report',
       p_is_opinion: isOpinion,
-      p_metadata: metadata
+      p_metadata: safeMetadata  // ✅ Use sanitized metadata to prevent object conversion errors
     });
 
   if (error) {
