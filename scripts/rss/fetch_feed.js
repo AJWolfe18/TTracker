@@ -38,6 +38,80 @@ function normalizeRssItem(raw) {
 }
 
 /**
+ * Safely convert RSS field to primitive string
+ * Handles arrays, nested objects, and XML parser structures
+ * @param {*} v - Value from RSS parser (can be object, array, string, etc.)
+ * @returns {string|null} - Clean string or null
+ */
+function toPrimitiveStr(v) {
+  if (v == null) return null;
+  if (Array.isArray(v)) return toPrimitiveStr(v[0]);        // handle arrays
+  if (typeof v === 'object') {
+    if ('_' in v) return toPrimitiveStr(v._);               // xml2js node text
+    if ('#' in v) return toPrimitiveStr(v['#']);            // some parsers use '#'
+    return null;                                            // avoid "[object Object]"
+  }
+  const s = String(v);
+  const trimmed = s.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+/**
+ * Safely extract author from RSS item
+ * Checks multiple common author fields and decodes entities
+ * @param {Object} item - RSS item
+ * @returns {string|null} - Clean author string or null
+ */
+function safeAuthor(item) {
+  // prefer dc:creator/creator, then author, then contributor; decode entities
+  const a =
+    toPrimitiveStr(item.creator) ??
+    toPrimitiveStr(item['dc:creator']) ??
+    toPrimitiveStr(item.author) ??
+    toPrimitiveStr(item.contributor);
+  return a ? he.decode(a) : null;
+}
+
+/**
+ * Safely extract GUID from RSS item
+ * Handles permalink logic and caps length
+ * @param {Object} item - RSS item
+ * @returns {string|null} - Clean GUID string or null
+ */
+function safeGuid(item) {
+  const rawGuid = toPrimitiveStr(item.guid) ?? toPrimitiveStr(item.id);
+  // Some feeds put GUID in link when isPermaLink="true"
+  const link = toPrimitiveStr(item.link);
+  const guidIsPermalink = String(item?.guid?.$?.isPermaLink ?? '')
+    .toLowerCase() === 'true';
+  // Choose a stable dedupe key
+  const chosen = rawGuid || (guidIsPermalink ? link : null) || link;
+  // Final sanitation: cap length to avoid DB issues
+  return chosen ? he.decode(chosen).slice(0, 512) : null;
+}
+
+/**
+ * Safely extract and normalize categories from RSS item
+ * Dedupes, decodes entities, and caps count
+ * @param {Object} item - RSS item
+ * @returns {string[]} - Array of clean category strings
+ */
+function safeCategories(item) {
+  const cats = item.categories || item.category || [];
+  const arr = Array.isArray(cats) ? cats : [cats];
+  // Map objects/strings -> clean strings, dedupe, cap count
+  const out = Array.from(
+    new Set(
+      arr
+        .map(toPrimitiveStr)
+        .filter(Boolean)
+        .map(s => he.decode(s).slice(0, 128))
+    )
+  );
+  return out.slice(0, 25);
+}
+
+/**
  * Check if RSS item should be kept based on filtering rules
  * @param {Object} item - Normalized RSS item
  * @param {Object} feedConfig - Feed configuration with filter_config
@@ -307,8 +381,8 @@ async function handleFetchFeed(job, db) {
  * @returns {Object} - Processing result
  */
 async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, maxContentChars = 5000) {
-  const articleUrl = item.link || item.guid;
-  const title = item.title || '(untitled)';
+  const articleUrl = toPrimitiveStr(item.link) || toPrimitiveStr(item.guid);
+  const title = toPrimitiveStr(item.title) || '(untitled)';
   
   if (!articleUrl) {
     throw new Error('Article has no URL');
@@ -346,18 +420,22 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   // Generate URL hash for deduplication
   const urlHash = crypto.createHash('sha256').update(articleUrl).digest('hex');
 
-  // Extract content/description
-  const content = item.contentEncoded || item.description || item.summary || '';
+  // Extract content/description with safe coercion
+  const content = toPrimitiveStr(item['content:encoded']) ||
+                  toPrimitiveStr(item.contentEncoded) ||
+                  toPrimitiveStr(item.description) ||
+                  toPrimitiveStr(item.summary) || '';
   
   // Detect opinion content based on URL patterns
   const isOpinion = detectOpinionContent(articleUrl, content, title);
 
-  // Build metadata object
+  // Build metadata object with safe coercion (TTRC-268/269/270 fix)
   const metadata = {
     feed_url: feedUrl,
-    original_guid: item.guid,
-    author: item.creator || item.author,
-    categories: item.categories || [],
+    original_guid: safeGuid(item) ?? '',
+    guid_is_permalink: String(item?.guid?.$?.isPermaLink ?? '').toLowerCase() === 'true',
+    author: safeAuthor(item) ?? '',
+    categories: safeCategories(item),
     processed_at: new Date().toISOString()
   };
 
