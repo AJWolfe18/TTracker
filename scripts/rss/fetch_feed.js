@@ -40,20 +40,21 @@ function normalizeRssItem(raw) {
 /**
  * Safely convert RSS field to primitive string
  * Handles arrays, nested objects, and XML parser structures
+ * CRITICAL: Returns empty string (not null) to prevent "[object Object]" coercion
  * @param {*} v - Value from RSS parser (can be object, array, string, etc.)
- * @returns {string|null} - Clean string or null
+ * @returns {string} - Clean string or empty string
  */
 function toPrimitiveStr(v) {
-  if (v == null) return null;
-  if (Array.isArray(v)) return toPrimitiveStr(v[0]);        // handle arrays
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return toPrimitiveStr(v[0]);
   if (typeof v === 'object') {
     if ('_' in v) return toPrimitiveStr(v._);               // xml2js node text
     if ('#' in v) return toPrimitiveStr(v['#']);            // some parsers use '#'
-    return null;                                            // avoid "[object Object]"
+    if (v.$ && (v.$.href || v.$.url)) return toPrimitiveStr(v.$.href || v.$.url);
+    return '';                                               // avoid "[object Object]"
   }
-  const s = String(v);
-  const trimmed = s.trim();
-  return trimmed.length ? trimmed : null;
+  return '';
 }
 
 /**
@@ -142,10 +143,8 @@ function normalizePublishedAt(item) {
  * @returns {boolean} - True if value represents truthy boolean
  */
 function toBool(v) {
-  const s = toPrimitiveStr(v);
-  if (!s) return false;
-  const lower = s.trim().toLowerCase();
-  return lower === 'true' || lower === '1' || lower === 'yes';
+  const s = toPrimitiveStr(v).trim().toLowerCase();
+  return s === 'true' || s === '1' || s === 'yes';
 }
 
 /**
@@ -158,7 +157,6 @@ function toStrArray(arr) {
   const input = Array.isArray(arr) ? arr : [arr];
   return input
     .map(toPrimitiveStr)
-    .filter(Boolean)
     .map(s => s.trim())
     .filter(Boolean);
 }
@@ -166,11 +164,12 @@ function toStrArray(arr) {
 /**
  * Deep sanitize metadata object to ensure JSON-serializable primitives
  * Prevents "Cannot convert object to primitive value" errors during RPC calls
+ * CRITICAL: All fields must be primitives (no nested objects) for PostgREST serialization
  * @param {Object} meta - Raw metadata object
  * @returns {Object} - Sanitized metadata with all primitive values
  */
 function sanitizeMetadata(meta) {
-  // Cap string lengths defensively
+  // Cap string lengths defensively (match column sizes)
   const cap = (s, n) => (s && s.length > n ? s.slice(0, n) : s);
 
   // Dedup and limit categories to 25 items
@@ -184,10 +183,10 @@ function sanitizeMetadata(meta) {
   return {
     feed_url: cap(toPrimitiveStr(meta.feed_url), 2048),
     original_guid: cap(toPrimitiveStr(meta.original_guid), 1024),
-    guid_is_permalink: !!toBool(meta.guid_is_permalink),
+    guid_is_permalink: !!toBool(meta.guid_is_permalink),  // Double-bang ensures boolean
     author: cap(toPrimitiveStr(meta.author), 512),
-    categories: dedupCats,
-    processed_at: processedISO,
+    categories: dedupCats,  // Already array of strings from toStrArray
+    processed_at: processedISO,  // Guaranteed ISO string
   };
 }
 
@@ -522,7 +521,20 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   } catch (e) {
     console.error('INGEST_METADATA_SERIALIZE_ERROR', {
       error: String(e),
-      shape: Object.keys(safeMetadata)
+      shape: Object.keys(safeMetadata),
+      feed_url_type: typeof safeMetadata.feed_url,
+      feed_url_value: safeMetadata.feed_url,
+      original_guid_type: typeof safeMetadata.original_guid,
+      original_guid_value: safeMetadata.original_guid,
+      author_type: typeof safeMetadata.author,
+      author_value: safeMetadata.author,
+      guid_is_permalink_type: typeof safeMetadata.guid_is_permalink,
+      guid_is_permalink_value: safeMetadata.guid_is_permalink,
+      categories_type: typeof safeMetadata.categories,
+      categories_value: safeMetadata.categories,
+      processed_at_type: typeof safeMetadata.processed_at,
+      processed_at_value: safeMetadata.processed_at,
+      full_metadata: safeMetadata
     });
     throw e;
   }

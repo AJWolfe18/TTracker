@@ -216,24 +216,82 @@ END$$;
 
 COMMIT;
 
--- Post-migration verification
--- Run these queries after applying to verify the fix:
+-------------------------------------------------------------------------------
+-- DEPLOYMENT INSTRUCTIONS
+-------------------------------------------------------------------------------
 --
--- 1. Check function signature:
+-- HOW TO APPLY THIS MIGRATION:
+--
+-- Option A: Supabase Dashboard SQL Editor (RECOMMENDED)
+--   1. Open Supabase Dashboard → SQL Editor
+--   2. Copy/paste this entire file
+--   3. Click "Run"
+--   4. Verify success message in output
+--
+-- Option B: psql command line
+--   psql "$SUPABASE_DB_URL" -f migrations/030_fix_upsert_rpc_return_type.sql
+--
+-- Option C: Supabase CLI
+--   supabase db push
+--
+-- DEPLOYMENT TIMELINE:
+--   1. Apply to TEST database first
+--   2. Test Guardian/NYT feeds (verify 0% error rate)
+--   3. Monitor for 24 hours
+--   4. Apply to PROD database (same SQL)
+--
+-- NO WORKER RESTART NEEDED - change is database-side only
+--
+-------------------------------------------------------------------------------
+-- POST-MIGRATION VERIFICATION
+-------------------------------------------------------------------------------
+--
+-- 1. Check function signature (should return "void"):
 --    SELECT pg_get_function_result(oid)
 --    FROM pg_proc
---    WHERE proname = 'upsert_article_and_enqueue_jobs';
+--    WHERE proname = 'upsert_article_and_enqueue_jobs'
+--      AND pronamespace = 'public'::regnamespace;
 --    Expected: "void"
 --
--- 2. Test RSS fetch for Guardian Trump feed:
+-- 2. Test RSS fetch for Guardian Trump feed (was 100% failing):
 --    INSERT INTO job_queue (job_type, payload, run_at, status)
 --    VALUES ('fetch_feed',
 --            '{"feed_id": 183, "url": "https://www.theguardian.com/us-news/donaldtrump/rss", "source_name": "The Guardian (Trump)"}',
 --            NOW(), 'pending');
 --
--- 3. Monitor for serialization errors (should be zero):
+-- 3. Wait 2 minutes for worker to process, then check results:
+--    SELECT id, feed_id, status, error
+--    FROM job_queue
+--    WHERE job_type = 'fetch_feed'
+--      AND feed_id = 183
+--    ORDER BY created_at DESC
+--    LIMIT 1;
+--    Expected: status = 'completed', error = null
+--
+-- 4. Verify NO serialization errors across all feeds:
 --    SELECT COUNT(*) FROM job_queue
 --    WHERE job_type = 'fetch_feed'
 --      AND status = 'failed'
 --      AND error LIKE '%Cannot convert object%';
 --    Expected: 0
+--
+-- 5. Check article creation rate for Guardian/NYT (should be normal):
+--    SELECT feed_id, COUNT(*) as articles_created
+--    FROM articles
+--    WHERE feed_id IN ('3', '182', '183')
+--      AND created_at > NOW() - INTERVAL '1 hour'
+--    GROUP BY feed_id;
+--    Expected: 5-20 articles per feed (not 0)
+--
+-------------------------------------------------------------------------------
+-- ROLLBACK PLAN (if needed)
+-------------------------------------------------------------------------------
+--
+-- If issues arise, restore previous function definition:
+--
+-- CREATE OR REPLACE FUNCTION public.upsert_article_and_enqueue_jobs(...)
+-- RETURNS jsonb  -- Restore old return type
+-- ...
+-- RETURN jsonb_build_object(...);  -- Restore old RETURN statement
+--
+-- Full rollback SQL available in: migrations/028_add_article_enrich_job.sql
