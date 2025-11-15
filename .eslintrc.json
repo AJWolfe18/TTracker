@@ -1,0 +1,23 @@
+{
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-implicit-coercion": ["error", {
+      "disallowTemplateShorthand": true
+    }],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "TemplateLiteral:has(MemberExpression[object.name='item'])",
+        "message": "Do not interpolate raw RSS item fields in template literals; use structured logging with toStr() instead."
+      }
+    ]
+  }
+}

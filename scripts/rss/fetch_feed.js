@@ -8,6 +8,7 @@ import he from 'he';
 import { fetchWithTimeout, readLimitedResponse, withRetry, getNetworkConfig } from '../utils/network.js';
 import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
+import { toStr, toBool, toStrArray } from './utils/primitive.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -37,25 +38,8 @@ function normalizeRssItem(raw) {
   };
 }
 
-/**
- * Safely convert RSS field to primitive string
- * Handles arrays, nested objects, and XML parser structures
- * CRITICAL: Returns empty string (not null) to prevent "[object Object]" coercion
- * @param {*} v - Value from RSS parser (can be object, array, string, etc.)
- * @returns {string} - Clean string or empty string
- */
-function toPrimitiveStr(v) {
-  if (v == null) return '';
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (Array.isArray(v)) return toPrimitiveStr(v[0]);
-  if (typeof v === 'object') {
-    if ('_' in v) return toPrimitiveStr(v._);               // xml2js node text
-    if ('#' in v) return toPrimitiveStr(v['#']);            // some parsers use '#'
-    if (v.$ && (v.$.href || v.$.url)) return toPrimitiveStr(v.$.href || v.$.url);
-    return '';                                               // avoid "[object Object]"
-  }
-  return '';
-}
+// toPrimitiveStr() has been replaced by toStr() from ./utils/primitive.js
+// See import at top of file
 
 /**
  * Safely extract author from RSS item
@@ -66,10 +50,10 @@ function toPrimitiveStr(v) {
 function safeAuthor(item) {
   // prefer dc:creator/creator, then author, then contributor; decode entities
   const a =
-    toPrimitiveStr(item.creator) ??
-    toPrimitiveStr(item['dc:creator']) ??
-    toPrimitiveStr(item.author) ??
-    toPrimitiveStr(item.contributor);
+    toStr(item.creator) ??
+    toStr(item['dc:creator']) ??
+    toStr(item.author) ??
+    toStr(item.contributor);
   return a ? he.decode(a) : null;
 }
 
@@ -80,9 +64,9 @@ function safeAuthor(item) {
  * @returns {string|null} - Clean GUID string or null
  */
 function safeGuid(item) {
-  const rawGuid = toPrimitiveStr(item.guid) ?? toPrimitiveStr(item.id);
+  const rawGuid = toStr(item.guid) ?? toStr(item.id);
   // Some feeds put GUID in link when isPermaLink="true"
-  const link = toPrimitiveStr(item.link);
+  const link = toStr(item.link);
   const guidIsPermalink = String(item?.guid?.$?.isPermaLink ?? '')
     .toLowerCase() === 'true';
   // Choose a stable dedupe key
@@ -104,7 +88,7 @@ function safeCategories(item) {
   const out = Array.from(
     new Set(
       arr
-        .map(toPrimitiveStr)
+        .map(toStr)
         .filter(Boolean)
         .map(s => he.decode(s).slice(0, 128))
     )
@@ -120,8 +104,8 @@ function safeCategories(item) {
  */
 function normalizePublishedAt(item) {
   const raw =
-    toPrimitiveStr(item.isoDate) ??
-    toPrimitiveStr(item.pubDate) ??
+    toStr(item.isoDate) ??
+    toStr(item.pubDate) ??
     null;
 
   // Fallback: now, if missing or unparsable
@@ -136,30 +120,8 @@ function normalizePublishedAt(item) {
   return new Date(Math.min(ts, now + 5 * 60 * 1000)).toISOString();
 }
 
-/**
- * Safely convert value to boolean
- * Avoids String(...) === 'true' edge cases with RSS parser objects
- * @param {*} v - Value to coerce to boolean
- * @returns {boolean} - True if value represents truthy boolean
- */
-function toBool(v) {
-  const s = toPrimitiveStr(v).trim().toLowerCase();
-  return s === 'true' || s === '1' || s === 'yes';
-}
-
-/**
- * Safely convert value to string array
- * Handles arrays, single values, filters empty strings
- * @param {*} arr - Value to coerce to string array
- * @returns {string[]} - Array of clean strings
- */
-function toStrArray(arr) {
-  const input = Array.isArray(arr) ? arr : [arr];
-  return input
-    .map(toPrimitiveStr)
-    .map(s => s.trim())
-    .filter(Boolean);
-}
+// toBool() and toStrArray() have been replaced by centralized versions from ./utils/primitive.js
+// See import at top of file
 
 /**
  * Deep sanitize metadata object to ensure JSON-serializable primitives
@@ -176,15 +138,15 @@ function sanitizeMetadata(meta) {
   const dedupCats = Array.from(new Set(toStrArray(meta.categories))).slice(0, 25);
 
   // Force ISO date format, fallback to now() if invalid
-  let processedISO = toPrimitiveStr(meta.processed_at);
+  let processedISO = toStr(meta.processed_at);
   const d = new Date(processedISO || Date.now());
   processedISO = Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 
   return {
-    feed_url: cap(toPrimitiveStr(meta.feed_url), 2048),
-    original_guid: cap(toPrimitiveStr(meta.original_guid), 1024),
+    feed_url: cap(toStr(meta.feed_url), 2048),
+    original_guid: cap(toStr(meta.original_guid), 1024),
     guid_is_permalink: !!toBool(meta.guid_is_permalink),  // Double-bang ensures boolean
-    author: cap(toPrimitiveStr(meta.author), 512),
+    author: cap(toStr(meta.author), 512),
     categories: dedupCats,  // Already array of strings from toStrArray
     processed_at: processedISO,  // Guaranteed ISO string
   };
@@ -200,14 +162,13 @@ function shouldKeepItem(item, feedConfig) {
   const result = scoreGovRelevance(item, feedConfig?.filter_config || {});
 
   if (!result.keep) {
-    console.log(JSON.stringify({
-      action: 'DROP',
+    console.log('Dropped article', {
       feed: feedConfig?.source_name,
-      url: item.link,
-      title: item.title,
+      url: toStr(item.link),
+      title: toStr(item.title),
       score: result.score,
       signals: result.signals
-    }));
+    });
   }
 
   return result.keep;
@@ -388,7 +349,7 @@ async function handleFetchFeed(job, db) {
           safeLog('error', 'Failed to process article', {
             feed_id,
             source_name,
-            article_url: item.link,
+            article_url: toStr(item.link),
             error: error.message
           });
           // Continue processing other articles even if one fails
@@ -460,8 +421,8 @@ async function handleFetchFeed(job, db) {
  * @returns {Object} - Processing result
  */
 async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, maxContentChars = 5000) {
-  const articleUrl = toPrimitiveStr(item.link) || toPrimitiveStr(item.guid);
-  const title = toPrimitiveStr(item.title) || '(untitled)';
+  const articleUrl = toStr(item.link) || toStr(item.guid);
+  const title = toStr(item.title) || '(untitled)';
   
   if (!articleUrl) {
     throw new Error('Article has no URL');
@@ -494,10 +455,10 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   const urlHash = crypto.createHash('sha256').update(articleUrl).digest('hex');
 
   // Extract content/description with safe coercion
-  const content = toPrimitiveStr(item['content:encoded']) ||
-                  toPrimitiveStr(item.contentEncoded) ||
-                  toPrimitiveStr(item.description) ||
-                  toPrimitiveStr(item.summary) || '';
+  const content = toStr(item['content:encoded']) ||
+                  toStr(item.contentEncoded) ||
+                  toStr(item.description) ||
+                  toStr(item.summary) || '';
   
   // Detect opinion content based on URL patterns
   const isOpinion = detectOpinionContent(articleUrl, content, title);

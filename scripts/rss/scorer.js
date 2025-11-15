@@ -1,5 +1,6 @@
 // scripts/rss/scorer.js
 import he from 'he';
+import { toStr, toStrArray } from './utils/primitive.js';
 
 const FED_ALLOW_RX = [
   /\bcongress\b/i,
@@ -40,10 +41,10 @@ function escapeRx(s) {
 }
 
 export function scoreGovRelevance(item, feedFilter = {}) {
-  const url = item.link || item.url || '';
-  const title = item.title || '';
-  const summary = item.contentSnippet || item.content || item.summary || '';
-  const categories = item.categories || [];
+  const url = toStr(item.link) || toStr(item.url) || '';
+  const title = toStr(item.title) || '';
+  const summary = toStr(item.contentSnippet) || toStr(item.content) || toStr(item.summary) || '';
+  const categories = toStrArray(item.categories);
 
   // Decode entities once, normalize to lower-case
   const hay = he.decode(`${title} ${summary} ${categories.join(' ')}`).toLowerCase();
