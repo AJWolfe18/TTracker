@@ -39,9 +39,15 @@
 
 BEGIN;
 
--- Replace function with VOID return type
--- Preserves all grants via CREATE OR REPLACE
-CREATE OR REPLACE FUNCTION public.upsert_article_and_enqueue_jobs(
+-- Drop existing function (required to change return type)
+-- Note: This will briefly make the function unavailable, but worker will retry
+DROP FUNCTION IF EXISTS public.upsert_article_and_enqueue_jobs(
+  text, text, text, timestamptz, text, text, text, text, boolean, jsonb
+);
+
+-- Create function with VOID return type
+-- Note: Grants must be re-applied after DROP (done at end of migration)
+CREATE FUNCTION public.upsert_article_and_enqueue_jobs(
   p_url text,
   p_title text,
   p_content text,
@@ -196,6 +202,15 @@ BEGIN
 END;
 $$;
 
+-- Re-grant permissions (lost during DROP)
+GRANT EXECUTE ON FUNCTION public.upsert_article_and_enqueue_jobs(
+  text, text, text, timestamptz, text, text, text, text, boolean, jsonb
+) TO service_role;
+
+REVOKE ALL ON FUNCTION public.upsert_article_and_enqueue_jobs(
+  text, text, text, timestamptz, text, text, text, text, boolean, jsonb
+) FROM PUBLIC, anon, authenticated;
+
 -- Verify function signature changed successfully
 DO $$
 DECLARE
@@ -240,7 +255,12 @@ COMMIT;
 --   3. Monitor for 24 hours
 --   4. Apply to PROD database (same SQL)
 --
--- NO WORKER RESTART NEEDED - change is database-side only
+-- IMPORTANT NOTES:
+--   - Migration uses DROP FUNCTION then CREATE (PostgreSQL requirement)
+--   - Function briefly unavailable during migration (< 1 second)
+--   - Worker will auto-retry any failed calls during migration
+--   - Permissions automatically restored after CREATE
+--   - NO WORKER RESTART NEEDED - change is database-side only
 --
 -------------------------------------------------------------------------------
 -- POST-MIGRATION VERIFICATION
