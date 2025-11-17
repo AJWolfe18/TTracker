@@ -65,7 +65,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 3. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
 
-4. **Update JIRA/Confluence immediately** - Don't say "needs update", just do it (use MCP tools directly)
+4. **JIRA Operations via Subagent** - Use Task tool (general-purpose) for JIRA queries to isolate 20K+ context cost
+   - JIRA MCP tools return full ticket dumps (descriptions, comments, history, attachments)
+   - Single ticket query = 20-30K tokens in main conversation
+   - Use subagent pattern: `Task(general-purpose): "Query JIRA ticket [ID], perform [ACTION], return summary only (not full ticket dump)"`
+   - Subagent processes JIRA internally, returns ~100 token summary
+   - Alternative: Use `/jira` command (see `/docs/COMMANDS.md`)
+   - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
 
