@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚀 TLDR (Read This First)
+
+**Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)  
+**Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)  
+**Budget**: <$50/month HARD LIMIT  
+**Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)  
+**Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Check AI review → Auto-deploy  
+**Tools Available**: Supabase MCP, Atlassian (JIRA) MCP, Filesystem MCP  
+**Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity  
+
+**Before Any Work**: 
+1. Check latest handoff in `/docs/handoffs/` (sorted by date)
+2. Verify on `test` branch: `git branch --show-current`
+3. Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
+4. See `/docs/QUICKSTART.md` for 5-minute onboarding
+
+---
+
 ## ⚠️ CRITICAL BRANCH RULES ⚠️
 
 ### 🔒 MAIN BRANCH IS PROTECTED
@@ -33,17 +51,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 📜 Critical Rules
+
+1. 🧪 **MANDATORY TESTING: Use Task tool (general-purpose agent) to validate ALL code changes before commit/PR**
+   - After ANY code changes to scripts/, supabase/functions/, migrations/
+   - Before marking todos complete
+   - Before creating PRs
+   - Test edge cases, regressions, and integration points
+   - Example: `Task(general-purpose): "Validate RSS fix - test duplicate URLs, check DB constraints, verify no errors"`
+   - **Before pushing:** Run relevant QA tests (`npm run qa:smoke` or specific test suite)
+
+2. **Work on TEST branch unless explicitly told otherwise**
+
+3. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
+
+4. **Update JIRA/Confluence immediately** - Don't say "needs update", just do it (use MCP tools directly)
+
+5. **Auto-QA always** - Check edge cases, regressions, cost after every change
+
+6. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
+
+7. **State cost implications** - Always mention $ impact for new features
+
+8. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
+
+9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + JIRA + handoff) in todos
+
+10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
+
+11. **Report token usage** - End every response with usage stats
+
+**For session workflow, communication style, and documentation structure, see `/docs/PROJECT_INSTRUCTIONS.md`**
+
+---
+
+## ❌ Anti-Patterns (What NOT to Do)
+
+### Git/Deployment
+- ❌ `git push origin main` - BLOCKED by branch protection (use PRs)
+- ❌ `git merge test` into main - WRONG (use cherry-pick from test to deployment branch)
+- ❌ Skip AI code review check - MANDATORY after every push
+- ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
+
+### Database
+- ❌ OFFSET pagination - Slow at scale (use cursor-based with `lt('id', cursor)`)
+- ❌ `timestamp` without timezone - Always use `timestamptz`
+- ❌ Missing `IF NOT EXISTS` in migrations - Breaks idempotency
+- ❌ Hardcoded IDs in queries - Use parameterized queries
+- ❌ Missing `ON DELETE` behavior - Always specify CASCADE/SET NULL/RESTRICT
+
+### Code
+- ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
+- ❌ Object references in `useEffect` dependencies - Causes infinite loops
+- ❌ Missing CORS headers in Edge Functions - Breaks frontend calls
+- ❌ `console.log` in production - Remove before commit
+- ❌ Unhandled promise rejections - Always use try-catch for async
+
+### Workflow
+- ❌ Say "needs JIRA update" - DO IT immediately via MCP tools
+- ❌ Skip validation testing - Use Task tool (general-purpose agent) first
+- ❌ Assume "I can't" - Check available MCP tools first
+- ❌ Create new files without reading existing - ALWAYS prefer editing existing files
+- ❌ Skip QA tests before push - Run `npm run qa:smoke` or relevant suite
+
+### Cost/Budget
+- ❌ Propose features without stating cost - Always mention $ impact
+- ❌ Ignore daily budget limits - Check `budgets` table before OpenAI calls
+- ❌ Use expensive models unnecessarily - GPT-4o-mini is sufficient for enrichment
+
+---
+
 ## Project Context
 
 **TrumpyTracker** is an AI-powered political accountability tracker that aggregates news from RSS feeds, clusters related articles into stories, and enriches them with AI summaries.
 
-**Current State:** Migration from legacy article system (PROD) to RSS story clustering system (TEST) - frontend QA phase ([TTRC-145](https://ajwolfe37.atlassian.net/browse/TTRC-145))
-
-**Active Work:** TTRC-192 - Auto-trigger story enrichment on create/reopen
-
 **Owner:** Josh (Product Manager, non-developer) - Prefers business impact explanations and single recommendations with cost implications stated clearly.
 
-**Budget:** <$50/month hard limit (current: ~$20/month for OpenAI)
+**Budget:** <$50/month hard limit
+
+---
+
+## 💰 Budget Enforcement
+
+**Hard Limits:**
+- Total: $50/month across all services
+- Daily pipeline cap: $5/day for story enrichment
+- Current spend: ~$20/month (OpenAI only)
+
+**Cost per Operation:**
+- Story enrichment: ~$0.003/story (GPT-4o-mini)
+- AI code review: $0.30-$1.00/PR (GPT-4o)
+- Article scraping: Free (no API costs)
+- Database queries: Free (within Supabase free tier)
+
+**Before Making OpenAI Calls:**
+```sql
+-- Check today's spend via Supabase MCP
+SELECT spent_usd, openai_calls 
+FROM budgets 
+WHERE day = CURRENT_DATE;
+
+-- If spent_usd > $5.00, HALT enrichment
+-- Log warning and skip enrichment job
+```
+
+**Budget Monitoring:**
+- Daily budget tracked in `budgets` table
+- Auto-enforced in job-queue-worker.js
+- Manual check: Query budgets table before proposing new AI features
+
+**CRITICAL RULE: Always state cost implications before proposing new features or suggesting additional AI calls.**
+
+---
 
 ## Environment Architecture
 
@@ -285,69 +404,6 @@ VALUES (
 
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
-
-## Critical Rules
-
-1. **Work on TEST branch unless explicitly told otherwise**
-2. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
-3. **Update JIRA/Confluence immediately** - Don't say "needs update", just do it
-4. **Auto-QA always** - Check edge cases, regressions, cost after every change
-5. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
-6. **State cost implications** - Always mention $ impact for new features
-7. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
-8. **Test before marking complete** - Use Task tool with general-purpose agent to validate code changes before marking todos complete or creating PRs
-9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + JIRA + handoff) in todos
-10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
-11. **Report token usage** - End every response with usage stats
-
-## Session Workflow
-
-### Start Every Session
-1. Ask: "Any handoffs to review?" (read from `/docs/handoffs/`)
-2. Ask: "What's our goal?"
-3. State: "Working on TEST environment" (or PROD if applicable)
-4. Reference: `/docs/STARTUP_PROMPT.md` for full checklist
-
-### Definition of Done
-- ✅ Business outcome clearly stated
-- ✅ Feature working
-- ✅ Edge cases handled
-- ✅ No regressions
-- ✅ Cost <$50/month
-- ✅ JIRA/Confluence updated (via tools)
-- ✅ Handoff in `/docs/handoffs/YYYY-MM-DD-name.md`
-
-### End Session
-1. Update JIRA (use tools)
-2. Update Confluence (use tools)
-3. Create handoff artifact (template in `/docs/HANDOFF_PROMPT.md`)
-4. Save to `/docs/handoffs/YYYY-MM-DD-name.md`
-
-## Communication Style
-
-- **Directive:** Pick best option, explain why
-- **Business-focused:** Impact over technical details
-- **Cost-aware:** State $ implications upfront
-- **Explicit:** Environment, risk level, breaking changes
-- **Concise:** Brief unless complexity requires detail
-- **Context reporting:** Always end with token usage
-
-## Documentation Structure
-
-**Core Protocols:**
-- `/docs/PROJECT_INSTRUCTIONS.md` - Quick reference
-- `/docs/STARTUP_PROMPT.md` - Session start checklist
-- `/docs/SESSION_PROTOCOL.md` - Complete workflow
-- `/docs/HANDOFF_PROMPT.md` - Handoff template
-
-**Architecture:**
-- `/docs/architecture/ARCHITECTURE.md` - System overview
-- `/docs/architecture/rss-system.md` - RSS pipeline details
-- `/docs/database/database-schema.md` - Schema documentation
-
-**Migration History:**
-- `/migrations/*.sql` - Database migrations (apply in order)
-- Migration 019 added story enrichment helpers (most recent)
 
 ## Tech Stack
 
