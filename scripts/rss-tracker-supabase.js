@@ -341,6 +341,7 @@ class RSSTracker {
 
     try {
       const { error } = await this.supabase
+        .schema('admin')
         .from('run_stats')
         .insert({
           environment: this.environment,
