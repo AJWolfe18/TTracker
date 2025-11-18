@@ -9,6 +9,15 @@ You are Claude Code - focused on execution, implementation, and testing. Not for
 - **Today's Plan:** Check `/docs/plans/` for latest plan document
 - **Status Reports:** Save progress to `/docs/status/YYYY-MM-DD-status.md`
 
+## ⚠️ GitHub Actions on TEST Branch
+**IMPORTANT:** Scheduled workflows DO NOT auto-run on test branch (GitHub limitation)
+- Workflows are only auto-scheduled when on the default branch (main)
+- TEST branch workflows must be triggered manually via GitHub UI:
+  1. Go to Actions tab → Select workflow → "Run workflow" button
+  2. Select `test` branch from dropdown → Click "Run workflow"
+- Alternative: Run scripts locally with TEST environment variables
+- This applies to ALL workflows including RSS tracker, daily tracker, etc.
+
 ---
 
 ## Your Workflow
