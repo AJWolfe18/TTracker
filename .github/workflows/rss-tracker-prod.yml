@@ -1,0 +1,48 @@
+name: RSS Tracker - PROD
+
+on:
+  # Auto schedule: Every 2 hours
+  schedule:
+    - cron: '0 */2 * * *'
+
+  # Manual trigger (for testing/emergency runs)
+  workflow_dispatch:
+
+jobs:
+  rss-tracker-prod:
+    runs-on: ubuntu-latest
+
+    # Branch lock: Only run on main branch
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run RSS Tracker (PROD)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ENVIRONMENT: prod
+          RSS_TRACKER_RUN_ENABLED: 'true'
+        run: node scripts/rss-tracker-supabase.js
+        timeout-minutes: 5
+
+      - name: Upload run logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: rss-tracker-prod-logs
+          path: |
+            *.log
+          retention-days: 7
