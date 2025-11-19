@@ -68,7 +68,8 @@ class RSSTracker {
       stories_clustered: 0,
       stories_enriched: 0,
       total_openai_cost_usd: 0,
-      enrichment_skipped_budget: 0
+      enrichment_skipped_budget: 0,
+      enrichment_failed: 0  // NEW: Track failed enrichments (TTRC-277)
     };
 
     this.runStatus = 'success';
@@ -335,17 +336,43 @@ class RSSTracker {
       console.log(`🤖 Enriching ${stories.length} stories...`);
 
       for (const story of stories) {
-        // Runtime guard
+        // Runtime guard (RUNTIME_LIMIT_MS = 4min, this.startTime set in constructor)
         if (Date.now() - this.startTime > RUNTIME_LIMIT_MS) {
           console.log('⏱ Runtime limit reached, stopping enrichment');
           this.runStatus = 'partial_success';
           break;
         }
 
-        // Enrich with atomic budget check
-        const shouldContinue = await this.enrichAndBillStory(story);
-        if (!shouldContinue) {
-          break; // Budget cap reached
+        // NEW: Wrap enrichment call in try-catch (TTRC-277)
+        // enrichAndBillStory throws on failure (no swallow inside)
+        try {
+          const shouldContinue = await this.enrichAndBillStory(story);
+          if (!shouldContinue) {
+            break; // Budget cap reached
+          }
+        } catch (enrichErr) {
+          // Log error
+          console.error(`❌ Enrichment failed for story ${story.id}:`, enrichErr.message);
+          
+          // Track failure
+          this.stats.enrichment_failed++;
+          this.runStatus = 'partial_success';
+          
+          // Set cooldown timestamp (nested try-catch for safety)
+          // CRITICAL: Don't let DB errors crash the run
+          try {
+            await this.supabase
+              .from('stories')
+              .update({ last_enriched_at: new Date().toISOString() })
+              .eq('id', story.id);
+          } catch (updateErr) {
+            console.error(`⚠️ Failed to update last_enriched_at for story ${story.id}:`, updateErr.message);
+            // Swallow error - don't crash run if DB update fails
+            // Story will retry next run (acceptable)
+          }
+          
+          // Continue to next story
+          continue;
         }
       }
 
@@ -382,7 +409,8 @@ class RSSTracker {
         p_stories_clustered: this.stats.stories_clustered,
         p_stories_enriched: this.stats.stories_enriched,
         p_total_openai_cost_usd: this.stats.total_openai_cost_usd,
-        p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget
+        p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget,
+        p_enrichment_failed: this.stats.enrichment_failed  // NEW: Pass failure count (15th param, TTRC-277)
       });
 
       if (error) throw error;
