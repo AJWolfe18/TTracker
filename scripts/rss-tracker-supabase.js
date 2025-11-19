@@ -8,7 +8,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { fetchFeed } from './rss/fetch_feed.js';
+import crypto from 'crypto';
+import { handleFetchFeed } from './rss/fetch_feed.js';
 import {
   enrichStory as enrichStoryImpl,
   shouldEnrichStory,
@@ -121,7 +122,24 @@ class RSSTracker {
       // Fetch feed via existing fetch_feed.js logic
       console.log(`📡 Fetching feed ${feed.id}: ${feed.source_name}`);
 
-      const result = await fetchFeed(feed.id, this.supabase);
+      // Wrap call to match handleFetchFeed signature (expects full job object)
+      const result = await handleFetchFeed({
+        id: `inline-feed-${feed.id}`,
+        type: 'fetch_feed',
+        attempts: 0,
+        payload: {
+          feed_id: feed.id,
+          url: feed.feed_url,  // Column is feed_url, not url
+          source_name: feed.source_name
+        }
+      }, this.supabase);
+
+      // Guard against missing result
+      if (!result || typeof result.status === 'undefined') {
+        console.warn(`❌ Feed ${feed.id} returned no status, treating as failure`);
+        this.stats.feeds_failed++;
+        return;
+      }
 
       // Track results
       if (result.status === 304) {
@@ -194,10 +212,19 @@ class RSSTracker {
           break;
         }
 
+        // Generate story_hash (EXACTLY matches DB formula from migration 020)
+        // SQL: v_title_clean := COALESCE(NULLIF(_title,''), 'Untitled Story');
+        //      v_story_hash := md5(lower(regexp_replace(v_title_clean, '\s+', ' ', 'g')));
+        // JS must match: null/empty → 'Untitled Story', whitespace-only → kept & normalized
+        const title = (article.title == null || article.title === '') ? 'Untitled Story' : article.title;
+        const normalizedTitle = title.toLowerCase().replace(/\s+/g, ' ');
+        const storyHash = crypto.createHash('md5').update(normalizedTitle).digest('hex');
+
         // Create new story for this article
         const { data: story, error: storyErr } = await this.supabase
           .from('stories')
           .insert({
+            story_hash: storyHash,
             primary_headline: article.title,
             status: 'active',
             first_seen_at: article.published_date
@@ -334,22 +361,29 @@ class RSSTracker {
   // ===================================================================
 
   /**
-   * Log run stats to admin.run_stats (fail-safe)
+   * Log run stats to admin.run_stats via RPC wrapper (fail-safe)
+   * Uses log_run_stats RPC (migration 036) to access admin schema
    */
   async finalizeRunStats(status) {
     const finalStatus = status || this.runStatus || 'success';
 
     try {
-      const { error } = await this.supabase
-        .schema('admin')
-        .from('run_stats')
-        .insert({
-          environment: this.environment,
-          run_started_at: this.runStartedAt,
-          run_finished_at: new Date().toISOString(),
-          status: finalStatus,
-          ...this.stats
-        });
+      const { error } = await this.supabase.rpc('log_run_stats', {
+        p_environment: this.environment,
+        p_run_started_at: this.runStartedAt,
+        p_run_finished_at: new Date().toISOString(),
+        p_status: finalStatus,
+        p_feeds_total: this.stats.feeds_total,
+        p_feeds_processed: this.stats.feeds_processed,
+        p_feeds_succeeded: this.stats.feeds_succeeded,
+        p_feeds_failed: this.stats.feeds_failed,
+        p_feeds_skipped_lock: this.stats.feeds_skipped_lock,
+        p_feeds_304_cached: this.stats.feeds_304_cached,
+        p_stories_clustered: this.stats.stories_clustered,
+        p_stories_enriched: this.stats.stories_enriched,
+        p_total_openai_cost_usd: this.stats.total_openai_cost_usd,
+        p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget
+      });
 
       if (error) throw error;
       console.log(`📊 Run stats logged: ${finalStatus}`);
