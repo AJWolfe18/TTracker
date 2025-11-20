@@ -104,6 +104,97 @@ CREATE INDEX idx_stories_created_at ON stories(created_at);
 
 ---
 
+### Issue: High Enrichment Failure Rate Due to Orphaned Stories
+**Symptom:** Enrichment run shows high failure rate (>50%) with "No articles found for story" errors in logs. Stories selected for enrichment have 0 articles in `article_story` junction table.
+
+**Cause:** Stories exist without linked articles ("orphans"), causing enrichment to fail. Orphans can result from:
+1. Test data cleanup (stories created but articles deleted)
+2. Failed clustering (story created but article linking failed)
+3. Manual story creation without articles
+
+**Impact:**
+- Orphan stories "crowd out" legitimate stories in enrichment queue (`.limit(50)`)
+- High failure rates waste runtime and reduce enrichment throughput
+- Example: 66 orphans grabbed 46 of 50 enrichment slots → only 4 real stories enriched
+
+**Detection:**
+```sql
+-- Find orphaned stories
+SELECT s.id, s.status, s.first_seen_at, s.primary_headline
+FROM stories s
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM article_story ars
+  WHERE ars.story_id = s.id
+)
+ORDER BY s.first_seen_at DESC;
+
+-- Count orphans vs total
+SELECT 
+  COUNT(*) FILTER (WHERE article_count = 0) as orphaned,
+  COUNT(*) as total,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE article_count = 0) / COUNT(*), 2) as orphan_pct
+FROM (
+  SELECT s.id, COUNT(ars.article_id) as article_count
+  FROM stories s
+  LEFT JOIN article_story ars ON s.id = ars.story_id
+  GROUP BY s.id
+) sub;
+```
+
+**Solution 1: Cleanup (Immediate)**
+```sql
+-- Backup orphaned stories first
+CREATE TABLE IF NOT EXISTS _stories_orphan_backup AS
+SELECT s.*
+FROM stories s
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM article_story ars
+  WHERE ars.story_id = s.id
+);
+
+-- Delete orphans (transactional)
+BEGIN;
+
+DELETE FROM stories s
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM article_story ars
+  WHERE ars.story_id = s.id
+);
+
+COMMIT;  -- Or ROLLBACK if count looks wrong
+```
+
+**Solution 2: Selection Guard (Prevention)**
+```javascript
+// In enrichment query, add article_story!inner join
+const { data: stories } = await supabase
+  .from('stories')
+  .select(`
+    id,
+    primary_headline,
+    last_enriched_at,
+    article_story!inner ( article_id )  // ← Prevents orphan selection
+  `)
+  .eq('status', 'active')
+  // ... rest of query
+```
+
+The `!inner` join ensures only stories WITH articles are selected for enrichment. Stories without articles are automatically filtered out.
+
+**Fixed in:** TTRC-280, commit df338d4  
+**Date:** November 20, 2025  
+**Result:** Failure rate 92% → 0%, enrichment throughput +750%  
+
+**Prevention:**
+- Use `article_story!inner` in all story selection queries that require articles
+- Monitor `enrichment_failed` metric in run_stats for spikes
+- Periodic cleanup: Delete stories older than 90 days with 0 articles
+
+---
+
 ### Issue: Job Queue RPC Returns NULL Despite No Active Jobs
 **Symptom:** RSS pipeline frozen - `enqueue_fetch_job()` RPC returns NULL for all feeds claiming "job already active" when database shows no active jobs exist
 

@@ -94,6 +94,55 @@ const { data, error } = await supabase
 
 ---
 
+### Selection Guard with Inner Join
+**Pattern for selecting records that MUST have related data**
+
+```javascript
+// Example: Select only stories that have articles
+const { data: stories, error } = await supabase
+  .from('stories')
+  .select(`
+    id,
+    primary_headline,
+    last_enriched_at,
+    article_story!inner ( article_id )  // !inner = MUST have ≥1 article
+  `)
+  .eq('status', 'active')
+  .order('last_enriched_at', { ascending: true, nullsFirst: true })
+  .limit(50);
+```
+
+**How `!inner` works:**
+- PostgREST inner join syntax
+- Only returns parent records that have ≥1 matching child record
+- Automatically filters out orphaned records
+- More efficient than client-side filtering or separate "exists" queries
+
+**When to use:**
+- Enrichment: Only stories with articles can be enriched
+- Processing: Only orders with line items should be processed
+- Display: Only playlists with tracks should be shown
+- Any scenario where related data is **required**, not optional
+
+**Why:** Prevents "No related records found" errors at processing time. Filters at query level instead of after fetch.
+
+**Created:** TTRC-280 (Enrichment retry)  
+**Date:** November 20, 2025  
+**Used in:** `scripts/rss-tracker-supabase.js` (enrichStories method)
+
+**Alternative (for optional relations):**
+```javascript
+// !left = Include parent even if no children (optional relation)
+const { data } = await supabase
+  .from('stories')
+  .select(`
+    *,
+    article_story!left ( article_id )  // May return 0 articles
+  `)
+```
+
+---
+
 ## Error Handling
 
 ### Edge Functions Pattern
