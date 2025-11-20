@@ -12,11 +12,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Tools Available**: Supabase MCP, Atlassian (JIRA) MCP, Filesystem MCP  
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity  
 
-**Before Any Work**: 
-1. Check latest handoff in `/docs/handoffs/` (sorted by date)
-2. Verify on `test` branch: `git branch --show-current`
-3. Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
-4. See `/docs/QUICKSTART.md` for 5-minute onboarding
+---
+
+## 🔄 Session Workflow Checklist
+
+### ✅ Start Every Session (5 min)
+- [ ] Read latest handoff: `/docs/handoffs/[latest-date].md`
+- [ ] Verify on `test` branch: `git branch --show-current`
+- [ ] Query JIRA via subagent (if ticket-based work): `Task(general-purpose): "Query TTRC-XXX, return summary only"`
+- [ ] Review existing plan OR create if complex: `/docs/plans/`
+- [ ] Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
+- [ ] Create TodoList with FULL workflow (code → validate → QA → commit → JIRA → handoff)
+
+### 🔨 During Work
+- [ ] Follow plan/todos linearly (don't jump around)
+- [ ] Validate with subagent BEFORE marking todos complete
+- [ ] Check MCP tools before claiming "I can't"
+
+### ✅ End Every Session (10 min)
+- [ ] Run QA tests: `npm run qa:smoke` or relevant suite
+- [ ] Commit & push to test branch
+- [ ] **MANDATORY**: Check AI code review: `bash scripts/check-code-review.sh`
+- [ ] Update JIRA via MCP (DO IT, don't just say "needs update")
+- [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ttrc-XXX-topic.md`
+- [ ] Report token usage
+
+**Skip plan.md for:** Simple bugs, 1-2 file changes, well-understood patterns  
+**Always create plan.md for:** New features, architecture changes, multiple approaches, cost analysis
 
 ---
 
@@ -483,6 +505,6 @@ ORDER BY job_type, status;
 
 ---
 
-**Last Updated:** 2025-10-04
+**Last Updated:** 2025-11-19
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
