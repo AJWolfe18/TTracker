@@ -2,8 +2,9 @@ name: RSS Tracker - PROD
 
 on:
   # Auto schedule: Every 2 hours
-  schedule:
-    - cron: '0 */2 * * *'
+  # DISABLED for initial rollout - manual testing only
+  # schedule:
+  #   - cron: '0 */2 * * *'
 
   # Manual trigger (for testing/emergency runs)
   workflow_dispatch:
@@ -34,7 +35,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENVIRONMENT: prod
-          RSS_TRACKER_RUN_ENABLED: 'true'
+          RSS_TRACKER_RUN_ENABLED: 'false'  # KILL SWITCH: Set to 'true' to enable automation
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
