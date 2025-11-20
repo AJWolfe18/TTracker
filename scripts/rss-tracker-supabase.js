@@ -320,7 +320,12 @@ class RSSTracker {
 
       const { data: stories, error } = await this.supabase
         .from('stories')
-        .select('id, primary_headline, last_enriched_at')
+        .select(`
+          id,
+          primary_headline,
+          last_enriched_at,
+          article_story!inner ( article_id )
+        `)
         .eq('status', 'active')
         .or(`last_enriched_at.is.null,last_enriched_at.lt.${cooldownCutoff}`)
         .order('last_enriched_at', { ascending: true, nullsFirst: true })
