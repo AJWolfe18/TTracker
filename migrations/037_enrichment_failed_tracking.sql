@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migration 037: Add enrichment_failed Tracking + last_enriched_at Column
 -- ============================================================================
--- Ticket: TTRC-277
+-- Ticket: TTRC-280
 -- Purpose: Track enrichment failures for observability and retry logic
 -- Blockers Fixed:
 --   - Missing last_enriched_at column (code already references it)
@@ -18,10 +18,10 @@ BEGIN;
 -- CRITICAL: Code already references this column at lines 322, 324, 551
 -- Without this, queries will crash with "column does not exist"
 
-ALTER TABLE stories
+ALTER TABLE public.stories
   ADD COLUMN IF NOT EXISTS last_enriched_at TIMESTAMPTZ;
 
-COMMENT ON COLUMN stories.last_enriched_at IS
+COMMENT ON COLUMN public.stories.last_enriched_at IS
   'Timestamp of last enrichment attempt (success OR failure). Used for 12h cooldown (ENRICHMENT_COOLDOWN_HOURS). Prevents retry storms by marking failed stories as "recently attempted". NULL = never attempted.';
 
 -- ============================================================================
@@ -64,7 +64,7 @@ CREATE OR REPLACE FUNCTION public.log_run_stats(
   p_stories_enriched INT,
   p_total_openai_cost_usd NUMERIC,
   p_enrichment_skipped_budget INT,
-  p_enrichment_failed INT  -- NEW PARAMETER (15th)
+  p_enrichment_failed INT DEFAULT 0  -- NEW PARAMETER (15th)
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -101,7 +101,7 @@ COMMENT ON FUNCTION public.log_run_stats(
   NUMERIC, INT, INT
 ) IS
 'Wrapper for inserting into admin.run_stats. Uses SECURITY DEFINER to bypass PostgREST schema restrictions.
-Updated in migration 037 to track enrichment failures (TTRC-277).';
+Updated in migration 037 to track enrichment failures (TTRC-280).';
 
 -- ============================================================================
 -- SECTION 5: Revoke public permissions
