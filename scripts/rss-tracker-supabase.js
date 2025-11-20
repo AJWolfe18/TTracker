@@ -69,7 +69,7 @@ class RSSTracker {
       stories_enriched: 0,
       total_openai_cost_usd: 0,
       enrichment_skipped_budget: 0,
-      enrichment_failed: 0  // NEW: Track failed enrichments (TTRC-277)
+      enrichment_failed: 0  // NEW: Track failed enrichments (TTRC-280)
     };
 
     this.runStatus = 'success';
@@ -343,7 +343,7 @@ class RSSTracker {
           break;
         }
 
-        // NEW: Wrap enrichment call in try-catch (TTRC-277)
+        // NEW: Wrap enrichment call in try-catch (TTRC-280)
         // enrichAndBillStory throws on failure (no swallow inside)
         try {
           const shouldContinue = await this.enrichAndBillStory(story);
@@ -410,7 +410,7 @@ class RSSTracker {
         p_stories_enriched: this.stats.stories_enriched,
         p_total_openai_cost_usd: this.stats.total_openai_cost_usd,
         p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget,
-        p_enrichment_failed: this.stats.enrichment_failed  // NEW: Pass failure count (15th param, TTRC-277)
+        p_enrichment_failed: this.stats.enrichment_failed  // NEW: Pass failure count (15th param, TTRC-280)
       });
 
       if (error) throw error;

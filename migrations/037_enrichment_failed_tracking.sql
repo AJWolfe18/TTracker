@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migration 037: Add enrichment_failed Tracking + last_enriched_at Column
 -- ============================================================================
--- Ticket: TTRC-277
+-- Ticket: TTRC-280
 -- Purpose: Track enrichment failures for observability and retry logic
 -- Blockers Fixed:
 --   - Missing last_enriched_at column (code already references it)
@@ -101,7 +101,7 @@ COMMENT ON FUNCTION public.log_run_stats(
   NUMERIC, INT, INT
 ) IS
 'Wrapper for inserting into admin.run_stats. Uses SECURITY DEFINER to bypass PostgREST schema restrictions.
-Updated in migration 037 to track enrichment failures (TTRC-277).';
+Updated in migration 037 to track enrichment failures (TTRC-280).';
 
 -- ============================================================================
 -- SECTION 5: Revoke public permissions
