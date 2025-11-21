@@ -14,6 +14,7 @@
 
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
+import { withRetry } from '../utils/network.js';
 
 // ---------- Configuration ----------
 // Default allow-list includes:
@@ -28,10 +29,20 @@ const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,p
 const MAX_SCRAPED_PER_CLUSTER = 2;
 const MAX_EXCERPT_CHARS = Number(process.env.SCRAPE_MAX_CHARS ?? 5000);  // Increased from 2000 to 5000 for better summary quality
 const MAX_BYTES = 1_500_000;       // 1.5 MB
-const FETCH_TIMEOUT_MS = 8000;
+const FETCH_TIMEOUT_MS = 15000;    // Increased from 8000 to 15000 (aligns with RSS fetcher)
 const PER_HOST_MIN_GAP_MS = Number(process.env.SCRAPE_MIN_GAP_MS ?? 1000);
 
 const lastHit = new Map();
+
+// Telemetry tracking for scrape failures
+const scrapeStats = {
+  timeout: 0,
+  http403: 0,
+  http429: 0,
+  http5xx: 0,
+  other: 0,
+  success: 0
+};
 
 // ---------- Utilities ----------
 
@@ -185,17 +196,56 @@ function extractFallbackWithRegex(html) {
 async function scrapeArticleBody(url) {
   await respectPerHostRate(url);
 
-  const res = await fetchWithTimeout(url, {
-    headers: {
-      // Honest UA with contact; many servers block "bare" bots
-      'User-Agent': 'Mozilla/5.0 TrumpyTrackerBot/1.0 (+https://trumpytracker.com/contact)',
-      'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9'
-    },
-    redirect: 'follow'
-  }, FETCH_TIMEOUT_MS);
+  // Wrap fetch in retry with exponential backoff (3 attempts, 1s base delay)
+  let res;
+  try {
+    res = await withRetry(async () => {
+      return await fetchWithTimeout(url, {
+        headers: {
+          // Honest UA with contact; many servers block "bare" bots
+          'User-Agent': 'Mozilla/5.0 TrumpyTrackerBot/1.0 (+https://trumpytracker.com/contact)',
+          'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
+        },
+        redirect: 'follow'
+      }, FETCH_TIMEOUT_MS);
+    }, 3, 1000); // 3 attempts, 1s base delay (1s, 2s, 4s backoff)
+  } catch (e) {
+    // Track timeout failures
+    if (e.name === 'AbortError' || e.message.includes('aborted')) {
+      scrapeStats.timeout++;
+      throw new Error(`Timeout after ${FETCH_TIMEOUT_MS}ms`);
+    }
+    scrapeStats.other++;
+    throw e;
+  }
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // Smart HTTP status handling
+  if (!res.ok) {
+    const status = res.status;
+    if (status === 429) {
+      // Rate limited - retry will handle with backoff
+      scrapeStats.http429++;
+      throw new Error(`HTTP 429 (rate limited)`);
+    }
+    if (status === 403) {
+      // Forbidden - permanent block, don't retry
+      scrapeStats.http403++;
+      throw new Error(`HTTP 403 (blocked, no retry)`);
+    }
+    if (status >= 400 && status < 500) {
+      // Other client errors - permanent, don't retry
+      scrapeStats.other++;
+      throw new Error(`HTTP ${status} (client error, no retry)`);
+    }
+    if (status >= 500) {
+      // Server errors - transient, allow retry
+      scrapeStats.http5xx++;
+      throw new Error(`HTTP ${status} (server error)`);
+    }
+    scrapeStats.other++;
+    throw new Error(`HTTP ${status}`);
+  }
   const ct = res.headers.get('content-type') ?? '';
   if (!ct.includes('text/html')) throw new Error(`Bad content-type: ${ct}`);
 
@@ -211,6 +261,7 @@ async function scrapeArticleBody(url) {
   try {
     text = extractMainTextWithReadability(html, res.url ?? url);
     if (text && text.length >= 300) {
+      scrapeStats.success++;
       console.log(`scraped_ok method=readability host=${host} len=${text.length}`);
       return text.slice(0, MAX_EXCERPT_CHARS);
     }
@@ -221,12 +272,31 @@ async function scrapeArticleBody(url) {
   // Tier 2: Try regex fallback (proven method)
   const alt = extractFallbackWithRegex(html);
   if (alt && alt.length >= 300) {
+    scrapeStats.success++;
     console.log(`scraped_ok method=regex_fallback host=${host} len=${alt.length}`);
     return alt.slice(0, MAX_EXCERPT_CHARS);
   }
 
   // Tier 3: Return empty (RSS fallback handled by caller)
   return '';
+}
+
+/**
+ * Log scraping telemetry stats
+ */
+function logScrapeStats() {
+  const total = scrapeStats.success + scrapeStats.timeout + scrapeStats.http403 +
+                scrapeStats.http429 + scrapeStats.http5xx + scrapeStats.other;
+  if (total === 0) return;
+
+  console.log('\n=== Scraper Telemetry ===');
+  console.log(`Success: ${scrapeStats.success}/${total} (${Math.round(scrapeStats.success/total*100)}%)`);
+  console.log(`Timeouts: ${scrapeStats.timeout}`);
+  console.log(`HTTP 403 (blocked): ${scrapeStats.http403}`);
+  console.log(`HTTP 429 (rate limited): ${scrapeStats.http429}`);
+  console.log(`HTTP 5xx (server errors): ${scrapeStats.http5xx}`);
+  console.log(`Other errors: ${scrapeStats.other}`);
+  console.log('========================\n');
 }
 
 /**
@@ -292,6 +362,9 @@ export async function enrichArticlesForSummary(articles) {
       // Don't increment successfulScrapes - will try next candidate
     }
   }
+
+  // Log telemetry stats
+  logScrapeStats();
 
   return results;
 }
