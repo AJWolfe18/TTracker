@@ -18,10 +18,11 @@ import { withRetry } from '../utils/network.js';
 
 // ---------- Configuration ----------
 // Default allow-list includes:
-// - CSM, PBS, ProPublica (public, non-paywalled)
-// - Reuters, AP, Politico (may hit rate limits, will fallback)
-// - NYT, WaPo (paywalled, will extract what's available before paywall)
-const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com,nytimes.com,washingtonpost.com')
+// - Public sources: CSM, PBS, ProPublica, Reason
+// - News orgs: Reuters, AP, Politico (may hit rate limits, will fallback)
+// - Paywalled (extract pre-paywall): NYT, WaPo, Atlantic, Economist, New Yorker
+// - Business/Policy: Fortune, Newsweek, Vox, Foreign Affairs
+const SCRAPE_ALLOWLIST = (process.env.SCRAPE_DOMAINS ?? 'csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com,nytimes.com,washingtonpost.com,newsweek.com,theatlantic.com,reason.com,fortune.com,vox.com,foreignaffairs.com,newyorker.com,economist.com')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
