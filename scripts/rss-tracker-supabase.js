@@ -221,24 +221,61 @@ class RSSTracker {
         const normalizedTitle = title.toLowerCase().replace(/\s+/g, ' ');
         const storyHash = crypto.createHash('md5').update(normalizedTitle).digest('hex');
 
-        // Create new story for this article
-        const { data: story, error: storyErr } = await this.supabase
-          .from('stories')
-          .insert({
-            story_hash: storyHash,
-            primary_headline: article.title,
-            status: 'active',
-            first_seen_at: article.published_date
-          })
-          .select()
-          .single();
+        // Get or create story (TTRC-282: handle duplicate story_hash)
+        // Pattern: SELECT first, INSERT if not found, retry SELECT on conflict
+        let story;
 
-        if (storyErr) {
-          console.error(`❌ Failed to create story for article ${article.id}:`, storyErr.message);
+        // 1) Try to find existing story by story_hash
+        const { data: existingStory, error: existingErr } = await this.supabase
+          .from('stories')
+          .select('id')
+          .eq('story_hash', storyHash)
+          .maybeSingle();
+
+        if (existingErr) {
+          console.error(`❌ Error checking existing story for article ${article.id}:`, existingErr.message);
           continue;
         }
 
-        // Link article to story
+        if (existingStory) {
+          // Reuse existing story
+          story = existingStory;
+        } else {
+          // 2) No existing story → insert new one
+          const { data: newStory, error: storyErr } = await this.supabase
+            .from('stories')
+            .insert({
+              story_hash: storyHash,
+              primary_headline: article.title,
+              status: 'active',
+              first_seen_at: article.published_date
+            })
+            .select('id')
+            .single();
+
+          if (storyErr) {
+            // Handle race condition: someone else may have inserted between SELECT and INSERT
+            console.warn(`⚠️ Story insert failed for article ${article.id}: ${storyErr.message}`);
+
+            // Retry SELECT to get the story that was just inserted
+            const { data: retryStory, error: retryErr } = await this.supabase
+              .from('stories')
+              .select('id')
+              .eq('story_hash', storyHash)
+              .maybeSingle();
+
+            if (retryErr || !retryStory) {
+              console.error(`❌ Unable to recover story for article ${article.id} after insert failure`);
+              continue;
+            }
+
+            story = retryStory;
+          } else {
+            story = newStory;
+          }
+        }
+
+        // 3) Link article to resolved story
         const { error: linkErr } = await this.supabase
           .from('article_story')
           .insert({
