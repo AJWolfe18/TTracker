@@ -366,9 +366,133 @@ class JobProcessor {
       .order('similarity_score', { ascending: false })
       .order('matched_at', { ascending: false })
       .limit(6);
-      
+
     if (error) throw new Error(`Failed to fetch articles: ${error.message}`);
     return (data || []).filter(r => r.articles);
+  }
+
+  /**
+   * Categorize enrichment errors for smart retry logic
+   * TTRC-278: Transient vs permanent error classification
+   *
+   * CRITICAL: Category strings MUST match CHECK constraint in admin.enrichment_error_log
+   *
+   * @param {Error} error - The error object to categorize
+   * @returns {Object} - { category, isPermanent, cooldownHours, isInfraError }
+   */
+  categorizeEnrichmentError(error) {
+    const msg = (error.message || '').toLowerCase();
+    const code = error.code || '';
+    const type = error.type || ''; // OpenAI error.type
+    const status = typeof error.status === 'number' ? error.status : undefined;
+
+    // 0. Infrastructure/auth errors - don't blame the story
+    if (type === 'authentication_error' || type === 'permission_error' ||
+        type === 'organization_invalid' || status === 401 || status === 403) {
+      return {
+        category: 'infra_auth',
+        isPermanent: false,
+        cooldownHours: 1,
+        isInfraError: true // NEW FLAG: Don't update story counters
+      };
+    }
+
+    // 1. Quota/billing (treat like budget_exceeded - no failure increment)
+    if (type === 'insufficient_quota' || msg.includes('exceeded your current quota') ||
+        msg.includes('insufficient_quota')) {
+      return {
+        category: 'budget_exceeded',
+        isPermanent: false,
+        cooldownHours: 24
+      };
+    }
+
+    // 2. Rate limit (429) - retry with 24h backoff
+    if (status === 429 || code === 'rate_limit_exceeded' || type === 'rate_limit_exceeded') {
+      return {
+        category: 'rate_limit',
+        isPermanent: false,
+        cooldownHours: 24
+      };
+    }
+
+    // 3. Budget exceeded (our daily cap) - wait until tomorrow, don't count as failure
+    if (code === 'budget_exceeded' || msg.includes('budget exceeded')) {
+      return {
+        category: 'budget_exceeded',
+        isPermanent: false,
+        cooldownHours: 24
+      };
+    }
+
+    // 4. Invalid request - check if token-related or schema-related
+    if (type === 'invalid_request_error') {
+      if (msg.includes('maximum context') || msg.includes('token')) {
+        return {
+          category: 'token_limit',
+          isPermanent: true,
+          cooldownHours: null
+        };
+      }
+      if (msg.includes('json') || msg.includes('schema')) {
+        return {
+          category: 'json_parse',
+          isPermanent: false,
+          cooldownHours: 12
+        };
+      }
+      // Generic invalid request - likely a code bug
+      return {
+        category: 'invalid_request',
+        isPermanent: true,
+        cooldownHours: null
+      };
+    }
+
+    // 5. Network timeouts (ECONNRESET, ETIMEDOUT, 5xx) - retry with 12h backoff
+    if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || (status && status >= 500)) {
+      return {
+        category: 'network_timeout',
+        isPermanent: false,
+        cooldownHours: 12
+      };
+    }
+
+    // 6. JSON parse errors - permanent after 3 tries (faster failure)
+    if (msg.includes('json parse failed') || msg.includes('valid json')) {
+      return {
+        category: 'json_parse',
+        isPermanent: false,  // Will be marked permanent after 3 tries via maxRetries
+        cooldownHours: 12
+      };
+    }
+
+    // 7. Content policy violations - permanent immediately
+    if (code === 'content_policy_violation' || type === 'content_policy_violation' ||
+        msg.includes('content policy')) {
+      return {
+        category: 'content_policy',
+        isPermanent: true,
+        cooldownHours: null
+      };
+    }
+
+    // 8. Token limit exceeded - story too large, permanent
+    if (code === 'context_length_exceeded' || type === 'context_length_exceeded' ||
+        msg.includes('maximum context')) {
+      return {
+        category: 'token_limit',
+        isPermanent: true,
+        cooldownHours: null
+      };
+    }
+
+    // 9. Unknown - default to transient behavior
+    return {
+      category: 'unknown',
+      isPermanent: false,
+      cooldownHours: 12
+    };
   }
 
   /**
@@ -407,9 +531,34 @@ class JobProcessor {
     }
 
     // ========================================
-    // 2. BUDGET CHECK (Optional - Phase 2)
+    // 2. BUDGET CHECK
     // ========================================
-    // TODO: Add budget soft/hard stop once migration 008 is deployed
+    const ESTIMATED_COST_PER_STORY = 0.003;  // GPT-4o-mini ~$0.003/story
+    const DAILY_BUDGET_LIMIT = 5.0;          // $5/day cap
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data: budgetRes, error: budgetErr } = await supabase.rpc(
+      'increment_budget_with_limit',
+      {
+        day_param: today,
+        amount_usd: ESTIMATED_COST_PER_STORY,
+        call_count: 1,
+        daily_limit: DAILY_BUDGET_LIMIT,
+      }
+    );
+
+    if (budgetErr) {
+      console.error('Budget check failed (infra error):', budgetErr);
+      const err = new Error(`Budget RPC failed: ${budgetErr.message || 'Unknown error'}`);
+      err.code = 'network_timeout'; // Categorized as network/infra error
+      throw err;
+    }
+
+    if (!budgetRes || !Array.isArray(budgetRes) || !budgetRes[0]?.success) {
+      const e = new Error('Daily budget exceeded - try tomorrow');
+      e.code = 'budget_exceeded';
+      throw e;
+    }
 
     // ========================================
     // 3. FETCH ARTICLES & BUILD CONTEXT
@@ -504,7 +653,12 @@ class JobProcessor {
         primary_actor,
         top_entities,        // TTRC-235: text[] of canonical IDs
         entity_counter,      // TTRC-235: jsonb {id: count}
-        last_enriched_at: new Date().toISOString()
+        last_enriched_at: new Date().toISOString(),
+        // TTRC-278/279: Reset error state on success
+        enrichment_status: 'success',
+        enrichment_failure_count: 0,
+        last_error_category: null,
+        last_error_message: null
       })
       .eq('id', story_id);
 
@@ -713,46 +867,168 @@ async function runWorker() {
           });
         })
         .catch(async (error) => {
-          // Mark job as failed
-          const attempts = (job.attempts || 0) + 1;
-          const maxAttempts = job.max_attempts || workerConfig.maxRetries;
-          
-          if (attempts >= maxAttempts) {
-            await supabase
-              .from('job_queue')
-              .update({ 
-                status: 'failed',
-                error: error.message,
-                completed_at: new Date().toISOString()
-              })
-              .eq('id', job.id);
-              
-            safeLog('error', `Job failed after ${attempts} attempts`, {
-              job_id: job.id,
-              job_type: job.job_type,
-              error: error.message
-            });
-          } else {
-            // Exponential backoff for retry
-            const backoffMs = workerConfig.backoffBase * Math.pow(2, attempts - 1);
-            const nextRun = new Date(Date.now() + backoffMs);
-            
-            await supabase
-              .from('job_queue')
-              .update({ 
-                status: 'pending',
-                attempts: attempts,
-                run_at: nextRun.toISOString(),
+          // TTRC-278/279: Smart error handling for story enrichment
+          if (job.job_type === 'story.enrich' && typeof job.payload?.story_id === 'number' && job.payload.story_id > 0) {
+            const { category, isPermanent, cooldownHours, isInfraError } = processor.categorizeEnrichmentError(error);
+            const isBudgetError = category === 'budget_exceeded';
+
+            // Infrastructure errors don't touch story state
+            if (isInfraError) {
+              safeLog('error', 'Infrastructure error - not counting against story', {
+                story_id: job.payload.story_id,
+                job_id: job.id,
                 error: error.message
-              })
-              .eq('id', job.id);
-              
-            safeLog('warn', `Job failed, will retry`, {
-              job_id: job.id,
-              job_type: job.job_type,
-              attempt: attempts,
-              next_run: nextRun.toISOString()
-            });
+              });
+
+              // Retry job with short backoff (1h), don't touch story
+              await supabase
+                .from('job_queue')
+                .update({
+                  status: 'pending',
+                  run_at: new Date(Date.now() + 3600000).toISOString(), // +1h
+                  error: `[${category}] ${error.message}`
+                })
+                .eq('id', job.id);
+              return; // Exit early, don't update story
+            }
+
+            // Category-specific max retries
+            let maxRetries = 5; // Default for transient errors
+            if (category === 'json_parse') maxRetries = 3;
+            if (isPermanent && !isBudgetError) maxRetries = 1; // Permanent errors fail immediately
+
+            // 1. Atomically increment story failure count
+            const { data: failureState, error: incErr } = await supabase.rpc(
+              'increment_enrichment_failure',
+              {
+                p_story_id: job.payload.story_id,
+                p_is_budget_error: isBudgetError,
+                p_max_retries: maxRetries,
+                p_error_category: category,
+                p_error_message: error.message?.slice(0, 500)
+              }
+            );
+
+            if (incErr) {
+              safeLog('error', 'Failed to update story error state', {
+                story_id: job.payload.story_id,
+                error: incErr.message
+              });
+              // Continue with job retry logic despite RPC failure
+            }
+
+            const failureCount = failureState?.[0]?.enrichment_failure_count ?? 0;
+            const storyStatus = failureState?.[0]?.enrichment_status ?? null;
+
+            // 2. Log to error history table (non-blocking)
+            try {
+              await supabase.rpc('log_enrichment_error', {
+                p_story_id: job.payload.story_id,
+                p_error_category: category,
+                p_error_message: error.message?.slice(0, 1000),
+                p_retry_count: failureCount,
+                p_job_id: job.id
+              });
+            } catch (logErr) {
+              safeLog('error', 'Failed to log enrichment error (non-blocking)', {
+                story_id: job.payload.story_id,
+                job_id: job.id,
+                log_error: logErr.message
+              });
+              // Continue - logging failures shouldn't break the pipeline
+            }
+
+            // 3. Job-level retry logic
+            const attempts = (job.attempts || 0) + (isBudgetError ? 0 : 1);
+            const maxJobAttempts = (isPermanent && !isBudgetError) ? 1 : 3;
+
+            // Budget errors bypass attempt limits (retry indefinitely until budget clears)
+            if ((attempts >= maxJobAttempts && !isBudgetError) || storyStatus === 'permanent_failure') {
+              // Mark job as failed
+              await supabase
+                .from('job_queue')
+                .update({
+                  status: 'failed',
+                  error: `[${category}] ${error.message}`,
+                  completed_at: new Date().toISOString()
+                })
+                .eq('id', job.id);
+
+              safeLog('error', `Story enrichment failed permanently`, {
+                story_id: job.payload.story_id,
+                job_id: job.id,
+                category,
+                failureCount,
+                isPermanent,
+                storyStatus
+              });
+            } else {
+              // Retry with category-aware backoff
+              const backoffHours = cooldownHours || 12;
+              const backoffMs = backoffHours * 60 * 60 * 1000;
+              const nextRun = new Date(Date.now() + backoffMs);
+
+              await supabase
+                .from('job_queue')
+                .update({
+                  status: 'pending',
+                  attempts: attempts,
+                  run_at: nextRun.toISOString(),
+                  error: `[${category}] ${error.message}`
+                })
+                .eq('id', job.id);
+
+              safeLog('warn', `Story enrichment will retry`, {
+                story_id: job.payload.story_id,
+                job_id: job.id,
+                category,
+                attempt: attempts,
+                next_run: nextRun.toISOString(),
+                cooldownHours: backoffHours
+              });
+            }
+          } else {
+            // Generic error handling for non-enrichment jobs
+            const attempts = (job.attempts || 0) + 1;
+            const maxAttempts = job.max_attempts || workerConfig.maxRetries;
+
+            if (attempts >= maxAttempts) {
+              await supabase
+                .from('job_queue')
+                .update({
+                  status: 'failed',
+                  error: error.message,
+                  completed_at: new Date().toISOString()
+                })
+                .eq('id', job.id);
+
+              safeLog('error', `Job failed after ${attempts} attempts`, {
+                job_id: job.id,
+                job_type: job.job_type,
+                error: error.message
+              });
+            } else {
+              // Exponential backoff for retry
+              const backoffMs = workerConfig.backoffBase * Math.pow(2, attempts - 1);
+              const nextRun = new Date(Date.now() + backoffMs);
+
+              await supabase
+                .from('job_queue')
+                .update({
+                  status: 'pending',
+                  attempts: attempts,
+                  run_at: nextRun.toISOString(),
+                  error: error.message
+                })
+                .eq('id', job.id);
+
+              safeLog('warn', `Job failed, will retry`, {
+                job_id: job.id,
+                job_type: job.job_type,
+                attempt: attempts,
+                next_run: nextRun.toISOString()
+              });
+            }
           }
         })
         .finally(() => {
