@@ -12,7 +12,7 @@ require curl
 
 # Dynamic effort based on 'thorough' label
 EFFORT="low"
-MAXTOK=2000
+MAXTOK=4000  # Bumped from 2000 - prevents truncated reviews
 
 if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH}" ]; then
   if jq -e '.pull_request.labels[]? | select(.name=="thorough")' < "$GITHUB_EVENT_PATH" >/dev/null 2>&1; then
