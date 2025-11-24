@@ -110,12 +110,12 @@ BEGIN
     END IF;
 
     -- Maintain cooldown, record error, but don't count it
-    UPDATE public.stories
+    UPDATE public.stories s
     SET
       last_enriched_at = NOW(),
       last_error_category = p_error_category,
       last_error_message = p_error_message
-    WHERE id = p_story_id;
+    WHERE s.id = p_story_id;
 
     RETURN QUERY SELECT v_count, v_status;
     RETURN;
@@ -125,18 +125,19 @@ BEGIN
   -- Normal Failure Path: Atomically increment counter and set status
   -- ========================================
   -- OPTIMIZED: Single UPDATE with CASE (instead of two UPDATEs)
-  UPDATE public.stories
+  -- NOTE: Use table alias 's' to avoid ambiguity with RETURNS TABLE columns
+  UPDATE public.stories s
   SET
-    enrichment_failure_count = enrichment_failure_count + 1,
+    enrichment_failure_count = s.enrichment_failure_count + 1,
     last_enriched_at = NOW(),
     last_error_category = p_error_category,
     last_error_message = p_error_message,
     enrichment_status = CASE
-      WHEN enrichment_failure_count + 1 >= p_max_retries THEN 'permanent_failure'
+      WHEN s.enrichment_failure_count + 1 >= p_max_retries THEN 'permanent_failure'
       ELSE 'pending'
     END
-  WHERE id = p_story_id
-  RETURNING enrichment_failure_count, enrichment_status
+  WHERE s.id = p_story_id
+  RETURNING s.enrichment_failure_count, s.enrichment_status
   INTO v_count, v_status;
 
   IF NOT FOUND THEN
