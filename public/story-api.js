@@ -27,6 +27,7 @@ window.StoryAPI = (function() {
   async function fetchStories({ offset = 0, limit = 30 } = {}) {
     const params = new URLSearchParams({
       status: 'eq.active',
+      summary_neutral: 'not.is.null', // TTRC-119: Hide un-enriched stories
       select: [
         'id',
         'primary_headline',
