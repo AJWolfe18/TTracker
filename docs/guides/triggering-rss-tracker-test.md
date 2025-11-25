@@ -1,7 +1,26 @@
 # How to Trigger RSS Tracker on TEST Branch
 
 **Created:** 2025-11-16
+**Updated:** 2025-11-24
 **Ticket:** TTRC-266
+
+---
+
+## ❌ DO NOT USE (Legacy Methods)
+
+These legacy methods create jobs in `job_queue` but **do not process them** because no worker is running:
+
+| Method | Why It Doesn't Work |
+|--------|---------------------|
+| `bash scripts/monitoring/trigger-rss.sh` | Creates jobs in queue, but no worker processes them |
+| `curl .../rss-enqueue` Edge Function | Same - creates orphaned jobs |
+| `node scripts/job-queue-worker.js` | Requires manual long-running process (not automated) |
+
+**The new system (TTRC-266) bypasses the job queue entirely.**
+
+---
+
+## ✅ CORRECT Methods (Use These)
 
 ---
 

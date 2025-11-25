@@ -251,21 +251,30 @@ node scripts/apply-migrations.js
 
 ### RSS Ingestion Pipeline
 
+**Current System (TTRC-266 - Inline Automation):**
 ```
-GitHub Actions (every 2 hours)
-    ↓ Triggers
-Supabase Edge Function (rss-enqueue)
-    ↓ Creates jobs in job_queue
-Job Queue Worker (Node.js - scripts/job-queue-worker.js)
-    ├── fetch_feed → Fetches RSS, creates articles
-    ├── story.cluster → Groups related articles into stories
-    └── story.enrich → Generates AI summaries
+GitHub Actions (every 2 hours on main, manual on test)
+    ↓ Runs
+rss-tracker-supabase.js (inline script)
+    ├── Fetches all active feeds directly
+    ├── Clusters articles into stories
+    └── Enriches stories with AI summaries
         ↓ Writes to
 Stories + Articles Tables
     ↓ Queries via
 Edge Functions (stories-active, stories-detail)
     ↓ Serves
 Frontend (public/index.html, public/story-view/)
+```
+
+**Trigger Methods:**
+- **TEST:** `gh workflow run "RSS Tracker - TEST" --ref test`
+- **PROD:** Auto-runs every 2 hours via `rss-tracker-prod.yml`
+
+**Legacy System (DEPRECATED - do not use):**
+```
+rss-enqueue Edge Function → job_queue table → job-queue-worker.js
+(Creates jobs but no worker processes them)
 ```
 
 ### Key Job Types
@@ -465,13 +474,23 @@ curl -X POST "$SUPABASE_URL/functions/v1/articles-manual" \
   -d '{"url":"https://example.com/article"}'
 ```
 
-### Trigger RSS Fetch
+### Trigger RSS Fetch (TEST Environment)
+**IMPORTANT:** Use the GitHub Actions workflow, NOT the legacy `rss-enqueue` endpoint.
+See: `docs/guides/triggering-rss-tracker-test.md` for full details.
+
 ```bash
-curl -X POST "$SUPABASE_URL/functions/v1/rss-enqueue" \
-  -H "Authorization: Bearer $EDGE_CRON_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"kind":"fetch_all_feeds"}'
+# Correct method - triggers the inline RSS tracker workflow
+gh workflow run "RSS Tracker - TEST" --ref test
+
+# Monitor the run
+gh run watch
+
+# Or view at: https://github.com/AJWolfe18/TTracker/actions/workflows/rss-tracker-test.yml
 ```
+
+**DO NOT USE** (creates orphaned jobs):
+- `bash scripts/monitoring/trigger-rss.sh`
+- `curl .../rss-enqueue`
 
 ### Monitor Job Queue
 ```sql
