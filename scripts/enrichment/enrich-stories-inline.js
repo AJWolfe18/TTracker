@@ -1,13 +1,13 @@
 /*
- * WARNING: This enrichment logic is copied from job-queue-worker.js.
- * Any changes to enrichment MUST be mirrored here until TTRC-267
- * refactors this into a shared module.
+ * Story enrichment for inline RSS pipeline.
+ * SYSTEM_PROMPT imported from ./prompts.js (shared with job-queue-worker.js)
  *
- * TODO TTRC-267: Extract into shared enrichment module used by both
- * inline script and worker (if worker kept for article.enrich)
+ * TODO TTRC-267: Consider full shared enrichment module if worker
+ * is kept for article.enrich operations.
  */
 
 import OpenAI from 'openai';
+import { SYSTEM_PROMPT } from './prompts.js';
 
 // =====================================================================
 // Constants
@@ -32,18 +32,7 @@ const UI_TO_DB_CATEGORIES = {
 
 const toDbCategory = (label) => UI_TO_DB_CATEGORIES[label] || 'other';
 
-// OpenAI system prompt (copied from worker)
-const SYSTEM_PROMPT = `You are a political accountability analyst. Your task is to generate concise, factual summaries of political news stories from multiple source articles.
-
-Return a JSON object with these fields:
-- summary_neutral: 2-3 sentence factual summary (100-150 words)
-- summary_spicy: Optional spicier version with sharper language
-- category: One of: "Corruption & Scandals", "Democracy & Elections", "Policy & Legislation", "Justice & Legal", "Executive Actions", "Foreign Policy", "Corporate & Financial", "Civil Liberties", "Media & Disinformation", "Epstein & Associates", "Other"
-- severity: One of: "critical", "severe", "moderate", "minor"
-- primary_actor: Main person/entity involved (if clear)
-- entities: Array of {id, type, confidence} for people/orgs mentioned
-
-Focus on facts, not speculation. Maintain objectivity in summary_neutral.`;
+// SYSTEM_PROMPT imported from ./prompts.js (single source of truth)
 
 // =====================================================================
 // Helper Functions
