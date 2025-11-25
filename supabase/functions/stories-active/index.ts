@@ -39,6 +39,7 @@ serve(async (req: Request) => {
         summary_spicy
       `)
       .eq('status', 'active')
+      .not('summary_neutral', 'is', null) // TTRC-119: Hide un-enriched stories
       .order('last_updated_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(limit + 1) // Get one extra to check if there's a next page
