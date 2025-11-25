@@ -232,13 +232,17 @@ npm run qa:concurrency     # Clustering concurrency
 
 ### Supabase Edge Functions
 ```bash
-# Deploy all functions
-supabase functions deploy rss-enqueue
-supabase functions deploy stories-active
-supabase functions deploy stories-detail
-supabase functions deploy stories-search
-supabase functions deploy articles-manual
-supabase functions deploy queue-stats
+# Project References (IMPORTANT - use correct ref for environment):
+# TEST:  --project-ref wnrjrywpcadwutfykflu  (TrumpyTracker-Test)
+# PROD:  --project-ref osjbulmltfpcoldydexg  (TrumpyTracker)
+
+# Deploy functions to TEST (default for development)
+supabase functions deploy stories-active --project-ref wnrjrywpcadwutfykflu
+supabase functions deploy stories-detail --project-ref wnrjrywpcadwutfykflu
+supabase functions deploy stories-search --project-ref wnrjrywpcadwutfykflu
+supabase functions deploy articles-manual --project-ref wnrjrywpcadwutfykflu
+supabase functions deploy queue-stats --project-ref wnrjrywpcadwutfykflu
+supabase functions deploy rss-enqueue --project-ref wnrjrywpcadwutfykflu
 ```
 
 ### Database Migrations
