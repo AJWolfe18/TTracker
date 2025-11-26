@@ -35,7 +35,7 @@ SELECT
   -- Placeholder for DROP metrics (requires log aggregation)
   0 AS dropped_24h,
   0.0 AS drop_rate_pct,
-  fr.last_fetched,
+  fr.last_fetched_at,
   fr.last_304_at,
   fr.failure_count,
   fr.filter_config

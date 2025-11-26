@@ -291,7 +291,7 @@ async function handleFetchFeed(job, db) {
         etag: newEtag || feedRecord?.etag,
         last_modified: newLastModified || feedRecord?.last_modified,
         failure_count: 0,
-        last_fetched: new Date().toISOString()
+        last_fetched_at: new Date().toISOString()
       })
       .eq('feed_url', url);
 
