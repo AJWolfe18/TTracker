@@ -42,7 +42,7 @@ ALTER TABLE executive_orders ADD CONSTRAINT executive_orders_severity_check
 - ✅ **Cost Tracking**: Logs every API call to `eo_enrichment_costs` table
 - ✅ **Daily Cap**: $5/day hard limit with dynamic guard (3× trailing 7-day average)
 - ✅ **Dead-Letter Queue**: Failed enrichments logged to `eo_enrichment_errors`
-- ✅ **Validation**: Word counts (100-160 per section), action tier rules, JSON schema
+- ✅ **Validation**: Word counts (100-200 per section), action tier rules, JSON schema
 - ✅ **Timeout Handling**: 60-second timeout per OpenAI request
 
 ## Architecture
@@ -205,8 +205,8 @@ created_at TIMESTAMPTZ DEFAULT NOW()
 
 ## Validation Rules
 
-### Word Count (100-160 words per section)
-Each of the 4 sections must be 100-160 words. If OpenAI returns <100 or >160 words, the enrichment fails and retries.
+### Word Count (100-200 words per section)
+Each of the 4 sections must be 100-200 words. If OpenAI returns <100 or >200 words, the enrichment fails and retries.
 
 **Enforced sections**:
 - `section_what_they_say`

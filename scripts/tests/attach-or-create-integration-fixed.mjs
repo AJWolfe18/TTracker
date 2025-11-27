@@ -15,17 +15,19 @@ const articleId = 'test-integration-' + uniqueId;
 const url = `https://test.local/article-${uniqueId}`;
 const urlHash = sha256(url);
 const now = new Date().toISOString();
+const uniqueTitle = `Senate advances stopgap funding bill ${uniqueId}`;
 
 // Clean up any existing article with this hash first
 await sb.from('article_story').delete().eq('article_id', articleId);
 await sb.from('articles').delete().eq('url_hash', urlHash);
 
-// Use upsert to handle conflicts properly
+// Use insert (not upsert) - onConflict doesn't work with GENERATED columns via PostgREST
+// We already cleaned up any existing data above, so insert is safe
 const { data: article, error: insertError } = await sb
   .from('articles')
-  .upsert({
+  .insert({
     id: articleId,
-    title: 'Senate advances stopgap funding bill',
+    title: uniqueTitle,
     url: url,
     url_canonical: url,
     url_hash: urlHash,
@@ -33,8 +35,6 @@ const { data: article, error: insertError } = await sb
     source_name: 'Test Source',
     source_domain: 'test.local',
     content: 'Test content for clustering'
-  }, {
-    onConflict: 'url_hash,published_date'
   })
   .select()
   .single();
@@ -45,7 +45,7 @@ assert.ok(article, 'Article should be created');
 // Now call the clustering function directly
 const { data: result1, error: error1 } = await sb.rpc('attach_or_create_story', {
   _article_id: articleId,
-  _title: 'Senate advances stopgap funding bill',
+  _title: uniqueTitle,
   _url: url,
   _url_canonical: url,
   _url_hash: urlHash,
@@ -75,7 +75,7 @@ assert.ok(links && links.length > 0, 'Article should be linked to a story');
 // Test idempotency - calling again should return already_clustered
 const { data: result2, error: error2 } = await sb.rpc('attach_or_create_story', {
   _article_id: articleId,
-  _title: 'Senate advances stopgap funding bill',
+  _title: uniqueTitle,
   _url: url,
   _url_canonical: url,
   _url_hash: urlHash,

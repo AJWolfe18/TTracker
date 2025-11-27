@@ -19,10 +19,11 @@ for (let i = 0; i < 10; i++) {
   const url = `https://example.com/article-${baseTime}-${i}`;
   const urlHash = sha256(url);
   
-  // Use upsert with proper conflict handling
-  const { data, error: artErr } = await sb.from('articles').upsert({
+  // Use insert (not upsert) - onConflict doesn't work with GENERATED columns via PostgREST
+  // Each test run uses unique IDs so insert is safe
+  const { data, error: artErr } = await sb.from('articles').insert({
     id: articleId,
-    title: `Concurrent article ${i}`,
+    title: `Concurrent article ${baseTime}-${i}`,
     url: url,
     url_canonical: url,
     url_hash: urlHash,
@@ -30,8 +31,6 @@ for (let i = 0; i < 10; i++) {
     source_domain: 'example.com',
     published_at: new Date().toISOString(),
     content: `Test content ${i}`
-  }, {
-    onConflict: 'url_hash,published_date'
   }).select().single();
   
   assert.ifError(artErr);
@@ -46,7 +45,7 @@ const clusterPromises = articles.map(async (articleId, i) => {
   
   const { data, error } = await sb.rpc('attach_or_create_story', {
     _article_id: articleId,
-    _title: `Concurrent article ${i}`,
+    _title: `Concurrent article ${baseTime}-${i}`,
     _url: url,
     _url_canonical: url,
     _url_hash: urlHash,
