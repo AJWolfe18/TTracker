@@ -6,6 +6,10 @@ on:
     branches: [main, test]
   push:
     branches: [test]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.txt'
 
 concurrency:
   group: ai-review-${{ github.event.pull_request.number || github.run_id }}
