@@ -92,7 +92,7 @@ paths:
 ### Events
 - **PR opened/updated:** Auto-review if paths match
 - **PR labeled:** Review when `ai:review` added
-- **Push to test:** Always reviews (for testing)
+- **Push to test:** Reviews unless docs-only (skips `docs/**`, `*.md`, `*.txt`)
 
 ## Examples
 
@@ -177,5 +177,5 @@ Monitor monthly costs:
 
 ---
 
-**Last Updated:** October 10, 2025
+**Last Updated:** November 30, 2025
 **Related:** [TTRC-203](https://ajwolfe37.atlassian.net/browse/TTRC-203), [PR #12](https://github.com/AJWolfe18/TTracker/pull/12)
