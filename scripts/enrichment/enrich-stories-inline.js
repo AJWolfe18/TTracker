@@ -8,6 +8,7 @@
 
 import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from './prompts.js';
+import { normalizeEntities } from '../lib/entity-normalization.js';
 
 // =====================================================================
 // Constants
@@ -196,7 +197,9 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   const primary_actor = (obj.primary_actor || '').trim() || null;
 
   // TTRC-235: Extract entities and format correctly
-  const entities = obj.entities || [];
+  // TTRC-236: Normalize entity IDs for consistent merge detection
+  const rawEntities = obj.entities || [];
+  const entities = normalizeEntities(rawEntities);
   const top_entities = toTopEntities(entities);  // text[] of IDs
   const entity_counter = buildEntityCounter(entities);  // jsonb {id: count}
 

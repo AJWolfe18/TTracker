@@ -12,6 +12,7 @@ import { checkAndSplitStory } from './rss/auto-split.js';
 import { runMergeDetection } from './rss/periodic-merge.js';
 import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
 import { enrichArticlesForSummary } from './enrichment/scraper.js';
+import { normalizeEntities } from './lib/entity-normalization.js';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -632,7 +633,9 @@ class JobProcessor {
     const primary_actor = (obj.primary_actor || '').trim() || null;
 
     // TTRC-235: Extract entities and format correctly
-    const entities = obj.entities || [];
+    // TTRC-236: Normalize entity IDs for consistent merge detection
+    const rawEntities = obj.entities || [];
+    const entities = normalizeEntities(rawEntities);
     const top_entities = this.toTopEntities(entities);  // text[] of IDs
     const entity_counter = this.buildEntityCounter(entities);  // jsonb {id: count}
 
