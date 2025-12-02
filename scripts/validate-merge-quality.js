@@ -100,9 +100,17 @@ async function main() {
 
   // Ground truth labels (YES/NO only - MAYBE already filtered out)
   const groundTruth = labeled.map(r => {
-    const val = r.are_duplicates.trim().toLowerCase();
-    const story1_id = parseInt(String(r.story1_id), 10);
-    const story2_id = parseInt(String(r.story2_id), 10);
+    // Defensive: coerce to string before string methods
+    const val = String(r.are_duplicates ?? '').trim().toLowerCase();
+
+    // Validate story IDs are pure integers
+    const s1 = String(r.story1_id ?? '').trim();
+    const s2 = String(r.story2_id ?? '').trim();
+    if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2)) {
+      console.error(`Warning: Invalid story ID(s) in row: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
+    }
+    const story1_id = parseInt(s1, 10) || 0;
+    const story2_id = parseInt(s2, 10) || 0;
 
     // Blocker #5: Defensive shared_entities parsing (handles both numeric and pipe-delimited)
     // Note: Use String() coercion since r.shared_entities may be a number
