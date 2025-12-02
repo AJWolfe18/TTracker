@@ -101,19 +101,20 @@ async function main() {
   // Ground truth labels (YES/NO only - MAYBE already filtered out)
   const groundTruth = labeled.map(r => {
     const val = r.are_duplicates.trim().toLowerCase();
-    const story1_id = parseInt(r.story1_id);
-    const story2_id = parseInt(r.story2_id);
+    const story1_id = parseInt(String(r.story1_id), 10);
+    const story2_id = parseInt(String(r.story2_id), 10);
 
     // Blocker #5: Defensive shared_entities parsing (handles both numeric and pipe-delimited)
+    // Note: Use String() coercion since r.shared_entities may be a number
     let sharedCount = 0;
-    const rawShared = (r.shared_entities || '').trim();
+    const rawShared = String(r.shared_entities ?? '').trim();
     if (rawShared) {
       // If it's a pure number, use it directly
       if (/^\d+$/.test(rawShared)) {
         sharedCount = parseInt(rawShared, 10);
       } else {
         // Otherwise parse as pipe-delimited entity IDs
-        sharedCount = rawShared.split('|').filter(e => e.trim()).length;
+        sharedCount = rawShared.split('|').map(e => e.trim()).filter(Boolean).length;
       }
     }
 
