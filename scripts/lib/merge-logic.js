@@ -51,57 +51,125 @@ function sharedEffective(entitiesA, entitiesB, config = MERGE_CFG) {
 }
 
 /**
- * Determine if two stories should merge
+ * Primary merge decision function - runs full logic, returns structured context
+ * This is the single source of truth for merge decisions.
  *
  * @param {object} storyA - First story (needs: top_entities, first_seen_at, category, primary_actor)
  * @param {object} storyB - Second story
  * @param {number} similarity - Precomputed centroid similarity (0-1)
  * @param {object} config - Merge config (defaults to MERGE_CFG, can override for testing)
- * @returns {boolean} True if stories should merge
+ * @returns {object} Context with decision, lane, blockedBy, passed, sharedEntities, sharedCount
  */
-export function shouldMerge(storyA, storyB, similarity, config = MERGE_CFG) {
+export function explainMergeDecision(storyA, storyB, similarity, config = MERGE_CFG) {
+  const context = {
+    decision: false,
+    lane: null,           // 'multi_entity' | '1_entity' | null
+    blockedBy: [],        // e.g. ['LOW_SIM_2', 'TIME_WINDOW']
+    passed: [],           // e.g. ['HAS_ENTITIES', 'TIME_WINDOW_OK']
+    sharedEntities: [],   // Actual shared entity IDs
+    sharedCount: 0,
+    similarity,
+  };
+
   // 1. Check entity presence (hard precondition)
   if (!hasEntities(storyA) || !hasEntities(storyB)) {
-    return false;
+    context.blockedBy.push('NO_ENTITIES');
+    return context;
   }
+  context.passed.push('HAS_ENTITIES');
 
   // 2. Check time window
   const timeA = storyA.first_seen_at || storyA.last_updated_at;
   const timeB = storyB.first_seen_at || storyB.last_updated_at;
 
   if (!withinDays(timeA, timeB, config.MAX_GAP_DAYS)) {
-    return false;
+    context.blockedBy.push('TIME_WINDOW');
+    return context;
   }
+  context.passed.push('TIME_WINDOW_OK');
 
   // 3. Optional: Check category match
   if (config.REQUIRE_CATEGORY_MATCH) {
     if (storyA.category && storyB.category && storyA.category !== storyB.category) {
-      return false;
+      context.blockedBy.push('CATEGORY_MISMATCH');
+      return context;
     }
+    context.passed.push('CATEGORY_MATCH_OK');
   }
 
   // 4. Optional: Check actor match
   if (config.REQUIRE_ACTOR_MATCH) {
     if (storyA.primary_actor && storyB.primary_actor && storyA.primary_actor !== storyB.primary_actor) {
-      return false;
+      context.blockedBy.push('ACTOR_MISMATCH');
+      return context;
     }
+    context.passed.push('ACTOR_MATCH_OK');
   }
 
   // 5. Calculate effective shared entities (with media org discount)
   const shared = sharedEffective(storyA.top_entities, storyB.top_entities, config);
-  const sharedCount = shared.length;
+  context.sharedEntities = shared;
+  context.sharedCount = shared.length;
 
   // 6. Multi-signal gating: entities + similarity
-  if (sharedCount >= 3 && similarity >= config.SIM_FOR_3) {
-    return true;
+  // Lane: 3+ shared entities
+  if (context.sharedCount >= 3) {
+    context.passed.push('ENTITY_OVERLAP_3+');
+    if (similarity >= config.SIM_FOR_3) {
+      context.passed.push('SIM_3_OK');
+      context.decision = true;
+      context.lane = 'multi_entity';
+      return context;
+    } else {
+      context.blockedBy.push('LOW_SIM_3');
+      return context;
+    }
   }
 
-  if (sharedCount === 2 && similarity >= config.SIM_FOR_2) {
-    return true;
+  // Lane: 2 shared entities
+  if (context.sharedCount === 2) {
+    context.passed.push('ENTITY_OVERLAP_2');
+    if (similarity >= config.SIM_FOR_2) {
+      context.passed.push('SIM_2_OK');
+      context.decision = true;
+      context.lane = 'multi_entity';
+      return context;
+    } else {
+      context.blockedBy.push('LOW_SIM_2');
+      return context;
+    }
   }
 
-  // Reject: insufficient signal
-  return false;
+  // Lane: 1 shared entity (strict, gated by config)
+  if (context.sharedCount === 1) {
+    context.passed.push('ENTITY_OVERLAP_1');
+    if (config.ENABLE_1_ENTITY_LANE) {
+      // Future: implement strict 1-entity lane checks
+      // For now, reject with clear reason
+      context.blockedBy.push('1_ENTITY_LANE_NOT_IMPLEMENTED');
+    } else {
+      context.blockedBy.push('1_ENTITY_LANE_DISABLED');
+    }
+    return context;
+  }
+
+  // No entity overlap
+  context.blockedBy.push('NO_ENTITY_OVERLAP');
+  return context;
+}
+
+/**
+ * Thin wrapper - returns just the merge decision
+ * Uses explainMergeDecision() as single source of truth
+ *
+ * @param {object} storyA - First story
+ * @param {object} storyB - Second story
+ * @param {number} similarity - Precomputed centroid similarity (0-1)
+ * @param {object} config - Merge config (defaults to MERGE_CFG)
+ * @returns {boolean} True if stories should merge
+ */
+export function shouldMerge(storyA, storyB, similarity, config = MERGE_CFG) {
+  return explainMergeDecision(storyA, storyB, similarity, config).decision;
 }
 
 /**

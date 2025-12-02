@@ -16,7 +16,7 @@ import { parse } from 'csv-parse/sync';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { MERGE_CFG } from './lib/merge-thresholds.js';
-import { shouldMerge, skipReason, isTestOrUnreadyPair } from './lib/merge-logic.js';
+import { shouldMerge, skipReason, isTestOrUnreadyPair, explainMergeDecision } from './lib/merge-logic.js';
 
 // Load environment variables
 dotenv.config();
@@ -50,12 +50,21 @@ async function main() {
   console.log(`Loaded ${records.length} labeled pairs from ${csvPath}`);
   console.log('='.repeat(70));
 
-  // Filter to only labeled records (case-insensitive, handle yes/no/maybe)
+  // Filter to only YES/NO labeled records (MAYBE is excluded from metrics)
   const labeled = records.filter(r => {
     if (!r.are_duplicates) return false;
     const val = r.are_duplicates.trim().toLowerCase();
-    return val === 'yes' || val === 'no' || val === 'maybe';
+    return val === 'yes' || val === 'no';  // MAYBE excluded per plan
   });
+
+  const maybeCount = records.filter(r => {
+    const val = (r.are_duplicates || '').trim().toLowerCase();
+    return val === 'maybe';
+  }).length;
+
+  if (maybeCount > 0) {
+    console.log(`Note: ${maybeCount} MAYBE pairs excluded from metrics\n`);
+  }
 
   if (labeled.length === 0) {
     console.error('Error: No labeled data found in CSV');
@@ -89,19 +98,19 @@ async function main() {
 
   console.log(`Fetched ${stories.length} stories from database\n`);
 
-  // Ground truth labels (treat "maybe" as "yes" for now - conservative merge)
+  // Ground truth labels (YES/NO only - MAYBE already filtered out)
   const groundTruth = labeled.map(r => {
     const val = r.are_duplicates.trim().toLowerCase();
     const story1_id = parseInt(r.story1_id);
     const story2_id = parseInt(r.story2_id);
 
     return {
+      bucket: r.bucket || 'UNKNOWN',  // Track bucket for per-bucket metrics
       story1_id,
       story2_id,
-      similarity: parseFloat(r.similarity),
-      shared_entities: parseInt(r.shared_entities),
-      are_duplicates: val === 'yes' || val === 'maybe',  // maybe = should merge
-      is_maybe: val === 'maybe',
+      similarity: parseFloat(r.similarity) || 0,
+      shared_entities: (r.shared_entities || '').split('|').filter(e => e).length,
+      are_duplicates: val === 'yes',  // YES = should merge, NO = should not
       story1_headline: r.story1_headline,
       story2_headline: r.story2_headline,
       // Use real story objects from database
@@ -160,10 +169,22 @@ async function main() {
   }
 
   // Count ground truth positives/negatives
-  const truePositives = cleanPairs.filter(g => g.are_duplicates).length;
-  const trueNegatives = cleanPairs.filter(g => !g.are_duplicates).length;
-  const maybes = cleanPairs.filter(g => g.is_maybe).length;
-  console.log(`Ground truth (clean set): ${truePositives} should merge (${maybes} maybes), ${trueNegatives} should NOT merge\n`);
+  const posCount = cleanPairs.filter(g => g.are_duplicates).length;
+  const negCount = cleanPairs.filter(g => !g.are_duplicates).length;
+  console.log(`Ground truth (clean set): ${posCount} YES (should merge), ${negCount} NO (should NOT merge)\n`);
+
+  // Per-bucket distribution
+  const buckets = ['A', 'B', 'C', 'D', 'UNKNOWN'];
+  console.log('Per-bucket distribution:');
+  for (const b of buckets) {
+    const count = cleanPairs.filter(p => p.bucket === b).length;
+    if (count > 0) {
+      const yes = cleanPairs.filter(p => p.bucket === b && p.are_duplicates).length;
+      const no = cleanPairs.filter(p => p.bucket === b && !p.are_duplicates).length;
+      console.log(`  Bucket ${b}: ${count} pairs (${yes} YES, ${no} NO)`);
+    }
+  }
+  console.log('');
 
   // Grid search: Test different threshold combinations
   const sweepConfigs = [
@@ -246,25 +267,54 @@ async function main() {
   console.log(`  Precision: ${(best.precision * 100).toFixed(1)}%`);
   console.log(`  Recall: ${(best.recall * 100).toFixed(1)}%`);
 
-  // Show false positives (incorrectly merged)
+  // Per-bucket metrics for best config
+  console.log(`\nPer-Bucket Metrics:`);
+  console.log('bucket    n_pairs    precision    recall    f1');
+  console.log('-'.repeat(50));
+
+  for (const b of buckets) {
+    const bucketPreds = best.predictions.filter(p => p.bucket === b);
+    if (bucketPreds.length === 0) continue;
+
+    const btp = bucketPreds.filter(p => p.predicted && p.are_duplicates).length;
+    const bfp = bucketPreds.filter(p => p.predicted && !p.are_duplicates).length;
+    const bfn = bucketPreds.filter(p => !p.predicted && p.are_duplicates).length;
+
+    const bprec = btp + bfp > 0 ? btp / (btp + bfp) : 0;
+    const brec = btp + bfn > 0 ? btp / (btp + bfn) : 0;
+    const bf1 = bprec + brec > 0 ? 2 * (bprec * brec) / (bprec + brec) : 0;
+
+    console.log(`${b.padEnd(9)} ${String(bucketPreds.length).padEnd(10)} ${(bprec * 100).toFixed(0).padStart(8)}%    ${(brec * 100).toFixed(0).padStart(6)}%    ${(bf1 * 100).toFixed(0).padStart(3)}%`);
+  }
+  console.log('-'.repeat(50));
+  console.log(`${'OVERALL'.padEnd(9)} ${String(best.predictions.length).padEnd(10)} ${(best.precision * 100).toFixed(0).padStart(8)}%    ${(best.recall * 100).toFixed(0).padStart(6)}%    ${(best.f1 * 100).toFixed(0).padStart(3)}%`);
+
+  // Build config for explainMergeDecision
+  const bestConfig = { ...MERGE_CFG, SIM_FOR_2: best.config.SIM_FOR_2, SIM_FOR_3: best.config.SIM_FOR_3 };
+
+  // Show false positives (incorrectly merged) with explainMergeDecision diagnostics
   if (best.fp > 0) {
     console.log(`\n⚠️  FALSE POSITIVES (${best.fp} different stories incorrectly flagged for merge):`);
     const fps = best.predictions.filter(p => p.predicted && !p.are_duplicates);
     fps.slice(0, 5).forEach((p, idx) => {
-      console.log(`  ${idx + 1}. Stories ${p.story1_id}/${p.story2_id} (sim=${p.similarity.toFixed(3)}, shared=${p.shared_entities})`);
-      console.log(`     "${p.story1_headline.slice(0, 60)}"`);
-      console.log(`     "${p.story2_headline.slice(0, 60)}"`);
+      const ctx = explainMergeDecision(p.story1, p.story2, p.similarity, bestConfig);
+      console.log(`  ${idx + 1}. Stories ${p.story1_id}/${p.story2_id} (bucket=${p.bucket}, lane=${ctx.lane}, passed=${ctx.passed.join(',')})`);
+      console.log(`     sim=${p.similarity.toFixed(3)}, shared=${ctx.sharedCount} entities`);
+      console.log(`     "${(p.story1_headline || '').slice(0, 60)}"`);
+      console.log(`     "${(p.story2_headline || '').slice(0, 60)}"`);
     });
   }
 
-  // Show false negatives (missed duplicates)
+  // Show false negatives (missed duplicates) with explainMergeDecision diagnostics
   if (best.fn > 0) {
     console.log(`\n⚠️  FALSE NEGATIVES (${best.fn} duplicates missed):`);
     const fns = best.predictions.filter(p => !p.predicted && p.are_duplicates);
     fns.slice(0, 5).forEach((p, idx) => {
-      console.log(`  ${idx + 1}. Stories ${p.story1_id}/${p.story2_id} (sim=${p.similarity.toFixed(3)}, shared=${p.shared_entities})`);
-      console.log(`     "${p.story1_headline.slice(0, 60)}"`);
-      console.log(`     "${p.story2_headline.slice(0, 60)}"`);
+      const ctx = explainMergeDecision(p.story1, p.story2, p.similarity, bestConfig);
+      console.log(`  ${idx + 1}. Stories ${p.story1_id}/${p.story2_id} (bucket=${p.bucket}, lane=${ctx.lane}, blockedBy=${ctx.blockedBy.join(',')})`);
+      console.log(`     sim=${p.similarity.toFixed(3)}, shared=${ctx.sharedCount} entities`);
+      console.log(`     "${(p.story1_headline || '').slice(0, 60)}"`);
+      console.log(`     "${(p.story2_headline || '').slice(0, 60)}"`);
     });
   }
 
