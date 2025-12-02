@@ -104,12 +104,25 @@ async function main() {
     const story1_id = parseInt(r.story1_id);
     const story2_id = parseInt(r.story2_id);
 
+    // Blocker #5: Defensive shared_entities parsing (handles both numeric and pipe-delimited)
+    let sharedCount = 0;
+    const rawShared = (r.shared_entities || '').trim();
+    if (rawShared) {
+      // If it's a pure number, use it directly
+      if (/^\d+$/.test(rawShared)) {
+        sharedCount = parseInt(rawShared, 10);
+      } else {
+        // Otherwise parse as pipe-delimited entity IDs
+        sharedCount = rawShared.split('|').filter(e => e.trim()).length;
+      }
+    }
+
     return {
       bucket: r.bucket || 'UNKNOWN',  // Track bucket for per-bucket metrics
       story1_id,
       story2_id,
       similarity: parseFloat(r.similarity) || 0,
-      shared_entities: (r.shared_entities || '').split('|').filter(e => e).length,
+      shared_entities: sharedCount,
       are_duplicates: val === 'yes',  // YES = should merge, NO = should not
       story1_headline: r.story1_headline,
       story2_headline: r.story2_headline,
@@ -133,9 +146,12 @@ async function main() {
   const SKIPS = {
     TEST_DATA: 0,
     NO_ENTITIES: 0,
+    NO_TIME: 0,
     TIME_WINDOW: 0,
     CATEGORY: 0,
+    CATEGORY_MISSING: 0,
     ACTOR: 0,
+    ACTOR_MISSING: 0,
   };
 
   const cleanPairs = [];

@@ -71,6 +71,12 @@ export function explainMergeDecision(storyA, storyB, similarity, config = MERGE_
     similarity,
   };
 
+  // 0. Validate similarity is a usable number (blocker #2)
+  if (typeof similarity !== 'number' || Number.isNaN(similarity)) {
+    context.blockedBy.push('SIM_INVALID');
+    return context;
+  }
+
   // 1. Check entity presence (hard precondition)
   if (!hasEntities(storyA) || !hasEntities(storyB)) {
     context.blockedBy.push('NO_ENTITIES');
@@ -78,9 +84,14 @@ export function explainMergeDecision(storyA, storyB, similarity, config = MERGE_
   }
   context.passed.push('HAS_ENTITIES');
 
-  // 2. Check time window
+  // 2. Check time window (blocker #1: null check before withinDays)
   const timeA = storyA.first_seen_at || storyA.last_updated_at;
   const timeB = storyB.first_seen_at || storyB.last_updated_at;
+
+  if (!timeA || !timeB) {
+    context.blockedBy.push('NO_TIME');
+    return context;
+  }
 
   if (!withinDays(timeA, timeB, config.MAX_GAP_DAYS)) {
     context.blockedBy.push('TIME_WINDOW');
@@ -88,18 +99,26 @@ export function explainMergeDecision(storyA, storyB, similarity, config = MERGE_
   }
   context.passed.push('TIME_WINDOW_OK');
 
-  // 3. Optional: Check category match
+  // 3. Optional: Check category match (blocker #3: block if missing when required)
   if (config.REQUIRE_CATEGORY_MATCH) {
-    if (storyA.category && storyB.category && storyA.category !== storyB.category) {
+    if (!storyA.category || !storyB.category) {
+      context.blockedBy.push('CATEGORY_MISSING');
+      return context;
+    }
+    if (storyA.category !== storyB.category) {
       context.blockedBy.push('CATEGORY_MISMATCH');
       return context;
     }
     context.passed.push('CATEGORY_MATCH_OK');
   }
 
-  // 4. Optional: Check actor match
+  // 4. Optional: Check actor match (blocker #4: block if missing when required)
   if (config.REQUIRE_ACTOR_MATCH) {
-    if (storyA.primary_actor && storyB.primary_actor && storyA.primary_actor !== storyB.primary_actor) {
+    if (!storyA.primary_actor || !storyB.primary_actor) {
+      context.blockedBy.push('ACTOR_MISSING');
+      return context;
+    }
+    if (storyA.primary_actor !== storyB.primary_actor) {
       context.blockedBy.push('ACTOR_MISMATCH');
       return context;
     }
@@ -187,24 +206,34 @@ export function skipReason(storyA, storyB, config = MERGE_CFG) {
     return 'NO_ENTITIES';
   }
 
-  // Check time window
+  // Check time window (with null check)
   const timeA = storyA.first_seen_at || storyA.last_updated_at;
   const timeB = storyB.first_seen_at || storyB.last_updated_at;
+
+  if (!timeA || !timeB) {
+    return 'NO_TIME';
+  }
 
   if (!withinDays(timeA, timeB, config.MAX_GAP_DAYS)) {
     return 'TIME_WINDOW';
   }
 
-  // Check category match
+  // Check category match (block if missing when required)
   if (config.REQUIRE_CATEGORY_MATCH) {
-    if (storyA.category && storyB.category && storyA.category !== storyB.category) {
+    if (!storyA.category || !storyB.category) {
+      return 'CATEGORY_MISSING';
+    }
+    if (storyA.category !== storyB.category) {
       return 'CATEGORY';
     }
   }
 
-  // Check actor match
+  // Check actor match (block if missing when required)
   if (config.REQUIRE_ACTOR_MATCH) {
-    if (storyA.primary_actor && storyB.primary_actor && storyA.primary_actor !== storyB.primary_actor) {
+    if (!storyA.primary_actor || !storyB.primary_actor) {
+      return 'ACTOR_MISSING';
+    }
+    if (storyA.primary_actor !== storyB.primary_actor) {
       return 'ACTOR';
     }
   }
