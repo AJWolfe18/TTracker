@@ -103,13 +103,18 @@ async function main() {
     // Defensive: coerce to string before string methods
     const val = String(r.are_duplicates ?? '').trim().toLowerCase();
 
-    // Validate story IDs: trim → BigInt parse → range check → Number cast
-    // No length guard needed - BigInt handles arbitrary precision, range check catches overflow
+    // Validate story IDs: trim → length guard → BigInt parse → range check → Number cast
     const s1 = String(r.story1_id ?? '').trim();
     const s2 = String(r.story2_id ?? '').trim();
 
     if (!s1 || !s2) {
-      throw new Error(`Empty story ID: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
+      throw new Error(`Empty story ID: story1_id='${String(r.story1_id).slice(0, 50)}', story2_id='${String(r.story2_id).slice(0, 50)}'`);
+    }
+
+    // DoS guard: 30 digits is generous (allows leading zeros) while preventing BigInt abuse
+    const MAX_ID_DIGITS = 30;
+    if (s1.length > MAX_ID_DIGITS || s2.length > MAX_ID_DIGITS) {
+      throw new Error(`Story ID too long: story1_id='${s1.slice(0, 30)}...', story2_id='${s2.slice(0, 30)}...'`);
     }
 
     const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
