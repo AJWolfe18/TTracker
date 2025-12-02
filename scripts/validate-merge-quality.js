@@ -103,33 +103,27 @@ async function main() {
     // Defensive: coerce to string before string methods
     const val = String(r.are_duplicates ?? '').trim().toLowerCase();
 
-    // Validate story IDs are pure integers (fail fast on bad data)
+    // Validate story IDs: trim → BigInt parse → range check → Number cast
+    // No length guard needed - BigInt handles arbitrary precision, range check catches overflow
     const s1 = String(r.story1_id ?? '').trim();
     const s2 = String(r.story2_id ?? '').trim();
 
-    // Length guard (MAX_SAFE_INTEGER has 16 digits, allow up to 20 for safety)
-    const MAX_ID_DIGITS = 20;
-    if (s1.length > MAX_ID_DIGITS || s2.length > MAX_ID_DIGITS) {
-      throw new Error(`Story ID too long: story1_id='${s1.slice(0, 20)}...', story2_id='${s2.slice(0, 20)}...'`);
+    if (!s1 || !s2) {
+      throw new Error(`Empty story ID: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
     }
 
-    if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2)) {
-      throw new Error(`Invalid story ID(s) in row: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
-    }
-
-    // Use BigInt for safe range validation before Number conversion (avoids silent truncation)
-    // Constants are computed once outside the loop for performance (moved to module scope would be cleaner)
     const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
     const parseSafeId = (str, label) => {
+      let big;
       try {
-        const big = BigInt(str);
-        if (big > MAX_SAFE || big < 0n) {
-          throw new Error(`${label} exceeds safe integer range: '${str}'`);
-        }
-        return Number(big);
-      } catch (e) {
-        throw new Error(`${label} parse error: ${e.message}`);
+        big = BigInt(str);
+      } catch {
+        throw new Error(`${label} is not a valid integer: '${str.slice(0, 50)}'`);
       }
+      if (big <= 0n || big > MAX_SAFE) {
+        throw new Error(`${label} out of range (must be 1 to ${Number.MAX_SAFE_INTEGER}): '${str.slice(0, 50)}'`);
+      }
+      return Number(big);
     };
 
     const story1_id = parseSafeId(s1, 'story1_id');
