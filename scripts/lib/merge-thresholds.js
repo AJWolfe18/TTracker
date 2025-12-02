@@ -12,8 +12,8 @@ export const MERGE_CFG = {
   MIN_SHARED: 2,                    // Minimum shared entities (after media org discount)
 
   // Similarity thresholds (multi-signal gating)
-  SIM_FOR_2: 0.88,                  // High bar when only 2 shared entities
-  SIM_FOR_3: 0.82,                  // Lower bar when 3+ shared entities
+  SIM_FOR_2: 0.85,                  // High bar when only 2 shared entities
+  SIM_FOR_3: 0.75,                  // Lower bar when 3+ shared entities
 
   // Time window
   MAX_GAP_DAYS: 7,                  // Publication date overlap window (days)
