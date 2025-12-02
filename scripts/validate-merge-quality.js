@@ -106,18 +106,30 @@ async function main() {
     // Validate story IDs are pure integers (fail fast on bad data)
     const s1 = String(r.story1_id ?? '').trim();
     const s2 = String(r.story2_id ?? '').trim();
+
+    // Length guard (MAX_SAFE_INTEGER has 16 digits, allow up to 20 for safety)
+    const MAX_ID_DIGITS = 20;
+    if (s1.length > MAX_ID_DIGITS || s2.length > MAX_ID_DIGITS) {
+      throw new Error(`Story ID too long: story1_id='${s1.slice(0, 20)}...', story2_id='${s2.slice(0, 20)}...'`);
+    }
+
     if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2)) {
       throw new Error(`Invalid story ID(s) in row: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
     }
 
     // Use BigInt for safe range validation before Number conversion (avoids silent truncation)
+    // Constants are computed once outside the loop for performance (moved to module scope would be cleaner)
+    const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
     const parseSafeId = (str, label) => {
-      const big = BigInt(str);
-      const max = BigInt(Number.MAX_SAFE_INTEGER);
-      if (big > max || big < 0n) {
-        throw new Error(`${label} exceeds safe integer range: '${str}'`);
+      try {
+        const big = BigInt(str);
+        if (big > MAX_SAFE || big < 0n) {
+          throw new Error(`${label} exceeds safe integer range: '${str}'`);
+        }
+        return Number(big);
+      } catch (e) {
+        throw new Error(`${label} parse error: ${e.message}`);
       }
-      return Number(big);
     };
 
     const story1_id = parseSafeId(s1, 'story1_id');
