@@ -109,13 +109,19 @@ async function main() {
     if (!/^\d+$/.test(s1) || !/^\d+$/.test(s2)) {
       throw new Error(`Invalid story ID(s) in row: story1_id='${r.story1_id}', story2_id='${r.story2_id}'`);
     }
-    const story1_id = Number(s1);
-    const story2_id = Number(s2);
 
-    // Ensure IDs are within safe integer range to avoid precision loss
-    if (!Number.isSafeInteger(story1_id) || !Number.isSafeInteger(story2_id)) {
-      throw new Error(`Story ID exceeds safe integer range: story1_id='${s1}', story2_id='${s2}'`);
-    }
+    // Use BigInt for safe range validation before Number conversion (avoids silent truncation)
+    const parseSafeId = (str, label) => {
+      const big = BigInt(str);
+      const max = BigInt(Number.MAX_SAFE_INTEGER);
+      if (big > max || big < 0n) {
+        throw new Error(`${label} exceeds safe integer range: '${str}'`);
+      }
+      return Number(big);
+    };
+
+    const story1_id = parseSafeId(s1, 'story1_id');
+    const story2_id = parseSafeId(s2, 'story2_id');
 
     // Blocker #5: Defensive shared_entities parsing (handles both numeric and pipe-delimited)
     // Note: Use String() coercion since r.shared_entities may be a number
