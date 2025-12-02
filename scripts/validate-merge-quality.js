@@ -112,6 +112,11 @@ async function main() {
     const story1_id = Number(s1);
     const story2_id = Number(s2);
 
+    // Ensure IDs are within safe integer range to avoid precision loss
+    if (!Number.isSafeInteger(story1_id) || !Number.isSafeInteger(story2_id)) {
+      throw new Error(`Story ID exceeds safe integer range: story1_id='${s1}', story2_id='${s2}'`);
+    }
+
     // Blocker #5: Defensive shared_entities parsing (handles both numeric and pipe-delimited)
     // Note: Use String() coercion since r.shared_entities may be a number
     let sharedCount = 0;
