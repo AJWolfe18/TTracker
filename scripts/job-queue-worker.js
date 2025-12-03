@@ -13,6 +13,7 @@ import { runMergeDetection } from './rss/periodic-merge.js';
 import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
 import { enrichArticlesForSummary } from './enrichment/scraper.js';
 import { normalizeEntities } from './lib/entity-normalization.js';
+import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -234,18 +235,21 @@ class JobProcessor {
     }
     const embeddingInput = `${article.title}\n\n${content.slice(0, 2000)}`;
 
-    // 3. Generate embedding using OpenAI text-embedding-3-small
+    // 3. Generate embedding using OpenAI
     const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
+      model: EMBEDDING_MODEL_V1,
       input: embeddingInput
     });
 
     const embedding = embeddingResponse.data[0].embedding;
 
-    // 4. Update article with embedding
+    // 4. Update article with embedding (pgvector string format)
     const { error: updateError } = await supabase
       .from('articles')
-      .update({ embedding_v1: embedding })
+      .update({
+        embedding_v1: `[${embedding.join(',')}]`,
+        embedding_model_v1: EMBEDDING_MODEL_V1,
+      })
       .eq('id', article_id);
 
     if (updateError) throw new Error(`Failed to update article: ${updateError.message}`);
@@ -811,7 +815,7 @@ async function runWorker() {
         .select('*')
         .eq('status', 'pending')
         .lte('run_at', new Date().toISOString())
-        .order('created_at', { ascending: true })
+        .order('run_at', { ascending: true })
         .limit(1);
       
       if (findError || !candidateJobs?.length) {
