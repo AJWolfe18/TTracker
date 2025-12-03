@@ -227,8 +227,13 @@ class RSSTracker {
 
         try {
           // Build input: title + first 2000 chars of content (matches worker pattern)
-          const content = article.content || article.excerpt || '';
-          const embeddingInput = `${article.title}\n\n${content.slice(0, 2000)}`;
+          // TTRC-299: Sanitize to avoid undefined titles and raw HTML in embeddings
+          const rawContent = article.content || article.excerpt || '';
+          const cleanContent = String(rawContent).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const safeTitle = (typeof article.title === 'string' && article.title.trim().length > 0)
+            ? article.title.trim()
+            : 'Untitled';
+          const embeddingInput = `${safeTitle}\n\n${cleanContent.slice(0, 2000)}`;
 
           // Generate embedding via OpenAI (same model as worker)
           const response = await this.openai.embeddings.create({
@@ -236,11 +241,19 @@ class RSSTracker {
             input: embeddingInput
           });
 
+          // Validate embedding response structure
+          const embedding = response?.data?.[0]?.embedding;
+          if (!Array.isArray(embedding) || embedding.length === 0) {
+            console.error(`❌ Invalid embedding response for ${article.id}`);
+            this.stats.embedding_failures++;
+            continue;
+          }
+
           // Store as pgvector string format (matches existing pattern from worker)
           const { error: updateError } = await this.supabase
             .from('articles')
             .update({
-              embedding_v1: `[${response.data[0].embedding.join(',')}]`,
+              embedding_v1: `[${embedding.join(',')}]`,
               embedding_model_v1: EMBEDDING_MODEL_V1
             })
             .eq('id', article.id);
@@ -305,9 +318,15 @@ class RSSTracker {
           // Call hybrid clustering - handles candidate generation, scoring, and story assignment
           const result = await clusterArticle(article.id);
 
+          // TTRC-299: Guard against null/invalid clustering result
+          if (!result || !result.story_id) {
+            console.warn(`⚠️ Clustering returned no decision for article ${article.id}`);
+            continue;
+          }
+
           // Log clustering decision with score for observability
-          const scoreStr = result.score != null ? result.score.toFixed(3) : 'N/A';
-          console.log(`[cluster] Article ${article.id} → Story ${result.story_id} (${result.status}, score: ${scoreStr})`);
+          const scoreStr = (typeof result.score === 'number') ? result.score.toFixed(3) : 'N/A';
+          console.log(`[cluster] Article ${article.id} → Story ${result.story_id} (${result.status || 'unknown'}, score: ${scoreStr})`);
 
           this.stats.stories_clustered++;
         } catch (err) {
