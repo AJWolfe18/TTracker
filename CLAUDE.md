@@ -504,6 +504,21 @@ GROUP BY job_type, status
 ORDER BY job_type, status;
 ```
 
+## Feature-Dev Plugin Usage
+
+When starting work on:
+- New frontend components or pages
+- Database schema additions
+- Multi-file architectural changes
+- Features spanning 3+ files
+
+Use `/feature-dev` for structured development workflow with specialist agents:
+- `code-explorer` - Analyzes codebase patterns
+- `code-architect` - Designs feature architecture
+- `code-reviewer` - Validates code quality
+
+**Skip for:** bug fixes, single-file changes, JIRA updates, RSS feed additions.
+
 ## Troubleshooting
 
 ### Feed Not Processing
@@ -528,6 +543,6 @@ ORDER BY job_type, status;
 
 ---
 
-**Last Updated:** 2025-11-19
+**Last Updated:** 2025-12-03
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
