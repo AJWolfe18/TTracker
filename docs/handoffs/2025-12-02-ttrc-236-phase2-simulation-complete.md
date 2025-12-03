@@ -92,26 +92,49 @@ Lines 380-383:
 
 ---
 
-## Next Steps
+## Critical Finding: TTRC-266 Regression
 
-### Immediate: Create Follow-up Ticket
-**Summary:** Add article-level entity extraction to RSS pipeline
-**Type:** Story
-**Project:** TTRC
+**Hybrid clustering WAS working before TTRC-266!**
 
-See plan file for full ticket description: `C:\Users\Josh\.claude\plans\prancy-brewing-pine.md`
+### Old Flow (Pre-TTRC-266)
+1. `attach_or_create_article` RPC inserts article
+2. RPC enqueues `story.cluster` job
+3. `job-queue-worker.js` processes job using `clusterArticle()` from `hybrid-clustering.js`
+4. **Result: Hybrid clustering with similarity scores** ✅
 
-This ticket enables the 25% entity weight in hybrid scoring:
-- Extract entities during article ingestion
-- Reuse logic from `scripts/backfill-article-entities-inline.js`
-- Cost: ~$2.25/month (within budget)
-- Impact: Improved clustering recall (optional enhancement)
+### Current Flow (Post-TTRC-266)
+1. Article inserted → `story.cluster` job still enqueued
+2. BUT `rss-tracker-supabase.js` runs `clusterArticles()` FIRST
+3. Inline script uses **title-hash only** clustering
+4. Article assigned to story before worker can process
+5. **Result: Title-hash clustering, hybrid bypassed** ❌
 
-### Optional: Nightly Centroid Job
-Add automated nightly centroid recompute to fix drift:
-- Job type: `story.lifecycle`
-- Run at 2am daily
-- Prevents centroid drift from running averages
+### Evidence
+- 861 completed `story.cluster` jobs (worker was processing)
+- 139 pending jobs in queue
+- 99.6% single-article stories (title-hash doesn't merge)
+
+---
+
+## Next Steps (Priority Order)
+
+### 1. TTRC-299: Fix Hybrid Clustering Regression (HIGH)
+Replace title-hash logic in `rss-tracker-supabase.js` with call to existing `clusterArticle()`:
+
+```javascript
+// Current (broken):
+const storyHash = crypto.createHash('md5').update(normalizedTitle).digest('hex');
+
+// Fixed (use validated hybrid clustering):
+import { clusterArticle } from './rss/hybrid-clustering.js';
+const result = await clusterArticle(article.id);
+```
+
+### 2. TTRC-298: Article Entity Extraction (MEDIUM)
+Enables 25% entity weight in hybrid scoring. Optional enhancement.
+
+### 3. Optional: Nightly Centroid Job
+Add automated nightly centroid recompute to fix drift.
 
 ---
 
