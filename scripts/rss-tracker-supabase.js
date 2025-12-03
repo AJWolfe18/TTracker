@@ -10,6 +10,8 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
+import { clusterArticle } from './rss/hybrid-clustering.js';
+import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import {
   enrichStory as enrichStoryImpl,
   shouldEnrichStory,
@@ -69,7 +71,10 @@ class RSSTracker {
       stories_enriched: 0,
       total_openai_cost_usd: 0,
       enrichment_skipped_budget: 0,
-      enrichment_failed: 0  // NEW: Track failed enrichments (TTRC-277)
+      enrichment_failed: 0,  // Track failed enrichments (TTRC-277)
+      // TTRC-299: Embedding generation tracking
+      embeddings_generated: 0,
+      embedding_failures: 0
     };
 
     this.runStatus = 'success';
@@ -182,15 +187,98 @@ class RSSTracker {
   }
 
   // ===================================================================
+  // Article Embedding (TTRC-299)
+  // ===================================================================
+
+  /**
+   * Generate embeddings for articles that don't have them yet.
+   * Must run BEFORE clustering so hybrid scoring has embeddings to work with.
+   * Uses same model and storage format as job-queue-worker.js for consistency.
+   */
+  async enrichArticles() {
+    try {
+      // Query ALL articles without embeddings (no time filter - clears backlog)
+      // Order by oldest first to ensure we eventually embed everything
+      const { data: articles, error } = await this.supabase
+        .from('articles')
+        .select('id, title, content, excerpt')
+        .is('embedding_v1', null)
+        .order('created_at', { ascending: true })
+        .limit(100);
+
+      if (error) {
+        console.error('❌ Failed to query articles for embedding:', error.message);
+        return;
+      }
+
+      if (!articles || articles.length === 0) {
+        console.log('✅ No articles need embeddings');
+        return;
+      }
+
+      console.log(`🔢 Generating embeddings for ${articles.length} articles...`);
+
+      for (const article of articles) {
+        // Runtime guard: stop at 60% to leave room for clustering + enrichment
+        if (Date.now() - this.startTime > RUNTIME_LIMIT_MS * 0.6) {
+          console.log('⏱ Runtime limit approaching (60%), stopping embeddings');
+          break;
+        }
+
+        try {
+          // Build input: title + first 2000 chars of content (matches worker pattern)
+          const content = article.content || article.excerpt || '';
+          const embeddingInput = `${article.title}\n\n${content.slice(0, 2000)}`;
+
+          // Generate embedding via OpenAI (same model as worker)
+          const response = await this.openai.embeddings.create({
+            model: EMBEDDING_MODEL_V1,
+            input: embeddingInput
+          });
+
+          // Store as pgvector string format (matches existing pattern from worker)
+          const { error: updateError } = await this.supabase
+            .from('articles')
+            .update({
+              embedding_v1: `[${response.data[0].embedding.join(',')}]`,
+              embedding_model_v1: EMBEDDING_MODEL_V1
+            })
+            .eq('id', article.id);
+
+          if (updateError) {
+            console.error(`❌ Failed to store embedding for ${article.id}:`, updateError.message);
+            this.stats.embedding_failures++;
+            continue;
+          }
+
+          this.stats.embeddings_generated++;
+        } catch (err) {
+          console.error(`❌ Embedding failed for ${article.id}:`, err.message);
+          this.stats.embedding_failures++;
+          // Continue with next article - this one will retry next run
+        }
+      }
+
+      console.log(`✅ Embeddings complete: ${this.stats.embeddings_generated} generated, ${this.stats.embedding_failures} failed`);
+
+    } catch (err) {
+      console.error('❌ enrichArticles() failed:', err.message);
+    }
+  }
+
+  // ===================================================================
   // Clustering
   // ===================================================================
 
   /**
-   * Cluster unclustered articles into stories (DB-centric)
+   * Cluster unclustered articles into stories using hybrid scoring.
+   * TTRC-299: Now calls clusterArticle() directly for semantic clustering.
+   * RPC only returns articles with embeddings (migration 042).
    */
   async clusterArticles() {
     try {
-      // Get unclustered articles via RPC (no PostgREST subquery issues)
+      // Get unclustered articles via RPC
+      // NOTE: RPC now only returns articles WITH embeddings (migration 042)
       const { data: articles, error } = await this.supabase
         .rpc('get_unclustered_articles', { limit_count: 100 });
 
@@ -201,10 +289,10 @@ class RSSTracker {
         return;
       }
 
-      console.log(`🔗 Clustering ${articles.length} articles...`);
+      console.log(`🔗 Clustering ${articles.length} articles via hybrid scoring...`);
 
-      // Simple 1-article-per-story clustering for TTRC-266
-      // (Complex similarity-based clustering deferred to future ticket)
+      // TTRC-299: Use hybrid clustering (validated in TTRC-236)
+      // clusterArticle() is the single source of truth for all clustering decisions
       for (const article of articles) {
         // Runtime guard
         if (Date.now() - this.startTime > RUNTIME_LIMIT_MS) {
@@ -213,90 +301,25 @@ class RSSTracker {
           break;
         }
 
-        // Generate story_hash (EXACTLY matches DB formula from migration 020)
-        // SQL: v_title_clean := COALESCE(NULLIF(_title,''), 'Untitled Story');
-        //      v_story_hash := md5(lower(regexp_replace(v_title_clean, '\s+', ' ', 'g')));
-        // JS must match: null/empty → 'Untitled Story', whitespace-only → kept & normalized
-        const title = (article.title == null || article.title === '') ? 'Untitled Story' : article.title;
-        const normalizedTitle = title.toLowerCase().replace(/\s+/g, ' ');
-        const storyHash = crypto.createHash('md5').update(normalizedTitle).digest('hex');
+        try {
+          // Call hybrid clustering - handles candidate generation, scoring, and story assignment
+          const result = await clusterArticle(article.id);
 
-        // Get or create story (TTRC-282: handle duplicate story_hash)
-        // Pattern: SELECT first, INSERT if not found, retry SELECT on conflict
-        let story;
+          // Log clustering decision with score for observability
+          const scoreStr = result.score != null ? result.score.toFixed(3) : 'N/A';
+          console.log(`[cluster] Article ${article.id} → Story ${result.story_id} (${result.status}, score: ${scoreStr})`);
 
-        // 1) Try to find existing story by story_hash
-        const { data: existingStory, error: existingErr } = await this.supabase
-          .from('stories')
-          .select('id')
-          .eq('story_hash', storyHash)
-          .maybeSingle();
-
-        if (existingErr) {
-          console.error(`❌ Error checking existing story for article ${article.id}:`, existingErr.message);
-          continue;
+          this.stats.stories_clustered++;
+        } catch (err) {
+          console.error(`❌ Clustering failed for ${article.id}:`, err.message);
+          // Continue with next article - don't fail the whole run
         }
-
-        if (existingStory) {
-          // Reuse existing story
-          story = existingStory;
-        } else {
-          // 2) No existing story → insert new one
-          const { data: newStory, error: storyErr } = await this.supabase
-            .from('stories')
-            .insert({
-              story_hash: storyHash,
-              primary_headline: article.title,
-              status: 'active',
-              first_seen_at: article.published_date
-            })
-            .select('id')
-            .single();
-
-          if (storyErr) {
-            // Handle race condition: someone else may have inserted between SELECT and INSERT
-            console.warn(`⚠️ Story insert failed for article ${article.id}: ${storyErr.message}`);
-
-            // Retry SELECT to get the story that was just inserted
-            const { data: retryStory, error: retryErr } = await this.supabase
-              .from('stories')
-              .select('id')
-              .eq('story_hash', storyHash)
-              .maybeSingle();
-
-            if (retryErr || !retryStory) {
-              console.error(`❌ Unable to recover story for article ${article.id} after insert failure`);
-              continue;
-            }
-
-            story = retryStory;
-          } else {
-            story = newStory;
-          }
-        }
-
-        // 3) Link article to resolved story
-        const { error: linkErr } = await this.supabase
-          .from('article_story')
-          .insert({
-            article_id: article.id,
-            story_id: story.id,
-            is_primary_source: true,
-            similarity_score: 1.0
-          });
-
-        if (linkErr) {
-          console.error(`❌ Failed to link article ${article.id} to story ${story.id}:`, linkErr.message);
-          continue;
-        }
-
-        this.stats.stories_clustered++;
       }
 
-      console.log(`✅ Clustered ${this.stats.stories_clustered} articles into new stories`);
+      console.log(`✅ Clustered ${this.stats.stories_clustered} articles`);
 
     } catch (err) {
-      console.error('❌ Clustering failed:', err.message);
+      console.error('❌ clusterArticles() failed:', err.message);
     }
   }
 
@@ -476,13 +499,17 @@ class RSSTracker {
       const feeds = await this.selectFeeds();
       await this.processFeeds(feeds);
 
-      // 2. Cluster articles
+      // 2. Generate embeddings for new articles (TTRC-299)
+      // Must run BEFORE clustering so hybrid scoring has embeddings
+      await this.enrichArticles();
+
+      // 3. Cluster articles using hybrid scoring (TTRC-299)
       await this.clusterArticles();
 
-      // 3. Enrich stories
+      // 4. Enrich stories with AI summaries
       await this.enrichStories();
 
-      // 4. Log final stats
+      // 5. Log final stats
       await this.finalizeRunStats();
 
       const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
