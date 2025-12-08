@@ -46,7 +46,9 @@ Generate TWO summaries of the story based solely on the provided article snippet
 Also extract:
 - category: one of [Corruption & Scandals; Democracy & Elections; Policy & Legislation; Justice & Legal; Executive Actions; Foreign Policy; Corporate & Financial; Civil Liberties; Media & Disinformation; Epstein & Associates; Other]
 - severity: one of [critical, severe, moderate, minor]
-- primary_actor: main person or organization (string)
+- primary_actor: the entity PERFORMING the main action (the subject of the headline's verb).
+  For government actions, use the agency (ICE, DOJ, FBI), not the president unless he is directly acting.
+  Examples: "ICE conducts raid" → "ICE", "DOJ files suit" → "DOJ", "Trump signs order" → "Trump"
 - entities: array of 3-8 key entities using CANONICAL IDs with stable prefixes:
   * PERSON: US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
   * ORG: ORG-<CANONICAL_SNAKE> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT, ORG-NYT)
@@ -67,6 +69,8 @@ Also extract:
   - Prefer fewer, higher-quality entities over many weak ones
   - Keep diverse entity types (avoid all PERSONs unless justified)
   - Sort by salience/importance
+  - For government agency stories, prioritize the agency (ORG-ICE, ORG-DOJ, ORG-FBI) as high-confidence entities
+  - Only include the president (US-TRUMP) in entities if he is directly acting or quoted, not just as contextual background
 
 Rules:
 - Use ONLY the provided snippets; do not speculate. If uncertain, keep it neutral.
@@ -86,7 +90,9 @@ Generate enriched story data based solely on the provided article snippets:
 2. METADATA:
    - category: one of [Corruption & Scandals; Democracy & Elections; Policy & Legislation; Justice & Legal; Executive Actions; Foreign Policy; Corporate & Financial; Civil Liberties; Media & Disinformation; Epstein & Associates; Other]
    - severity: one of [critical, severe, moderate, minor]
-   - primary_actor: main person or organization (string)
+   - primary_actor: the entity PERFORMING the main action (the subject of the headline's verb).
+     For government actions, use the agency (ICE, DOJ, FBI), not the president unless he is directly acting.
+     Examples: "ICE conducts raid" → "ICE", "DOJ files suit" → "DOJ", "Trump signs order" → "Trump"
    - regions: array of geographic areas affected (e.g., ["Texas", "Border States", "National"]). Use "National" for nationwide impact.
    - policy_areas: array of policy topics (e.g., ["Immigration", "Civil Rights", "Healthcare", "Economy", "Environment"]). Max 3.
 
