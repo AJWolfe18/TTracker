@@ -20,6 +20,7 @@ import {
   UI_TO_DB_CATEGORIES,
   ENRICHMENT_COOLDOWN_HOURS
 } from './enrichment/enrich-stories-inline.js';
+import { extractArticleEntities } from './enrichment/extract-article-entities-inline.js';
 
 // =====================================================================
 // Configuration & Constants
@@ -74,7 +75,9 @@ class RSSTracker {
       enrichment_failed: 0,  // Track failed enrichments (TTRC-277)
       // TTRC-299: Embedding generation tracking
       embeddings_generated: 0,
-      embedding_failures: 0
+      embedding_failures: 0,
+      // TTRC-298: Entity extraction tracking
+      entities_extracted: 0
     };
 
     this.runStatus = 'success';
@@ -276,6 +279,99 @@ class RSSTracker {
 
     } catch (err) {
       console.error('❌ enrichArticles() failed:', err.message);
+    }
+  }
+
+  // ===================================================================
+  // Article Entity Extraction (TTRC-298)
+  // ===================================================================
+
+  /**
+   * Extract entities from articles for clustering signals.
+   * TTRC-298: Entities enable 25% weight in hybrid scoring.
+   * Runs after embeddings, before clustering.
+   */
+  async extractArticleEntitiesPhase() {
+    try {
+      console.log('[RSS] === PHASE: ARTICLE ENTITY EXTRACTION ===');
+
+      // Budget check first - respect daily limits
+      const today = new Date().toISOString().split('T')[0];
+      const { data: budget } = await this.supabase
+        .from('budgets')
+        .select('spent_usd')
+        .eq('day', today)
+        .single();
+
+      if (budget?.spent_usd >= DAILY_BUDGET_LIMIT) {
+        console.log('[RSS] Daily budget exceeded, skipping entity extraction');
+        return;
+      }
+
+      // Query articles needing extraction (include excerpt-only articles)
+      const { data: articles, error } = await this.supabase
+        .from('articles')
+        .select('id, title, content, excerpt')
+        .or('entities.is.null,entities.eq.[]')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('[RSS] Failed to query articles for entity extraction:', error.message);
+        return;
+      }
+
+      if (!articles?.length) {
+        console.log('[RSS] No articles need entity extraction');
+        return;
+      }
+
+      console.log(`[RSS] Extracting entities for ${articles.length} articles`);
+      let extracted = 0, failed = 0, totalTokens = 0;
+
+      for (const article of articles) {
+        // Runtime guard
+        if (Date.now() - this.startTime > RUNTIME_LIMIT_MS * 0.7) {
+          console.log('[RSS] Runtime limit approaching (70%), stopping entity extraction');
+          break;
+        }
+
+        const content = article.content || article.excerpt || '';
+        const { entities, tokens } = await extractArticleEntities(
+          article.title,
+          content,
+          this.openai
+        );
+
+        // Store result (empty array prevents re-processing)
+        const { error: updateError } = await this.supabase
+          .from('articles')
+          .update({ entities: entities.length > 0 ? entities : [] })
+          .eq('id', article.id);
+
+        if (updateError) {
+          console.error(`[RSS] Failed to update entities for ${article.id}:`, updateError.message);
+          failed++;
+          continue;
+        }
+
+        if (entities.length > 0) {
+          extracted++;
+          if (tokens) totalTokens += tokens.total_tokens || 0;
+        } else {
+          failed++;
+        }
+
+        // Rate limiting (150ms between calls)
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      const cost = (totalTokens / 1000) * 0.00015;
+      console.log(`[RSS] Entity extraction: ${extracted} success, ${failed} empty, ~$${cost.toFixed(4)}`);
+      this.stats.entities_extracted = extracted;
+
+    } catch (err) {
+      console.error('[RSS] extractArticleEntitiesPhase() failed:', err.message);
     }
   }
 
@@ -494,7 +590,8 @@ class RSSTracker {
         p_stories_enriched: this.stats.stories_enriched,
         p_total_openai_cost_usd: this.stats.total_openai_cost_usd,
         p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget,
-        p_enrichment_failed: this.stats.enrichment_failed  // NEW: Pass failure count (15th param, TTRC-277)
+        p_enrichment_failed: this.stats.enrichment_failed,  // 15th param (TTRC-277)
+        p_entities_extracted: this.stats.entities_extracted  // 16th param (TTRC-298)
       });
 
       if (error) throw error;
@@ -522,13 +619,17 @@ class RSSTracker {
       // Must run BEFORE clustering so hybrid scoring has embeddings
       await this.enrichArticles();
 
-      // 3. Cluster articles using hybrid scoring (TTRC-299)
+      // 3. Extract entities from articles (TTRC-298)
+      // Must run BEFORE clustering so entity overlap scoring works
+      await this.extractArticleEntitiesPhase();
+
+      // 4. Cluster articles using hybrid scoring (TTRC-299)
       await this.clusterArticles();
 
-      // 4. Enrich stories with AI summaries
+      // 5. Enrich stories with AI summaries
       await this.enrichStories();
 
-      // 5. Log final stats
+      // 6. Log final stats
       await this.finalizeRunStats();
 
       const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);

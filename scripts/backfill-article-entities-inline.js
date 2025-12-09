@@ -8,6 +8,8 @@
  * Problem: Story clustering needs article.entities but pipeline only
  * populated story-level entities. This backfills article-level entities.
  *
+ * TTRC-298: Refactored to use shared extraction module.
+ *
  * Usage:
  *   node scripts/backfill-article-entities-inline.js [limit]
  *
@@ -20,7 +22,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { normalizeEntities } from './lib/entity-normalization.js';
+import { extractArticleEntities } from './enrichment/extract-article-entities-inline.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -50,42 +52,6 @@ function estimateCost() {
   return (totalInputTokens / 1000) * COST_PER_1K_INPUT +
          (totalOutputTokens / 1000) * COST_PER_1K_OUTPUT;
 }
-
-// ============================================================================
-// Entity Extraction Prompt (Article-specific)
-// ============================================================================
-
-const ENTITY_EXTRACTION_PROMPT = `You are a political entity extractor. Return ONLY valid JSON object.
-
-Extract 3-8 key entities from this news article using CANONICAL IDs:
-
-Entity formats:
-* PERSON: US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
-* ORG: ORG-<ABBREV> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT)
-* LOCATION: LOC-<NAME> (e.g., LOC-USA, LOC-TEXAS, LOC-UKRAINE)
-* EVENT: EVT-<NAME> (e.g., EVT-JAN6, EVT-ACA)
-
-Return JSON object format:
-{
-  "entities": [
-    {
-      "id": "US-TRUMP",
-      "name": "Donald Trump",
-      "type": "PERSON",
-      "confidence": 0.95
-    }
-  ]
-}
-
-Guidelines:
-- Only include entities with confidence ≥0.70
-- Sort by importance/salience
-- Prefer fewer high-quality entities over many weak ones
-- Keep diverse types (not all PERSONs unless justified)
-- If you cannot assign canonical ID, omit the entity
-- Return empty array {"entities": []} if no entities found
-
-IMPORTANT: Return ONLY the JSON object with "entities" key.`;
 
 // ============================================================================
 // Database Functions
@@ -129,64 +95,21 @@ async function updateArticleEntities(articleId, entities) {
 }
 
 // ============================================================================
-// Entity Extraction
+// Entity Extraction (uses shared module from TTRC-298)
 // ============================================================================
-
-async function extractEntities(title, content) {
-  const articleText = `Title: ${title}\n\nContent: ${content || '(no content)'}`.slice(0, 4000);
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: ENTITY_EXTRACTION_PROMPT },
-        { role: 'user', content: articleText }
-      ],
-      temperature: 0.1,
-      max_tokens: 500,
-      response_format: { type: 'json_object' }
-    });
-
-    const usage = response.usage || {};
-    totalInputTokens += usage.prompt_tokens || 0;
-    totalOutputTokens += usage.completion_tokens || 0;
-
-    // Parse response - expecting {entities: [...]} format
-    const responseText = response.choices[0].message.content;
-    let parsed = JSON.parse(responseText);
-
-    // Extract entities array from response object
-    let entities = parsed.entities || parsed.entity || [];
-
-    // Handle case where it's already an array (fallback)
-    if (Array.isArray(parsed)) {
-      entities = parsed;
-    }
-
-    if (!Array.isArray(entities)) {
-      console.warn(`Invalid entities format, returning empty: ${responseText.slice(0, 100)}`);
-      return [];
-    }
-
-    // Normalize entity IDs using existing normalization
-    entities = normalizeEntities(entities);
-
-    // Filter to only high-confidence entities
-    entities = entities.filter(e => e && e.id && (e.confidence === undefined || e.confidence >= 0.70));
-
-    return entities;
-
-  } catch (err) {
-    console.error(`Entity extraction error: ${err.message}`);
-    return [];
-  }
-}
 
 async function processArticle(article) {
   const content = article.content || article.excerpt || '';
 
   try {
-    const entities = await extractEntities(article.title, content);
+    // Use shared extraction module
+    const { entities, tokens } = await extractArticleEntities(article.title, content, openai);
+
+    // Track token usage for cost estimation
+    if (tokens) {
+      totalInputTokens += tokens.prompt_tokens || 0;
+      totalOutputTokens += tokens.completion_tokens || 0;
+    }
 
     const success = await updateArticleEntities(article.id, entities);
     if (success) {

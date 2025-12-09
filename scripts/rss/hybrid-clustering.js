@@ -265,6 +265,23 @@ async function attachToStory(article, story, score) {
     .update(updates)
     .eq('id', storyId);
 
+  // TTRC-298: Aggregate article entities into story via atomic RPC
+  const entityIds = (article.entities || [])
+    .map(e => e?.id)
+    .filter(Boolean);
+
+  if (entityIds.length > 0) {
+    try {
+      await getSupabaseClient().rpc('increment_story_entities', {
+        p_story_id: storyId,
+        p_entity_ids: entityIds
+      });
+    } catch (rpcErr) {
+      // Log but don't fail - entity aggregation is enhancement, not critical
+      console.warn(`[hybrid-clustering] Entity aggregation failed for story ${storyId}: ${rpcErr.message}`);
+    }
+  }
+
   return {
     story_id: storyId,
     created_new: false,
@@ -283,6 +300,14 @@ async function createNewStory(article) {
   // Generate story_hash from headline (simple hash for uniqueness)
   const storyHash = hashString(article.title || 'untitled');
 
+  // TTRC-298: Build initial entity_counter from article.entities
+  const entityCounter = {};
+  const articleEntities = article.entities || [];
+  for (const e of articleEntities) {
+    if (e?.id) entityCounter[e.id] = 1;
+  }
+  const topEntities = Object.keys(entityCounter).slice(0, 8);
+
   // 1. Create story
   const { data: story, error: createError } = await getSupabaseClient()
     .from('stories')
@@ -297,7 +322,9 @@ async function createNewStory(article) {
       last_updated_at: article.published_at || new Date().toISOString(),
       source_count: 1,
       lifecycle_state: 'emerging',
-      status: 'active'
+      status: 'active',
+      entity_counter: entityCounter,   // TTRC-298
+      top_entities: topEntities         // TTRC-298
     })
     .select()
     .single();
