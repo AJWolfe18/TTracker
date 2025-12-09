@@ -275,66 +275,147 @@ const ENTITY_ALIASES = {
   'Obamacare': 'EVT-ACA',
   'Affordable Care Act': 'EVT-ACA',
   'ACA': 'EVT-ACA',
+
+  // === ID VARIANT NORMALIZATION ===
+  // GPT sometimes generates these non-canonical IDs
+  // Fix: Normalize to correct canonical form
+  'ORG-US': 'LOC-USA',       // Wrong type: US as org → should be LOC-USA
+  'ORG-USA': 'LOC-USA',      // Wrong type: USA as org → should be LOC-USA
+  'LOC-US': 'LOC-USA',       // Missing 'A': US → USA
+  'US-SENATE': 'ORG-SENATE', // Wrong prefix: US- → ORG-
+  'US-CONGRESS': 'ORG-CONGRESS',
+  'US-HOUSE': 'ORG-HOUSE',
+  'US-DOJ': 'ORG-DOJ',
+  'US-FBI': 'ORG-FBI',
+  'US-CIA': 'ORG-CIA',
+  'US-DHS': 'ORG-DHS',
+  'US-WHITE-HOUSE': 'ORG-WHITE-HOUSE',
+  'US-SUPREME-COURT': 'ORG-SUPREME-COURT',
+
+  // === PERIOD VARIANTS (GPT includes periods) ===
+  'LOC-D.C.': 'LOC-DC',
+  'LOC-DC.': 'LOC-DC',
+  'ORG-U.N.': 'ORG-UN',
+  'ORG-C.D.C.': 'ORG-CDC',
+  'ORG-F.B.I.': 'ORG-FBI',
+  'ORG-C.I.A.': 'ORG-CIA',
+  'ORG-D.O.J.': 'ORG-DOJ',
+  'ORG-D.H.S.': 'ORG-DHS',
+  'ORG-F.A.A.': 'ORG-FAA',
+  'ORG-F.D.A.': 'ORG-FDA',
+  'ORG-V.O.A.': 'ORG-VOA', // Voice of America
 };
+
+// ============================================================================
+// ID Validation
+// ============================================================================
+
+/**
+ * Valid entity ID patterns (format-only validation)
+ * Semantic validation happens via prompt improvements, not here.
+ */
+const VALID_ID_PATTERNS = [
+  /^US-[A-Z][A-Z0-9-]*$/,       // US People: US-TRUMP, US-BIDEN
+  /^[A-Z]{2}-[A-Z][A-Z0-9-]*$/, // International: RU-PUTIN, IL-NETANYAHU
+  /^ORG-[A-Z0-9-]+$/,           // Organizations: ORG-DOJ, ORG-FBI
+  /^LOC-[A-Z0-9-]+$/,           // Locations: LOC-USA, LOC-UKRAINE
+  /^EVT-[A-Z0-9-]+$/,           // Events: EVT-JAN6, EVT-SNAP
+];
+
+/**
+ * Check if an entity ID matches valid format patterns
+ * @param {string} id - Entity ID to validate
+ * @returns {boolean} - True if ID matches a valid pattern
+ */
+export function isValidEntityId(id) {
+  if (!id || typeof id !== 'string') return false;
+  return VALID_ID_PATTERNS.some(pattern => pattern.test(id));
+}
+
+// ============================================================================
+// Normalization
+// ============================================================================
 
 /**
  * Normalize a single entity ID
  * @param {string} entityId - Raw entity ID from OpenAI
- * @returns {string} - Canonical entity ID
+ * @returns {string|null} - Canonical entity ID, or null if invalid
  */
 export function normalizeEntityId(entityId) {
   if (!entityId || typeof entityId !== 'string') {
-    return entityId;
+    return null;
   }
 
-  // Check direct mapping first
-  if (ENTITY_ALIASES[entityId]) {
-    return ENTITY_ALIASES[entityId];
+  // Trim whitespace and normalize to uppercase for ID pattern matching
+  const trimmed = entityId.trim();
+  const uppercased = trimmed.toUpperCase();
+
+  // Step 1: Check alias mapping (case-insensitive)
+  // First try direct lookup on original (for name-based aliases like "Donald Trump")
+  if (ENTITY_ALIASES[trimmed]) {
+    return ENTITY_ALIASES[trimmed];
   }
 
-  // Check case-insensitive (for edge cases)
-  const lowerKey = entityId.toLowerCase();
+  // Then try uppercased (for ID-based aliases like "ORG-US")
+  if (ENTITY_ALIASES[uppercased]) {
+    return ENTITY_ALIASES[uppercased];
+  }
+
+  // Finally try case-insensitive full scan (for edge cases)
+  const lowerKey = trimmed.toLowerCase();
   for (const [alias, canonical] of Object.entries(ENTITY_ALIASES)) {
     if (alias.toLowerCase() === lowerKey) {
       return canonical;
     }
   }
 
-  // Return original if no mapping found
-  return entityId;
+  // Step 2: Validate ID format (must be uppercase for pattern matching)
+  // If ID doesn't match any valid pattern, reject it
+  if (!isValidEntityId(uppercased)) {
+    // Invalid format - return null to filter out
+    return null;
+  }
+
+  // Return uppercased version (canonical form is always uppercase)
+  return uppercased;
 }
 
 /**
  * Normalize an array of entity objects from OpenAI
+ * Filters out entities with invalid IDs (null after normalization)
  * @param {Array<{id: string, name: string, type: string, confidence: number}>} entities
- * @returns {Array} - Entities with normalized IDs
+ * @returns {Array} - Entities with normalized IDs, invalid entities filtered out
  */
 export function normalizeEntities(entities) {
   if (!Array.isArray(entities)) {
     return entities;
   }
 
-  return entities.map(entity => ({
-    ...entity,
-    id: normalizeEntityId(entity.id)
-  }));
+  return entities
+    .map(entity => ({
+      ...entity,
+      id: normalizeEntityId(entity.id)
+    }))
+    .filter(entity => entity.id !== null);
 }
 
 /**
  * Normalize a top_entities array (text[] from DB)
+ * Filters out invalid IDs (null after normalization)
  * @param {string[]} topEntities - Array of entity IDs
- * @returns {string[]} - Normalized and deduplicated array
+ * @returns {string[]} - Normalized, filtered, and deduplicated array
  */
 export function normalizeTopEntities(topEntities) {
   if (!Array.isArray(topEntities)) {
     return topEntities;
   }
 
-  // Normalize each ID
-  const normalized = topEntities.map(id => normalizeEntityId(id));
-
-  // Deduplicate (in case normalization creates duplicates)
-  return [...new Set(normalized)];
+  // Normalize each ID, filter nulls, then deduplicate
+  return [...new Set(
+    topEntities
+      .map(id => normalizeEntityId(id))
+      .filter(id => id !== null)
+  )];
 }
 
 /**
@@ -360,4 +441,5 @@ export default {
   normalizeTopEntities,
   needsNormalization,
   getAliasMappings,
+  isValidEntityId,
 };

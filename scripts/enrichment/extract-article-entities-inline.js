@@ -23,11 +23,28 @@ export const ENTITY_EXTRACTION_PROMPT = `You are a political entity extractor. R
 
 Extract 3-8 key entities from this news article using CANONICAL IDs:
 
-Entity formats:
+Entity formats (STRICT - use exactly these patterns):
 * PERSON: US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
-* ORG: ORG-<ABBREV> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT)
+* PERSON (International): <CC>-<LASTNAME> where CC is 2-letter country code (e.g., RU-PUTIN, UA-ZELENSKY, IL-NETANYAHU)
+* ORG: ORG-<ABBREV> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT, ORG-FBI)
 * LOCATION: LOC-<NAME> (e.g., LOC-USA, LOC-TEXAS, LOC-UKRAINE)
 * EVENT: EVT-<NAME> (e.g., EVT-JAN6, EVT-ACA)
+
+CRITICAL RULES:
+- Always use LOC-USA for the United States (NOT ORG-US or ORG-USA)
+- Use ORG- prefix for government agencies: ORG-DOJ, ORG-WHITE-HOUSE, ORG-CONGRESS, ORG-SENATE
+- Do NOT create entities for vague topics like 'funding', 'election', 'economy', 'immigration'
+- Only emit entities that are: people, organizations, locations, or concrete named events
+- If unsure about canonical ID, OMIT the entity
+
+Examples:
+GOOD: "US-TRUMP" for Donald Trump
+GOOD: "LOC-USA" for United States (as country)
+GOOD: "ORG-DOJ" for Department of Justice
+GOOD: "RU-PUTIN" for Vladimir Putin
+BAD: "ORG-US" - wrong pattern, use LOC-USA or specific org
+BAD: "US-FUNDING" - not an entity, omit
+BAD: "US-ECONOMY" - not an entity, omit
 
 Return JSON object format:
 {
