@@ -1,18 +1,20 @@
 # TTRC-298 Backfill Continuation
 
 **Date:** 2025-12-08
-**Status:** Article backfill running, story backfill pending
+**Status:** Article backfill COMPLETE, story backfill pending
 
 ---
 
-## Current State
+## Article Backfill Results (Completed 2025-12-08)
 
-Article entity backfill was started:
-```bash
-node scripts/backfill-article-entities-inline.js all
-```
-
-**Progress when last checked:** ~385/857 (45%) at $0.04
+| Metric | Value |
+|--------|-------|
+| Articles processed | 857 |
+| Success | 857 (100%) |
+| Entities extracted | 2,058 |
+| Avg per article | 2.4 |
+| **Total cost** | **$0.12** |
+| Remaining | 217 (new articles during run) |
 
 ---
 
@@ -193,7 +195,7 @@ LIMIT 10;
 
 | Step | Script | Cost | Status |
 |------|--------|------|--------|
-| 1. Article entities | `backfill-article-entities-inline.js all` | ~$0.10 | Running |
+| 1. Article entities | `backfill-article-entities-inline.js all` | $0.12 | ✅ Complete |
 | 2. Story aggregation | `backfill-story-entities.js` | $0.00 | Pending |
 
 ---
