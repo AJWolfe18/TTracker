@@ -47,13 +47,20 @@ ON articles(url_hash, date_trunc('day', published_at));
 
 ## Story Clustering
 
-### Clustering Algorithm
-1. Extract primary_actor from headline
-2. Calculate similarity scores
-3. Match thresholds:
-   - >80%: Auto-match to story
-   - 60-80%: Review queue
-   - <60%: No match
+**See: [Clustering & Scoring System](./clustering-scoring.md)** for detailed documentation.
+
+### Overview
+Articles are clustered into stories using a **hybrid scoring system** that combines:
+- Embedding similarity (45%) - semantic meaning
+- Title TF-IDF (25%) - headline similarity
+- Entity overlap (12%) - named entities (with stopwords filtered)
+- Time decay (10%) - 72h window
+- Geography (8%) - location matching
+
+### Key Features
+- **Entity Stopwords**: Generic entities (US-TRUMP, ORG-CONGRESS, etc.) contribute 0 to scoring
+- **Hard Guardrail**: Requires specific entity OR title match to cluster (prevents "Trump blobs")
+- **Precision-first**: Prefer separate stories over false clustering
 
 ### Story Lifecycle
 - **Active**: 0-72 hours (displayed prominently)
