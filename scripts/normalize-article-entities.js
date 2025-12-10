@@ -28,6 +28,24 @@ const supabase = createClient(
 const BATCH_SIZE = 100;
 const DRY_RUN = !process.argv.includes('--apply');
 
+// === BAD_IDS: Generic/non-entity IDs to filter out ===
+// These are NOT aliases - they have no valid canonical target.
+// Used only in migration, not in runtime validation.
+const BAD_IDS = new Set([
+  // Generic/abstract - not real entities
+  'US-FUNDING',
+  'US-POLICY',
+  'US-CITIZENS',
+  'US-PUBLIC',
+  'US-POLL',
+  'US-REFORM',
+  'US-GOV',
+  // Ambiguous roles - can't map to specific person across time
+  'US-PRESIDENT',
+  'IL-PRESIDENT',
+  'US-REPUBLICAN-LEADER',
+]);
+
 async function main() {
   console.log('='.repeat(60));
   console.log('Entity ID Normalization Migration');
@@ -87,8 +105,9 @@ async function main() {
           continue;
         }
 
-        // Normalize entities
-        const normalized = normalizeEntities(original);
+        // Normalize entities, then filter out BAD_IDS
+        const normalized = normalizeEntities(original)
+          .filter(e => e.id && !BAD_IDS.has(e.id));
 
         // Check if anything changed
         const originalJSON = JSON.stringify(original);
@@ -109,12 +128,19 @@ async function main() {
 
             for (const id of originalIds) {
               if (!normalizedIds.has(id)) {
-                // Check if it was normalized or removed
+                // Check if it was normalized, filtered as BAD_ID, or invalid
                 const normalizedVersion = normalizeEntities([{ id }]);
                 if (normalizedVersion.length > 0 && normalizedVersion[0].id !== id) {
-                  console.log(`  ${id} → ${normalizedVersion[0].id}`);
+                  // Aliased to different ID
+                  if (BAD_IDS.has(normalizedVersion[0].id)) {
+                    console.log(`  ${id} → (removed - bad ID after normalization)`);
+                  } else {
+                    console.log(`  ${id} → ${normalizedVersion[0].id}`);
+                  }
+                } else if (BAD_IDS.has(id)) {
+                  console.log(`  ${id} → (removed - generic/non-entity)`);
                 } else {
-                  console.log(`  ${id} → (removed - invalid)`);
+                  console.log(`  ${id} → (removed - invalid format)`);
                 }
               }
             }

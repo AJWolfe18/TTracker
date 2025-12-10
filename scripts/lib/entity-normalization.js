@@ -304,6 +304,19 @@ const ENTITY_ALIASES = {
   'ORG-F.A.A.': 'ORG-FAA',
   'ORG-F.D.A.': 'ORG-FDA',
   'ORG-V.O.A.': 'ORG-VOA', // Voice of America
+
+  // === MISLABELED ENTITIES (wrong prefix, fixable) ===
+  // These have clear canonical targets
+  'US-JUSTICE': 'ORG-DOJ',
+  'US-FCC': 'ORG-FCC',
+  'US-SUPREME': 'ORG-SUPREME-COURT',
+  'US-ARMY': 'ORG-ARMY',
+  'US-HAMAS': 'ORG-HAMAS',
+  'US-DEMOCRATS': 'ORG-DEM',
+  'US-REPUBLICANS': 'ORG-GOP',
+  'US-IPSOS': 'ORG-IPSOS',
+  'US-AMERICA': 'LOC-USA',
+  'US-DEMOCRATIC-CAUCUS': 'ORG-HOUSE-DEMS',
 };
 
 // ============================================================================
