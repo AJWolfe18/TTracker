@@ -10,6 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { ENTITY_STOPWORDS } from './scoring.js';
 
 // Lazy-initialize Supabase client (don't create at module load time)
 let supabase = null;
@@ -118,10 +119,16 @@ async function getTimeBlockCandidates(article) {
 async function getEntityBlockCandidates(article) {
   if (!article.entities || article.entities.length === 0) return [];
 
-  // Extract entity IDs
-  const entityIds = article.entities.map(e => e.id);
+  // TTRC-312: Filter out stopword entities to avoid wasting candidate slots
+  // If article only has stopwords (e.g., US-TRUMP), skip entity block entirely
+  const entityIds = article.entities
+    .map(e => e.id)
+    .filter(id => id && !ENTITY_STOPWORDS.has(id));
 
-  if (entityIds.length === 0) return [];
+  if (entityIds.length === 0) {
+    console.log('[candidate-gen] Entity block skipped: only stopword entities');
+    return [];
+  }
 
   // Query using array overlap operator (&&)
   // Note: Supabase PostgREST uses cs (contains) operator for array overlap

@@ -2,9 +2,10 @@
 
 **Status:** Ready for Implementation
 **Priority:** High
-**Estimated Effort:** 4-6 hours
+**Estimated Effort:** 5-7 hours
 **Parent Epic:** TTRC-225 (RSS Feed Expansion)
 **Created:** 2025-12-10
+**Last Updated:** 2025-12-10 (Expert Review Incorporated)
 
 ---
 
@@ -16,8 +17,19 @@
 3. Threshold (0.62) is too low
 4. Keyphrase scoring is broken (uses entity IDs, not actual phrases)
 5. **No guardrail** to prevent clustering when score crosses threshold due to "generic mush"
+6. **Title score normalization bug** - TF-IDF cosine (0-1) passed through embedding normalizer inflates scores
 
 **User Priority:** Precision over recall - prefer 2 separate similar stories over 1 combined unrelated story.
+
+---
+
+## Key Decisions (from Expert Review)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Entity source for scoring | `entity_counter` | Richer data (has counts), no information loss vs `top_entities` (top 8 only) |
+| Reclustering strategy | Full re-cluster | Delete all article_story links, recluster from scratch |
+| Title score normalization | Fix the bug | TF-IDF already 0-1, don't apply embedding normalizer |
 
 ---
 
@@ -75,39 +87,149 @@ const ENTITY_STOPWORDS = new Set([
 ]);
 ```
 
-**Simple implementation (no frequency buckets for v1):**
+**Implementation:**
+1. Add `ENTITY_STOPWORDS` set to `scoring.js`
+2. Modify `calculateEntityScore()` to filter stopwords and return overlap count
+3. **Use `entity_counter` as canonical source** (not `top_entities`)
+
+**Implementation (using entity_counter):**
 ```javascript
-function getEntityWeight(entityId) {
-  return ENTITY_STOPWORDS.has(entityId) ? 0 : 1;
+function calculateEntityScore(articleEntities, storyEntityCounter) {
+  if (!articleEntities || !storyEntityCounter) return { score: 0, nonStopwordEntityOverlapCount: 0 };
+
+  // Use entity_counter keys (has all entities, not just top 8)
+  const storyEntityIds = Object.keys(storyEntityCounter || {});
+  const articleEntityIds = (articleEntities || [])
+    .map(e => e.id)
+    .filter(id => id && !ENTITY_STOPWORDS.has(id));
+
+  const storyNonStop = new Set(
+    storyEntityIds.filter(id => !ENTITY_STOPWORDS.has(id))
+  );
+  const articleNonStop = new Set(articleEntityIds);
+
+  const overlap = [...articleNonStop].filter(id => storyNonStop.has(id));
+  const nonStopwordEntityOverlapCount = overlap.length;
+
+  // Jaccard on non-stopword entities only
+  const union = new Set([...articleNonStop, ...storyNonStop]);
+  const score = union.size > 0 ? overlap.length / union.size : 0;
+
+  return { score, nonStopwordEntityOverlapCount };
 }
 ```
 
-**Implementation:**
-1. Add `ENTITY_STOPWORDS` set to `scoring.js`
-2. Add simple `getEntityWeight(entityId)` function
-3. Modify `calculateEntityScore()` to filter stopwords
-4. Track `non_stopword_entity_overlap_count` for diagnostics
-
-**Implementation note - use unique IDs (Set) for overlap count:**
-```javascript
-const nonStopwordArticleEntities = new Set(
-  article.entities
-    .map(e => e.id)
-    .filter(id => !ENTITY_STOPWORDS.has(id))
-);
-const nonStopwordStoryEntities = new Set(
-  story.top_entities.filter(id => !ENTITY_STOPWORDS.has(id))
-);
-
-const overlap = [...nonStopwordArticleEntities]
-  .filter(id => nonStopwordStoryEntities.has(id));
-
-const nonStopwordEntityOverlapCount = overlap.length;
-```
-
-**Important:** Stopwords only affect scoring, not storage. `articles.entities` and `stories.top_entities` still contain TRUMP/BIDEN/etc. for display and analytics.
+**Important:**
+- Stopwords only affect scoring, not storage
+- `entity_counter` is canonical for scoring (complete data)
+- `top_entities` stays useful for GIN index queries and UI display
 
 **Deferred to follow-up ticket (TTRC-304):** Frequency-based bucketed weighting (>20% → 0, 10-20% → 0.25x, etc.)
+
+---
+
+### Phase 2.5: Scoring Refactor & Normalization Fix (30 min) ⭐ MANDATORY
+
+**Goal:** Fix title score bug and enable guardrail by exposing raw component scores
+
+**File:** `scripts/rss/scoring.js`
+
+**BUG FIX - Title Score Normalization:**
+
+Current code has a bug where TF-IDF cosine (already 0-1) is passed through `calculateEmbeddingScore()` which applies `(similarity + 1) / 2` normalization (meant for embedding cosine -1 to 1):
+
+```javascript
+// BEFORE (buggy) - scoring.js:237
+function calculateTitleScore(titleA, titleB) {
+  // ... TF-IDF calculation ...
+  return calculateEmbeddingScore(vectorA, vectorB);  // ← WRONG
+}
+```
+
+**Fix:** Create separate cosine similarity helper:
+
+```javascript
+// Pure cosine similarity for TF-IDF (already 0-1 scale)
+function cosineSimilarity(vectorA, vectorB) {
+  if (!vectorA?.length || !vectorB?.length || vectorA.length !== vectorB.length) return 0;
+
+  let dotProduct = 0, normA = 0, normB = 0;
+  for (let i = 0; i < vectorA.length; i++) {
+    dotProduct += vectorA[i] * vectorB[i];
+    normA += vectorA[i] * vectorA[i];
+    normB += vectorB[i] * vectorB[i];
+  }
+
+  normA = Math.sqrt(normA);
+  normB = Math.sqrt(normB);
+  if (normA === 0 || normB === 0) return 0;
+
+  return dotProduct / (normA * normB);  // No normalization - TF-IDF is already 0-1
+}
+
+// AFTER (fixed)
+function calculateTitleScore(titleA, titleB) {
+  // ... TF-IDF calculation ...
+  return Math.max(0, Math.min(1, cosineSimilarity(vectorA, vectorB)));
+}
+
+// Embeddings still use the old normalization (cosine ranges -1 to 1)
+function calculateEmbeddingScore(embA, embB) {
+  const cosine = cosineSimilarity(embA, embB);
+  return (cosine + 1) / 2;  // Normalize -1..1 to 0..1
+}
+```
+
+**REFACTOR - Return detailed scores object:**
+
+```javascript
+export function calculateHybridScore(article, story) {
+  const embeddingScore = calculateEmbeddingScore(article.embedding_v1, story.centroid_embedding_v1);
+  const titleScore = calculateTitleScore(article.title, story.primary_headline);
+  const { score: entityScore, nonStopwordEntityOverlapCount } = calculateEntityScore(article.entities, story.entity_counter);
+  const timeScore = calculateTimeScore(article.published_at, story.last_updated_at);
+  const geoScore = calculateGeoScore(article.geo, story.geography);
+
+  // Keyphrase short-circuit (weight is 0)
+  const keyphraseScore = WEIGHTS.keyphrases > 0
+    ? calculateKeyphraseScore(article.keyphrases, story.top_entities)
+    : 0;
+
+  const total =
+    WEIGHTS.embedding * embeddingScore +
+    WEIGHTS.title * titleScore +
+    WEIGHTS.entities * entityScore +
+    WEIGHTS.time * timeScore +
+    WEIGHTS.geography * geoScore +
+    WEIGHTS.keyphrases * keyphraseScore;
+
+  // Add bonuses...
+
+  return {
+    total: Math.min(total + bonuses, 1.0),
+    embeddingScore,
+    titleScore,
+    entityScore,
+    timeScore,
+    geoScore,
+    keyphraseScore,
+    nonStopwordEntityOverlapCount,
+  };
+}
+```
+
+**Update hybrid-clustering.js:**
+
+```javascript
+// BEFORE
+const score = calculateHybridScore(article, story);
+if (score >= threshold) { ... }
+
+// AFTER
+const scoreResult = calculateHybridScore(article, story);
+if (scoreResult.total >= threshold) { ... }
+// Now can access scoreResult.embeddingScore, scoreResult.titleScore, etc.
+```
 
 ---
 
@@ -196,19 +318,29 @@ Default: 0.70           // +8% (start here, may go to 0.72)
 
 **File:** `scripts/rss/hybrid-clustering.js` (attach decision logic)
 
+**Configuration block (add to scoring.js):**
+```javascript
+const GUARDRAIL = {
+  minEmbedding: 0.60,  // Raw embedding score required
+  minTitle: 0.50,      // Raw title score required (if no entity overlap)
+};
+```
+
 **The guardrail requires a concrete reason to cluster, not just a threshold pass:**
 
 ```javascript
-// In the attach decision logic
-const hasNonStopwordEntityOverlap = candidate.nonStopwordEntityOverlapCount > 0;
-const hasDecentEmbedding = candidate.embeddingScore >= 0.60;  // raw, pre-weight
-const hasTitleMatch = candidate.titleScore >= 0.50;           // raw, pre-weight
+// In the attach decision logic (hybrid-clustering.js)
+const scoreResult = calculateHybridScore(article, candidateStory);
+
+const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
+const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
+const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
 
 const passesGuardrail =
   hasDecentEmbedding &&
   (hasNonStopwordEntityOverlap || hasTitleMatch);
 
-if (bestScore >= threshold && passesGuardrail) {
+if (scoreResult.total >= threshold && passesGuardrail) {
   // ATTACH to existing story
 } else {
   // CREATE new story
@@ -222,24 +354,28 @@ if (bestScore >= threshold && passesGuardrail) {
 - This is the safety net for precision-first approach
 
 **Implementation:**
-1. Expose raw component scores from `calculateHybridScore()`
-2. Track `nonStopwordEntityOverlapCount` during scoring
+1. ✅ Raw component scores now available from Phase 2.5 refactor
+2. ✅ `nonStopwordEntityOverlapCount` tracked in Phase 2
 3. Add guardrail check in attach decision
 4. Log when guardrail blocks a would-be cluster:
 
 ```javascript
-console.log('[cluster-guardrail-block]', {
-  articleId,
-  storyId: candidate.storyId,
-  embeddingScore: candidate.embeddingScore,
-  titleScore: candidate.titleScore,
-  nonStopwordEntityOverlapCount,
-  totalScore: candidate.totalScore,
-  threshold,
-});
+if (scoreResult.total >= threshold && !passesGuardrail) {
+  console.log('[cluster-guardrail-block]', {
+    articleId: article.id,
+    storyId: candidateStory.id,
+    embeddingScore: scoreResult.embeddingScore,
+    titleScore: scoreResult.titleScore,
+    nonStopwordEntityOverlapCount: scoreResult.nonStopwordEntityOverlapCount,
+    totalScore: scoreResult.total,
+    threshold,
+    reason: !hasDecentEmbedding ? 'low-embedding' :
+            (!hasNonStopwordEntityOverlap && !hasTitleMatch) ? 'no-specific-match' : 'unknown'
+  });
+}
 ```
 
-**Note:** The 0.60 / 0.50 thresholds are tunables, not constants. Use the guardrail block logs to refine these values if needed.
+**Note:** The 0.60 / 0.50 thresholds are tunables. Use the guardrail block logs to refine these values if needed.
 
 ---
 
@@ -249,14 +385,42 @@ console.log('[cluster-guardrail-block]', {
 
 **TEST-first:** Run reclustering in TEST environment with metrics captured before any PROD changes.
 
+**Strategy: FULL RE-CLUSTER**
+- Delete all `article_story` links
+- Delete all stories
+- Re-cluster every article from scratch with new scoring
+- This ensures clean data without legacy bad clusters
+
 **Steps:**
-1. Run `scripts/recluster-all.mjs` with new scoring logic
-2. Export new review CSV: `scripts/export-clustering-review.mjs`
-3. Manual review of 20 multi-article stories
-4. Compare metrics:
-   - False positive rate: Target <10% (from ~45%)
-   - Multi-article story count: Expect decrease (OK)
-   - Average articles/story: May decrease (OK)
+1. **Backup current state:**
+   ```sql
+   -- Export current article_story for rollback
+   SELECT * FROM article_story INTO OUTFILE 'article_story_backup.csv';
+   ```
+
+2. **Clear existing clusters:**
+   ```sql
+   DELETE FROM article_story;
+   DELETE FROM stories;
+   ```
+
+3. **Run full re-cluster:**
+   ```bash
+   node scripts/recluster-all.mjs --full
+   ```
+
+4. **Export new review CSV:**
+   ```bash
+   node scripts/export-clustering-review.mjs
+   ```
+
+5. **Validate:**
+   - Manual review of 20 multi-article stories
+   - Verify gold clusters still form correctly
+   - Compare metrics:
+     - False positive rate: Target <10% (from ~45%)
+     - Multi-article story count: Expect decrease (OK)
+     - Average articles/story: May decrease (OK)
 
 **Success criteria:**
 - No "Trump blob" clusters with unrelated articles
@@ -311,10 +475,67 @@ console.log('[cluster-guardrail-block]', {
 
 | File | Changes |
 |------|---------|
-| `scripts/rss/scoring.js` | Stopwords, weights, thresholds, expose raw scores |
-| `scripts/rss/hybrid-clustering.js` | Add guardrail check in attach decision |
+| `scripts/rss/scoring.js` | Stopwords, weights, thresholds, **title score bug fix**, **return type refactor**, GUARDRAIL config |
+| `scripts/rss/hybrid-clustering.js` | Update to use `.total` from scoring, add guardrail check |
+| `scripts/rss/candidate-generation.js` | Filter stopwords from entity block query (optimization) |
 | `scripts/analyze-cluster-scores.mjs` | NEW - diagnostic score breakdown with debug columns |
-| `scripts/recluster-all.mjs` | May need updates for new scoring |
+| `scripts/recluster-all.mjs` | Add `--full` flag for complete re-cluster |
+
+### Phase 6: Candidate Generation Optimization ✅ INCLUDED
+
+**File:** `scripts/rss/candidate-generation.js`
+
+Filter stopwords before building the entity candidate list to avoid wasting candidate slots:
+
+```javascript
+// In getEntityBlockCandidates()
+const entityIds = (article.entities || [])
+  .map(e => e.id)
+  .filter(id => id && !ENTITY_STOPWORDS.has(id));
+
+if (entityIds.length === 0) {
+  // Skip entity block - rely on time + embeddings
+  return [];
+}
+
+// Use filtered entityIds in overlaps() query
+```
+
+This prevents the entity block from returning stories that only match on US-TRUMP when that's the article's only entity.
+
+---
+
+### Phase 7: Env-Configurable Thresholds ✅ INCLUDED
+
+**File:** `scripts/rss/scoring.js`
+
+Make thresholds overridable via environment variables for quick A/B testing:
+
+```javascript
+const THRESHOLDS = {
+  wire: parseFloat(process.env.THRESHOLD_WIRE || '0.68'),
+  opinion: parseFloat(process.env.THRESHOLD_OPINION || '0.76'),
+  policy: parseFloat(process.env.THRESHOLD_POLICY || '0.72'),
+  default: parseFloat(process.env.THRESHOLD_DEFAULT || '0.70'),
+};
+
+const GUARDRAIL = {
+  minEmbedding: parseFloat(process.env.GUARDRAIL_MIN_EMBEDDING || '0.60'),
+  minTitle: parseFloat(process.env.GUARDRAIL_MIN_TITLE || '0.50'),
+};
+```
+
+This allows quick tuning without code changes during validation.
+
+---
+
+## Scope Decisions
+
+| Item | Decision | Rationale |
+|------|----------|-----------|
+| Candidate generation stopword filter | ✅ Include | Cleaner candidates, minor perf win |
+| Env-configurable thresholds | ✅ Include | Easy A/B testing during validation |
+| Automated gold cluster tests | ❌ Defer | Manual validation sufficient for now |
 
 ---
 
@@ -346,11 +567,26 @@ If new scoring produces unexpected results:
 
 ## Related Tickets
 
+### TTRC-301 Sub-Tasks (Created 2025-12-10)
+
+| Ticket | Summary | Phase | Est |
+|--------|---------|-------|-----|
+| **TTRC-307** | Diagnostic Baseline & Score Analysis | 1 | 30 min |
+| **TTRC-308** | Entity Stopwords Implementation | 2 | 45 min |
+| **TTRC-309** | Scoring Refactor & Title Bug Fix ⭐ CRITICAL | 2.5 | 30 min |
+| **TTRC-310** | Weight Rebalancing & Thresholds | 3-4 | 30 min |
+| **TTRC-311** | Hard Guardrail Implementation ⭐ CRITICAL | 4.5 | 30 min |
+| **TTRC-312** | Candidate Generation Optimization | 6 | 15 min |
+| **TTRC-313** | Full Re-cluster & Validation | 5+7 | 1 hour |
+
+**Total Estimated Time:** 3h 40m
+
+### Future Work (Separate Tickets)
+
 | Ticket | Description | Status |
 |--------|-------------|--------|
-| TTRC-301 | Clustering Quality Improvement (this work) | In Progress |
 | TTRC-304 | Frequency-Based Entity Weighting | Backlog |
 | TTRC-305 | Fix Keyphrase Scoring | Backlog |
 | TTRC-306 | AI Topic Extraction | Backlog |
 
-**Parent Epic:** TTRC-225 (RSS Feed Expansion)
+**Parent Epic:** TTRC-250 (RSS Feed Expansion)

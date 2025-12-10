@@ -21,20 +21,56 @@ const TfIdf = natural.TfIdf;
 // Configuration
 // ============================================================================
 
+// TTRC-310: Rebalanced weights - embeddings + title carry the decision, entities refine
 const WEIGHTS = {
-  embedding: 0.40,      // Semantic similarity (cosine)
-  entities: 0.25,       // Entity overlap (Jaccard)
-  title: 0.15,          // Title TF-IDF similarity (cosine)
-  time: 0.10,           // Time decay factor
-  keyphrases: 0.05,     // Keyphrase overlap (Jaccard)
-  geography: 0.05,      // Geography match
+  embedding: 0.45,      // +5% - Primary signal (semantic similarity)
+  entities: 0.12,       // -13% - Refinement only (after stopword filter)
+  title: 0.25,          // +10% - Strong signal for same event
+  time: 0.10,           // Keep - Time decay factor
+  keyphrases: 0.00,     // Disabled until TTRC-305 (was broken)
+  geography: 0.08,      // +3% - Redistribute from entities
 };
+
+// TTRC-301: Entity stopwords - generic entities that appear in 80%+ of articles
+// These contribute 0 to entity similarity scoring (still stored for display/analytics)
+const ENTITY_STOPWORDS = new Set([
+  'US-TRUMP',
+  'US-BIDEN',
+  'LOC-USA',
+  'ORG-WHITE-HOUSE',
+  'ORG-DEM',
+  'ORG-GOP',
+  'ORG-CONGRESS',
+  'ORG-SENATE',
+  'ORG-HOUSE',
+  'ORG-SUPREME-COURT',
+  'ORG-DOJ',
+  'ORG-FBI',
+  'LOC-WASHINGTON',
+]);
 
 const BONUSES = {
   sharedArtifacts: 0.06,   // Same PDF/FR doc
   quoteMatch: 0.05,        // Shared quotes (pressers)
   sameOutlet: 0.04,        // Same media source
 };
+
+// TTRC-310: Thresholds with env-configurable overrides for A/B testing
+const THRESHOLDS = {
+  wire: parseFloat(process.env.THRESHOLD_WIRE || '0.68'),       // +8% from 0.60
+  opinion: parseFloat(process.env.THRESHOLD_OPINION || '0.76'), // +8% from 0.68
+  policy: parseFloat(process.env.THRESHOLD_POLICY || '0.72'),   // +8% from 0.64
+  default: parseFloat(process.env.THRESHOLD_DEFAULT || '0.70'), // +8% from 0.62
+};
+
+// TTRC-311: Guardrail config - requires concrete reason to cluster
+const GUARDRAIL = {
+  minEmbedding: parseFloat(process.env.GUARDRAIL_MIN_EMBEDDING || '0.60'),
+  minTitle: parseFloat(process.env.GUARDRAIL_MIN_TITLE || '0.50'),
+};
+
+// Export GUARDRAIL for use in hybrid-clustering.js
+export { GUARDRAIL };
 
 const WIRE_DOMAINS = [
   'ap.org', 'apnews.com',
@@ -53,73 +89,80 @@ const TIME_DECAY_HOURS = 72;  // Full bonus within 72 hours
 
 /**
  * Calculate hybrid score between article and story
+ * TTRC-309: Returns detailed object with raw component scores for guardrail
  * @param {object} article - New article with metadata
  * @param {object} story - Existing story with centroid
- * @returns {number} - Score 0.0-1.0
+ * @returns {object} - { total, embeddingScore, titleScore, entityScore, timeScore, geoScore, keyphraseScore, nonStopwordEntityOverlapCount }
  */
 export function calculateHybridScore(article, story) {
-  if (!article || !story) return 0.0;
+  const emptyResult = {
+    total: 0.0,
+    embeddingScore: 0.0,
+    titleScore: 0.0,
+    entityScore: 0.0,
+    timeScore: 0.0,
+    geoScore: 0.0,
+    keyphraseScore: 0.0,
+    nonStopwordEntityOverlapCount: 0,
+  };
 
-  let score = 0.0;
+  if (!article || !story) return emptyResult;
 
-  // 1. Embedding similarity (40%)
+  // 1. Embedding similarity
   const embeddingScore = calculateEmbeddingScore(
     article.embedding_v1,
     story.centroid_embedding_v1
   );
-  const embeddingWeighted = WEIGHTS.embedding * embeddingScore;
-  score += embeddingWeighted;
 
-  // 2. Entity overlap (25%)
-  const entityScore = calculateEntityScore(
+  // 2. Entity overlap - TTRC-301: now filters stopwords
+  const { score: entityScore, nonStopwordEntityOverlapCount } = calculateEntityScore(
     article.entities,
     story.entity_counter
   );
-  const entityWeighted = WEIGHTS.entities * entityScore;
-  score += entityWeighted;
 
-  // 3. Title TF-IDF similarity (15%)
+  // 3. Title TF-IDF similarity
   const titleScore = calculateTitleScore(
     article.title,
     story.primary_headline
   );
-  const titleWeighted = WEIGHTS.title * titleScore;
-  score += titleWeighted;
 
-  // 4. Time decay factor (10%)
+  // 4. Time decay factor
   const timeScore = calculateTimeScore(
     article.published_at,
     story.last_updated_at
   );
-  const timeWeighted = WEIGHTS.time * timeScore;
-  score += timeWeighted;
 
-  // 5. Keyphrase overlap (5%)
-  const keyphraseScore = calculateKeyphraseScore(
-    article.keyphrases,
-    story.top_entities  // Use top entities as proxy for keyphrases
-  );
-  const keyphraseWeighted = WEIGHTS.keyphrases * keyphraseScore;
-  score += keyphraseWeighted;
+  // 5. Keyphrase overlap (short-circuit if weight is 0)
+  const keyphraseScore = WEIGHTS.keyphrases > 0
+    ? calculateKeyphraseScore(article.keyphrases, story.top_entities)
+    : 0.0;
 
-  // 6. Geography overlap (5%)
+  // 6. Geography overlap
   const geoScore = calculateGeoScore(
     article.geo,
-    story.geography  // Assume stories have aggregated geography
+    story.geography
   );
-  const geoWeighted = WEIGHTS.geography * geoScore;
-  score += geoWeighted;
+
+  // Calculate weighted total
+  let score =
+    WEIGHTS.embedding * embeddingScore +
+    WEIGHTS.entities * entityScore +
+    WEIGHTS.title * titleScore +
+    WEIGHTS.time * timeScore +
+    WEIGHTS.keyphrases * keyphraseScore +
+    WEIGHTS.geography * geoScore;
 
   // Debug logging for story #290
   if (story.id === 290) {
     console.log(`[scoring] Story #290 score breakdown:`);
-    console.log(`  Embedding: ${embeddingScore.toFixed(3)} × ${WEIGHTS.embedding} = ${embeddingWeighted.toFixed(3)}`);
-    console.log(`  Entities: ${entityScore.toFixed(3)} × ${WEIGHTS.entities} = ${entityWeighted.toFixed(3)}`);
-    console.log(`  Title: ${titleScore.toFixed(3)} × ${WEIGHTS.title} = ${titleWeighted.toFixed(3)}`);
-    console.log(`  Time: ${timeScore.toFixed(3)} × ${WEIGHTS.time} = ${timeWeighted.toFixed(3)}`);
-    console.log(`  Keyphrases: ${keyphraseScore.toFixed(3)} × ${WEIGHTS.keyphrases} = ${keyphraseWeighted.toFixed(3)}`);
-    console.log(`  Geography: ${geoScore.toFixed(3)} × ${WEIGHTS.geography} = ${geoWeighted.toFixed(3)}`);
+    console.log(`  Embedding: ${embeddingScore.toFixed(3)} × ${WEIGHTS.embedding} = ${(WEIGHTS.embedding * embeddingScore).toFixed(3)}`);
+    console.log(`  Entities: ${entityScore.toFixed(3)} × ${WEIGHTS.entities} = ${(WEIGHTS.entities * entityScore).toFixed(3)}`);
+    console.log(`  Title: ${titleScore.toFixed(3)} × ${WEIGHTS.title} = ${(WEIGHTS.title * titleScore).toFixed(3)}`);
+    console.log(`  Time: ${timeScore.toFixed(3)} × ${WEIGHTS.time} = ${(WEIGHTS.time * timeScore).toFixed(3)}`);
+    console.log(`  Keyphrases: ${keyphraseScore.toFixed(3)} × ${WEIGHTS.keyphrases} = ${(WEIGHTS.keyphrases * keyphraseScore).toFixed(3)}`);
+    console.log(`  Geography: ${geoScore.toFixed(3)} × ${WEIGHTS.geography} = ${(WEIGHTS.geography * geoScore).toFixed(3)}`);
     console.log(`  Subtotal: ${score.toFixed(3)}`);
+    console.log(`  NonStopwordEntityOverlap: ${nonStopwordEntityOverlapCount}`);
   }
 
   // Bonuses
@@ -140,8 +183,17 @@ export function calculateHybridScore(article, story) {
     bonuses += BONUSES.sameOutlet;
   }
 
-  // Cap at 1.0
-  return Math.min(score + bonuses, 1.0);
+  // Return detailed result object
+  return {
+    total: Math.min(score + bonuses, 1.0),
+    embeddingScore,
+    titleScore,
+    entityScore,
+    timeScore,
+    geoScore,
+    keyphraseScore,
+    nonStopwordEntityOverlapCount,
+  };
 }
 
 // ============================================================================
@@ -149,25 +201,24 @@ export function calculateHybridScore(article, story) {
 // ============================================================================
 
 /**
- * Cosine similarity between embeddings
- * @param {number[]} embA - Article embedding (1536 dims)
- * @param {number[]} embB - Story centroid embedding (1536 dims)
- * @returns {number} - Cosine similarity 0.0-1.0
+ * TTRC-309: Pure cosine similarity helper (no normalization)
+ * Returns raw cosine similarity in range [-1, 1] or [0, 1] for TF-IDF
+ * @param {number[]} vectorA - First vector
+ * @param {number[]} vectorB - Second vector
+ * @returns {number} - Raw cosine similarity
  */
-function calculateEmbeddingScore(embA, embB) {
-  if (!embA || !embB) return 0.0;
-  if (embA.length === 0 || embB.length === 0) return 0.0;
-  if (embA.length !== embB.length) return 0.0;
+function cosineSimilarity(vectorA, vectorB) {
+  if (!vectorA?.length || !vectorB?.length) return 0.0;
+  if (vectorA.length !== vectorB.length) return 0.0;
 
-  // Cosine similarity = dot product / (||a|| * ||b||)
   let dotProduct = 0.0;
   let normA = 0.0;
   let normB = 0.0;
 
-  for (let i = 0; i < embA.length; i++) {
-    dotProduct += embA[i] * embB[i];
-    normA += embA[i] * embA[i];
-    normB += embB[i] * embB[i];
+  for (let i = 0; i < vectorA.length; i++) {
+    dotProduct += vectorA[i] * vectorB[i];
+    normA += vectorA[i] * vectorA[i];
+    normB += vectorB[i] * vectorB[i];
   }
 
   normA = Math.sqrt(normA);
@@ -175,38 +226,66 @@ function calculateEmbeddingScore(embA, embB) {
 
   if (normA === 0 || normB === 0) return 0.0;
 
-  const similarity = dotProduct / (normA * normB);
+  return dotProduct / (normA * normB);
+}
 
-  // Normalize to 0-1 (cosine ranges from -1 to 1)
-  return (similarity + 1) / 2;
+/**
+ * Cosine similarity between embeddings
+ * Embeddings use cosine range [-1, 1], so we normalize to [0, 1]
+ * @param {number[]} embA - Article embedding (1536 dims)
+ * @param {number[]} embB - Story centroid embedding (1536 dims)
+ * @returns {number} - Normalized similarity 0.0-1.0
+ */
+function calculateEmbeddingScore(embA, embB) {
+  const cosine = cosineSimilarity(embA, embB);
+  // Normalize from [-1, 1] to [0, 1]
+  return (cosine + 1) / 2;
 }
 
 /**
  * Jaccard similarity between article entities and story entity_counter
+ * TTRC-301: Filters out stopword entities (US-TRUMP, etc.) from scoring
  * @param {array} articleEntities - [{id, name, type, confidence}, ...]
  * @param {object} storyEntityCounter - {entity_id: count, ...}
- * @returns {number} - Jaccard similarity 0.0-1.0
+ * @returns {object} - { score: 0.0-1.0, nonStopwordEntityOverlapCount: number }
  */
 function calculateEntityScore(articleEntities, storyEntityCounter) {
-  if (!articleEntities || !storyEntityCounter) return 0.0;
-  if (articleEntities.length === 0) return 0.0;
-  if (Object.keys(storyEntityCounter).length === 0) return 0.0;
+  if (!articleEntities || !storyEntityCounter) {
+    return { score: 0.0, nonStopwordEntityOverlapCount: 0 };
+  }
+  if (articleEntities.length === 0) {
+    return { score: 0.0, nonStopwordEntityOverlapCount: 0 };
+  }
+  if (Object.keys(storyEntityCounter).length === 0) {
+    return { score: 0.0, nonStopwordEntityOverlapCount: 0 };
+  }
 
-  const articleEntityIds = new Set(articleEntities.map(e => e.id));
-  const storyEntityIds = new Set(Object.keys(storyEntityCounter));
+  // Use entity_counter keys (has all entities, not just top 8)
+  const storyEntityIds = Object.keys(storyEntityCounter);
 
-  const intersection = new Set(
-    [...articleEntityIds].filter(id => storyEntityIds.has(id))
+  // Filter out stopwords from both sets
+  const articleNonStop = new Set(
+    articleEntities
+      .map(e => e?.id)
+      .filter(id => id && !ENTITY_STOPWORDS.has(id))
   );
-  const union = new Set([...articleEntityIds, ...storyEntityIds]);
+  const storyNonStop = new Set(
+    storyEntityIds.filter(id => !ENTITY_STOPWORDS.has(id))
+  );
 
-  if (union.size === 0) return 0.0;
+  // Jaccard on non-stopword entities only
+  const overlap = [...articleNonStop].filter(id => storyNonStop.has(id));
+  const nonStopwordEntityOverlapCount = overlap.length;
 
-  return intersection.size / union.size;
+  const union = new Set([...articleNonStop, ...storyNonStop]);
+  const score = union.size > 0 ? overlap.length / union.size : 0.0;
+
+  return { score, nonStopwordEntityOverlapCount };
 }
 
 /**
  * TF-IDF cosine similarity between titles
+ * TTRC-309 BUG FIX: TF-IDF cosine is already [0, 1], don't apply embedding normalization
  * @param {string} titleA - Article title
  * @param {string} titleB - Story headline
  * @returns {number} - Cosine similarity 0.0-1.0
@@ -233,8 +312,10 @@ function calculateTitleScore(titleA, titleB) {
     vectorB.push(tfidf.tfidf(term, 1));
   });
 
-  // Cosine similarity
-  return calculateEmbeddingScore(vectorA, vectorB);
+  // TTRC-309: Use raw cosine similarity (TF-IDF is already [0, 1])
+  // Clamp to ensure valid range
+  const rawCosine = cosineSimilarity(vectorA, vectorB);
+  return Math.max(0, Math.min(1, rawCosine));
 }
 
 /**
@@ -364,26 +445,26 @@ function hasQuoteMatch(articleHashes, story) {
  * @returns {number} - Threshold 0.58-0.68
  */
 export function getThreshold(article) {
-  if (!article) return 0.60;
+  if (!article) return THRESHOLDS.default;
 
-  // Wire services (looser - many rewrites)
+  // Wire services (stricter - many rewrites of same story)
   const domain = article.source_domain || '';
   if (WIRE_DOMAINS.some(wd => domain.includes(wd))) {
-    return 0.60;  // Start stricter (+0.02 from expert review)
+    return THRESHOLDS.wire;
   }
 
-  // Opinion pieces (stricter - unique perspectives)
-  if (article.category === 'opinion') {
-    return 0.68;
+  // Opinion pieces (strictest - unique perspectives)
+  if (article.opinion_flag) {
+    return THRESHOLDS.opinion;
   }
 
   // Policy documents (medium - shared refs)
   if (article.artifact_urls && article.artifact_urls.length > 0) {
-    return 0.64;
+    return THRESHOLDS.policy;
   }
 
   // Default
-  return 0.62;
+  return THRESHOLDS.default;
 }
 
 /**

@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { calculateHybridScore, getThreshold, canReopenStaleStory } from './scoring.js';
+import { calculateHybridScore, getThreshold, canReopenStaleStory, GUARDRAIL } from './scoring.js';
 import { generateCandidates } from './candidate-generation.js';
 import { updateCentroid, initializeCentroid, getArticleCount } from './centroid-tracking.js';
 import { extractPrimaryActor } from './clustering.js';  // Keep legacy actor extraction
@@ -128,14 +128,14 @@ export async function clusterArticle(articleId) {
     console.warn(`[hybrid-clustering] ⚠️ Candidate generation slow: ${candidateTime}ms (target: <100ms)`);
   }
 
-  // 5. Score each candidate
+  // 5. Score each candidate - TTRC-309: now returns detailed object
   const scoringStart = Date.now();
   const scoredCandidates = candidates
     .map(story => ({
       story,
-      score: calculateHybridScore(article, story)
+      scoreResult: calculateHybridScore(article, story)
     }))
-    .sort((a, b) => b.score - a.score);  // Sort by score descending
+    .sort((a, b) => b.scoreResult.total - a.scoreResult.total);  // Sort by total score descending
   const scoringTime = Date.now() - scoringStart;
 
   console.log(`[hybrid-clustering] Scored ${candidates.length} candidates in ${scoringTime}ms (${(scoringTime / candidates.length).toFixed(1)}ms avg per candidate)`);
@@ -151,32 +151,55 @@ export async function clusterArticle(articleId) {
   const bestMatch = scoredCandidates[0];
 
   // Debug logging for threshold comparison
-  console.log(`[hybrid-clustering] Best match: score=${bestMatch?.score?.toFixed(3) || 'N/A'}, threshold=${threshold.toFixed(3)}`);
+  console.log(`[hybrid-clustering] Best match: score=${bestMatch?.scoreResult?.total?.toFixed(3) || 'N/A'}, threshold=${threshold.toFixed(3)}`);
   if (bestMatch) {
     console.log(`[hybrid-clustering] Best story: ID=${bestMatch.story.id}, headline="${bestMatch.story.primary_headline}"`);
   }
 
-  if (bestMatch && bestMatch.score >= threshold) {
-    // Check if story is stale and needs special permission
+  if (bestMatch && bestMatch.scoreResult.total >= threshold) {
     const story = bestMatch.story;
-    const isStale = story.lifecycle_state === 'stale';
+    const scoreResult = bestMatch.scoreResult;
 
-    if (isStale && !canReopenStaleStory(bestMatch.score, article, story)) {
-      console.log(`[hybrid-clustering] Story ${story.id} is stale and score ${bestMatch.score} doesn't meet reopen criteria`);
+    // TTRC-311: Hard guardrail - require concrete reason to cluster beyond threshold
+    // Prevents "Trump blob" clusters where unrelated political news gets grouped
+    const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
+    const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
+    const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
+    const passesGuardrail = hasDecentEmbedding && (hasNonStopwordEntityOverlap || hasTitleMatch);
+
+    if (!passesGuardrail) {
+      // Log blocked cluster for debugging/tuning
+      console.log(`[cluster-guardrail-block] Article ${articleId} blocked from story ${story.id}:`, {
+        totalScore: scoreResult.total.toFixed(3),
+        threshold: threshold.toFixed(3),
+        embeddingScore: scoreResult.embeddingScore.toFixed(3),
+        titleScore: scoreResult.titleScore.toFixed(3),
+        nonStopwordEntityOverlapCount: scoreResult.nonStopwordEntityOverlapCount,
+        minEmbedding: GUARDRAIL.minEmbedding,
+        minTitle: GUARDRAIL.minTitle,
+      });
       // Fall through to create new story
     } else {
-      // Attach to existing story
-      const result = await attachToStory(article, story, bestMatch.score);
+      // Check if story is stale and needs special permission
+      const isStale = story.lifecycle_state === 'stale';
 
-      const totalTime = Date.now() - totalStart;
-      console.log(`[hybrid-clustering] ✅ Attached article ${articleId} to story ${story.id} (score: ${bestMatch.score.toFixed(3)}, threshold: ${threshold})`);
-      console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+      if (isStale && !canReopenStaleStory(scoreResult.total, article, story)) {
+        console.log(`[hybrid-clustering] Story ${story.id} is stale and score ${scoreResult.total} doesn't meet reopen criteria`);
+        // Fall through to create new story
+      } else {
+        // Attach to existing story
+        const result = await attachToStory(article, story, scoreResult.total);
 
-      if (totalTime > 500) {
-        console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+        const totalTime = Date.now() - totalStart;
+        console.log(`[hybrid-clustering] ✅ Attached article ${articleId} to story ${story.id} (score: ${scoreResult.total.toFixed(3)}, threshold: ${threshold})`);
+        console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+
+        if (totalTime > 500) {
+          console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+        }
+
+        return result;
       }
-
-      return result;
     }
   }
 
@@ -184,7 +207,7 @@ export async function clusterArticle(articleId) {
   const result = await createNewStory(article);
 
   const totalTime = Date.now() - totalStart;
-  console.log(`[hybrid-clustering] 🆕 Created new story ${result.story_id} for article ${articleId} (best score: ${bestMatch?.score?.toFixed(3) || 'N/A'}, threshold: ${threshold})`);
+  console.log(`[hybrid-clustering] 🆕 Created new story ${result.story_id} for article ${articleId} (best score: ${bestMatch?.scoreResult?.total?.toFixed(3) || 'N/A'}, threshold: ${threshold})`);
   console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
 
   if (totalTime > 500) {
