@@ -70,7 +70,7 @@ const GUARDRAIL = {
 };
 
 // Export GUARDRAIL for use in hybrid-clustering.js
-export { GUARDRAIL };
+export { GUARDRAIL, ENTITY_STOPWORDS };
 
 const WIRE_DOMAINS = [
   'ap.org', 'apnews.com',
