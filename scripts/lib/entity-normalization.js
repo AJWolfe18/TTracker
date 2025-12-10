@@ -317,7 +317,126 @@ const ENTITY_ALIASES = {
   'US-IPSOS': 'ORG-IPSOS',
   'US-AMERICA': 'LOC-USA',
   'US-DEMOCRATIC-CAUCUS': 'ORG-HOUSE-DEMS',
+
+  // ============================================================================
+  // ENTITY AUDIT FIX (2025-12-09) - Consolidate variants from entity-audit.csv
+  // ============================================================================
+
+  // === SPELLING VARIANTS ===
+  'US-JEFFERIES': 'US-JEFFRIES',
+  'US-AL-SHARAA': 'SY-AL-SHARA',
+  'US-AL-SHARA': 'SY-AL-SHARA',
+  'US-SHARRA': 'SY-AL-SHARA',
+
+  // === INTERNATIONAL FIGURES (country code prefix) ===
+  // NOTE: Using UK- for British figures (pragmatic, not strict ISO GB-)
+  'US-NETANYAHU': 'IL-NETANYAHU',
+  'US-PUTIN': 'RU-PUTIN',
+  'US-ZELENSKY': 'UA-ZELENSKY',
+  'US-ZELENSKYY': 'UA-ZELENSKY',
+  'Zelenskyy': 'UA-ZELENSKY',
+  'US-ORBAN': 'HU-ORBAN',
+  'US-MADURO': 'VE-MADURO',
+  'US-XI': 'CN-XI',
+  'Xi Jinping': 'CN-XI',
+  'US-ERDOGAN': 'TR-ERDOGAN',
+  'Erdogan': 'TR-ERDOGAN',
+  'US-RAMAPHOSA': 'ZA-RAMAPHOSA',
+  'US-STARMER': 'UK-STARMER',
+  'UK-STARMER': 'UK-STARMER',
+  'GB-STARMER': 'UK-STARMER',  // ISO alias → canonical UK-
+  'US-FARAGE': 'UK-FARAGE',
+  'UK-FARAGE': 'UK-FARAGE',
+  'GB-FARAGE': 'UK-FARAGE',    // ISO alias → canonical UK-
+  'Keir Starmer': 'UK-STARMER',
+  'Nigel Farage': 'UK-FARAGE',
+
+  // === MBS CONSOLIDATION → SA-MBS ===
+  'US-BIN-SALMAN': 'SA-MBS',
+  'US-MOHAMMED-BIN-SALMAN': 'SA-MBS',
+  'US-MBS': 'SA-MBS',
+  'Mohammed bin Salman': 'SA-MBS',
+  'MBS': 'SA-MBS',
+  'Crown Prince Mohammed bin Salman': 'SA-MBS',
+
+  // === PARTY VARIANTS → CANONICAL ===
+  'ORG-DEMOCRATS': 'ORG-DEM',
+  'ORG-DEMS': 'ORG-DEM',
+  'ORG-DEMOCRATIC': 'ORG-DEM',
+  'ORG-DEMOCRATIC-PARTY': 'ORG-DEM',
+  'ORG-REPUBLICANS': 'ORG-GOP',
+  'ORG-REPUBLICAN': 'ORG-GOP',
+
+  // === EVENT CONSOLIDATION ===
+  'EVT-SHUTDOWN': 'EVT-GOVERNMENT-SHUTDOWN',
+  'EVT-EPSTEIN': 'EVT-EPSTEIN-FILES',
+  'EVT-EPSTEIN-SCANDAL': 'EVT-EPSTEIN-FILES',
+  'EVT-EPSTEIN-SAGA': 'EVT-EPSTEIN-FILES',
+  'EVT-JEFFERY-EPSTEIN-FILES': 'EVT-EPSTEIN-FILES',
+  'EVT-MIDTERM-ELECTIONS': 'EVT-MIDTERMS',
+
+  // === WRONG TYPE PREFIX FIXES ===
+  'LOC-WHITE-HOUSE': 'ORG-WHITE-HOUSE',
+  'ORG-ISRAEL': 'LOC-ISRAEL',
+  'ORG-SAUDI-ARABIA': 'LOC-SAUDI-ARABIA',
+  'US-SAUDI-ARABIA': 'LOC-SAUDI-ARABIA',
+
+  // === STATES AS PEOPLE → LOC (preserve signal, fix type) ===
+  'US-TEXAS': 'LOC-TEXAS',
+  'US-UTAH': 'LOC-UTAH',
+  'US-VIRGINIA': 'LOC-VIRGINIA',
+  'US-WASHINGTON': 'LOC-WASHINGTON',
+
+  // === MEDIA CONSOLIDATION ===
+  'ORG-WP': 'ORG-WAPO',
+  'ORG-WASHINGTON-POST': 'ORG-WAPO',
+  'ORG-FOX-NEWS': 'ORG-FOX',
 };
+
+// ============================================================================
+// BAD_IDS Blocklist
+// ============================================================================
+
+/**
+ * BAD_IDS - Entity IDs we never want to treat as entities
+ *
+ * IMPORTANT: Keep this list small and stable!
+ * For new edge cases, prefer prompt fixes and aliases first.
+ * Only add here if the ID is truly meaningless for clustering.
+ *
+ * Migration scripts inherit this via normalizeEntities() - do NOT duplicate.
+ */
+const BAD_IDS = new Set([
+  // === GENERIC TITLES (not specific people) ===
+  'US-MAYOR',
+  'US-PRESIDENT',
+  'IL-PRESIDENT',
+  'US-REPUBLICAN-LEADER',
+
+  // === TOO GENERIC (meaningless for clustering) ===
+  'ORG-NEWS',
+  'ORG-GOVERNMENT',
+  'ORG-COURT',
+  'ORG-FEDERAL',
+  'ORG-ADMINISTRATION',
+  'ORG-POLICE',
+  'LOC-SOUTH',
+
+  // === SEMANTIC GARBAGE (not real entities) ===
+  'US-FUNDING',
+  'US-GOV',
+  'US-POLICY',
+  'US-CITIZENS',
+  'US-REFORM',
+
+  // === PERSON AS ORG (wrong type) ===
+  'ORG-BIDEN',
+  'ORG-REAGAN',
+  'ORG-COHEN',
+
+  // === PROGRAM AS LOCATION (wrong type) ===
+  'LOC-MEDICARE',
+]);
 
 // ============================================================================
 // ID Validation
@@ -351,8 +470,16 @@ export function isValidEntityId(id) {
 
 /**
  * Normalize a single entity ID
+ *
+ * Validation order (IMPORTANT):
+ * 1. Apply alias mapping FIRST
+ * 2. THEN check BAD_IDS (after aliasing)
+ * 3. THEN validate format pattern
+ *
+ * This ensures alias fixes aren't accidentally blocked.
+ *
  * @param {string} entityId - Raw entity ID from OpenAI
- * @returns {string|null} - Canonical entity ID, or null if invalid
+ * @returns {string|null} - Canonical entity ID, or null if invalid/blocked
  */
 export function normalizeEntityId(entityId) {
   if (!entityId || typeof entityId !== 'string') {
@@ -364,33 +491,41 @@ export function normalizeEntityId(entityId) {
   const uppercased = trimmed.toUpperCase();
 
   // Step 1: Check alias mapping (case-insensitive)
+  let normalized = null;
+
   // First try direct lookup on original (for name-based aliases like "Donald Trump")
   if (ENTITY_ALIASES[trimmed]) {
-    return ENTITY_ALIASES[trimmed];
+    normalized = ENTITY_ALIASES[trimmed];
   }
-
   // Then try uppercased (for ID-based aliases like "ORG-US")
-  if (ENTITY_ALIASES[uppercased]) {
-    return ENTITY_ALIASES[uppercased];
+  else if (ENTITY_ALIASES[uppercased]) {
+    normalized = ENTITY_ALIASES[uppercased];
   }
-
   // Finally try case-insensitive full scan (for edge cases)
-  const lowerKey = trimmed.toLowerCase();
-  for (const [alias, canonical] of Object.entries(ENTITY_ALIASES)) {
-    if (alias.toLowerCase() === lowerKey) {
-      return canonical;
+  else {
+    const lowerKey = trimmed.toLowerCase();
+    for (const [alias, canonical] of Object.entries(ENTITY_ALIASES)) {
+      if (alias.toLowerCase() === lowerKey) {
+        normalized = canonical;
+        break;
+      }
     }
   }
 
-  // Step 2: Validate ID format (must be uppercase for pattern matching)
-  // If ID doesn't match any valid pattern, reject it
-  if (!isValidEntityId(uppercased)) {
-    // Invalid format - return null to filter out
+  // Use aliased result or uppercased original
+  const result = normalized || uppercased;
+
+  // Step 2: Check BAD_IDS blocklist (AFTER aliasing)
+  if (BAD_IDS.has(result)) {
     return null;
   }
 
-  // Return uppercased version (canonical form is always uppercase)
-  return uppercased;
+  // Step 3: Validate ID format pattern
+  if (!isValidEntityId(result)) {
+    return null;
+  }
+
+  return result;
 }
 
 /**

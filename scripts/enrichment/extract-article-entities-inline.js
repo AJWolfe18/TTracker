@@ -24,27 +24,58 @@ export const ENTITY_EXTRACTION_PROMPT = `You are a political entity extractor. R
 Extract 3-8 key entities from this news article using CANONICAL IDs:
 
 Entity formats (STRICT - use exactly these patterns):
-* PERSON: US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
-* PERSON (International): <CC>-<LASTNAME> where CC is 2-letter country code (e.g., RU-PUTIN, UA-ZELENSKY, IL-NETANYAHU)
+* PERSON (US): US-<LASTNAME> (e.g., US-TRUMP, US-BIDEN, US-PELOSI)
+* PERSON (International): <CC>-<LASTNAME> where CC is 2-letter country code
 * ORG: ORG-<ABBREV> (e.g., ORG-DOJ, ORG-DHS, ORG-SUPREME-COURT, ORG-FBI)
 * LOCATION: LOC-<NAME> (e.g., LOC-USA, LOC-TEXAS, LOC-UKRAINE)
-* EVENT: EVT-<NAME> (e.g., EVT-JAN6, EVT-ACA)
+* EVENT: EVT-<NAME> (e.g., EVT-JAN6, EVT-GOVERNMENT-SHUTDOWN)
 
-CRITICAL RULES:
+=== INTERNATIONAL FIGURES - Use country code, NOT US- ===
+- Netanyahu → IL-NETANYAHU
+- Putin → RU-PUTIN
+- Zelensky/Zelenskyy → UA-ZELENSKY
+- MBS / Mohammed bin Salman → SA-MBS
+- Xi Jinping → CN-XI
+- Maduro → VE-MADURO
+- Orban → HU-ORBAN
+- Erdogan → TR-ERDOGAN
+- Starmer / Farage (UK) → UK-STARMER, UK-FARAGE
+
+=== POLITICAL PARTIES - Use canonical form ===
+- Democrats / Democratic Party → ORG-DEM
+- Republicans / GOP → ORG-GOP
+
+=== EVENTS - Use full canonical form ===
+- Government shutdown → EVT-GOVERNMENT-SHUTDOWN (not EVT-SHUTDOWN)
+- Epstein files/scandal → EVT-EPSTEIN-FILES
+- Do NOT invent new event IDs if a canonical one exists; use the canonical ID or omit
+
+=== CRITICAL RULES ===
 - Always use LOC-USA for the United States (NOT ORG-US or ORG-USA)
 - Use ORG- prefix for government agencies: ORG-DOJ, ORG-WHITE-HOUSE, ORG-CONGRESS, ORG-SENATE
-- Do NOT create entities for vague topics like 'funding', 'election', 'economy', 'immigration'
-- Only emit entities that are: people, organizations, locations, or concrete named events
+- State names use LOC- prefix: LOC-TEXAS, LOC-CALIFORNIA (NOT US-TEXAS)
 - If unsure about canonical ID, OMIT the entity
+
+=== NEVER USE these generic/garbage IDs ===
+- US-MAYOR, US-PRESIDENT (use specific person name like US-BIDEN)
+- ORG-GOVERNMENT, ORG-COURT, ORG-ADMINISTRATION (too vague)
+- ORG-POLICE (use specific like ORG-CAPITOL-POLICE or ORG-NYPD)
+- US-FUNDING, US-POLICY, US-REFORM, US-CITIZENS (concepts, not entities)
+
+=== FUNDAMENTAL RULE ===
+Only emit entities that are PEOPLE, ORGANIZATIONS, LOCATIONS, or NAMED EVENTS.
+Do NOT create entities for generic concepts (e.g., 'funding', 'policy', 'citizens', 'reform').
 
 Examples:
 GOOD: "US-TRUMP" for Donald Trump
-GOOD: "LOC-USA" for United States (as country)
-GOOD: "ORG-DOJ" for Department of Justice
-GOOD: "RU-PUTIN" for Vladimir Putin
-BAD: "ORG-US" - wrong pattern, use LOC-USA or specific org
+GOOD: "IL-NETANYAHU" for Netanyahu (NOT US-NETANYAHU)
+GOOD: "SA-MBS" for Mohammed bin Salman
+GOOD: "LOC-USA" for United States
+GOOD: "ORG-DEM" for Democrats
+BAD: "US-NETANYAHU" - wrong prefix, use IL-NETANYAHU
+BAD: "ORG-DEMOCRATS" - use ORG-DEM
 BAD: "US-FUNDING" - not an entity, omit
-BAD: "US-ECONOMY" - not an entity, omit
+BAD: "ORG-GOVERNMENT" - too vague, omit
 
 Return JSON object format:
 {
