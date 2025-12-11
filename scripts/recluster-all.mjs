@@ -58,8 +58,21 @@ async function main() {
   console.log('Proceeding...');
   console.log('');
 
-  // Step 3: Delete article_story links
-  console.log('Step 1/3: Clearing article_story links...');
+  // Step 3: Backup enrichment data before deletion
+  console.log('Backing up enrichment data...');
+  const { data: enrichmentBackup } = await supabase
+    .from('stories')
+    .select('story_hash, summary_neutral, summary_spicy, category, severity, primary_actor, last_enriched_at')
+    .not('summary_neutral', 'is', null);
+
+  const enrichmentMap = new Map(
+    (enrichmentBackup || []).map(s => [s.story_hash, s])
+  );
+  console.log(`  ✓ Backed up ${enrichmentMap.size} enriched stories`);
+  console.log('');
+
+  // Step 4: Delete article_story links
+  console.log('Step 1/4: Clearing article_story links...');
   const { error: linkError } = await supabase
     .from('article_story')
     .delete()
@@ -71,8 +84,8 @@ async function main() {
   }
   console.log('  ✓ Links cleared');
 
-  // Step 4: Delete stories
-  console.log('Step 2/3: Deleting stories...');
+  // Step 5: Delete stories
+  console.log('Step 2/4: Deleting stories...');
   const { error: storyError } = await supabase
     .from('stories')
     .delete()
@@ -84,8 +97,8 @@ async function main() {
   }
   console.log('  ✓ Stories deleted');
 
-  // Step 5: Get all articles ordered by published_at (with pagination to get all)
-  console.log('Step 3/3: Re-clustering articles...');
+  // Step 6: Get all articles ordered by published_at (with pagination to get all)
+  console.log('Step 3/4: Re-clustering articles...');
 
   let articles = [];
   let offset = 0;
@@ -177,6 +190,42 @@ async function main() {
   console.log('Final story count:', newStoryCount);
   console.log('Reduction:', storyCount, '→', newStoryCount,
     `(${((1 - newStoryCount/storyCount) * 100).toFixed(0)}% fewer)`);
+  console.log('');
+
+  // Step 7: Restore enrichment data
+  if (enrichmentMap.size > 0) {
+    console.log('Step 4/4: Restoring enrichment data...');
+    let restored = 0;
+    let notFound = 0;
+
+    for (const [storyHash, enrichment] of enrichmentMap) {
+      const { data, error } = await supabase
+        .from('stories')
+        .update({
+          summary_neutral: enrichment.summary_neutral,
+          summary_spicy: enrichment.summary_spicy,
+          category: enrichment.category,
+          severity: enrichment.severity,
+          primary_actor: enrichment.primary_actor,
+          last_enriched_at: enrichment.last_enriched_at
+        })
+        .eq('story_hash', storyHash)
+        .select('id');
+
+      if (!error && data?.length > 0) {
+        restored++;
+      } else {
+        notFound++;
+      }
+    }
+
+    console.log(`  ✓ Restored enrichment for ${restored}/${enrichmentMap.size} stories`);
+    if (notFound > 0) {
+      console.log(`  ⚠ ${notFound} stories no longer exist (headlines changed)`);
+    }
+  } else {
+    console.log('No enrichment data to restore (none was backed up)');
+  }
 }
 
 main().catch(console.error);

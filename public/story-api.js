@@ -83,7 +83,7 @@ window.StoryAPI = (function() {
   async function fetchStoryArticles(storyId) {
     const params = new URLSearchParams({
       story_id: `eq.${storyId}`,
-      select: 'article_id,is_primary_source,similarity_score,articles(*)'
+      select: 'article_id,is_primary_source,similarity_score,articles(id,title,source_name,published_at,url,excerpt,content)'
     });
     
     try {

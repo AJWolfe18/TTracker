@@ -108,7 +108,7 @@ export function shouldEnrichStory(story) {
 async function fetchStoryArticles(story_id, supabase) {
   const { data, error } = await supabase
     .from('article_story')
-    .select('is_primary_source, similarity_score, matched_at, articles(*)')
+    .select('is_primary_source, similarity_score, matched_at, articles(title, source_name, content, excerpt)')
     .eq('story_id', story_id)
     .order('is_primary_source', { ascending: false })
     .order('similarity_score', { ascending: false })
