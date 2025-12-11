@@ -53,6 +53,7 @@ const BONUSES = {
   sharedArtifacts: 0.06,   // Same PDF/FR doc
   quoteMatch: 0.05,        // Shared quotes (pressers)
   sameOutlet: 0.04,        // Same media source
+  topicSlugMatch: 0.08,    // TTRC-306: Same topic slug (conservative start, tune up based on data)
 };
 
 // TTRC-310: Thresholds with env-configurable overrides for A/B testing
@@ -69,8 +70,8 @@ const GUARDRAIL = {
   minTitle: parseFloat(process.env.GUARDRAIL_MIN_TITLE || '0.50'),
 };
 
-// Export GUARDRAIL for use in hybrid-clustering.js
-export { GUARDRAIL, ENTITY_STOPWORDS };
+// Export GUARDRAIL, ENTITY_STOPWORDS, and BONUSES for use in hybrid-clustering.js
+export { GUARDRAIL, ENTITY_STOPWORDS, BONUSES };
 
 const WIRE_DOMAINS = [
   'ap.org', 'apnews.com',

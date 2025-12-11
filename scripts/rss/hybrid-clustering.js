@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { calculateHybridScore, getThreshold, canReopenStaleStory, GUARDRAIL } from './scoring.js';
+import { calculateHybridScore, getThreshold, canReopenStaleStory, GUARDRAIL, BONUSES } from './scoring.js';
 import { generateCandidates } from './candidate-generation.js';
 import { updateCentroid, initializeCentroid, getArticleCount } from './centroid-tracking.js';
 import { extractPrimaryActor } from './clustering.js';  // Keep legacy actor extraction
@@ -160,12 +160,18 @@ export async function clusterArticle(articleId) {
     const story = bestMatch.story;
     const scoreResult = bestMatch.scoreResult;
 
+    // TTRC-306: Topic slug match as one of the "reasons to cluster"
+    // Slug match STILL requires embedding >= 0.60 (guardrail maintained)
+    const slugsMatch = article.topic_slug &&
+                       story.topic_slugs?.includes(article.topic_slug);
+
     // TTRC-311: Hard guardrail - require concrete reason to cluster beyond threshold
     // Prevents "Trump blob" clusters where unrelated political news gets grouped
     const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
     const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
     const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
-    const passesGuardrail = hasDecentEmbedding && (hasNonStopwordEntityOverlap || hasTitleMatch);
+    // TTRC-306: slugsMatch is now one of the valid "reasons to cluster"
+    const passesGuardrail = hasDecentEmbedding && (slugsMatch || hasNonStopwordEntityOverlap || hasTitleMatch);
 
     if (!passesGuardrail) {
       // Log blocked cluster for debugging/tuning
@@ -175,20 +181,30 @@ export async function clusterArticle(articleId) {
         embeddingScore: scoreResult.embeddingScore.toFixed(3),
         titleScore: scoreResult.titleScore.toFixed(3),
         nonStopwordEntityOverlapCount: scoreResult.nonStopwordEntityOverlapCount,
+        slugsMatch,  // TTRC-306: log slug match status
+        articleSlug: article.topic_slug,
+        storySlugs: story.topic_slugs,
         minEmbedding: GUARDRAIL.minEmbedding,
         minTitle: GUARDRAIL.minTitle,
       });
       // Fall through to create new story
     } else {
+      // TTRC-306: Calculate final score with slug bonus if matched
+      let finalScore = scoreResult.total;
+      if (slugsMatch) {
+        finalScore = Math.min(finalScore + BONUSES.topicSlugMatch, 1.0);
+        console.log(`[cluster-slug-match] Article ${articleId} matched story ${story.id} via slug "${article.topic_slug}"`);
+      }
+
       // Check if story is stale and needs special permission
       const isStale = story.lifecycle_state === 'stale';
 
-      if (isStale && !canReopenStaleStory(scoreResult.total, article, story)) {
-        console.log(`[hybrid-clustering] Story ${story.id} is stale and score ${scoreResult.total} doesn't meet reopen criteria`);
+      if (isStale && !canReopenStaleStory(finalScore, article, story)) {
+        console.log(`[hybrid-clustering] Story ${story.id} is stale and score ${finalScore} doesn't meet reopen criteria`);
         // Fall through to create new story
       } else {
         // Attach to existing story
-        const result = await attachToStory(article, story, scoreResult.total);
+        const result = await attachToStory(article, story, finalScore);
 
         const totalTime = Date.now() - totalStart;
         console.log(`[hybrid-clustering] ✅ Attached article ${articleId} to story ${story.id} (score: ${scoreResult.total.toFixed(3)}, threshold: ${threshold})`);
@@ -305,6 +321,28 @@ async function attachToStory(article, story, score) {
     }
   }
 
+  // TTRC-306: Aggregate article topic slug into story.topic_slugs
+  if (article.topic_slug) {
+    try {
+      const { data: currentStoryData } = await getSupabaseClient()
+        .from('stories')
+        .select('topic_slugs')
+        .eq('id', storyId)
+        .single();
+
+      const existingSlugs = currentStoryData?.topic_slugs || [];
+      if (!existingSlugs.includes(article.topic_slug)) {
+        await getSupabaseClient()
+          .from('stories')
+          .update({ topic_slugs: [...existingSlugs, article.topic_slug] })
+          .eq('id', storyId);
+      }
+    } catch (slugErr) {
+      // Log but don't fail - slug aggregation is enhancement, not critical
+      console.warn(`[hybrid-clustering] Slug aggregation failed for story ${storyId}: ${slugErr.message}`);
+    }
+  }
+
   return {
     story_id: storyId,
     created_new: false,
@@ -331,6 +369,9 @@ async function createNewStory(article) {
   }
   const topEntities = Object.keys(entityCounter).slice(0, 8);
 
+  // TTRC-306: Initialize topic_slugs with article's topic_slug
+  const initialSlugs = article.topic_slug ? [article.topic_slug] : [];
+
   // 1. Create story
   const { data: story, error: createError } = await getSupabaseClient()
     .from('stories')
@@ -347,7 +388,8 @@ async function createNewStory(article) {
       lifecycle_state: 'emerging',
       status: 'active',
       entity_counter: entityCounter,   // TTRC-298
-      top_entities: topEntities         // TTRC-298
+      top_entities: topEntities,        // TTRC-298
+      topic_slugs: initialSlugs         // TTRC-306
     })
     .select()
     .single();

@@ -69,10 +69,16 @@ export async function generateCandidates(article) {
   console.log(`[candidate-gen] ANN block: ${annCandidates.length} stories in ${Date.now() - annStart}ms`);
   annCandidates.forEach(story => candidates.set(story.id, story));
 
+  // Block 4: TTRC-306 Topic slug match (10-20 candidates)
+  const slugStart = Date.now();
+  const slugCandidates = await getSlugBlockCandidates(article);
+  console.log(`[candidate-gen] Slug block: ${slugCandidates.length} stories in ${Date.now() - slugStart}ms`);
+  slugCandidates.forEach(story => candidates.set(story.id, story));
+
   // Convert to array and limit
   const result = Array.from(candidates.values()).slice(0, MAX_CANDIDATES);
 
-  console.log(`[candidate-gen] Total candidates: ${result.length} (time: ${timeCandidates.length}, entity: ${entityCandidates.length}, ann: ${annCandidates.length})`);
+  console.log(`[candidate-gen] Total candidates: ${result.length} (time: ${timeCandidates.length}, entity: ${entityCandidates.length}, ann: ${annCandidates.length}, slug: ${slugCandidates.length})`);
 
   return result;
 }
@@ -96,7 +102,7 @@ async function getTimeBlockCandidates(article) {
 
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, last_updated_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .gte('last_updated_at', startTime.toISOString())
     .lte('last_updated_at', endTime.toISOString())
@@ -134,7 +140,7 @@ async function getEntityBlockCandidates(article) {
   // Note: Supabase PostgREST uses cs (contains) operator for array overlap
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, last_updated_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .overlaps('top_entities', entityIds)  // GIN index accelerates this
     .limit(150);
@@ -169,6 +175,30 @@ async function getAnnBlockCandidates(article) {
   if (error) {
     console.error('[candidate-gen] ANN block error:', error.message);
     // Fallback: return empty array
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * TTRC-306: Slug block - Stories with matching topic_slug
+ * Fast query using topic_slugs GIN index (contains operator)
+ * @param {object} article - Article with topic_slug
+ * @returns {array} - Stories with matching slug (~10 candidates)
+ */
+async function getSlugBlockCandidates(article) {
+  if (!article.topic_slug) return [];
+
+  const { data, error } = await getSupabaseClient()
+    .from('stories')
+    .select('id, primary_headline, centroid_embedding_v1, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
+    .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
+    .contains('topic_slugs', [article.topic_slug])  // GIN index lookup
+    .limit(20);
+
+  if (error) {
+    console.error('[candidate-gen] Slug block error:', error.message);
     return [];
   }
 

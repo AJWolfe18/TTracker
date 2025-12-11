@@ -21,6 +21,7 @@ import {
   ENRICHMENT_COOLDOWN_HOURS
 } from './enrichment/enrich-stories-inline.js';
 import { extractArticleEntities } from './enrichment/extract-article-entities-inline.js';
+import { extractTopicSlug } from './rss/topic-extraction.js';
 
 // =====================================================================
 // Configuration & Constants
@@ -309,10 +310,11 @@ class RSSTracker {
       }
 
       // Query articles needing extraction (include excerpt-only articles)
+      // TTRC-306: Also include articles without topic_slug for slug extraction
       const { data: articles, error } = await this.supabase
         .from('articles')
-        .select('id, title, content, excerpt')
-        .or('entities.is.null,entities.eq.[]')
+        .select('id, title, content, excerpt, entities, topic_slug')
+        .or('entities.is.null,entities.eq.[],topic_slug.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -326,40 +328,56 @@ class RSSTracker {
         return;
       }
 
-      console.log(`[RSS] Extracting entities for ${articles.length} articles`);
-      let extracted = 0, failed = 0, totalTokens = 0;
+      console.log(`[RSS] Extracting entities and topic slugs for ${articles.length} articles`);
+      let entitiesExtracted = 0, slugsExtracted = 0, failed = 0, totalTokens = 0;
 
       for (const article of articles) {
         // Runtime guard
         if (Date.now() - this.startTime > RUNTIME_LIMIT_MS * 0.7) {
-          console.log('[RSS] Runtime limit approaching (70%), stopping entity extraction');
+          console.log('[RSS] Runtime limit approaching (70%), stopping extraction');
           break;
         }
 
         const content = article.content || article.excerpt || '';
-        const { entities, tokens } = await extractArticleEntities(
-          article.title,
-          content,
-          this.openai
-        );
+        const updateFields = {};
 
-        // Store result (empty array prevents re-processing)
-        const { error: updateError } = await this.supabase
-          .from('articles')
-          .update({ entities: entities.length > 0 ? entities : [] })
-          .eq('id', article.id);
-
-        if (updateError) {
-          console.error(`[RSS] Failed to update entities for ${article.id}:`, updateError.message);
-          failed++;
-          continue;
+        // TTRC-306: Extract entities if missing
+        const needsEntities = !article.entities || article.entities.length === 0;
+        if (needsEntities) {
+          const { entities, tokens } = await extractArticleEntities(
+            article.title,
+            content,
+            this.openai
+          );
+          updateFields.entities = entities.length > 0 ? entities : [];
+          if (entities.length > 0) {
+            entitiesExtracted++;
+            if (tokens) totalTokens += tokens.total_tokens || 0;
+          }
         }
 
-        if (entities.length > 0) {
-          extracted++;
-          if (tokens) totalTokens += tokens.total_tokens || 0;
-        } else {
-          failed++;
+        // TTRC-306: Extract topic slug if missing (idempotent)
+        const needsSlug = !article.topic_slug;
+        if (needsSlug) {
+          const slug = await extractTopicSlug(article.title, content, article.excerpt || '', this.openai);
+          if (slug) {
+            updateFields.topic_slug = slug;
+            slugsExtracted++;
+          }
+        }
+
+        // Update if any fields need to be set
+        if (Object.keys(updateFields).length > 0) {
+          const { error: updateError } = await this.supabase
+            .from('articles')
+            .update(updateFields)
+            .eq('id', article.id);
+
+          if (updateError) {
+            console.error(`[RSS] Failed to update article ${article.id}:`, updateError.message);
+            failed++;
+            continue;
+          }
         }
 
         // Rate limiting (150ms between calls)
@@ -367,8 +385,9 @@ class RSSTracker {
       }
 
       const cost = (totalTokens / 1000) * 0.00015;
-      console.log(`[RSS] Entity extraction: ${extracted} success, ${failed} empty, ~$${cost.toFixed(4)}`);
-      this.stats.entities_extracted = extracted;
+      console.log(`[RSS] Extraction complete: ${entitiesExtracted} entities, ${slugsExtracted} slugs, ${failed} failed, ~$${cost.toFixed(4)}`);
+      this.stats.entities_extracted = entitiesExtracted;
+      this.stats.slugs_extracted = slugsExtracted;
 
     } catch (err) {
       console.error('[RSS] extractArticleEntitiesPhase() failed:', err.message);
