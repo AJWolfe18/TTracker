@@ -109,6 +109,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 11. **Report token usage** - End every response with usage stats
 
+12. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
+   - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB
+   - **MCP queries:** Always use `select=id,field1,field2` not `select=*`
+   - **Always use `limit`:** Default to `limit=10` for exploration
+   - **NEVER fetch `embedding` or `content` fields** unless absolutely required (embeddings = 6KB each, content = 5KB+ each)
+   - **Re-cluster/backfill scripts are EXPENSIVE:** Fetching 1800 articles with embeddings = ~5-7GB egress
+   - **Before running bulk scripts:** Warn about egress cost, consider if necessary
+
 **For session workflow, communication style, and documentation structure, see `/docs/PROJECT_INSTRUCTIONS.md`**
 
 ---
@@ -127,6 +135,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ❌ Missing `IF NOT EXISTS` in migrations - Breaks idempotency
 - ❌ Hardcoded IDs in queries - Use parameterized queries
 - ❌ Missing `ON DELETE` behavior - Always specify CASCADE/SET NULL/RESTRICT
+
+### Database Egress (Critical - costs real money!)
+- ❌ `select=*` in MCP queries - Use `select=id,field1,field2` (only fields needed)
+- ❌ Queries without `limit` - Always add `limit=10` for exploration
+- ❌ Fetching `embedding` field - 6KB per row, use only when computing similarity
+- ❌ Fetching `content` field from articles - 5KB+ per row, use only when needed
+- ❌ Running re-cluster/backfill without warning - 1800 articles with embeddings = 5-7GB egress
+- ❌ Multiple Claude sessions doing heavy exploration - Egress accumulates across sessions
 
 ### Code
 - ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
@@ -164,6 +180,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Hard Limits:**
 - Total: $50/month across all services
 - Daily pipeline cap: $5/day for story enrichment
+- Supabase egress: 5GB/month free tier (overages: $0.09/GB)
 - Current spend: ~$20/month (OpenAI only)
 
 **Cost per Operation:**
@@ -171,6 +188,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - AI code review: $0.30-$1.00/PR (GPT-4o)
 - Article scraping: Free (no API costs)
 - Database queries: Free (within Supabase free tier)
+- **Re-cluster job (1800 articles):** ~5-7GB egress ($0.18-0.63 overage)
+- **MCP query (articles with content):** ~5KB per row
+- **MCP query (articles with embeddings):** ~6KB per row
 
 **Before Making OpenAI Calls:**
 ```sql
