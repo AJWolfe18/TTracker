@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 /**
- * TTRC-306: Backfill topic slugs for existing articles
- * Cost: ~$0.0005/article (~$0.92 for 1,830 articles)
+ * TTRC-302/306: Backfill topic slugs for existing articles
+ * Cost: ~$0.0005/article (~$0.60 for ~1,200 articles)
  *
  * Usage:
- *   node scripts/backfill-topic-slugs.mjs [--limit N] [--since YYYY-MM-DD]
+ *   node scripts/backfill-topic-slugs.mjs [options]
  *
  * Options:
  *   --limit N       Process only N articles (for testing)
  *   --since DATE    Only process articles published after DATE
+ *   --force         Re-extract slugs for ALL articles (not just NULL)
+ *                   Does NOT null out existing slugs if extraction fails
+ *
+ * Examples:
+ *   node scripts/backfill-topic-slugs.mjs --limit 5 --force  # Test with 5 articles
+ *   node scripts/backfill-topic-slugs.mjs --force            # Full re-extraction
+ *   node scripts/backfill-topic-slugs.mjs                    # Only fill NULLs
  */
 
 import 'dotenv/config';
@@ -29,21 +36,25 @@ const limitIdx = args.indexOf('--limit');
 const sinceIdx = args.indexOf('--since');
 const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : null;
 const since = sinceIdx >= 0 ? args[sinceIdx + 1] : null;
+const FORCE = args.includes('--force');
 
 async function backfillTopicSlugs() {
-  console.log('TTRC-306: Backfilling topic slugs...');
+  console.log('TTRC-302: Backfilling topic slugs...');
   if (limit) console.log(`  --limit ${limit}`);
   if (since) console.log(`  --since ${since}`);
+  if (FORCE) console.log(`  --force (overwriting existing slugs)`);
 
-  // Get articles without slugs
-  // EGRESS OPTIMIZATION: Only fetch title + excerpt (not content)
-  // Slug extraction only uses first 500 chars anyway
-  // This reduces egress from ~9MB to ~1MB for 1800 articles
+  // TTRC-302 FIX: Include content field for consistency with RSS pipeline
+  // Pipeline uses content || excerpt, backfill must do the same
   let query = supabase
     .from('articles')
-    .select('id, title, excerpt')
-    .is('topic_slug', null)
-    .order('published_at', { ascending: false });
+    .select('id, title, content, excerpt')
+    .order('published_at', { ascending: true });  // Oldest first for consistent ordering
+
+  // Only filter for NULL slugs if NOT forcing
+  if (!FORCE) {
+    query = query.is('topic_slug', null);
+  }
 
   if (since) {
     query = query.gte('published_at', since);
@@ -69,13 +80,13 @@ async function backfillTopicSlugs() {
 
   for (const article of articles) {
     try {
-      // EGRESS OPTIMIZATION: Only using excerpt (not content)
-      // extractTopicSlug uses title + first 500 chars of content anyway
+      // TTRC-302 FIX: Use content || excerpt for consistency with RSS pipeline
+      const content = article.content || '';
       const excerpt = article.excerpt || '';
 
       const slug = await extractTopicSlug(
-        article.title,
-        '',  // No content fetched - egress optimization
+        article.title || '',
+        content,  // Now properly using content field
         excerpt,
         openai
       );
@@ -93,6 +104,8 @@ async function backfillTopicSlugs() {
           succeeded++;
         }
       } else {
+        // In --force mode, don't null out existing slugs - leave as-is
+        // In non-force mode, slug is already null, so no action needed
         failed++;
       }
 

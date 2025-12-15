@@ -8,6 +8,81 @@
  * The LLM output is NOT trusted directly - it's cleaned and validated.
  */
 
+// ============================================================================
+// Synonym Canonicalization (TTRC-302)
+// ============================================================================
+// Maps common event word variants to canonical forms to reduce slug drift.
+// e.g., CONFIRMED, CONFIRMATION, CONFIRMING → CONFIRM
+// This avoids full Porter stemming which mangles proper nouns/acronyms.
+
+const EVENT_WORD_MAP = {
+  CONFIRMED: 'CONFIRM',
+  CONFIRMATION: 'CONFIRM',
+  CONFIRMING: 'CONFIRM',
+
+  HEARING: 'HEAR',
+  HEARINGS: 'HEAR',
+
+  NOMINATION: 'NOMINATE',
+  NOMINATED: 'NOMINATE',
+  NOMINATIONS: 'NOMINATE',
+
+  INVESTIGATION: 'INVESTIGATE',
+  INVESTIGATING: 'INVESTIGATE',
+  INVESTIGATED: 'INVESTIGATE',
+
+  ANNOUNCEMENT: 'ANNOUNCE',
+  ANNOUNCED: 'ANNOUNCE',
+  ANNOUNCING: 'ANNOUNCE',
+
+  APPOINTMENT: 'APPOINT',
+  APPOINTED: 'APPOINT',
+
+  INDICTMENT: 'INDICT',
+  INDICTED: 'INDICT',
+
+  ARREST: 'ARREST',
+  ARRESTED: 'ARREST',
+
+  RESIGNATION: 'RESIGN',
+  RESIGNED: 'RESIGN',
+
+  // Expand as drift families are observed
+};
+
+// Skip tokens: short words, pure numbers, known acronyms
+const SKIP_TOKENS = new Set([
+  'DOJ', 'FBI', 'DHS', 'CIA', 'NSA', 'EPA', 'IRS',
+  'GOP', 'DNC', 'USA', 'US', 'UN', 'NATO',
+]);
+
+/**
+ * Canonicalize slug via synonym mapping to reduce drift
+ * HEGSETH-CONFIRMATION-HEARING → HEGSETH-CONFIRM-HEAR
+ * Avoids Porter stemming to preserve proper nouns and acronyms
+ */
+function canonicalizeSlug(slug) {
+  if (!slug) return null;
+
+  const tokens = slug.split('-').filter(Boolean);
+
+  const mapped = tokens.map((t) => {
+    // Slug should already be uppercase from normalizeSlug()
+    if (t.length <= 3) return t;
+    if (/^\d+$/.test(t)) return t;
+    if (SKIP_TOKENS.has(t)) return t;
+    return EVENT_WORD_MAP[t] ?? t;
+  });
+
+  // Remove immediate duplicates caused by mapping
+  const deduped = [];
+  for (const t of mapped) {
+    if (deduped[deduped.length - 1] !== t) deduped.push(t);
+  }
+
+  return deduped.join('-');
+}
+
 const SLUG_PROMPT = `Generate a canonical topic slug for this news article.
 
 Rules:
@@ -82,14 +157,15 @@ export async function extractTopicSlug(title, content = '', excerpt = '', openai
 
     const rawSlug = response.choices[0]?.message?.content?.trim();
     const normalizedSlug = normalizeSlug(rawSlug);
+    const canonicalSlug = canonicalizeSlug(normalizedSlug);
 
-    // Validate normalized slug format (3-60 chars, uppercase alphanumeric + hyphens)
-    if (!normalizedSlug || !normalizedSlug.match(/^[A-Z0-9-]{3,60}$/)) {
-      console.warn(`[topic-extraction] Invalid slug: raw="${rawSlug}" normalized="${normalizedSlug}" title="${title.slice(0, 50)}..."`);
+    // Validate the canonical slug (not the raw/normalized one)
+    if (!canonicalSlug || !canonicalSlug.match(/^[A-Z0-9-]{3,60}$/)) {
+      console.warn(`[topic-extraction] Invalid slug: raw="${rawSlug}" normalized="${normalizedSlug}" canonical="${canonicalSlug}" title="${title.slice(0, 50)}..."`);
       return null;
     }
 
-    return normalizedSlug;
+    return canonicalSlug;
   } catch (error) {
     console.error(`[topic-extraction] Error extracting slug:`, error.message);
     return null;

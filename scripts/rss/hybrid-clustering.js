@@ -64,10 +64,11 @@ export async function clusterArticle(articleId) {
   const totalStart = Date.now();
   console.log(`[hybrid-clustering] Clustering article: ${articleId}`);
 
-  // 1. Fetch article with all metadata
+  // 1. Fetch article with clustering-required fields only (TTRC-302 egress optimization)
+  // Excludes: content, excerpt, scraped_html (not used in clustering, saves ~5KB/article)
   const { data: article, error: fetchError } = await getSupabaseClient()
     .from('articles')
-    .select('*')
+    .select('id, title, embedding_v1, entities, published_at, source_name, source_domain, url, primary_actor, topic_slug, artifact_urls, quote_hashes, geo, opinion_flag')
     .eq('id', articleId)
     .single();
 
