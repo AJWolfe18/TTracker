@@ -16,6 +16,7 @@
 import natural from 'natural';
 
 const TfIdf = natural.TfIdf;
+const stemmer = natural.PorterStemmer;
 
 // ============================================================================
 // Configuration
@@ -70,8 +71,62 @@ const GUARDRAIL = {
   minTitle: parseFloat(process.env.GUARDRAIL_MIN_TITLE || '0.50'),
 };
 
-// Export GUARDRAIL, ENTITY_STOPWORDS, and BONUSES for use in hybrid-clustering.js
-export { GUARDRAIL, ENTITY_STOPWORDS, BONUSES };
+// ============================================================================
+// TTRC-315: Tiered Guardrail with Stemmer-Based Token Similarity
+// ============================================================================
+
+// Stem → canonical root (only accept stems in this allowlist)
+const EVENT_STEM_TO_ROOT = {
+  seiz: 'SEIZE',       // seize, seized, seizing
+  seizur: 'SEIZE',     // seizure (different stem!)
+  confirm: 'CONFIRM',
+  nomin: 'NOMINATE',
+  indict: 'INDICT',
+  arrest: 'ARREST',
+  announc: 'ANNOUNCE',
+  investig: 'INVESTIGATE',
+  appoint: 'APPOINT',
+  resign: 'RESIGN',
+  fire: 'FIRE',        // fire, fired, firing
+  ban: 'BAN',          // kept for normalization, but NOT high-signal
+  order: 'ORDER',      // kept for normalization, but NOT high-signal
+  sign: 'SIGN',        // kept for normalization, but NOT high-signal
+};
+
+// HIGH-SIGNAL events only - these qualify for hasEventOverlap
+// Excludes generic verbs (ORDER, SIGN, BAN) that would merge unrelated stories
+const HIGH_SIGNAL_EVENTS = new Set([
+  'SEIZE', 'INDICT', 'ARREST', 'RESIGN', 'APPOINT',
+  'INVESTIGATE', 'FIRE', 'CONFIRM', 'NOMINATE', 'ANNOUNCE',
+]);
+
+// Pre-computed set of all canonical event roots (hoisted to module scope)
+const ALL_EVENT_ROOTS = new Set(Object.values(EVENT_STEM_TO_ROOT));
+
+// Slug token stopwords - generic terms that appear in many unrelated stories
+const STOP_TOKENS = new Set([
+  'TRUMP', 'WHITE', 'HOUSE', 'SAYS', 'NEWS', 'UPDATE',
+  'REPORT', 'BREAKING', 'LATEST', 'NEW',
+]);
+
+// Slug token skip tokens - acronyms to ignore
+const SKIP_TOKENS = new Set([
+  'DOJ', 'FBI', 'DHS', 'CIA', 'NSA', 'EPA', 'IRS',
+  'GOP', 'DNC', 'USA', 'NATO',
+]);
+
+// TTRC-315: Tiered guardrail config
+const TIERED_GUARDRAIL = {
+  veryHighEmbedding: parseFloat(process.env.VERY_HIGH_EMBEDDING || '0.90'),
+  tokenOverlapEmbedMin: parseFloat(process.env.TOKEN_OVERLAP_EMBED_MIN || '0.85'),
+  minOverlapCount: 2,
+  minOverlapCoeff: 0.60,
+  enabled: process.env.ENABLE_TIERED_GUARDRAIL !== 'false', // default true
+  logEnabled: process.env.LOG_CLUSTER_GUARDRAIL === 'true', // default false (verbose)
+};
+
+// Export GUARDRAIL, ENTITY_STOPWORDS, BONUSES, and TTRC-315 additions for use in hybrid-clustering.js
+export { GUARDRAIL, ENTITY_STOPWORDS, BONUSES, TIERED_GUARDRAIL, HIGH_SIGNAL_EVENTS };
 
 const WIRE_DOMAINS = [
   'ap.org', 'apnews.com',
@@ -83,6 +138,107 @@ const WIRE_DOMAINS = [
 ];
 
 const TIME_DECAY_HOURS = 72;  // Full bonus within 72 hours
+
+// ============================================================================
+// TTRC-315: Slug Token Similarity Functions
+// ============================================================================
+
+/**
+ * Singularize a token (conservative plural handling)
+ * Avoids wrecking short words or acronyms
+ * @param {string} t - Token to singularize (already uppercase)
+ * @returns {string} - Singularized token
+ */
+function singularizeToken(t) {
+  if (t.length <= 3) return t;
+  if (t.endsWith('IES') && t.length > 4) return t.slice(0, -3) + 'Y';  // POLICIES → POLICY
+  if (t.endsWith('ES') && t.length > 4) return t.slice(0, -2);         // SEIZES → SEIZ (stem handles)
+  if (t.endsWith('S') && !t.endsWith('SS') && t.length > 3) return t.slice(0, -1);  // TANKERS → TANKER
+  return t;
+}
+
+/**
+ * Canonicalize an event token using Porter stemmer + allowlist
+ * Only maps if stem is in EVENT_STEM_TO_ROOT, otherwise returns original
+ * @param {string} token - Token to canonicalize (already uppercase)
+ * @returns {string} - Canonical form or original
+ */
+function canonicalizeEventToken(token) {
+  const stem = stemmer.stem(token.toLowerCase());
+  return EVENT_STEM_TO_ROOT[stem] ?? token;
+}
+
+/**
+ * Normalize slug tokens with CORRECT pipeline order:
+ * 1. Filter short tokens (<3 chars)
+ * 2. Uppercase
+ * 3. Singularize (so HOUSES → HOUSE before stop filter)
+ * 4. Stop/skip filtering (catches singularized forms)
+ * 5. Event canonicalization (stems verbs)
+ * @param {string} slug - Topic slug like "TRUMP-SEIZES-OIL-TANKERS"
+ * @returns {string[]} - Normalized tokens
+ */
+function normalizeSlugTokens(slug) {
+  if (!slug) return [];
+  return slug.split('-')
+    .filter(t => t.length >= 3)            // 1. Filter short tokens
+    .map(t => t.toUpperCase())             // 2. Uppercase
+    .map(singularizeToken)                 // 3. Singularize (HOUSES → HOUSE)
+    .filter(t => !STOP_TOKENS.has(t))      // 4. Filter AFTER singularizing
+    .filter(t => !SKIP_TOKENS.has(t))
+    .map(canonicalizeEventToken);          // 5. Event canonicalization last
+}
+
+/**
+ * Calculate slug token similarity between article and story slugs
+ * Requires: high-signal event overlap + anchor (non-event) token overlap
+ * @param {string} articleSlug - Article's topic_slug
+ * @param {string[]} storySlugs - Story's topic_slugs array
+ * @returns {object} - { passes, overlapCoeff, overlapCount, hasEventOverlap, hasAnchorOverlap }
+ */
+export function slugTokenSimilarity(articleSlug, storySlugs) {
+  const emptyResult = { passes: false, overlapCoeff: 0, overlapCount: 0, hasEventOverlap: false, hasAnchorOverlap: false };
+
+  if (!articleSlug || !storySlugs?.length) {
+    return emptyResult;
+  }
+
+  const articleTokens = new Set(normalizeSlugTokens(articleSlug));
+  if (articleTokens.size < 2) {
+    return emptyResult;
+  }
+
+  let best = { ...emptyResult };
+
+  for (const storySlug of storySlugs) {
+    const storyTokens = new Set(normalizeSlugTokens(storySlug));
+    if (storyTokens.size < 2) continue;
+
+    const intersection = [...articleTokens].filter(t => storyTokens.has(t));
+    const overlapCount = intersection.length;
+    const minSize = Math.min(articleTokens.size, storyTokens.size);
+    const overlapCoeff = minSize > 0 ? overlapCount / minSize : 0;
+
+    // Check for HIGH-SIGNAL event token overlap (not generic ORDER/SIGN/BAN)
+    const hasEventOverlap = intersection.some(t => HIGH_SIGNAL_EVENTS.has(t));
+
+    // Check for ANCHOR token overlap (non-event token like TANKER, REDISTRICTING)
+    // Prevents merges that overlap only on generic event tokens
+    const hasAnchorOverlap = intersection.some(t => !ALL_EVENT_ROOTS.has(t));
+
+    // PASSES requires: count + coeff + high-signal event + anchor
+    const passes = overlapCount >= TIERED_GUARDRAIL.minOverlapCount &&
+                   overlapCoeff >= TIERED_GUARDRAIL.minOverlapCoeff &&
+                   hasEventOverlap &&
+                   hasAnchorOverlap;
+
+    if (overlapCoeff > best.overlapCoeff) {
+      best = { passes, overlapCoeff, overlapCount, hasEventOverlap, hasAnchorOverlap };
+    }
+  }
+
+  return best;
+}
 
 // ============================================================================
 // Main Scoring Function

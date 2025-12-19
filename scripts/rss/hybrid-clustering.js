@@ -10,7 +10,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { calculateHybridScore, getThreshold, canReopenStaleStory, GUARDRAIL, BONUSES } from './scoring.js';
+import { calculateHybridScore, getThreshold, canReopenStaleStory, GUARDRAIL, BONUSES, TIERED_GUARDRAIL, slugTokenSimilarity } from './scoring.js';
 import { generateCandidates } from './candidate-generation.js';
 import { updateCentroid, initializeCentroid, getArticleCount } from './centroid-tracking.js';
 import { extractPrimaryActor } from './clustering.js';  // Keep legacy actor extraction
@@ -166,27 +166,63 @@ export async function clusterArticle(articleId) {
     const slugsMatch = article.topic_slug &&
                        story.topic_slugs?.includes(article.topic_slug);
 
+    // TTRC-315: Calculate slug token similarity for tiered guardrail
+    const slugToken = slugTokenSimilarity(article.topic_slug, story.topic_slugs);
+
+    // Slug token overlap only valid at high embedding (>= 0.85)
+    const hasSlugTokenOverlap =
+      scoreResult.embeddingScore >= TIERED_GUARDRAIL.tokenOverlapEmbedMin &&
+      slugToken.passes;
+
     // TTRC-311: Hard guardrail - require concrete reason to cluster beyond threshold
     // Prevents "Trump blob" clusters where unrelated political news gets grouped
     const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
     const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
     const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
-    // TTRC-306: slugsMatch is now one of the valid "reasons to cluster"
-    const passesGuardrail = hasDecentEmbedding && (slugsMatch || hasNonStopwordEntityOverlap || hasTitleMatch);
+
+    // TTRC-315: Tiered guardrail logic (if feature enabled)
+    let passesGuardrail;
+    if (TIERED_GUARDRAIL.enabled) {
+      passesGuardrail = hasDecentEmbedding && (
+        scoreResult.embeddingScore >= TIERED_GUARDRAIL.veryHighEmbedding ||  // Very high = auto-pass
+        slugsMatch ||
+        hasSlugTokenOverlap ||
+        hasNonStopwordEntityOverlap ||
+        hasTitleMatch
+      );
+    } else {
+      // Fallback to original TTRC-311 logic
+      passesGuardrail = hasDecentEmbedding && (slugsMatch || hasNonStopwordEntityOverlap || hasTitleMatch);
+    }
+
+    // TTRC-315: Log merge reasons for analysis (ONLY if LOG_CLUSTER_GUARDRAIL=true)
+    if (TIERED_GUARDRAIL.logEnabled) {
+      const mergeReasons = [];
+      if (scoreResult.embeddingScore >= TIERED_GUARDRAIL.veryHighEmbedding) mergeReasons.push('very_high_embedding');
+      if (slugsMatch) mergeReasons.push('exact_slug_match');
+      if (hasSlugTokenOverlap) mergeReasons.push(`slug_token(coeff=${slugToken.overlapCoeff.toFixed(2)},cnt=${slugToken.overlapCount},evt=${slugToken.hasEventOverlap},anc=${slugToken.hasAnchorOverlap})`);
+      if (hasNonStopwordEntityOverlap) mergeReasons.push('entity_overlap');
+      if (hasTitleMatch) mergeReasons.push('title_match');
+
+      console.log(`[cluster-guardrail] ${articleId} → ${story.id}: ${passesGuardrail ? 'PASS' : 'BLOCK'} [${mergeReasons.join(', ') || 'none'}]`);
+    }
 
     if (!passesGuardrail) {
-      // Log blocked cluster for debugging/tuning
+      // Log blocked cluster for debugging/tuning (existing log, kept for backwards compat)
       console.log(`[cluster-guardrail-block] Article ${articleId} blocked from story ${story.id}:`, {
         totalScore: scoreResult.total.toFixed(3),
         threshold: threshold.toFixed(3),
         embeddingScore: scoreResult.embeddingScore.toFixed(3),
         titleScore: scoreResult.titleScore.toFixed(3),
         nonStopwordEntityOverlapCount: scoreResult.nonStopwordEntityOverlapCount,
-        slugsMatch,  // TTRC-306: log slug match status
+        slugsMatch,
+        hasSlugTokenOverlap,
+        slugTokenDetails: slugToken,
         articleSlug: article.topic_slug,
         storySlugs: story.topic_slugs,
         minEmbedding: GUARDRAIL.minEmbedding,
         minTitle: GUARDRAIL.minTitle,
+        tieredEnabled: TIERED_GUARDRAIL.enabled,
       });
       // Fall through to create new story
     } else {
