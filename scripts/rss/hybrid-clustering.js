@@ -116,25 +116,63 @@ export async function clusterArticle(articleId) {
   const candidates = await generateCandidates(article);
   const candidateTime = Date.now() - startTime;
 
-  // Parse candidate story centroids
-  candidates.forEach(story => {
-    if (story.centroid_embedding_v1 && typeof story.centroid_embedding_v1 === 'string') {
-      story.centroid_embedding_v1 = JSON.parse(story.centroid_embedding_v1);
+  console.log(`[hybrid-clustering] Found ${candidates.length} candidates in ${candidateTime}ms`);
+
+  // TTRC-319: Server-side similarity calculation (egress optimization)
+  // Replaces centroid parsing - centroids no longer fetched, similarity computed in PostgreSQL
+
+  // SAFEGUARD 1: Deduplicate story IDs (ANN/time/entity/slug blocks overlap heavily)
+  const storyIds = [...new Set(candidates.map(c => c.id))];
+
+  // SAFEGUARD 2: Handle null embeddings gracefully (don't force new story!)
+  // Embedding is 45% of score, but title/entities/time/geo (55%) can still find matches
+  let simMap = new Map();
+
+  if (!article.embedding_v1 || article.embedding_v1.length === 0) {
+    console.warn(`[hybrid-clustering] Article ${articleId} has no embedding - using 0 for similarity`);
+    // Don't skip - let other signals (title, entity, time) do the work
+    // simMap stays empty, all candidates get precomputedSimilarity = 0
+  } else if (storyIds.length > 0) {
+    // Call RPC for all candidates at once (single query)
+    // Uses float8[] param - pass embedding array directly (not vector type)
+    const { data: similarities, error: simError } = await getSupabaseClient()
+      .rpc('get_embedding_similarities', {
+        p_query_embedding: article.embedding_v1,
+        p_story_ids: storyIds
+      });
+
+    // SAFEGUARD 3: Don't throw on RPC failure (especially in TEST)
+    // Fallback to similarity=0, let other signals work
+    if (simError) {
+      console.error(`[hybrid-clustering] Similarity RPC failed (fallback to 0): ${simError.message}`);
+      // simMap stays empty - all candidates get 0
+    } else if (similarities) {
+      simMap = new Map(similarities.map(s => [s.story_id, s.similarity]));
+    }
+  }
+
+  // SAFEGUARD 4: Attach precomputed similarity to each candidate
+  // ANN candidates already have similarity from find_similar_stories - use that
+  // Non-ANN candidates need lookup from simMap (default 0 if centroid was null)
+  candidates.forEach(c => {
+    if (c.similarity !== undefined) {
+      c.precomputedSimilarity = c.similarity;  // ANN already has it
+    } else {
+      c.precomputedSimilarity = simMap.get(c.id) ?? 0;  // Default 0 if not found
     }
   });
-
-  console.log(`[hybrid-clustering] Found ${candidates.length} candidates in ${candidateTime}ms`);
 
   if (candidateTime > 100) {
     console.warn(`[hybrid-clustering] ⚠️ Candidate generation slow: ${candidateTime}ms (target: <100ms)`);
   }
 
   // 5. Score each candidate - TTRC-309: now returns detailed object
+  // TTRC-319: Pass precomputed similarity (server-side egress optimization)
   const scoringStart = Date.now();
   const scoredCandidates = candidates
     .map(story => ({
       story,
-      scoreResult: calculateHybridScore(article, story)
+      scoreResult: calculateHybridScore(article, story, story.precomputedSimilarity)
     }))
     .sort((a, b) => b.scoreResult.total - a.scoreResult.total);  // Sort by total score descending
   const scoringTime = Date.now() - scoringStart;

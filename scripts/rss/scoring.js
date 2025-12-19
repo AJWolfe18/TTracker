@@ -248,11 +248,13 @@ export function slugTokenSimilarity(articleSlug, storySlugs) {
 /**
  * Calculate hybrid score between article and story
  * TTRC-309: Returns detailed object with raw component scores for guardrail
+ * TTRC-319: Added precomputedSimilarity param for server-side similarity
  * @param {object} article - New article with metadata
- * @param {object} story - Existing story with centroid
+ * @param {object} story - Existing story (centroid no longer needed if similarity precomputed)
+ * @param {number|null} precomputedSimilarity - If provided, use instead of calculating (TTRC-319 egress optimization)
  * @returns {object} - { total, embeddingScore, titleScore, entityScore, timeScore, geoScore, keyphraseScore, nonStopwordEntityOverlapCount }
  */
-export function calculateHybridScore(article, story) {
+export function calculateHybridScore(article, story, precomputedSimilarity = null) {
   const emptyResult = {
     total: 0.0,
     embeddingScore: 0.0,
@@ -267,10 +269,11 @@ export function calculateHybridScore(article, story) {
   if (!article || !story) return emptyResult;
 
   // 1. Embedding similarity
-  const embeddingScore = calculateEmbeddingScore(
-    article.embedding_v1,
-    story.centroid_embedding_v1
-  );
+  // TTRC-319: Use precomputed similarity if provided (from server-side RPC)
+  // This avoids fetching 14KB centroids for egress optimization
+  const embeddingScore = precomputedSimilarity !== null
+    ? precomputedSimilarity  // Already in [0,1] range from RPC (1 - cosine_distance)
+    : calculateEmbeddingScore(article.embedding_v1, story.centroid_embedding_v1);
 
   // 2. Entity overlap - TTRC-301: now filters stopwords
   const { score: entityScore, nonStopwordEntityOverlapCount } = calculateEntityScore(

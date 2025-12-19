@@ -202,12 +202,13 @@ class RSSTracker {
   async enrichArticles() {
     try {
       // Query ALL articles without embeddings (no time filter - clears backlog)
-      // Order by oldest first to ensure we eventually embed everything
+      // TTRC-320: Order by NEWEST first - prioritize current run's articles
+      // Old logic (ascending: true) caused 54% of new articles to miss embeddings
       const { data: articles, error } = await this.supabase
         .from('articles')
         .select('id, title, content, excerpt')
         .is('embedding_v1', null)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(100);
 
       if (error) {
