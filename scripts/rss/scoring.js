@@ -250,8 +250,8 @@ export function slugTokenSimilarity(articleSlug, storySlugs) {
  * TTRC-309: Returns detailed object with raw component scores for guardrail
  * TTRC-319: Added precomputedSimilarity param for server-side similarity
  * @param {object} article - New article with metadata
- * @param {object} story - Existing story (centroid no longer needed if similarity precomputed)
- * @param {number|null} precomputedSimilarity - If provided, use instead of calculating (TTRC-319 egress optimization)
+ * @param {object} story - Existing story; centroid not needed if similarity is precomputed, but other fields required for title/entity/time/geo scoring
+ * @param {number|null} precomputedSimilarity - Optional numeric similarity in [0,1] range. Values are validated, clamped to [0,1]; if invalid/NaN falls back to calculating. (TTRC-319 egress optimization)
  * @returns {object} - { total, embeddingScore, titleScore, entityScore, timeScore, geoScore, keyphraseScore, nonStopwordEntityOverlapCount }
  */
 export function calculateHybridScore(article, story, precomputedSimilarity = null) {
@@ -271,9 +271,20 @@ export function calculateHybridScore(article, story, precomputedSimilarity = nul
   // 1. Embedding similarity
   // TTRC-319: Use precomputed similarity if provided (from server-side RPC)
   // This avoids fetching 14KB centroids for egress optimization
-  const embeddingScore = precomputedSimilarity !== null
-    ? precomputedSimilarity  // Already in [0,1] range from RPC (1 - cosine_distance)
-    : calculateEmbeddingScore(article.embedding_v1, story.centroid_embedding_v1);
+  // AI code review fix: Validate and clamp precomputed similarity to [0,1]
+  let embeddingScore;
+  if (precomputedSimilarity !== null) {
+    const simNum = Number(precomputedSimilarity);
+    if (Number.isFinite(simNum)) {
+      // Clamp to [0,1] range
+      embeddingScore = Math.max(0, Math.min(1, simNum));
+    } else {
+      // Invalid value (NaN/Infinity) - fall back to calculation
+      embeddingScore = calculateEmbeddingScore(article.embedding_v1, story.centroid_embedding_v1);
+    }
+  } else {
+    embeddingScore = calculateEmbeddingScore(article.embedding_v1, story.centroid_embedding_v1);
+  }
 
   // 2. Entity overlap - TTRC-301: now filters stopwords
   const { score: entityScore, nonStopwordEntityOverlapCount } = calculateEntityScore(
