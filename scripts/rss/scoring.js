@@ -105,7 +105,7 @@ const ALL_EVENT_ROOTS = new Set(Object.values(EVENT_STEM_TO_ROOT));
 
 // Slug token stopwords - generic terms that appear in many unrelated stories
 const STOP_TOKENS = new Set([
-  'TRUMP', 'WHITE', 'HOUSE', 'SAYS', 'NEWS', 'UPDATE',
+  'TRUMP', 'WHITE', 'HOUSE', 'SAYS', 'SAY', 'NEWS', 'UPDATE',
   'REPORT', 'BREAKING', 'LATEST', 'NEW',
 ]);
 
@@ -152,8 +152,9 @@ const TIME_DECAY_HOURS = 72;  // Full bonus within 72 hours
 function singularizeToken(t) {
   if (t.length <= 3) return t;
   if (t.endsWith('IES') && t.length > 4) return t.slice(0, -3) + 'Y';  // POLICIES → POLICY
-  if (t.endsWith('ES') && t.length > 4) return t.slice(0, -2);         // SEIZES → SEIZ (stem handles)
-  if (t.endsWith('S') && !t.endsWith('SS') && t.length > 3) return t.slice(0, -1);  // TANKERS → TANKER
+  // Note: Removed ES rule - it broke HOUSES → HOUS. The S rule handles HOUSES → HOUSE correctly.
+  // Stemmer handles verb forms like SEIZES → seiz anyway.
+  if (t.endsWith('S') && !t.endsWith('SS') && t.length > 3) return t.slice(0, -1);  // HOUSES → HOUSE, TANKERS → TANKER
   return t;
 }
 
