@@ -36,6 +36,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENVIRONMENT: test
           RSS_TRACKER_RUN_ENABLED: 'true'
+          LOG_PHASE0_DIAGNOSTICS: 'true'
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
