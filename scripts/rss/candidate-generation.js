@@ -26,6 +26,18 @@ function getSupabaseClient() {
 }
 
 // ============================================================================
+// TTRC-321 Phase 0 Diagnostic Helpers
+// ============================================================================
+
+/**
+ * IMPORTANT: Resolve dynamically to avoid module import order issues.
+ * Using module-level const would capture null forever if imported before set.
+ */
+function getRunStart() {
+  return globalThis.__RUN_START__ ?? null;
+}
+
+// ============================================================================
 // Configuration
 // ============================================================================
 
@@ -80,6 +92,42 @@ export async function generateCandidates(article) {
 
   console.log(`[candidate-gen] Total candidates: ${result.length} (time: ${timeCandidates.length}, entity: ${entityCandidates.length}, ann: ${annCandidates.length}, slug: ${slugCandidates.length})`);
 
+  // ============================================================================
+  // TTRC-321 Phase 0: Attach metadata for diagnostic logging
+  // ============================================================================
+
+  // Track which blocks contain each story (for per-block diagnosis)
+  const blockResults = {
+    time: timeCandidates.map(c => c.id),
+    entity: entityCandidates.map(c => c.id),
+    ann: annCandidates.map(c => c.id),
+    slug: slugCandidates.map(c => c.id)
+  };
+
+  // Attach as non-enumerable to prevent leaking into Object.keys/logging
+  Object.defineProperty(result, '__candidateIds', {
+    value: result.map(c => c.id),
+    enumerable: false
+  });
+  Object.defineProperty(result, '__blockResults', {
+    value: blockResults,
+    enumerable: false
+  });
+
+  // Phase 0 diagnostic logging (only when enabled)
+  const LOG_PHASE0 = process.env.LOG_PHASE0_DIAGNOSTICS === 'true';
+  const RUN_START = getRunStart();
+
+  if (LOG_PHASE0 && RUN_START) {
+    // Defensive: warn if created_at is missing (would cause false negatives)
+    if (result.length > 0 && result.every(c => !c.created_at)) {
+      console.warn(`[PHASE0_WARNING] created_at_missing_in_candidates=true - check selects!`);
+    }
+
+    const thisRunCandidates = result.filter(c => c.created_at && new Date(c.created_at) >= RUN_START);
+    console.log(`[CANDIDATES] article_id=${article.id} from_this_run=${thisRunCandidates.length} total=${result.length}`);
+  }
+
   return result;
 }
 
@@ -102,9 +150,10 @@ async function getTimeBlockCandidates(article) {
 
   // TTRC-319: Removed centroid_embedding_v1 from select (14KB each -> egress optimization)
   // Similarity calculated server-side via get_embedding_similarities RPC
+  // TTRC-321: Added created_at TEMPORARILY for Phase 0 diagnostic logging (remove after validation)
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state, created_at')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .gte('last_updated_at', startTime.toISOString())
     .lte('last_updated_at', endTime.toISOString())
@@ -141,9 +190,10 @@ async function getEntityBlockCandidates(article) {
   // Query using array overlap operator (&&)
   // Note: Supabase PostgREST uses cs (contains) operator for array overlap
   // TTRC-319: Removed centroid_embedding_v1 from select (egress optimization)
+  // TTRC-321: Added created_at TEMPORARILY for Phase 0 diagnostic logging (remove after validation)
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state, created_at')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .overlaps('top_entities', entityIds)  // GIN index accelerates this
     .limit(150);
@@ -194,9 +244,10 @@ async function getSlugBlockCandidates(article) {
   if (!article.topic_slug) return [];
 
   // TTRC-319: Removed centroid_embedding_v1 from select (egress optimization)
+  // TTRC-321: Added created_at TEMPORARILY for Phase 0 diagnostic logging (remove after validation)
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, primary_source_domain, lifecycle_state, created_at')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .contains('topic_slugs', [article.topic_slug])  // GIN index lookup
     .limit(20);

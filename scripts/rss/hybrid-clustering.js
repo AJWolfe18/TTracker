@@ -29,6 +29,44 @@ function getSupabaseClient() {
 }
 
 // ============================================================================
+// TTRC-321 Phase 0: Diagnostic State and Helpers
+// ============================================================================
+
+// Environment flag to enable Phase 0 diagnostic logging
+const LOG_PHASE0 = process.env.LOG_PHASE0_DIAGNOSTICS === 'true';
+
+// Track titles seen this run for duplicate detection
+// Store FIRST occurrence only - never overwrite
+const seenTitlesThisRun = new Map(); // normalizedTitle -> { storyId }
+let lastCandidateIds = [];  // Track candidates for current article
+
+/**
+ * IMPORTANT: Resolve dynamically to avoid module import order issues.
+ * Using module-level const would capture null forever if imported before set.
+ */
+function getRunStart() {
+  return globalThis.__RUN_START__ ?? null;
+}
+
+/**
+ * Normalize title for duplicate detection
+ * Removes all non-alphanumeric characters, lowercases, and collapses whitespace
+ */
+function normalizeTitle(title) {
+  return (title || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Reset run state - call at start of each RSS run
+ * Exported for use by rss-tracker-supabase.js
+ */
+export function resetRunState() {
+  seenTitlesThisRun.clear();
+  lastCandidateIds = [];
+  console.log('[hybrid-clustering] Run state reset');
+}
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 
@@ -115,6 +153,9 @@ export async function clusterArticle(articleId) {
   const startTime = Date.now();
   const candidates = await generateCandidates(article);
   const candidateTime = Date.now() - startTime;
+
+  // TTRC-321 Phase 0: Store candidate IDs for diagnostic logging
+  lastCandidateIds = candidates.__candidateIds || [];
 
   console.log(`[hybrid-clustering] Found ${candidates.length} candidates in ${candidateTime}ms`);
 
@@ -295,7 +336,51 @@ export async function clusterArticle(articleId) {
   }
 
   // 8. No match found - create new story
+
+  // ============================================================================
+  // TTRC-321 Phase 0: Pre-creation diagnostic logging
+  // ============================================================================
+  if (LOG_PHASE0) {
+    // Log decision context before creating new story
+    console.log(`[DECISION] action=create_new_story article_id=${articleId} best_story_id=${bestMatch?.story?.id || 'none'} best_total=${bestMatch?.scoreResult?.total?.toFixed(3) || 'n/a'} embedding=${bestMatch?.scoreResult?.embeddingScore?.toFixed(3) || 'n/a'} threshold=${threshold.toFixed(3)}`);
+
+    // Check if we're about to create a duplicate
+    const norm = normalizeTitle(article.title);
+    if (seenTitlesThisRun.has(norm)) {
+      const prev = seenTitlesThisRun.get(norm);
+      const expectedInCandidates = lastCandidateIds.includes(prev.storyId);
+      const blocks = candidates.__blockResults || {};
+      console.warn(`[ABOUT_TO_DUP] article_id=${articleId} normalized_title="${norm}" first_seen_story=${prev.storyId} first_story_in_candidates=${expectedInCandidates} best_story_id=${bestMatch?.story?.id || 'none'} best_total=${bestMatch?.scoreResult?.total?.toFixed(3) || 'n/a'}`);
+      console.log(`[ABOUT_TO_DUP_DETAIL] time_has_expected=${blocks.time?.includes(prev.storyId)} entity_has_expected=${blocks.entity?.includes(prev.storyId)} ann_has_expected=${blocks.ann?.includes(prev.storyId)} slug_has_expected=${blocks.slug?.includes(prev.storyId)}`);
+    }
+  }
+
   const result = await createNewStory(article);
+
+  // ============================================================================
+  // TTRC-321 Phase 0: Post-creation diagnostic logging
+  // ============================================================================
+  if (LOG_PHASE0) {
+    // Log story creation
+    console.log(`[STORY_CREATED] story_id=${result.story_id} primary_headline="${article.title}" created_at=${new Date().toISOString()}`);
+
+    const norm = normalizeTitle(article.title);
+    if (seenTitlesThisRun.has(norm)) {
+      // Confirmed duplicate - log with block-level detail
+      const prev = seenTitlesThisRun.get(norm);
+      const expectedInCandidates = lastCandidateIds.includes(prev.storyId);
+      const blocks = candidates.__blockResults || {};
+      console.warn(`[DUP_IN_RUN] article_id=${articleId} normalized_title="${norm}" created_story=${result.story_id} first_seen_story=${prev.storyId} expected_in_candidates=${expectedInCandidates} candidate_count=${lastCandidateIds.length}`);
+      console.log(`[DUP_IN_RUN_DETAIL] time_has_expected=${blocks.time?.includes(prev.storyId)} entity_has_expected=${blocks.entity?.includes(prev.storyId)} ann_has_expected=${blocks.ann?.includes(prev.storyId)} slug_has_expected=${blocks.slug?.includes(prev.storyId)}`);
+
+      // Log new story fields to check if filters explain non-visibility
+      // Note: We don't have newStory object here, but result has story_id
+      console.log(`[NEW_STORY_FIELDS] article_slug=${article.topic_slug || 'none'} article_entities_count=${article.entities?.length || 0}`);
+    } else {
+      // First time seeing this title - store it (never overwrite)
+      seenTitlesThisRun.set(norm, { storyId: result.story_id });
+    }
+  }
 
   const totalTime = Date.now() - totalStart;
   console.log(`[hybrid-clustering] 🆕 Created new story ${result.story_id} for article ${articleId} (best score: ${bestMatch?.scoreResult?.total?.toFixed(3) || 'N/A'}, threshold: ${threshold})`);
@@ -607,4 +692,5 @@ export async function clusterBatch(limit = 50) {
 export default {
   clusterArticle,
   clusterBatch,
+  resetRunState,
 };

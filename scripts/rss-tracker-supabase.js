@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
-import { clusterArticle } from './rss/hybrid-clustering.js';
+import { clusterArticle, resetRunState } from './rss/hybrid-clustering.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import {
   enrichStory as enrichStoryImpl,
@@ -628,6 +628,13 @@ class RSSTracker {
 
   async run() {
     try {
+      // TTRC-321 Phase 0: Set global run start for diagnostic logging
+      globalThis.__RUN_START__ = new Date();
+      console.log(`[RUN_START] ${globalThis.__RUN_START__.toISOString()}`);
+
+      // Reset run state for batch dedup tracking
+      resetRunState();
+
       console.log(`🚀 RSS Tracker starting (${this.environment.toUpperCase()})`);
       console.log(`⏰ Started at: ${this.runStartedAt}`);
 
