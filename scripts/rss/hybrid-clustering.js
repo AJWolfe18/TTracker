@@ -40,6 +40,15 @@ const LOG_PHASE0 = process.env.LOG_PHASE0_DIAGNOSTICS === 'true';
 const seenTitlesThisRun = new Map(); // normalizedTitle -> { storyId }
 let lastCandidateIds = [];  // Track candidates for current article
 
+// Run-level stats for observability (TTRC-323/324)
+let runStats = {
+  created: 0,
+  attachedNormal: 0,
+  attached321SameRun: 0,
+  attached323ExactTitle: 0,
+  attached324SlugEmbed: 0
+};
+
 /**
  * IMPORTANT: Resolve dynamically to avoid module import order issues.
  * Using module-level const would capture null forever if imported before set.
@@ -63,6 +72,13 @@ function normalizeTitle(title) {
 export function resetRunState() {
   seenTitlesThisRun.clear();
   lastCandidateIds = [];
+  runStats = {
+    created: 0,
+    attachedNormal: 0,
+    attached321SameRun: 0,
+    attached323ExactTitle: 0,
+    attached324SlugEmbed: 0
+  };
   console.log('[hybrid-clustering] Run state reset');
 }
 
@@ -168,6 +184,44 @@ export async function clusterArticle(articleId) {
         .update({ primary_actor: article.primary_actor })
         .eq('id', articleId);
     }
+  }
+
+  // ============================================================================
+  // TTRC-323: Same-Run Exact Title Match Dedup
+  // Check EARLY - before candidate generation to save compute
+  // ============================================================================
+  const normTitle = normalizeTitle(article.title);
+
+  // Guard: skip generic short titles (less reliable for dedup)
+  if (normTitle.length >= 20 && seenTitlesThisRun.has(normTitle)) {
+    const cachedStory = seenTitlesThisRun.get(normTitle);
+
+    // SLUG SANITY CHECK: if article has slug and story has slugs, require match
+    // Prevents merging different events with same headline (e.g., "Breaking: Fire reported")
+    const articleSlug = article.topic_slug;
+    const storyHasSlugs = cachedStory.topic_slugs?.length > 0;
+    const slugsMatch = !articleSlug || !storyHasSlugs ||
+                       cachedStory.topic_slugs.includes(articleSlug);
+
+    if (slugsMatch) {
+      console.log(JSON.stringify({
+        type: 'EXACT_TITLE_DEDUP_ATTACH',
+        article_id: article.id,
+        target_story_id: cachedStory.id,
+        normalized_title: normTitle
+      }));
+
+      const totalStart2 = Date.now();
+      const result = await attachToStory(article, cachedStory, 1.0);
+      const totalTime = Date.now() - totalStart2;
+
+      console.log(`[hybrid-clustering] ✅ TITLE_DEDUP: Attached article ${articleId} to story ${cachedStory.id} (exact title match)`);
+      console.log(`[PERF] Total clustering time: ${totalTime}ms (title dedup path)`);
+
+      runStats.attached323ExactTitle++;
+      return result;
+    }
+    // else: Different events with same headline - proceed to normal clustering
   }
 
   // 4. Parse embeddings if they're JSON strings (Supabase returns vectors as strings)
@@ -347,6 +401,7 @@ export async function clusterArticle(articleId) {
           console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
         }
 
+        runStats.attachedNormal++;
         return result;
       }
     }
@@ -440,9 +495,92 @@ export async function clusterArticle(articleId) {
         console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
       }
 
+      runStats.attached321SameRun++;
       return overrideResult;
     }
   }
+
+  // ============================================================================
+  // TTRC-324: Cross-Run Slug + Embedding Override
+  // Run ONLY when about to create new story (after normal attach and TTRC-321 failed)
+  // Fixes Epstein-class failures: cross-run articles score 0.47-0.66 due to weak
+  // title/entity overlap, despite high embedding similarity
+  // ============================================================================
+
+  // Step 1: Filter candidates to those passing gates (slug + time + guardrail)
+  const slugTimeFilteredCandidates = scoredCandidates.filter(c => {
+    const story = c.story;
+    const scoreResult = c.scoreResult;
+
+    // Slug gate (exact OR token-based)
+    const hasExactSlug = story.topic_slugs?.includes(article.topic_slug);
+    const slugTok = slugTokenSimilarity(article.topic_slug, story.topic_slugs);
+    const slugGate = hasExactSlug || slugTok.passes;
+    if (!slugGate) return false;
+
+    // Time gate (72h from last activity) - DEFENSIVE: missing timestamps = false
+    const articleTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
+    const storyTime = story.last_updated_at ? new Date(story.last_updated_at).getTime() : NaN;
+    if (!Number.isFinite(articleTime) || !Number.isFinite(storyTime)) return false;
+
+    const timeDiffMs = Math.abs(articleTime - storyTime);
+    const timeGate = timeDiffMs <= 72 * 60 * 60 * 1000; // 72 hours
+    if (!timeGate) return false;
+
+    // Guardrail check (reuse helper)
+    const passesGuardrail = passesClusteringGuardrail(article, story, scoreResult);
+    if (!passesGuardrail) return false;
+
+    return true;
+  });
+
+  // Step 2: From filtered set, pick highest embeddingScore
+  if (slugTimeFilteredCandidates.length > 0) {
+    const byEmbedFiltered = [...slugTimeFilteredCandidates].sort(
+      (a, b) => (b.scoreResult?.embeddingScore ?? 0) - (a.scoreResult?.embeddingScore ?? 0)
+    );
+
+    const bestSlugCandidate = byEmbedFiltered[0];
+    const embedBest = bestSlugCandidate.scoreResult?.embeddingScore ?? 0;
+    const embedSecond = byEmbedFiltered[1]?.scoreResult?.embeddingScore ?? 0;
+
+    // Threshold check: 0.80 since gates are strict (slug + time + guardrail)
+    if (embedBest >= 0.80) {
+      const targetStory = bestSlugCandidate.story;
+      const hasExactSlug = targetStory.topic_slugs?.includes(article.topic_slug);
+      const timeDiffMs = Math.abs(
+        new Date(article.published_at).getTime() - new Date(targetStory.last_updated_at).getTime()
+      );
+
+      console.log(JSON.stringify({
+        type: 'SLUG_EMBED_OVERRIDE',
+        article_id: article.id,
+        story_id: targetStory.id,
+        embed_best: embedBest.toFixed(3),
+        embed_second: embedSecond.toFixed(3),
+        total: bestSlugCandidate.scoreResult?.total?.toFixed(3),
+        threshold: GUARDRAIL.FINAL_THRESHOLD,
+        slug_gate: hasExactSlug ? 'exact' : 'token',
+        timeWindowMinutes: Math.round(timeDiffMs / 60000),
+        candidate_count_slug_time: slugTimeFilteredCandidates.length
+      }));
+
+      const slugEmbedResult = await attachToStory(article, targetStory, bestSlugCandidate.scoreResult.total);
+
+      const totalTime = Date.now() - totalStart;
+      console.log(`[hybrid-clustering] ✅ SLUG_EMBED_OVERRIDE: Attached article ${articleId} to story ${targetStory.id} (embed: ${embedBest.toFixed(3)}, slug: ${hasExactSlug ? 'exact' : 'token'})`);
+      console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+
+      if (totalTime > 500) {
+        console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+      }
+
+      runStats.attached324SlugEmbed++;
+      return slugEmbedResult;
+    }
+  }
+
+  // Fall through to createNewStory()
 
   // ============================================================================
   // TTRC-321 Phase 0: Pre-creation diagnostic logging
@@ -463,6 +601,24 @@ export async function clusterArticle(articleId) {
   }
 
   const result = await createNewStory(article);
+
+  // ============================================================================
+  // TTRC-323: Store title→story mapping for same-run dedup
+  // Only store if NOT already present (first story wins, prevents ping-pong)
+  // Store full story object (not just id) for attachToStory() compatibility
+  // ============================================================================
+  if (normTitle.length >= 20 && !seenTitlesThisRun.has(normTitle)) {
+    // Fetch the created story to get full object with topic_slugs
+    const { data: createdStory } = await getSupabaseClient()
+      .from('stories')
+      .select('id, primary_headline, topic_slugs, first_seen_at, last_updated_at')
+      .eq('id', result.story_id)
+      .single();
+
+    if (createdStory) {
+      seenTitlesThisRun.set(normTitle, createdStory);
+    }
+  }
 
   // ============================================================================
   // TTRC-321 Phase 0: Post-creation diagnostic logging
@@ -497,7 +653,16 @@ export async function clusterArticle(articleId) {
     console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
   }
 
+  runStats.created++;
   return result;
+}
+
+/**
+ * Get current run stats (for end-of-run summary)
+ * @returns {object} - Current run stats
+ */
+export function getRunStats() {
+  return { ...runStats };
 }
 
 // ============================================================================
@@ -628,13 +793,28 @@ async function createNewStory(article) {
   // Generate story_hash from headline (simple hash for uniqueness)
   const storyHash = hashString(article.title || 'untitled');
 
-  // TTRC-298: Build initial entity_counter from article.entities
+  // TTRC-325: Seed entity_counter with primary_actor (improves same-run matching)
+  // TTRC-298: Also include article.entities
   const entityCounter = {};
+  const topEntities = [];
+
+  // Seed with primary_actor first (TTRC-325)
+  const actor = article.primary_actor?.trim();
+  if (actor) {
+    entityCounter[actor] = 1;
+    topEntities.push(actor);
+  }
+
+  // Also add article.entities (TTRC-298)
   const articleEntities = article.entities || [];
   for (const e of articleEntities) {
-    if (e?.id) entityCounter[e.id] = 1;
+    if (e?.id && !entityCounter[e.id]) {
+      entityCounter[e.id] = 1;
+      if (topEntities.length < 8) {
+        topEntities.push(e.id);
+      }
+    }
   }
-  const topEntities = Object.keys(entityCounter).slice(0, 8);
 
   // TTRC-306: Initialize topic_slugs with article's topic_slug
   const initialSlugs = article.topic_slug ? [article.topic_slug] : [];
@@ -789,6 +969,17 @@ export async function clusterBatch(limit = 50) {
     console.warn(`[PERF] ⚠️ p95 latency ${p95}ms exceeds target (500ms)`);
   }
 
+  // Log run-level override stats for observability (TTRC-323/324)
+  const stats = getRunStats();
+  console.log(JSON.stringify({
+    type: 'RUN_SUMMARY',
+    created: stats.created,
+    attached_normal: stats.attachedNormal,
+    attached_321_same_run: stats.attached321SameRun,
+    attached_323_exact_title: stats.attached323ExactTitle,
+    attached_324_slug_embed: stats.attached324SlugEmbed
+  }));
+
   return results;
 }
 
@@ -800,4 +991,5 @@ export default {
   clusterArticle,
   clusterBatch,
   resetRunState,
+  getRunStats,
 };
