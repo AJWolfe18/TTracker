@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
-import { clusterArticle, resetRunState } from './rss/hybrid-clustering.js';
+import { clusterArticle, resetRunState, getRunStats } from './rss/hybrid-clustering.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import {
   enrichStory as enrichStoryImpl,
@@ -662,6 +662,17 @@ class RSSTracker {
       const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
       console.log(`✅ RSS Tracker complete in ${elapsed}s`);
       console.log(`📊 Stats:`, this.stats);
+
+      // Log clustering override stats (TTRC-323/324)
+      const clusterStats = getRunStats();
+      console.log(JSON.stringify({
+        type: 'CLUSTERING_SUMMARY',
+        created: clusterStats.created,
+        attached_normal: clusterStats.attachedNormal,
+        attached_321_same_run: clusterStats.attached321SameRun,
+        attached_323_exact_title: clusterStats.attached323ExactTitle,
+        attached_324_slug_embed: clusterStats.attached324SlugEmbed
+      }));
 
     } catch (err) {
       console.error('💥 RSS Tracker failed:', err.message);
