@@ -251,12 +251,13 @@ export async function clusterArticle(articleId) {
   }
 
   // TTRC-321: Track top 2 candidates by EMBEDDING (not total) for margin gate
-  // Also track story IDs for debugging false positives/negatives
+  // Use scoreResult.embeddingScore (source of truth), not story.precomputedSimilarity
+  // which may be undefined/stale for non-ANN candidates
   const byEmbed = [...scoredCandidates].sort(
-    (a, b) => (b.story.precomputedSimilarity ?? 0) - (a.story.precomputedSimilarity ?? 0)
+    (a, b) => (b.scoreResult?.embeddingScore ?? 0) - (a.scoreResult?.embeddingScore ?? 0)
   );
-  const bestEmbedding = byEmbed[0]?.story?.precomputedSimilarity ?? 0;
-  const secondBestEmbedding = byEmbed[1]?.story?.precomputedSimilarity ?? 0;
+  const bestEmbedding = byEmbed[0]?.scoreResult?.embeddingScore ?? 0;
+  const secondBestEmbedding = byEmbed[1]?.scoreResult?.embeddingScore ?? 0;
   const bestStoryIdByEmbed = byEmbed[0]?.story?.id ?? null;
   const secondStoryIdByEmbed = byEmbed[1]?.story?.id ?? null;
 
@@ -364,7 +365,8 @@ export async function clusterArticle(articleId) {
   // They usually match, but if they differ we log it for debugging
   const overrideCandidate = byEmbed[0];
   const overrideStory = overrideCandidate?.story;
-  const precomputedSimilarity = overrideStory?.precomputedSimilarity ?? 0;
+  // Use scoreResult.embeddingScore (source of truth) instead of story.precomputedSimilarity
+  const topEmbedding = overrideCandidate?.scoreResult?.embeddingScore ?? 0;
 
   // Log if top-by-embedding differs from best-by-total (diagnostic)
   const topByTotalId = bestMatch?.story?.id ?? null;
@@ -373,13 +375,13 @@ export async function clusterArticle(articleId) {
     console.log(`[TTRC-321-DEBUG] top-by-total=${topByTotalId} differs from top-by-embedding=${topByEmbedId}`);
   }
 
-  const isHighEmbed = precomputedSimilarity >= 0.90;
+  const isHighEmbed = topEmbedding >= 0.90;
   const runStart = getRunStart();
   const isSameRun = runStart && overrideStory?.created_at &&
                     new Date(overrideStory.created_at) >= runStart;
   // Use overrideCandidate's score (top-by-embedding), not bestMatch (top-by-total)
   const overrideScore = overrideCandidate?.scoreResult;
-  const belowThreshold = overrideScore && overrideScore.total < threshold;
+  const belowThreshold = typeof overrideScore?.total === 'number' && overrideScore.total < threshold;
 
   // Use helper - NO INLINE DUPLICATION of guardrail logic
   const overridePassesGuardrail = overrideScore
@@ -388,7 +390,7 @@ export async function clusterArticle(articleId) {
 
   if (isHighEmbed && isSameRun && belowThreshold && overridePassesGuardrail) {
     // Safety gates (at least one must pass)
-    const margin = precomputedSimilarity - secondBestEmbedding;
+    const margin = topEmbedding - secondBestEmbedding;
     const hasMargin = margin >= 0.04;
 
     const overrideSlugTok = slugTokenSimilarity(article.topic_slug, overrideStory.topic_slugs);
@@ -412,7 +414,7 @@ export async function clusterArticle(articleId) {
         type: 'SAME_RUN_OVERRIDE',
         article_id: article.id,
         story_id: overrideStory.id,
-        embeddingSim: precomputedSimilarity.toFixed(3),
+        embeddingSim: topEmbedding.toFixed(3),
         secondBestEmbedding: secondBestEmbedding.toFixed(3),
         bestStoryIdByEmbed: bestStoryIdByEmbed,
         secondStoryIdByEmbed: secondStoryIdByEmbed,
