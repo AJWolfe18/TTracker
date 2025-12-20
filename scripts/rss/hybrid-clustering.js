@@ -377,8 +377,9 @@ export async function clusterArticle(articleId) {
 
   const isHighEmbed = topEmbedding >= 0.90;
   const runStart = getRunStart();
-  const isSameRun = runStart && overrideStory?.created_at &&
-                    new Date(overrideStory.created_at) >= runStart;
+  // Stories use first_seen_at as creation timestamp (not created_at)
+  const isSameRun = runStart && overrideStory?.first_seen_at &&
+                    new Date(overrideStory.first_seen_at) >= runStart;
   // Use overrideCandidate's score (top-by-embedding), not bestMatch (top-by-total)
   const overrideScore = overrideCandidate?.scoreResult;
   const belowThreshold = typeof overrideScore?.total === 'number' && overrideScore.total < threshold;
@@ -397,8 +398,9 @@ export async function clusterArticle(articleId) {
     const hasSlugOverlap = overrideSlugTok.passes;
 
     // DEFENSIVE: Handle null/invalid timestamps gracefully
+    // Stories use first_seen_at as creation timestamp (not created_at)
     const articlePubTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
-    const storyCreateTime = overrideStory.created_at ? new Date(overrideStory.created_at).getTime() : NaN;
+    const storyCreateTime = overrideStory.first_seen_at ? new Date(overrideStory.first_seen_at).getTime() : NaN;
     const timeDiffMs = Math.abs(articlePubTime - storyCreateTime);
     const hasTightWindow = Number.isFinite(timeDiffMs) && timeDiffMs < 2 * 60 * 60 * 1000;
 

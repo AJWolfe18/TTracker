@@ -1,7 +1,8 @@
--- Migration 027: Add created_at to find_similar_stories for TTRC-321
+-- Migration 027: Add first_seen_at to find_similar_stories for TTRC-321
 --
 -- TTRC-321: Same-Run High-Embedding Override
--- Need created_at to detect if a candidate story was created in the current RSS run.
+-- Need first_seen_at to detect if a candidate story was created in the current RSS run.
+-- (stories table uses first_seen_at as creation timestamp, not created_at)
 -- Without this, the override can't distinguish same-run stories from older ones.
 --
 -- CRITICAL: Must DROP first to avoid ERROR 42725 "function not unique"
@@ -21,7 +22,7 @@ RETURNS TABLE (
   top_entities text[],
   topic_slugs text[],
   last_updated_at timestamptz,
-  created_at timestamptz,  -- ADDED for TTRC-321 same-run detection
+  first_seen_at timestamptz,  -- ADDED for TTRC-321 same-run detection
   primary_source_domain text,
   lifecycle_state text,
   similarity double precision
@@ -35,7 +36,7 @@ AS $$
     s.top_entities,
     s.topic_slugs,
     s.last_updated_at,
-    s.created_at,  -- ADDED for TTRC-321
+    s.first_seen_at,  -- ADDED for TTRC-321 (stories use first_seen_at, not created_at)
     s.primary_source_domain,
     s.lifecycle_state,
     1 - (s.centroid_embedding_v1 <=> query_embedding) AS similarity
@@ -51,5 +52,5 @@ $$;
 COMMENT ON FUNCTION public.find_similar_stories(vector, integer, double precision)
 IS 'ANN search for story clustering. Returns top-K similar stories by centroid embedding.
 TTRC-319: No longer returns centroid_embedding_v1 to reduce egress.
-TTRC-321: Added created_at for same-run detection in override logic.
+TTRC-321: Added first_seen_at for same-run detection in override logic.
 The similarity field contains the computed cosine similarity.';
