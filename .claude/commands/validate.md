@@ -45,10 +45,15 @@ Please validate the current changes by executing the following checks:
 - [ ] Confirm feature stays within $50/month limit
 - [ ] State cost clearly if proposing new AI features
 
-### 6. Documentation
+### 6. Documentation & JIRA
 - [ ] Update `/docs/code-patterns.md` if new pattern introduced
 - [ ] Update `/docs/common-issues.md` if fixing a bug
 - [ ] Update JIRA ticket via `/jira` command (don't say "needs update")
+- [ ] Verify JIRA issue type is correct:
+  - Story = ALL dev work (default)
+  - Bug = something broken
+  - Epic = groups Stories only
+  - NEVER use Task or Sub-task
 
 ### 7. Security
 - [ ] No secrets or API keys in code

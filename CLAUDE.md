@@ -465,6 +465,7 @@ VALUES (
 **Atlassian Integration:** Direct JIRA/Confluence updates
 - **ALWAYS update JIRA/Confluence directly using tools** - never say "needs update"
 - Use for: Ticket updates, documentation, handoff creation
+- See JIRA Workflow below for issue type rules
 
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
@@ -478,6 +479,28 @@ VALUES (
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
+
+## JIRA Workflow
+
+**Issue Types (3 only):**
+- **Story** = DEFAULT for ALL development work
+- **Bug** = Something is broken
+- **Epic** = Groups Stories (explicit request only)
+
+**NOT USED:** Task, Sub-task
+
+**Labels for grouping:** `clustering`, `security`, `ui`, `rss`, `infra`, `docs`
+
+**Quick Rules:**
+| If the work is... | Create a... |
+|-------------------|-------------|
+| Any dev work (add, implement, improve) | Story |
+| Something broken (fix, error, crash) | Bug |
+| Grouping Stories (user says "epic") | Epic |
+
+**Status Workflow:** Backlog → In Progress → In Review → Ready for Test → Done
+
+**Use `/jira` command** for all JIRA operations. See `/docs/guides/jira-workflow.md` for full details.
 
 ## Common Tasks
 
