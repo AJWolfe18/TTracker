@@ -33,6 +33,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit & push to test branch
 - [ ] **MANDATORY**: Check AI code review: `bash scripts/check-code-review.sh`
+  - ⏱️ **AI reviews take 5-10 minutes** - Don't burn tokens polling repeatedly
+  - After push, inform user: "AI code review triggered, check back in ~5 min"
+  - User will ask you to check status when ready
 - [ ] Update JIRA via MCP (DO IT, don't just say "needs update")
 - [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ttrc-XXX-topic.md`
 - [ ] Report token usage
