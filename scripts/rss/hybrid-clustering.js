@@ -85,6 +85,32 @@ function hashString(str) {
   return Math.abs(hash).toString(16);
 }
 
+/**
+ * TTRC-321: Single guardrail check used by both normal attach path and override path
+ * Prevents logic drift when thresholds change (TTRC-315, etc.)
+ * @param {object} article - Article being clustered
+ * @param {object} story - Candidate story
+ * @param {object} scoreResult - Result from calculateHybridScore
+ * @returns {boolean} - Whether the article-story pair passes clustering guardrails
+ */
+function passesClusteringGuardrail(article, story, scoreResult) {
+  const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
+  const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
+  const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
+  const slugsMatch = article.topic_slug && story?.topic_slugs?.includes(article.topic_slug);
+
+  const slugToken = slugTokenSimilarity(article.topic_slug, story?.topic_slugs || []);
+  const hasSlugTokenOverlap = scoreResult.embeddingScore >= TIERED_GUARDRAIL.tokenOverlapEmbedMin && slugToken.passes;
+
+  if (TIERED_GUARDRAIL.enabled) {
+    return hasDecentEmbedding && (
+      scoreResult.embeddingScore >= TIERED_GUARDRAIL.veryHighEmbedding ||
+      slugsMatch || hasSlugTokenOverlap || hasNonStopwordEntityOverlap || hasTitleMatch
+    );
+  }
+  return hasDecentEmbedding && (slugsMatch || hasNonStopwordEntityOverlap || hasTitleMatch);
+}
+
 // ============================================================================
 // Main Clustering Function
 // ============================================================================
@@ -224,6 +250,16 @@ export async function clusterArticle(articleId) {
     console.warn(`[hybrid-clustering] ⚠️ Scoring slow: ${scoringTime}ms for ${candidates.length} candidates (target: <50ms per candidate)`);
   }
 
+  // TTRC-321: Track top 2 candidates by EMBEDDING (not total) for margin gate
+  // Also track story IDs for debugging false positives/negatives
+  const byEmbed = [...scoredCandidates].sort(
+    (a, b) => (b.story.precomputedSimilarity ?? 0) - (a.story.precomputedSimilarity ?? 0)
+  );
+  const bestEmbedding = byEmbed[0]?.story?.precomputedSimilarity ?? 0;
+  const secondBestEmbedding = byEmbed[1]?.story?.precomputedSimilarity ?? 0;
+  const bestStoryIdByEmbed = byEmbed[0]?.story?.id ?? null;
+  const secondStoryIdByEmbed = byEmbed[1]?.story?.id ?? null;
+
   // 6. Get adaptive threshold for this article
   const threshold = getThreshold(article);
 
@@ -240,39 +276,19 @@ export async function clusterArticle(articleId) {
     const story = bestMatch.story;
     const scoreResult = bestMatch.scoreResult;
 
-    // TTRC-306: Topic slug match as one of the "reasons to cluster"
-    // Slug match STILL requires embedding >= 0.60 (guardrail maintained)
-    const slugsMatch = article.topic_slug &&
-                       story.topic_slugs?.includes(article.topic_slug);
+    // TTRC-321: Use helper function to check guardrail (prevents logic duplication)
+    const passesGuardrail = passesClusteringGuardrail(article, story, scoreResult);
 
-    // TTRC-315: Calculate slug token similarity for tiered guardrail
+    // TTRC-306: Topic slug match (still needed for logging and bonus calculation)
+    const slugsMatch = article.topic_slug && story.topic_slugs?.includes(article.topic_slug);
+
+    // TTRC-315: Calculate slug token similarity for logging
     const slugToken = slugTokenSimilarity(article.topic_slug, story.topic_slugs);
+    const hasSlugTokenOverlap = scoreResult.embeddingScore >= TIERED_GUARDRAIL.tokenOverlapEmbedMin && slugToken.passes;
 
-    // Slug token overlap only valid at high embedding (>= 0.85)
-    const hasSlugTokenOverlap =
-      scoreResult.embeddingScore >= TIERED_GUARDRAIL.tokenOverlapEmbedMin &&
-      slugToken.passes;
-
-    // TTRC-311: Hard guardrail - require concrete reason to cluster beyond threshold
-    // Prevents "Trump blob" clusters where unrelated political news gets grouped
+    // Variables for logging only (guardrail check done in helper)
     const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
-    const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
     const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
-
-    // TTRC-315: Tiered guardrail logic (if feature enabled)
-    let passesGuardrail;
-    if (TIERED_GUARDRAIL.enabled) {
-      passesGuardrail = hasDecentEmbedding && (
-        scoreResult.embeddingScore >= TIERED_GUARDRAIL.veryHighEmbedding ||  // Very high = auto-pass
-        slugsMatch ||
-        hasSlugTokenOverlap ||
-        hasNonStopwordEntityOverlap ||
-        hasTitleMatch
-      );
-    } else {
-      // Fallback to original TTRC-311 logic
-      passesGuardrail = hasDecentEmbedding && (slugsMatch || hasNonStopwordEntityOverlap || hasTitleMatch);
-    }
 
     // TTRC-315: Log merge reasons for analysis (ONLY if LOG_CLUSTER_GUARDRAIL=true)
     if (TIERED_GUARDRAIL.logEnabled) {
@@ -336,6 +352,93 @@ export async function clusterArticle(articleId) {
   }
 
   // 8. No match found - create new story
+
+  // ============================================================================
+  // TTRC-321: Same-Run High-Embedding Override
+  // Attach to same-run story when embedding is very high but total is below threshold
+  // (happens because newborn stories have empty entity_counter)
+  // HARDENING: Use top-by-embedding (byEmbed[0]) as override target, not best-by-total
+  // ============================================================================
+
+  // IMPORTANT: Override targets top-by-embedding, not best-by-total
+  // They usually match, but if they differ we log it for debugging
+  const overrideCandidate = byEmbed[0];
+  const overrideStory = overrideCandidate?.story;
+  const precomputedSimilarity = overrideStory?.precomputedSimilarity ?? 0;
+
+  // Log if top-by-embedding differs from best-by-total (diagnostic)
+  const topByTotalId = bestMatch?.story?.id ?? null;
+  const topByEmbedId = overrideStory?.id ?? null;
+  if (topByTotalId !== topByEmbedId && topByTotalId && topByEmbedId) {
+    console.log(`[TTRC-321-DEBUG] top-by-total=${topByTotalId} differs from top-by-embedding=${topByEmbedId}`);
+  }
+
+  const isHighEmbed = precomputedSimilarity >= 0.90;
+  const runStart = getRunStart();
+  const isSameRun = runStart && overrideStory?.created_at &&
+                    new Date(overrideStory.created_at) >= runStart;
+  // Use overrideCandidate's score (top-by-embedding), not bestMatch (top-by-total)
+  const overrideScore = overrideCandidate?.scoreResult;
+  const belowThreshold = overrideScore && overrideScore.total < threshold;
+
+  // Use helper - NO INLINE DUPLICATION of guardrail logic
+  const overridePassesGuardrail = overrideScore
+    ? passesClusteringGuardrail(article, overrideStory, overrideScore)
+    : false;
+
+  if (isHighEmbed && isSameRun && belowThreshold && overridePassesGuardrail) {
+    // Safety gates (at least one must pass)
+    const margin = precomputedSimilarity - secondBestEmbedding;
+    const hasMargin = margin >= 0.04;
+
+    const overrideSlugTok = slugTokenSimilarity(article.topic_slug, overrideStory.topic_slugs);
+    const hasSlugOverlap = overrideSlugTok.passes;
+
+    // DEFENSIVE: Handle null/invalid timestamps gracefully
+    const articlePubTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
+    const storyCreateTime = overrideStory.created_at ? new Date(overrideStory.created_at).getTime() : NaN;
+    const timeDiffMs = Math.abs(articlePubTime - storyCreateTime);
+    const hasTightWindow = Number.isFinite(timeDiffMs) && timeDiffMs < 2 * 60 * 60 * 1000;
+
+    if (hasMargin || hasSlugOverlap || hasTightWindow) {
+      // Log all gates that passed
+      const reasons = [];
+      if (hasMargin) reasons.push('margin');
+      if (hasSlugOverlap) reasons.push('slug');
+      if (hasTightWindow) reasons.push('time');
+
+      // MUST LOG: Story IDs for margin gate debugging/tuning
+      console.log(JSON.stringify({
+        type: 'SAME_RUN_OVERRIDE',
+        article_id: article.id,
+        story_id: overrideStory.id,
+        embeddingSim: precomputedSimilarity.toFixed(3),
+        secondBestEmbedding: secondBestEmbedding.toFixed(3),
+        bestStoryIdByEmbed: bestStoryIdByEmbed,
+        secondStoryIdByEmbed: secondStoryIdByEmbed,
+        topByTotalDiffers: topByTotalId !== topByEmbedId,
+        total: overrideScore.total.toFixed(3),
+        threshold: threshold.toFixed(3),
+        reasonsPassed: reasons,
+        margin: margin.toFixed(3),
+        slugPasses: hasSlugOverlap,
+        timeWindowMinutes: Number.isFinite(timeDiffMs) ? Math.round(timeDiffMs / 60000) : null
+      }));
+
+      // Attach instead of creating new story (using overrideScore, not bestMatch)
+      const overrideResult = await attachToStory(article, overrideStory, overrideScore.total);
+
+      const totalTime = Date.now() - totalStart;
+      console.log(`[hybrid-clustering] ✅ OVERRIDE: Attached article ${articleId} to same-run story ${overrideStory.id} (score: ${overrideScore.total.toFixed(3)}, threshold: ${threshold}, reasons: [${reasons.join(', ')}])`);
+      console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+
+      if (totalTime > 500) {
+        console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+      }
+
+      return overrideResult;
+    }
+  }
 
   // ============================================================================
   // TTRC-321 Phase 0: Pre-creation diagnostic logging
