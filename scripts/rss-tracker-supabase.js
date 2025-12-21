@@ -665,6 +665,9 @@ class RSSTracker {
 
       // Log clustering override stats (TTRC-323/324 v2)
       const clusterStats = getRunStats();
+      // Guard against undefined tier fields (AI code review blocker)
+      const tierA = Number(clusterStats.attached324TierA ?? 0);
+      const tierB = Number(clusterStats.attached324TierB ?? 0);
       console.log(JSON.stringify({
         type: 'CLUSTERING_SUMMARY',
         created: clusterStats.created,
@@ -672,10 +675,10 @@ class RSSTracker {
         attached_321_same_run: clusterStats.attached321SameRun,
         attached_323_exact_title: clusterStats.attached323ExactTitle,
         // Backwards compat - keep old key for one release
-        attached_324_slug_embed: clusterStats.attached324TierA + clusterStats.attached324TierB,
+        attached_324_slug_embed: tierA + tierB,
         // New tier-specific keys (v2)
-        attached_324_tier_a: clusterStats.attached324TierA,
-        attached_324_tier_b: clusterStats.attached324TierB
+        attached_324_tier_a: tierA,
+        attached_324_tier_b: tierB
       }));
 
     } catch (err) {

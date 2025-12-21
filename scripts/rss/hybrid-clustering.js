@@ -576,10 +576,11 @@ export async function clusterArticle(articleId) {
   if (overrideBest) {
     const embedBest = overrideBest.scoreResult?.embeddingScore ?? 0;
     const candidateCount = allByEmbed.length;
-    // Null when single candidate (margin would be vacuous/misleading)
-    const embedSecond = candidateCount >= 2 ? allByEmbed[1].scoreResult?.embeddingScore : null;
+    // Null when single candidate OR second candidate lacks embeddingScore (AI code review blocker)
+    const rawSecond = candidateCount >= 2 ? (allByEmbed[1].scoreResult?.embeddingScore ?? null) : null;
+    const embedSecond = Number.isFinite(rawSecond) ? rawSecond : null;
     const margin = embedSecond !== null ? embedBest - embedSecond : null;
-    const marginVacuous = candidateCount < 2;
+    const marginVacuous = candidateCount < 2 || embedSecond === null;
     const targetStory = overrideBest.story;
     const scoreResult = overrideBest.scoreResult;
 
@@ -1090,6 +1091,9 @@ export async function clusterBatch(limit = 50) {
 
   // Log run-level override stats for observability (TTRC-323/324)
   const stats = getRunStats();
+  // Guard against undefined tier fields (AI code review blocker)
+  const tierA = Number(stats.attached324TierA ?? 0);
+  const tierB = Number(stats.attached324TierB ?? 0);
   console.log(JSON.stringify({
     type: 'RUN_SUMMARY',
     created: stats.created,
@@ -1097,10 +1101,10 @@ export async function clusterBatch(limit = 50) {
     attached_321_same_run: stats.attached321SameRun,
     attached_323_exact_title: stats.attached323ExactTitle,
     // Backwards compat - keep old key for one release
-    attached_324_slug_embed: stats.attached324TierA + stats.attached324TierB,
+    attached_324_slug_embed: tierA + tierB,
     // New tier-specific keys (v2)
-    attached_324_tier_a: stats.attached324TierA,
-    attached_324_tier_b: stats.attached324TierB
+    attached_324_tier_a: tierA,
+    attached_324_tier_b: tierB
   }));
 
   return results;
