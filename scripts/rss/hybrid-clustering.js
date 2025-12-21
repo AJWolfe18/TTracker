@@ -51,7 +51,8 @@ let runStats = {
   attached321SameRun: 0,
   attached323ExactTitle: 0,
   attached324TierA: 0,
-  attached324TierB: 0
+  attached324TierB: 0,
+  latestArticlePubRpcFails: 0  // TTRC-326: Track RPC failures for observability
 };
 
 /**
@@ -142,7 +143,8 @@ export function resetRunState() {
     attached321SameRun: 0,
     attached323ExactTitle: 0,
     attached324TierA: 0,
-    attached324TierB: 0
+    attached324TierB: 0,
+    latestArticlePubRpcFails: 0
   };
   console.log('[hybrid-clustering] Run state reset');
 }
@@ -594,30 +596,25 @@ export async function clusterArticle(articleId) {
     const articleCreatedTime = article.created_at ? new Date(article.created_at).getTime() : NaN;
     const articleTime = Number.isFinite(articlePubTime) ? articlePubTime : articleCreatedTime;
 
-    const storyLastUpdated = targetStory.last_updated_at ? new Date(targetStory.last_updated_at).getTime() : NaN;
-    const storyFirstSeen = targetStory.first_seen_at ? new Date(targetStory.first_seen_at).getTime() : NaN;
+    // TTRC-326: Prefer latest_article_published_at (most accurate for event recency)
+    // Fallback to first_seen_at if column not populated or RPC failed
+    const storyLatestArticle = targetStory.latest_article_published_at
+      ? new Date(targetStory.latest_article_published_at).getTime() : NaN;
+    const storyFirstSeen = targetStory.first_seen_at
+      ? new Date(targetStory.first_seen_at).getTime() : NaN;
 
-    // Prefer last_updated_at, fallback to first_seen_at
     let storyTime = NaN;
     let timeAnchor = 'unknown';
-    if (Number.isFinite(storyLastUpdated)) {
-      storyTime = storyLastUpdated;
-      timeAnchor = 'last_updated_at';
+
+    if (Number.isFinite(storyLatestArticle)) {
+      storyTime = storyLatestArticle;
+      timeAnchor = 'latest_article_published_at';
     } else if (Number.isFinite(storyFirstSeen)) {
       storyTime = storyFirstSeen;
       timeAnchor = 'first_seen_at';
     }
-
-    // Safety valve: last_updated_at may be touched by enrichment/maintenance.
-    // Avoid treating old stories as "recent" solely due to maintenance.
-    // If first_seen_at is >7 days older than last_updated_at, use first_seen_at.
-    if (timeAnchor === 'last_updated_at' && Number.isFinite(storyFirstSeen)) {
-      const gapDays = (storyLastUpdated - storyFirstSeen) / (24 * 60 * 60 * 1000);
-      if (gapDays > 7) {
-        storyTime = storyFirstSeen;
-        timeAnchor = 'first_seen_at_safety';
-      }
-    }
+    // REMOVED: Old safety valve (last_updated_at gap check) no longer needed
+    // latest_article_published_at only updates on article attachment, not enrichment
 
     const timeDiffMs = Number.isFinite(articleTime) && Number.isFinite(storyTime)
       ? Math.abs(articleTime - storyTime) : Infinity;
@@ -960,6 +957,25 @@ async function attachToStory(article, story, score) {
     }
   }
 
+  // TTRC-326: Atomically update latest_article_published_at via DB-side GREATEST
+  // Avoids JS-side race conditions when multiple attachments happen concurrently
+  // NOTE: Two round-trips for now; could merge into single attach RPC later
+  if (article.published_at) {
+    try {
+      const { data: updatedTs, error: rpcErr } = await getSupabaseClient().rpc('update_story_latest_article_published_at', {
+        p_story_id: storyId,
+        p_article_published_at: article.published_at
+      });
+      if (rpcErr) throw rpcErr;
+      // Debug: uncomment to log updated timestamp
+      // console.log(`[hybrid-clustering] latest_article_published_at updated to ${updatedTs}`);
+    } catch (latestPubErr) {
+      // Log but don't fail - recency gating falls back to first_seen_at
+      console.warn(`[hybrid-clustering] latest_article_published_at update failed: ${latestPubErr.message}`);
+      runStats.latestArticlePubRpcFails++;
+    }
+  }
+
   // TTRC-306: Aggregate article topic slug into story.topic_slugs
   if (article.topic_slug) {
     try {
@@ -1038,6 +1054,7 @@ async function createNewStory(article) {
       primary_actor: article.primary_actor,
       first_seen_at: article.published_at || new Date().toISOString(),
       last_updated_at: article.published_at || new Date().toISOString(),
+      latest_article_published_at: article.published_at ?? null,  // TTRC-326: null if missing, don't fake
       source_count: 1,
       lifecycle_state: 'emerging',
       status: 'active',

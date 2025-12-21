@@ -663,12 +663,13 @@ class RSSTracker {
       console.log(`✅ RSS Tracker complete in ${elapsed}s`);
       console.log(`📊 Stats:`, this.stats);
 
-      // Log clustering override stats (TTRC-323/324 v2)
+      // Log clustering override stats (TTRC-323/324 v2, TTRC-326)
       const clusterStats = getRunStats();
       // Guard against undefined tier fields (AI code review blocker)
       const tierA = Number(clusterStats.attached324TierA ?? 0);
       const tierB = Number(clusterStats.attached324TierB ?? 0);
-      console.log(JSON.stringify({
+      const rpcFails = Number(clusterStats.latestArticlePubRpcFails ?? 0);
+      const summaryObj = {
         type: 'CLUSTERING_SUMMARY',
         created: clusterStats.created,
         attached_normal: clusterStats.attachedNormal,
@@ -679,7 +680,12 @@ class RSSTracker {
         // New tier-specific keys (v2)
         attached_324_tier_a: tierA,
         attached_324_tier_b: tierB
-      }));
+      };
+      // TTRC-326: Only log RPC failures if > 0 (avoid noise)
+      if (rpcFails > 0) {
+        summaryObj.latest_article_pub_rpc_fails = rpcFails;
+      }
+      console.log(JSON.stringify(summaryObj));
 
     } catch (err) {
       console.error('💥 RSS Tracker failed:', err.message);
