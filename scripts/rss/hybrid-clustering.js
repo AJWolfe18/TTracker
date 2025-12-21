@@ -35,6 +35,10 @@ function getSupabaseClient() {
 // Environment flag to enable Phase 0 diagnostic logging
 const LOG_PHASE0 = process.env.LOG_PHASE0_DIAGNOSTICS === 'true';
 
+// Environment flag to enable near-miss diagnostic logging (TTRC-324 v2)
+// Defaults to true for initial debugging, set to 'false' to disable
+const LOG_NEAR_MISS = process.env.LOG_NEAR_MISS !== 'false';
+
 // Track titles seen this run for duplicate detection
 // Store FIRST occurrence only - never overwrite
 const seenTitlesThisRun = new Map(); // normalizedTitle -> { storyId }
@@ -702,9 +706,10 @@ export async function clusterArticle(articleId) {
     // =========================================================================
     // Near-miss diagnostic: log when top-by-embedding was close but didn't fire
     // Helps debug cases like "why didn't this attach to the obvious story?"
+    // Controlled by LOG_NEAR_MISS env flag (defaults true, set 'false' to disable)
     // =========================================================================
     const nearMissEligible =
-      embedBest >= 0.88 || (embedBest >= 0.85 && timeDiffHours <= 72);
+      LOG_NEAR_MISS && (embedBest >= 0.88 || (embedBest >= 0.85 && timeDiffHours <= 72));
 
     if (nearMissEligible) {
       // Recompute slug/entity/title corroboration for logging (may not have been computed if Tier B wasn't reached)
