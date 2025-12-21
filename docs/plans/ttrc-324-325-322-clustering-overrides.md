@@ -1,8 +1,9 @@
 # Implementation Plan: TTRC-324, TTRC-325, TTRC-322 Clustering Overrides
 
 **Created:** 2025-12-20
-**Status:** Approved
+**Status:** ✅ IMPLEMENTED
 **Revised:** v4 - Final
+**Commit:** 763fc4d (test branch)
 
 ---
 
@@ -76,96 +77,66 @@ Three clustering improvements to reduce duplicate story creation:
 
 ---
 
-## TTRC-325: Cross-Run Slug + Embedding Attach Override
+## TTRC-324: Cross-Run High-Embedding Override (v2 - Two-Tier)
 
-**Priority:** High | **Location:** `scripts/rss/hybrid-clustering.js` (in "would create new story" branch, after TTRC-321 check)
+**Priority:** High | **Location:** `scripts/rss/hybrid-clustering.js`
+**Status:** v1 implemented, v2 pending (slug gate too strict)
 
-### Critical Design: Candidate Selection
+### Problem with v1
+Slug gate blocks valid merges. Epstein articles have different slugs (`EPSTEIN-DOCS-RELEASE` vs `EPSTEIN-FILES-REMOVED-TRUMP`) but ARE the same event.
 
-The key insight: "bestMatch" by total score is wrong because total is suppressed. Instead:
+### v2 Design: Two-Tier Safety Profile
+
+**Tier A** - Very high embedding, no corroboration needed:
+- `embedBest >= 0.90`
+- `timeDiff <= 48h`
+- `margin >= 0.04` (embedBest - embedSecond)
+- `passesGuardrail`
+
+**Tier B** - High embedding, needs corroboration:
+- `embedBest >= 0.88`
+- `timeDiff <= 72h`
+- `margin >= 0.04`
+- `passesGuardrail`
+- AND one of:
+  - `slugTokenSimilarity.passes` (preferred)
+  - `entityOverlapCount >= 1`
+  - `titleTokenOverlap >= 1` (shared token length >= 5)
 
 ```javascript
-// ============================================================================
-// TTRC-325: Cross-Run Slug + Embedding Override
-// Run ONLY when about to create new story (after normal attach failed)
-// ============================================================================
-
-// Step 1: Filter candidates to those passing gates
-const slugTimeFilteredCandidates = scoredCandidates.filter(c => {
-  const story = c.story;
-  const scoreResult = c.scoreResult;
-
-  // Slug gate (exact OR token-based)
-  const hasExactSlug = story.topic_slugs?.includes(article.topic_slug);
-  const slugTok = slugTokenSimilarity(article.topic_slug, story.topic_slugs);
-  const slugGate = hasExactSlug || slugTok.passes;
-  if (!slugGate) return false;
-
-  // Time gate (72h from last activity) - DEFENSIVE: missing timestamps = false
-  const articleTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
-  const storyTime = story.last_updated_at ? new Date(story.last_updated_at).getTime() : NaN;
-  if (!Number.isFinite(articleTime) || !Number.isFinite(storyTime)) return false;
-
-  const timeDiffMs = Math.abs(articleTime - storyTime);
-  const timeGate = timeDiffMs <= 72 * 60 * 60 * 1000;
-  if (!timeGate) return false;
-
-  // Guardrail check
-  const passesGuardrail = passesClusteringGuardrail(article, story, scoreResult);
-  if (!passesGuardrail) return false;
-
-  return true;
-});
-
-// Step 2: From filtered set, pick highest embeddingScore
-if (slugTimeFilteredCandidates.length > 0) {
-  const byEmbed = [...slugTimeFilteredCandidates].sort(
-    (a, b) => (b.scoreResult?.embeddingScore ?? 0) - (a.scoreResult?.embeddingScore ?? 0)
-  );
-
-  const bestSlugCandidate = byEmbed[0];
-  const embedBest = bestSlugCandidate.scoreResult?.embeddingScore ?? 0;
-  const embedSecond = byEmbed[1]?.scoreResult?.embeddingScore ?? 0;
-
-  // Threshold check (start at 0.80 since gates are strict, tune upward if false positives)
-  if (embedBest >= 0.80) {
-    const targetStory = bestSlugCandidate.story;
-    const hasExactSlug = targetStory.topic_slugs?.includes(article.topic_slug);
-    const timeDiffMs = Math.abs(
-      new Date(article.published_at) - new Date(targetStory.last_updated_at)
-    );
-
-    console.log(JSON.stringify({
-      type: 'SLUG_EMBED_OVERRIDE',
-      article_id: article.id,
-      story_id: targetStory.id,
-      embed_best: embedBest.toFixed(3),
-      embed_second: embedSecond.toFixed(3),
-      total: bestSlugCandidate.scoreResult?.total?.toFixed(3),
-      threshold: GUARDRAIL.FINAL_THRESHOLD,
-      slug_gate: hasExactSlug ? 'exact' : 'token',
-      timeWindowMinutes: Math.round(timeDiffMs / 60000),
-      candidate_count_slug_time: slugTimeFilteredCandidates.length
-    }));
-
-    return attachToStory(article, targetStory, bestSlugCandidate.scoreResult.total);
-  }
+// Tier A: Very high embedding
+if (embedBest >= 0.90 && timeDiff <= 48h && margin >= 0.04 && passesGuardrail) {
+  return attach(tier: "A");
 }
 
-// Fall through to createNewStory()
+// Tier B: High embedding + corroboration
+if (embedBest >= 0.88 && timeDiff <= 72h && margin >= 0.04 && passesGuardrail) {
+  const corroboration = slugTokenSimilarity.passes ||
+                        entityOverlapCount >= 1 ||
+                        titleTokenOverlap >= 1;
+  if (corroboration) {
+    return attach(tier: "B");
+  }
+}
 ```
 
-### Pre-Implementation Verification
-- [ ] Confirm `attachToStory()` unions `topic_slugs` (not replaces)
-- [ ] Confirm `attachToStory()` updates `last_updated_at`
-- If either is false, add that behavior as part of TTRC-325
+### Logging
+```json
+{
+  "type": "CROSS_RUN_OVERRIDE",
+  "tier": "A",
+  "embed_best": 0.91,
+  "margin": 0.08,
+  "corroboration": null
+}
+```
 
-### Threshold Strategy
-- Start at **0.80** since gates are strict (slug + time + guardrail)
-- Tune upward only if false positives observed
-- Optional: LOG_ONLY mode first run to observe actual embedding scores
+### Success Criteria
+- Epstein-class articles attach instead of creating new stories
+- No spike in obviously-wrong merges (spot-check 20 overrides first week)
+- Attach rate increases materially
 
-**Estimated Changes:** ~60 lines
+**Estimated Changes:** ~60 lines (refactor existing TTRC-324)
 
 ---
 
