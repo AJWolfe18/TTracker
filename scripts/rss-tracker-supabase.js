@@ -663,7 +663,7 @@ class RSSTracker {
       console.log(`✅ RSS Tracker complete in ${elapsed}s`);
       console.log(`📊 Stats:`, this.stats);
 
-      // Log clustering override stats (TTRC-323/324)
+      // Log clustering override stats (TTRC-323/324 v2)
       const clusterStats = getRunStats();
       console.log(JSON.stringify({
         type: 'CLUSTERING_SUMMARY',
@@ -671,7 +671,11 @@ class RSSTracker {
         attached_normal: clusterStats.attachedNormal,
         attached_321_same_run: clusterStats.attached321SameRun,
         attached_323_exact_title: clusterStats.attached323ExactTitle,
-        attached_324_slug_embed: clusterStats.attached324SlugEmbed
+        // Backwards compat - keep old key for one release
+        attached_324_slug_embed: clusterStats.attached324TierA + clusterStats.attached324TierB,
+        // New tier-specific keys (v2)
+        attached_324_tier_a: clusterStats.attached324TierA,
+        attached_324_tier_b: clusterStats.attached324TierB
       }));
 
     } catch (err) {

@@ -46,7 +46,8 @@ let runStats = {
   attachedNormal: 0,
   attached321SameRun: 0,
   attached323ExactTitle: 0,
-  attached324SlugEmbed: 0
+  attached324TierA: 0,
+  attached324TierB: 0
 };
 
 /**
@@ -66,6 +67,65 @@ function normalizeTitle(title) {
 }
 
 /**
+ * TTRC-324 v2: Stopwords for title token overlap
+ * Filters common newsroom words that would create false corroboration
+ */
+const TITLE_STOPWORDS = new Set([
+  // Common function words (length >= 5)
+  'about', 'after', 'before', 'could', 'would', 'should',
+  'their', 'there', 'where', 'which', 'while', 'being',
+  'first', 'under', 'again', 'these', 'those', 'other',
+  'between', 'through', 'during', 'against', 'further',
+  // Generic newsroom tokens
+  'release', 'released', 'report', 'reports', 'reported',
+  'latest', 'update', 'updates', 'updated', 'breaking',
+  'official', 'officials', 'sources', 'according',
+  'court', 'ruling', 'judge', 'judges', 'trial',
+  'probe', 'probes', 'investigation', 'investigators',
+  'policy', 'policies', 'admin', 'administration',
+  'statement', 'statements', 'spokesman', 'spokesperson',
+  // Opinion/feature pieces
+  'exclusive', 'analysis', 'opinion', 'interview', 'explainer'
+]);
+
+/**
+ * TTRC-324 v2: Critical acronyms that should count as meaningful tokens
+ * even though they're shorter than 5 characters
+ * NOTE: 'who' excluded - ambiguous with common pronoun
+ */
+const ACRONYM_ALLOWLIST = new Set([
+  'doj', 'ice', 'fbi', 'cia', 'nsa', 'sec', 'ftc', 'epa', 'irs',
+  'cdc', 'dhs', 'atf', 'dea', 'nato', 'gop', 'dnc', 'rnc'
+]);
+
+/**
+ * TTRC-324 v2: Get count of shared meaningful tokens between two titles
+ * Filters stopwords, requires length >= 5 OR is a critical acronym
+ * @param {string} title1 - First title
+ * @param {string} title2 - Second title
+ * @returns {number} - Count of unique shared meaningful tokens
+ */
+function getTitleTokenOverlap(title1, title2) {
+  if (!title1 || !title2) return 0;
+
+  const normalize = t => t.toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(tok =>
+      (tok.length >= 5 && !TITLE_STOPWORDS.has(tok)) ||
+      ACRONYM_ALLOWLIST.has(tok)
+    );
+
+  const tokens1 = new Set(normalize(title1));
+  const tokens2 = new Set(normalize(title2));
+
+  let count = 0;
+  for (const tok of tokens2) {
+    if (tokens1.has(tok)) count++;
+  }
+  return count;
+}
+
+/**
  * Reset run state - call at start of each RSS run
  * Exported for use by rss-tracker-supabase.js
  */
@@ -77,7 +137,8 @@ export function resetRunState() {
     attachedNormal: 0,
     attached321SameRun: 0,
     attached323ExactTitle: 0,
-    attached324SlugEmbed: 0
+    attached324TierA: 0,
+    attached324TierB: 0
   };
   console.log('[hybrid-clustering] Run state reset');
 }
@@ -501,82 +562,140 @@ export async function clusterArticle(articleId) {
   }
 
   // ============================================================================
-  // TTRC-324: Cross-Run Slug + Embedding Override
-  // Run ONLY when about to create new story (after normal attach and TTRC-321 failed)
-  // Fixes Epstein-class failures: cross-run articles score 0.47-0.66 due to weak
-  // title/entity overlap, despite high embedding similarity
+  // TTRC-324 v2: Two-Tier Cross-Run Override
+  // Tier A: Very high embedding (0.90+, 48h) - no corroboration needed
+  // Tier B: High embedding (0.88+, 72h) - needs slug/entity/title corroboration
   // ============================================================================
 
-  // Step 1: Filter candidates to those passing gates (slug + time + guardrail)
-  const slugTimeFilteredCandidates = scoredCandidates.filter(c => {
-    const story = c.story;
-    const scoreResult = c.scoreResult;
+  // Sort all candidates by embedding for override logic
+  const allByEmbed = [...scoredCandidates].sort(
+    (a, b) => (b.scoreResult?.embeddingScore ?? 0) - (a.scoreResult?.embeddingScore ?? 0)
+  );
 
-    // Slug gate (exact OR token-based)
-    const hasExactSlug = story.topic_slugs?.includes(article.topic_slug);
-    const slugTok = slugTokenSimilarity(article.topic_slug, story.topic_slugs);
-    const slugGate = hasExactSlug || slugTok.passes;
-    if (!slugGate) return false;
+  const overrideBest = allByEmbed[0];
+  if (overrideBest) {
+    const embedBest = overrideBest.scoreResult?.embeddingScore ?? 0;
+    const candidateCount = allByEmbed.length;
+    // Null when single candidate (margin would be vacuous/misleading)
+    const embedSecond = candidateCount >= 2 ? allByEmbed[1].scoreResult?.embeddingScore : null;
+    const margin = embedSecond !== null ? embedBest - embedSecond : null;
+    const marginVacuous = candidateCount < 2;
+    const targetStory = overrideBest.story;
+    const scoreResult = overrideBest.scoreResult;
 
-    // Time gate (72h from last activity) - DEFENSIVE: missing timestamps = false
-    const articleTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
-    const storyTime = story.last_updated_at ? new Date(story.last_updated_at).getTime() : NaN;
-    if (!Number.isFinite(articleTime) || !Number.isFinite(storyTime)) return false;
+    // Time diff calculation with fallback chain
+    // Article: prefer published_at, fallback to created_at (for sources missing pub dates)
+    const articlePubTime = article.published_at ? new Date(article.published_at).getTime() : NaN;
+    const articleCreatedTime = article.created_at ? new Date(article.created_at).getTime() : NaN;
+    const articleTime = Number.isFinite(articlePubTime) ? articlePubTime : articleCreatedTime;
 
-    const timeDiffMs = Math.abs(articleTime - storyTime);
-    const timeGate = timeDiffMs <= 72 * 60 * 60 * 1000; // 72 hours
-    if (!timeGate) return false;
+    const storyLastUpdated = targetStory.last_updated_at ? new Date(targetStory.last_updated_at).getTime() : NaN;
+    const storyFirstSeen = targetStory.first_seen_at ? new Date(targetStory.first_seen_at).getTime() : NaN;
 
-    // Guardrail check (reuse helper)
-    const passesGuardrail = passesClusteringGuardrail(article, story, scoreResult);
-    if (!passesGuardrail) return false;
+    // Prefer last_updated_at, fallback to first_seen_at
+    let storyTime = NaN;
+    let timeAnchor = 'unknown';
+    if (Number.isFinite(storyLastUpdated)) {
+      storyTime = storyLastUpdated;
+      timeAnchor = 'last_updated_at';
+    } else if (Number.isFinite(storyFirstSeen)) {
+      storyTime = storyFirstSeen;
+      timeAnchor = 'first_seen_at';
+    }
 
-    return true;
-  });
+    // Safety valve: last_updated_at may be touched by enrichment/maintenance.
+    // Avoid treating old stories as "recent" solely due to maintenance.
+    // If first_seen_at is >7 days older than last_updated_at, use first_seen_at.
+    if (timeAnchor === 'last_updated_at' && Number.isFinite(storyFirstSeen)) {
+      const gapDays = (storyLastUpdated - storyFirstSeen) / (24 * 60 * 60 * 1000);
+      if (gapDays > 7) {
+        storyTime = storyFirstSeen;
+        timeAnchor = 'first_seen_at_safety';
+      }
+    }
 
-  // Step 2: From filtered set, pick highest embeddingScore
-  if (slugTimeFilteredCandidates.length > 0) {
-    const byEmbedFiltered = [...slugTimeFilteredCandidates].sort(
-      (a, b) => (b.scoreResult?.embeddingScore ?? 0) - (a.scoreResult?.embeddingScore ?? 0)
-    );
+    const timeDiffMs = Number.isFinite(articleTime) && Number.isFinite(storyTime)
+      ? Math.abs(articleTime - storyTime) : Infinity;
+    const timeDiffHours = timeDiffMs / (60 * 60 * 1000);
 
-    const bestSlugCandidate = byEmbedFiltered[0];
-    const embedBest = bestSlugCandidate.scoreResult?.embeddingScore ?? 0;
-    const embedSecond = byEmbedFiltered[1]?.scoreResult?.embeddingScore ?? 0;
+    // Guardrail check
+    const passesGuardrail = passesClusteringGuardrail(article, targetStory, scoreResult);
 
-    // Threshold check: 0.80 since gates are strict (slug + time + guardrail)
-    if (embedBest >= 0.80) {
-      const targetStory = bestSlugCandidate.story;
-      const hasExactSlug = targetStory.topic_slugs?.includes(article.topic_slug);
-      const timeDiffMs = Math.abs(
-        new Date(article.published_at).getTime() - new Date(targetStory.last_updated_at).getTime()
-      );
+    // Tier A: embed >= 0.90 (0.92 if single candidate for extra safety), time <= 48h, margin, guardrail
+    const tierAEmbedThreshold = candidateCount < 2 ? 0.92 : 0.90;
+    const marginOkTierA = marginVacuous ? true : margin >= 0.04;
+    const isTierA = embedBest >= tierAEmbedThreshold && timeDiffHours <= 48 && marginOkTierA && passesGuardrail;
 
+    // Tier B: embed >= 0.88, time <= 72h, margin >= 0.04 with 2+ candidates, guardrail + corroboration
+    let isTierB = false;
+    let corroboration = null;
+
+    // Tier B requires 2+ candidates for margin to be meaningful
+    const hasMeaningfulMargin = !marginVacuous && margin >= 0.04;
+
+    if (!isTierA && embedBest >= 0.88 && timeDiffHours <= 72 && hasMeaningfulMargin && passesGuardrail) {
+      // Defensive slug handling - ensure array type
+      const storySlugs = Array.isArray(targetStory.topic_slugs)
+        ? targetStory.topic_slugs
+        : (targetStory.topic_slugs ? [String(targetStory.topic_slugs)] : []);
+
+      // Check corroboration signals (with fallback for primary_headline)
+      const slugTok = slugTokenSimilarity(article.topic_slug || '', storySlugs);
+      const entityOverlap = scoreResult.nonStopwordEntityOverlapCount ?? 0;
+      const storyTitle = targetStory.primary_headline || targetStory.title || '';
+      const titleTokenOverlap = getTitleTokenOverlap(article.title, storyTitle);
+
+      if (slugTok.passes) {
+        isTierB = true;
+        corroboration = 'slug_token';
+      } else if (entityOverlap >= 1) {
+        isTierB = true;
+        corroboration = 'entity';
+      } else if (titleTokenOverlap >= 1) {
+        isTierB = true;
+        corroboration = 'title_token';
+      }
+    }
+
+    if (isTierA || isTierB) {
+      const tier = isTierA ? 'A' : 'B';
+
+      // Guard against undefined scoreResult.total
+      const attachScore = Number.isFinite(scoreResult.total) ? scoreResult.total : embedBest;
+
+      // JSON log with raw numbers (no toFixed for machine parsing)
       console.log(JSON.stringify({
-        type: 'SLUG_EMBED_OVERRIDE',
+        type: 'CROSS_RUN_OVERRIDE',
+        tier,
+        tierA_embed_threshold: tierAEmbedThreshold,
         article_id: article.id,
         story_id: targetStory.id,
-        embed_best: embedBest.toFixed(3),
-        embed_second: embedSecond.toFixed(3),
-        total: bestSlugCandidate.scoreResult?.total?.toFixed(3),
-        threshold: GUARDRAIL.FINAL_THRESHOLD,
-        slug_gate: hasExactSlug ? 'exact' : 'token',
-        timeWindowMinutes: Math.round(timeDiffMs / 60000),
-        candidate_count_slug_time: slugTimeFilteredCandidates.length
+        embed_best: embedBest,
+        embed_second: embedSecond,
+        margin,
+        margin_vacuous: marginVacuous,
+        time_diff_hours: timeDiffHours,
+        time_anchor: timeAnchor,
+        candidate_count: candidateCount,
+        guardrail: passesGuardrail,
+        corroboration,
+        total: attachScore
       }));
 
-      const slugEmbedResult = await attachToStory(article, targetStory, bestSlugCandidate.scoreResult.total);
+      const overrideResult = await attachToStory(article, targetStory, attachScore);
 
       const totalTime = Date.now() - totalStart;
-      console.log(`[hybrid-clustering] ✅ SLUG_EMBED_OVERRIDE: Attached article ${articleId} to story ${targetStory.id} (embed: ${embedBest.toFixed(3)}, slug: ${hasExactSlug ? 'exact' : 'token'})`);
-      console.log(`[PERF] Total clustering time: ${totalTime}ms (candidate: ${candidateTime}ms, scoring: ${scoringTime}ms)`);
+      const marginStr = margin !== null ? margin.toFixed(3) : 'n/a';
+      const embedSecondStr = embedSecond !== null ? embedSecond.toFixed(3) : 'n/a';
+      console.log(`[hybrid-clustering] ✅ CROSS_RUN_OVERRIDE (Tier ${tier}): Attached ${article.id} to ${targetStory.id} (embed: ${embedBest.toFixed(3)}, second: ${embedSecondStr}, margin: ${marginStr})`);
+      console.log(`[PERF] Total clustering time: ${totalTime}ms`);
 
-      if (totalTime > 500) {
-        console.warn(`[PERF] ⚠️ End-to-end clustering slow: ${totalTime}ms (target: <500ms p95)`);
+      if (tier === 'A') {
+        runStats.attached324TierA++;
+      } else {
+        runStats.attached324TierB++;
       }
-
-      runStats.attached324SlugEmbed++;
-      return slugEmbedResult;
+      return overrideResult;
     }
   }
 
@@ -977,7 +1096,11 @@ export async function clusterBatch(limit = 50) {
     attached_normal: stats.attachedNormal,
     attached_321_same_run: stats.attached321SameRun,
     attached_323_exact_title: stats.attached323ExactTitle,
-    attached_324_slug_embed: stats.attached324SlugEmbed
+    // Backwards compat - keep old key for one release
+    attached_324_slug_embed: stats.attached324TierA + stats.attached324TierB,
+    // New tier-specific keys (v2)
+    attached_324_tier_a: stats.attached324TierA,
+    attached_324_tier_b: stats.attached324TierB
   }));
 
   return results;
