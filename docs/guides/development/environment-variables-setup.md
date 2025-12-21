@@ -1,7 +1,7 @@
 # TrumpyTracker Environment Variables & Secrets Documentation
 
-**Last Updated:** November 2025
-**Version:** 3.0
+**Last Updated:** December 2025
+**Version:** 3.1
 
 ## Table of Contents
 1. [Critical Database Info](#critical-database-schema-update)
@@ -136,6 +136,8 @@ csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com
 | `NODE_ENV` | `development` | Environment mode (test/development/production) | `NODE_ENV=test` |
 | `DEBUG_COUNTS` | `false` | Log detailed counts in clustering | `DEBUG_COUNTS=true` |
 | `DRY_RUN` | `false` | Simulate operations without writing to DB | `DRY_RUN=true` |
+| `LOG_PHASE0_DIAGNOSTICS` | `false` | Enable Phase 0 diagnostic logging (TTRC-321) | `LOG_PHASE0_DIAGNOSTICS=true` |
+| `LOG_NEAR_MISS` | `true` | Log CROSS_RUN_NEAR_MISS events for override debugging (TTRC-324 v2) | `LOG_NEAR_MISS=false` |
 
 ---
 
@@ -289,12 +291,12 @@ DRY_RUN=true
 - **Worker:** `MAX_EMPTY_POLLS`, `STALE_JOB_MINUTES`, `LOG_LEVEL`
 - **EO:** `EO_LOOKBACK_DAYS`
 - **Dedup:** `DUPLICATE_*` variables
-- **Debug:** `NODE_ENV`, `DEBUG_COUNTS`, `DRY_RUN`
+- **Debug:** `NODE_ENV`, `DEBUG_COUNTS`, `DRY_RUN`, `LOG_PHASE0_DIAGNOSTICS`, `LOG_NEAR_MISS`
 
 **Total count:** 3 required + 25+ optional
 
 ---
 
-**Document Version**: 3.0
-**Last Updated**: November 2025
+**Document Version**: 3.1
+**Last Updated**: December 2025
 **Critical**: Always use `articles` table in TEST, never `political_entries`
