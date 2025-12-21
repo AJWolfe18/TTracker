@@ -698,6 +698,85 @@ export async function clusterArticle(articleId) {
       }
       return overrideResult;
     }
+
+    // =========================================================================
+    // Near-miss diagnostic: log when top-by-embedding was close but didn't fire
+    // Helps debug cases like "why didn't this attach to the obvious story?"
+    // =========================================================================
+    const nearMissEligible =
+      embedBest >= 0.88 || (embedBest >= 0.85 && timeDiffHours <= 72);
+
+    if (nearMissEligible) {
+      // Recompute slug/entity/title corroboration for logging (may not have been computed if Tier B wasn't reached)
+      const storySlugsNM = Array.isArray(targetStory.topic_slugs)
+        ? targetStory.topic_slugs
+        : (targetStory.topic_slugs ? [String(targetStory.topic_slugs)] : []);
+      const slugTokNM = slugTokenSimilarity(article.topic_slug || '', storySlugsNM);
+      const entityOverlapNM = scoreResult?.nonStopwordEntityOverlapCount ?? 0;
+      const storyTitleNM = targetStory.primary_headline || targetStory.title || '';
+      const titleTokenOverlapNM = getTitleTokenOverlap(article.title, storyTitleNM);
+
+      const tierA_gates = {
+        embed: embedBest >= tierAEmbedThreshold,
+        time: timeDiffHours <= 48,
+        margin: marginVacuous ? true : (margin !== null && margin >= 0.04),
+        guardrail: passesGuardrail
+      };
+
+      const hasMeaningfulMarginNM = !marginVacuous && margin !== null && margin >= 0.04;
+      const tierB_base = {
+        embed: embedBest >= 0.88,
+        time: timeDiffHours <= 72,
+        margin: hasMeaningfulMarginNM,
+        guardrail: passesGuardrail
+      };
+
+      const corroboration_detail = {
+        slug_token: slugTokNM?.passes ?? false,
+        entity: entityOverlapNM >= 1,
+        title_token: titleTokenOverlapNM >= 1
+      };
+
+      const tierB_corroboration_pass =
+        corroboration_detail.slug_token ||
+        corroboration_detail.entity ||
+        corroboration_detail.title_token;
+
+      // Determine primary blocker in stable order
+      function firstFail(gates, order) {
+        for (const k of order) {
+          if (!gates[k]) return k;
+        }
+        return null;
+      }
+
+      const tierA_primary_blocker = firstFail(tierA_gates, ['embed', 'time', 'margin', 'guardrail']);
+      let tierB_primary_blocker = firstFail(tierB_base, ['embed', 'time', 'margin', 'guardrail']);
+      if (tierB_primary_blocker === null && !tierB_corroboration_pass) {
+        tierB_primary_blocker = 'corroboration';
+      }
+
+      console.log(JSON.stringify({
+        type: 'CROSS_RUN_NEAR_MISS',
+        article_id: article.id,
+        story_id: targetStory.id,
+        top_by: 'embedding',
+        embed_best: embedBest,
+        embed_second: embedSecond,
+        margin,
+        margin_vacuous: marginVacuous,
+        candidate_count: candidateCount,
+        time_diff_hours: timeDiffHours,
+        time_anchor: timeAnchor,
+        tierA_embed_threshold: tierAEmbedThreshold,
+        tierA_gates,
+        tierA_primary_blocker,
+        tierB_base,
+        tierB_corroboration_pass,
+        corroboration_detail,
+        tierB_primary_blocker
+      }));
+    }
   }
 
   // Fall through to createNewStory()
@@ -707,7 +786,10 @@ export async function clusterArticle(articleId) {
   // ============================================================================
   if (LOG_PHASE0) {
     // Log decision context before creating new story
-    console.log(`[DECISION] action=create_new_story article_id=${articleId} best_story_id=${bestMatch?.story?.id || 'none'} best_total=${bestMatch?.scoreResult?.total?.toFixed(3) || 'n/a'} embedding=${bestMatch?.scoreResult?.embeddingScore?.toFixed(3) || 'n/a'} threshold=${threshold.toFixed(3)}`);
+    // Include BOTH top-by-total and top-by-embedding to avoid confusion
+    const topByTotal = bestMatch?.story;
+    const topByEmbed = allByEmbed?.[0]?.story;
+    console.log(`[DECISION] action=create_new_story article_id=${articleId} top_total_story=${topByTotal?.id || 'none'} top_total_score=${bestMatch?.scoreResult?.total?.toFixed(3) || 'n/a'} top_embed_story=${topByEmbed?.id || 'none'} top_embed_score=${allByEmbed?.[0]?.scoreResult?.embeddingScore?.toFixed(3) || 'n/a'} threshold=${threshold.toFixed(3)}`);
 
     // Check if we're about to create a duplicate
     const norm = normalizeTitle(article.title);
