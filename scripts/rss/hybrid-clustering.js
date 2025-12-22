@@ -809,6 +809,67 @@ export async function clusterArticle(articleId) {
   // Fall through to createNewStory()
 
   // ============================================================================
+  // TTRC-329: Shadow Policy Diff Logging (no behavior change)
+  // Test multiple Tier B thresholds to inform threshold selection
+  // Only logs when shadow would ATTACH but live would CREATE
+  // ============================================================================
+  if (targetStory && embedBest >= 0.86 && timeDiffHours <= 48 && passesGuardrail) {
+    // Compute corroboration signals
+    const shadowSlugs = Array.isArray(targetStory.topic_slugs)
+      ? targetStory.topic_slugs
+      : (targetStory.topic_slugs ? [String(targetStory.topic_slugs)] : []);
+    const shadowSlugTok = slugTokenSimilarity(article.topic_slug || '', shadowSlugs);
+    const shadowEntityOverlap = scoreResult?.nonStopwordEntityOverlapCount ?? 0;
+    const shadowStoryTitle = targetStory.primary_headline || targetStory.title || '';
+    const shadowTitleOverlap = getTitleTokenOverlap(article.title, shadowStoryTitle);
+
+    // Corroboration strength
+    const hasStrongCorroboration = shadowSlugTok.passes || shadowEntityOverlap >= 1;
+    const hasTitleOnlyCorroboration = shadowTitleOverlap >= 1 && !hasStrongCorroboration;
+    const hasAnyCorroboration = hasStrongCorroboration || hasTitleOnlyCorroboration;
+
+    // Test shadow thresholds
+    const shadowThresholds = [0.86, 0.87, 0.88, 0.89];
+    const shadowResults = {};
+
+    for (const thresh of shadowThresholds) {
+      // Safety rule: title-only corroboration requires embed >= 0.90
+      const effectiveThresh = hasTitleOnlyCorroboration ? Math.max(thresh, 0.90) : thresh;
+      const wouldAttach = embedBest >= effectiveThresh && hasAnyCorroboration;
+      shadowResults[`tierB_${String(thresh).replace('.', '_')}`] = wouldAttach;
+    }
+
+    // Only log if at least one shadow would attach
+    if (Object.values(shadowResults).some(v => v)) {
+      console.log(JSON.stringify({
+        type: 'SHADOW_POLICY_DIFF',
+        article_id: article.id,
+        article_title: (article.title || '').substring(0, 80),
+        best_candidate_id: targetStory.id,
+        best_candidate_headline: (targetStory.primary_headline || '').substring(0, 80),
+        embed_best: embedBest,
+        embed_second: embedSecond,
+        margin: margin,
+        candidate_count: candidateCount,
+        time_diff_hours: timeDiffHours,
+        guardrail: passesGuardrail,
+        corroboration_type: hasStrongCorroboration ? (shadowSlugTok.passes ? 'slug' : 'entity') : (hasTitleOnlyCorroboration ? 'title_only' : 'none'),
+        corroboration_detail: {
+          entity: shadowEntityOverlap,
+          slug: shadowSlugTok.passes,
+          title: shadowTitleOverlap
+        },
+        // Entity snapshots at clustering time (key diagnostic)
+        article_entities_count: article.entities?.length || 0,
+        story_entities_count: targetStory.top_entities?.length || 0,
+        article_entity_sample: (article.entities || []).slice(0, 5).map(e => e.id || e.name || e),
+        story_entity_sample: (targetStory.top_entities || []).slice(0, 5),
+        shadow_results: shadowResults
+      }));
+    }
+  }
+
+  // ============================================================================
   // TTRC-321 Phase 0: Pre-creation diagnostic logging
   // ============================================================================
   if (LOG_PHASE0) {
