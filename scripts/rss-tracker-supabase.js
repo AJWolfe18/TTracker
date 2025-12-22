@@ -664,8 +664,8 @@ class RSSTracker {
       console.log(`📊 Stats:`, this.stats);
 
       // Log clustering override stats (TTRC-323/324 v2, TTRC-326)
-      const clusterStats = getRunStats();
-      // Guard against undefined tier fields (AI code review blocker)
+      const clusterStats = getRunStats() || {};
+      // Guard against undefined/null clusterStats and tier fields (AI code review blocker)
       const tierA = Number(clusterStats.attached324TierA ?? 0);
       const tierB = Number(clusterStats.attached324TierB ?? 0);
       const rpcFails = Number(clusterStats.latestArticlePubRpcFails ?? 0);

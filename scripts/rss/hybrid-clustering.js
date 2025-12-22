@@ -597,11 +597,13 @@ export async function clusterArticle(articleId) {
     const articleTime = Number.isFinite(articlePubTime) ? articlePubTime : articleCreatedTime;
 
     // TTRC-326: Prefer latest_article_published_at (most accurate for event recency)
-    // Fallback to first_seen_at if column not populated or RPC failed
+    // Fallback chain: latest_article_published_at → first_seen_at → last_updated_at
     const storyLatestArticle = targetStory.latest_article_published_at
       ? new Date(targetStory.latest_article_published_at).getTime() : NaN;
     const storyFirstSeen = targetStory.first_seen_at
       ? new Date(targetStory.first_seen_at).getTime() : NaN;
+    const storyLastUpdated = targetStory.last_updated_at
+      ? new Date(targetStory.last_updated_at).getTime() : NaN;
 
     let storyTime = NaN;
     let timeAnchor = 'unknown';
@@ -612,9 +614,11 @@ export async function clusterArticle(articleId) {
     } else if (Number.isFinite(storyFirstSeen)) {
       storyTime = storyFirstSeen;
       timeAnchor = 'first_seen_at';
+    } else if (Number.isFinite(storyLastUpdated)) {
+      // Tertiary fallback for legacy rows without latest_article_published_at/first_seen_at
+      storyTime = storyLastUpdated;
+      timeAnchor = 'last_updated_at_fallback';
     }
-    // REMOVED: Old safety valve (last_updated_at gap check) no longer needed
-    // latest_article_published_at only updates on article attachment, not enrichment
 
     const timeDiffMs = Number.isFinite(articleTime) && Number.isFinite(storyTime)
       ? Math.abs(articleTime - storyTime) : Infinity;
