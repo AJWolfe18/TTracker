@@ -152,12 +152,13 @@ async function getTimeBlockCandidates(article) {
   // TTRC-319: Removed centroid_embedding_v1 from select (14KB each -> egress optimization)
   // Similarity calculated server-side via get_embedding_similarities RPC
   // TTRC-321: Added first_seen_at for same-run detection (stories use first_seen_at, not created_at)
+  // TTRC-327: Use latest_article_published_at for time filter (not last_updated_at which updates on enrichment)
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
-    .gte('last_updated_at', startTime.toISOString())
-    .lte('last_updated_at', endTime.toISOString())
+    .gte('latest_article_published_at', startTime.toISOString())
+    .lte('latest_article_published_at', endTime.toISOString())
     .limit(100);
 
   if (error) {
@@ -192,9 +193,10 @@ async function getEntityBlockCandidates(article) {
   // Note: Supabase PostgREST uses cs (contains) operator for array overlap
   // TTRC-319: Removed centroid_embedding_v1 from select (egress optimization)
   // TTRC-321: Added first_seen_at for same-run detection (stories use first_seen_at, not created_at)
+  // TTRC-327: Added latest_article_published_at for recency gating
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .overlaps('top_entities', entityIds)  // GIN index accelerates this
     .limit(150);
@@ -246,9 +248,10 @@ async function getSlugBlockCandidates(article) {
 
   // TTRC-319: Removed centroid_embedding_v1 from select (egress optimization)
   // TTRC-321: Added first_seen_at for same-run detection (stories use first_seen_at, not created_at)
+  // TTRC-327: Added latest_article_published_at for recency gating
   const { data, error } = await getSupabaseClient()
     .from('stories')
-    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, primary_source_domain, lifecycle_state')
+    .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .contains('topic_slugs', [article.topic_slug])  // GIN index lookup
     .limit(20);
