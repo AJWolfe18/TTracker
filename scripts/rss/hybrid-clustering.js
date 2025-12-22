@@ -627,9 +627,40 @@ export async function clusterArticle(articleId) {
     // Guardrail check
     const passesGuardrail = passesClusteringGuardrail(article, targetStory, scoreResult);
 
+    // Calculate corroboration signals upfront (used by both Tier A margin bypass and Tier B)
+    // Defensive slug handling - ensure array type
+    const storySlugs = Array.isArray(targetStory.topic_slugs)
+      ? targetStory.topic_slugs
+      : (targetStory.topic_slugs ? [String(targetStory.topic_slugs)] : []);
+    const slugTok = slugTokenSimilarity(article.topic_slug || '', storySlugs);
+    const entityOverlap = scoreResult.nonStopwordEntityOverlapCount ?? 0;
+    const storyTitle = targetStory.primary_headline || targetStory.title || '';
+    const titleTokenOverlap = getTitleTokenOverlap(article.title, storyTitle);
+
     // Tier A: embed >= 0.90 (0.92 if single candidate for extra safety), time <= 48h, margin, guardrail
     const tierAEmbedThreshold = candidateCount < 2 ? 0.92 : 0.90;
-    const marginOkTierA = marginVacuous ? true : margin >= 0.04;
+    let marginOkTierA = marginVacuous ? true : margin >= 0.04;
+    let tierAMarginBypass = null;
+
+    // Tier A margin bypass: corroboration can override low margin when other gates pass
+    // This catches cases where multiple candidates are about the SAME event (Epstein-class fragmentation)
+    if (!marginOkTierA && embedBest >= tierAEmbedThreshold && timeDiffHours <= 48 && passesGuardrail) {
+      // Bypass rules (ordered by signal strength):
+      // - entityOverlap >= 1: strong structural signal
+      // - slug_token.passes: strong topic signal
+      // - titleTokenOverlap >= 1 AND embedBest >= 0.905: title needs extra embedding safety
+      if (entityOverlap >= 1) {
+        marginOkTierA = true;
+        tierAMarginBypass = 'entity';
+      } else if (slugTok.passes) {
+        marginOkTierA = true;
+        tierAMarginBypass = 'slug_token';
+      } else if (titleTokenOverlap >= 1 && embedBest >= 0.905) {
+        marginOkTierA = true;
+        tierAMarginBypass = 'title_token';
+      }
+    }
+
     const isTierA = embedBest >= tierAEmbedThreshold && timeDiffHours <= 48 && marginOkTierA && passesGuardrail;
 
     // Tier B: embed >= 0.88, time <= 72h, margin >= 0.04 with 2+ candidates, guardrail + corroboration
@@ -640,17 +671,6 @@ export async function clusterArticle(articleId) {
     const hasMeaningfulMargin = !marginVacuous && margin >= 0.04;
 
     if (!isTierA && embedBest >= 0.88 && timeDiffHours <= 72 && hasMeaningfulMargin && passesGuardrail) {
-      // Defensive slug handling - ensure array type
-      const storySlugs = Array.isArray(targetStory.topic_slugs)
-        ? targetStory.topic_slugs
-        : (targetStory.topic_slugs ? [String(targetStory.topic_slugs)] : []);
-
-      // Check corroboration signals (with fallback for primary_headline)
-      const slugTok = slugTokenSimilarity(article.topic_slug || '', storySlugs);
-      const entityOverlap = scoreResult.nonStopwordEntityOverlapCount ?? 0;
-      const storyTitle = targetStory.primary_headline || targetStory.title || '';
-      const titleTokenOverlap = getTitleTokenOverlap(article.title, storyTitle);
-
       if (slugTok.passes) {
         isTierB = true;
         corroboration = 'slug_token';
@@ -674,6 +694,7 @@ export async function clusterArticle(articleId) {
         type: 'CROSS_RUN_OVERRIDE',
         tier,
         tierA_embed_threshold: tierAEmbedThreshold,
+        tierA_margin_bypass: tierAMarginBypass,  // null if margin was OK, else the corroboration that allowed bypass
         article_id: article.id,
         story_id: targetStory.id,
         embed_best: embedBest,
@@ -684,7 +705,7 @@ export async function clusterArticle(articleId) {
         time_anchor: timeAnchor,
         candidate_count: candidateCount,
         guardrail: passesGuardrail,
-        corroboration,
+        corroboration: isTierA ? tierAMarginBypass : corroboration,  // Show what allowed the attach
         total: attachScore
       }));
 
