@@ -159,6 +159,7 @@ async function getTimeBlockCandidates(article) {
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
     .gte('latest_article_published_at', startTime.toISOString())
     .lte('latest_article_published_at', endTime.toISOString())
+    .order('latest_article_published_at', { ascending: false })
     .limit(100);
 
   if (error) {
