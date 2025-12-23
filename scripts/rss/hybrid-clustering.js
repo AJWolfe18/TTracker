@@ -843,6 +843,7 @@ export async function clusterArticle(articleId) {
     if (Object.values(shadowResults).some(v => v)) {
       console.log(JSON.stringify({
         type: 'SHADOW_POLICY_DIFF',
+        commit_sha: process.env.GITHUB_SHA || 'local',
         article_id: article.id,
         article_title: (article.title || '').substring(0, 80),
         best_candidate_id: targetStory.id,
