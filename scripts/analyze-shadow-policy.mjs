@@ -396,25 +396,31 @@ async function main() {
     console.log(`⚠️  Only ${baselineCount}/${BASELINE_RESERVE} baseline slots filled (not enough unused records after stratified)`);
   }
 
-  // === OUTPUT TSV (avoids CSV quote escaping hell) ===
-  const tsvHeader = [
+  // === OUTPUT CSV ===
+  // Helper to escape CSV fields (wrap in quotes if contains comma, quote, or newline)
+  const csvEscape = (val) => {
+    const str = String(val ?? '');
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  };
+
+  const csvHeader = [
     'row', 'article_id', 'best_candidate_id', 'article_title', 'story_headline',
     'embed_best', 'margin', 'time_diff_hours',
     'corroboration_type', 'candidate_count', 'risk_score',
     'shadow_0_86', 'shadow_0_87', 'shadow_0_88', 'shadow_0_89',
     'sample_reason', 'occurrences', 'run_id', 'run_created', 'commit_sha', 'label'
-  ].join('\t');
+  ].join(',');
 
-  const tsvRows = samples.map((r, i) => {
-    // Safe field access with fallbacks, strip tabs/newlines
-    const clean = (s) => (s || '').replace(/[\t\n\r]/g, ' ');
-
+  const csvRows = samples.map((r, i) => {
     return [
       i + 1,
-      r.article_id || '',
-      r.best_candidate_id || '',
-      clean(r.article_title),
-      clean(r.best_candidate_headline),
+      csvEscape(r.article_id || ''),
+      csvEscape(r.best_candidate_id || ''),
+      csvEscape(r.article_title || ''),
+      csvEscape(r.best_candidate_headline || ''),
       r.embed_best?.toFixed(3) || '',
       r.margin?.toFixed(3) || '',
       r.time_diff_hours?.toFixed(1) || '',
@@ -429,20 +435,20 @@ async function main() {
       r._occurrences || 1,
       r._run_id || '',
       r._run_created || '',
-      r._run_sha || r.commit_sha || '',
+      csvEscape(r._run_sha || r.commit_sha || ''),
       ''  // label column for user to fill
-    ].join('\t');
+    ].join(',');
   });
 
-  const tsv = [tsvHeader, ...tsvRows].join('\n');
-  fs.writeFileSync(path.join(LOG_DIR, 'risky-cases.tsv'), tsv);
-  console.log(`\n✅ Wrote ${LOG_DIR}/risky-cases.tsv`);
+  const csv = [csvHeader, ...csvRows].join('\n');
+  fs.writeFileSync(path.join(LOG_DIR, 'risky-cases.csv'), csv);
+  console.log(`\n✅ Wrote ${LOG_DIR}/risky-cases.csv`);
 
   // === OUTPUT SUMMARY JSON ===
   fs.writeFileSync(path.join(LOG_DIR, 'summary.json'), JSON.stringify(stats, null, 2));
   console.log(`✅ Wrote ${LOG_DIR}/summary.json`);
 
-  console.log(`\nNext: Open risky-cases.tsv, fill 'label' column (S/A/D), save as risky-cases-labeled.tsv`);
+  console.log(`\nNext: Open risky-cases.csv in Excel, fill 'label' column (S/A/D), save as risky-cases-labeled.csv`);
 }
 
 main().catch(console.error);

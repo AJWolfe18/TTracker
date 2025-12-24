@@ -1,7 +1,7 @@
 /**
  * TTRC-329: Generate threshold recommendation from labeled data
  *
- * Reads risky-cases-labeled.tsv, calculates FP rates per threshold
+ * Reads risky-cases-labeled.csv, calculates FP rates per threshold
  */
 
 import fs from 'fs';
@@ -9,26 +9,52 @@ import path from 'path';
 
 const LOG_DIR = 'logs/shadow-policy';
 
-// Simple TSV parser (handles Windows \r\n)
-function parseTSV(content) {
+// Simple CSV parser (handles quoted fields with commas)
+function parseCSV(content) {
   const lines = content.split('\n').filter(l => l.trim());
-  const header = lines[0].split('\t').map(h => h.trim());
 
+  // Parse a single CSV line handling quoted fields
+  const parseLine = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++; // Skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim().replace(/\r$/, '')); // Handle Windows line endings
+    return result;
+  };
+
+  const header = parseLine(lines[0]);
   return lines.slice(1).map(line => {
-    const values = line.split('\t');
+    const values = parseLine(line);
     const obj = {};
-    header.forEach((h, i) => obj[h] = (values[i] || '').trim());  // .trim() handles \r
+    header.forEach((h, i) => obj[h] = values[i] || '');
     return obj;
   });
 }
 
 async function main() {
-  const tsvPath = path.join(LOG_DIR, 'risky-cases-labeled.tsv');
+  const csvPath = path.join(LOG_DIR, 'risky-cases-labeled.csv');
   const summaryPath = path.join(LOG_DIR, 'summary.json');
 
-  if (!fs.existsSync(tsvPath)) {
-    console.log('❌ risky-cases-labeled.tsv not found.');
-    console.log('   Label risky-cases.tsv and save as risky-cases-labeled.tsv first.');
+  if (!fs.existsSync(csvPath)) {
+    console.log('❌ risky-cases-labeled.csv not found.');
+    console.log('   Label risky-cases.csv and save as risky-cases-labeled.csv first.');
     process.exit(1);
   }
 
@@ -38,7 +64,7 @@ async function main() {
     globalStats = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
   }
 
-  const records = parseTSV(fs.readFileSync(tsvPath, 'utf8'));
+  const records = parseCSV(fs.readFileSync(csvPath, 'utf8'));
   const labeled = records.filter(r => ['S', 'A', 'D'].includes(r.label?.toUpperCase()));
 
   // Warn if sample sizes too small
