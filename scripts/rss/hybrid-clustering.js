@@ -810,7 +810,7 @@ export async function clusterArticle(articleId) {
     // Test multiple Tier B thresholds to inform threshold selection
     // Only logs when shadow would ATTACH but live would CREATE
     // ==========================================================================
-    if (embedBest >= 0.86 && timeDiffHours <= 48 && passesGuardrail) {
+    if (targetStory && embedBest >= 0.86 && timeDiffHours <= 48 && passesGuardrail) {
       // Compute corroboration signals
       const shadowSlugs = Array.isArray(targetStory.topic_slugs)
         ? targetStory.topic_slugs
@@ -818,7 +818,7 @@ export async function clusterArticle(articleId) {
       const shadowSlugTok = slugTokenSimilarity(article.topic_slug || '', shadowSlugs);
       const shadowEntityOverlap = scoreResult?.nonStopwordEntityOverlapCount ?? 0;
       const shadowStoryTitle = targetStory.primary_headline || targetStory.title || '';
-      const shadowTitleOverlap = getTitleTokenOverlap(article.title, shadowStoryTitle);
+      const shadowTitleOverlap = getTitleTokenOverlap(article.title || '', shadowStoryTitle);
 
       // Corroboration strength
       const hasStrongCorroboration = shadowSlugTok.passes || shadowEntityOverlap >= 1;
