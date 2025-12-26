@@ -39,6 +39,16 @@ const LOG_PHASE0 = process.env.LOG_PHASE0_DIAGNOSTICS === 'true';
 // Defaults to true for initial debugging, set to 'false' to disable
 const LOG_NEAR_MISS = process.env.LOG_NEAR_MISS !== 'false';
 
+// ============================================================================
+// TTRC-331: Tier B Margin Bypass (feature-flagged)
+// ============================================================================
+// Feature flag - defaults OFF. Enable with ENABLE_TIERB_MARGIN_BYPASS=true
+const ENABLE_TIERB_MARGIN_BYPASS = process.env.ENABLE_TIERB_MARGIN_BYPASS === 'true';
+// Shadow log rate limit - max 10 per run to avoid log spam
+const TIERB_BYPASS_SHADOW_LIMIT = 10;
+// Counter for shadow logs - MUST be module-scope (outside per-article loop)
+let tierBBypassShadowCount = 0;
+
 // Track titles seen this run for duplicate detection
 // Store FIRST occurrence only - never overwrite
 const seenTitlesThisRun = new Map(); // normalizedTitle -> { storyId }
@@ -69,6 +79,20 @@ function getRunStart() {
  */
 function normalizeTitle(title) {
   return (title || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * TTRC-331: Build blocked_by array from gate booleans
+ * Returns list of failed gates in deterministic order
+ * Uses RAW margin gate (pre-bypass) to show honest failures
+ */
+function buildBlockedBy(gates) {
+  const blockers = [];
+  const order = ['guardrail', 'time', 'embed', 'corroboration', 'margin'];
+  for (const k of order) {
+    if (!gates[k]) blockers.push(k);
+  }
+  return blockers;
 }
 
 /**
@@ -587,6 +611,8 @@ export async function clusterArticle(articleId) {
     const embedSecond = Number.isFinite(rawSecond) ? rawSecond : null;
     const margin = embedSecond !== null ? embedBest - embedSecond : null;
     const marginVacuous = candidateCount < 2 || embedSecond === null;
+    // TTRC-331: Capture second candidate for logging (null if doesn't exist)
+    const secondCandidate = candidateCount >= 2 ? allByEmbed[1]?.story : null;
     const targetStory = overrideBest.story;
     const scoreResult = overrideBest.scoreResult;
 
@@ -663,14 +689,64 @@ export async function clusterArticle(articleId) {
 
     const isTierA = embedBest >= tierAEmbedThreshold && timeDiffHours <= 48 && marginOkTierA && passesGuardrail;
 
-    // Tier B: embed >= 0.88, time <= 72h, margin >= 0.04 with 2+ candidates, guardrail + corroboration
+    // =========================================================================
+    // Tier B: embed >= 0.88, time <= 72h, margin gate, guardrail + corroboration
+    // TTRC-331: Fix marginVacuous bug + add margin bypass
+    // =========================================================================
     let isTierB = false;
     let corroboration = null;
 
-    // Tier B requires 2+ candidates for margin to be meaningful
+    // TTRC-331: Margin gate passes if meaningful margin OR vacuous (single candidate)
+    // Single-candidate cases have no ambiguity to resolve
     const hasMeaningfulMargin = !marginVacuous && margin >= 0.04;
+    // IMPORTANT: Save pre-bypass state for logging/shadow mode
+    const tierBMarginOk_preBypass = hasMeaningfulMargin || marginVacuous;
+    let tierBMarginOk = tierBMarginOk_preBypass;  // Will be mutated by bypass
+    let tierBMarginBypass = null;
 
-    if (!isTierA && embedBest >= 0.88 && timeDiffHours <= 72 && hasMeaningfulMargin && passesGuardrail) {
+    // TTRC-331: Compute wouldBypass BEFORE bypass mutation
+    // This is used for shadow logging and near-miss diagnostics
+    const wouldBypassVia = slugTok.passes ? 'slug' : (entityOverlap >= 2 ? 'entity' : null);
+    const wouldBypass = !tierBMarginOk_preBypass && wouldBypassVia && embedBest >= 0.88 && timeDiffHours <= 48 && passesGuardrail;
+
+    // TTRC-331: Tier B margin bypass (feature-flagged, defaults OFF)
+    // Similar to Tier A but stricter: entity >= 2 (not 1), no title-only bypass
+    if (
+      !tierBMarginOk_preBypass &&                          // Use PRE-bypass state
+      embedBest >= 0.88 &&
+      timeDiffHours <= 48 &&                               // Stricter time (48h not 72h)
+      passesGuardrail &&
+      ENABLE_TIERB_MARGIN_BYPASS                           // Feature flag
+    ) {
+      if (slugTok.passes) {
+        tierBMarginOk = true;
+        tierBMarginBypass = 'slug';
+      } else if (entityOverlap >= 2) {                     // Entity >= 2 (not 1)
+        tierBMarginOk = true;
+        tierBMarginBypass = 'entity';
+      }
+      // NO title-only bypass for Tier B
+    }
+
+    // TTRC-331: Shadow logging - log when bypass WOULD have fired (but didn't because flag is OFF)
+    // Rate-limited to avoid log spam. Counter is module-scope (outside article loop)
+    const marginIsBlocker = !tierBMarginOk_preBypass && !marginVacuous;
+    if (!ENABLE_TIERB_MARGIN_BYPASS && marginIsBlocker && wouldBypass &&
+        tierBBypassShadowCount < TIERB_BYPASS_SHADOW_LIMIT) {
+      tierBBypassShadowCount++;
+      console.log(JSON.stringify({
+        type: 'TIERB_BYPASS_SHADOW',
+        article_id: article.id,
+        story_id: targetStory.id,
+        embed_best: embedBest,
+        margin,
+        would_bypass_via: wouldBypassVia,
+        shadow_count: tierBBypassShadowCount
+      }));
+    }
+
+    // CRITICAL: passesCorroboration still required - bypass only relaxes margin gate
+    if (!isTierA && embedBest >= 0.88 && timeDiffHours <= 72 && tierBMarginOk && passesGuardrail) {
       if (slugTok.passes) {
         isTierB = true;
         corroboration = 'slug_token';
@@ -695,6 +771,7 @@ export async function clusterArticle(articleId) {
         tier,
         tierA_embed_threshold: tierAEmbedThreshold,
         tierA_margin_bypass: tierAMarginBypass,  // null if margin was OK, else the corroboration that allowed bypass
+        tierB_margin_bypass: tierBMarginBypass,  // TTRC-331: null if margin was OK, else 'slug'|'entity'
         article_id: article.id,
         story_id: targetStory.id,
         embed_best: embedBest,
@@ -789,7 +866,7 @@ export async function clusterArticle(articleId) {
         story_id: targetStory.id,
         top_by: 'embedding',
         embed_best: embedBest,
-        embed_second: embedSecond,
+        embed_second: candidateCount >= 2 ? embedSecond : null,  // TTRC-331: null if single candidate
         margin,
         margin_vacuous: marginVacuous,
         candidate_count: candidateCount,
@@ -801,7 +878,26 @@ export async function clusterArticle(articleId) {
         tierB_base,
         tierB_corroboration_pass,
         corroboration_detail,
-        tierB_primary_blocker
+        tierB_primary_blocker,
+        // TTRC-331: Margin diagnosis - separate raw vs final
+        margin_pass_raw: hasMeaningfulMargin,                    // raw margin gate only (>= 0.04)
+        tierB_margin_ok_preBypass: tierBMarginOk_preBypass,      // raw + vacuous (before bypass)
+        tierB_margin_ok: tierBMarginOk,                          // final (includes bypass)
+        tierBMarginBypass: tierBMarginBypass,                    // 'slug'|'entity'|null
+        bypass_applied: tierBMarginBypass != null,               // boolean for easy filtering
+        // TTRC-331: blocked_by uses RAW margin gate (shows true failures even if bypassed)
+        blocked_by: buildBlockedBy({
+          guardrail: passesGuardrail,
+          time: timeDiffHours <= 72,
+          embed: embedBest >= 0.88,
+          corroboration: tierB_corroboration_pass,
+          margin: tierBMarginOk_preBypass                        // RAW, not tierBMarginOk
+        }),
+        // TTRC-331: Second candidate (null if doesn't exist)
+        second_candidate_id: secondCandidate?.id ?? null,
+        // TTRC-331: Shadow mode - what would have happened if bypass was enabled
+        tierBMarginBypass_would_fire: wouldBypass,
+        tierBMarginBypass_would_fire_via: wouldBypassVia
       }));
     }
 
