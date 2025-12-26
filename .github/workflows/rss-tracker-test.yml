@@ -37,6 +37,7 @@ jobs:
           ENVIRONMENT: test
           RSS_TRACKER_RUN_ENABLED: 'true'
           LOG_PHASE0_DIAGNOSTICS: 'true'
+          ENABLE_TIERB_MARGIN_BYPASS: 'true'
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
