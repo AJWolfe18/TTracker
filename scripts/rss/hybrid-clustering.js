@@ -771,7 +771,7 @@ export async function clusterArticle(articleId) {
         tier,
         tierA_embed_threshold: tierAEmbedThreshold,
         tierA_margin_bypass: tierAMarginBypass,  // null if margin was OK, else the corroboration that allowed bypass
-        tierB_margin_bypass: tierBMarginBypass,  // TTRC-331: null if margin was OK, else 'slug'|'entity'
+        tierb_margin_bypass: tierBMarginBypass,  // TTRC-331: null if margin was OK, else 'slug'|'entity'
         article_id: article.id,
         story_id: targetStory.id,
         embed_best: embedBest,
@@ -881,23 +881,23 @@ export async function clusterArticle(articleId) {
         tierB_primary_blocker,
         // TTRC-331: Margin diagnosis - separate raw vs final
         margin_pass_raw: hasMeaningfulMargin,                    // raw margin gate only (>= 0.04)
-        tierB_margin_ok_preBypass: tierBMarginOk_preBypass,      // raw + vacuous (before bypass)
-        tierB_margin_ok: tierBMarginOk,                          // final (includes bypass)
-        tierBMarginBypass: tierBMarginBypass,                    // 'slug'|'entity'|null
+        tierb_margin_ok_pre_bypass: tierBMarginOk_preBypass,     // raw + vacuous (before bypass)
+        tierb_margin_ok: tierBMarginOk,                          // final (includes bypass)
+        tierb_margin_bypass: tierBMarginBypass,                  // 'slug'|'entity'|null
         bypass_applied: tierBMarginBypass != null,               // boolean for easy filtering
-        // TTRC-331: blocked_by uses RAW margin gate (shows true failures even if bypassed)
+        // TTRC-331: blocked_by uses effective margin gate (shows true failures even if bypassed)
         blocked_by: buildBlockedBy({
           guardrail: passesGuardrail,
           time: timeDiffHours <= 72,
           embed: embedBest >= 0.88,
           corroboration: tierB_corroboration_pass,
-          margin: tierBMarginOk_preBypass                        // RAW, not tierBMarginOk
+          margin: tierBMarginOk_preBypass                        // effective gate, not post-bypass
         }),
         // TTRC-331: Second candidate (null if doesn't exist)
         second_candidate_id: secondCandidate?.id ?? null,
         // TTRC-331: Shadow mode - what would have happened if bypass was enabled
-        tierBMarginBypass_would_fire: wouldBypass,
-        tierBMarginBypass_would_fire_via: wouldBypassVia
+        tierb_margin_bypass_would_fire: wouldBypass,
+        tierb_margin_bypass_would_fire_via: wouldBypassVia
       }));
     }
 
