@@ -706,11 +706,13 @@ export async function clusterArticle(articleId) {
 
     // TTRC-331: Compute wouldBypass BEFORE bypass mutation
     // This is used for shadow logging and near-miss diagnostics
-    const wouldBypassVia = slugTok.passes ? 'slug' : (entityOverlap >= 2 ? 'entity' : null);
+    const wouldBypassVia = slugTok.passes ? 'slug'
+      : (entityOverlap >= 2 ? 'entity'
+      : (titleTokenOverlap >= 1 ? 'title_token' : null));
     const wouldBypass = !tierBMarginOk_preBypass && wouldBypassVia && embedBest >= 0.88 && timeDiffHours <= 48 && passesGuardrail;
 
-    // TTRC-331: Tier B margin bypass (feature-flagged, defaults OFF)
-    // Similar to Tier A but stricter: entity >= 2 (not 1), no title-only bypass
+    // TTRC-331/333: Tier B margin bypass (feature-flagged, defaults OFF)
+    // Similar to Tier A but stricter: entity >= 2 (not 1), title_token uses base 0.88
     if (
       !tierBMarginOk_preBypass &&                          // Use PRE-bypass state
       embedBest >= 0.88 &&
@@ -724,8 +726,10 @@ export async function clusterArticle(articleId) {
       } else if (entityOverlap >= 2) {                     // Entity >= 2 (not 1)
         tierBMarginOk = true;
         tierBMarginBypass = 'entity';
+      } else if (titleTokenOverlap >= 1) {                // TTRC-333: Title token bypass
+        tierBMarginOk = true;
+        tierBMarginBypass = 'title_token';
       }
-      // NO title-only bypass for Tier B
     }
 
     // TTRC-331: Shadow logging - log when bypass WOULD have fired (but didn't because flag is OFF)
@@ -771,7 +775,7 @@ export async function clusterArticle(articleId) {
         tier,
         tierA_embed_threshold: tierAEmbedThreshold,
         tierA_margin_bypass: tierAMarginBypass,  // null if margin was OK, else the corroboration that allowed bypass
-        tierb_margin_bypass: tierBMarginBypass,  // TTRC-331: null if margin was OK, else 'slug'|'entity'
+        tierb_margin_bypass: tierBMarginBypass,  // null if margin was OK, else 'slug'|'entity'|'title_token'
         article_id: article.id,
         story_id: targetStory.id,
         embed_best: embedBest,
@@ -926,8 +930,8 @@ export async function clusterArticle(articleId) {
       const shadowResults = {};
 
       for (const thresh of shadowThresholds) {
-        // Safety rule: title-only corroboration requires embed >= 0.90
-        const effectiveThresh = hasTitleOnlyCorroboration ? Math.max(thresh, 0.90) : thresh;
+        // TTRC-333: title-only corroboration now uses 0.88 (matches live bypass)
+        const effectiveThresh = hasTitleOnlyCorroboration ? Math.max(thresh, 0.88) : thresh;
         const wouldAttach = embedBest >= effectiveThresh && hasAnyCorroboration;
         shadowResults[`tierB_${String(thresh).replace('.', '_')}`] = wouldAttach;
       }
