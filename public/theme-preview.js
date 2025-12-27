@@ -321,7 +321,7 @@
         story.primary_actor && React.createElement('span', { className: 'tt-actor' },
           React.createElement('span', { className: 'tt-actor-icon' }, '👤'),
           'Main actor: ',
-          story.primary_actor
+          window.TTShared?.formatActorName(story.primary_actor) || story.primary_actor
         ),
         severityLabel && React.createElement('span', {
           className: 'tt-severity',
@@ -547,7 +547,7 @@
               story.primary_actor && React.createElement('span', { className: 'tt-actor' },
                 React.createElement('span', { className: 'tt-actor-icon' }, '👤'),
                 'Main actor: ',
-                story.primary_actor
+                window.TTShared?.formatActorName(story.primary_actor) || story.primary_actor
               ),
               severityLabel && React.createElement('span', {
                 className: 'tt-severity',

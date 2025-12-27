@@ -267,6 +267,37 @@
   }
 
   // ===========================================
+  // ACTOR NAME FORMATTING
+  // ===========================================
+
+  // Convert entity codes like "US-ERIC-ADAMS" to "Eric Adams"
+  function formatActorName(actor) {
+    if (!actor) return '';
+
+    // Already clean name (no prefix pattern)
+    if (!actor.includes('-') || actor.length < 4) {
+      return actor;
+    }
+
+    // Known prefixes to strip
+    const prefixes = ['US-', 'ORG-', 'INTL-', 'STATE-', 'GOV-'];
+    let name = actor;
+
+    for (const prefix of prefixes) {
+      if (name.startsWith(prefix)) {
+        name = name.slice(prefix.length);
+        break;
+      }
+    }
+
+    // Convert "ERIC-ADAMS" or "VAN-HOLLEN" to "Eric Adams" or "Van Hollen"
+    return name
+      .split('-')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // ===========================================
   // SUPABASE REQUEST HELPER
   // ===========================================
 
@@ -320,6 +351,7 @@
     normalizeSeverity,
     getCategoryLabel,
     getSeverityLabel,
+    formatActorName,
     CATEGORY_LABELS,
     SEVERITY_LABELS,
 

@@ -15,34 +15,34 @@
 
   const ITEMS_PER_PAGE = 12;
 
-  // EO Category labels
+  // EO Category labels (match database values)
   const EO_CATEGORIES = {
-    economic: 'Economic',
-    immigration: 'Immigration',
-    environment: 'Environment',
-    defense: 'Defense',
-    healthcare: 'Healthcare',
-    civil_rights: 'Civil Rights',
-    government: 'Government',
-    trade: 'Trade',
-    education: 'Education',
+    health_care: 'Health Care',
+    gov_ops_workforce: 'Government & Workforce',
+    economy_jobs_taxes: 'Economy & Jobs',
+    justice_civil_rights_voting: 'Justice & Civil Rights',
+    infra_housing_transport: 'Infrastructure',
+    immigration_border: 'Immigration & Border',
+    environment_energy: 'Environment & Energy',
+    natsec_foreign: 'National Security',
+    education_science: 'Education & Science',
     other: 'Other'
   };
 
-  // Impact type labels
+  // Impact type labels (match database eo_impact_type values)
   const IMPACT_LABELS = {
-    major: 'Major Impact',
-    moderate: 'Moderate Impact',
-    minor: 'Minor Impact',
-    symbolic: 'Symbolic'
+    fascist_power_grab: 'Fascist Power Grab',
+    authoritarian_overreach: 'Authoritarian Overreach',
+    performative_bullshit: 'Performative Bullshit',
+    corrupt_grift: 'Corrupt Grift'
   };
 
   // Impact type colors
   const IMPACT_COLORS = {
-    major: 'critical',
-    moderate: 'moderate',
-    minor: 'minor',
-    symbolic: 'minor'
+    fascist_power_grab: 'critical',
+    authoritarian_overreach: 'severe',
+    performative_bullshit: 'minor',
+    corrupt_grift: 'moderate'
   };
 
   // Action tier labels
@@ -300,10 +300,10 @@
     return React.createElement('article', { className: 'tt-card' },
       React.createElement('div', { className: 'tt-card-header' },
         React.createElement('span', { className: 'tt-eo-badge' },
-          eo.order_number || 'EO'
+          `EO ${eo.order_number || ''}`
         ),
         React.createElement('span', { className: 'tt-timestamp' },
-          formatDate(eo.signed_date || eo.created_at)
+          formatDate(eo.date || eo.created_at)
         )
       ),
 
@@ -340,7 +340,7 @@
           rel: 'noopener noreferrer',
           className: 'tt-sources-btn'
         },
-          React.createElement('span', null, '📄'),
+          React.createElement('span', { className: 'tt-btn-icon' }, '📄'),
           'Official Text'
         ),
         React.createElement('button', {
@@ -402,7 +402,7 @@
 
         React.createElement('div', { className: 'tt-detail-modal-body' },
           React.createElement('span', { className: 'tt-eo-badge tt-eo-badge-large' },
-            eo.order_number || 'EO'
+            `EO ${eo.order_number || ''}`
           ),
 
           React.createElement('h2', {
@@ -413,7 +413,7 @@
           React.createElement('div', { className: 'tt-detail-meta' },
             React.createElement('span', { className: 'tt-detail-date' },
               'Signed: ',
-              formatDate(eo.signed_date || eo.created_at)
+              formatDate(eo.date || eo.created_at)
             ),
             eo.eo_impact_type && React.createElement('span', {
               className: 'tt-severity',
@@ -518,7 +518,7 @@
       try {
         setLoading(true);
         const data = await supabaseRequest(
-          'executive_orders?select=id,order_number,title,signed_date,category,eo_impact_type,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&order=signed_date.desc,id.desc&limit=500'
+          'executive_orders?select=id,order_number,title,date,category,eo_impact_type,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&order=date.desc,id.desc&limit=500'
         );
         setAllEOs(data || []);
         setError(null);
