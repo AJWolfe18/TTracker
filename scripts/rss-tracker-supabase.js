@@ -685,6 +685,14 @@ class RSSTracker {
       if (rpcFails > 0) {
         summaryObj.latest_article_pub_rpc_fails = rpcFails;
       }
+      // TTRC-336: Add batch dedup stats if any were considered
+      const batchConsidered = Number(clusterStats.batchDedupConsidered ?? 0);
+      if (batchConsidered > 0) {
+        summaryObj.batch_dedup_considered = batchConsidered;
+        summaryObj.batch_dedup_attached = Number(clusterStats.batchDedupAttached ?? 0);
+        summaryObj.batch_dedup_rejected = Number(clusterStats.batchDedupRejected ?? 0);
+        summaryObj.batch_dedup_shadow = Number(clusterStats.batchDedupShadow ?? 0);
+      }
       console.log(JSON.stringify(summaryObj));
 
     } catch (err) {
