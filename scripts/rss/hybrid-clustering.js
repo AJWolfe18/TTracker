@@ -54,7 +54,18 @@ let tierBBypassShadowCount = 0;
 const seenTitlesThisRun = new Map(); // normalizedTitle -> { storyId }
 let lastCandidateIds = [];  // Track candidates for current article
 
-// Run-level stats for observability (TTRC-323/324)
+// ============================================================================
+// TTRC-336: In-Memory Batch Story Tracking
+// ============================================================================
+// Track stories created during THIS batch run for same-run dedup
+// Used as FALLBACK when DB candidate generation misses newborn stories
+const batchStoriesThisRun = new Map(); // storyId -> BatchStoryEntry
+
+// Feature flags for TTRC-336 batch dedup
+const ENABLE_BATCH_DEDUP = process.env.ENABLE_BATCH_DEDUP === 'true';
+const BATCH_DEDUP_SHADOW_MODE = process.env.BATCH_DEDUP_SHADOW_MODE !== 'false'; // Default true initially
+
+// Run-level stats for observability (TTRC-323/324/336)
 let runStats = {
   created: 0,
   attachedNormal: 0,
@@ -62,7 +73,12 @@ let runStats = {
   attached323ExactTitle: 0,
   attached324TierA: 0,
   attached324TierB: 0,
-  latestArticlePubRpcFails: 0  // TTRC-326: Track RPC failures for observability
+  latestArticlePubRpcFails: 0,  // TTRC-326: Track RPC failures for observability
+  // TTRC-336: Batch dedup stats
+  batchDedupConsidered: 0,      // How often batch cache was checked
+  batchDedupAttached: 0,        // How often batch dedup resulted in merge
+  batchDedupRejected: 0,        // How often rejected (and why)
+  batchDedupShadow: 0           // Shadow mode decisions logged
 };
 
 /**
@@ -154,12 +170,205 @@ function getTitleTokenOverlap(title1, title2) {
   return count;
 }
 
+// ============================================================================
+// TTRC-336: Batch Dedup Helper Functions
+// ============================================================================
+
+/**
+ * TTRC-336: Common tokens that don't count toward batch dedup corroboration
+ * These are high-frequency political terms that would create false matches
+ */
+const BATCH_COMMON_TOKENS = new Set([
+  'trump', 'biden', 'netanyahu', 'america', 'congress',
+  'supreme', 'federal', 'national', 'president', 'administration',
+  'judge', 'court', 'says', 'amid', 'after', 'meeting'
+]);
+
+/**
+ * TTRC-336: Short geo terms that should count as meaningful tokens
+ */
+const SHORT_GEO_TERMS = new Set(['iran', 'gaza', 'iraq', 'cuba', 'nato', 'un']);
+
+/**
+ * TTRC-336: Slugs too broad to count as corroboration
+ */
+const GENERIC_SLUGS = new Set([
+  'us-politics', 'immigration', 'foreign-policy',
+  'breaking', 'news', 'analysis', 'politics', 'world'
+]);
+
+/**
+ * TTRC-336: Roundup headline detection pattern
+ */
+const ROUNDUP_RE = /at a glance|live updates|live blog|what we know|latest updates|morning briefing|evening briefing|roundup|what happened/i;
+
+/**
+ * TTRC-336: Check if a token is meaningful for batch dedup
+ * Includes acronyms (3-6 chars ALL CAPS) and short geo terms
+ */
+function isMeaningfulTokenForBatch(tok) {
+  if (!tok) return false;
+  const upper = tok.toUpperCase();
+  const lower = tok.toLowerCase();
+
+  // 1. Acronyms: 3-6 chars, ALL CAPS (CFPB, DOJ, ICE, DHS, EEOC, NATO)
+  if (tok.length >= 3 && tok.length <= 6 && tok === upper) return true;
+
+  // 2. Short geo terms allowlist
+  if (SHORT_GEO_TERMS.has(lower)) return true;
+
+  // 3. Normal words: 5+ chars, not in common tokens denylist
+  if (tok.length >= 5 && !BATCH_COMMON_TOKENS.has(lower)) return true;
+
+  return false;
+}
+
+/**
+ * TTRC-336: Extract meaningful tokens from a headline for batch dedup
+ */
+function getMeaningfulTokens(title) {
+  if (!title) return [];
+  return title
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(isMeaningfulTokenForBatch);
+}
+
+/**
+ * TTRC-336: Count overlapping meaningful tokens between article and story
+ */
+function getMeaningfulTokenOverlap(articleTokens, storyTokens) {
+  if (!articleTokens?.length || !storyTokens?.length) return 0;
+  const storySet = new Set(storyTokens.map(t => t.toLowerCase()));
+  let count = 0;
+  for (const tok of articleTokens) {
+    if (storySet.has(tok.toLowerCase())) count++;
+  }
+  return count;
+}
+
+/**
+ * TTRC-336: Check if slug overlap is valid (non-empty and non-generic)
+ */
+function hasValidSlugOverlap(articleSlugs, storySlugs) {
+  // Story must have non-empty slugs
+  if (!storySlugs || storySlugs.length === 0) return false;
+  if (!articleSlugs || articleSlugs.length === 0) return false;
+
+  // Find overlapping slugs not in generic denylist
+  const articleSlugSet = new Set(Array.isArray(articleSlugs) ? articleSlugs : [articleSlugs]);
+  for (const slug of storySlugs) {
+    if (articleSlugSet.has(slug) && !GENERIC_SLUGS.has(slug)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * TTRC-336: Check if headline (or dek) matches roundup patterns
+ */
+function isRoundup(headline, dek = '') {
+  return ROUNDUP_RE.test(headline) || ROUNDUP_RE.test(dek);
+}
+
+/**
+ * TTRC-336: Compute cosine similarity between two embedding vectors
+ * Assumes embeddings are already normalized to unit length
+ */
+function cosineSimilarity(embA, embB) {
+  if (!embA?.length || !embB?.length || embA.length !== embB.length) return 0;
+  let dotProduct = 0;
+  for (let i = 0; i < embA.length; i++) {
+    dotProduct += embA[i] * embB[i];
+  }
+  // Embeddings are normalized, so dot product = cosine similarity
+  // Map from [-1, 1] to [0, 1] for consistency with existing scoring
+  return (dotProduct + 1) / 2;
+}
+
+/**
+ * TTRC-336: Find best matching story from batch cache
+ * Implements tiered thresholds and semantic corroboration
+ * @param {object} article - Article being clustered
+ * @param {Map} batchCache - Map of storyId -> BatchStoryEntry
+ * @returns {object|null} - {story, sim, decision, rejectReason} or null
+ */
+function findBatchStoryMatch(article, batchCache) {
+  if (!ENABLE_BATCH_DEDUP || batchCache.size === 0) return null;
+  if (!article.embedding_v1) return null;
+
+  const articleEmbedding = typeof article.embedding_v1 === 'string'
+    ? JSON.parse(article.embedding_v1)
+    : article.embedding_v1;
+
+  const articleTokens = getMeaningfulTokens(article.title);
+  const articleSlugs = article.topic_slug ? [article.topic_slug] : [];
+  const isRoundupArticle = isRoundup(article.title);
+
+  // 1. Score all candidates
+  const scored = [];
+  for (const [storyId, batchStory] of batchCache) {
+    if (!batchStory.embedding) continue;
+    const sim = cosineSimilarity(articleEmbedding, batchStory.embedding);
+    scored.push({ story: batchStory, sim });
+  }
+
+  if (scored.length === 0) return null;
+
+  // 2. Filter to ELIGIBLE candidates only
+  const eligible = scored.filter(({ story, sim }) => {
+    // Roundup articles need ≥0.93
+    if (isRoundupArticle && sim < 0.93) return false;
+
+    // Base threshold
+    if (sim < 0.88) return false;
+
+    // ≥0.93 is always eligible (no corroboration needed)
+    if (sim >= 0.93) return true;
+
+    // 0.88–0.93 needs corroboration
+    const tokenOverlap = getMeaningfulTokenOverlap(articleTokens, story.title_tokens || []);
+    const slugOk = hasValidSlugOverlap(articleSlugs, story.topic_slugs || []);
+
+    return tokenOverlap >= 2 || slugOk;
+  });
+
+  runStats.batchDedupConsidered++;
+
+  if (eligible.length === 0) {
+    runStats.batchDedupRejected++;
+    return { story: null, sim: scored[0]?.sim || 0, decision: 'reject', rejectReason: 'no_eligible_candidates' };
+  }
+
+  // 3. Sort eligible by similarity
+  eligible.sort((a, b) => b.sim - a.sim);
+
+  const top1 = eligible[0];
+  const top2 = eligible[1] ?? null;
+
+  // 4. Ambiguity rejection (only among eligible candidates)
+  if (top2 && (top1.sim - top2.sim) < 0.02) {
+    runStats.batchDedupRejected++;
+    return { story: null, sim: top1.sim, decision: 'reject', rejectReason: 'ambiguity' };
+  }
+
+  // 5. Tie-break: prefer earliest story among near-ties
+  let selectedStory = top1.story;
+  if (top2 && Math.abs(top1.sim - top2.sim) < 0.005) {
+    // Prefer story with lower ID (created earlier)
+    selectedStory = top1.story.id < top2.story.id ? top1.story : top2.story;
+  }
+
+  return { story: selectedStory, sim: top1.sim, decision: 'attach', rejectReason: null };
+}
+
 /**
  * Reset run state - call at start of each RSS run
  * Exported for use by rss-tracker-supabase.js
  */
 export function resetRunState() {
   seenTitlesThisRun.clear();
+  batchStoriesThisRun.clear();  // TTRC-336: Clear batch cache
   lastCandidateIds = [];
   runStats = {
     created: 0,
@@ -168,7 +377,12 @@ export function resetRunState() {
     attached323ExactTitle: 0,
     attached324TierA: 0,
     attached324TierB: 0,
-    latestArticlePubRpcFails: 0
+    latestArticlePubRpcFails: 0,
+    // TTRC-336: Batch dedup stats
+    batchDedupConsidered: 0,
+    batchDedupAttached: 0,
+    batchDedupRejected: 0,
+    batchDedupShadow: 0
   };
   console.log('[hybrid-clustering] Run state reset');
 }
@@ -971,6 +1185,76 @@ export async function clusterArticle(articleId) {
   // Fall through to createNewStory()
 
   // ============================================================================
+  // TTRC-336: Batch Dedup Fallback
+  // Check batch cache for same-run stories that DB candidate gen missed
+  // This runs AFTER DB scoring fails, as a FALLBACK only
+  // ============================================================================
+  if (ENABLE_BATCH_DEDUP && batchStoriesThisRun.size > 0) {
+    const batchMatch = findBatchStoryMatch(article, batchStoriesThisRun);
+
+    if (batchMatch) {
+      const { story: batchStory, sim, decision, rejectReason } = batchMatch;
+
+      // Compute corroboration details for logging
+      const articleTokens = getMeaningfulTokens(article.title);
+      const tokenOverlap = batchStory ? getMeaningfulTokenOverlap(articleTokens, batchStory.title_tokens || []) : 0;
+      const slugMatch = batchStory ? hasValidSlugOverlap(
+        article.topic_slug ? [article.topic_slug] : [],
+        batchStory.topic_slugs || []
+      ) : false;
+
+      // Log decision (shadow or live)
+      const mode = BATCH_DEDUP_SHADOW_MODE ? 'shadow' : 'live';
+      console.log(JSON.stringify({
+        type: 'BATCH_DEDUP_DECISION',
+        mode,
+        article_id: article.id,
+        decision,
+        target_story_id: batchStory?.id ?? null,
+        embed_similarity: sim,
+        corroborators_found: [
+          tokenOverlap >= 2 ? 'title_token' : null,
+          slugMatch ? 'slug' : null
+        ].filter(Boolean),
+        title_token_overlap: tokenOverlap,
+        slug_match: slugMatch,
+        batch_cache_size: batchStoriesThisRun.size,
+        reject_reason: rejectReason,
+        best_db_candidate_score: bestMatch?.scoreResult?.embeddingScore ?? null
+      }));
+
+      // If live mode and we have a match, attach to batch story
+      if (!BATCH_DEDUP_SHADOW_MODE && decision === 'attach' && batchStory) {
+        // Fetch full story from DB for attachToStory compatibility
+        const { data: fullStory } = await getSupabaseClient()
+          .from('stories')
+          .select('id, primary_headline, topic_slugs, first_seen_at, last_updated_at, entity_counter, top_entities, lifecycle_state, primary_source_domain')
+          .eq('id', batchStory.id)
+          .single();
+
+        if (fullStory) {
+          const batchResult = await attachToStory(article, fullStory, sim);
+
+          // Update batch cache with new article info
+          batchStory.article_count = (batchStory.article_count || 1) + 1;
+          if (article.topic_slug && !batchStory.topic_slugs?.includes(article.topic_slug)) {
+            batchStory.topic_slugs = [...(batchStory.topic_slugs || []), article.topic_slug];
+          }
+
+          const totalTime = Date.now() - totalStart;
+          console.log(`[hybrid-clustering] ✅ BATCH_DEDUP: Attached ${article.id} to batch story ${batchStory.id} (sim: ${sim.toFixed(3)})`);
+          console.log(`[PERF] Total clustering time: ${totalTime}ms`);
+
+          runStats.batchDedupAttached++;
+          return batchResult;
+        }
+      } else if (BATCH_DEDUP_SHADOW_MODE && decision === 'attach') {
+        runStats.batchDedupShadow++;
+      }
+    }
+  }
+
+  // ============================================================================
   // TTRC-321 Phase 0: Pre-creation diagnostic logging
   // ============================================================================
   if (LOG_PHASE0) {
@@ -1009,6 +1293,23 @@ export async function clusterArticle(articleId) {
     if (createdStory) {
       seenTitlesThisRun.set(normTitle, createdStory);
     }
+  }
+
+  // ============================================================================
+  // TTRC-336: Populate batch cache for same-batch dedup
+  // ============================================================================
+  if (ENABLE_BATCH_DEDUP && article.embedding_v1) {
+    batchStoriesThisRun.set(result.story_id, {
+      id: result.story_id,
+      headline: article.title,
+      embedding: typeof article.embedding_v1 === 'string'
+        ? JSON.parse(article.embedding_v1) : article.embedding_v1,
+      topic_slugs: article.topic_slug ? [article.topic_slug] : [],
+      title_tokens: getMeaningfulTokens(article.title),
+      first_seen_at: new Date().toISOString(),
+      article_count: 1
+    });
+    console.log(`[BATCH_CACHE] Added story ${result.story_id} to batch cache (size: ${batchStoriesThisRun.size})`)
   }
 
   // ============================================================================
@@ -1380,7 +1681,7 @@ export async function clusterBatch(limit = 50) {
     console.warn(`[PERF] ⚠️ p95 latency ${p95}ms exceeds target (500ms)`);
   }
 
-  // Log run-level override stats for observability (TTRC-323/324)
+  // Log run-level override stats for observability (TTRC-323/324/336)
   const stats = getRunStats();
   // Guard against undefined tier fields (AI code review blocker)
   const tierA = Number(stats.attached324TierA ?? 0);
@@ -1395,7 +1696,12 @@ export async function clusterBatch(limit = 50) {
     attached_324_slug_embed: tierA + tierB,
     // New tier-specific keys (v2)
     attached_324_tier_a: tierA,
-    attached_324_tier_b: tierB
+    attached_324_tier_b: tierB,
+    // TTRC-336: Batch dedup stats
+    batch_dedup_considered: stats.batchDedupConsidered ?? 0,
+    batch_dedup_attached: stats.batchDedupAttached ?? 0,
+    batch_dedup_rejected: stats.batchDedupRejected ?? 0,
+    batch_dedup_shadow: stats.batchDedupShadow ?? 0
   }));
 
   return results;

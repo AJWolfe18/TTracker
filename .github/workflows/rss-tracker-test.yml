@@ -38,6 +38,9 @@ jobs:
           RSS_TRACKER_RUN_ENABLED: 'true'
           LOG_PHASE0_DIAGNOSTICS: 'true'
           ENABLE_TIERB_MARGIN_BYPASS: 'true'
+          # TTRC-336: Same-batch dedup (shadow mode first)
+          ENABLE_BATCH_DEDUP: 'true'
+          BATCH_DEDUP_SHADOW_MODE: 'true'
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
