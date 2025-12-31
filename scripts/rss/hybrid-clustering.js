@@ -323,10 +323,9 @@ function findBatchStoryMatch(article, batchCache) {
     // Base threshold
     if (sim < 0.88) return false;
 
-    // ≥0.93 is always eligible (no corroboration needed)
-    if (sim >= 0.93) return true;
-
-    // 0.88–0.93 needs corroboration
+    // TTRC-336 fix: Removed standalone mode (embed >= 0.93 without corroboration)
+    // Shadow run showed 2/3 false positives at 0.93 with title_token 0-1
+    // All batch dedup matches now require corroboration
     const tokenOverlap = getMeaningfulTokenOverlap(articleTokens, story.title_tokens || []);
     const slugOk = hasValidSlugOverlap(articleSlugs, story.topic_slugs || []);
 
