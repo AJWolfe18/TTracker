@@ -705,6 +705,7 @@
     const [detailError, setDetailError] = useState(null);
     const [detailJunctionData, setDetailJunctionData] = useState([]);
     const detailOpenedViaPush = useRef(false);
+    const detailClosingRef = useRef(false); // Guard against deep-link re-open race
 
     const searchDebounceRef = useRef(null);
 
@@ -937,6 +938,9 @@
 
     // Close detail modal
     const closeDetailModal = useCallback(() => {
+      // Set closing guard to prevent deep-link useEffect race condition
+      detailClosingRef.current = true;
+
       // Unlock scroll
       if (window.TTShared) window.TTShared.unlockScroll();
 
@@ -949,6 +953,9 @@
       detailOpenedViaPush.current = false;
 
       setDetailStory(null);
+
+      // Clear closing guard after a tick (allow URL to update)
+      setTimeout(() => { detailClosingRef.current = false; }, 50);
     }, []);
 
     // Handle popstate (back button)
@@ -968,6 +975,9 @@
 
     // Check for deep link on mount
     useEffect(() => {
+      // Skip if we're in the middle of closing (prevents race condition re-open)
+      if (detailClosingRef.current) return;
+
       if (window.TTShared) {
         const storyId = window.TTShared.getUrlParam('story');
         if (storyId && allStories.length > 0) {
