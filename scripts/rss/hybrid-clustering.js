@@ -1552,8 +1552,52 @@ async function createNewStory(article) {
     .select()
     .single();
 
-  if (createError || !story) {
-    throw new Error(`Failed to create story: ${createError?.message || 'Unknown error'}`);
+  // TTRC-354: Handle duplicate hash constraint - attach to existing story instead of orphaning
+  if (createError) {
+    const msg = `${createError.message || ''} ${createError.details || ''}`.toLowerCase();
+    const constraint = (createError.constraint || '').toLowerCase();
+
+    const isUniqueViolation =
+      createError.code === '23505' ||
+      msg.includes('duplicate key value') ||
+      msg.includes('unique constraint');
+
+    const isStoryHashCollision =
+      constraint.includes('story_hash') ||
+      msg.includes('story_hash') ||
+      msg.includes('stories_story_hash') ||
+      msg.includes('story_hash_key') ||
+      msg.includes('stories_story_hash_key');
+
+    if (isUniqueViolation && isStoryHashCollision) {
+      console.warn(
+        `[TTRC-354] story_hash collision (hash=${storyHash}) for "${article.title}". Looking up existing story...`
+      );
+
+      const { data: existingStory, error: lookupError } = await getSupabaseClient()
+        .from('stories')
+        .select('*')
+        .eq('story_hash', storyHash)
+        .maybeSingle();
+
+      if (!lookupError && existingStory) {
+        console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${existingStory.id}`);
+        return attachToStory(article, existingStory, 1.0);
+      }
+
+      console.error(
+        `[TTRC-354] Collision lookup failed (hash=${storyHash}): ${lookupError?.message || 'no story found'}`
+      );
+      // fall through and throw original create error
+    }
+
+    throw new Error(
+      `Failed to create story: ${createError.message} (code=${createError.code || 'n/a'} constraint=${createError.constraint || 'n/a'})`
+    );
+  }
+
+  if (!story) {
+    throw new Error('Failed to create story: No story returned');
   }
 
   const storyId = story.id;
