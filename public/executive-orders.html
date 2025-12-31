@@ -1,81 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Executive Orders | TrumpyTracker</title>
-    <meta name="description" content="Track and analyze Trump administration executive orders with plain-English translations and fact-checks">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrumpyTracker - Executive Orders</title>
+  <meta name="description" content="Track and analyze Trump administration executive orders with plain-English translations and fact-checks.">
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="./trumpytracker-logo.jpeg">
 
-    <!-- React -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Theme CSS Variables -->
+  <link rel="stylesheet" href="./themes.css">
 
-    <!-- Babel for JSX transformation -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- React 18 CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-    <style>
-        /* Custom scrollbar for dark theme */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
+  <!-- Babel for JSX (dev mode) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        /* Loading animation */
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .animate-spin {
-            animation: spin 1s linear infinite;
-        }
+  <!-- Prevent FOUC: Set theme immediately -->
+  <script>
+    (function() {
+      const saved = localStorage.getItem('tt-theme');
+      const theme = saved || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 
-        /* Fade in animation */
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-    </style>
+  <style>
+    /* Critical CSS to prevent layout shift */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #root {
+      min-height: 100vh;
+    }
+
+    /* Initial loading state */
+    .initial-loader {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--page-bg);
+      font-family: var(--font-body);
+      color: var(--text-muted);
+    }
+
+    .initial-loader-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--card-border, #e5e7eb);
+      border-top-color: var(--text-link, #1d4ed8);
+      border-radius: 50%;
+      animation: initialSpin 0.8s linear infinite;
+    }
+
+    @keyframes initialSpin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-<body class="bg-gray-900">
-    <div id="root"></div>
+<body>
+  <div id="root">
+    <!-- Initial loading state (replaced by React) -->
+    <div class="initial-loader">
+      <div class="initial-loader-spinner"></div>
+    </div>
+  </div>
 
-    <!-- Load Supabase configuration first -->
-    <script src="supabase-browser-config.js"></script>
+  <!-- Supabase configuration (environment-aware) -->
+  <script src="supabase-browser-config.js"></script>
 
-    <!-- Load utility modules -->
-    <script src="dashboard-utils.js"></script>
-    <script src="category-config.js"></script>
-    <script type="text/babel" src="dashboard-components.js"></script>
+  <!-- Shared Utilities -->
+  <script src="./shared.js"></script>
 
-    <!-- Load executive orders page module -->
-    <script type="text/babel" src="eo-page.js"></script>
-
-    <!-- Fallback for users with JavaScript disabled -->
-    <noscript>
-        <div class="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">
-            <div class="text-center">
-                <h1 class="text-3xl font-bold text-red-500 mb-4">JavaScript Required</h1>
-                <p class="text-gray-400">Please enable JavaScript to view the Executive Orders page.</p>
-            </div>
-        </div>
-    </noscript>
+  <!-- Executive Orders App Components -->
+  <script type="text/babel" src="./eo-app.js"></script>
 </body>
 </html>

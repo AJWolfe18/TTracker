@@ -1114,10 +1114,10 @@
   // ===========================================
 
   const TABS = [
-    { id: 'stories', label: 'Stories', href: '/theme-preview.html' },
-    { id: 'eo', label: 'Executive Orders', href: '/eo-theme-preview.html' },
-    { id: 'scotus', label: 'Supreme Court', href: '?tab=scotus' },
-    { id: 'merch', label: 'Merchandise', href: '?tab=merch' }
+    { id: 'stories', label: 'Stories', href: './' },
+    { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
+    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
+    { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
 
   function TabNavigation({ activeTab }) {

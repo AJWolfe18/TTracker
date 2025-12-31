@@ -140,7 +140,7 @@
   function Header({ theme, toggleTheme }) {
     return React.createElement('header', { className: 'tt-header' },
       React.createElement('div', { className: 'tt-header-inner' },
-        React.createElement('a', { href: '/theme-preview.html', className: 'tt-logo' },
+        React.createElement('a', { href: './', className: 'tt-logo' },
           React.createElement('img', {
             src: './trumpytracker-logo.jpeg',
             alt: 'TrumpyTracker',
@@ -166,10 +166,10 @@
   // ===========================================
 
   const TABS = [
-    { id: 'stories', label: 'Stories', href: '/theme-preview.html' },
-    { id: 'eo', label: 'Executive Orders', href: '/eo-theme-preview.html' },
-    { id: 'scotus', label: 'Supreme Court', href: '/theme-preview.html?tab=scotus' },
-    { id: 'merch', label: 'Merchandise', href: '/theme-preview.html?tab=merch' }
+    { id: 'stories', label: 'Stories', href: './' },
+    { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
+    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
+    { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
 
   function TabNavigation({ activeTab }) {
