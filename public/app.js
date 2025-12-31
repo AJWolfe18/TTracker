@@ -166,7 +166,7 @@
   };
 
   // Severity filter options
-  const SEVERITY_FILTERS = ['all', 'critical', 'severe'];
+  const SEVERITY_FILTERS = ['all', 'critical', 'severe', 'moderate', 'minor'];
 
   function FiltersSection({
     searchTerm,
