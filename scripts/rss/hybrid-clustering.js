@@ -320,16 +320,26 @@ function findBatchStoryMatch(article, batchCache) {
     // Roundup articles need ≥0.93
     if (isRoundupArticle && sim < 0.93) return false;
 
-    // Base threshold
-    if (sim < 0.88) return false;
-
-    // TTRC-336 fix: Removed standalone mode (embed >= 0.93 without corroboration)
-    // Shadow run showed 2/3 false positives at 0.93 with title_token 0-1
-    // All batch dedup matches now require corroboration
+    // TTRC-336 fix: Tiered thresholds based on corroboration strength
+    // Shadow analysis (4 runs, 11 attach decisions) showed:
+    // - Correct matches: all had embed >= 0.928
+    // - False positives: embed 0.912-0.914 with 2 generic topic tokens
+    // Raising 2-token threshold from 0.88 to 0.92 eliminates FPs while keeping correct matches
     const tokenOverlap = getMeaningfulTokenOverlap(articleTokens, story.title_tokens || []);
     const slugOk = hasValidSlugOverlap(articleSlugs, story.topic_slugs || []);
 
-    return tokenOverlap >= 2 || slugOk;
+    // Strong corroboration (3+ tokens or slug): allow 0.88+
+    if (tokenOverlap >= 3 || slugOk) {
+      return sim >= 0.88;
+    }
+
+    // Moderate corroboration (2 tokens): require 0.92+ to avoid generic topic marker FPs
+    if (tokenOverlap >= 2) {
+      return sim >= 0.92;
+    }
+
+    // No corroboration: reject
+    return false;
   });
 
   runStats.batchDedupConsidered++;
