@@ -143,6 +143,83 @@ const ACRONYM_ALLOWLIST = new Set([
   'cdc', 'dhs', 'atf', 'dea', 'nato', 'gop', 'dnc', 'rnc'
 ]);
 
+// ============================================================================
+// TTRC-355 Stage 1: Enhanced Title Token Overlap (log-only, behavior-neutral)
+// ============================================================================
+
+// Stage 1: Title token threshold constant (for easy Stage 2 changes)
+const TITLE_TOKEN_THRESHOLD = 1;
+
+// Stage 1: Acronyms to exclude from pattern detection (too common/ambiguous)
+const ACRONYM_DENYLIST = new Set(['US', 'USA']);
+
+/**
+ * TTRC-355 Stage 1: Enhanced overlap with pattern-based acronym detection (log-only)
+ * Operates on RAW tokens before lowercasing so "DOJ" is detected
+ */
+function getTitleTokenOverlapEnhanced(a, b, stopwordsSet) {
+  const tokens = (s) => (s || '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+
+  const isAcronym = (raw) => {
+    if (!raw) return false;
+    if (raw.length < 3 || raw.length > 6) return false;
+    if (!/^[A-Z]+$/.test(raw)) return false;  // Must be ALL CAPS
+    return !ACRONYM_DENYLIST.has(raw);
+  };
+
+  const buildSets = (s) => {
+    const regular = new Set();
+    const acr = new Set();
+
+    for (const raw of tokens(s)) {
+      const lower = raw.toLowerCase();
+
+      // regular tokens: 5+ chars, not stopword
+      if (lower.length >= 5 && !stopwordsSet.has(lower)) {
+        regular.add(lower);
+        continue;
+      }
+
+      // pattern-detected acronyms (ALLCAPS 3-6)
+      if (isAcronym(raw)) {
+        acr.add(lower);  // store lowercase for matching
+      }
+    }
+
+    return { regular, acr };
+  };
+
+  const A = buildSets(a);
+  const B = buildSets(b);
+
+  let regularOverlap = 0;
+  for (const t of A.regular) if (B.regular.has(t)) regularOverlap++;
+
+  let acronymOverlap = 0;
+  for (const t of A.acr) if (B.acr.has(t)) acronymOverlap++;
+
+  return {
+    overlap: regularOverlap + acronymOverlap,
+    regularOverlap,
+    acronymOverlap,
+  };
+}
+
+/**
+ * TTRC-355 Stage 1: Unified helper for computing both legacy and enhanced overlaps
+ * Call from both OVERRIDE and NEAR_MISS paths to avoid drift
+ */
+function computeTitleTokenOverlaps(articleTitle, storyTitle) {
+  const legacy = getTitleTokenOverlap(articleTitle, storyTitle);
+  const enhanced = getTitleTokenOverlapEnhanced(articleTitle, storyTitle, TITLE_STOPWORDS);
+  return {
+    legacy,
+    enhanced: enhanced.overlap,
+    enhanced_regular: enhanced.regularOverlap,
+    enhanced_acronym: enhanced.acronymOverlap
+  };
+}
+
 /**
  * TTRC-324 v2: Get count of shared meaningful tokens between two titles
  * Filters stopwords, requires length >= 5 OR is a critical acronym
@@ -884,7 +961,9 @@ export async function clusterArticle(articleId) {
     const slugTok = slugTokenSimilarity(article.topic_slug || '', storySlugs);
     const entityOverlap = scoreResult.nonStopwordEntityOverlapCount ?? 0;
     const storyTitle = targetStory.primary_headline || targetStory.title || '';
-    const titleTokenOverlap = getTitleTokenOverlap(article.title, storyTitle);
+    // TTRC-355 Stage 1: Compute both legacy and enhanced overlaps
+    const titleOverlaps = computeTitleTokenOverlaps(article.title, storyTitle);
+    const titleTokenOverlap = titleOverlaps.legacy;  // Used by Tier B decision (unchanged)
 
     // Tier A: embed >= 0.90 (0.92 if single candidate for extra safety), time <= 48h, margin, guardrail
     const tierAEmbedThreshold = candidateCount < 2 ? 0.92 : 0.90;
@@ -1010,7 +1089,13 @@ export async function clusterArticle(articleId) {
         candidate_count: candidateCount,
         guardrail: passesGuardrail,
         corroboration: isTierA ? tierAMarginBypass : corroboration,  // Show what allowed the attach
-        total: attachScore
+        total: attachScore,
+        // TTRC-355 Stage 1: Enhanced title token overlap fields (log-only)
+        title_token_overlap: titleOverlaps.legacy,
+        title_token_overlap_enhanced: titleOverlaps.enhanced,
+        title_token_overlap_enhanced_regular: titleOverlaps.enhanced_regular,
+        title_token_overlap_enhanced_acronym: titleOverlaps.enhanced_acronym,
+        title_token_threshold: TITLE_TOKEN_THRESHOLD
       }));
 
       const overrideResult = await attachToStory(article, targetStory, attachScore);
@@ -1045,7 +1130,9 @@ export async function clusterArticle(articleId) {
       const slugTokNM = slugTokenSimilarity(article.topic_slug || '', storySlugsNM);
       const entityOverlapNM = scoreResult?.nonStopwordEntityOverlapCount ?? 0;
       const storyTitleNM = targetStory.primary_headline || targetStory.title || '';
-      const titleTokenOverlapNM = getTitleTokenOverlap(article.title, storyTitleNM);
+      // TTRC-355 Stage 1: Compute both legacy and enhanced overlaps for near-miss
+      const titleOverlapsNM = computeTitleTokenOverlaps(article.title, storyTitleNM);
+      const titleTokenOverlapNM = titleOverlapsNM.legacy;  // Keep for existing corroboration_detail
 
       const tierA_gates = {
         embed: embedBest >= tierAEmbedThreshold,
@@ -1124,7 +1211,13 @@ export async function clusterArticle(articleId) {
         second_candidate_id: secondCandidate?.id ?? null,
         // TTRC-331: Shadow mode - what would have happened if bypass was enabled
         tierb_margin_bypass_would_fire: wouldBypass,
-        tierb_margin_bypass_would_fire_via: wouldBypassVia
+        tierb_margin_bypass_would_fire_via: wouldBypassVia,
+        // TTRC-355 Stage 1: Enhanced title token overlap fields (log-only)
+        title_token_overlap: titleOverlapsNM.legacy,
+        title_token_overlap_enhanced: titleOverlapsNM.enhanced,
+        title_token_overlap_enhanced_regular: titleOverlapsNM.enhanced_regular,
+        title_token_overlap_enhanced_acronym: titleOverlapsNM.enhanced_acronym,
+        title_token_threshold: TITLE_TOKEN_THRESHOLD
       }));
     }
 
