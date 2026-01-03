@@ -1,8 +1,8 @@
 // Story Enrichment Prompts
 // Used by job-queue-worker.js for OpenAI enrichment
 
-// Dynamic year for prompts - evaluated at module load time (fresh each run)
-const CURRENT_YEAR = new Date().getFullYear();
+// Dynamic year for prompts - use UTC to avoid timezone-related off-by-one day/year issues
+const CURRENT_YEAR = new Date().getUTCFullYear();
 
 export const SYSTEM_PROMPT = `You are a political analyst. Return ONLY valid JSON (a single JSON object), no prose.
 
