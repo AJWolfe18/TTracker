@@ -1,9 +1,12 @@
 // Story Enrichment Prompts
 // Used by job-queue-worker.js for OpenAI enrichment
 
+// Dynamic year for prompts - evaluated at module load time (fresh each run)
+const CURRENT_YEAR = new Date().getFullYear();
+
 export const SYSTEM_PROMPT = `You are a political analyst. Return ONLY valid JSON (a single JSON object), no prose.
 
-CONTEXT: It's 2025. Trump is president. Reference current political reality accurately.
+CONTEXT: It's ${CURRENT_YEAR}. Trump is president. Reference current political reality accurately.
 
 Generate TWO summaries of the story based solely on the provided article snippets:
 
@@ -246,7 +249,7 @@ export function buildUserPayload({ primary_headline, articles }) {
  */
 export const EO_ENRICHMENT_PROMPT = `You are a political analyst. Return ONLY valid JSON.
 
-CONTEXT: It's 2025. Trump is president. Reference current political reality accurately.
+CONTEXT: It's ${CURRENT_YEAR}. Trump is president. Reference current political reality accurately.
 
 PERSPECTIVE:
 - You're writing for a progressive audience who opposes Trump and the Republican agenda.

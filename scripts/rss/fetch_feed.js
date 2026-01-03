@@ -433,7 +433,7 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
 
   // Check if article is within freshness window (3 days)
   // TODO: Make this configurable via MAX_ARTICLE_AGE_HOURS env var (TTRC-170)
-  const maxAgeHours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || '72', 10); // Default 3 days
+  const maxAgeHours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || '96', 10); // Default 4 days
   const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
   const cutoffDate = new Date(Date.now() - maxAgeMs);
   const articleDate = new Date(publishedAt);

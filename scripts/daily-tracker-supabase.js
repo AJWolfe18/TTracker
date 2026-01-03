@@ -734,11 +734,11 @@ IMPORTANT: Only include news from the specified date range. Each story must be u
 
 CRITICAL DATE REQUIREMENTS:
 - Extract the ACTUAL publication date from each article (not today's date)
-- The article MUST be from 2025, not 2024 or earlier
-- If an article is from September 2024, it is ONE YEAR OLD - DO NOT include it
+- The article MUST be from the current year (${new Date().getFullYear()}) or very recent prior year
+- If an article is more than 7 days old, DO NOT include it
 - Only include articles from the last 7 days
 - The 'date' field must be the article's real publication date in YYYY-MM-DD format
-- Today is 2025, so articles from 2024 are outdated - REJECT them
+- Articles older than 1 week are outdated - REJECT them
 
 Find credible news sources and return specific, factual developments with proper citations.`,
 
@@ -963,9 +963,11 @@ Return ONLY a JSON array of relevant political developments found. Only include 
                         continue;
                     }
                     
-                    // CRITICAL: Reject ANY article from 2024 or earlier
-                    if (articleDate.getFullYear() < 2025) {
-                        console.log(`  ⚠️ OLD YEAR REJECTED: ${entry.date} (from ${articleDate.getFullYear()}) - ${entry.title?.substring(0, 50)}...`);
+                    // CRITICAL: Reject articles older than 1 year (dynamic, no hardcoded year)
+                    const oneYearAgo = new Date();
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    if (articleDate < oneYearAgo) {
+                        console.log(`  ⚠️ OLD ARTICLE REJECTED: ${entry.date} (more than 1 year old) - ${entry.title?.substring(0, 50)}...`);
                         continue;
                     }
                     
