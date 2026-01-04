@@ -1,8 +1,16 @@
 name: RSS Tracker - TEST
 
 on:
-  # Manual trigger
+  # Manual trigger with optional inputs
   workflow_dispatch:
+    inputs:
+      log_canonical:
+        description: 'Enable canonical decision logs (TTRC-357)'
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
   # Temporary 2h schedule for 48h validation
   # TODO: Remove/comment out after 48h monitoring (TTRC-266 Phase 6)
@@ -41,6 +49,8 @@ jobs:
           # TTRC-336: Same-batch dedup (shadow mode first)
           ENABLE_BATCH_DEDUP: 'true'
           BATCH_DEDUP_SHADOW_MODE: 'true'
+          # TTRC-357: Canonical decision logs (opt-in via workflow input)
+          LOG_CANONICAL_DECISIONS: ${{ inputs.log_canonical || 'false' }}
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 

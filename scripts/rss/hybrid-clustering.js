@@ -65,6 +65,121 @@ const batchStoriesThisRun = new Map(); // storyId -> BatchStoryEntry
 const ENABLE_BATCH_DEDUP = process.env.ENABLE_BATCH_DEDUP === 'true';
 const BATCH_DEDUP_SHADOW_MODE = process.env.BATCH_DEDUP_SHADOW_MODE !== 'false'; // Default true initially
 
+// ============================================================================
+// TTRC-357: Canonical Decision Logging
+// ============================================================================
+
+const LOG_CANONICAL_DECISIONS = process.env.LOG_CANONICAL_DECISIONS === 'true';
+const MAX_CANDIDATES_CAP = 200;  // Reference for candidate_capped detection
+
+// Run ID - generated fresh per run in resetRunState(), not at module load
+let canonicalRunId = null;
+
+// Track logged articles to prevent double-logging (cleared per run)
+const loggedArticleDecisions = new Set();
+
+// Separate stats object for canonical logging (doesn't touch existing runStats)
+let canonicalStats = {
+  skipped: 0,
+  attachPaths: { normal: 0, exact_title: 0, same_run: 0, cross_run_tier_a: 0, cross_run_tier_b: 0, batch_dedup: 0 },
+  createReasons: {}
+};
+
+/**
+ * TTRC-357: Safely extract blockResults from candidates array
+ * Must call immediately after generateCandidates() before any array operations
+ */
+function safeBlockResults(candidates) {
+  const br = candidates?.__blockResults;
+  return br && typeof br === 'object'
+    ? br
+    : { time: [], entity: [], ann: [], slug: [] };
+}
+
+/**
+ * TTRC-357: Convert blockResults to counts for logging
+ */
+function blockResultCounts(br) {
+  return {
+    time: br.time?.length || 0,
+    entity: br.entity?.length || 0,
+    ann: br.ann?.length || 0,
+    slug: br.slug?.length || 0,
+  };
+}
+
+/**
+ * TTRC-357: Determine create_reason from always-available facts only
+ * Uses 0.88 (Tier B threshold), not 0.85
+ * Does NOT depend on Tier-B-only variables (margin, corroboration internals)
+ */
+function determineCreateReason(candidateCount, bestEmbed, bestTotal, threshold) {
+  if (candidateCount === 0) return 'no_candidates';
+  if (bestEmbed < 0.88) return 'best_embed_below_tierb';  // Below Tier B eligibility
+  if (bestTotal < threshold) return 'best_hybrid_below_threshold';
+  return 'rejected_other';  // Guardrail/margin/corroboration - v0.2 can expand
+}
+
+/**
+ * TTRC-357: Emit canonical ARTICLE_DECISION log (once per article)
+ */
+function emitArticleDecision({
+  article,
+  decision,
+  skipReason = null,
+  attachPath = null,
+  createReason = null,
+  candidateCount = 0,
+  candidateCapped = false,
+  blockResults = null,
+  bestEmbedByEmbed = null,
+  bestStoryIdByEmbed = null,
+  titleOverlaps = null
+}) {
+  if (!LOG_CANONICAL_DECISIONS) return;
+
+  // Defensive: ensure run_id exists (in case resetRunState wasn't called)
+  if (!canonicalRunId) {
+    canonicalRunId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  // Prevent double-logging
+  if (loggedArticleDecisions.has(article.id)) {
+    console.warn(`[TTRC-357] Double-log prevented for article ${article.id}`);
+    return;
+  }
+  loggedArticleDecisions.add(article.id);
+
+  const br = blockResults || { time: [], entity: [], ann: [], slug: [] };
+
+  console.log(JSON.stringify({
+    type: 'ARTICLE_DECISION',
+    schema_version: '0.1',
+    run_id: canonicalRunId,
+    article_id: article.id,
+    decision,
+    skip_reason: skipReason,
+    attach_path: attachPath,
+    create_reason: createReason,
+    candidate_count: candidateCount,
+    candidate_sources: blockResultCounts(br),
+    candidate_capped: candidateCapped,
+    best_embed: bestEmbedByEmbed !== null ? Number(bestEmbedByEmbed.toFixed(4)) : null,
+    best_story_id_by_embed: bestStoryIdByEmbed,
+    title_token_overlap: titleOverlaps?.legacy ?? null,
+    title_token_overlap_enhanced: titleOverlaps?.enhanced ?? null
+  }));
+
+  // Update canonicalStats (separate from runStats to avoid changing existing log shape)
+  if (decision === 'skipped') {
+    canonicalStats.skipped++;
+  } else if (decision === 'attached' && attachPath) {
+    canonicalStats.attachPaths[attachPath] = (canonicalStats.attachPaths[attachPath] || 0) + 1;
+  } else if (decision === 'created' && createReason) {
+    canonicalStats.createReasons[createReason] = (canonicalStats.createReasons[createReason] || 0) + 1;
+  }
+}
+
 // Run-level stats for observability (TTRC-323/324/336)
 let runStats = {
   created: 0,
@@ -470,6 +585,16 @@ export function resetRunState() {
     batchDedupRejected: 0,
     batchDedupShadow: 0
   };
+
+  // TTRC-357: Generate fresh run ID per run (not per-process)
+  canonicalRunId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  loggedArticleDecisions.clear();
+  canonicalStats = {
+    skipped: 0,
+    attachPaths: { normal: 0, exact_title: 0, same_run: 0, cross_run_tier_a: 0, cross_run_tier_b: 0, batch_dedup: 0 },
+    createReasons: {}
+  };
+
   console.log('[hybrid-clustering] Run state reset');
 }
 
@@ -556,6 +681,12 @@ export async function clusterArticle(articleId) {
 
   if (existing && !existingError) {
     console.log(`[hybrid-clustering] Article ${articleId} already clustered to story ${existing.story_id}`);
+    // TTRC-357: Log skipped decision
+    emitArticleDecision({
+      article,
+      decision: 'skipped',
+      skipReason: 'already_clustered'
+    });
     return {
       story_id: existing.story_id,
       created_new: false,
@@ -610,6 +741,15 @@ export async function clusterArticle(articleId) {
       console.log(`[PERF] Total clustering time: ${totalTime}ms (title dedup path)`);
 
       runStats.attached323ExactTitle++;
+      // TTRC-357: Log exact title attach (before generateCandidates, so no blockResults)
+      emitArticleDecision({
+        article,
+        decision: 'attached',
+        attachPath: 'exact_title',
+        candidateCount: 0,
+        blockResults: null,
+        bestStoryIdByEmbed: cachedStory.id
+      });
       return result;
     }
     // else: Different events with same headline - proceed to normal clustering
@@ -627,6 +767,10 @@ export async function clusterArticle(articleId) {
 
   // TTRC-321 Phase 0: Store candidate IDs for diagnostic logging
   lastCandidateIds = candidates.__candidateIds || [];
+
+  // TTRC-357: Capture block-level sources IMMEDIATELY (lost after array operations)
+  const blockResults = safeBlockResults(candidates);
+  const candidateCapped = candidates.length === MAX_CANDIDATES_CAP;  // Strict equality - hit the cap
 
   console.log(`[hybrid-clustering] Found ${candidates.length} candidates in ${candidateTime}ms`);
 
@@ -793,6 +937,20 @@ export async function clusterArticle(articleId) {
         }
 
         runStats.attachedNormal++;
+        // TTRC-357: Log normal attach - use top-by-embedding for consistency
+        const topByEmbedNormal = byEmbed[0];
+        const titleOverlapsNormal = computeTitleTokenOverlaps(article.title, story.primary_headline || '');
+        emitArticleDecision({
+          article,
+          decision: 'attached',
+          attachPath: 'normal',
+          candidateCount: candidates.length,
+          candidateCapped,
+          blockResults,
+          bestEmbedByEmbed: topByEmbedNormal?.scoreResult?.embeddingScore ?? null,
+          bestStoryIdByEmbed: topByEmbedNormal?.story?.id ?? null,
+          titleOverlaps: titleOverlapsNormal
+        });
         return result;
       }
     }
@@ -887,6 +1045,17 @@ export async function clusterArticle(articleId) {
       }
 
       runStats.attached321SameRun++;
+      // TTRC-357: Log same-run override
+      emitArticleDecision({
+        article,
+        decision: 'attached',
+        attachPath: 'same_run',
+        candidateCount: candidates.length,
+        candidateCapped,
+        blockResults,
+        bestEmbedByEmbed: topEmbedding,
+        bestStoryIdByEmbed: overrideStory.id
+      });
       return overrideResult;
     }
   }
@@ -1111,6 +1280,18 @@ export async function clusterArticle(articleId) {
       } else {
         runStats.attached324TierB++;
       }
+      // TTRC-357: Log cross-run override
+      emitArticleDecision({
+        article,
+        decision: 'attached',
+        attachPath: isTierA ? 'cross_run_tier_a' : 'cross_run_tier_b',
+        candidateCount: candidates.length,
+        candidateCapped,
+        blockResults,
+        bestEmbedByEmbed: embedBest,
+        bestStoryIdByEmbed: targetStory.id,
+        titleOverlaps
+      });
       return overrideResult;
     }
 
@@ -1348,6 +1529,17 @@ export async function clusterArticle(articleId) {
           console.log(`[PERF] Total clustering time: ${totalTime}ms`);
 
           runStats.batchDedupAttached++;
+          // TTRC-357: Log batch dedup attach
+          emitArticleDecision({
+            article,
+            decision: 'attached',
+            attachPath: 'batch_dedup',
+            candidateCount: candidates.length,
+            candidateCapped,
+            blockResults,
+            bestEmbedByEmbed: sim,
+            bestStoryIdByEmbed: batchStory.id
+          });
           return batchResult;
         }
       } else if (BATCH_DEDUP_SHADOW_MODE && decision === 'attach') {
@@ -1448,6 +1640,34 @@ export async function clusterArticle(articleId) {
   }
 
   runStats.created++;
+
+  // TTRC-357: Log creation - use top-by-embedding consistently
+  const topByEmbedCreate = allByEmbed?.[0];
+  const bestEmbedForLog = topByEmbedCreate?.scoreResult?.embeddingScore ?? null;
+  const bestStoryIdForLog = topByEmbedCreate?.story?.id ?? null;
+  const bestTitleOverlaps = topByEmbedCreate?.story
+    ? computeTitleTokenOverlaps(article.title, topByEmbedCreate.story.primary_headline || '')
+    : null;
+
+  // Only consider hybrid score when embed is Tier B eligible (avoids misclassification)
+  const bestEmbed = bestEmbedForLog ?? 0;
+  let bestTotalForReason = 0;
+  if (bestEmbed >= 0.88) {
+    bestTotalForReason = bestMatch?.scoreResult?.total ?? 0;
+  }
+
+  emitArticleDecision({
+    article,
+    decision: 'created',
+    createReason: determineCreateReason(candidates.length, bestEmbed, bestTotalForReason, threshold),
+    candidateCount: candidates.length,
+    candidateCapped,
+    blockResults,
+    bestEmbedByEmbed: bestEmbedForLog,
+    bestStoryIdByEmbed: bestStoryIdForLog,
+    titleOverlaps: bestTitleOverlaps
+  });
+
   return result;
 }
 
@@ -1849,6 +2069,21 @@ export async function clusterBatch(limit = 50) {
     batch_dedup_rejected: stats.batchDedupRejected ?? 0,
     batch_dedup_shadow: stats.batchDedupShadow ?? 0
   }));
+
+  // TTRC-357: Emit canonical run summary (use canonicalStats, not runStats)
+  if (LOG_CANONICAL_DECISIONS) {
+    console.log(JSON.stringify({
+      type: 'RUN_SUMMARY_CANONICAL',
+      schema_version: '0.1',
+      run_id: canonicalRunId,
+      articles_processed: results.processed,
+      articles_attached: results.attached,
+      articles_created: results.created,
+      articles_skipped: canonicalStats.skipped,
+      attach_paths: canonicalStats.attachPaths,
+      create_reasons: canonicalStats.createReasons
+    }));
+  }
 
   return results;
 }
