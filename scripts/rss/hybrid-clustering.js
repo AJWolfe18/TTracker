@@ -70,7 +70,22 @@ const BATCH_DEDUP_SHADOW_MODE = process.env.BATCH_DEDUP_SHADOW_MODE !== 'false';
 // ============================================================================
 
 const LOG_CANONICAL_DECISIONS = process.env.LOG_CANONICAL_DECISIONS === 'true';
+const INCLUDE_TITLES_IN_LOGS = process.env.INCLUDE_TITLES_IN_LOGS !== 'false'; // Default true for diagnostics
 const MAX_CANDIDATES_CAP = 200;  // Reference for candidate_capped detection
+
+/**
+ * TTRC-357 v0.2: Sanitize and truncate title for logging
+ * Removes newlines, excessive whitespace, and truncates to max length
+ */
+function sanitizeTitle(title, maxLen = 80) {
+  if (!title) return null;
+  const cleaned = String(title)
+    .replace(/[\r\n\t]+/g, ' ')  // Remove newlines/tabs
+    .replace(/\s+/g, ' ')        // Collapse whitespace
+    .trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  return cleaned.slice(0, maxLen - 3) + '...';
+}
 
 // Run ID - generated fresh per run in resetRunState(), not at module load
 let canonicalRunId = null;
@@ -121,7 +136,11 @@ function determineCreateReason(candidateCount, bestEmbed, bestTotal, threshold) 
 }
 
 /**
- * TTRC-357: Emit canonical ARTICLE_DECISION log (once per article)
+ * TTRC-357 v0.2: Emit canonical ARTICLE_DECISION log (once per article)
+ *
+ * Enhancements:
+ * - article_title and best_story_headline included when INCLUDE_TITLES_IN_LOGS=true
+ * - blockers array only included for 'created' decisions (null for attached/skipped)
  */
 function emitArticleDecision({
   article,
@@ -134,7 +153,9 @@ function emitArticleDecision({
   blockResults = null,
   bestEmbedByEmbed = null,
   bestStoryIdByEmbed = null,
-  titleOverlaps = null
+  bestStoryHeadline = null,
+  titleOverlaps = null,
+  blockers = null  // Only populated for 'created' decisions
 }) {
   if (!LOG_CANONICAL_DECISIONS) return;
 
@@ -152,15 +173,18 @@ function emitArticleDecision({
 
   const br = blockResults || { time: [], entity: [], ann: [], slug: [] };
 
-  console.log(JSON.stringify({
+  // Build log object
+  const logObj = {
     type: 'ARTICLE_DECISION',
-    schema_version: '0.1',
+    schema_version: '0.2',
     run_id: canonicalRunId,
     article_id: article.id,
     decision,
     skip_reason: skipReason,
     attach_path: attachPath,
     create_reason: createReason,
+    // Blockers only for created decisions (null otherwise)
+    blockers: decision === 'created' ? (blockers || []) : null,
     candidate_count: candidateCount,
     candidate_sources: blockResultCounts(br),
     candidate_capped: candidateCapped,
@@ -168,7 +192,15 @@ function emitArticleDecision({
     best_story_id_by_embed: bestStoryIdByEmbed,
     title_token_overlap: titleOverlaps?.legacy ?? null,
     title_token_overlap_enhanced: titleOverlaps?.enhanced ?? null
-  }));
+  };
+
+  // Add titles when enabled (opt-out via INCLUDE_TITLES_IN_LOGS=false)
+  if (INCLUDE_TITLES_IN_LOGS) {
+    logObj.article_title = sanitizeTitle(article.title);
+    logObj.best_story_headline = sanitizeTitle(bestStoryHeadline);
+  }
+
+  console.log(JSON.stringify(logObj));
 
   // Update canonicalStats (separate from runStats to avoid changing existing log shape)
   if (decision === 'skipped') {
@@ -748,7 +780,8 @@ export async function clusterArticle(articleId) {
         attachPath: 'exact_title',
         candidateCount: 0,
         blockResults: null,
-        bestStoryIdByEmbed: cachedStory.id
+        bestStoryIdByEmbed: cachedStory.id,
+        bestStoryHeadline: cachedStory.primary_headline
       });
       return result;
     }
@@ -949,6 +982,7 @@ export async function clusterArticle(articleId) {
           blockResults,
           bestEmbedByEmbed: topByEmbedNormal?.scoreResult?.embeddingScore ?? null,
           bestStoryIdByEmbed: topByEmbedNormal?.story?.id ?? null,
+          bestStoryHeadline: topByEmbedNormal?.story?.primary_headline ?? null,
           titleOverlaps: titleOverlapsNormal
         });
         return result;
@@ -1054,7 +1088,8 @@ export async function clusterArticle(articleId) {
         candidateCapped,
         blockResults,
         bestEmbedByEmbed: topEmbedding,
-        bestStoryIdByEmbed: overrideStory.id
+        bestStoryIdByEmbed: overrideStory.id,
+        bestStoryHeadline: overrideStory.primary_headline
       });
       return overrideResult;
     }
@@ -1290,6 +1325,7 @@ export async function clusterArticle(articleId) {
         blockResults,
         bestEmbedByEmbed: embedBest,
         bestStoryIdByEmbed: targetStory.id,
+        bestStoryHeadline: targetStory.primary_headline,
         titleOverlaps
       });
       return overrideResult;
@@ -1538,7 +1574,8 @@ export async function clusterArticle(articleId) {
             candidateCapped,
             blockResults,
             bestEmbedByEmbed: sim,
-            bestStoryIdByEmbed: batchStory.id
+            bestStoryIdByEmbed: batchStory.id,
+            bestStoryHeadline: batchStory.headline
           });
           return batchResult;
         }
@@ -1641,10 +1678,11 @@ export async function clusterArticle(articleId) {
 
   runStats.created++;
 
-  // TTRC-357: Log creation - use top-by-embedding consistently
+  // TTRC-357 v0.2: Log creation - use top-by-embedding consistently
   const topByEmbedCreate = allByEmbed?.[0];
   const bestEmbedForLog = topByEmbedCreate?.scoreResult?.embeddingScore ?? null;
   const bestStoryIdForLog = topByEmbedCreate?.story?.id ?? null;
+  const bestStoryHeadlineForLog = topByEmbedCreate?.story?.primary_headline ?? null;
   const bestTitleOverlaps = topByEmbedCreate?.story
     ? computeTitleTokenOverlaps(article.title, topByEmbedCreate.story.primary_headline || '')
     : null;
@@ -1656,15 +1694,26 @@ export async function clusterArticle(articleId) {
     bestTotalForReason = bestMatch?.scoreResult?.total ?? 0;
   }
 
+  // Derive blockers from create_reason (high-level summary)
+  // Note: For detailed blockers, see CROSS_RUN_NEAR_MISS logs which have full gate breakdown
+  const createReason = determineCreateReason(candidates.length, bestEmbed, bestTotalForReason, threshold);
+  const derivedBlockers = [];
+  if (createReason === 'no_candidates') derivedBlockers.push('retrieval');
+  else if (createReason === 'best_embed_below_tierb') derivedBlockers.push('embed');
+  else if (createReason === 'best_hybrid_below_threshold') derivedBlockers.push('hybrid_score');
+  else if (createReason === 'rejected_other') derivedBlockers.push('guardrail_or_margin');
+
   emitArticleDecision({
     article,
     decision: 'created',
-    createReason: determineCreateReason(candidates.length, bestEmbed, bestTotalForReason, threshold),
+    createReason,
+    blockers: derivedBlockers,
     candidateCount: candidates.length,
     candidateCapped,
     blockResults,
     bestEmbedByEmbed: bestEmbedForLog,
     bestStoryIdByEmbed: bestStoryIdForLog,
+    bestStoryHeadline: bestStoryHeadlineForLog,
     titleOverlaps: bestTitleOverlaps
   });
 
