@@ -166,6 +166,41 @@ This prevents false positives from high entity/time overlap with unrelated conte
 | `best_hybrid_below_threshold` | Embed >= 0.88 but hybrid score too low | Check other signals (title, entity, time) |
 | `rejected_other` | Passed thresholds but blocked | Guardrail, margin gate, or corroboration failed |
 
+#### Detailed Diagnostic Guide
+
+**`no_candidates`** - **Retrieval Gap**
+The system couldn't even FIND the right story to consider. Check:
+- Time block: Is the matching story outside the 72h window?
+- Entity block: Does article only have stopword entities (US-TRUMP, LOC-USA)?
+- ANN block: Is the embedding quality poor or very different from story centroids?
+- Slug block: No matching topic slug?
+
+**`best_embed_below_tierb`** - **Likely Correct**
+We found candidates, but none were semantically close enough (all < 0.88). This is often correct behavior - the article really is about something new. Only investigate if you believe it SHOULD have matched.
+
+**`best_hybrid_below_threshold`** - **Fragmentation Danger Zone**
+The embedding says "these are similar" (≥ 0.88) but the hybrid score says "not enough other evidence." This is where fragmentation happens. Check:
+- Is the title phrased very differently?
+- Are different entities mentioned (person vs organization focus)?
+- Is there a time decay penalty (story is old)?
+
+Example fragmentation signal:
+```json
+{
+  "decision": "created",
+  "create_reason": "best_hybrid_below_threshold",
+  "best_embed": 0.91,
+  "candidate_sources": {"time": 70, "entity": 0, "ann": 60, "slug": 0}
+}
+```
+This says: "Embedding was 0.91 (high!) but entity block returned 0, so no entity corroboration was available."
+
+**`rejected_other`** - **Safety Gate Blocked**
+The article passed thresholds but a safety mechanism blocked it. Currently a catch-all. In v0.2, this could expand to:
+- `rejected_guardrail` - embed < 0.60 AND title < 0.50
+- `rejected_margin` - second-best candidate too close (unclear winner)
+- `rejected_corroboration` - Tier B needed slug/entity/title overlap but didn't have it
+
 ### attach_path Values
 
 | Value | When Used |
