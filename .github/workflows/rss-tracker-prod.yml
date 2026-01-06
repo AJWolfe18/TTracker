@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload run logs (on failure)
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rss-tracker-prod-logs
           path: |
