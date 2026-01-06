@@ -10,6 +10,8 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
+import { clusterArticle, resetRunState, getRunStats } from './rss/hybrid-clustering.js';
+import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import {
   enrichStory as enrichStoryImpl,
   shouldEnrichStory,
@@ -18,6 +20,8 @@ import {
   UI_TO_DB_CATEGORIES,
   ENRICHMENT_COOLDOWN_HOURS
 } from './enrichment/enrich-stories-inline.js';
+import { extractArticleEntities } from './enrichment/extract-article-entities-inline.js';
+import { extractTopicSlug } from './rss/topic-extraction.js';
 
 // =====================================================================
 // Configuration & Constants
@@ -69,7 +73,12 @@ class RSSTracker {
       stories_enriched: 0,
       total_openai_cost_usd: 0,
       enrichment_skipped_budget: 0,
-      enrichment_failed: 0  // NEW: Track failed enrichments (TTRC-280)
+      enrichment_failed: 0,  // Track failed enrichments (TTRC-277)
+      // TTRC-299: Embedding generation tracking
+      embeddings_generated: 0,
+      embedding_failures: 0,
+      // TTRC-298: Entity extraction tracking
+      entities_extracted: 0
     };
 
     this.runStatus = 'success';
@@ -182,15 +191,223 @@ class RSSTracker {
   }
 
   // ===================================================================
+  // Article Embedding (TTRC-299)
+  // ===================================================================
+
+  /**
+   * Generate embeddings for articles that don't have them yet.
+   * Must run BEFORE clustering so hybrid scoring has embeddings to work with.
+   * Uses same model and storage format as job-queue-worker.js for consistency.
+   */
+  async enrichArticles() {
+    try {
+      // Query ALL articles without embeddings (no time filter - clears backlog)
+      // TTRC-320: Order by NEWEST first - prioritize current run's articles
+      // Old logic (ascending: true) caused 54% of new articles to miss embeddings
+      const { data: articles, error } = await this.supabase
+        .from('articles')
+        .select('id, title, content, excerpt')
+        .is('embedding_v1', null)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error('❌ Failed to query articles for embedding:', error.message);
+        return;
+      }
+
+      if (!articles || articles.length === 0) {
+        console.log('✅ No articles need embeddings');
+        return;
+      }
+
+      console.log(`🔢 Generating embeddings for ${articles.length} articles...`);
+
+      for (const article of articles) {
+        // Runtime guard: stop at 60% to leave room for clustering + enrichment
+        if (Date.now() - this.startTime > RUNTIME_LIMIT_MS * 0.6) {
+          console.log('⏱ Runtime limit approaching (60%), stopping embeddings');
+          break;
+        }
+
+        try {
+          // Build input: title + first 2000 chars of content (matches worker pattern)
+          // TTRC-299: Sanitize to avoid undefined titles and raw HTML in embeddings
+          const rawContent = article.content || article.excerpt || '';
+          const cleanContent = String(rawContent).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const safeTitle = (typeof article.title === 'string' && article.title.trim().length > 0)
+            ? article.title.trim()
+            : 'Untitled';
+          const embeddingInput = `${safeTitle}\n\n${cleanContent.slice(0, 2000)}`;
+
+          // Generate embedding via OpenAI (same model as worker)
+          const response = await this.openai.embeddings.create({
+            model: EMBEDDING_MODEL_V1,
+            input: embeddingInput
+          });
+
+          // Validate embedding response structure
+          const embedding = response?.data?.[0]?.embedding;
+          if (!Array.isArray(embedding) || embedding.length === 0) {
+            console.error(`❌ Invalid embedding response for ${article.id}`);
+            this.stats.embedding_failures++;
+            continue;
+          }
+
+          // Store as pgvector string format (matches existing pattern from worker)
+          const { error: updateError } = await this.supabase
+            .from('articles')
+            .update({
+              embedding_v1: `[${embedding.join(',')}]`,
+              embedding_model_v1: EMBEDDING_MODEL_V1
+            })
+            .eq('id', article.id);
+
+          if (updateError) {
+            console.error(`❌ Failed to store embedding for ${article.id}:`, updateError.message);
+            this.stats.embedding_failures++;
+            continue;
+          }
+
+          this.stats.embeddings_generated++;
+        } catch (err) {
+          console.error(`❌ Embedding failed for ${article.id}:`, err.message);
+          this.stats.embedding_failures++;
+          // Continue with next article - this one will retry next run
+        }
+      }
+
+      console.log(`✅ Embeddings complete: ${this.stats.embeddings_generated} generated, ${this.stats.embedding_failures} failed`);
+
+    } catch (err) {
+      console.error('❌ enrichArticles() failed:', err.message);
+    }
+  }
+
+  // ===================================================================
+  // Article Entity Extraction (TTRC-298)
+  // ===================================================================
+
+  /**
+   * Extract entities from articles for clustering signals.
+   * TTRC-298: Entities enable 25% weight in hybrid scoring.
+   * Runs after embeddings, before clustering.
+   */
+  async extractArticleEntitiesPhase() {
+    try {
+      console.log('[RSS] === PHASE: ARTICLE ENTITY EXTRACTION ===');
+
+      // Budget check first - respect daily limits
+      const today = new Date().toISOString().split('T')[0];
+      const { data: budget } = await this.supabase
+        .from('budgets')
+        .select('spent_usd')
+        .eq('day', today)
+        .single();
+
+      if (budget?.spent_usd >= DAILY_BUDGET_LIMIT) {
+        console.log('[RSS] Daily budget exceeded, skipping entity extraction');
+        return;
+      }
+
+      // Query articles needing extraction (include excerpt-only articles)
+      // TTRC-306: Also include articles without topic_slug for slug extraction
+      const { data: articles, error } = await this.supabase
+        .from('articles')
+        .select('id, title, content, excerpt, entities, topic_slug')
+        .or('entities.is.null,entities.eq.[],topic_slug.is.null')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('[RSS] Failed to query articles for entity extraction:', error.message);
+        return;
+      }
+
+      if (!articles?.length) {
+        console.log('[RSS] No articles need entity extraction');
+        return;
+      }
+
+      console.log(`[RSS] Extracting entities and topic slugs for ${articles.length} articles`);
+      let entitiesExtracted = 0, slugsExtracted = 0, failed = 0, totalTokens = 0;
+
+      for (const article of articles) {
+        // Runtime guard
+        if (Date.now() - this.startTime > RUNTIME_LIMIT_MS * 0.7) {
+          console.log('[RSS] Runtime limit approaching (70%), stopping extraction');
+          break;
+        }
+
+        const content = article.content || article.excerpt || '';
+        const updateFields = {};
+
+        // TTRC-306: Extract entities if missing
+        const needsEntities = !article.entities || article.entities.length === 0;
+        if (needsEntities) {
+          const { entities, tokens } = await extractArticleEntities(
+            article.title,
+            content,
+            this.openai
+          );
+          updateFields.entities = entities.length > 0 ? entities : [];
+          if (entities.length > 0) {
+            entitiesExtracted++;
+            if (tokens) totalTokens += tokens.total_tokens || 0;
+          }
+        }
+
+        // TTRC-306: Extract topic slug if missing (idempotent)
+        const needsSlug = !article.topic_slug;
+        if (needsSlug) {
+          const slug = await extractTopicSlug(article.title, content, article.excerpt || '', this.openai);
+          if (slug) {
+            updateFields.topic_slug = slug;
+            slugsExtracted++;
+          }
+        }
+
+        // Update if any fields need to be set
+        if (Object.keys(updateFields).length > 0) {
+          const { error: updateError } = await this.supabase
+            .from('articles')
+            .update(updateFields)
+            .eq('id', article.id);
+
+          if (updateError) {
+            console.error(`[RSS] Failed to update article ${article.id}:`, updateError.message);
+            failed++;
+            continue;
+          }
+        }
+
+        // Rate limiting (150ms between calls)
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      const cost = (totalTokens / 1000) * 0.00015;
+      console.log(`[RSS] Extraction complete: ${entitiesExtracted} entities, ${slugsExtracted} slugs, ${failed} failed, ~$${cost.toFixed(4)}`);
+      this.stats.entities_extracted = entitiesExtracted;
+      this.stats.slugs_extracted = slugsExtracted;
+
+    } catch (err) {
+      console.error('[RSS] extractArticleEntitiesPhase() failed:', err.message);
+    }
+  }
+
+  // ===================================================================
   // Clustering
   // ===================================================================
 
   /**
-   * Cluster unclustered articles into stories (DB-centric)
+   * Cluster unclustered articles into stories using hybrid scoring.
+   * TTRC-299: Now calls clusterArticle() directly for semantic clustering.
+   * RPC only returns articles with embeddings (migration 042).
    */
   async clusterArticles() {
     try {
-      // Get unclustered articles via RPC (no PostgREST subquery issues)
+      // Get unclustered articles via RPC
+      // NOTE: RPC now only returns articles WITH embeddings (migration 042)
       const { data: articles, error } = await this.supabase
         .rpc('get_unclustered_articles', { limit_count: 100 });
 
@@ -201,10 +418,10 @@ class RSSTracker {
         return;
       }
 
-      console.log(`🔗 Clustering ${articles.length} articles...`);
+      console.log(`🔗 Clustering ${articles.length} articles via hybrid scoring...`);
 
-      // Simple 1-article-per-story clustering for TTRC-266
-      // (Complex similarity-based clustering deferred to future ticket)
+      // TTRC-299: Use hybrid clustering (validated in TTRC-236)
+      // clusterArticle() is the single source of truth for all clustering decisions
       for (const article of articles) {
         // Runtime guard
         if (Date.now() - this.startTime > RUNTIME_LIMIT_MS) {
@@ -213,53 +430,31 @@ class RSSTracker {
           break;
         }
 
-        // Generate story_hash (EXACTLY matches DB formula from migration 020)
-        // SQL: v_title_clean := COALESCE(NULLIF(_title,''), 'Untitled Story');
-        //      v_story_hash := md5(lower(regexp_replace(v_title_clean, '\s+', ' ', 'g')));
-        // JS must match: null/empty → 'Untitled Story', whitespace-only → kept & normalized
-        const title = (article.title == null || article.title === '') ? 'Untitled Story' : article.title;
-        const normalizedTitle = title.toLowerCase().replace(/\s+/g, ' ');
-        const storyHash = crypto.createHash('md5').update(normalizedTitle).digest('hex');
+        try {
+          // Call hybrid clustering - handles candidate generation, scoring, and story assignment
+          const result = await clusterArticle(article.id);
 
-        // Create new story for this article
-        const { data: story, error: storyErr } = await this.supabase
-          .from('stories')
-          .insert({
-            story_hash: storyHash,
-            primary_headline: article.title,
-            status: 'active',
-            first_seen_at: article.published_date
-          })
-          .select()
-          .single();
+          // TTRC-299: Guard against null/invalid clustering result
+          if (!result || !result.story_id) {
+            console.warn(`⚠️ Clustering returned no decision for article ${article.id}`);
+            continue;
+          }
 
-        if (storyErr) {
-          console.error(`❌ Failed to create story for article ${article.id}:`, storyErr.message);
-          continue;
+          // Log clustering decision with score for observability
+          const scoreStr = (typeof result.score === 'number') ? result.score.toFixed(3) : 'N/A';
+          console.log(`[cluster] Article ${article.id} → Story ${result.story_id} (${result.status || 'unknown'}, score: ${scoreStr})`);
+
+          this.stats.stories_clustered++;
+        } catch (err) {
+          console.error(`❌ Clustering failed for ${article.id}:`, err.message);
+          // Continue with next article - don't fail the whole run
         }
-
-        // Link article to story
-        const { error: linkErr } = await this.supabase
-          .from('article_story')
-          .insert({
-            article_id: article.id,
-            story_id: story.id,
-            is_primary_source: true,
-            similarity_score: 1.0
-          });
-
-        if (linkErr) {
-          console.error(`❌ Failed to link article ${article.id} to story ${story.id}:`, linkErr.message);
-          continue;
-        }
-
-        this.stats.stories_clustered++;
       }
 
-      console.log(`✅ Clustered ${this.stats.stories_clustered} articles into new stories`);
+      console.log(`✅ Clustered ${this.stats.stories_clustered} articles`);
 
     } catch (err) {
-      console.error('❌ Clustering failed:', err.message);
+      console.error('❌ clusterArticles() failed:', err.message);
     }
   }
 
@@ -320,7 +515,12 @@ class RSSTracker {
 
       const { data: stories, error } = await this.supabase
         .from('stories')
-        .select('id, primary_headline, last_enriched_at')
+        .select(`
+          id,
+          primary_headline,
+          last_enriched_at,
+          article_story!inner ( article_id )
+        `)
         .eq('status', 'active')
         .or(`last_enriched_at.is.null,last_enriched_at.lt.${cooldownCutoff}`)
         .order('last_enriched_at', { ascending: true, nullsFirst: true })
@@ -343,7 +543,7 @@ class RSSTracker {
           break;
         }
 
-        // NEW: Wrap enrichment call in try-catch (TTRC-280)
+        // NEW: Wrap enrichment call in try-catch (TTRC-277)
         // enrichAndBillStory throws on failure (no swallow inside)
         try {
           const shouldContinue = await this.enrichAndBillStory(story);
@@ -410,7 +610,8 @@ class RSSTracker {
         p_stories_enriched: this.stats.stories_enriched,
         p_total_openai_cost_usd: this.stats.total_openai_cost_usd,
         p_enrichment_skipped_budget: this.stats.enrichment_skipped_budget,
-        p_enrichment_failed: this.stats.enrichment_failed  // NEW: Pass failure count (15th param, TTRC-280)
+        p_enrichment_failed: this.stats.enrichment_failed,  // 15th param (TTRC-277)
+        p_entities_extracted: this.stats.entities_extracted  // 16th param (TTRC-298)
       });
 
       if (error) throw error;
@@ -427,6 +628,13 @@ class RSSTracker {
 
   async run() {
     try {
+      // TTRC-321 Phase 0: Set global run start for diagnostic logging
+      globalThis.__RUN_START__ = new Date();
+      console.log(`[RUN_START] ${globalThis.__RUN_START__.toISOString()}`);
+
+      // Reset run state for batch dedup tracking
+      resetRunState();
+
       console.log(`🚀 RSS Tracker starting (${this.environment.toUpperCase()})`);
       console.log(`⏰ Started at: ${this.runStartedAt}`);
 
@@ -434,18 +642,58 @@ class RSSTracker {
       const feeds = await this.selectFeeds();
       await this.processFeeds(feeds);
 
-      // 2. Cluster articles
+      // 2. Generate embeddings for new articles (TTRC-299)
+      // Must run BEFORE clustering so hybrid scoring has embeddings
+      await this.enrichArticles();
+
+      // 3. Extract entities from articles (TTRC-298)
+      // Must run BEFORE clustering so entity overlap scoring works
+      await this.extractArticleEntitiesPhase();
+
+      // 4. Cluster articles using hybrid scoring (TTRC-299)
       await this.clusterArticles();
 
-      // 3. Enrich stories
+      // 5. Enrich stories with AI summaries
       await this.enrichStories();
 
-      // 4. Log final stats
+      // 6. Log final stats
       await this.finalizeRunStats();
 
       const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
       console.log(`✅ RSS Tracker complete in ${elapsed}s`);
       console.log(`📊 Stats:`, this.stats);
+
+      // Log clustering override stats (TTRC-323/324 v2, TTRC-326)
+      const clusterStats = getRunStats() ?? {};
+      // Guard against undefined/null clusterStats and tier fields (AI code review blocker)
+      const tierA = Number(clusterStats.attached324TierA ?? 0);
+      const tierB = Number(clusterStats.attached324TierB ?? 0);
+      const rpcFails = Number(clusterStats.latestArticlePubRpcFails ?? 0);
+      const summaryObj = {
+        type: 'CLUSTERING_SUMMARY',
+        created: clusterStats.created,
+        attached_normal: clusterStats.attachedNormal,
+        attached_321_same_run: clusterStats.attached321SameRun,
+        attached_323_exact_title: clusterStats.attached323ExactTitle,
+        // Backwards compat - keep old key for one release
+        attached_324_slug_embed: tierA + tierB,
+        // New tier-specific keys (v2)
+        attached_324_tier_a: tierA,
+        attached_324_tier_b: tierB
+      };
+      // TTRC-326: Only log RPC failures if > 0 (avoid noise)
+      if (rpcFails > 0) {
+        summaryObj.latest_article_pub_rpc_fails = rpcFails;
+      }
+      // TTRC-336: Add batch dedup stats if any were considered
+      const batchConsidered = Number(clusterStats.batchDedupConsidered ?? 0);
+      if (batchConsidered > 0) {
+        summaryObj.batch_dedup_considered = batchConsidered;
+        summaryObj.batch_dedup_attached = Number(clusterStats.batchDedupAttached ?? 0);
+        summaryObj.batch_dedup_rejected = Number(clusterStats.batchDedupRejected ?? 0);
+        summaryObj.batch_dedup_shadow = Number(clusterStats.batchDedupShadow ?? 0);
+      }
+      console.log(JSON.stringify(summaryObj));
 
     } catch (err) {
       console.error('💥 RSS Tracker failed:', err.message);
