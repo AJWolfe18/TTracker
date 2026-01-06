@@ -9,14 +9,33 @@
     "daily": "node scripts/daily-tracker-supabase.js",
     "eo": "node scripts/executive-orders-tracker-supabase.js",
     "server": "node scripts/simple-server.js",
-    "test": "node test-verification.js"
+    "test": "node test-verification.js",
+    "qa:boundaries": "node scripts/tests/clustering-boundaries.mjs",
+    "qa:integration": "node scripts/tests/attach-or-create-integration-fixed.mjs",
+    "qa:idempotency": "node scripts/tests/enqueue-idempotency.mjs",
+    "qa:concurrency": "node scripts/tests/clustering-concurrency-fixed.mjs",
+    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2",
+    "@mozilla/readability": "0.6.0",
     "@supabase/supabase-js": "^2.39.1",
-    "playwright": "^1.40.0"
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.1",
+    "he": "1.2.0",
+    "jsdom": "^27.1.0",
+    "natural": "^6.10.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.28.0",
+    "pg": "^8.11.0",
+    "playwright": "^1.40.0",
+    "rss-parser": "^3.13.0"
   },
-  "keywords": ["political", "tracker", "accountability", "automation"],
+  "keywords": [
+    "political",
+    "tracker",
+    "accountability",
+    "automation"
+  ],
   "author": "Political Transparency Project",
   "license": "MIT"
 }
