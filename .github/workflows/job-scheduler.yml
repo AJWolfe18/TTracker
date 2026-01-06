@@ -8,7 +8,7 @@ on:
 jobs:
   schedule-rss:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 */2 * * *' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event.schedule == '0 */2 * * *' || github.event_name == 'workflow_dispatch')
     steps:
       - name: Trigger RSS feed fetching
         run: |
@@ -22,7 +22,7 @@ jobs:
 
   schedule-lifecycle:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch')
     steps:
       - name: Trigger story lifecycle jobs
         run: |

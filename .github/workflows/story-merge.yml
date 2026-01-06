@@ -10,6 +10,7 @@ on:
 jobs:
   merge-stories:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Trigger story merge detection
         id: merge
