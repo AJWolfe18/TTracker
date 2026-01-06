@@ -16,7 +16,7 @@ jobs:
         id: merge
         run: |
           curl -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/rss-enqueue" \
-               -H "Authorization: Bearer ${{ secrets.EDGE_CRON_TOKEN }}" \
+               -H "Authorization: Bearer ${{ secrets.EDGE_CRON_TOKEN_PROD }}" \
                -H "Content-Type: application/json" \
                -d '{"kind":"story.merge"}' \
                --fail-with-body \
