@@ -19,6 +19,27 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // SECURITY: Verify EDGE_CRON_TOKEN before processing any requests
+  // This prevents unauthorized users from spamming the job queue
+  const authHeader = req.headers.get('Authorization');
+  const expectedToken = Deno.env.get('EDGE_CRON_TOKEN');
+
+  if (!expectedToken) {
+    console.error('EDGE_CRON_TOKEN not configured - rejecting request');
+    return new Response(
+      JSON.stringify({ error: 'Server misconfigured: missing EDGE_CRON_TOKEN' }),
+      { status: 500, headers: { ...corsHeaders, 'content-type': 'application/json' } }
+    );
+  }
+
+  if (!authHeader || authHeader !== `Bearer ${expectedToken}`) {
+    console.warn('Unauthorized rss-enqueue attempt');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'content-type': 'application/json' } }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
