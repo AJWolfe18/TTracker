@@ -1,0 +1,35 @@
+name: Job Queue Scheduler
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # RSS every 2 hours
+    - cron: '5 * * * *'     # Lifecycle jobs hourly
+  workflow_dispatch:       # Allow manual trigger for testing
+
+jobs:
+  schedule-rss:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event.schedule == '0 */2 * * *' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Trigger RSS feed fetching
+        run: |
+          curl -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/rss-enqueue" \
+               -H "Authorization: Bearer ${{ secrets.EDGE_CRON_TOKEN }}" \
+               -H "Content-Type: application/json" \
+               -d '{"kind":"fetch_all_feeds"}' \
+               --fail-with-body
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+  schedule-lifecycle:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Trigger story lifecycle jobs
+        run: |
+          curl -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/rss-enqueue" \
+               -H "Authorization: Bearer ${{ secrets.EDGE_CRON_TOKEN }}" \
+               -H "Content-Type: application/json" \
+               -d '{"kind":"lifecycle"}' \
+               --fail-with-body
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
