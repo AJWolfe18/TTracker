@@ -73,79 +73,19 @@ RETURN jsonb_build_object(
 
 ---
 
-## Deployment Instructions
+## Deployment
 
-### TEST Environment (Do This First)
+**See migration file for complete deployment instructions:**
+- `migrations/030_fix_upsert_rpc_return_type.sql`
 
-1. **Apply Migration:**
-   ```bash
-   # Option A: Via Supabase SQL Editor (recommended)
-   - Open Supabase Dashboard → SQL Editor
-   - Copy/paste contents of migrations/030_fix_upsert_rpc_return_type.sql
-   - Run query
+**Quick summary:**
+1. Copy/paste migration SQL into Supabase SQL Editor
+2. Run query
+3. No worker restart needed
+4. Test Guardian/NYT feeds (should see 0% error rate)
 
-   # Option B: Via psql (if you have it installed)
-   psql "$SUPABASE_DB_URL" -f migrations/030_fix_upsert_rpc_return_type.sql
-   ```
-
-2. **Verify Migration:**
-   ```sql
-   SELECT pg_get_function_result(oid)
-   FROM pg_proc
-   WHERE proname = 'upsert_article_and_enqueue_jobs'
-     AND pronamespace = 'public'::regnamespace;
-   ```
-   **Expected:** `void`
-
-3. **NO WORKER RESTART NEEDED** (change is database-side only)
-
-4. **Test RSS Feeds:**
-   ```bash
-   # Trigger fetch for Guardian Trump feed (was 100% failing)
-   curl -X POST "$SUPABASE_URL/functions/v1/rss-enqueue" \
-     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json"
-   ```
-
-5. **Monitor Results:**
-   ```sql
-   -- Check recent Guardian/NYT jobs (should have error = null)
-   SELECT id, feed_id, status, error
-   FROM job_queue
-   WHERE job_type = 'fetch_feed'
-     AND feed_id IN (3, 182, 183)
-   ORDER BY created_at DESC
-   LIMIT 10;
-
-   -- Verify NO serialization errors (should return 0)
-   SELECT COUNT(*)
-   FROM job_queue
-   WHERE job_type = 'fetch_feed'
-     AND status = 'failed'
-     AND error LIKE '%Cannot convert object%';
-   ```
-
----
-
-### PROD Environment (After TEST Validation)
-
-**Timing:** Can be deployed during normal operation (no downtime)
-
-**Steps:**
-1. **Apply same migration** (`migrations/030_fix_upsert_rpc_return_type.sql`)
-2. **Verify function signature** (same SQL as TEST)
-3. **NO WORKER RESTART** needed
-4. **Monitor next scheduled RSS fetch** (runs every 2 hours via GitHub Actions)
-
-**Rollback Plan:**
-If issues arise, revert to previous function version:
-```sql
--- Rollback: Restore JSONB return type
--- (Copy previous function definition from migration 028)
-CREATE OR REPLACE FUNCTION public.upsert_article_and_enqueue_jobs(...)
-RETURNS jsonb  -- Restore old return type
-...
-```
+**Timeline:**
+- TEST first → Monitor 24 hours → PROD deployment
 
 ---
 
