@@ -93,3 +93,7 @@ Executive Orders (EO) — Simple Cate.md
 # RSS runtime logs and Supabase CLI temp files
 rss-trigger-log.txt
 supabase/.temp/
+
+# Temporary error files (IDE/command artifacts)
+_ul*
+_UL*
