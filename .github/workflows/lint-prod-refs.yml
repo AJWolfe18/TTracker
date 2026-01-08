@@ -1,10 +1,15 @@
 # TTRC-362: Lint PROD References
-# Prevents hardcoded PROD Supabase refs from being committed outside allowlist
+# Prevents hardcoded PROD Supabase refs from being committed to TEST branch
+# NOTE: This check is SKIPPED on main branch - PROD refs are correct there
 name: Lint PROD References
 
 on:
   push:
+    branches-ignore:
+      - main  # PROD refs are correct on main branch
   pull_request:
+    branches-ignore:
+      - main  # PRs to main can have PROD refs
 
 jobs:
   check:
