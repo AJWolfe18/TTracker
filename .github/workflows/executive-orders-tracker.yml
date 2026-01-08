@@ -32,6 +32,16 @@ jobs:
           echo "🚀 Using PRODUCTION environment"
         fi
 
+    - name: Export env (prod|test)
+      run: |
+        if [ "${{ steps.env_detect.outputs.environment }}" = "production" ]; then
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          echo "TARGET_ENV=prod" >> $GITHUB_ENV
+        else
+          echo "ENVIRONMENT=test" >> $GITHUB_ENV
+          echo "TARGET_ENV=test" >> $GITHUB_ENV
+        fi
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
