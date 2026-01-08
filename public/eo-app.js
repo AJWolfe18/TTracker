@@ -106,6 +106,9 @@
     return response.json();
   }
 
+  // Analytics tracking helper (from shared.js)
+  const trackEvent = window.TTShared?.trackEvent || (() => {});
+
   // ===========================================
   // THEME HOOK
   // ===========================================
@@ -123,7 +126,9 @@
     }, []);
 
     const toggleTheme = useCallback(() => {
-      setTheme(theme === 'dark' ? 'light' : 'dark');
+      const newTheme = theme === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+      trackEvent('theme_toggle', { theme: newTheme, page: 'executive_orders' });
     }, [theme, setTheme]);
 
     useEffect(() => {
@@ -569,6 +574,9 @@
       searchDebounceRef.current = setTimeout(() => {
         setSearchTerm(value);
         setPage(1);
+        if (value.trim()) {
+          trackEvent('search', { search_term: value.trim(), page: 'executive_orders' });
+        }
       }, 300);
     }, []);
 
@@ -602,9 +610,9 @@
         searchTerm,
         onSearchChange: handleSearchChange,
         selectedCategory,
-        onCategoryChange: (cat) => { setSelectedCategory(cat); setPage(1); },
+        onCategoryChange: (cat) => { setSelectedCategory(cat); setPage(1); trackEvent('filter_category', { category: cat, page: 'executive_orders' }); },
         selectedImpact,
-        onImpactChange: (imp) => { setSelectedImpact(imp); setPage(1); },
+        onImpactChange: (imp) => { setSelectedImpact(imp); setPage(1); trackEvent('filter_impact', { impact: imp, page: 'executive_orders' }); },
         categories,
         filteredCount: filteredEOs.length,
         totalCount: allEOs.length,
@@ -627,7 +635,7 @@
             React.createElement(EOCard, {
               key: eo.id,
               eo,
-              onViewAnalysis: setDetailEO
+              onViewAnalysis: (eo) => { setDetailEO(eo); trackEvent('view_eo_analysis', { eo_id: eo.id, eo_number: eo.eo_number, impact_type: eo.eo_impact_type }); }
             })
           )
         ),
@@ -635,7 +643,7 @@
         React.createElement(Pagination, {
           currentPage: page,
           totalPages,
-          onPageChange: (p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+          onPageChange: (p) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); trackEvent('pagination', { page: p, page_name: 'executive_orders' }); }
         })
       ),
 
