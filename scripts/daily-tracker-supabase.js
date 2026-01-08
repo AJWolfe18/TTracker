@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import { createClient } from '@supabase/supabase-js';
 import { generateSpicySummary } from './spicy-summaries-integration.js';
 import crypto from 'crypto';
+import { validateEnv } from '../lib/env-validation.js';
 
 // Only load dotenv for local testing (not in GitHub Actions)
 if (!process.env.GITHUB_ACTIONS) {
@@ -29,9 +30,12 @@ if (!OPENAI_API_KEY) {
     process.exit(1);
 }
 
-// Supabase configuration - matching manual processor setup
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
+// Validate environment configuration (fail closed - no PROD fallbacks)
+// TTRC-362: Removed hardcoded PROD fallbacks
+validateEnv({ requireAnonKey: true });
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 // Create Supabase client using official SDK
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);

@@ -12,8 +12,9 @@ jobs:
   rss-tracker-prod:
     runs-on: ubuntu-latest
 
-    # Branch lock: Only run on main branch
-    if: github.ref == 'refs/heads/main'
+    # Branch lock + kill-switch: Only run on main, schedule blocked unless ENABLE_PROD_SCHEDULES=true
+    # TTRC-362: workflow_dispatch still works when kill-switch is off
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true')
 
     steps:
       - name: Checkout code

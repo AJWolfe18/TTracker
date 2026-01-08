@@ -9,7 +9,8 @@ jobs:
   track-orders:
     # Skip scheduled runs on test branch (only run on main)
     # Manual triggers (workflow_dispatch) work on any branch
-    if: github.event_name != 'schedule' || github.ref == 'refs/heads/main'
+    # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
+    if: github.event_name != 'schedule' || (github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20  # TTRC-223: Increased from 10 to 20 for enrichment step
 
