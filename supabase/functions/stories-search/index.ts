@@ -1,0 +1,121 @@
+// Edge Function: GET /api/v1/stories/search
+// Search and filter stories with full-text search
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { getSupabaseClient } from '../_shared/auth.ts'
+import { getPaginationParams, parseCursor, createCursor } from '../_shared/pagination.ts'
+
+serve(async (req: Request) => {
+  // Handle CORS
+  const corsResponse = handleCors(req)
+  if (corsResponse) return corsResponse
+
+  try {
+    const url = new URL(req.url)
+    const { limit, cursor } = getPaginationParams(url)
+    const cursorData = parseCursor(cursor)
+    
+    // Get search parameters
+    const searchQuery = url.searchParams.get('q') || ''
+    const status = url.searchParams.get('status') || null
+    const topics = url.searchParams.get('topics')?.split(',').filter(Boolean) || []
+    const severity = url.searchParams.get('severity') || null
+    const hasOpinion = url.searchParams.get('has_opinion')
+    
+    const supabase = getSupabaseClient(req)
+    
+    // Build base query
+    let query = supabase
+      .from('stories')
+      .select('*')
+      .order('last_updated_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit + 1)
+    
+    // Apply search if provided
+    if (searchQuery) {
+      // Use full-text search on the search_vector column
+      query = query.textSearch('search_vector', searchQuery, {
+        type: 'websearch',
+        config: 'english'
+      })
+    }
+    
+    // Apply filters
+    if (status) {
+      query = query.eq('status', status)
+    }
+    
+    if (topics.length > 0) {
+      // Check if story topics overlap with requested topics
+      query = query.overlaps('topic_tags', topics)
+    }
+    
+    if (severity) {
+      query = query.eq('severity', severity)
+    }
+    
+    if (hasOpinion !== null) {
+      query = query.eq('has_opinion', hasOpinion === 'true')
+    }
+    
+    // Apply cursor for pagination
+    if (cursorData) {
+      query = query.or(`last_updated_at.lt.${cursorData.ts},and(last_updated_at.eq.${cursorData.ts},id.lt.${cursorData.id})`)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+    
+    // Check if there's a next page
+    const hasMore = data && data.length > limit
+    const items = hasMore ? data.slice(0, -1) : data || []
+    
+    // Create next cursor if there are more items
+    const nextCursor = hasMore && items.length > 0
+      ? createCursor(
+          items[items.length - 1].last_updated_at,
+          items[items.length - 1].id
+        )
+      : null
+    
+    // Add search metadata
+    const response = {
+      items,
+      next_cursor: nextCursor,
+      has_more: hasMore,
+      search_params: {
+        query: searchQuery || null,
+        status,
+        topics: topics.length > 0 ? topics : null,
+        severity,
+        has_opinion: hasOpinion !== null ? hasOpinion === 'true' : null,
+      },
+      total_results: items.length,
+    }
+    
+    return new Response(
+      JSON.stringify(response),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
+})

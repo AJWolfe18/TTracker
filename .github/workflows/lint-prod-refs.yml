@@ -36,7 +36,8 @@ jobs:
           # - dashboard-*.js: Legacy dashboard files (main site uses app.js)
           # - data-health-monitor.js: PROD monitoring script (intentional)
           # - batch/: Windows batch files (legacy)
-          ALLOWLIST_REGEX='(^|/)(lib/env-validation\.js|public/supabase-browser-config\.js|legacy/|.*-backup.*|dashboard-.*\.js|data-health-monitor\.js|batch/)'
+          # - lint-prod-refs.yml: This workflow (contains PROD_REF constant for checking)
+          ALLOWLIST_REGEX='(^|/)(lib/env-validation\.js|public/supabase-browser-config\.js|legacy/|.*-backup.*|dashboard-.*\.js|data-health-monitor\.js|batch/|lint-prod-refs\.yml)'
 
           matches="$(grep -RIn --exclude-dir=node_modules --exclude-dir=.git \
             -e "${PROD_REF}" -e "${PROD_HOST}" "${SCAN_DIRS[@]}" || true)"

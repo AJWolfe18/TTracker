@@ -8,8 +8,8 @@ on:
 jobs:
   schedule-rss:
     runs-on: ubuntu-latest
-    # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
-    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true') && (github.event.schedule == '0 */2 * * *' || github.event_name == 'workflow_dispatch')
+    # DISABLED 2026-01-08: Creates orphaned jobs - rss-tracker-prod.yml is now the primary RSS system
+    if: false
     steps:
       - name: Trigger RSS feed fetching
         run: |
@@ -23,8 +23,8 @@ jobs:
 
   schedule-lifecycle:
     runs-on: ubuntu-latest
-    # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
-    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true') && (github.event.schedule == '5 * * * *' || github.event_name == 'workflow_dispatch')
+    # DISABLED 2026-01-08: Creates orphaned jobs - rss-tracker-prod.yml is now the primary RSS system
+    if: false
     steps:
       - name: Trigger story lifecycle jobs
         run: |

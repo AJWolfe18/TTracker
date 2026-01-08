@@ -32,7 +32,7 @@ export async function supabaseRequest(endpoint, method = 'GET', body = null, hea
             'apikey': apiKey,
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation,missing=default',
+            'Prefer': 'return=representation,missing=default', // Add missing=default to handle auto-generated columns
             ...headers
         }
     };
@@ -42,7 +42,7 @@ export async function supabaseRequest(endpoint, method = 'GET', body = null, hea
     }
 
     const response = await fetch(url, options);
-
+    
     if (!response.ok) {
         const error = await response.text();
         throw new Error(`Supabase error: ${response.status} - ${error}`);
@@ -52,6 +52,6 @@ export async function supabaseRequest(endpoint, method = 'GET', body = null, hea
     if (contentType && contentType.includes('application/json')) {
         return await response.json();
     }
-
+    
     return { success: true };
 }

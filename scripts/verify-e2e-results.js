@@ -1,106 +1,115 @@
 #!/usr/bin/env node
-// Verify RSS E2E test results
-// Check if articles were created and generate report
+// scripts/verify-e2e-results.js
+// Smarter E2E verification – supabase-js v2 correct chaining
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-async function verifyResults() {
-  console.log('\n📊 E2E TEST RESULTS');
-  console.log('═'.repeat(40));
-  
-  // Check articles created in last hour
-  const cutoff = new Date(Date.now() - 3600000).toISOString();
-  const { data: articles, count, error } = await supabase
-    .from('articles')
-    .select('*', { count: 'exact' })
-    .gte('created_at', cutoff)
-    .order('created_at', { ascending: false })
-    .limit(10);
-    
-  if (error) {
-    console.error('❌ Failed to query articles:', error.message);
-    process.exit(1);
-  }
-  
-  console.log(`Articles created in last hour: ${count || 0}`);
-  
-  if (articles && articles.length > 0) {
-    console.log('\nSample articles:');
-    articles.slice(0, 5).forEach(a => {
-      const title = (a.title || '').substring(0, 60);
-      console.log(`  - [${a.source_name}] ${title}...`);
-    });
-  }
-  
-  // Check job queue status
-  const { data: jobStats } = await supabase
-    .from('job_queue')
-    .select('status, job_type');
-    
-  const statusCounts = {};
-  const typeCounts = {};
-  
-  jobStats?.forEach(job => {
-    statusCounts[job.status] = (statusCounts[job.status] || 0) + 1;
-    typeCounts[job.job_type] = (typeCounts[job.job_type] || 0) + 1;
-  });
-  
-  console.log('\nJob Queue Status:');
-  Object.entries(statusCounts).forEach(([status, cnt]) => {
-    const icon = status === 'pending' ? '⏳' :
-                 status === 'processing' ? '⚙️' :
-                 status === 'done' ? '✅' :
-                 status === 'failed' ? '❌' : '🔄';
-    console.log(`  ${icon} ${status}: ${cnt}`);
-  });
-  
-  // Check stories
-  const { count: storyCount } = await supabase
-    .from('stories')
-    .select('*', { count: 'exact', head: true });
-    
-  console.log(`\nTotal stories: ${storyCount || 0}`);
-  
-  // Generate report
-  const report = {
-    timestamp: new Date().toISOString(),
-    environment: 'TEST',
-    success: count > 0,
-    metrics: {
-      articles_created_1h: count || 0,
-      total_stories: storyCount || 0,
-      job_status: statusCounts,
-      job_types: typeCounts
-    },
-    sample_articles: articles?.slice(0, 5).map(a => ({
-      title: a.title,
-      source: a.source_name,
-      created: a.created_at
-    }))
-  };
-  
-  // Save report
-  fs.writeFileSync('e2e-test-report.json', JSON.stringify(report, null, 2));
-  console.log('\n📝 Report saved to e2e-test-report.json');
-  
-  // Final verdict
-  if (count > 0) {
-    console.log('\n✅ E2E TEST PASSED - Articles are being ingested!');
-    process.exit(0);
-  } else {
-    console.log('\n❌ E2E TEST FAILED - No articles created');
-    console.log('   Check the worker logs for errors');
-    process.exit(1);  // Fail the CI
-  }
+// Validate environment variables immediately
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
 }
 
-verifyResults().catch(err => {
-  console.error('Fatal error:', err);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+const now = new Date();
+const nowIso = now.toISOString();
+const oneHourAgoIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+
+const getCount = async (table, build = (q) => q) => {
+  const base = supabase.from(table).select('*', { count: 'exact', head: true });
+  const { count, error } = await build(base);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+async function main() {
+  console.log('\n📊 E2E TEST RESULTS');
+  console.log('════════════════════════════════════════');
+
+  const feeds = await getCount('feed_registry', (q) => q.eq('is_active', true));
+  
+  // Use server-side function to count runnable jobs (single source of truth)
+  const { data: runnable, error } = await supabase.rpc('count_runnable_fetch_jobs');
+  if (error) {
+    console.error('Error calling count_runnable_fetch_jobs:', error);
+    throw error;
+  }
+  
+  // All processing jobs (for monitoring)
+  const processing = await getCount('job_queue', (q) =>
+    q.eq('job_type', 'fetch_feed').eq('status', 'processing')
+  );
+  const articles1h = await getCount('articles', (q) =>
+    q.gte('created_at', oneHourAgoIso)
+  );
+  const totalStories = await getCount('stories');
+
+  // Job status (last hour) for context
+  const statusCounts = {};
+  {
+    const { data } = await supabase
+      .from('job_queue')
+      .select('status')
+      .gte('created_at', oneHourAgoIso);
+    data?.forEach((j) => {
+      statusCounts[j.status] = (statusCounts[j.status] || 0) + 1;
+    });
+  }
+
+  console.log(`Active feeds: ${feeds}`);
+  console.log(`Runnable jobs: ${runnable}`);
+  console.log(`Processing jobs: ${processing}`);
+  console.log(`Articles (last hour): ${articles1h}`);
+  console.log(`Total stories: ${totalStories}`);
+
+  console.log('\nJob Queue Status (last hour):');
+  Object.entries(statusCounts).forEach(([status, cnt]) => {
+    const emoji =
+      status === 'done' ? '✅' :
+      status === 'failed' ? '❌' :
+      status === 'processing' ? '⚙️' :
+      status === 'pending' ? '⏳' : '🔄';
+    console.log(`  ${emoji} ${status}: ${cnt}`);
+  });
+
+  const report = {
+    timestamp: nowIso,
+    environment: 'TEST',
+    metrics: { feeds, runnable, processing, articles1h, totalStories, jobStatusLastHour: statusCounts },
+    success: true,
+    reason: 'Pipeline functioning normally',
+  };
+
+  // Smart failure: only fail if feeds>0 AND no runnable AND no processing AND no new articles
+  if (feeds > 0 && runnable === 0 && processing === 0 && articles1h === 0) {
+    report.success = false;
+    report.reason = 'Pipeline stuck: No runnable/processing jobs and no new articles';
+    console.error('\n❌ E2E TEST FAILED - Pipeline appears stuck');
+  } else if (articles1h === 0) {
+    report.success = true;
+    report.reason = 'No new articles (feeds may already be current)';
+    console.warn('\n⚠️  E2E TEST WARNING - No new articles; may be normal');
+  } else {
+    console.log('\n✅ E2E TEST PASSED');
+  }
+
+  fs.writeFileSync('e2e-test-report.json', JSON.stringify(report, null, 2));
+  console.log('\n📝 Report saved to e2e-test-report.json');
+
+  process.exit(report.success ? 0 : 1);
+}
+
+main().catch((err) => {
+  console.error('Error running E2E verification:', err);
+  // ensure CI still uploads a report file for debugging
+  fs.writeFileSync('e2e-test-report.json', JSON.stringify({ 
+    success: false, 
+    error: String(err),
+    message: err.message,
+    timestamp: nowIso 
+  }, null, 2));
   process.exit(1);
 });

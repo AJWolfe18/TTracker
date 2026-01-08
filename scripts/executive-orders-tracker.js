@@ -191,14 +191,13 @@ async function fetchFromWhiteHouseRSS() {
                             url.includes('presidential-memorandum')
                         );
                         
-                        // Filter for 2025 content
-                        const is2025Content = (
-                            pubDate.includes('2025') ||
-                            title.includes('2025') ||
-                            url.includes('2025')
-                        );
-                        
-                        if (isExecutiveOrder && is2025Content) {
+                        // Filter for Trump's second term (Jan 20, 2025 onwards)
+                        // Inauguration date is historical fact - won't change
+                        const INAUGURATION_DATE = new Date('2025-01-20');
+                        const orderDate = new Date(pubDate);
+                        const isSecondTermContent = !isNaN(orderDate.getTime()) && orderDate >= INAUGURATION_DATE;
+
+                        if (isExecutiveOrder && isSecondTermContent) {
                             allOrders.push({
                                 title: title,
                                 source_url: url,

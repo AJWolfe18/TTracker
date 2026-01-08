@@ -1,12 +1,17 @@
 -- Migration 027: Add 7 New RSS Feeds (Tier 2 & 3)
 -- Part of TTRC-264 - Feed expansion with paywalled sources
 -- Adds Newsweek, The Atlantic, Reason, Fortune, Vox, Foreign Affairs, The New Yorker
+--
+-- NOTES:
+-- - Newsweek URL corrected from /politics/rss to /rss (404 fix)
+-- - Vox URL corrected from /politics/rss/index.xml to /rss/index.xml (404 fix)
+-- - Fortune disabled post-migration (403 Forbidden - RSS blocked by CloudFront)
 
 -- Tier 2 Feeds (5 sources)
 INSERT INTO feed_registry (feed_url, feed_name, source_name, topics, tier, source_tier, is_active, filter_config)
 VALUES
   -- Newsweek Politics
-  ('https://www.newsweek.com/politics/rss', 'Newsweek Politics', 'Newsweek', ARRAY['politics','us'], 2, 2, true,
+  ('https://www.newsweek.com/rss', 'Newsweek Politics', 'Newsweek', ARRAY['politics','us'], 2, 2, true,
    jsonb_build_object(
      'allow', ARRAY['Trump','Congress','White House','Supreme Court','DOJ','federal'],
      'block', ARRAY['city council','mayor','state legislature','gubernatorial']
@@ -34,7 +39,7 @@ VALUES
    )),
 
   -- Vox Politics
-  ('https://www.vox.com/politics/rss/index.xml', 'Vox Politics', 'Vox', ARRAY['politics','policy'], 2, 2, true,
+  ('https://www.vox.com/rss/index.xml', 'Vox Politics', 'Vox', ARRAY['politics','policy'], 2, 2, true,
    jsonb_build_object(
      'allow', ARRAY['Trump','Congress','White House','Supreme Court','federal','policy explainer'],
      'block', ARRAY['city council','local','state legislature']

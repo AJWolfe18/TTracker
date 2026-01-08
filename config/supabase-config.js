@@ -1,13 +1,34 @@
 // supabase-config.js
 // Shared configuration for all scripts
+// TTRC-362: Removed hardcoded PROD refs - uses env vars + lazy validation
 
 import fetch from 'node-fetch';
+import { validateEnv } from '../lib/env-validation.js';
 
-export const SUPABASE_URL = 'https://osjbulmltfpcoldydexg.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zamJ1bG1sdGZwY29sZHlkZXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3NjQ5NzEsImV4cCI6MjA3MDM0MDk3MX0.COtWEcun0Xkw5hUhaVEJGCrWbumj42L4vwWGgH7RyIE';
+// Export env values directly (no hardcoded refs)
+// Existing imports still work - they'll be undefined if env not set
+// That's fine for lint/tests; fail-closed at runtime when actually used
+export const SUPABASE_URL = process.env.SUPABASE_URL;
+export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
+// Lazy getter - validates only when actually used
+// Prevents import-time explosions during lint/tests
+export function getSupabaseConfig() {
+  const { SUPABASE_URL } = validateEnv({ requireAnonKey: true });
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+  return { SUPABASE_URL, SUPABASE_ANON_KEY };
+}
+
+// Optional: explicit assertion for code that uses constants directly
+// Gives clear error if called without env setup
+export function assertSupabaseEnv() {
+  return getSupabaseConfig();
+}
 
 // Helper function for Supabase API calls
 export async function supabaseRequest(endpoint, method = 'GET', body = null, headers = {}) {
+    // Lazy validation - fail-closed when actually used
+    const { SUPABASE_URL, SUPABASE_ANON_KEY } = getSupabaseConfig();
     const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
     const options = {
         method,

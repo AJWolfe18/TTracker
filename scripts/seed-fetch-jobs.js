@@ -1,79 +1,136 @@
 #!/usr/bin/env node
-// Create RSS fetch jobs for CI/CD workflow
-// This replaces the inline node -e scripts in the GitHub workflow
+// scripts/seed-fetch-jobs.js
+// Production-ready RSS feed job seeder using atomic RPC + partial unique index
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
+
+// Validate environment variables immediately
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-async function createFetchJobs() {
-  console.log('📋 Creating RSS fetch jobs...\n');
+// Strip nulls from object for stable hashing (matches DB jsonb_strip_nulls behavior)
+const stripNulls = (obj) => {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripNulls);
+
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== null && value !== undefined) {
+      result[key] = typeof value === 'object' ? stripNulls(value) : value;
+    }
+  }
+  return result;
+};
+
+// Stable 64-char SHA-256 hash (matches database digest() with jsonb_strip_nulls)
+const hash = (obj) =>
+  crypto.createHash('sha256')
+    .update(JSON.stringify(stripNulls(obj)))
+    .digest('hex');
+
+async function enqueueFeed(feed) {
+  const payload = {
+    feed_id: feed.id,
+    url: feed.feed_url,       // backward-compat
+    feed_url: feed.feed_url,  // worker compatibility
+    source_name: feed.feed_name
+  };
+
+  // Let DB compute hash from payload for consistency (or pass explicit hash)
+  // Using explicit hash for deterministic seeding (matches what DB would compute)
+  const payloadHash = hash(payload);
+
+  // ATOMIC: Let the database handle duplicate detection
+  const { data: jobId, error } = await supabase.rpc('enqueue_fetch_job', {
+    p_type: 'fetch_feed',
+    p_payload: payload,
+    p_hash: payloadHash
+  });
   
-  // Get active feeds
+  if (error) {
+    console.error(`❌ Error enqueueing ${feed.feed_name}:`, error.message);
+    throw error;
+  }
+  
+  // jobId is NULL if duplicate exists (partial unique index prevented insert)
+  return jobId ? 'created' : 'skipped';
+}
+
+async function createFetchJobs() {
+  console.log('📋 Creating RSS fetch jobs (atomic mode)...\n');
+
+  // Check current runnable jobs count using RPC
+  const { data: runnableBefore } = await supabase.rpc('count_runnable_fetch_jobs');
+  console.log(`Runnable jobs before seeding: ${runnableBefore || 0}\n`);
+
+  // Active feeds
   const { data: feeds, error: feedError } = await supabase
     .from('feed_registry')
-    .select('*')
+    .select('id, feed_name, feed_url')
     .eq('is_active', true);
-    
+
   if (feedError) {
     console.error('❌ Failed to fetch feeds:', feedError.message);
     process.exit(1);
   }
-  
-  if (!feeds || feeds.length === 0) {
+  if (!feeds?.length) {
     console.error('❌ No active feeds found in feed_registry');
     process.exit(1);
   }
-  
+
   console.log(`Found ${feeds.length} active feeds\n`);
-  
-  let created = 0;
-  let skipped = 0;
-  let failed = 0;
-  
-  // Create job for each feed
+
+  let created = 0, skipped = 0, failed = 0;
+
   for (const feed of feeds) {
-    const { error } = await supabase
-      .from('job_queue')
-      .insert({
-        job_type: 'fetch_feed',
-        payload: {
-          feed_id: feed.id,
-          url: feed.feed_url,
-          source_name: feed.feed_name
-        },
-        run_at: new Date().toISOString(),
-        status: 'pending',
-        attempts: 0
-      })
-      .select();
-    
-    if (!error) {
-      console.log(`✅ Created job for: ${feed.feed_name}`);
-      created++;
-    } else if (error.message?.includes('duplicate') || error.message?.includes('unique')) {
-      console.log(`⏭️ Job already exists for: ${feed.feed_name}`);
-      skipped++;
-    } else {
-      console.error(`❌ Failed to create job for ${feed.feed_name}:`, error.message);
+    try {
+      const res = await enqueueFeed(feed);
+      if (res === 'created') {
+        console.log(`✅ Created job for: ${feed.feed_name}`);
+        created++;
+      } else {
+        console.log(`⏭️ Job already active for: ${feed.feed_name}`);
+        skipped++;
+      }
+    } catch {
       failed++;
     }
   }
-  
-  console.log(`\n📊 Summary:`);
+
+  console.log('\n📊 Summary:');
   console.log(`   Created: ${created}`);
-  console.log(`   Skipped: ${skipped}`);
+  console.log(`   Skipped (active): ${skipped}`);
   console.log(`   Failed: ${failed}`);
+
+  // Verify runnable jobs using server-side function
+  console.log('\n🔍 Checking for runnable jobs...');
+  const { data: runnableCount, error: runErr } = await supabase.rpc('count_runnable_fetch_jobs');
   
-  if (created === 0 && skipped === 0) {
-    console.error('\n❌ No jobs were created or found!');
+  if (runErr) {
+    console.error('❌ Failed to check runnable jobs:', runErr.message);
     process.exit(1);
   }
-  
-  console.log('\n✅ Jobs ready for processing');
+
+  if (runnableCount > 0) {
+    console.log(`✅ ${runnableCount} fetch_feed jobs ready to run`);
+  } else if (skipped > 0) {
+    console.log(`ℹ️ No new jobs created but ${skipped} are already active`);
+  } else {
+    console.error('❌ No runnable jobs available!');
+    process.exit(1);
+  }
+
+  console.log('\n✅ Job seeding complete - worker can proceed');
 }
 
 createFetchJobs().catch(err => {

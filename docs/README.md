@@ -7,13 +7,16 @@
 - **Full protocol?** See `/docs/SESSION_PROTOCOL.md`
 
 ## Documentation Structure
-- `/handoffs/` - Historical session summaries (not in project knowledge)
+- `/handoffs/` - Session summaries (not in project knowledge)
 - `/architecture/` - System design and structure
 - `/database/` - Schemas, migrations, data models
 - `/guides/` - How-to guides organized by topic
 - `/api/` - API documentation and specifications
 - `/reference/` - Quick reference and troubleshooting
 - `/archive/` - Superseded documents (for reference only)
+- `/plans/` - Implementation plans
+
+**Do NOT create docs in /docs/ root** - use appropriate subdirectories above.
 
 ## Key Documents
 **For Claude:**
@@ -36,4 +39,4 @@
 - **Database schema?** → `/database/`
 - **Something broken?** → `/reference/TROUBLESHOOTING.md`
 
-_Last Updated: October 2, 2025_
+_Last Updated: January 8, 2026_
