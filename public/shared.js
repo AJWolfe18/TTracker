@@ -333,6 +333,21 @@
   }
 
   // ===========================================
+  // ANALYTICS
+  // ===========================================
+
+  /**
+   * Track analytics event (Google Analytics)
+   * @param {string} eventName - Event name (e.g., 'search', 'view_story')
+   * @param {Object} eventParams - Event parameters (optional)
+   */
+  function trackEvent(eventName, eventParams = {}) {
+    if (typeof gtag === 'function') {
+      gtag('event', eventName, eventParams);
+    }
+  }
+
+  // ===========================================
   // EXPORT TO GLOBAL
   // ===========================================
 
@@ -373,7 +388,10 @@
     formatDateTime,
 
     // API
-    supabaseRequest
+    supabaseRequest,
+
+    // Analytics
+    trackEvent
   };
 
 })(window);
