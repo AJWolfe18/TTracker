@@ -138,7 +138,64 @@ Option B: Continue with TTRC-369 (archive legacy scripts)
 ---
 
 ## Session Stats
-- **Duration:** ~30 minutes
-- **Commits:** 5
+- **Duration:** ~1 hour
+- **Commits:** 6 (5 cleanup + 1 handoff)
 - **Files Changed:** ~65
 - **QA Tests:** All passing
+- **Branches Deleted:** 11 stale branches
+- **PR Created:** #36 (test→main, awaiting merge)
+
+---
+
+## Additional Work Done (Late Session)
+
+### JIRA Updated
+- Added comment to TTRC-368 explaining job-scheduler disable relates to schema drift cleanup
+
+### Branch Cleanup
+Deleted 11 stale branches that were causing lint-prod-refs failures:
+- AJWolfe18-patch-1, test-backup-20250817, feature/ttrc-221-eo-detail
+- test-ai-review-trigger, verify-ai-review-workflow
+- deploy-prod-phase3, docs-sync-to-prod, fix-artifact-v4
+- fix-prod-deps, sync-rss-scripts, sync-utils
+
+**Remaining branches:** `main`, `test` only
+
+### Auto-Delete Enabled
+Enabled `delete_branch_on_merge` in repo settings - branches will auto-delete when PRs merge.
+
+### AI Code Review Issue Identified
+- AI code review workflow only triggers on PRs, not pushes
+- The 0s "failures" on pushes are a GitHub display quirk
+- Last actual PR-triggered review was October 2025 (~2.5 months ago)
+- Workflow may need investigation (JIRA card recommended)
+
+---
+
+## Orphaned Jobs Status
+
+**TEST database:** Has orphaned `story.cluster` jobs from Jan 4-5 (visible via MCP)
+
+**PROD database:** Unknown - no MCP access. Need to check manually:
+```sql
+SELECT job_type, status, COUNT(*) AS cnt,
+       MIN(created_at) AS oldest,
+       MAX(created_at) AS newest
+FROM public.job_queue
+WHERE status IN ('pending', 'claimed')
+GROUP BY job_type, status
+ORDER BY cnt DESC;
+```
+
+See TTRC-372 for cleanup procedure.
+
+---
+
+## Open Items
+
+| Item | Status | Action |
+|------|--------|--------|
+| PR #36 | Open | Merge to stop PROD orphaned job creation |
+| PROD orphaned jobs | Unknown | Check via Supabase dashboard |
+| AI code review | Broken? | Investigate why not triggering on PRs |
+| TTRC-369-372 | Backlog | Future cleanup phases |
