@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Archive Request - Fixed</title>
+    <script src="supabase-browser-config.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+        button { padding: 10px; margin: 5px; background: #333; color: #0f0; border: 1px solid #0f0; cursor: pointer; }
+        .log { background: #000; padding: 10px; margin: 10px 0; border: 1px solid #333; }
+        .success { color: #0f0; }
+        .error { color: #f00; }
+        .warning { color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Archive Request - Fixed Version</h1>
+    <p>This tests why the admin panel can't fetch or update archived entries</p>
+    
+    <button onclick="testSelectPolicy()">Test SELECT Policy Issue</button>
+    <button onclick="testWithNonArchived()">Test with Non-Archived Entry</button>
+    <button onclick="testDirectUpdate()">Test Direct SQL-like Update</button>
+    <button onclick="clearLog()">Clear Log</button>
+    
+    <div id="log" class="log"></div>
+
+    <script>
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+        
+        function log(msg, type = '') {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += `<div class="${type}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // Test if SELECT policy is blocking archived entries
+        async function testSelectPolicy() {
+            log('Testing SELECT policy with archived entry...', 'info');
+            
+            const archivedId = 'mdkcc9cgg5gwkui2w1m'; // We know this is archived
+            
+            try {
+                // Try to fetch the archived entry
+                log(`Fetching archived entry: ${archivedId}`, 'info');
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${archivedId}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const data = await response.json();
+                log(`Response: ${JSON.stringify(data)}`, 'info');
+                
+                if (data.length === 0) {
+                    log('❌ SELECT policy is blocking archived entries!', 'error');
+                    log('This is why the admin panel can\'t see or update archived items', 'error');
+                    
+                    // Now try without the archived filter
+                    log('\nTrying to fetch ALL entries including archived...', 'info');
+                    const allResponse = await fetch(
+                        `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${archivedId}&archived=is.true`,
+                        {
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                            }
+                        }
+                    );
+                    
+                    const allData = await allResponse.json();
+                    if (allData.length > 0) {
+                        log(`✅ Entry exists but is hidden by default SELECT policy`, 'success');
+                        log(`Entry data: ${JSON.stringify(allData[0])}`, 'info');
+                    }
+                } else {
+                    log(`✅ Can fetch archived entry: archived=${data[0].archived}`, 'success');
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test with a non-archived entry
+        async function testWithNonArchived() {
+            log('Testing with a non-archived entry...', 'info');
+            
+            try {
+                // First, get a non-archived entry
+                log('Fetching a non-archived entry...', 'info');
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?archived=eq.false&limit=1`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const entries = await response.json();
+                if (entries.length === 0) {
+                    log('No non-archived entries found', 'error');
+                    return;
+                }
+                
+                const entry = entries[0];
+                log(`Found entry: ${entry.id} - "${entry.title}"`, 'success');
+                log(`Current archived status: ${entry.archived}`, 'info');
+                
+                // Now try to archive it
+                log('Attempting to archive this entry...', 'info');
+                const patchResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({ archived: true })
+                    }
+                );
+                
+                log(`PATCH response status: ${patchResponse.status}`, patchResponse.ok ? 'success' : 'error');
+                const patchData = await patchResponse.text();
+                log(`PATCH response: ${patchData || '(empty)'}`, 'info');
+                
+                // Try to fetch it again (it might be hidden now!)
+                log('Trying to fetch after archiving...', 'info');
+                const verifyResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const verifyData = await verifyResponse.json();
+                if (verifyData.length === 0) {
+                    log('⚠️ Entry disappeared after archiving - SELECT policy is hiding it!', 'warning');
+                    
+                    // Try with explicit archived=true filter
+                    const archivedCheck = await fetch(
+                        `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}&archived=is.true`,
+                        {
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                            }
+                        }
+                    );
+                    const archivedData = await archivedCheck.json();
+                    if (archivedData.length > 0) {
+                        log('✅ Archive worked! Entry is now archived but hidden by SELECT policy', 'success');
+                    }
+                } else {
+                    log(`Entry still visible: archived=${verifyData[0].archived}`, verifyData[0].archived ? 'success' : 'error');
+                }
+                
+                // Restore it for next test
+                if (entry.id) {
+                    await fetch(
+                        `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ archived: false })
+                        }
+                    );
+                    log('Entry restored for next test', 'info');
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test bypassing SELECT policy issue
+        async function testDirectUpdate() {
+            log('Testing update with explicit filters...', 'info');
+            
+            try {
+                // Get any entry (archived or not)
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?limit=1&order=id`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const entries = await response.json();
+                if (entries.length === 0) {
+                    log('No entries found at all!', 'error');
+                    return;
+                }
+                
+                const entry = entries[0];
+                const newArchived = !entry.archived;
+                log(`Found entry: ${entry.id} - archived=${entry.archived}`, 'info');
+                log(`Will change to: archived=${newArchived}`, 'info');
+                
+                // Update it
+                const patchResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=representation'
+                        },
+                        body: JSON.stringify({ archived: newArchived })
+                    }
+                );
+                
+                const patchText = await patchResponse.text();
+                log(`PATCH response (${patchResponse.status}): ${patchText || '(empty)'}`, 'info');
+                
+                // The key insight: we need to check with the right filter!
+                const checkUrl = newArchived 
+                    ? `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}&archived=is.true`
+                    : `${SUPABASE_URL}/rest/v1/political_entries?id=eq.${entry.id}&archived=is.false`;
+                    
+                log(`Checking with proper filter: ${newArchived ? 'archived=true' : 'archived=false'}`, 'info');
+                
+                const checkResponse = await fetch(checkUrl, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const checkData = await checkResponse.json();
+                if (checkData.length > 0) {
+                    log(`✅ Update successful! Entry is now archived=${checkData[0].archived}`, 'success');
+                } else {
+                    log('❌ Update may have worked but SELECT policy is hiding the result', 'error');
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        log('Ready. Database: ' + (SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PRODUCTION'), 'info');
+        log('Click a button to start testing...', 'info');
+    </script>
+</body>
+</html>

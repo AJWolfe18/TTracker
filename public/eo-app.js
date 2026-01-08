@@ -10,7 +10,7 @@
   // CONFIGURATION
   // ===========================================
 
-  const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://wnrjrywpcadwutfykflu.supabase.co';
+  const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
 
   const ITEMS_PER_PAGE = 12;

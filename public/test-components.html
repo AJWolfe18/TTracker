@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Components Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <h1 class="text-2xl mb-4">Dashboard Module Test</h1>
+    <div id="test-results" class="space-y-2"></div>
+    
+    <script>
+        // Test module loading
+        const results = document.getElementById('test-results');
+        
+        function addResult(module, loaded) {
+            const div = document.createElement('div');
+            div.className = loaded ? 'text-green-400' : 'text-red-400';
+            div.textContent = `${module}: ${loaded ? '✓ Loaded' : '✗ Not Found'}`;
+            results.appendChild(div);
+        }
+        
+        // Load modules in order
+        const loadScript = (src) => {
+            return new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => resolve(true);
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
+            });
+        };
+        
+        const loadBabelScript = (src) => {
+            return new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.type = 'text/babel';
+                script.src = src;
+                script.onload = () => setTimeout(() => resolve(true), 100);
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
+            });
+        };
+        
+        async function testModules() {
+            // Load supabase config
+            await loadScript('supabase-browser-config.js');
+            addResult('Supabase Config', !!window.SUPABASE_URL);
+            
+            // Load utils
+            await loadScript('dashboard-utils.js');
+            addResult('Dashboard Utils', !!window.DashboardUtils);
+            
+            // Load stats
+            await loadScript('dashboard-stats.js');
+            addResult('Dashboard Stats', !!window.DashboardStats);
+            
+            // Load components
+            await loadBabelScript('dashboard-components.js');
+            setTimeout(() => {
+                addResult('Dashboard Components', !!window.DashboardComponents);
+                
+                // Check individual components
+                if (window.DashboardComponents) {
+                    const components = [
+                        'ConstructionBanner',
+                        'ContentModal',
+                        'PaginationControls',
+                        'NoResultsMessage',
+                        'PoliticalEntryCard',
+                        'ExecutiveOrderCard',
+                        'TabNavigation',
+                        'LoadingOverlay'
+                    ];
+                    
+                    const div = document.createElement('div');
+                    div.className = 'mt-4 pl-4';
+                    div.innerHTML = '<div class="text-gray-400 mb-2">Components found:</div>';
+                    results.appendChild(div);
+                    
+                    components.forEach(comp => {
+                        const found = !!window.DashboardComponents[comp];
+                        const compDiv = document.createElement('div');
+                        compDiv.className = found ? 'text-green-300 pl-8' : 'text-red-300 pl-8';
+                        compDiv.textContent = `• ${comp}: ${found ? '✓' : '✗'}`;
+                        results.appendChild(compDiv);
+                    });
+                }
+            }, 500);
+        }
+        
+        testModules();
+    </script>
+</body>
+</html>

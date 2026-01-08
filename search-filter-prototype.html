@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrumpyTracker - Search & Filter Design Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #ff6b6b, #ffd93d);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #a0aec0;
+            margin-bottom: 2rem;
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        /* Filter Bar */
+        .filter-bar {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        /* Search Input */
+        .search-container {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 1rem;
+        }
+        
+        .search-input::placeholder {
+            color: #64748b;
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+        
+        /* Dropdown Filters */
+        .filter-select {
+            padding: 0.75rem 2rem 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        
+        /* Category Dropdown */
+        .dropdown-container {
+            position: relative;
+        }
+        
+        .dropdown-button {
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 0.375rem;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 0.5rem;
+            background: #1e293b;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 0.375rem;
+            width: 250px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        
+        .dropdown-item:hover {
+            background: rgba(51, 65, 85, 0.5);
+        }
+        
+        .dropdown-item input {
+            cursor: pointer;
+        }
+        
+        .dropdown-item-text {
+            flex: 1;
+        }
+        
+        .dropdown-item-count {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+        
+        /* Severity Buttons */
+        .severity-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .severity-btn {
+            padding: 0.75rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.6);
+            color: #94a3b8;
+        }
+        
+        .severity-btn:hover {
+            background: rgba(51, 65, 85, 0.5);
+        }
+        
+        .severity-btn.active-high {
+            background: #dc2626;
+            color: white;
+            border-color: #dc2626;
+        }
+        
+        .severity-btn.active-medium {
+            background: #eab308;
+            color: black;
+            border-color: #eab308;
+        }
+        
+        .severity-btn.active-low {
+            background: #22c55e;
+            color: white;
+            border-color: #22c55e;
+        }
+        
+        /* Clear All Button */
+        .clear-btn {
+            padding: 0.75rem 1rem;
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid #dc2626;
+            border-radius: 0.375rem;
+            color: #f87171;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .clear-btn:hover {
+            background: rgba(220, 38, 38, 0.3);
+        }
+        
+        /* Active Filters Display */
+        .active-filters {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 0.375rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .filter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+        }
+        
+        .filter-pill-search {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid #3b82f6;
+            color: #60a5fa;
+        }
+        
+        .filter-pill-date {
+            background: rgba(168, 85, 247, 0.2);
+            border: 1px solid #a855f7;
+            color: #c084fc;
+        }
+        
+        .filter-pill-category {
+            background: rgba(251, 146, 60, 0.2);
+            border: 1px solid #fb923c;
+            color: #fdba74;
+        }
+        
+        .filter-pill-severity {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid #22c55e;
+            color: #86efac;
+        }
+        
+        .filter-pill button {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1.25rem;
+            padding: 0;
+            margin-left: 0.25rem;
+        }
+        
+        .result-count {
+            margin-left: auto;
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+        
+        .tab-container {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 0.5rem;
+            padding: 0.25rem;
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+        }
+        
+        .tab:hover {
+            color: white;
+        }
+        
+        .tab.active-political {
+            background: #ea580c;
+            color: white;
+        }
+        
+        .tab.active-executive {
+            background: #2563eb;
+            color: white;
+        }
+        
+        /* Results Grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1rem;
+        }
+        
+        .result-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 0.75rem;
+        }
+        
+        .result-date {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .result-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-high {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .badge-medium {
+            background: #eab308;
+            color: black;
+        }
+        
+        .badge-low {
+            background: #22c55e;
+            color: white;
+        }
+        
+        .result-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .result-actor {
+            color: #60a5fa;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .result-description {
+            color: #cbd5e1;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .result-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .result-category {
+            background: rgba(251, 146, 60, 0.2);
+            color: #fdba74;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+        
+        .result-link {
+            color: #60a5fa;
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+        
+        .result-link:hover {
+            color: #93c5fd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TRUMPYTRACKER</h1>
+        <p class="subtitle">Search & Filter Design Prototype</p>
+        
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">523</div>
+                <div class="stat-label">Total Entries</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #f87171;">47</div>
+                <div class="stat-label">High Severity</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: #60a5fa;">6</div>
+                <div class="stat-label">Filtered Results</div>
+            </div>
+        </div>
+        
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <div class="filter-row">
+                <!-- Search -->
+                <div class="search-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" placeholder="Search titles, descriptions, actors..." value="">
+                </div>
+                
+                <!-- Date Range -->
+                <select class="filter-select">
+                    <option>All Time</option>
+                    <option>Last 7 Days</option>
+                    <option>Last 30 Days</option>
+                </select>
+                
+                <!-- Categories -->
+                <div class="dropdown-container">
+                    <button class="dropdown-button">
+                        Categories (2) ▼
+                    </button>
+                    <div class="dropdown-menu" style="display: block; position: static; margin-top: 0.5rem;">
+                        <div class="dropdown-item">
+                            <input type="checkbox" checked>
+                            <span class="dropdown-item-text">Democracy & Rule of Law</span>
+                            <span class="dropdown-item-count">(3)</span>
+                        </div>
+                        <div class="dropdown-item">
+                            <input type="checkbox" checked>
+                            <span class="dropdown-item-text">Immigration & Border</span>
+                            <span class="dropdown-item-count">(1)</span>
+                        </div>
+                        <div class="dropdown-item">
+                            <input type="checkbox">
+                            <span class="dropdown-item-text">Federal Agencies</span>
+                            <span class="dropdown-item-count">(1)</span>
+                        </div>
+                        <div class="dropdown-item">
+                            <input type="checkbox">
+                            <span class="dropdown-item-text">Financial & Economic</span>
+                            <span class="dropdown-item-count">(1)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Severity -->
+                <div class="severity-buttons">
+                    <button class="severity-btn active-high">High (3)</button>
+                    <button class="severity-btn">Medium (2)</button>
+                    <button class="severity-btn">Low (1)</button>
+                </div>
+                
+                <!-- Clear All -->
+                <button class="clear-btn">Clear All</button>
+            </div>
+        </div>
+        
+        <!-- Active Filters -->
+        <div class="active-filters">
+            <span style="color: #94a3b8; font-size: 0.875rem;">Active Filters:</span>
+            <span class="filter-pill filter-pill-date">
+                Last 7 days
+                <button>×</button>
+            </span>
+            <span class="filter-pill filter-pill-category">
+                Democracy & Rule of Law
+                <button>×</button>
+            </span>
+            <span class="filter-pill filter-pill-category">
+                Immigration & Border
+                <button>×</button>
+            </span>
+            <span class="filter-pill filter-pill-severity">
+                High
+                <button>×</button>
+            </span>
+            <span class="result-count">Showing 6 of 523 entries</span>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab-container">
+                <button class="tab active-political">Political Entries</button>
+                <button class="tab">Executive Orders</button>
+            </div>
+        </div>
+        
+        <!-- Results Grid -->
+        <div class="results-grid">
+            <div class="result-card">
+                <div class="result-header">
+                    <span class="result-date">2025-08-20</span>
+                    <span class="result-badge badge-high">HIGH</span>
+                </div>
+                <h3 class="result-title">Trump Announces New Immigration Policy</h3>
+                <p class="result-actor">Actor: Donald Trump</p>
+                <p class="result-description">
+                    Former President Trump outlined sweeping changes to immigration enforcement, including expanded ICE operations and new border security measures. The proposal has drawn criticism from civil rights groups.
+                </p>
+                <div class="result-footer">
+                    <span class="result-category">Immigration & Border</span>
+                    <a href="#" class="result-link">View Source →</a>
+                </div>
+            </div>
+            
+            <div class="result-card">
+                <div class="result-header">
+                    <span class="result-date">2025-08-19</span>
+                    <span class="result-badge badge-medium">MEDIUM</span>
+                </div>
+                <h3 class="result-title">Federal Court Blocks Executive Action</h3>
+                <p class="result-actor">Actor: Federal Courts</p>
+                <p class="result-description">
+                    A federal judge issued a temporary restraining order against recent executive actions, citing constitutional concerns. The administration plans to appeal the decision.
+                </p>
+                <div class="result-footer">
+                    <span class="result-category">Democracy & Rule of Law</span>
+                    <a href="#" class="result-link">View Source →</a>
+                </div>
+            </div>
+            
+            <div class="result-card">
+                <div class="result-header">
+                    <span class="result-date">2025-08-15</span>
+                    <span class="result-badge badge-high">HIGH</span>
+                </div>
+                <h3 class="result-title">DOJ Announces Investigation into Voting Rights</h3>
+                <p class="result-actor">Actor: Department of Justice</p>
+                <p class="result-description">
+                    The Department of Justice launched a new investigation into alleged voting rights violations in multiple states. Civil rights organizations have welcomed the move.
+                </p>
+                <div class="result-footer">
+                    <span class="result-category">Democracy & Rule of Law</span>
+                    <a href="#" class="result-link">View Source →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -92,14 +92,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
         run: node scripts/seed-fetch-jobs.js
       
-      - name: Check for runnable jobs
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          echo "🔍 Checking for runnable jobs..."
-          node scripts/check-runnable-jobs.js
-      
       - name: Process RSS jobs with atomic worker
         env:
           NODE_ENV: test
@@ -108,7 +100,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           WORKER_POLL_INTERVAL_MS: "2000"
           WORKER_MAX_CONCURRENT: "3"
-          MAX_EMPTY_POLLS: "30"  # Exit after 30 empty polls (~1 minute)
         run: |
           echo "🔄 Processing RSS feed jobs..."
           # Simple: just run the script that's been created

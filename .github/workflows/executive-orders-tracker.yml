@@ -3,7 +3,7 @@ name: Track Executive Orders
 on:
   schedule:
     - cron: '0 16 * * *'  # 11:00 AM EST daily (2 hours after main tracker)
-  workflow_dispatch:      # Manual trigger (works on any branch)
+  workflow_dispatch:      # Manual trigger
 
 jobs:
   track-orders:
@@ -12,7 +12,6 @@ jobs:
     # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
     if: github.event_name != 'schedule' || (github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 20  # TTRC-223: Increased from 10 to 20 for enrichment step
 
     steps:
     - name: Checkout repository
@@ -32,24 +31,22 @@ jobs:
           echo "environment=production" >> $GITHUB_OUTPUT
           echo "🚀 Using PRODUCTION environment"
         fi
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        
+
     - name: Install dependencies
       run: npm install
-      
+
     - name: Track Executive Orders (Supabase)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
-        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-        EO_LOOKBACK_DAYS: ${{ steps.env_detect.outputs.environment == 'test' && '90' || '3' }}
       run: node scripts/executive-orders-tracker-supabase.js
-      
+
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |
         git config --local user.email "action@github.com"

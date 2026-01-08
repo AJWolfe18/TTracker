@@ -9,8 +9,6 @@ import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
 // FIX: Using correct function name generateEOTranslation (not generateSpicyEOTranslation)
 import { generateEOTranslation } from './spicy-eo-translator.js';
-// TTRC-223: Auto-enrich new EOs after collection
-import { enrichExecutiveOrder } from './enrichment/enrich-executive-orders.js';
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
 console.log('================================================\n');
@@ -21,6 +19,11 @@ if (!OPENAI_KEY) {
     console.log('⚠️  WARNING: No OPENAI_API_KEY found - summaries will be basic');
 } else {
     console.log('✅ OpenAI API key found - will generate AI summaries');
+}
+
+// Generate unique ID for executive orders
+function generateOrderId() {
+    return `eo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 // Check if order already exists in database
@@ -43,7 +46,9 @@ async function generateAIAnalysis(title, orderNumber, abstract = '') {
             summary: `Executive Order ${orderNumber}: ${title}`,
             severity_rating: 'medium',
             policy_direction: 'modify',
-            implementation_timeline: 'ongoing'
+            implementation_timeline: 'ongoing',
+            impact_areas: [],
+            full_text_available: true
         };
     }
     
@@ -70,7 +75,9 @@ Provide a JSON response with these exact fields:
   "summary": "2-3 sentence summary of what this order does and its key impacts",
   "severity_rating": "low|medium|high based on scope and impact",
   "policy_direction": "expand|restrict|modify|create|eliminate",
-  "implementation_timeline": "immediate|30_days|90_days|ongoing"
+  "implementation_timeline": "immediate|30_days|90_days|ongoing",
+  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"],
+  "full_text_available": true
 }
 
 Respond ONLY with valid JSON.`
@@ -87,8 +94,10 @@ Respond ONLY with valid JSON.`
                 summary: `Executive Order ${orderNumber}: ${title}`,
                 severity_rating: 'medium',
                 policy_direction: 'modify',
-                implementation_timeline: 'ongoing'
-                };
+                implementation_timeline: 'ongoing',
+                impact_areas: [],
+                full_text_available: true
+            };
         }
 
         const data = await response.json();
@@ -103,8 +112,10 @@ Respond ONLY with valid JSON.`
                 summary: content || `Executive Order ${orderNumber}: ${title}`,
                 severity_rating: 'medium',
                 policy_direction: 'modify',
-                implementation_timeline: 'ongoing'
-                };
+                implementation_timeline: 'ongoing',
+                impact_areas: [],
+                full_text_available: true
+            };
         }
         
     } catch (error) {
@@ -113,7 +124,9 @@ Respond ONLY with valid JSON.`
             summary: `Executive Order ${orderNumber}: ${title}`,
             severity_rating: 'medium',
             policy_direction: 'modify',
-            implementation_timeline: 'ongoing'
+            implementation_timeline: 'ongoing',
+            impact_areas: [],
+            full_text_available: true
         };
     }
 }
@@ -149,11 +162,10 @@ async function fetchFromFederalRegister() {
             startDate = '2025-01-20';
             console.log('   🚀 INITIAL IMPORT MODE - fetching all EOs since inauguration');
         } else {
-            // Daily update - configurable lookback (default 3 days, TEST env uses 30 days)
-            const lookbackDays = parseInt(process.env.EO_LOOKBACK_DAYS || '3', 10);
-            const lookbackDate = new Date(Date.now() - lookbackDays*24*60*60*1000).toISOString().split('T')[0];
-            startDate = lookbackDate;
-            console.log(`   📅 DAILY UPDATE MODE - fetching last ${lookbackDays} days only`);
+            // Daily update - only last 3 days
+            const threeDaysAgo = new Date(Date.now() - 3*24*60*60*1000).toISOString().split('T')[0];
+            startDate = threeDaysAgo;
+            console.log('   📅 DAILY UPDATE MODE - fetching last 3 days only');
         }
     } catch (error) {
         // If check fails, default to full import
@@ -188,6 +200,7 @@ async function fetchFromFederalRegister() {
     
     console.log(`   Searching from ${startDate} to ${today} (${daysDiff} days)`);
     console.log(`   Filter: Executive Orders ONLY\n`);
+    console.log(`   🎯 EXPECTING ~190 Executive Orders for full import\n`);
     
     try {
         const response = await fetch(url, {
@@ -217,15 +230,15 @@ async function fetchFromFederalRegister() {
         
         // Check if results field exists
         if (!data.hasOwnProperty('results')) {
-            // Federal Register API omits 'results' field when count=0
-            if (data.count === 0 || data.total === 0) {
-                console.log('   ✅ No executive orders published in the specified date range (this is normal for daily checks)');
-                return [];
-            }
-
-            // If count > 0 but no results field, that's an actual error
             console.log(`   ⚠️ API response missing 'results' field. Response keys: ${Object.keys(data).join(', ')}`);
             console.log(`   Full response: ${JSON.stringify(data).substring(0, 500)}`);
+            
+            // It might be a valid response with 0 results
+            if (data.count === 0 || data.total === 0) {
+                console.log('   ℹ️ No executive orders found in the specified date range');
+                return [];
+            }
+            
             throw new Error(`Invalid API response structure - no results field`);
         }
         
@@ -295,9 +308,10 @@ async function fetchFromFederalRegister() {
                 }
                 
                 const order = {
+                    id: generateOrderId(),
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
-                    date: item.signing_date || item.publication_date || today,
+                    date: item.publication_date || today,
                     summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`),
                     category: determineCategory(item.title, item.abstract),
                     agencies_affected: extractAgencies(item),
@@ -315,6 +329,8 @@ async function fetchFromFederalRegister() {
                     severity_rating: aiAnalysis ? aiAnalysis.severity_rating : 'medium',
                     policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
                     implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
+                    impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
+                    full_text_available: aiAnalysis ? aiAnalysis.full_text_available : true,
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
@@ -367,19 +383,18 @@ function extractAgencies(item) {
 // Determine category based on content
 function determineCategory(title, abstract) {
     const text = `${title} ${abstract}`.toLowerCase();
-
-    // Map to valid eo_category enum values (from migration 023)
-    if (text.includes('immigration') || text.includes('border')) return 'immigration_border';
-    if (text.includes('climate') || text.includes('energy') || text.includes('environment')) return 'environment_energy';
-    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid')) return 'health_care';
-    if (text.includes('defense') || text.includes('military') || text.includes('foreign')) return 'natsec_foreign';
-    if (text.includes('trade') || text.includes('tariff') || text.includes('tax') || text.includes('economy') || text.includes('jobs')) return 'economy_jobs_taxes';
+    
+    if (text.includes('immigration') || text.includes('border')) return 'immigration';
+    if (text.includes('climate') || text.includes('energy') || text.includes('environment')) return 'environment';
+    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid')) return 'healthcare';
+    if (text.includes('defense') || text.includes('military')) return 'defense';
+    if (text.includes('trade') || text.includes('tariff')) return 'trade';
     if (text.includes('education')) return 'education';
-    if (text.includes('court') || text.includes('judicial') || text.includes('justice') || text.includes('civil rights') || text.includes('voting')) return 'justice_civil_rights_voting';
-    if (text.includes('technology') || text.includes('data') || text.includes('privacy') || text.includes('cyber')) return 'technology_data_privacy';
-    if (text.includes('infrastructure') || text.includes('housing') || text.includes('transport')) return 'infra_housing_transport';
-
-    return 'gov_ops_workforce';
+    if (text.includes('court') || text.includes('judicial')) return 'judicial';
+    if (text.includes('tax') || text.includes('economy')) return 'economic';
+    if (text.includes('regulation') || text.includes('deregulation')) return 'regulatory';
+    
+    return 'government_operations';
 }
 
 // Calculate impact score
@@ -421,14 +436,14 @@ async function saveToSupabase(orders) {
         
         // Insert all orders at once
         const result = await supabaseRequest('executive_orders', 'POST', orders);
-
+        
         // Validate the insert succeeded
-        if (!result || !Array.isArray(result)) {
+        if (!result) {
             throw new Error('Supabase insert returned null/undefined result');
         }
-
+        
         console.log(`✅ Successfully saved ${orders.length} executive orders`);
-
+        
         // Summary
         const highImpact = orders.filter(o => o.impact_score >= 70).length;
         console.log(`\n📊 Summary:`);
@@ -439,10 +454,7 @@ async function saveToSupabase(orders) {
             console.log(`   Order number range: ${orderNums[0]} to ${orderNums[orderNums.length-1]}`);
             console.log(`   Order numbers: ${orderNums.join(', ')}`);
         }
-
-        // Return the inserted records (with auto-generated IDs) for enrichment
-        return result;
-
+        
     } catch (error) {
         console.error('❌ FATAL ERROR saving to Supabase:', error.message);
         console.error('   This is a blocking error - manual investigation required');
@@ -457,81 +469,25 @@ async function getDatabaseStats() {
         const allOrders = await supabaseRequest('executive_orders?select=order_number,date&order=order_number.asc');
         const withNumber = allOrders.filter(o => o.order_number);
         const withoutNumber = allOrders.filter(o => !o.order_number);
-
+        
         console.log('\n📊 Current Database Status:');
         console.log(`   Total records: ${allOrders.length}`);
         console.log(`   With order number: ${withNumber.length}`);
         console.log(`   WITHOUT order number: ${withoutNumber.length} ${withoutNumber.length > 0 ? '⚠️' : '✅'}`);
-
+        
         if (withNumber.length > 0) {
             const orderNums = withNumber.map(o => parseInt(o.order_number)).filter(n => !isNaN(n)).sort((a,b) => a-b);
             console.log(`   Order number range: ${orderNums[0]} to ${orderNums[orderNums.length-1]}`);
         }
-
+        
         if (withoutNumber.length > 0) {
             console.log('\n   ⚠️ WARNING: Database contains records without order numbers!');
             console.log('   These are likely NOT Executive Orders and should be cleaned.');
             console.log('   Run safe-eo-cleanup.bat to remove them.');
         }
-
+        
     } catch (error) {
         console.error('Error getting database stats:', error.message);
-    }
-}
-
-// TTRC-223: Enrich newly collected EOs
-async function enrichNewEOs(orders) {
-    if (!orders || orders.length === 0) {
-        return;
-    }
-
-    console.log(`\n🎨 Enriching ${orders.length} new executive orders...`);
-    console.log('='.repeat(60));
-
-    let enrichedCount = 0;
-    let failedCount = 0;
-    const errors = [];
-
-    for (const order of orders) {
-        try {
-            const titlePreview = (order.title || '').substring(0, 50);
-            console.log(`\n🤖 Enriching EO ${order.order_number}: ${titlePreview}...`);
-            // Skip idempotency check since these are newly collected EOs
-            const result = await enrichExecutiveOrder(order, true);
-
-            if (result.success && result.enriched) {
-                console.log(`✅ Successfully enriched EO ${order.order_number}`);
-                enrichedCount++;
-            } else if (result.success && result.skipped) {
-                console.log(`⏭️  Skipped EO ${order.order_number} (${result.reason})`);
-                // Don't count as success or failure - just skipped
-            } else {
-                console.error(`❌ Failed to enrich EO ${order.order_number}: ${result.error}`);
-                failedCount++;
-                errors.push({ order_number: order.order_number, error: result.error });
-            }
-        } catch (error) {
-            console.error(`❌ Error enriching EO ${order.order_number}:`, error.message);
-            failedCount++;
-            errors.push({ order_number: order.order_number, error: error.message });
-            // Continue with other EOs - don't let one failure block the rest
-        }
-    }
-
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 Enrichment Summary:');
-    console.log(`   New EOs collected: ${orders.length}`);
-    console.log(`   Successfully enriched: ${enrichedCount} ✅`);
-    console.log(`   Failed enrichment: ${failedCount} ${failedCount > 0 ? '⚠️' : ''}`);
-
-    if (errors.length > 0) {
-        console.log('\n⚠️  Failed orders:');
-        errors.forEach(e => {
-            console.log(`   - EO ${e.order_number}: ${e.error}`);
-        });
-        console.log('\n   Note: Failed EOs saved without enrichment (can be enriched later)');
-        console.log('   💡 Check dead-letter queue for details:');
-        console.log('      SELECT * FROM eo_enrichment_errors ORDER BY created_at DESC LIMIT 10;');
     }
 }
 
@@ -539,34 +495,27 @@ async function enrichNewEOs(orders) {
 async function main() {
     try {
         console.log('🔍 Starting executive orders collection...\n');
-
+        
         // Show current database state
         await getDatabaseStats();
-
+        
         // Fetch from Federal Register (with proper filtering)
         console.log('\n' + '='.repeat(60));
         const federalOrders = await fetchFromFederalRegister();
-
+        
         // Save to Supabase
         console.log('='.repeat(60));
         if (federalOrders.length > 0) {
-            // Save and get back the inserted records WITH auto-generated IDs
-            const insertedOrders = await saveToSupabase(federalOrders);
-
-            // TTRC-223: Auto-enrich new EOs after collection
-            // Pass the inserted records (with IDs) to enrichment
-            // Errors don't block collection - failed EOs saved without enrichment
-            await enrichNewEOs(insertedOrders);
-
-            console.log('\n✨ Executive orders collection and enrichment complete!');
+            await saveToSupabase(federalOrders);
+            console.log('\n✨ Executive orders tracking complete!');
         } else {
             console.log('\n📭 No new executive orders to add');
         }
-
+        
         // Show updated stats
         console.log('\n' + '='.repeat(60));
         await getDatabaseStats();
-
+        
     } catch (error) {
         console.error('\n❌ Fatal error:', error);
         process.exit(1);

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archive Test - Direct Supabase</title>
+    <script src="supabase-browser-config.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #0f0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background: #333;
+            color: #0f0;
+            border: 1px solid #0f0;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #333;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Archive Operation Test</h1>
+    <p>This tests the archive operation directly against Supabase</p>
+    
+    <div>
+        <h2>Test Controls</h2>
+        <button onclick="testArchive('political')">Test Archive Political Entry</button>
+        <button onclick="testArchive('executive')">Test Archive Executive Order</button>
+        <button onclick="testWithDifferentMethod()">Test with Different Headers</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div id="log" class="log"></div>
+
+    <script>
+        const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+        const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testArchive(type) {
+            log(`Testing archive for ${type} entry...`, 'info');
+            
+            // First, get an entry to test with
+            const table = type === 'political' ? 'political_entries' : 'executive_orders';
+            
+            try {
+                // Get first non-archived entry
+                log(`Fetching non-archived ${type} entries...`, 'info');
+                const fetchResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/${table}?archived=eq.false&limit=1`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                
+                const entries = await fetchResponse.json();
+                log(`Found ${entries.length} non-archived entries`, 'info');
+                
+                if (entries.length === 0) {
+                    log(`No non-archived ${type} entries found to test with`, 'error');
+                    return;
+                }
+                
+                const entry = entries[0];
+                log(`Testing with entry ID: ${entry.id}, Title: ${entry.title}`, 'info');
+                
+                // Now try to archive it
+                log(`Attempting to archive entry ${entry.id}...`, 'info');
+                
+                const updateUrl = `${SUPABASE_URL}/rest/v1/${table}?id=eq.${entry.id}`;
+                log(`PATCH URL: ${updateUrl}`, 'info');
+                
+                const updateResponse = await fetch(updateUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation'  // This should return the updated row
+                    },
+                    body: JSON.stringify({ archived: true })
+                });
+                
+                log(`Response status: ${updateResponse.status}`, updateResponse.ok ? 'success' : 'error');
+                log(`Response headers:`, 'info');
+                for (let [key, value] of updateResponse.headers) {
+                    log(`  ${key}: ${value}`, 'info');
+                }
+                
+                const responseText = await updateResponse.text();
+                log(`Response body: ${responseText || '(empty)'}`, 'info');
+                
+                if (responseText) {
+                    try {
+                        const responseData = JSON.parse(responseText);
+                        log(`Parsed response: ${JSON.stringify(responseData, null, 2)}`, 'success');
+                        
+                        if (Array.isArray(responseData) && responseData.length > 0) {
+                            log(`✅ Archive successful! Entry is now archived: ${responseData[0].archived}`, 'success');
+                        } else if (Array.isArray(responseData) && responseData.length === 0) {
+                            log(`❌ No rows were updated - likely an RLS policy issue`, 'error');
+                        }
+                    } catch (e) {
+                        log(`Could not parse response as JSON: ${e.message}`, 'error');
+                    }
+                }
+                
+                // Verify by fetching the entry again
+                log(`Verifying archive status...`, 'info');
+                const verifyResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/${table}?id=eq.${entry.id}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                
+                const verifyData = await verifyResponse.json();
+                if (verifyData.length > 0) {
+                    log(`Entry archived status: ${verifyData[0].archived}`, verifyData[0].archived ? 'success' : 'error');
+                    
+                    // If it worked, restore it for next test
+                    if (verifyData[0].archived) {
+                        log(`Restoring entry for next test...`, 'info');
+                        await fetch(updateUrl, {
+                            method: 'PATCH',
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ archived: false })
+                        });
+                        log(`Entry restored`, 'success');
+                    }
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        async function testWithDifferentMethod() {
+            log(`Testing with different approach...`, 'info');
+            
+            try {
+                // Try updating with a minimal set of headers
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.1081`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'  // Try minimal return
+                        },
+                        body: JSON.stringify({ archived: true })
+                    }
+                );
+                
+                log(`Response status: ${response.status}`, response.ok ? 'success' : 'error');
+                const text = await response.text();
+                log(`Response: ${text || '(empty)'}`, 'info');
+                
+                // Also try with return=headers-only
+                const response2 = await fetch(
+                    `${SUPABASE_URL}/rest/v1/political_entries?id=eq.1081`,
+                    {
+                        method: 'PATCH',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=headers-only'
+                        },
+                        body: JSON.stringify({ archived: false })
+                    }
+                );
+                
+                log(`Alternative response status: ${response2.status}`, response2.ok ? 'success' : 'error');
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Initial check
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+            log('❌ Supabase configuration not loaded!', 'error');
+        } else {
+            log('✅ Supabase configuration loaded', 'success');
+            log(`URL: ${SUPABASE_URL}`, 'info');
+            log(`Using ${SUPABASE_URL.includes('wnrjrywpcadwutfykflu') ? 'TEST' : 'PRODUCTION'} database`, 'info');
+        }
+    </script>
+</body>
+</html>
