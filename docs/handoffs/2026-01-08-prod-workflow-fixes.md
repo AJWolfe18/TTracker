@@ -97,12 +97,12 @@ Error: Missing TARGET_ENV or ENVIRONMENT (prod|test)
 
 ---
 
-## Files on Test Branch (Uncommitted)
+## Files Changed on Test Branch
 
 | File | Status |
 |------|--------|
-| `docs/archive/product-strategy-analysis-2026-01-08.md` | Saved locally, not committed |
-| `.github/workflows/rss-tracker-test.yml` | Schedule disabled (committed) |
+| `docs/archive/product-strategy-analysis-2026-01-08.md` | ✅ Committed |
+| `.github/workflows/rss-tracker-test.yml` | ✅ Schedule disabled |
 
 ---
 
@@ -119,9 +119,9 @@ Error: Missing TARGET_ENV or ENVIRONMENT (prod|test)
 - This is a UI display quirk, not actual failures
 
 ### 3. Product Strategy Doc
-- Comprehensive analysis saved to `docs/archive/`
+- Comprehensive analysis saved to `docs/archive/product-strategy-analysis-2026-01-08.md`
 - Covers: analytics, retention, monetization, growth
-- Not committed yet - review and decide if you want to keep
+- ✅ Committed to test branch
 
 ---
 
