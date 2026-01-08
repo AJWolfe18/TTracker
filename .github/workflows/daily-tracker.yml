@@ -1,16 +1,21 @@
 # .github/workflows/daily-tracker.yml
-name: Daily Political Tracker
+# DEPRECATED: This workflow is replaced by RSS Tracker (rss-tracker-prod.yml)
+# The RSS Tracker fetches from RSS feeds, clusters into stories, and enriches with AI.
+# This legacy workflow used OpenAI search and wrote to political_entries table.
+# Disabled: 2026-01-08
+name: Daily Political Tracker (DISABLED)
 
 on:
-  schedule:
-    # Runs every day at 9:00 AM EST (2:00 PM UTC)
-    - cron: '0 14 * * *'
-  
-  # Allow manual triggering
+  # Schedule REMOVED - this workflow is deprecated
+  # Old schedule: cron: '0 14 * * *' (9:00 AM EST daily)
+
+  # Keep manual trigger for potential debugging/testing
   workflow_dispatch:
 
 jobs:
   fetch-updates:
+    # DISABLED: This legacy workflow is replaced by RSS Tracker
+    if: false
     runs-on: ubuntu-latest
     
     steps:
