@@ -10,7 +10,8 @@ on:
 jobs:
   merge-stories:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true')
     steps:
       - name: Trigger story merge detection
         id: merge
