@@ -67,13 +67,27 @@ User noticed articles with "Watch:" in titles - want AI-generated neutral titles
 
 ---
 
+## Repo Cleanup Progress
+
+**Plan:** `docs/plans/2026-01-08-repo-cleanup-audit.md`
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Root directory organization | ✅ Done (prev session) |
+| 2 | Workflow cleanup | ✅ Done (prev session) |
+| 3 | Documentation cleanup | ✅ Done (prev session) |
+| 4 | Archive legacy scripts | ⏳ TTRC-369 |
+| 5 | Clean temp/public artifacts | ⏳ TTRC-370 |
+| 6 | Update CLAUDE.md + deprecations | ⏳ TTRC-371 |
+| 7 | Clean orphaned jobs | ✅ TTRC-372 (this session) |
+
 ## Remaining Cleanup Backlog
 
-| Ticket | Summary | Priority |
-|--------|---------|----------|
-| TTRC-369 | Archive legacy scripts | Medium |
-| TTRC-370 | Clean temp/public test artifacts | Medium |
-| TTRC-371 | Update CLAUDE.md + deprecation notices | Medium |
+| Ticket | Phase | Summary |
+|--------|-------|---------|
+| TTRC-369 | 4 | Archive legacy scripts |
+| TTRC-370 | 5 | Clean temp/public test artifacts |
+| TTRC-371 | 6 | Update CLAUDE.md + deprecation notices |
 
 ---
 
@@ -89,7 +103,14 @@ User noticed articles with "Watch:" in titles - want AI-generated neutral titles
 
 ## Next Session
 
-Option A: Implement TTRC-373 (AI story titles)
-Option B: Continue cleanup backlog (TTRC-369-371)
+**Continue repo cleanup (3 phases remain):**
+- TTRC-369: Archive legacy scripts (Phase 4)
+- TTRC-370: Clean temp/public artifacts (Phase 5)
+- TTRC-371: Update CLAUDE.md + deprecations (Phase 6)
 
-**Handoff from previous session:** `docs/handoffs/2026-01-08-repo-cleanup-execution.md`
+**Or start new feature:**
+- TTRC-373: AI story titles
+
+**Related handoffs:**
+- Previous cleanup session: `docs/handoffs/2026-01-08-repo-cleanup-execution.md`
+- Cleanup plan: `docs/plans/2026-01-08-repo-cleanup-audit.md`
