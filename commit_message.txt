@@ -1,6 +1,0 @@
-Fix admin panel Supabase configuration mismatch
-
-- Fixed variable name mismatch between admin-supabase.html and supabase-browser-config.js
-- Admin was looking for window.SUPABASE_CONFIG.url but config sets window.SUPABASE_URL
-- Now checks both possible variable names for compatibility
-- This fixes the "Unexpected token '<'" JSON error

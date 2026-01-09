@@ -7,6 +7,7 @@
 import fetch from 'node-fetch';
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -39,6 +40,20 @@ console.log(`📍 Supabase URL: ${SUPABASE_URL ? SUPABASE_URL.substring(0, 30) +
 
 // Create Supabase client with environment variables
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Helper functions for RPC
+function sha256(text) {
+    return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+function safeHost(url) {
+    try {
+        const h = new URL(url).hostname || '';
+        return h.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
+}
 
 // Get input from GitHub Actions or environment
 const inputData = JSON.parse(process.env.INPUT_DATA || '{}');
@@ -73,9 +88,13 @@ console.log(`  Title: ${title || 'To be extracted'}`);
 console.log(`  Category: ${category || 'Political News'}`);
 console.log(`  Submitted by: ${submitted_by || 'admin'}\n`);
 
-// Generate unique ID
+// Generate unique ID (integer for database compatibility)
 function generateId() {
-    return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    // Create a unique integer ID using timestamp + random component
+    // This ensures uniqueness while staying within integer range
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return parseInt(`${timestamp}${random}`.slice(-15)); // Keep it within safe integer range
 }
 
 // Normalize URL to detect duplicates

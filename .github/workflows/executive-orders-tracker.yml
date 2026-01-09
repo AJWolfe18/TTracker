@@ -7,18 +7,22 @@ on:
 
 jobs:
   track-orders:
+    # Skip scheduled runs on test branch (only run on main)
+    # Manual triggers (workflow_dispatch) work on any branch
+    # TTRC-362: Kill-switch for scheduled runs (workflow_dispatch still works)
+    if: github.event_name != 'schedule' || (github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true')
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Detect environment
       id: env_detect
       run: |
         echo "Current ref: ${{ github.ref }}"
         echo "Current branch: ${GITHUB_REF#refs/heads/}"
-        
+
         # Check if we're on test branch or if test file exists
         if [[ "${{ github.ref }}" == "refs/heads/test" ]] || [[ -f "TEST_BRANCH_MARKER.md" ]]; then
           echo "environment=test" >> $GITHUB_OUTPUT
@@ -27,22 +31,32 @@ jobs:
           echo "environment=production" >> $GITHUB_OUTPUT
           echo "🚀 Using PRODUCTION environment"
         fi
-      
+
+    - name: Export env (prod|test)
+      run: |
+        if [ "${{ steps.env_detect.outputs.environment }}" = "production" ]; then
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          echo "TARGET_ENV=prod" >> $GITHUB_ENV
+        else
+          echo "ENVIRONMENT=test" >> $GITHUB_ENV
+          echo "TARGET_ENV=test" >> $GITHUB_ENV
+        fi
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        
+
     - name: Install dependencies
       run: npm install
-      
+
     - name: Track Executive Orders (Supabase)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
       run: node scripts/executive-orders-tracker-supabase.js
-      
+
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |
         git config --local user.email "action@github.com"

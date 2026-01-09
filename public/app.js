@@ -10,7 +10,7 @@
   // CONFIGURATION
   // ===========================================
 
-  const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
+  const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://wnrjrywpcadwutfykflu.supabase.co';
   const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
 
   const ITEMS_PER_PAGE = 12; // 4 rows x 3 columns on desktop
@@ -94,6 +94,9 @@
     return response.json();
   }
 
+  // Analytics tracking helper (from shared.js)
+  const trackEvent = window.TTShared?.trackEvent || (() => {});
+
   // ===========================================
   // THEME CONTEXT
   // ===========================================
@@ -111,7 +114,9 @@
     }, []);
 
     const toggleTheme = useCallback(() => {
-      setTheme(theme === 'dark' ? 'light' : 'dark');
+      const newTheme = theme === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+      trackEvent('theme_toggle', { theme: newTheme });
     }, [theme, setTheme]);
 
     // Sync with document on mount
@@ -800,6 +805,9 @@
       searchDebounceRef.current = setTimeout(() => {
         setSearchTerm(value);
         setPage(1);
+        if (value.trim()) {
+          trackEvent('search', { search_term: value.trim() });
+        }
       }, 300);
     }, []);
 
@@ -807,18 +815,21 @@
     const handleCategoryChange = useCallback((cat) => {
       setSelectedCategory(cat);
       setPage(1);
+      trackEvent('filter_category', { category: cat });
     }, []);
 
     // Handle severity change
     const handleSeverityChange = useCallback((sev) => {
       setSelectedSeverity(sev);
       setPage(1);
+      trackEvent('filter_severity', { severity: sev });
     }, []);
 
     // Handle sort change
     const handleSortChange = useCallback((sort) => {
       setSelectedSort(sort);
       setPage(1);
+      trackEvent('sort_change', { sort_by: sort });
     }, []);
 
     // Handle clear all filters
@@ -834,6 +845,7 @@
     const handlePageChange = useCallback((newPage) => {
       setPage(newPage);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      trackEvent('pagination', { page: newPage });
     }, []);
 
     // Handle view sources
@@ -878,6 +890,15 @@
       setDetailStory(story);
       setDetailLoading(true);
       setDetailError(null);
+
+      // Track story view (only from user clicks, not deep links)
+      if (!fromDeepLink) {
+        trackEvent('view_story', {
+          story_id: story.id,
+          category: story.category,
+          severity: story.severity
+        });
+      }
 
       // Lock scroll when modal opens
       if (window.TTShared) window.TTShared.lockScroll();

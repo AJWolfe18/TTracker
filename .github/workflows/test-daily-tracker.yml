@@ -20,6 +20,8 @@ on:
 jobs:
   test-daily-tracker:
     runs-on: ubuntu-latest
+    # DISABLED 2026-01-08: daily-tracker.yml is disabled, this test workflow is obsolete
+    if: false
     
     steps:
     - name: Checkout test branch

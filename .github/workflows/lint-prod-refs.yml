@@ -1,0 +1,57 @@
+# TTRC-362: Lint PROD References
+# Prevents hardcoded PROD Supabase refs from being committed to TEST branch
+# NOTE: This check is SKIPPED on main branch - PROD refs are correct there
+name: Lint PROD References
+
+on:
+  push:
+    branches-ignore:
+      - main  # PROD refs are correct on main branch
+  pull_request:
+    branches-ignore:
+      - main  # PRs to main can have PROD refs
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for hardcoded PROD refs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROD_REF="osjbulmltfpcoldydexg"
+          PROD_HOST="osjbulmltfpcoldydexg.supabase.co"
+
+          # Scan only places where hardcoding is dangerous
+          SCAN_DIRS=(public scripts config .github)
+
+          # Allowlist files that are explicitly allowed to reference PROD
+          # - lib/env-validation.js: Centralized validation constants
+          # - public/supabase-browser-config.js: Browser config with both envs
+          # - legacy/: Legacy files not actively used
+          # - *-backup*: Backup files not actively used
+          # - dashboard-*.js: Legacy dashboard files (main site uses app.js)
+          # - data-health-monitor.js: PROD monitoring script (intentional)
+          # - batch/: Windows batch files (legacy)
+          # - lint-prod-refs.yml: This workflow (contains PROD_REF constant for checking)
+          ALLOWLIST_REGEX='(^|/)(lib/env-validation\.js|public/supabase-browser-config\.js|legacy/|.*-backup.*|dashboard-.*\.js|data-health-monitor\.js|batch/|lint-prod-refs\.yml)'
+
+          matches="$(grep -RIn --exclude-dir=node_modules --exclude-dir=.git \
+            -e "${PROD_REF}" -e "${PROD_HOST}" "${SCAN_DIRS[@]}" || true)"
+
+          if [[ -n "${matches}" ]]; then
+            filtered="$(echo "${matches}" | grep -Ev "${ALLOWLIST_REGEX}" || true)"
+            if [[ -n "${filtered}" ]]; then
+              echo "❌ FAIL: Found hardcoded PROD Supabase ref/host outside allowlist:"
+              echo "${filtered}"
+              echo ""
+              echo "These should use environment variables, not hardcoded values."
+              echo "If this is intentional, add the file to ALLOWLIST_REGEX in this workflow."
+              exit 1
+            fi
+          fi
+
+          echo "✅ PASS: No hardcoded PROD refs found outside allowlist."

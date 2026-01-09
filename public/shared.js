@@ -314,7 +314,7 @@
   // ===========================================
 
   async function supabaseRequest(query) {
-    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://osjbulmltfpcoldydexg.supabase.co';
+    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL || 'https://wnrjrywpcadwutfykflu.supabase.co';
     const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${query}`, {
@@ -330,6 +330,21 @@
     }
 
     return response.json();
+  }
+
+  // ===========================================
+  // ANALYTICS
+  // ===========================================
+
+  /**
+   * Track analytics event (Google Analytics)
+   * @param {string} eventName - Event name (e.g., 'search', 'view_story')
+   * @param {Object} eventParams - Event parameters (optional)
+   */
+  function trackEvent(eventName, eventParams = {}) {
+    if (typeof gtag === 'function') {
+      gtag('event', eventName, eventParams);
+    }
   }
 
   // ===========================================
@@ -373,7 +388,10 @@
     formatDateTime,
 
     // API
-    supabaseRequest
+    supabaseRequest,
+
+    // Analytics
+    trackEvent
   };
 
 })(window);

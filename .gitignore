@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -54,6 +55,7 @@ __pycache__/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # Local test files that shouldn't be tracked
 test-local/
@@ -82,3 +84,16 @@ admin-config.js
 !COMPLETE-TEST-SCHEMA-FIX.sql
 !fix-dashboard-stats-view.sql
 !fix-test-schema.sql
+node_modules/.package-lock.json
+package-lock.json
+docs/guides/deployment/TTracker Search and filters.png
+.claude/settings.local.json
+Executive Orders (EO) — Simple Cate.md
+
+# RSS runtime logs and Supabase CLI temp files
+rss-trigger-log.txt
+supabase/.temp/
+
+# Temporary error files (IDE/command artifacts)
+_ul*
+_UL*

@@ -1,13 +1,12 @@
 name: RSS Tracker - TEST
 
 on:
-  # Manual trigger
+  # Manual trigger only - schedule disabled 2026-01-08
   workflow_dispatch:
 
-  # Temporary 2h schedule for 48h validation
-  # TODO: Remove/comment out after 48h monitoring (TTRC-266 Phase 6)
-  schedule:
-    - cron: '0 */2 * * *'  # Every 2 hours
+  # DISABLED: Schedule removed - use manual trigger only
+  # Was: cron: '0 */2 * * *' (every 2 hours)
+  # Reason: TEST should only run on-demand, PROD handles scheduled runs
 
 jobs:
   rss-tracker-test:
