@@ -3,7 +3,6 @@ name: RSS Pipeline Health Check
 on:
   push:
     paths:
-      - 'scripts/job-queue-worker-atomic.js'
       - 'scripts/seed-fetch-jobs.js'
       - 'scripts/rss/**'
       - 'migrations/**'
