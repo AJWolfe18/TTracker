@@ -78,7 +78,12 @@ Completed Phase 5 of repo cleanup - deleted ~60 development artifacts and archiv
 ## Known Issues
 
 - **AI code review workflow** - Pre-existing failure, separate bug fix needed
+- **JIRA MCP auth intermittent** - Was working, then failed. TTRC-370 needs manual update to Done status.
 - **Docs with old references** - Historical handoffs/guides reference deleted files (expected, no action needed)
+
+## Notes
+
+- **AI code review only triggers on PRs** - Not on direct pushes to test. No review ran for this cleanup work (that's fine for housekeeping).
 
 ---
 
