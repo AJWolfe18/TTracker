@@ -6,10 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node daily-tracker.js",
-    "daily": "node scripts/daily-tracker-supabase.js",
     "eo": "node scripts/executive-orders-tracker-supabase.js",
     "server": "node scripts/simple-server.js",
-    "test": "node test-verification.js",
+    "test": "npm run qa:smoke",
     "qa:boundaries": "node scripts/tests/clustering-boundaries.mjs",
     "qa:integration": "node scripts/tests/attach-or-create-integration-fixed.mjs",
     "qa:idempotency": "node scripts/tests/enqueue-idempotency.mjs",
