@@ -20,6 +20,7 @@ concurrency:
 jobs:
   seed-test-feeds:
     name: Seed RSS Feeds
+    if: false  # DISABLED: Uses superseded job-queue-worker system (TTRC-369)
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.target_env }}
     steps:
