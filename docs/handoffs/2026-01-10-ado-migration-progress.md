@@ -63,24 +63,63 @@ All 168 active JIRA items have been migrated to Azure DevOps with:
 - JIRA key tags for traceability (jira:TTRC-XXX)
 - Descriptions copied where they existed in JIRA
 
-## Known Issues (Next Session)
+## Session 2: Cleanup Complete (2026-01-10)
 
-### 1. Duplicate Items (HIGH PRIORITY)
-Interrupted runs likely created duplicate ADO items with same JIRA tag.
-- Search ADO for duplicate `jira:TTRC-XXX` tags
-- Close/delete duplicates (keep the one with description)
-- Gap analysis flagged: TTRC-332, TTRC-340, TTRC-34, TTRC-35, TTRC-36, TTRC-37, TTRC-40, TTRC-42
+### 7. Duplicates Fixed
+Found and closed 6 duplicate ADO items:
+- ADO #10 (duplicate of #106 for TTRC-340)
+- ADO #171-175 (duplicates of #141-145 for TTRC-34 through TTRC-40)
+- Set state to "Removed"
 
-### 2. Missing Parent Links
-52 items have parents in JIRA but only 29 resolved to ADO parent IDs.
-- After fixing duplicates, re-link children to parents
-- Use `mcp__azure-devops__wit_work_items_link` with type "parent"
+### 8. Orphan Items Tagged
+2 items without JIRA tags were identified and tagged:
+- ADO #60 → jira:TTRC-332 (Manual curate/combine)
+- ADO #109 → jira:TTRC-237 (Trump Pardons Tracker)
 
-### 3. Description Formatting
-Descriptions sent without `format: "Markdown"` - shows raw markdown.
-- Re-update all 52 items with `format: "Markdown"` flag
-- User prefers markdown (fewer tokens for Claude)
+### 9. Parent Links Fixed (37 items)
+Created parent-child relationships for 37 items that had parents in JIRA.
+- Used `mcp__azure-devops__wit_work_items_link` in 4 batches
+- All 37 links created successfully
 
-### 4. Empty Descriptions (23 items)
-These JIRA items have no description - user will add in ADO directly.
+### 10. Parent Link Analysis
+| Category | Count | Notes |
+|----------|-------|-------|
+| Correct links (already existed) | 39 | No action needed |
+| Links created this session | 37 | Now fixed |
+| Parent not in ADO | 62 | Parent JIRA items were closed/archived |
+
+The 62 items with "parent not in ADO" reference old JIRA epics/features that weren't in the active migration (TTRC-12, TTRC-18, TTRC-134, TTRC-239, etc.). These parent items were closed/archived in JIRA before export.
+
+## Final ADO State
+
+| Metric | Count |
+|--------|-------|
+| Total work items | 176 (170 active + 6 removed) |
+| Items with JIRA tags | 170 |
+| Parent links correct | 76 (39 existing + 37 fixed) |
+| Items without parents (by design) | 62 (parent was archived in JIRA) |
+
+## Remaining Items (Optional)
+
+### 1. Description Formatting (LOW)
+Descriptions show raw markdown in ADO UI.
+- Re-update 52 items with `format: "Markdown"` flag
+- User may edit directly in ADO instead
+
+### 2. Empty Descriptions (LOW)
+23 JIRA items have no description - user will add in ADO directly.
 Run: `node scripts/find-empty-descriptions.cjs` for list
+
+### 3. Archived Parent Items (OPTIONAL)
+62 items reference parent JIRAs that were closed/archived. If needed later:
+- Create parent epics in ADO for: TTRC-12, TTRC-18, TTRC-134, TTRC-239, etc.
+- Re-run parent analysis to link
+
+## Scripts Created This Session
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/find-duplicates.cjs` | Find duplicate JIRA tags in ADO |
+| `scripts/analyze-parent-links.cjs` | Compare parent links JIRA vs ADO |
+| `scripts/parent-fixes.json` | Output of fixes applied |
+| `scripts/ado-export-fresh.json` | Fresh ADO export (176 items) |
