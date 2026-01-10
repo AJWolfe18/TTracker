@@ -64,10 +64,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
-2. Cherry-pick tested commits from `test`
-3. Push deployment branch
-4. Create PR to `main` via `gh pr create`
-5. Merge PR (auto-deploys to trumpytracker.com)
+2. **Check `.claude/test-only-paths.md`** - skip commits for test-only files
+3. Cherry-pick tested commits from `test`
+4. Push deployment branch
+5. Create PR to `main` via `gh pr create`
+6. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
 - `git push origin main` → ❌ BLOCKED (protected branch)
@@ -482,10 +483,11 @@ VALUES (
 
 ## JIRA Workflow
 
-**Issue Types (3 only):**
-- **Story** = DEFAULT for ALL development work
+**Issue Types (4 total):**
+- **Epic** = Major product area (e.g., SCOTUS Tracker, Pardons Tracker)
+- **Feature** = Distinct functional area within an Epic
+- **Story** = 1 context window of dev work (code → test → deploy)
 - **Bug** = Something is broken
-- **Epic** = Groups Stories (explicit request only)
 
 **NOT USED:** Task, Sub-task
 
@@ -494,13 +496,78 @@ VALUES (
 **Quick Rules:**
 | If the work is... | Create a... |
 |-------------------|-------------|
-| Any dev work (add, implement, improve) | Story |
-| Something broken (fix, error, crash) | Bug |
-| Grouping Stories (user says "epic") | Epic |
+| New product section/tracker | Epic |
+| Functional area within Epic | Feature |
+| Any dev work (1 session) | Story |
+| Something broken | Bug |
 
 **Status Workflow:** Backlog → In Progress → In Review → Ready for Test → Done
 
 **Use `/jira` command** for all JIRA operations. See `/docs/guides/jira-workflow.md` for full details.
+
+### Epic → Feature → Story Hierarchy
+
+**The 3-Tier Pattern:**
+```
+Epic: [Product Area]
+├── Feature: [Functional Area 1]
+│   ├── Story: DB schema + migrations
+│   ├── Story: Edge function / API
+│   ├── Story: UI cards + list view
+│   └── Story: Detail modal
+├── Feature: [Functional Area 2]
+│   ├── Story: ...
+│   └── Story: ...
+└── Feature: [Functional Area 3]
+    └── Story: ...
+```
+
+**Real Example - SCOTUS Tracker:**
+```
+Epic: SCOTUS Tracker
+├── Feature: Rulings & Opinions
+│   ├── Story: DB schema (rulings, justices, votes)
+│   ├── Story: Edge function (rulings-list, ruling-detail)
+│   ├── Story: UI cards + filters
+│   └── Story: Detail modal with vote breakdown
+├── Feature: Schedule & Oral Arguments
+│   ├── Story: DB schema (cases, arguments, calendar)
+│   ├── Story: Calendar UI component
+│   └── Story: Case detail view
+└── Feature: Emergency/Shadow Docket
+    ├── Story: DB schema (emergency orders)
+    ├── Story: Shadow docket list + alerts
+    └── Story: Emergency order detail view
+```
+
+### Story Sizing: 1 Story = 1 Context Window
+
+**Core Principle:** A Story must be completable in a single Claude Code session.
+- Planning happens BEFORE (separate session → creates plan + Stories)
+- Dev session: Code → Test → Deploy → Done
+- No multi-session Stories - if it doesn't fit, split it
+
+**Story Sizing Checklist:**
+| Fits in 1 session? | Guideline |
+|--------------------|-----------|
+| ✅ Yes | Single focus, 1-3 files, clear acceptance criteria |
+| ✅ Yes | DB migration + edge function OR UI component (not both) |
+| ✅ Yes | Bug fix with known root cause |
+| ❌ No, split it | Multiple unrelated changes |
+| ❌ No, split it | Full stack (DB + API + UI) for new feature |
+| ❌ No, split it | Requires research/exploration first |
+
+**Planning vs Dev Sessions:**
+| Session Type | Purpose | Output |
+|--------------|---------|--------|
+| Planning | Research, design, decompose Epic | Plan doc + Features + Stories in ADO |
+| Dev | Execute 1 Story | Working code + tests + deploy + handoff |
+
+**Before Creating a Story, Verify:**
+1. Acceptance criteria are explicit (not "make it work")
+2. Dependencies are done (no blockers)
+3. Technical approach is decided (no research needed)
+4. Scope fits: Can you describe the changes in <5 sentences?
 
 ## Common Tasks
 
