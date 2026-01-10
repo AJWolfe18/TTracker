@@ -56,9 +56,31 @@ Final ADO state:
 - `scripts/compare-jira-ado.cjs` - Gap analysis between JIRA and ADO
 - `scripts/split-batches.cjs` - Split large updates into manageable batches
 
-## Migration Complete
+## Migration Complete (with known issues)
 
 All 168 active JIRA items have been migrated to Azure DevOps with:
 - Matching work item types (Epic, User Story, Bug, Task)
 - JIRA key tags for traceability (jira:TTRC-XXX)
 - Descriptions copied where they existed in JIRA
+
+## Known Issues (Next Session)
+
+### 1. Duplicate Items (HIGH PRIORITY)
+Interrupted runs likely created duplicate ADO items with same JIRA tag.
+- Search ADO for duplicate `jira:TTRC-XXX` tags
+- Close/delete duplicates (keep the one with description)
+- Gap analysis flagged: TTRC-332, TTRC-340, TTRC-34, TTRC-35, TTRC-36, TTRC-37, TTRC-40, TTRC-42
+
+### 2. Missing Parent Links
+52 items have parents in JIRA but only 29 resolved to ADO parent IDs.
+- After fixing duplicates, re-link children to parents
+- Use `mcp__azure-devops__wit_work_items_link` with type "parent"
+
+### 3. Description Formatting
+Descriptions sent without `format: "Markdown"` - shows raw markdown.
+- Re-update all 52 items with `format: "Markdown"` flag
+- User prefers markdown (fewer tokens for Claude)
+
+### 4. Empty Descriptions (23 items)
+These JIRA items have no description - user will add in ADO directly.
+Run: `node scripts/find-empty-descriptions.cjs` for list
