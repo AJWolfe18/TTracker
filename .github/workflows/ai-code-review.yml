@@ -1,4 +1,4 @@
-name: AI Code Review (Latest Commit Only) 
+name: AI Code Review (Latest Commit Only)
 
 on:
   pull_request:
@@ -79,42 +79,48 @@ jobs:
 
       - name: Build prompt header
         id: header
+        shell: bash
         run: |
-          TITLE=$(jq -r .title pr.json)
-          BODY=$(jq -r .body pr.json)
-          HEAD=$(jq -r .headRefName pr.json)
-          BASE=$(jq -r .baseRefName pr.json)
-          AUTHOR=$(jq -r .author.login pr.json)
+          set -euo pipefail
 
-          cat > prompt_header.txt <<'EOF'
-Role: Senior Staff Engineer reviewer
-Scope: Review ONLY the latest commit (diff provided). Do not discuss files not shown.
-Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX
-Constraints:
-- Cite filename:line ranges for every finding.
-- Max 10 findings total, ≤3 per file.
-- Prefer surgical, copy-pasteable patch suggestions.
+          # Null-safe field extraction (// "" prevents "null" string)
+          TITLE=$(jq -r '.title // ""' pr.json)
+          BODY=$(jq -r '.body // ""' pr.json)
+          HEAD=$(jq -r '.headRefName // ""' pr.json)
+          BASE=$(jq -r '.baseRefName // ""' pr.json)
+          AUTHOR=$(jq -r '.author.login // ""' pr.json)
 
-Repo context for relevance:
-- Project: TrumpyTracker (RSS + Story clustering). TEST env only, cost cap <$50/mo.
-- Stack: Node.js (ESM), Supabase (Postgres), vanilla JS frontend, Netlify static hosting.
-- Style: small pure functions, early returns, cursor pagination (NO offset), UTC timestamps.
-- Security: never log secrets; SQL must be parameterized; RLS respected; idempotent jobs via (job_type,payload_hash) unique.
-- UX: keep dashboards responsive; avoid heavy client bundles.
+          # Prompt header (no heredoc = no YAML indentation traps)
+          printf '%s\n' \
+            "Role: Senior Staff Engineer reviewer" \
+            "Scope: Review ONLY the latest commit (diff provided). Do not discuss files not shown." \
+            "Focus order: (1) Correctness & security (2) Performance (3) Code quality/style (4) Tests/DX" \
+            "Constraints:" \
+            "- Cite filename:line ranges for every finding." \
+            "- Max 10 findings total, <=3 per file." \
+            "- Prefer surgical, copy-pasteable patch suggestions." \
+            "" \
+            "Repo context for relevance:" \
+            "- Project: TrumpyTracker (RSS + Story clustering). TEST env only, cost cap <\$50/mo." \
+            "- Stack: Node.js (ESM), Supabase (Postgres), vanilla JS frontend, Netlify static hosting." \
+            "- Style: small pure functions, early returns, cursor pagination (NO offset), UTC timestamps." \
+            "- Security: never log secrets; SQL must be parameterized; RLS respected; idempotent jobs via (job_type,payload_hash) unique." \
+            "- UX: keep dashboards responsive; avoid heavy client bundles." \
+            "" \
+            "Output format: Return JSON with two arrays - BLOCKERS and NON_BLOCKING." \
+            "Each finding should have: file, lines, type, why, and patch fields." \
+            "If nothing to report, return empty arrays for both sections." \
+            > prompt_header.txt
 
-Output format: Return JSON with two arrays - BLOCKERS and NON_BLOCKING.
-Each finding should have: file, lines, type, why, and patch fields.
-If nothing to report, return empty arrays for both sections.
-EOF
-
-          {
-            echo "PR Title: ${TITLE}"
-            echo "Branch: ${HEAD} -> ${BASE}"
-            echo "Author: ${AUTHOR}"
-            echo
-            echo "PR Description:"
-            echo "${BODY}"
-          } > pr_context.txt
+          # PR context
+          printf '%s\n' \
+            "PR Title: ${TITLE}" \
+            "Branch: ${HEAD} -> ${BASE}" \
+            "Author: ${AUTHOR}" \
+            "" \
+            "PR Description:" \
+            "${BODY}" \
+            > pr_context.txt
 
       - name: Validate API key & model access
         env:
@@ -126,7 +132,7 @@ EOF
           curl -sS --connect-timeout 10 --max-time 20 \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             "$LLM_API_BASE/models" >/dev/null || {
-              echo "⚠️ Unable to reach $LLM_API_BASE/models"; exit 1; }
+              echo "WARNING: Unable to reach $LLM_API_BASE/models"; exit 1; }
 
       - name: Probe Responses API (lightweight)
         env:
@@ -194,7 +200,7 @@ EOF
                 input: [
                   {role:"system", content:[{type:"input_text", text: $header}]},
                   {role:"user",   content:[{type:"input_text", text: $context}]},
-                  {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets. Hard cap: 10 findings total, ≤3 per file. Output sections: BLOCKERS and NON-BLOCKING."}]},
+                  {role:"user",   content:[{type:"input_text", text: "Review ONLY this latest-commit unified diff chunk. Provide: (a) Risks (b) Bugs (c) Perf (d) Style (e) Tests (f) Suggested patch snippets. Hard cap: 10 findings total, <=3 per file. Output sections: BLOCKERS and NON-BLOCKING."}]},
                   {role:"user",   content:[{type:"input_text", text: $diff}]}
                 ]
               }')
