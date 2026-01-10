@@ -8,8 +8,7 @@ import { handleFetchFeed } from './rss/fetch_feed.js';
 import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
 import { updateLifecycleStates } from './rss/lifecycle.js';
-import { checkAndSplitStory } from './rss/auto-split.js';
-import { runMergeDetection } from './rss/periodic-merge.js';
+// REMOVED: checkAndSplitStory, runMergeDetection - merge/split feature archived (TTRC-376 Phase 4)
 import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
 import { enrichArticlesForSummary } from './enrichment/scraper.js';
 import { normalizeEntities } from './lib/entity-normalization.js';
@@ -74,8 +73,7 @@ class JobProcessor {
       'story.cluster.batch': (payload) => clusteringHandlers['story.cluster.batch'](payload, supabase),
       'story.enrich': this.enrichStory.bind(this),
       'story.lifecycle': this.updateLifecycle.bind(this),
-      'story.split': this.splitStory.bind(this),
-      'story.merge': this.mergeStories.bind(this),
+      // REMOVED: 'story.split', 'story.merge' - merge/split feature archived (TTRC-376 Phase 4)
       'article.enrich': this.enrichArticle.bind(this), // TTRC-234: Article embedding generation
       'process_article': this.processArticle.bind(this)
     };
@@ -287,40 +285,7 @@ class JobProcessor {
     return result;
   }
 
-  /**
-   * TTRC-231: Auto-split story detection
-   * Checks if story has low coherence and splits if needed
-   */
-  async splitStory(payload) {
-    const { story_id, threshold } = payload || {};
-    if (!story_id) throw new Error('story_id required');
-
-    console.log(`[job-queue-worker] Checking split for story ${story_id}...`);
-    const result = await checkAndSplitStory(story_id, threshold);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Split check failed');
-    }
-
-    return result;
-  }
-
-  /**
-   * TTRC-231: Periodic merge detection
-   * Finds and merges duplicate stories
-   */
-  async mergeStories(payload) {
-    const { limit, threshold } = payload || {};
-
-    console.log('[job-queue-worker] Running merge detection...');
-    const result = await runMergeDetection(limit, threshold);
-
-    if (!result.success) {
-      throw new Error(result.error || 'Merge detection failed');
-    }
-
-    return result;
-  }
+  // REMOVED: splitStory, mergeStories methods - merge/split feature archived (TTRC-376 Phase 4)
 
   /**
    * TTRC-235: Build entity counter from entities array
