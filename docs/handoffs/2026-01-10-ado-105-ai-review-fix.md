@@ -60,51 +60,57 @@ The workflow failures for the past 1-2 days were:
 
 ---
 
-## NEXT SESSION: Investigate Unpromoted Commits
+## UPDATE: Unpromoted Commits Investigation (Complete)
 
-### The Problem
-**555 commits on test that aren't on main.** Many are docs/handoffs, but some are real code:
+### Investigation Results
 
-### Priority Commits to Review
+**Key Finding:** Main and test are much more in sync than the 555 commit count suggests.
 
-| Commit | Description | Should Promote? |
-|--------|-------------|-----------------|
-| `5eac7a7` | PROD hardening - fail closed (TTRC-362) | ⚠️ Review - security |
-| `bfc21d4` | EDGE_CRON_TOKEN auth (TTRC-361) | ⚠️ Review - security |
-| `d573652` | Remove hardcoded prod url, use env vars | ⚠️ Review |
-| `8975d95` | upload-artifact v4 (deprecated v3) | ✅ Probably yes |
-| `36e0f58` | Enhanced ARTICLE_DECISION logs | ✅ Probably yes |
-| `7b674ca` | UTC year fix (timezone off-by-one) | ✅ Probably yes |
-| `fad84ef` | TTRC-376 phase 4 (index cleanup) | ❓ DB already done? |
-| `5701160` | TTRC-376 FK indexes | ❓ DB already done? |
+| Category | % | Explanation |
+|----------|---|-------------|
+| Same code, different hash | ~80% | PRs create merge commits with different hashes |
+| Documentation/handoffs | ~15% | Intentionally test-only |
+| Dead file cleanup | ~5% | Now addressed via PR #44 |
 
-### Key Questions to Answer
+### Verified: All Critical Code Already on Main
 
-1. **DB migrations (TTRC-376, TTRC-366):** Were these run directly in prod? If so, the commits are just documentation and don't need PRs.
+| Component | Status |
+|-----------|--------|
+| Workflows | ✅ Identical (AI review fix merged) |
+| Edge Functions | ✅ Identical (security fixes already deployed) |
+| Migrations | ✅ Identical (DB changes promoted) |
+| Core scripts | ✅ Identical |
 
-2. **Security changes (TTRC-362, TTRC-361):** Were Edge Functions deployed to prod separately? Check if prod has the token auth.
+### What Was Actually Different
 
-3. **Workflow changes:** Some are test-only (disable schedules), some should go to main (artifact v4).
+**Dead backup files (now fixed):**
+- 19 old backup/test files existed on main but were cleaned up on test (TTRC-370)
+- PR #44 created to delete these (~6,400 lines of dead code)
 
-### How to Investigate
+### PR #44: Dead Backup Files Cleanup
 
-```bash
-# See all code changes on test not on main
-git log --oneline origin/main..origin/test -- "*.js" "supabase/functions/**" ".github/workflows/**"
-
-# Check a specific commit
-git show <commit> --stat
-
-# Check if Edge Function is deployed to prod
-supabase functions list --project-ref osjbulmltfpcoldydexg
+**Files deleted from main:**
 ```
-
-### Recommended Approach
-
-1. **Categorize commits:** test-only vs should-promote
-2. **Verify prod state:** Check if security/DB changes are already live
-3. **Create focused PRs:** One per ticket (TTRC-362, TTRC-361, etc.)
-4. **Add branch protection:** Require lint to pass before merge to main
+backups/dashboard-backup-before-noresults-fix.js
+public/audit-dates.js
+public/dashboard-backup-20250828.js
+public/dashboard-backup-before-final-refactor.js
+public/dashboard-backup-phase3-before.js
+public/dashboard-backup-tabs.js
+public/dashboard-cards-updated.js
+public/dashboard-components.js
+public/dashboard-corrupted.js
+public/dashboard-refactored.js
+public/dashboard-test-refactored.js
+public/dashboard-ui-improvements.js
+public/dashboard-utils.js
+public/dashboard.js
+public/move-tabs-script.js
+public/refactoring-guide.js
+public/spicy-summary-card.js
+test-runs/check-eo-status.js
+test-runs/check-political-status.js
+```
 
 ---
 
@@ -112,20 +118,17 @@ supabase functions list --project-ref osjbulmltfpcoldydexg
 
 - `.github/workflows/ai-code-review.yml` - heredoc → printf fix
 - `.gitattributes` - new file, LF enforcement
-- `public/legacy/*` - deleted (main)
+- `public/legacy/*` - deleted (main via PR #43)
 - `scripts/archive/legacy-frontend/*` - deleted (test)
+- 19 backup files - deleted (main via PR #44)
 
-## Commands for Next Session
+## Summary
 
-```bash
-# Check what's on test not main (code only)
-git log --oneline origin/main..origin/test -- "*.js" "*.ts" "supabase/functions/**"
+| PR | Description | Status |
+|----|-------------|--------|
+| #43 | AI review YAML fix + legacy file deletion | ✅ Merged |
+| #44 | Dead backup files cleanup | ⏳ Open |
 
-# Check prod Edge Functions
-supabase functions list --project-ref osjbulmltfpcoldydexg
-
-# Create PR for specific commits
-git checkout -b deploy/ttrc-XXX origin/main
-git cherry-pick <commit>
-gh pr create --base main
-```
+**Main and test are now in sync** for all critical code. The only differences are:
+- Documentation/handoffs (intentionally test-only)
+- Claude config additions (optional to promote later)
