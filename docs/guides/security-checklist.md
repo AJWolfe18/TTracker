@@ -52,21 +52,35 @@ grep -r "password" --include="*.js" --include="*.ts" .
 
 ### Row Level Security (RLS)
 
-**Check RLS is enabled on sensitive tables:**
+**RLS should be enabled on all API-exposed public schema tables (including join tables).** For public data, use explicit `SELECT` policies.
+
 ```sql
-SELECT tablename, rowsecurity
+SELECT schemaname, tablename, rowsecurity
 FROM pg_tables
-WHERE schemaname = 'public';
+WHERE schemaname = 'public'
+ORDER BY tablename;
 ```
 
-**Current tables that should have RLS:**
-- `budgets` - internal cost tracking
-- `job_queue` - internal processing
+**Tables with restricted access (no public policies):**
+- `budgets` — internal cost tracking
+- `job_queue` — internal processing
 
-**Tables that can be public (read-only):**
-- `stories` - public content
-- `articles` - public content
-- `feed_registry` - public metadata
+**Tables with public read-only policies:**
+- `stories` — public content (SELECT only)
+- `articles` — public content (SELECT only)
+- `feed_registry` — public metadata (SELECT only)
+
+**Example read-only policy:**
+
+```sql
+ALTER TABLE public.stories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read access"
+ON public.stories
+FOR SELECT
+TO anon
+USING (true);
+```
 
 ### Query Safety
 

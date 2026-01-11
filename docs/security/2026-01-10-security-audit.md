@@ -96,8 +96,12 @@ return new Response(JSON.stringify({ error: error.message }), ...)
 
 **Remediation:**
 ```typescript
-// Log full error internally
-console.error('Full error:', error);
+// Log minimal, non-sensitive error details only
+// NEVER log error.message in prod - can contain secrets (headers, DB details, upstream responses)
+console.error('EdgeFunctionError', {
+  name: error?.name,
+  code: (error as any)?.code
+});
 
 // Return generic message to client
 return new Response(
@@ -200,16 +204,21 @@ CREATE POLICY "Budgets are private"
 
 **Risk:** Increases attack surface unnecessarily.
 
-**Remediation:** Exclude from production builds in `netlify.toml`:
+**Remediation:** Block access via Netlify redirects in `netlify.toml`:
 ```toml
-[build]
-  ignore = "public/admin*.html"
+[[redirects]]
+  from = "/admin*"
+  to = "/404"
+  status = 404
+  force = true
 ```
 
 Or create `public/_redirects`:
 ```
-/admin* /404 404
+/admin* /404 404!
 ```
+
+**Note:** `[build].ignore` does not prevent files from being served.
 
 ---
 
