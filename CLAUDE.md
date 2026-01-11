@@ -125,6 +125,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] Changes tested on TEST environment
 - [ ] `npm run qa:smoke` passes
 - [ ] AI code review passed
+- [ ] Security quick-check: `/docs/guides/security-checklist.md`
 - [ ] Check `.claude/test-only-paths.md` - skip test-only files
 
 ### Test-Only Tracking:
