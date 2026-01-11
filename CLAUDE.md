@@ -9,8 +9,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Budget**: <$50/month HARD LIMIT  
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)  
 **Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Check AI review → Auto-deploy  
-**Tools Available**: Supabase MCP, Atlassian (JIRA) MCP, Filesystem MCP  
-**Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity  
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP  
+**Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
+
+---
+
+## 📁 Quick Reference
+
+**First 3 commands every session:**
+1. `git branch --show-current` → Must be `test`
+2. Read `/docs/handoffs/[latest].md`
+3. Check if handoff references a plan → EXECUTE it (don't re-plan)
+
+**Key docs:**
+- `/docs/plans/` - Implementation plans (EXECUTE, don't re-plan)
+- `/docs/handoffs/` - Session handoffs
+- `/docs/guides/ado-workflow.md` - ADO states and work item types
+- `/docs/database/database-schema.md` - Full schema reference
 
 ---
 
@@ -19,10 +34,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### ✅ Start Every Session (5 min)
 - [ ] Read latest handoff: `/docs/handoffs/[latest-date].md`
 - [ ] Verify on `test` branch: `git branch --show-current`
-- [ ] Query JIRA via subagent (if ticket-based work): `Task(general-purpose): "Query TTRC-XXX, return summary only"`
+- [ ] Query ADO via `/ado` command (if ticket-based work)
 - [ ] Review existing plan OR create if complex: `/docs/plans/`
 - [ ] Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
-- [ ] Create TodoList with FULL workflow (code → validate → QA → commit → JIRA → handoff)
+- [ ] Create TodoList with FULL workflow (code → validate → QA → commit → ADO → handoff)
 
 ### 🔨 During Work
 - [ ] Follow plan/todos linearly (don't jump around)
@@ -36,12 +51,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - ⏱️ **AI reviews take 5-10 minutes** - Don't burn tokens polling repeatedly
   - After push, inform user: "AI code review triggered, check back in ~5 min"
   - User will ask you to check status when ready
-- [ ] Update JIRA via MCP (DO IT, don't just say "needs update")
-- [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ttrc-XXX-topic.md`
+- [ ] Update ADO via `/ado` command (DO IT, don't just say "needs update")
+- [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
 - [ ] Report token usage
 
-**Skip plan.md for:** Simple bugs, 1-2 file changes, well-understood patterns  
+**Skip plan.md for:** Simple bugs, 1-2 file changes, well-understood patterns
 **Always create plan.md for:** New features, architecture changes, multiple approaches, cost analysis
+
+---
+
+## 📋 Working with Plans
+
+### Decision Tree: Plan or Execute?
+
+| Situation | Action |
+|-----------|--------|
+| Handoff references existing plan | **EXECUTE** that plan (don't create new) |
+| Complex feature (3+ files, multi-phase) | **CREATE** plan in `/docs/plans/` |
+| Simple task (1-2 files, clear scope) | **JUST DO IT** (no plan needed) |
+| Bug fix with known cause | **JUST DO IT** |
+
+### EXECUTION MODE (When Plan Exists):
+1. Open plan file at specified location
+2. Check STATUS → identifies current phase
+3. Execute tasks sequentially
+4. Update STATUS when phase completes
+5. Create handoff pointing to next phase
+
+### DON'T DO THIS:
+- ❌ "Let me create a session plan based on the main plan"
+- ❌ Create new plan when one already exists
+- ❌ Summarize existing plan into smaller steps
+
+**Red Flag:** If saying "Let me plan..." when plan exists → STOP → Execute existing plan.
 
 ---
 
@@ -77,6 +119,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 🚀 Promotion to PROD
+
+### Before Creating PR to Main:
+- [ ] Changes tested on TEST environment
+- [ ] `npm run qa:smoke` passes
+- [ ] AI code review passed
+- [ ] Check `.claude/test-only-paths.md` - skip test-only files
+
+### Test-Only Tracking:
+**File:** `.claude/test-only-paths.md`
+
+**Add to this file when:**
+- Creating one-time scripts (migration helpers, data fixes)
+- Adding debug/monitoring tools not needed in prod
+- Temporary config changes for testing
+
+---
+
 ## 📜 Critical Rules
 
 1. 🧪 **MANDATORY TESTING: Use Task tool (general-purpose agent) to validate ALL code changes before commit/PR**
@@ -91,12 +151,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 3. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
 
-4. **JIRA Operations via Subagent** - Use Task tool (general-purpose) for JIRA queries to isolate 20K+ context cost
-   - JIRA MCP tools return full ticket dumps (descriptions, comments, history, attachments)
-   - Single ticket query = 20-30K tokens in main conversation
-   - Use subagent pattern: `Task(general-purpose): "Query JIRA ticket [ID], perform [ACTION], return summary only (not full ticket dump)"`
-   - Subagent processes JIRA internally, returns ~100 token summary
-   - Alternative: Use `/jira` command (see `/docs/COMMANDS.md`)
+4. **ADO Operations via `/ado` command** - Isolates 20K+ context cost
+   - ADO MCP tools return full work item dumps
+   - Use `/ado` command to query/update work items
+   - See `.claude/commands/ado.md` for syntax
    - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
@@ -107,7 +165,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 8. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
 
-9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + JIRA + handoff) in todos
+9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
 10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
 
@@ -156,7 +214,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ❌ Unhandled promise rejections - Always use try-catch for async
 
 ### Workflow
-- ❌ Say "needs JIRA update" - DO IT immediately via MCP tools
+- ❌ Say "needs ADO update" - DO IT immediately via `/ado` command
 - ❌ Skip validation testing - Use Task tool (general-purpose agent) first
 - ❌ Assume "I can't" - Check available MCP tools first
 - ❌ Create new files without reading existing - ALWAYS prefer editing existing files
@@ -166,6 +224,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ❌ Propose features without stating cost - Always mention $ impact
 - ❌ Ignore daily budget limits - Check `budgets` table before OpenAI calls
 - ❌ Use expensive models unnecessarily - GPT-4o-mini is sufficient for enrichment
+
+### Language/Runtime
+- ❌ **Using Python in this project** - NO PYTHON IN THIS REPO
+  - This is a Node.js/JavaScript project
+  - Never run `python3`, `pip`, or Python scripts
+  - For data processing: Use `node -e "..."` or SQL via MCP
 
 ---
 
@@ -313,57 +377,20 @@ rss-enqueue Edge Function → job_queue table → job-queue-worker.js
 - `story.enrich` - OpenAI enrichment (summaries, categories, severity)
 - `process_article` - Article processing tasks
 
-### Database Schema (TEST)
+### Database Schema (Summary)
 
-**stories** - Story aggregation
-- Primary key: `id` (BIGINT)
-- Unique: `story_hash` (hash of primary_headline)
-- Status: `active` (0-72h) | `closed` (72h+) | `archived` (90d+)
-- AI fields: `summary_neutral`, `summary_spicy`, `primary_actor`, `severity`, `category`
-- Full-text search: `search_vector` (tsvector, generated)
+**Core tables:** `stories`, `articles`, `article_story`, `feed_registry`, `job_queue`, `budgets`
 
-**articles** - Individual RSS articles
-- Primary key: `id` (TEXT, format: 'art-{uuid}')
-- Deduplication: UNIQUE constraint on `(url_hash, published_date)`
-- Foreign key: Links to stories via `article_story` junction table
+**Key constraints:**
+- Articles: UNIQUE(url_hash, published_date)
+- Stories: UNIQUE(story_hash), status: 'active' | 'closed' | 'archived'
 
-**article_story** - Many-to-many junction
-- Primary key: `article_id`
-- Foreign keys: `article_id` → articles, `story_id` → stories
-- Metadata: `is_primary_source`, `similarity_score`, `matched_at`
+**Critical RPCs:**
+- `attach_or_create_article()` - Idempotent article insertion
+- `claim_runnable_job()` - Atomic job claiming
+- `get_stories_needing_enrichment()` - Find unenriched stories
 
-**feed_registry** - RSS feed management
-- Primary key: `id`
-- HTTP caching: `etag`, `last_modified` (for 304 Not Modified)
-- Failure tracking: `failure_count` (auto-disable at 5), `is_active`
-
-**job_queue** - Async job processing
-- Primary key: `id`
-- Job claiming: Atomic RPC `claim_runnable_job()` prevents race conditions
-- Status: `pending` | `claimed` | `completed` | `failed`
-- Cleanup: Auto-delete after 7 days
-
-**budgets** - Daily cost tracking
-- Primary key: `day` (DATE)
-- Tracks: `spent_usd`, `openai_calls`
-- Enforces: Daily cap ($50/day max)
-
-### Critical Functions & RPCs
-
-**Database Helpers (migrations/019_story_enrichment_helpers.sql):**
-- `get_stories_needing_enrichment(limit)` - Finds stories without AI summaries
-- `mark_story_enriched(story_id, enrichment_data)` - Updates story with AI results
-- Used by: Story enrichment backfill scripts, job queue worker
-
-**Job Queue (migrations/009_atomic_job_claiming.sql):**
-- `claim_runnable_job()` - Atomically claims next available job
-- `get_runnable_count()` - Returns count of pending jobs
-- Prevents: Race conditions in concurrent worker scenarios
-
-**Article Upsert (migrations/003_atomic_article_upsert.sql):**
-- `attach_or_create_article(...)` - Idempotent article insertion
-- Handles: Deduplication, story assignment, primary source selection
-- Critical for: RSS ingestion reliability
+**Full schema:** `/docs/database/database-schema.md`
 
 ## Important Patterns
 
@@ -463,10 +490,9 @@ VALUES (
 - Use for: Data exploration, verification, ad-hoc queries
 - Example: `SELECT COUNT(*) FROM stories WHERE status = 'active'`
 
-**Atlassian Integration:** Direct JIRA/Confluence updates
-- **ALWAYS update JIRA/Confluence directly using tools** - never say "needs update"
-- Use for: Ticket updates, documentation, handoff creation
-- See JIRA Workflow below for issue type rules
+**Azure DevOps Integration:** Direct work item operations
+- **Use `/ado` command** for all work item operations
+- See `/docs/guides/ado-workflow.md` for states, types, and workflow
 
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
@@ -481,93 +507,21 @@ VALUES (
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
 
-## JIRA Workflow
+## ADO Workflow
 
-**Issue Types (4 total):**
-- **Epic** = Major product area (e.g., SCOTUS Tracker, Pardons Tracker)
-- **Feature** = Distinct functional area within an Epic
-- **Story** = 1 context window of dev work (code → test → deploy)
-- **Bug** = Something is broken
-
-**NOT USED:** Task, Sub-task
-
-**Labels for grouping:** `clustering`, `security`, `ui`, `rss`, `infra`, `docs`
+**Work Item Types:** Epic, User Story, Bug, Task
+**Project:** TTracker (`https://dev.azure.com/AJWolfe92/TTracker`)
 
 **Quick Rules:**
 | If the work is... | Create a... |
 |-------------------|-------------|
-| New product section/tracker | Epic |
-| Functional area within Epic | Feature |
-| Any dev work (1 session) | Story |
+| Major product area | Epic |
+| Any dev work (1 session) | User Story |
 | Something broken | Bug |
 
-**Status Workflow:** Backlog → In Progress → In Review → Ready for Test → Done
+**Use `/ado` command** for all operations. See `/docs/guides/ado-workflow.md` for full workflow details.
 
-**Use `/jira` command** for all JIRA operations. See `/docs/guides/jira-workflow.md` for full details.
-
-### Epic → Feature → Story Hierarchy
-
-**The 3-Tier Pattern:**
-```
-Epic: [Product Area]
-├── Feature: [Functional Area 1]
-│   ├── Story: DB schema + migrations
-│   ├── Story: Edge function / API
-│   ├── Story: UI cards + list view
-│   └── Story: Detail modal
-├── Feature: [Functional Area 2]
-│   ├── Story: ...
-│   └── Story: ...
-└── Feature: [Functional Area 3]
-    └── Story: ...
-```
-
-**Real Example - SCOTUS Tracker:**
-```
-Epic: SCOTUS Tracker
-├── Feature: Rulings & Opinions
-│   ├── Story: DB schema (rulings, justices, votes)
-│   ├── Story: Edge function (rulings-list, ruling-detail)
-│   ├── Story: UI cards + filters
-│   └── Story: Detail modal with vote breakdown
-├── Feature: Schedule & Oral Arguments
-│   ├── Story: DB schema (cases, arguments, calendar)
-│   ├── Story: Calendar UI component
-│   └── Story: Case detail view
-└── Feature: Emergency/Shadow Docket
-    ├── Story: DB schema (emergency orders)
-    ├── Story: Shadow docket list + alerts
-    └── Story: Emergency order detail view
-```
-
-### Story Sizing: 1 Story = 1 Context Window
-
-**Core Principle:** A Story must be completable in a single Claude Code session.
-- Planning happens BEFORE (separate session → creates plan + Stories)
-- Dev session: Code → Test → Deploy → Done
-- No multi-session Stories - if it doesn't fit, split it
-
-**Story Sizing Checklist:**
-| Fits in 1 session? | Guideline |
-|--------------------|-----------|
-| ✅ Yes | Single focus, 1-3 files, clear acceptance criteria |
-| ✅ Yes | DB migration + edge function OR UI component (not both) |
-| ✅ Yes | Bug fix with known root cause |
-| ❌ No, split it | Multiple unrelated changes |
-| ❌ No, split it | Full stack (DB + API + UI) for new feature |
-| ❌ No, split it | Requires research/exploration first |
-
-**Planning vs Dev Sessions:**
-| Session Type | Purpose | Output |
-|--------------|---------|--------|
-| Planning | Research, design, decompose Epic | Plan doc + Features + Stories in ADO |
-| Dev | Execute 1 Story | Working code + tests + deploy + handoff |
-
-**Before Creating a Story, Verify:**
-1. Acceptance criteria are explicit (not "make it work")
-2. Dependencies are done (no blockers)
-3. Technical approach is decided (no research needed)
-4. Scope fits: Can you describe the changes in <5 sentences?
+**Story Sizing:** 1 Story = 1 Claude Code session (code → test → deploy → done)
 
 ## Common Tasks
 
@@ -630,7 +584,7 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 - `code-architect` - Designs feature architecture
 - `code-reviewer` - Validates code quality
 
-**Skip for:** bug fixes, single-file changes, JIRA updates, RSS feed additions.
+**Skip for:** bug fixes, single-file changes, ADO updates, RSS feed additions.
 
 ## Troubleshooting
 
@@ -656,6 +610,6 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ---
 
-**Last Updated:** 2025-12-03
+**Last Updated:** 2026-01-10
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
