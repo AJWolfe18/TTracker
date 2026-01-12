@@ -55,6 +55,19 @@
     re_offended: { label: 'Re-offended', color: '#dc2626' }
   };
 
+  // Timeline event types (for ReceiptsTimeline)
+  const EVENT_TYPES = {
+    donation: { label: 'Donation', color: '#16a34a', icon: '$' },
+    conviction: { label: 'Conviction', color: '#dc2626', icon: '⚖' },
+    pardon_request: { label: 'Pardon Request', color: '#ca8a04', icon: '📋' },
+    pardon_granted: { label: 'Pardon Granted', color: '#9333ea', icon: '✓' },
+    mar_a_lago_visit: { label: 'Mar-a-Lago Visit', color: '#ea580c', icon: '🏌' },
+    sentencing: { label: 'Sentencing', color: '#be123c', icon: '🔨' },
+    investigation: { label: 'Investigation', color: '#0891b2', icon: '🔍' },
+    legal_filing: { label: 'Legal Filing', color: '#2563eb', icon: '📄' },
+    other: { label: 'Other', color: '#6b7280', icon: '•' }
+  };
+
   // Corruption level spicy labels (5 = most corrupt, 1 = least)
   const CORRUPTION_LABELS = {
     5: { label: 'Paid-to-Play', color: '#7f1d1d' },
@@ -258,6 +271,68 @@
   }
 
   // ===========================================
+  // RECEIPTS TIMELINE COMPONENT
+  // ===========================================
+
+  function ReceiptsTimeline({ events }) {
+    if (!events || events.length === 0) {
+      return null;
+    }
+
+    // Sort events by date (oldest first for timeline)
+    const sortedEvents = [...events].sort((a, b) =>
+      new Date(a.date) - new Date(b.date)
+    );
+
+    return React.createElement('div', { className: 'tt-timeline' },
+      sortedEvents.map((event, index) => {
+        const eventConfig = EVENT_TYPES[event.event_type] || EVENT_TYPES.other;
+
+        return React.createElement('div', {
+          key: index,
+          className: 'tt-timeline-event'
+        },
+          // Timeline dot and line
+          React.createElement('div', { className: 'tt-timeline-marker' },
+            React.createElement('span', {
+              className: 'tt-timeline-dot',
+              style: { backgroundColor: eventConfig.color }
+            }),
+            index < sortedEvents.length - 1 &&
+              React.createElement('span', { className: 'tt-timeline-line' })
+          ),
+          // Event content
+          React.createElement('div', { className: 'tt-timeline-content' },
+            React.createElement('div', { className: 'tt-timeline-header' },
+              React.createElement('span', {
+                className: 'tt-timeline-badge',
+                style: { backgroundColor: eventConfig.color }
+              }, eventConfig.label),
+              React.createElement('span', { className: 'tt-timeline-date' },
+                formatDate(event.date)
+              )
+            ),
+            React.createElement('p', { className: 'tt-timeline-desc' },
+              event.description
+            ),
+            // Show amount for donations
+            event.amount_usd && React.createElement('p', { className: 'tt-timeline-amount' },
+              formatCurrency(event.amount_usd)
+            ),
+            // Source link
+            event.source_url && React.createElement('a', {
+              href: event.source_url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'tt-timeline-source'
+            }, 'Source')
+          )
+        );
+      })
+    );
+  }
+
+  // ===========================================
   // PARDON CARD COMPONENT
   // ===========================================
 
@@ -417,13 +492,13 @@
           ),
 
           !loading && !error && React.createElement(React.Fragment, null,
-            // Header
+            // Header with connection badge and spicy status
             React.createElement('div', { className: 'tt-pardon-modal-header' },
               React.createElement('span', {
                 className: 'tt-connection-badge tt-badge-large',
                 style: { backgroundColor: connectionType.color }
               }, connectionType.label),
-              React.createElement(CorruptionMeter, { level: p.corruption_level })
+              React.createElement(SpicyStatus, { level: p.corruption_level })
             ),
 
             React.createElement('h2', { id: modalId, className: 'tt-detail-headline' },
@@ -488,6 +563,22 @@
                   formatCurrency(p.donation_amount_usd)
                 )
               )
+            ),
+
+            // Section: The Real Story (summary_spicy)
+            React.createElement('div', { className: 'tt-pardon-section' },
+              React.createElement('h3', { className: 'tt-section-title' }, 'The Real Story'),
+              React.createElement('div', { className: 'tt-section-content' },
+                p.summary_spicy ?
+                  React.createElement('p', { className: 'tt-real-story' }, p.summary_spicy) :
+                  React.createElement('p', { className: 'tt-placeholder' }, 'Analysis coming soon...')
+              )
+            ),
+
+            // Section: The Receipts (timeline)
+            p.receipts_timeline && p.receipts_timeline.length > 0 && React.createElement('div', { className: 'tt-pardon-section' },
+              React.createElement('h3', { className: 'tt-section-title' }, 'The Receipts'),
+              React.createElement(ReceiptsTimeline, { events: p.receipts_timeline })
             ),
 
             // What Happened Next (if available)
