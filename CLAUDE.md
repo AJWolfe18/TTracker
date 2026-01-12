@@ -22,10 +22,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. Check if handoff references a plan → EXECUTE it (don't re-plan)
 
 **Key docs:**
-- `/docs/plans/` - Implementation plans (EXECUTE, don't re-plan)
+- `/docs/features/[feature]/` - PRD, plans, notes for active features
 - `/docs/handoffs/` - Session handoffs
 - `/docs/guides/ado-workflow.md` - ADO states and work item types
 - `/docs/database/database-schema.md` - Full schema reference
+
+**Feature folders:** Each major feature gets its own folder in `/docs/features/`:
+```
+docs/features/
+├── pardons-tracker/     # Active feature
+│   ├── prd.md
+│   └── plan.md
+└── rss-enrichment/      # System feature
+    └── spicy-prompts-guide.md
+```
 
 ---
 
@@ -35,7 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] Read latest handoff: `/docs/handoffs/[latest-date].md`
 - [ ] Verify on `test` branch: `git branch --show-current`
 - [ ] Query ADO via `/ado` command (if ticket-based work)
-- [ ] Review existing plan OR create if complex: `/docs/plans/`
+- [ ] Review existing plan in `/docs/features/[feature]/` OR create if complex
 - [ ] Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
 - [ ] Create TodoList with FULL workflow (code → validate → QA → commit → ADO → handoff)
 
@@ -56,8 +66,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
 - [ ] Report token usage
 
-**Skip plan.md for:** Simple bugs, 1-2 file changes, well-understood patterns
-**Always create plan.md for:** New features, architecture changes, multiple approaches, cost analysis
+**Skip plan for:** Simple bugs, 1-2 file changes, well-understood patterns
+**Create feature folder for:** New features, architecture changes, cost analysis needed
 
 ---
 
@@ -68,7 +78,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Situation | Action |
 |-----------|--------|
 | Handoff references existing plan | **EXECUTE** that plan (don't create new) |
-| Complex feature (3+ files, multi-phase) | **CREATE** plan in `/docs/plans/` |
+| Complex feature (3+ files, multi-phase) | **CREATE** plan in `/docs/features/[feature]/` |
 | Simple task (1-2 files, clear scope) | **JUST DO IT** (no plan needed) |
 | Bug fix with known cause | **JUST DO IT** |
 

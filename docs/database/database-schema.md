@@ -273,6 +273,20 @@ LIMIT 10;
 
 ---
 
+## Naming Conventions
+
+| Element | Format | Example |
+|---------|--------|---------|
+| Tables | `snake_case`, plural | `stories`, `feed_registry` |
+| Columns | `snake_case` | `created_at`, `story_id` |
+| Foreign Keys | `{table_singular}_id` | `story_id`, `article_id` |
+| Indexes | `idx_{table}_{columns}` | `idx_stories_created_at` |
+
+**Required columns:** `id`, `created_at` (timestamptz)
+**Always use:** `timestamptz` (not timestamp), `jsonb` (not json), `text` (not varchar unless constrained)
+
+---
+
 ## Schema Maintenance
 
 ### When Adding Feeds
