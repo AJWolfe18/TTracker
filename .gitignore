@@ -97,3 +97,4 @@ supabase/.temp/
 # Temporary error files (IDE/command artifacts)
 _ul*
 _UL*
+tmpclaude-*
