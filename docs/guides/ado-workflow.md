@@ -97,8 +97,23 @@ Common labels for grouping: `clustering`, `security`, `ui`, `rss`, `infra`, `doc
 
 ## Status Workflow
 
-Default ADO states: New → Active → Resolved → Closed
+**Custom states for User Stories:**
+```
+New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+```
+
+| State | Meaning |
+|-------|---------|
+| **New** | Just created, not yet prioritized |
+| **Todo** | Ready to work on, in backlog |
+| **Active** | Currently being worked on |
+| **Review** | Code complete, awaiting review |
+| **Testing** | Deployed to TEST, being verified |
+| **Ready for Prod** | Verified on TEST, awaiting PROD deployment |
+| **Resolved** | Deployed to PROD, awaiting final signoff |
+| **Closed** | Done |
+| **Removed** | Cancelled/deleted |
 
 ---
 
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-12
