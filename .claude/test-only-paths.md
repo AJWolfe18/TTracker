@@ -9,6 +9,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 ## Data Files (never commit)
 - `scripts/*.json` - Temporary data exports
 
+## Test Seed Scripts (test-only data)
+- `scripts/seed-pardons-test.sql` - Pardons test data (ADO-241)
+
 ## What DOES go to prod
 - `.claude/skills/` - All skills work in both environments
 - `.claude/commands/` - All commands work in both environments
