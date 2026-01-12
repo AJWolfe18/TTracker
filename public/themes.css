@@ -1862,7 +1862,57 @@
   color: var(--text-muted);
 }
 
-/* Pardon card meta row */
+/* Muted card header (connection type + date) */
+.tt-card-header-muted {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tt-meta-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tt-meta-dot {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.tt-mass-pardon-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: var(--severity-critical-bg);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Group subtitle (count) */
+.tt-group-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
+/* Spicy Status - THE prominent element */
+.tt-spicy-status {
+  margin: 12px 0;
+}
+
+.tt-spicy-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* Pardon card meta row (legacy - can remove later) */
 .tt-pardon-meta-row {
   display: flex;
   align-items: center;

@@ -57,11 +57,11 @@
 
   // Corruption level spicy labels (5 = most corrupt, 1 = least)
   const CORRUPTION_LABELS = {
-    5: 'Paid-to-Play',
-    4: 'Friends & Family Discount',
-    3: 'Swamp Creature',
-    2: 'Celebrity Request',
-    1: 'Broken Clock'
+    5: { label: 'Paid-to-Play', color: '#7f1d1d' },
+    4: { label: 'Friends & Family Discount', color: '#dc2626' },
+    3: { label: 'Swamp Creature', color: '#ea580c' },
+    2: { label: 'Celebrity Request', color: '#ca8a04' },
+    1: { label: 'Broken Clock', color: '#16a34a' }
   };
 
   // ===========================================
@@ -244,28 +244,20 @@
   // CORRUPTION METER COMPONENT
   // ===========================================
 
-  function CorruptionMeter({ level }) {
+  // Spicy Status - the prominent corruption label
+  function SpicyStatus({ level }) {
     if (!level || level < 1 || level > 5) return null;
 
-    const bars = [];
-    for (let i = 1; i <= 5; i++) {
-      bars.push(
-        React.createElement('span', {
-          key: i,
-          className: `tt-corruption-bar ${i <= level ? 'active' : ''}`,
-          'data-level': level
-        })
-      );
-    }
-
-    const spicyLabel = CORRUPTION_LABELS[level] || '';
+    const config = CORRUPTION_LABELS[level] || { label: 'Unknown', color: '#6b7280' };
 
     return React.createElement('div', {
-      className: 'tt-corruption-meter',
-      title: `Corruption Level: ${level}/5 - "${spicyLabel}"`
+      className: 'tt-spicy-status',
+      title: `Corruption Level: ${level}/5`
     },
-      React.createElement('div', { className: 'tt-corruption-bars' }, bars),
-      React.createElement('span', { className: 'tt-corruption-label' }, `"${spicyLabel}"`)
+      React.createElement('span', {
+        className: 'tt-spicy-label',
+        style: { color: config.color }
+      }, `"${config.label}"`)
     );
   }
 
@@ -277,21 +269,18 @@
     const [expanded, setExpanded] = useState(false);
 
     const connectionType = CONNECTION_TYPES[pardon.primary_connection_type] || { label: 'Unknown', color: '#6b7280' };
-    const crimeLabel = CRIME_CATEGORIES[pardon.crime_category] || 'Unknown';
     const summary = pardon.summary_spicy || pardon.crime_description || '';
     const hasLongSummary = summary.length > 180;
     const isGroup = pardon.recipient_type === 'group';
 
     return React.createElement('article', { className: 'tt-card tt-pardon-card' },
-      // Header with date and badges
-      React.createElement('div', { className: 'tt-card-header' },
-        React.createElement('span', {
-          className: 'tt-connection-badge',
-          style: { backgroundColor: connectionType.color }
-        }, connectionType.label),
-        React.createElement('span', { className: 'tt-timestamp' },
-          formatDate(pardon.pardon_date)
-        )
+      // Header: small muted connection type + date
+      React.createElement('div', { className: 'tt-card-header tt-card-header-muted' },
+        React.createElement('span', { className: 'tt-meta-text' }, connectionType.label),
+        React.createElement('span', { className: 'tt-meta-dot' }, '•'),
+        React.createElement('span', { className: 'tt-meta-text' }, formatDate(pardon.pardon_date)),
+        // Mass pardon badge for groups
+        isGroup && React.createElement('span', { className: 'tt-mass-pardon-badge' }, 'MASS PARDON')
       ),
 
       // Recipient name
@@ -302,28 +291,19 @@
         )
       ),
 
-      // Group indicator
-      isGroup && React.createElement('div', { className: 'tt-group-indicator' },
-        React.createElement('span', { className: 'tt-group-badge' }, 'Group Pardon'),
-        React.createElement('span', { className: 'tt-group-count' },
-          `Applies to ~${pardon.recipient_count?.toLocaleString() || '?'} people`
-        ),
-        pardon.recipient_criteria && React.createElement('p', { className: 'tt-group-criteria' },
-          pardon.recipient_criteria
-        )
+      // Group subtitle (count only, no box)
+      isGroup && React.createElement('div', { className: 'tt-group-subtitle' },
+        `~${pardon.recipient_count?.toLocaleString() || '?'} people`
       ),
 
-      // Meta row: crime category + corruption meter
-      React.createElement('div', { className: 'tt-pardon-meta-row' },
-        React.createElement('span', { className: 'tt-crime-badge' }, crimeLabel),
-        React.createElement(CorruptionMeter, { level: pardon.corruption_level })
-      ),
+      // Spicy Status - THE prominent element
+      React.createElement(SpicyStatus, { level: pardon.corruption_level }),
 
-      // Summary
+      // Summary (for groups, show criteria if no spicy summary)
       React.createElement('div', { className: 'tt-summary' },
         React.createElement('p', {
           className: `tt-summary-text ${!expanded && hasLongSummary ? 'clamped' : ''}`
-        }, summary || 'Details coming soon...'),
+        }, summary || (isGroup && pardon.recipient_criteria) || 'Details coming soon...'),
         hasLongSummary && React.createElement('button', {
           className: 'tt-expand-btn',
           onClick: () => setExpanded(!expanded),
