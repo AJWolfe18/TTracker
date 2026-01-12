@@ -4,7 +4,7 @@
 (function() {
   'use strict';
 
-  const { useState, useEffect, useMemo, useRef, useCallback } = React;
+  const { useState, useEffect, useCallback } = React;
 
   // ===========================================
   // CONFIGURATION
@@ -92,15 +92,17 @@
   }
 
   // Edge Function request helper
-  async function edgeFunctionRequest(functionName, params = {}) {
+  async function edgeFunctionRequest(functionName, params = {}, signal) {
     const queryString = new URLSearchParams(params).toString();
     const url = `${SUPABASE_URL}/functions/v1/${functionName}${queryString ? '?' + queryString : ''}`;
 
     const response = await fetch(url, {
       headers: {
+        'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json'
-      }
+      },
+      signal
     });
 
     if (!response.ok) {
@@ -340,24 +342,37 @@
     const modalId = `pardon-detail-${pardon?.id || 'unknown'}`;
 
     useEffect(() => {
-      if (!pardon) return;
+      if (!pardon?.id) return;
+
+      // Reset detail when pardon changes to avoid showing stale data
+      setDetail(null);
+      setLoading(true);
+      setError(null);
+
+      const controller = new AbortController();
 
       async function loadDetail() {
         try {
-          setLoading(true);
-          const data = await edgeFunctionRequest('pardons-detail', { id: pardon.id });
-          setDetail(data.pardon);
-          setError(null);
+          const data = await edgeFunctionRequest('pardons-detail', { id: pardon.id }, controller.signal);
+          if (!controller.signal.aborted) {
+            setDetail(data.pardon);
+          }
         } catch (err) {
-          console.error('Failed to load pardon detail:', err);
-          setError(err.message);
+          if (!controller.signal.aborted) {
+            console.error('Failed to load pardon detail:', err);
+            setError(err.name === 'AbortError' ? null : err.message);
+          }
         } finally {
-          setLoading(false);
+          if (!controller.signal.aborted) {
+            setLoading(false);
+          }
         }
       }
 
       loadDetail();
-    }, [pardon]);
+
+      return () => controller.abort();
+    }, [pardon?.id]);
 
     useEffect(() => {
       const handleEsc = (e) => {
@@ -552,6 +567,9 @@
   // PARDONS FEED COMPONENT
   // ===========================================
 
+  // Track current list fetch AbortController
+  let listFetchController = null;
+
   function PardonsFeed() {
     const [pardons, setPardons] = useState([]);
     const [stats, setStats] = useState(null);
@@ -569,71 +587,106 @@
     useEffect(() => {
       const urlId = window.TTShared?.getUrlParam('id');
       if (urlId) {
-        // Load this pardon directly
-        setDetailPardon({ id: urlId });
-        trackEvent('pardon_deeplink', { pardon_id: urlId });
+        const idNum = Number(urlId);
+        if (Number.isInteger(idNum) && idNum > 0) {
+          setDetailPardon({ id: idNum });
+          trackEvent('pardon_deeplink', { pardon_id: idNum });
+        }
       }
     }, []);
 
     // Load stats
     useEffect(() => {
+      const controller = new AbortController();
+
       async function loadStats() {
         try {
-          const data = await edgeFunctionRequest('pardons-stats');
-          setStats(data);
+          const data = await edgeFunctionRequest('pardons-stats', {}, controller.signal);
+          if (!controller.signal.aborted) {
+            setStats(data);
+          }
         } catch (err) {
-          console.error('Failed to load stats:', err);
+          if (!controller.signal.aborted && err.name !== 'AbortError') {
+            console.error('Failed to load stats:', err);
+          }
         } finally {
-          setStatsLoading(false);
+          if (!controller.signal.aborted) {
+            setStatsLoading(false);
+          }
         }
       }
+
       loadStats();
+      return () => controller.abort();
     }, []);
 
-    // Load pardons
-    useEffect(() => {
-      loadPardons();
-    }, [recipientType]);
+    // Memoized loadPardons with abort support
+    const loadPardons = useCallback(async (cursor = null) => {
+      // Abort any in-flight request
+      if (listFetchController) {
+        listFetchController.abort();
+      }
+      listFetchController = new AbortController();
+      const currentController = listFetchController;
 
-    async function loadPardons(cursor = null) {
       try {
         if (cursor) {
           setLoadingMore(true);
         } else {
           setLoading(true);
-          setPardons([]);
+          // Reset pagination state but keep stale data visible
+          setNextCursor(null);
+          setHasMore(false);
         }
 
         const params = { limit: ITEMS_PER_PAGE };
         if (cursor) params.cursor = cursor;
         if (recipientType !== 'all') params.recipient_type = recipientType;
 
-        const data = await edgeFunctionRequest('pardons-active', params);
+        const data = await edgeFunctionRequest('pardons-active', params, currentController.signal);
 
-        if (cursor) {
-          setPardons(prev => [...prev, ...(data.items || [])]);
-        } else {
-          setPardons(data.items || []);
+        if (!currentController.signal.aborted) {
+          if (cursor) {
+            setPardons(prev => [...prev, ...(data.items || [])]);
+          } else {
+            setPardons(data.items || []);
+          }
+
+          setNextCursor(data.next_cursor);
+          setHasMore(data.has_more);
+          setError(null);
         }
-
-        setNextCursor(data.next_cursor);
-        setHasMore(data.has_more);
-        setError(null);
       } catch (err) {
-        console.error('Failed to load pardons:', err);
-        setError('Failed to load pardons. Please try again.');
+        if (!currentController.signal.aborted && err.name !== 'AbortError') {
+          console.error('Failed to load pardons:', err);
+          setError('Failed to load pardons. Please try again.');
+        }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (!currentController.signal.aborted) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
-    }
+    }, [recipientType]);
+
+    // Load pardons when filter changes
+    useEffect(() => {
+      loadPardons();
+
+      // Cleanup: abort on unmount or filter change
+      return () => {
+        if (listFetchController) {
+          listFetchController.abort();
+        }
+      };
+    }, [loadPardons]);
 
     const handleLoadMore = useCallback(() => {
       if (nextCursor && !loadingMore) {
         loadPardons(nextCursor);
-        trackEvent('pardons_load_more', { cursor: nextCursor });
+        trackEvent('pardons_load_more');
       }
-    }, [nextCursor, loadingMore]);
+    }, [nextCursor, loadingMore, loadPardons]);
 
     const handleRecipientTypeChange = useCallback((type) => {
       setRecipientType(type);
