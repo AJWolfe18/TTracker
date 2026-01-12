@@ -70,9 +70,9 @@ WHERE tc.constraint_type = 'FOREIGN KEY'
   AND ccu.table_name = 'your_table_name';
 
 -- Fix: Update constraint to allow deletion
-ALTER TABLE story_articles 
-  DROP CONSTRAINT story_articles_story_id_fkey,
-  ADD CONSTRAINT story_articles_story_id_fkey 
+ALTER TABLE article_story 
+  DROP CONSTRAINT article_story_story_id_fkey,
+  ADD CONSTRAINT article_story_story_id_fkey 
     FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE CASCADE;
 ```
 
@@ -195,7 +195,10 @@ The `!inner` join ensures only stories WITH articles are selected for enrichment
 
 ---
 
-### Issue: Job Queue RPC Returns NULL Despite No Active Jobs
+### Issue: Job Queue RPC Returns NULL Despite No Active Jobs (HISTORICAL)
+
+> **Note:** Job queue system was deprecated in Jan 2026. Replaced by inline `rss-tracker-supabase.js`. This section is kept for historical reference.
+
 **Symptom:** RSS pipeline frozen - `enqueue_fetch_job()` RPC returns NULL for all feeds claiming "job already active" when database shows no active jobs exist
 
 **Root Causes (Multiple):**
@@ -608,7 +611,7 @@ stories.forEach(story => {
 // ✅ GOOD - Single query with join
 const stories = await supabase
   .from('stories')
-  .select('*, story_articles(*)')
+  .select('*, article_story(*)')
   .limit(20);
 ```
 
@@ -638,15 +641,14 @@ When something breaks:
 
 - [ ] Check browser console for errors
 - [ ] Check Network tab for failed requests
-- [ ] Check Supabase logs: `supabase-test:get_logs service="api"`
-- [ ] Check Edge Function logs: `supabase-test:get_logs service="edge-function"`
-- [ ] Check database: `supabase-test:execute_sql`
+- [ ] Check Supabase dashboard for logs
+- [ ] Check database via MCP: `mcp__supabase-test__postgrestRequest`
 - [ ] Check RLS policies on affected tables
 - [ ] Check if issue exists in common-issues.md
 - [ ] Check if pattern exists in code-patterns.md
 
 ---
 
-_Last Updated: October 5, 2025_  
-_Maintained by: Claude Code_  
+_Last Updated: 2026-01-12_
+_Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_
