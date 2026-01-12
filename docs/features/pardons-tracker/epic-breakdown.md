@@ -1,8 +1,8 @@
 # Plan: Pardons Tracker Epic Breakdown (ADO-109)
 
-**Status:** IN PROGRESS - Stories 1.1 + 1.2 Complete
+**Status:** IN PROGRESS - Stories 1.1 + 1.2 + 1.3A Complete
 **Created:** 2026-01-11
-**Updated:** 2026-01-12 (Session 2)
+**Updated:** 2026-01-12 (Session 3)
 **PRD:** `docs/features/pardons-tracker/prd.md`
 
 ## Overview
@@ -30,8 +30,8 @@ Epic 109: Trump Pardons Tracker
 ├── Feature: Pardons Tracker MVP (ADO-239)
 │   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ DONE
 │   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ DONE
-│   ├── Story 1.3A: Frontend List + Cards + Basic Modal ← NEXT
-│   ├── Story 1.3B: Receipts Timeline + What Happened Next
+│   ├── Story 1.3A: Frontend List + Cards + Basic Modal ✅ DONE
+│   ├── Story 1.3B: Receipts Timeline + What Happened Next ← NEXT
 │   └── Story 1.4: Filtering & Search
 │
 ├── Feature: Pardons AI Enrichment (NEW - to create)
@@ -319,9 +319,9 @@ Epic 109: Trump Pardons Tracker
 **Recommended sequence:**
 1. **Story 1.1** (Database) - Foundation ✅ DONE
 2. **Story 1.2** (APIs) - Backend ready ✅ DONE
-3. **Story 1.3A** (Basic UI) - **Ship visible feature fast** ← NEXT
-4. **Story 1.4** (Filtering) - Core UX complete
-5. **Story 1.3B** (Timeline) - Enhanced modal
+3. **Story 1.3A** (Basic UI) - Ship visible feature ✅ DONE
+4. **Story 1.3B** (Timeline) - Enhanced modal ← NEXT
+5. **Story 1.4** (Filtering) - Core UX complete
 6. **Feature 2** (Enrichment) - AI layer
 7. **Feature 3** (Sharing) - Can parallel with Feature 2
 
