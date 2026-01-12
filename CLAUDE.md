@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)  
 **Budget**: <$50/month HARD LIMIT  
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)  
-**Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Check AI review → Auto-deploy  
+**Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Auto-deploy (AI review only on PRs)  
 **Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP  
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
@@ -56,11 +56,10 @@ docs/features/
 
 ### ✅ End Every Session (10 min)
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
-- [ ] Commit & push to test branch
-- [ ] **MANDATORY**: Check AI code review: `bash scripts/check-code-review.sh`
-  - ⏱️ **AI reviews take 5-10 minutes** - Don't burn tokens polling repeatedly
-  - After push, inform user: "AI code review triggered, check back in ~5 min"
-  - User will ask you to check status when ready
+- [ ] Commit & push to test branch → Auto-deploys to test site
+- [ ] **Note**: AI code review only runs on PRs (not direct pushes to test)
+  - For PROD deployments: Create PR → AI review runs automatically
+  - Check PR review: `bash scripts/check-code-review.sh` or `gh pr view`
 - [ ] Update ADO via `/ado` command (DO IT, don't just say "needs update")
 - [ ] If schema/architecture/patterns changed → Update relevant doc in `/docs/`
 - [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
@@ -112,8 +111,8 @@ docs/features/
 1. Always work on `test` branch
 2. Commit to `test` branch
 3. Push to `test` branch (`git push origin test`)
-4. **🚨 MANDATORY: Check AI code review** (`bash scripts/check-code-review.sh`)
-5. Auto-deploys to Netlify TEST site
+4. Auto-deploys to Netlify TEST site
+5. **Note:** No AI code review on direct pushes (review only runs on PRs)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -121,7 +120,8 @@ docs/features/
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. Merge PR (auto-deploys to trumpytracker.com)
+6. **AI code review runs automatically on PR** - check with `gh pr view`
+7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
 - `git push origin main` → ❌ BLOCKED (protected branch)
@@ -179,7 +179,7 @@ docs/features/
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
+10. **AI code review only runs on PRs** - Direct pushes to test don't trigger review. When creating PRs for PROD, check review status with `gh pr view` or `bash scripts/check-code-review.sh`
 
 11. **Report token usage** - End every response with usage stats
 
@@ -200,8 +200,8 @@ docs/features/
 ### Git/Deployment
 - ❌ `git push origin main` - BLOCKED by branch protection (use PRs)
 - ❌ `git merge test` into main - WRONG (use cherry-pick from test to deployment branch)
-- ❌ Skip AI code review check - MANDATORY after every push
 - ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
+- ❌ Expecting AI review on test pushes - Review only runs on PRs (not direct pushes)
 
 ### Database
 - ❌ OFFSET pagination - Slow at scale (use cursor-based with `lt('id', cursor)`)
