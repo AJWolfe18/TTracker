@@ -244,21 +244,17 @@
   // CORRUPTION METER COMPONENT
   // ===========================================
 
-  // Spicy Status - the prominent corruption label
+  // Spicy Status - badge style like severity badges on other tabs
   function SpicyStatus({ level }) {
     if (!level || level < 1 || level > 5) return null;
 
     const config = CORRUPTION_LABELS[level] || { label: 'Unknown', color: '#6b7280' };
 
-    return React.createElement('div', {
-      className: 'tt-spicy-status',
+    return React.createElement('span', {
+      className: 'tt-spicy-badge',
+      style: { backgroundColor: config.color },
       title: `Corruption Level: ${level}/5`
-    },
-      React.createElement('span', {
-        className: 'tt-spicy-label',
-        style: { color: config.color }
-      }, `"${config.label}"`)
-    );
+    }, config.label);
   }
 
   // ===========================================
@@ -274,13 +270,19 @@
     const isGroup = pardon.recipient_type === 'group';
 
     return React.createElement('article', { className: 'tt-card tt-pardon-card' },
-      // Header: small muted connection type + date
+      // Header: different layout for groups vs individuals
       React.createElement('div', { className: 'tt-card-header tt-card-header-muted' },
-        React.createElement('span', { className: 'tt-meta-text' }, connectionType.label),
-        React.createElement('span', { className: 'tt-meta-dot' }, '•'),
-        React.createElement('span', { className: 'tt-meta-text' }, formatDate(pardon.pardon_date)),
-        // Mass pardon badge for groups
-        isGroup && React.createElement('span', { className: 'tt-mass-pardon-badge' }, 'MASS PARDON')
+        // Groups: MASS PARDON badge left, date right
+        // Individuals: connection type • date
+        isGroup ?
+          React.createElement('span', { className: 'tt-mass-pardon-badge' }, 'MASS PARDON') :
+          React.createElement(React.Fragment, null,
+            React.createElement('span', { className: 'tt-meta-text' }, connectionType.label),
+            React.createElement('span', { className: 'tt-meta-text' }, '·'),
+            React.createElement('span', { className: 'tt-meta-text' }, formatDate(pardon.pardon_date))
+          ),
+        // Date on right for groups
+        isGroup && React.createElement('span', { className: 'tt-meta-text tt-meta-right' }, formatDate(pardon.pardon_date))
       ),
 
       // Recipient name

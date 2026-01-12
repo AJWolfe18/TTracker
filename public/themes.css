@@ -1876,19 +1876,17 @@
   font-weight: 500;
 }
 
-.tt-meta-dot {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.tt-meta-right {
+  margin-left: auto;
 }
 
 .tt-mass-pardon-badge {
-  margin-left: auto;
-  padding: 2px 8px;
+  padding: 3px 8px;
   background: var(--severity-critical-bg);
   color: #ffffff;
   border-radius: 4px;
-  font-size: 0.625rem;
-  font-weight: 700;
+  font-size: 0.6875rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1901,15 +1899,18 @@
   margin-bottom: 12px;
 }
 
-/* Spicy Status - THE prominent element */
-.tt-spicy-status {
-  margin: 12px 0;
-}
-
-.tt-spicy-label {
-  font-size: 1.125rem;
-  font-weight: 700;
-  font-style: italic;
+/* Spicy Badge - matches severity badge style */
+.tt-spicy-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  white-space: nowrap;
+  margin: 8px 0;
 }
 
 /* Pardon card meta row (legacy - can remove later) */
