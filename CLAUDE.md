@@ -52,6 +52,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - After push, inform user: "AI code review triggered, check back in ~5 min"
   - User will ask you to check status when ready
 - [ ] Update ADO via `/ado` command (DO IT, don't just say "needs update")
+- [ ] If schema/architecture/patterns changed → Update relevant doc in `/docs/`
 - [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
 - [ ] Report token usage
 
@@ -163,7 +164,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 7. **State cost implications** - Always mention $ impact for new features
 
-8. **Follow PR workflow** - See `/docs/CLAUDE-CODE-PR-WORKFLOW.md` and `/docs/AI-CODE-REVIEW-GUIDE.md` for full PR process
+8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR and AI review process
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
@@ -273,7 +274,7 @@ WHERE day = CURRENT_DATE;
 
 **Budget Monitoring:**
 - Daily budget tracked in `budgets` table
-- Auto-enforced in job-queue-worker.js
+- Auto-enforced in `rss-tracker-supabase.js`
 - Manual check: Query budgets table before proposing new AI features
 
 **CRITICAL RULE: Always state cost implications before proposing new features or suggesting additional AI calls.**
@@ -285,14 +286,13 @@ WHERE day = CURRENT_DATE;
 ### TEST Environment (test branch)
 - **Database:** Supabase TEST (RSS + Story Clustering schema)
 - **Deploy:** Auto-deploy to Netlify test site
-- **Status:** Active development, 86 stories, 180 articles from 6 feeds
+- **Status:** Active development (~2700 stories, ~3100 articles, 18 feeds)
 - **Marker File:** `TEST_BRANCH_MARKER.md` presence indicates TEST environment
 
 ### PROD Environment (main branch)
-- **Database:** Supabase PROD (Legacy article schema)
+- **Database:** Supabase PROD (RSS v2 - same schema as TEST)
 - **Deploy:** Auto-deploy to trumpytracker.com
-- **Status:** Stable legacy system, 717 entries
-- **Migration:** Pending frontend completion
+- **Status:** Production RSS v2 system
 
 **NEVER merge test→main. Always cherry-pick tested commits.**
 
@@ -302,9 +302,6 @@ WHERE day = CURRENT_DATE;
 ```bash
 # Frontend local server
 npm run server
-
-# Job queue worker (processes RSS jobs)
-node scripts/job-queue-worker.js
 
 # Run QA smoke tests
 npm run qa:smoke
@@ -356,30 +353,16 @@ Stories + Articles Tables
     ↓ Queries via
 Edge Functions (stories-active, stories-detail)
     ↓ Serves
-Frontend (public/index.html, public/story-view/)
+Frontend (public/index.html)
 ```
 
 **Trigger Methods:**
 - **TEST:** `gh workflow run "RSS Tracker - TEST" --ref test`
 - **PROD:** Auto-runs every 2 hours via `rss-tracker-prod.yml`
 
-**Legacy System (DEPRECATED - do not use):**
-```
-rss-enqueue Edge Function → job_queue table → job-queue-worker.js
-(Creates jobs but no worker processes them)
-```
-
-### Key Job Types
-- `fetch_feed` - Fetch individual RSS feed
-- `fetch_all_feeds` - Batch fetch all active feeds
-- `story.cluster` - Cluster single article into story
-- `story.cluster.batch` - Batch clustering
-- `story.enrich` - OpenAI enrichment (summaries, categories, severity)
-- `process_article` - Article processing tasks
-
 ### Database Schema (Summary)
 
-**Core tables:** `stories`, `articles`, `article_story`, `feed_registry`, `job_queue`, `budgets`
+**Core tables:** `stories`, `articles`, `article_story`, `feed_registry`, `budgets`
 
 **Key constraints:**
 - Articles: UNIQUE(url_hash, published_date)
@@ -387,7 +370,6 @@ rss-enqueue Edge Function → job_queue table → job-queue-worker.js
 
 **Critical RPCs:**
 - `attach_or_create_article()` - Idempotent article insertion
-- `claim_runnable_job()` - Atomic job claiming
 - `get_stories_needing_enrichment()` - Find unenriched stories
 
 **Full schema:** `/docs/database/database-schema.md`
@@ -437,7 +419,7 @@ published_at TIMESTAMP
 - Allows story reopening if new articles match
 
 ### Category Mapping
-UI labels → Database enum values (defined in job-queue-worker.js):
+UI labels → Database enum values (defined in `scripts/enrichment/enrich-stories-inline.js`):
 - 'Corruption & Scandals' → 'corruption_scandals'
 - 'Democracy & Elections' → 'democracy_elections'
 - 'Policy & Legislation' → 'policy_legislation'
@@ -486,9 +468,9 @@ VALUES (
 
 ## MCP Tools Available
 
-**Supabase TEST Database:** Full query access via `mcp__supabase-test__query`
+**Supabase TEST Database:** Full query access via `mcp__supabase-test__postgrestRequest`
 - Use for: Data exploration, verification, ad-hoc queries
-- Example: `SELECT COUNT(*) FROM stories WHERE status = 'active'`
+- Example: `GET /stories?select=count` or use `sqlToRest` for SQL conversion
 
 **Azure DevOps Integration:** Direct work item operations
 - **Use `/ado` command** for all work item operations
@@ -501,7 +483,6 @@ VALUES (
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
 - **Frontend:** Vanilla JS, HTML5, CSS3, Tailwind CSS
-- **Worker:** Node.js (job-queue-worker.js)
 - **AI:** OpenAI GPT-4o-mini for enrichment
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
@@ -559,17 +540,8 @@ gh run watch
 # Or view at: https://github.com/AJWolfe18/TTracker/actions/workflows/rss-tracker-test.yml
 ```
 
-**DO NOT USE** (creates orphaned jobs):
-- `bash scripts/monitoring/trigger-rss.sh`
+**DO NOT USE** (legacy endpoints - creates orphaned jobs):
 - `curl .../rss-enqueue`
-
-### Monitor Job Queue
-```sql
-SELECT job_type, status, COUNT(*)
-FROM job_queue
-GROUP BY job_type, status
-ORDER BY job_type, status;
-```
 
 ## Feature-Dev Plugin Usage
 
@@ -591,7 +563,7 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 ### Feed Not Processing
 1. Check `SELECT * FROM feed_registry WHERE is_active = true`
 2. Verify `failure_count < 5`
-3. Check `SELECT * FROM job_queue WHERE job_type = 'fetch_feed' ORDER BY created_at DESC`
+3. Check GitHub Actions run logs: `gh run list --workflow="rss-tracker-test.yml" --limit 5`
 
 ### Duplicate Articles
 1. Verify `url_hash` generation
@@ -601,15 +573,10 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 ### Missing AI Enrichment
 1. Check OpenAI API key in environment
 2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
-3. Review job_queue errors: `SELECT * FROM job_queue WHERE status = 'failed' AND job_type = 'story.enrich'`
-
-### Worker Not Processing Jobs
-1. Check worker is running: `node scripts/job-queue-worker.js`
-2. Verify jobs exist: `SELECT get_runnable_count()`
-3. Check for stuck jobs: `SELECT * FROM job_queue WHERE status = 'claimed' AND claimed_at < NOW() - INTERVAL '10 minutes'`
+3. Check GitHub Actions logs for enrichment errors
 
 ---
 
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-01-12
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
