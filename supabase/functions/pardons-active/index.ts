@@ -1,7 +1,7 @@
 // Edge Function: GET /pardons-active
 // Returns active (public) pardons with pagination, search, and filters
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 import { getSupabaseClient } from '../_shared/auth.ts'
 
 interface CursorData {
@@ -23,10 +23,54 @@ function createCursor(pardonDate: string, id: string): string {
   return btoa(JSON.stringify({ d: pardonDate, id }))
 }
 
+// Cursor validation helpers
+function isValidCursorDate(d: unknown): d is string {
+  return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+}
+
+function isValidCursorId(id: unknown): id is number | string {
+  if (typeof id === 'number') return Number.isInteger(id) && id > 0
+  return typeof id === 'string' && /^\d+$/.test(id)
+}
+
+// Enum validation sets
+const VALID_CONNECTION_TYPES = new Set([
+  'mar_a_lago_vip', 'major_donor', 'family', 'political_ally',
+  'campaign_staff', 'business_associate', 'jan6_defendant',
+  'fake_electors', 'celebrity', 'no_connection',
+])
+
+const VALID_CRIME_CATEGORIES = new Set([
+  'white_collar', 'obstruction', 'political_corruption', 'violent',
+  'drug', 'election', 'jan6', 'other',
+])
+
+const VALID_RESEARCH_STATUSES = new Set(['complete', 'in_progress', 'pending'])
+
+const VALID_POST_PARDON_STATUSES = new Set(['quiet', 'under_investigation', 're_offended'])
+
+const VALID_RECIPIENT_TYPES = new Set(['person', 'group'])
+
+function badParam(name: string, value: string) {
+  return new Response(
+    JSON.stringify({ error: `Invalid ${name}: ${value}` }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
+}
+
 serve(async (req: Request) => {
   // Handle CORS preflight
-  const corsResponse = handleCors(req)
-  if (corsResponse) return corsResponse
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Only allow GET
+  if (req.method !== 'GET') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
 
   try {
     const url = new URL(req.url)
@@ -37,7 +81,12 @@ serve(async (req: Request) => {
       100
     )
     const cursor = url.searchParams.get('cursor') || undefined
-    const cursorData = parseCursor(cursor)
+    let cursorData = parseCursor(cursor)
+
+    // Validate cursor data
+    if (cursorData && (!isValidCursorDate(cursorData.d) || !isValidCursorId(cursorData.id))) {
+      cursorData = null
+    }
 
     // Search param (full-text via TSVECTOR)
     const q = url.searchParams.get('q')
@@ -49,6 +98,29 @@ serve(async (req: Request) => {
     const recipientType = url.searchParams.get('recipient_type')
     const researchStatus = url.searchParams.get('research_status')
     const postPardonStatus = url.searchParams.get('post_pardon_status')
+
+    // Validate enum params
+    if (connectionType && !VALID_CONNECTION_TYPES.has(connectionType)) {
+      return badParam('connection_type', connectionType)
+    }
+    if (crimeCategory && !VALID_CRIME_CATEGORIES.has(crimeCategory)) {
+      return badParam('crime_category', crimeCategory)
+    }
+    if (recipientType && !VALID_RECIPIENT_TYPES.has(recipientType)) {
+      return badParam('recipient_type', recipientType)
+    }
+    if (researchStatus && !VALID_RESEARCH_STATUSES.has(researchStatus)) {
+      return badParam('research_status', researchStatus)
+    }
+    if (postPardonStatus && !VALID_POST_PARDON_STATUSES.has(postPardonStatus)) {
+      return badParam('post_pardon_status', postPardonStatus)
+    }
+    if (corruptionLevel) {
+      const level = parseInt(corruptionLevel)
+      if (isNaN(level) || level < 1 || level > 5) {
+        return badParam('corruption_level', corruptionLevel)
+      }
+    }
 
     const supabase = getSupabaseClient(req)
 
@@ -97,7 +169,7 @@ serve(async (req: Request) => {
       })
     }
 
-    // Apply filters
+    // Apply filters (already validated above)
     if (connectionType) {
       query = query.eq('primary_connection_type', connectionType)
     }
@@ -105,12 +177,9 @@ serve(async (req: Request) => {
       query = query.eq('crime_category', crimeCategory)
     }
     if (corruptionLevel) {
-      const level = parseInt(corruptionLevel)
-      if (level >= 1 && level <= 5) {
-        query = query.eq('corruption_level', level)
-      }
+      query = query.eq('corruption_level', parseInt(corruptionLevel))
     }
-    if (recipientType && ['person', 'group'].includes(recipientType)) {
+    if (recipientType) {
       query = query.eq('recipient_type', recipientType)
     }
     if (researchStatus) {

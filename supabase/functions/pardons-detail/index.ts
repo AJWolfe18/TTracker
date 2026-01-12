@@ -1,13 +1,22 @@
 // Edge Function: GET /pardons-detail?id=123
 // Returns single pardon with full data + related stories
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 import { getSupabaseClient } from '../_shared/auth.ts'
 
 serve(async (req: Request) => {
   // Handle CORS preflight
-  const corsResponse = handleCors(req)
-  if (corsResponse) return corsResponse
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Only allow GET
+  if (req.method !== 'GET') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
 
   try {
     const url = new URL(req.url)
