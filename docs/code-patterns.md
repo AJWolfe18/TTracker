@@ -56,7 +56,7 @@ const { data, error } = await supabase
   .from('stories')
   .select(`
     *,
-    article_count:story_articles(count)
+    article_count:article_story(count)
   `)
   .order('created_at', { ascending: false })
   .limit(20);
@@ -76,7 +76,7 @@ const { data, error } = await supabase
   .from('stories')
   .select(`
     *,
-    story_articles (
+    article_story (
       *,
       sources (
         name,
@@ -237,7 +237,9 @@ if (error) return <div>Error: {error}</div>;
 
 ---
 
-## React Patterns
+## React Patterns (Reference)
+
+> **Note:** Current frontend is vanilla JS. These patterns are for reference if migrating to React.
 
 ### Custom Hook for Data Fetching
 **Reusable hook pattern**
@@ -297,10 +299,12 @@ export function useStories() {
 
 ---
 
-## TypeScript Types
+## TypeScript Types (Edge Functions)
+
+> **Note:** TypeScript is used in Edge Functions. Main frontend is vanilla JS.
 
 ### Supabase Generated Types
-**ALWAYS use generated types**
+**Use generated types in Edge Functions**
 
 ```typescript
 // Import generated types
@@ -331,33 +335,34 @@ async function getStory(id: string): Promise<Story | null> {
 
 ## File Organization
 
-### Component Structure
+### Current Project Structure
 ```
-src/
-├── components/
-│   ├── stories/
-│   │   ├── StoryList.jsx          # List view
-│   │   ├── StoryCard.jsx          # Individual card
-│   │   └── StoryDetail.jsx        # Detail view
-│   ├── articles/
-│   │   ├── ArticleList.jsx
-│   │   └── ArticleCard.jsx
-│   └── common/
-│       ├── LoadingSpinner.jsx     # Reusable loading
-│       └── ErrorMessage.jsx       # Reusable error
-├── hooks/
-│   ├── useStories.js              # Data fetching
-│   └── usePagination.js           # Pagination logic
-├── utils/
-│   ├── dateFormatting.js          # Date helpers
-│   └── apiHelpers.js              # API utilities
-└── types/
-    └── supabase.ts                # Generated types
+public/
+├── index.html              # Main dashboard
+├── admin.html              # Admin panel
+├── executive-orders.html   # EO tracker
+├── app.js                  # Main app logic
+├── shared.js               # Shared utilities
+└── supabase-browser-config.js  # Supabase client
+
+scripts/
+├── rss-tracker-supabase.js # Main RSS pipeline
+├── enrichment/             # AI enrichment
+│   ├── enrich-stories-inline.js
+│   ├── prompts.js
+│   └── scraper.js
+└── rss/                    # RSS parsing
+    └── fetch_feed.js
+
+supabase/functions/         # Edge Functions
+├── stories-active/
+├── stories-detail/
+└── articles-manual/
 ```
 
-**Why:** Clear organization, easy to find code  
-**Created:** Project structure  
-**Reference:** Existing structure
+**Note:** This is a vanilla JS project, not React.
+**Created:** Project structure
+**Reference:** Repository root
 
 ---
 
@@ -596,6 +601,6 @@ async function scrapeArticleBody(url) {
 
 ---
 
-_Last Updated: October 5, 2025_  
-_Maintained by: Claude Code_  
-_Reference: `/docs/database-standards.md` for database patterns_
+_Last Updated: 2026-01-12_
+_Maintained by: Claude Code_
+_Reference: `/docs/database/database-schema.md` for schema details_
