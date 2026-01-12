@@ -200,8 +200,12 @@ CREATE TABLE pardons (
   conviction_date DATE,
 
   -- Classification
-  connection_type TEXT NOT NULL,  -- "mar_a_lago_vip", "major_donor", "family", etc.
+  primary_connection_type TEXT NOT NULL,  -- Main reason for pardon: "mar_a_lago_vip", "major_donor", etc.
+  secondary_connection_types TEXT[],  -- Other relevant relationships
   corruption_level SMALLINT NOT NULL CHECK (corruption_level BETWEEN 1 AND 5),
+
+  -- Research Status
+  research_status TEXT DEFAULT 'complete' CHECK (research_status IN ('complete', 'in_progress', 'pending')),
   -- 5 = "Paid-to-Play", 4 = "Friends & Family", 3 = "Swamp Creature",
   -- 2 = "Celebrity Request", 1 = "Broken Clock"
 
@@ -216,9 +220,6 @@ CREATE TABLE pardons (
   -- The Receipts (Timeline Data)
   receipts_timeline JSONB,  -- [{date, event_type, description}, ...]
   -- event_types: "donation", "conviction", "pardon_request", "pardon_granted", "mar_a_lago_visit"
-
-  -- Justice Gap (Comparison Data)
-  average_sentence_comparison TEXT,  -- "Average American: 10 years. This guy: Pardoned"
 
   -- AI Enrichment
   summary_neutral TEXT,
@@ -253,10 +254,11 @@ CREATE TABLE pardons (
 
 -- Indexes
 CREATE INDEX idx_pardons_date ON pardons(pardon_date DESC);
-CREATE INDEX idx_pardons_connection ON pardons(connection_type);
+CREATE INDEX idx_pardons_connection ON pardons(primary_connection_type);
 CREATE INDEX idx_pardons_crime ON pardons(crime_category);
 CREATE INDEX idx_pardons_corruption ON pardons(corruption_level);
-CREATE INDEX idx_pardons_status ON pardons(post_pardon_status);
+CREATE INDEX idx_pardons_post_status ON pardons(post_pardon_status);
+CREATE INDEX idx_pardons_research ON pardons(research_status);
 CREATE INDEX idx_pardons_search ON pardons USING GIN(search_vector);
 ```
 
@@ -298,6 +300,7 @@ CRITICAL RULES:
 ### Quick Stats Bar (Snarky Aggregate Metrics)
 ```
 🎫 147 Pardons Tracked | 💰 $45.2M in Donor Connections | 🔄 12 Re-offended
+Last updated: [Date]
 ```
 
 ### Pardons Tab
@@ -339,16 +342,15 @@ CRITICAL RULES:
 3. **The Connection** - How they know Trump, relationship history
 4. **The Real Story** - Spicy AI summary (T² editorial voice)
 5. **The Receipts** - Timeline: donation dates, conviction, pardon request, pardon grant
-6. **Justice Gap** - Side-by-side: "Average American gets X, this person got pardoned"
-7. **What Happened Next** - Post-pardon status tracking
+6. **What Happened Next** - Post-pardon status tracking
 
 ### Unique Features (Per ADO-109)
 
 | Feature | Description | Phase |
 |---------|-------------|-------|
 | **The Receipts** | Timeline showing donation→conviction→pardon chain | MVP |
-| **Justice Gap** | Compare to non-connected person's outcome | Phase 2 |
-| **What Happened Next** | Track post-pardon status (re-offended?) | Phase 2 |
+| **What Happened Next** | Track post-pardon status (re-offended?) | MVP |
+| **Social Sharing** | Share pardon cards to Twitter, Facebook, Copy Link (ADO-236) | MVP |
 | **Connection Network** | Visual graph of relationships | Phase 3 |
 
 ---
@@ -463,11 +465,40 @@ This is a **separate JIRA epic** - not part of Pardons MVP. For MVP:
 ### User Engagement (Primary)
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
-| **Pardons tab visits** | 500+ visits/month | Analytics |
-| **Detail modal opens** | 30%+ of visitors click "View Details" | Click tracking |
-| **Time on page** | 2+ minutes average | Analytics |
-| **Return visitors** | 20%+ come back | Analytics |
-| **Cross-navigation** | 15%+ click to related Stories | Click tracking |
+| **Pardons tab visits** | 500+ visits/month | GA4 page_view |
+| **Detail modal opens** | 30%+ of visitors click "View Details" | GA4 pardon_modal_open |
+| **Time on page** | 2+ minutes average | GA4 engagement_time |
+| **Return visitors** | 20%+ come back | GA4 new_vs_returning |
+| **Cross-navigation** | 15%+ click to related Stories | GA4 related_story_click |
+
+### User Acquisition
+| Metric | Why It Matters | How to Measure |
+|--------|---------------|----------------|
+| **Traffic source breakdown** | Where do visitors come from? | GA4 source/medium |
+| **Search terms** | What are people googling? | Google Search Console |
+| **First-time vs returning** | Is content sticky? | GA4 new_vs_returning |
+
+### Engagement Depth
+| Metric | Why It Matters | How to Measure |
+|--------|---------------|----------------|
+| **Scroll depth** | Do users see all pardons? | GA4 scroll event |
+| **Filter usage rate** | Which filters used most? | GA4 filter_applied |
+| **Cards viewed per session** | Browsing or targeted? | GA4 pardon_card_click count |
+| **Modal section views** | Which sections get read? | GA4 modal_section_view |
+
+### Content Performance
+| Metric | Why It Matters | How to Measure |
+|--------|---------------|----------------|
+| **Most viewed pardons** | What drives interest? | GA4 by pardon_id |
+| **Views by corruption level** | Do users prefer scandal? | GA4 custom dimension |
+| **Views by connection type** | Donors vs Family vs Jan 6? | GA4 custom dimension |
+
+### Virality
+| Metric | Why It Matters | How to Measure |
+|--------|---------------|----------------|
+| **Share button clicks** | Are users sharing? | GA4 share event |
+| **Shares by platform** | Twitter vs Facebook? | GA4 share method |
+| **Social referral traffic** | Did sharing work? | GA4 source/medium |
 
 ### Data Quality (Secondary)
 | Metric | Target |
@@ -479,7 +510,151 @@ This is a **separate JIRA epic** - not part of Pardons MVP. For MVP:
 
 ---
 
-## 18. References
+## 18. Sorting & Pagination
+
+### Sort Options
+| Option | Database Query | Default |
+|--------|---------------|---------|
+| **Date (Newest)** | `ORDER BY pardon_date DESC` | ✅ Default |
+| **Corruption Level (Highest)** | `ORDER BY corruption_level DESC` | |
+| **Name (A-Z)** | `ORDER BY recipient_name ASC` | |
+
+### Pagination
+- **Items per page:** 20 (matches Stories and EOs pattern)
+- **Component:** Reuse existing `Pagination` component from app.js
+- **Behavior:** Page numbers with prev/next buttons
+
+---
+
+## 19. URL Structure
+
+### Routes
+| Page | URL | Notes |
+|------|-----|-------|
+| **List view** | `/pardons` or `/?tab=pardons` | Main pardons page |
+| **Individual pardon** | `/pardons?id=[slug]` | Deep link for sharing |
+
+### Slug Format
+- Pattern: `recipient-name-lowercase-hyphenated`
+- Examples: `rudy-giuliani`, `steve-bannon`, `january-6th-mass-pardon`
+- Generated from `recipient_slug` field in database
+
+---
+
+## 20. Empty & Error States
+
+### Empty States
+| State | Display |
+|-------|---------|
+| **No pardons yet** | "No pardons tracked yet. Check back soon." |
+| **No filter results** | "No pardons match your filters" + [Clear Filters] button |
+| **Loading** | Skeleton cards (3 placeholder cards with pulse animation) |
+
+### Error States
+| State | Display |
+|-------|---------|
+| **API failure** | "Unable to load pardons. Please refresh the page." + [Retry] button |
+| **Pardon not found** | Redirect to list with toast: "Pardon not found" |
+
+---
+
+## 21. Photo Fallback
+
+### When No Photo Available
+- **Default image:** Trump mugshot silhouette
+- **Alt text:** "Pardon recipient - photo unavailable"
+- **Design notes:** Dark silhouette with orange background, on-brand with site's snarky tone
+
+---
+
+## 22. Research Status Display
+
+### Status Badges
+| Status | Badge Display | Card Behavior |
+|--------|--------------|---------------|
+| **complete** | (none) | Normal card display |
+| **in_progress** | 🔍 INVESTIGATION IN PROGRESS | Partial info shown, some fields may be empty |
+| **pending** | 📰 DEVELOPING STORY | Minimal info, placeholder for upcoming research |
+
+### Display Rules
+- Cards with `research_status != 'complete'` still appear in list (per decision to always show)
+- Badge appears prominently on card
+- Modal shows expanded message: "We're still researching this pardon. Check back for updates."
+
+---
+
+## 23. Mobile Responsiveness
+
+### Breakpoints
+| Screen | Cards Layout | Filters | Modal |
+|--------|-------------|---------|-------|
+| **Mobile (<640px)** | 1 column | Slide-out panel via "Filters" button | Full-screen |
+| **Tablet (640-1024px)** | 2 columns | Horizontal pills | 90% width modal |
+| **Desktop (>1024px)** | 3 columns | Sidebar or horizontal | Standard modal |
+
+### Mobile-Specific Behavior
+- Stats bar stacks vertically
+- Corruption meter simplified to badge only
+- Share buttons move to bottom of modal
+
+---
+
+## 24. Social Sharing
+
+> **Related ADO:** [ADO-236: Add social sharing for pardon cards](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/236)
+
+### Share Locations
+- Share button on each pardon card
+- Share button in detail modal header
+
+### Platforms
+- **Twitter/X** - Pre-filled tweet with spicy summary
+- **Facebook** - Rich preview with photo and description
+- **Copy Link** - Direct URL to pardon
+
+### Share Text Template
+```
+🎫 PARDONED: [Name] - [Crime]
+
+[Spicy summary snippet - first 100 chars]
+
+Corruption Level: [X]/5 "[Label]"
+
+See the full story: [URL]
+```
+
+### OpenGraph Meta Tags
+```html
+<meta property="og:title" content="PARDONED: [Name]" />
+<meta property="og:description" content="[Spicy summary]" />
+<meta property="og:image" content="[Photo URL or fallback]" />
+<meta property="og:url" content="[Canonical URL]" />
+<meta name="twitter:card" content="summary_large_image" />
+```
+
+---
+
+## 25. Analytics Requirements
+
+### GA4 Events to Implement
+| Event | Trigger | Parameters |
+|-------|---------|------------|
+| `page_view` | Pardons tab load | `page_title: 'Pardons'` |
+| `filter_applied` | User applies filter | `filter_type`, `filter_value` |
+| `pardon_card_click` | User clicks card | `pardon_id`, `corruption_level`, `connection_type` |
+| `pardon_modal_open` | Modal opens | `pardon_id` |
+| `pardon_modal_section_view` | User views section | `pardon_id`, `section` |
+| `share` | User clicks share | `method`, `content_type: 'pardon'`, `item_id` |
+| `related_story_click` | User clicks related story | `source: 'pardon'`, `pardon_id`, `story_id` |
+
+### Custom Dimensions (GA4)
+- `corruption_level` (1-5)
+- `primary_connection_type` (enum)
+- `crime_category` (enum)
+
+---
+
+## 26. References
 
 - [DOJ Clemency Grants Trump 2025+](https://www.justice.gov/pardon/clemency-grants-president-donald-j-trump-2025-present)
 - [Wikipedia Term 2 Clemency List](https://en.wikipedia.org/wiki/List_of_people_granted_executive_clemency_in_the_second_Trump_presidency)
