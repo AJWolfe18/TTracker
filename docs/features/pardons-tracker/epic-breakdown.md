@@ -30,7 +30,7 @@ Epic 109: Trump Pardons Tracker
 ├── Feature: Pardons Tracker MVP (ADO-239)
 │   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ DONE
 │   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ DONE
-│   ├── Story 1.3A: Frontend List + Cards + Basic Modal ✅ DONE
+│   ├── Story 1.3A: Frontend List + Cards + Basic Modal (ADO-251) ✅ DONE
 │   ├── Story 1.3B: Receipts Timeline + What Happened Next ← NEXT
 │   └── Story 1.4: Filtering & Search
 │

@@ -1,7 +1,7 @@
-# Session Handoff: 2026-01-12 (Session 2)
+# Session Handoff: 2026-01-12 (Session 3)
 
 ## Summary
-Implemented Story 1.3A (Frontend List + Cards + Basic Modal) for Pardons Tracker. Created full React frontend with pardons.html, pardons-app.js, and pardons-specific CSS. Integrated with the three Edge Functions from Story 1.2.
+Implemented Story 1.3A (Frontend List + Cards + Basic Modal) for Pardons Tracker. Created full React frontend with pardons.html, pardons-app.js, and pardons-specific CSS. Integrated with the three Edge Functions from Story 1.2. Applied code review fixes for race conditions, validation, and auth headers.
 
 ---
 
@@ -72,6 +72,20 @@ Implemented Story 1.3A (Frontend List + Cards + Basic Modal) for Pardons Tracker
 
 ---
 
+### 7. Code Review Fixes Applied
+
+| Fix | Description |
+|-----|-------------|
+| Modal fetch race condition | AbortController + reset detail on pardon.id change |
+| List fetch race condition | AbortController per fetch, abort previous on new request |
+| Deep link ID validation | Number() conversion + Number.isInteger() check |
+| loadPardons stale closure | useCallback with recipientType dependency |
+| Missing apikey header | Added to match app.js/eo-app.js pattern |
+| Keep stale data visible | Don't clear pardons array during filter change |
+| Unused import | Removed useRef |
+
+---
+
 ## Verified Working
 
 Tested Edge Function integration:
@@ -95,13 +109,13 @@ pardons-detail?id=1: Returns Rudy Giuliani with full data
 
 ---
 
-## ADO Updates Needed
+## ADO Updates
 
-| ADO | Title | Recommended Status |
-|-----|-------|-------------------|
-| (TBD) | Story 1.3A: Frontend List + Cards + Basic Modal | Ready for Prod |
+| ADO | Title | Status |
+|-----|-------|--------|
+| 251 | Story 1.3A: Frontend List + Cards + Basic Modal | Ready for Prod |
 
-**Note:** Story 1.3A needs to be created in ADO under Feature 239 (Pardons Tracker MVP).
+**Created:** ADO-251 linked to Feature 239 (Pardons Tracker MVP).
 
 ---
 
@@ -142,7 +156,7 @@ GET /functions/v1/pardons-stats
 | 239 | Pardons Tracker MVP (Feature) | Active |
 | 241 | Story 1.1: Database Schema | Ready for Prod |
 | 242 | Story 1.2: Backend Edge Functions | Ready for Prod |
-| (TBD) | Story 1.3A: Frontend List + Cards + Basic Modal | Ready for Prod |
+| 251 | Story 1.3A: Frontend List + Cards + Basic Modal | Ready for Prod |
 
 ---
 
@@ -157,8 +171,10 @@ GET /functions/v1/pardons-stats
 
 ---
 
-## Commit
+## Commits
 
 ```
+9651539 fix(pardons): code review fixes - abort controllers, validation, auth
+d8866d5 docs(handoff): Story 1.3A complete - frontend MVP shipped
 8e0b748 feat(pardons): add frontend list + cards + basic modal (Story 1.3A)
 ```
