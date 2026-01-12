@@ -1,7 +1,7 @@
 # Session Handoff: 2026-01-12
 
 ## Summary
-Implemented ADO-242 (Story 1.2: Backend Edge Functions) - created three Edge Functions for the Pardons Tracker API: pardons-active, pardons-detail, and pardons-stats.
+Implemented ADO-242 (Story 1.2: Backend Edge Functions) - created three Edge Functions for the Pardons Tracker API: pardons-active, pardons-detail, and pardons-stats. Includes code review security fixes and documentation updates.
 
 ---
 
@@ -66,6 +66,23 @@ pardons-stats: Returns {total_pardons: 4, reoffended_count: 0, ...}
 | ADO | Title | Status |
 |-----|-------|--------|
 | 242 | Story 1.2: Backend Edge Functions | Ready for Prod |
+
+### 6. Code Review Security Fixes Applied
+
+| Fix | Description |
+|-----|-------------|
+| Method check | GET only, 405 for POST/PUT/etc |
+| Cursor validation | Date format (YYYY-MM-DD) + numeric ID |
+| Enum validation | All filter params validated with 400 errors |
+| Corruption level range | Must be 1-5 |
+| TODO for stats RPC | Added optimization note for scale |
+
+### 7. Documentation Updated
+
+| Doc | Change |
+|-----|--------|
+| `docs/database/database-schema.md` | Added pardons + pardon_story tables |
+| `docs/features/pardons-tracker/epic-breakdown.md` | Stories 1.1 + 1.2 marked DONE |
 
 ---
 
