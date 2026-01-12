@@ -1,8 +1,8 @@
 # Plan: Pardons Tracker Epic Breakdown (ADO-109)
 
-**Status:** FINAL - APPROVED
+**Status:** IN PROGRESS - Stories 1.1 + 1.2 Complete
 **Created:** 2026-01-11
-**Updated:** 2026-01-12
+**Updated:** 2026-01-12 (Session 2)
 **PRD:** `docs/features/pardons-tracker/prd.md`
 
 ## Overview
@@ -28,9 +28,9 @@ The Pardons Tracker is a dedicated section tracking presidential pardons with:
 ```
 Epic 109: Trump Pardons Tracker
 ├── Feature: Pardons Tracker MVP (ADO-239)
-│   ├── Story 1.1: Database Schema & Migrations (ADO-241) ← CURRENT
-│   ├── Story 1.2: Backend Edge Functions (APIs)
-│   ├── Story 1.3A: Frontend List + Cards + Basic Modal
+│   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ DONE
+│   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ DONE
+│   ├── Story 1.3A: Frontend List + Cards + Basic Modal ← NEXT
 │   ├── Story 1.3B: Receipts Timeline + What Happened Next
 │   └── Story 1.4: Filtering & Search
 │
@@ -317,9 +317,9 @@ Epic 109: Trump Pardons Tracker
 ## Implementation Order
 
 **Recommended sequence:**
-1. **Story 1.1** (Database) - Foundation ← **CURRENT**
-2. **Story 1.2** (APIs) - Backend ready
-3. **Story 1.3A** (Basic UI) - **Ship visible feature fast**
+1. **Story 1.1** (Database) - Foundation ✅ DONE
+2. **Story 1.2** (APIs) - Backend ready ✅ DONE
+3. **Story 1.3A** (Basic UI) - **Ship visible feature fast** ← NEXT
 4. **Story 1.4** (Filtering) - Core UX complete
 5. **Story 1.3B** (Timeline) - Enhanced modal
 6. **Feature 2** (Enrichment) - AI layer
@@ -360,12 +360,14 @@ After creating ADO items:
 ## Files to Modify/Create
 
 **Database:**
-- `migrations/056_pardons_table.sql` (new) ← **CURRENT**
+- `migrations/056_pardons_table.sql` ✅ CREATED
+- `supabase/migrations/20260112000000_pardons_table.sql` ✅ CREATED
+- `scripts/seed-pardons-test.sql` ✅ CREATED (test-only)
 
 **Backend:**
-- `supabase/functions/pardons-active/index.ts` (new - list + search + filters)
-- `supabase/functions/pardons-detail/index.ts` (new - single item + joins)
-- `supabase/functions/pardons-stats/index.ts` (new - aggregates for stats bar)
+- `supabase/functions/pardons-active/index.ts` ✅ CREATED (list + search + filters)
+- `supabase/functions/pardons-detail/index.ts` ✅ CREATED (single item + joins)
+- `supabase/functions/pardons-stats/index.ts` ✅ CREATED (aggregates for stats bar)
 - `supabase/functions/pardons-og/index.ts` (new - OG meta for sharing)
 - `scripts/job-queue-worker.js` (add pardon.enrich handler)
 

@@ -150,6 +150,91 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 
 ---
 
+## Pardons Tracker Tables
+
+### `pardons`
+**Purpose:** Track presidential pardons with corruption analysis
+**Row Count:** ~5 test records (MVP in development)
+**Migration:** `056_pardons_table.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (GENERATED ALWAYS AS IDENTITY) |
+| recipient_name | TEXT | NOT NULL - Name of pardon recipient |
+| recipient_slug | TEXT | Auto-generated URL slug |
+| nickname | TEXT | Optional nickname |
+| photo_url | TEXT | Optional photo URL |
+| recipient_type | TEXT | 'person' or 'group' (default: 'person') |
+| recipient_count | INT | For groups only - how many people |
+| recipient_criteria | TEXT | For groups only - who qualifies |
+| pardon_date | DATE | NOT NULL - When pardon was granted |
+| clemency_type | TEXT | 'pardon', 'commutation', 'pre_emptive' |
+| status | TEXT | 'confirmed' or 'reported' |
+| conviction_district | TEXT | DOJ ingestion field |
+| case_number | TEXT | DOJ ingestion field |
+| offense_raw | TEXT | Raw offense text from DOJ |
+| crime_description | TEXT | Human-readable crime description |
+| crime_category | TEXT | Enum: white_collar, obstruction, etc. |
+| original_sentence | TEXT | Original sentence |
+| conviction_date | DATE | When convicted |
+| primary_connection_type | TEXT | Enum: mar_a_lago_vip, major_donor, etc. |
+| secondary_connection_types | TEXT[] | Additional connections |
+| corruption_level | SMALLINT | 1-5 "spicy" scale |
+| research_status | TEXT | 'complete', 'in_progress', 'pending' |
+| post_pardon_status | TEXT | 'quiet', 'under_investigation', 're_offended' |
+| post_pardon_notes | TEXT | What happened after pardon |
+| trump_connection_detail | TEXT | Connection explanation |
+| donation_amount_usd | NUMERIC(14,2) | Donation amount if applicable |
+| receipts_timeline | JSONB | Array of timeline events |
+| summary_neutral | TEXT | AI: Factual summary |
+| summary_spicy | TEXT | AI: Engaging summary |
+| why_it_matters | TEXT | AI: Analysis |
+| pattern_analysis | TEXT | AI: Pattern context |
+| enriched_at | TIMESTAMPTZ | When AI enrichment ran |
+| needs_review | BOOLEAN | Flag for manual review |
+| primary_source_url | TEXT | Main source URL |
+| source_urls | JSONB | Array of source URLs |
+| source_system | TEXT | 'manual' or 'doj_opa' |
+| source_key | TEXT | DOJ registry ID (for dedupe) |
+| is_public | BOOLEAN | Publish gate (RLS filter) |
+| search_vector | TSVECTOR | GENERATED full-text index |
+| created_at | TIMESTAMPTZ | Row created |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Key Constraints:**
+- `pardons_group_fields_chk` - Groups require count + criteria
+- `pardons_donation_nonnegative` - Donation >= 0
+- `pardons_receipts_timeline_is_array` - JSONB array check
+- Partial unique: `(source_system, source_key) WHERE source_key IS NOT NULL`
+
+**Key Indexes:**
+- `idx_pardons_search` - GIN on search_vector
+- `idx_pardons_pardon_date_id_desc` - Composite pagination
+- `idx_pardons_public_pardon_date_id_desc` - Partial index for public queries
+- btree on: primary_connection_type, crime_category, corruption_level, recipient_type
+
+**RLS Policies:**
+- `pardons_anon_select` - Anon sees only `is_public = true`
+
+---
+
+### `pardon_story`
+**Purpose:** Many-to-many junction linking pardons to news stories
+
+| Column | Type | Description |
+|--------|------|-------------|
+| pardon_id | BIGINT | FK to pardons.id (CASCADE) |
+| story_id | BIGINT | FK to stories.id (CASCADE) |
+| link_type | TEXT | 'primary_coverage', 'background', 'related', 'mentioned' |
+| linked_at | TIMESTAMPTZ | When link created |
+
+**Primary Key:** `(pardon_id, story_id)`
+
+**RLS Policies:**
+- `pardon_story_anon_select` - Only show links to public pardons
+
+---
+
 ## Supporting Tables
 
 ### `executive_orders`
