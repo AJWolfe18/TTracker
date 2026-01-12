@@ -55,6 +55,15 @@
     re_offended: { label: 'Re-offended', color: '#dc2626' }
   };
 
+  // Corruption level spicy labels (5 = most corrupt, 1 = least)
+  const CORRUPTION_LABELS = {
+    5: 'Paid-to-Play',
+    4: 'Friends & Family Discount',
+    3: 'Swamp Creature',
+    2: 'Celebrity Request',
+    1: 'Broken Clock'
+  };
+
   // ===========================================
   // UTILITIES
   // ===========================================
@@ -177,8 +186,8 @@
   const TABS = [
     { id: 'stories', label: 'Stories', href: './' },
     { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
-    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'pardons', label: 'Pardons', href: './pardons.html' },
+    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
 
@@ -249,12 +258,14 @@
       );
     }
 
+    const spicyLabel = CORRUPTION_LABELS[level] || '';
+
     return React.createElement('div', {
       className: 'tt-corruption-meter',
-      title: `Corruption Level: ${level}/5`
+      title: `Corruption Level: ${level}/5 - "${spicyLabel}"`
     },
-      React.createElement('span', { className: 'tt-corruption-label' }, 'Spicy:'),
-      React.createElement('div', { className: 'tt-corruption-bars' }, bars)
+      React.createElement('div', { className: 'tt-corruption-bars' }, bars),
+      React.createElement('span', { className: 'tt-corruption-label' }, `"${spicyLabel}"`)
     );
   }
 

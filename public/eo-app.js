@@ -173,8 +173,8 @@
   const TABS = [
     { id: 'stories', label: 'Stories', href: './' },
     { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
-    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'pardons', label: 'Pardons', href: './pardons.html' },
+    { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
 
