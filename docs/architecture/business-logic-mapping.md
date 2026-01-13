@@ -391,4 +391,170 @@ const FEATURE_FLAGS = {
 };
 ```
 
+## Pardon Corruption Level System
+
+### Database Values → Display Labels
+
+#### Database Storage
+```sql
+-- pardons table
+corruption_level: 1 | 2 | 3 | 4 | 5
+primary_connection_type: 'major_donor' | 'political_ally' | 'family' |
+  'business_associate' | 'celebrity' | 'jan6_defendant' | 'fake_electors' |
+  'mar_a_lago_vip' | 'campaign_staff' | 'no_connection'
+```
+
+#### Spicy Labels (In-App Display)
+```javascript
+const CORRUPTION_LABELS_SPICY = {
+  5: "Paid-to-Play 💰",
+  4: "Friends & Family 👥",
+  3: "Swamp Creature 🐊",
+  2: "Celebrity Request ⭐",
+  1: "Broken Clock 🔧"
+};
+```
+
+#### Neutral Labels (For Exports/Sharing)
+```javascript
+const CORRUPTION_LABELS_NEUTRAL = {
+  5: "Direct Financial Connection",
+  4: "Personal/Inner Circle",
+  3: "Political Alliance",
+  2: "Public Campaign",
+  1: "Policy-Based"
+};
+```
+
+#### Color Mapping
+```javascript
+const CORRUPTION_COLORS = {
+  5: { bg: "#fee2e2", text: "#7f1d1d", border: "#dc2626" }, // red
+  4: { bg: "#fed7aa", text: "#7c2d12", border: "#ea580c" }, // orange
+  3: { bg: "#fef3c7", text: "#713f12", border: "#f59e0b" }, // yellow
+  2: { bg: "#e0e7ff", text: "#3730a3", border: "#6366f1" }, // indigo
+  1: { bg: "#d1fae5", text: "#064e3b", border: "#10b981" }  // green
+};
+```
+
+### Corruption Level Determination Rules
+
+#### Level 5: Paid-to-Play
+**Triggers:**
+- Documented donations to Trump campaign/PAC/legal fund/inauguration
+- Direct financial relationship (business deals, loans)
+- Payment timing correlates with pardon timing
+- FEC records show pattern
+- Mar-a-Lago membership with clear access-for-benefit pattern
+
+**Evidence types:** FEC filings, inauguration fund records, business contracts, membership records
+
+#### Level 4: Friends & Family
+**Triggers:**
+- Inner circle (campaign staff, advisors, family members)
+- Personal relationship with Trump
+- Could testify against Trump (pardon = potential silence)
+- Self-dealing indicators
+- Proximity to ongoing investigations
+
+**Evidence types:** Employment records, testimony transcripts, investigation documents
+
+**Tone rule:** Pose implications as questions ("What did they know?") unless research explicitly documents witness-related effects. Do not assert "witness tampering" without explicit record.
+
+#### Level 3: Swamp Creature
+**Triggers:**
+- Political ally (endorsed Trump, fundraised, etc.)
+- Lobbyist or industry connection
+- Pardon covers up related wrongdoing
+- Benefits Republican political interests
+- Standard political favor-trading
+
+**Evidence types:** Endorsements, campaign appearances, lobbying records
+
+#### Level 2: Celebrity Request
+**Triggers:**
+- High-profile advocacy campaign
+- Media attention drove the pardon
+- No direct Trump connection found
+- Legitimate policy argument may exist
+- Fame provided access that others don't have
+
+**Evidence types:** Media coverage, advocacy campaigns, public statements
+
+**Tone rule:** No profanity. Critique the system, not the individual.
+
+#### Level 1: Broken Clock
+**Triggers:**
+- Criminal justice reform case
+- Disproportionate original sentence
+- Bipartisan support for clemency
+- No Trump connection whatsoever
+- Actually defensible on merits
+
+**Evidence types:** Sentencing records, bipartisan advocacy, reform organization support
+
+**Tone rule:** Acknowledge legitimacy. Can express cautious approval. Contrast with corrupt pardons.
+
+### Connection Type Taxonomy
+
+```javascript
+const CONNECTION_TYPES = {
+  major_donor: "Documented donations to Trump/GOP campaigns or funds",
+  political_ally: "Endorsed, campaigned for, or politically aligned with Trump",
+  family: "Trump family member or extended family",
+  business_associate: "Business relationship with Trump Organization",
+  celebrity: "Famous person with media platform and public advocacy",
+  jan6_defendant: "Charged in January 6 investigation",
+  fake_electors: "Involved in fake electors scheme",
+  mar_a_lago_vip: "Known Mar-a-Lago member or frequent guest",
+  campaign_staff: "Worked on Trump campaign in official capacity",
+  no_connection: "No documented Trump relationship found"
+};
+```
+
+### Edge Case Handling
+
+#### Multiple Connections
+When multiple connection types exist, prioritize in this order:
+1. Documented donations (most concrete, hardest to dispute)
+2. Business relationships (verifiable through records)
+3. Inner circle role (establishes access and motive)
+4. Political alignment (public record)
+5. Social access (circumstantial but notable)
+
+**Rule:** Stack the receipts. Multiple angles strengthen the case.
+
+#### Level/Type Mismatch
+Trust corruption_level as primary driver (it's based on full research).
+Use connection_type to inform framing and vocabulary, not override level.
+
+#### No Connection + High Corruption
+If `no_connection` but corruption level 3-5, do NOT invent a connection.
+Frame as: system critique + what Trump gains politically, based ONLY on stated facts.
+
+#### Insurrection Pardons (Jan 6, Fake Electors)
+Focus on impunity signal and deterrence removal, not individual details.
+Frame as: permission for future actors, message to supporters, threat to rule of law.
+
+#### Group Pardons
+Focus on the group's collective connection, not individuals.
+Frame as categorical decision and signal to future actors.
+
+#### Missing Information
+- Prefer omitting missing details over calling them out
+- If noting absence: "No public justification cited" (not "Not in record")
+- Never fill gaps with inference
+
+### Profanity Rules
+
+```javascript
+const PROFANITY_ALLOWED = {
+  5: true,   // Paid-to-Play - full spice
+  4: true,   // Friends & Family - allowed
+  3: false,  // Swamp Creature - sardonic, not profane
+  2: false,  // Celebrity Request - measured
+  1: false   // Broken Clock - respectful acknowledgment
+};
+```
+
 This document should be updated as business logic evolves.
