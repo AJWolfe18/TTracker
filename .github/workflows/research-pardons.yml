@@ -23,6 +23,10 @@ on:
         required: false
         default: "false"
 
+permissions:
+  contents: read
+  actions: write
+
 concurrency:
   group: research-pardons-test
   cancel-in-progress: true
@@ -32,6 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/test'
     timeout-minutes: 10
+    environment:
+      name: test
 
     steps:
       - name: Checkout code
@@ -52,13 +58,22 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           RUN_ID: ${{ github.run_id }}
+        shell: bash
         run: |
-          ARGS="--limit=${{ inputs.limit }}"
-          if [ "${{ inputs.force }}" = "true" ]; then
-            ARGS="$ARGS --force"
+          set -Eeuo pipefail
+          LIMIT="${{ inputs.limit }}"
+          FORCE="${{ inputs.force }}"
+          # Validate numeric limit to avoid shell/arg injection
+          if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
+            echo "Invalid limit: $LIMIT" >&2
+            exit 2
           fi
-          echo "Running: node scripts/enrichment/perplexity-research.js $ARGS"
-          node scripts/enrichment/perplexity-research.js $ARGS
+          ARGS=( "--limit=$LIMIT" )
+          if [[ "$FORCE" == "true" ]]; then
+            ARGS+=( "--force" )
+          fi
+          echo "Running: node scripts/enrichment/perplexity-research.js ${ARGS[*]}"
+          node scripts/enrichment/perplexity-research.js "${ARGS[@]}"
 
       - name: Upload logs on failure
         if: failure()
