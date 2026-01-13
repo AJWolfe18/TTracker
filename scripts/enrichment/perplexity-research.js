@@ -48,7 +48,8 @@ const CONNECTION_TYPES = [
 // Event types for receipts_timeline
 const EVENT_TYPES = [
   'donation', 'conviction', 'pardon_granted', 'pardon_request',
-  'mar_a_lago_visit', 'investigation', 'sentencing', 'legal_filing', 'other'
+  'mar_a_lago_visit', 'investigation', 'sentencing', 'legal_filing',
+  'indictment', 'arrest', 'campaign_event', 'plea_deal', 'appeal', 'other'
 ];
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -76,7 +77,7 @@ Return JSON with EXACTLY these fields:
   "corruption_level": 1-5,
   "corruption_reasoning": "Why this corruption level (1 sentence)",
   "receipts_timeline": [
-    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing|legal_filing|pardon_request|other", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
+    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing|legal_filing|pardon_request|indictment|arrest|campaign_event|plea_deal|appeal|other", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
   ],
   "donation_amount_usd": null,
   "sources": ["url1", "url2"]
