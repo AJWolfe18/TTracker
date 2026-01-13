@@ -14,7 +14,9 @@
     "qa:idempotency": "node scripts/tests/enqueue-idempotency.mjs",
     "qa:concurrency": "node scripts/tests/clustering-concurrency-fixed.mjs",
     "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency",
-    "ingest:pardons": "node scripts/ingest/doj-pardons-scraper.js"
+    "ingest:pardons": "node scripts/ingest/doj-pardons-scraper.js",
+    "research:pardons": "node scripts/enrichment/perplexity-research.js",
+    "research:pardons:dry-run": "node scripts/enrichment/perplexity-research.js --dry-run"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

@@ -1,8 +1,8 @@
 # Plan: Pardons Tracker Epic Breakdown (ADO-109)
 
-**Status:** IN PROGRESS - MVP Complete, AI Enrichment Phase Starting
+**Status:** IN PROGRESS - MVP Complete, AI Enrichment Code Complete
 **Created:** 2026-01-11
-**Updated:** 2026-01-13 (Session 8B - Added Perplexity integration)
+**Updated:** 2026-01-13 (Session 9 - ADO-253 code complete, migration pending)
 **PRD:** `docs/features/pardons-tracker/prd.md`
 
 ## Overview
@@ -36,9 +36,9 @@ Epic 109: Trump Pardons Tracker
 │   └── Story 1.5: DOJ Scraper - Pardon Ingestion (ADO-250) ✅ Ready for Prod
 │
 ├── Feature: Pardons AI Enrichment (ADO-240) ← ACTIVE
-│   ├── Story 2.0: Perplexity Research Integration (ADO-253) ← NEXT
-│   │   └── Daily workflow, research facts, populate connection_type/corruption_level
-│   ├── Story 2.1: GPT Tone Generation (ADO-246) - depends on 253
+│   ├── Story 2.0: Perplexity Research Integration (ADO-253) 🔨 CODE COMPLETE
+│   │   └── Migration pending, then test + backfill 92 pardons
+│   ├── Story 2.1: GPT Tone Generation (ADO-246) ← NEXT (depends on 253)
 │   │   └── summary_spicy, why_it_matters, pattern_analysis
 │   ├── Story 2.2: Display Enrichment (ADO-247)
 │   │   └── Show AI content in modal
@@ -246,27 +246,40 @@ Research FACTS         →      Apply TONE          →      Display (ADO-247)
 
 ### Stories Under This Feature:
 
-#### Story 2.0: Perplexity Research Integration (ADO-253) ← NEXT
+#### Story 2.0: Perplexity Research Integration (ADO-253) 🔨 CODE COMPLETE
 **Description:** Set up Perplexity API to research pardon recipients and populate factual data.
+**Status:** Code complete - Migration pending application, then test + backfill
 
 **Acceptance Criteria:**
-- [ ] Perplexity API client with PERPLEXITY_API_KEY from GitHub Secrets
-- [ ] Uses Sonar model (~$0.0065/pardon)
-- [ ] Research prompt extracts: connection_type, corruption_level, receipts_timeline
-- [ ] **GitHub Actions Workflow:**
+- [x] Perplexity API client with PERPLEXITY_API_KEY from GitHub Secrets
+- [x] Uses Sonar model (~$0.005/pardon)
+- [x] Research prompt extracts: connection_type, corruption_level, receipts_timeline
+- [x] **GitHub Actions Workflow:**
   - New workflow: `research-pardons.yml`
-  - Runs daily (cron schedule)
-  - Manual trigger option (workflow_dispatch)
-- [ ] **Production Safeguards:**
-  - Idempotent: skips if `research_status='complete'` (unless --force)
-  - Budget tracking in budgets table
+  - Manual-only (cron doesn't work on non-default branch)
+  - Inputs: `--limit`, `--force`
+  - Concurrency guard (cancel-in-progress)
+- [x] **Production Safeguards:**
+  - Idempotent via `research_prompt_version` column on pardons
+  - Cost tracking in `pardon_research_costs` table
+  - Error tracking with dedupe in `pardon_research_errors` table
+  - RLS + REVOKE on telemetry tables (hard deny)
   - Sets `research_status='complete'` on success
-- [ ] npm script: `npm run research:pardons [--force]`
+- [x] npm script: `npm run research:pardons [--force] [--limit=N] [--dry-run]`
+- [ ] **PENDING:** Apply migration 057 to TEST database
+- [ ] **PENDING:** Test with 3 pardons (dry-run + live)
+- [ ] **PENDING:** Backfill 92 pardons
+
+**Files Created:**
+- `migrations/057_pardon_research_tables.sql`
+- `scripts/enrichment/perplexity-research.js`
+- `.github/workflows/research-pardons.yml`
 
 **Technical Notes:**
-- Cost: ~$0.0065/pardon (92 pardons = ~$0.60)
+- Cost: ~$0.005/pardon (92 pardons = ~$0.46)
 - Output feeds into ADO-246 (GPT tone)
 - See PRD Section 10 for prompt template
+- Expert review applied: table-specific constraints, sequence REVOKE, selective index
 
 ---
 
