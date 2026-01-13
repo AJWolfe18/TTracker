@@ -2426,21 +2426,20 @@
   margin-top: 0.75rem;
 }
 
-/* Inline Newsletter CTA (50% scroll) */
+/* Inline Newsletter CTA (50% scroll - fixed position slide-in) */
 .tt-newsletter-inline {
   background: linear-gradient(135deg, var(--filter-active-bg) 0%, var(--text-link) 100%);
   border-radius: var(--card-radius);
   padding: 1.5rem;
-  margin: 2rem 0;
   text-align: center;
-  box-shadow: var(--card-shadow);
-  animation: tt-newsletter-slide-in 0.3s ease-out;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: tt-newsletter-slide-in 0.4s ease-out;
 }
 
 @keyframes tt-newsletter-slide-in {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(100%);
   }
   to {
     opacity: 1;
@@ -2505,7 +2504,12 @@
 }
 
 .tt-newsletter-inline-wrapper {
-  position: relative;
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  max-width: 360px;
+  width: calc(100% - 3rem);
 }
 
 /* Privacy note */
@@ -2532,6 +2536,19 @@
 
   .tt-newsletter-submit {
     width: 100%;
+  }
+
+  /* Make inline CTA full-width on mobile */
+  .tt-newsletter-inline-wrapper {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    width: auto;
+    max-width: none;
+  }
+
+  .tt-newsletter-inline {
+    padding: 1rem;
   }
 }
 

@@ -74,10 +74,24 @@
 2. Click **Add site**
 3. Fill in:
    - **Site name:** TrumpyTracker Newsletter
-   - **Hostname:** `trumpytracker.com` (add both prod and test domains)
+   - **Hostnames:** (add ALL of these)
+     - `trumpytracker.com` (PROD)
+     - `test--trumpytracker.netlify.app` (TEST)
+     - `localhost` (local development)
    - **Widget Mode:** Managed (recommended)
    - **Pre-Clearance:** Disabled
 4. Click **Create**
+
+### 2.1b Add Missing Hostnames (if widget already exists)
+
+If you see "Invalid domain" error:
+1. Go to https://dash.cloudflare.com/?to=/:account/turnstile
+2. Click on your TrumpyTracker widget
+3. Scroll to **Hostname** section
+4. Add missing domains:
+   - `test--trumpytracker.netlify.app`
+   - `localhost`
+5. Click **Save**
 
 ### 2.2 Get Keys
 
@@ -145,6 +159,14 @@ supabase secrets unset KEY_NAME --project-ref wnrjrywpcadwutfykflu
 - Wait 24-48 hours for processing
 - Verify events are firing in DebugView
 - Check dimension name matches event parameter exactly
+
+### Turnstile shows "Invalid domain" error
+- **CAUSE:** The current domain isn't in the Turnstile allowed hostnames
+- **FIX:** See section 2.1b above - add the missing domain to Turnstile settings
+- Required hostnames:
+  - `trumpytracker.com` (PROD)
+  - `test--trumpytracker.netlify.app` (TEST)
+  - `localhost` (development)
 
 ### Turnstile widget not loading
 - Verify hostname is added to Turnstile widget settings
