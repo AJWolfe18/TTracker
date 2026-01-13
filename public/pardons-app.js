@@ -581,16 +581,12 @@
               React.createElement(ReceiptsTimeline, { events: p.receipts_timeline })
             ),
 
-            // What Happened Next (if available)
-            (p.post_pardon_status || p.post_pardon_notes) && React.createElement('div', { className: 'tt-pardon-section' },
+            // What Happened Next (only show if noteworthy - not "quiet", or has notes)
+            ((p.post_pardon_status && p.post_pardon_status !== 'quiet') || p.post_pardon_notes) && React.createElement('div', { className: 'tt-pardon-section' },
               React.createElement('h3', { className: 'tt-section-title' }, 'What Happened Next'),
               React.createElement('div', { className: 'tt-section-content' },
-                p.post_pardon_status && React.createElement('span', {
-                  className: 'tt-post-status-badge',
-                  style: { backgroundColor: postStatus.color }
-                }, postStatus.label),
-                p.post_pardon_notes && React.createElement('p', { className: 'tt-post-notes' },
-                  p.post_pardon_notes
+                React.createElement('p', { className: 'tt-post-notes' },
+                  p.post_pardon_notes || (p.post_pardon_status === 'under_investigation' ? 'Currently under investigation.' : 'Has since re-offended.')
                 )
               )
             ),
