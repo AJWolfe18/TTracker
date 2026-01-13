@@ -1,8 +1,8 @@
 # Plan: Pardons Tracker Epic Breakdown (ADO-109)
 
-**Status:** IN PROGRESS - MVP Stories Complete, Starting Ingestion Pipeline
+**Status:** IN PROGRESS - MVP Complete, AI Enrichment Phase Starting
 **Created:** 2026-01-11
-**Updated:** 2026-01-12 (Session 8)
+**Updated:** 2026-01-13 (Session 8B - Added Perplexity integration)
 **PRD:** `docs/features/pardons-tracker/prd.md`
 
 ## Overview
@@ -27,18 +27,23 @@ The Pardons Tracker is a dedicated section tracking presidential pardons with:
 
 ```
 Epic 109: Trump Pardons Tracker
-├── Feature: Pardons Tracker MVP (ADO-239) - ACTIVE
+├── Feature: Pardons Tracker MVP (ADO-239) ✅ COMPLETE
 │   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ Ready for Prod
 │   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ Ready for Prod
 │   ├── Story 1.3A: Frontend List + Cards + Basic Modal (ADO-251) ✅ Closed
 │   ├── Story 1.3B: Receipts Timeline + What Happened Next (ADO-244) 🧪 Testing
 │   ├── Story 1.4: Filtering & Search (ADO-245) 🧪 Testing
-│   └── Story 1.5: DOJ Scraper - Pardon Ingestion (ADO-250) ← IN PROGRESS
+│   └── Story 1.5: DOJ Scraper - Pardon Ingestion (ADO-250) ✅ Ready for Prod
 │
-├── Feature: Pardons AI Enrichment (NEW - to create after ADO-250)
-│   ├── Story 2.1: Perplexity API Integration + Research Prompts
-│   ├── Story 2.2: GPT Tone Layer (summary_spicy, why_it_matters)
-│   └── Story 2.3: Related Stories Linking
+├── Feature: Pardons AI Enrichment (ADO-240) ← ACTIVE
+│   ├── Story 2.0: Perplexity Research Integration (ADO-253) ← NEXT
+│   │   └── Daily workflow, research facts, populate connection_type/corruption_level
+│   ├── Story 2.1: GPT Tone Generation (ADO-246) - depends on 253
+│   │   └── summary_spicy, why_it_matters, pattern_analysis
+│   ├── Story 2.2: Display Enrichment (ADO-247)
+│   │   └── Show AI content in modal
+│   └── Story 2.3: Related Stories Linking (ADO-248)
+│       └── Link pardons to news stories
 │
 ├── Feature: Social Sharing for Pardon Cards (ADO-236)
 │   └── Story 3.1: Social Sharing + OG Meta Endpoint
@@ -222,56 +227,83 @@ Epic 109: Trump Pardons Tracker
 
 ---
 
-## Feature 2: Pardons AI Enrichment
+## Feature 2: Pardons AI Enrichment (ADO-240)
 
-**Description:** AI-powered enrichment for pardon analysis and pattern detection.
+**Description:** Two-phase AI enrichment: Perplexity for research/facts, GPT for editorial tone.
+**Status:** Active - Starting ADO-253
+
+### Architecture: Two-Phase Pipeline
+
+```
+Perplexity (ADO-253)          GPT (ADO-246)
+─────────────────────         ──────────────────
+Research FACTS         →      Apply TONE          →      Display (ADO-247)
+• Trump connection            • summary_spicy            • Show in modal
+• Corruption level            • why_it_matters           • Loading states
+• Receipts timeline           • pattern_analysis
+• Sources/citations           • Sets is_public=true
+```
 
 ### Stories Under This Feature:
 
-#### Story 2.1: AI Enrichment Prompt & Job Type
-**Description:** Create AI enrichment system for pardons with production safeguards.
+#### Story 2.0: Perplexity Research Integration (ADO-253) ← NEXT
+**Description:** Set up Perplexity API to research pardon recipients and populate factual data.
 
 **Acceptance Criteria:**
-- [ ] New job type `pardon.enrich` in job queue
-- [ ] Enrichment prompt per PRD Section 10
-- [ ] Generates: `summary_neutral`, `summary_spicy`, `why_it_matters`, `pattern_analysis`
-- [ ] **Idempotent enqueue:**
-  - `payload_hash` unique constraint on job queue
-  - Prevents duplicate enrichment jobs
-- [ ] **Cooldown enforcement:**
-  - Skip if `enriched_at > NOW() - INTERVAL '12 hours'` (unless forced)
-- [ ] **Budget enforcement:**
-  - Check daily budget before OpenAI call
-  - Refuse/queue when $5/day cap exceeded
-  - Atomic budget decrement on success
-- [ ] **Response validation:**
-  - Strict JSON schema validation on AI response
-  - Reject/abstain when low confidence or malformed response
-- [ ] **Force mode:**
-  - `--force` flag bypasses idempotency check (salts payload_hash or uses separate dedupe key)
-  - Allows re-enrichment even within cooldown window
-- [ ] Manual trigger script: `npm run enrich:pardons` (with optional `--force` flag)
+- [ ] Perplexity API client with PERPLEXITY_API_KEY from GitHub Secrets
+- [ ] Uses Sonar model (~$0.0065/pardon)
+- [ ] Research prompt extracts: connection_type, corruption_level, receipts_timeline
+- [ ] **GitHub Actions Workflow:**
+  - New workflow: `research-pardons.yml`
+  - Runs daily (cron schedule)
+  - Manual trigger option (workflow_dispatch)
+- [ ] **Production Safeguards:**
+  - Idempotent: skips if `research_status='complete'` (unless --force)
+  - Budget tracking in budgets table
+  - Sets `research_status='complete'` on success
+- [ ] npm script: `npm run research:pardons [--force]`
 
 **Technical Notes:**
-- Add to job-queue-worker.js processor
-- Use GPT-4o-mini (~$0.003/pardon)
-- Follow existing story enrichment pattern in `enrich-stories-inline.js`
+- Cost: ~$0.0065/pardon (92 pardons = ~$0.60)
+- Output feeds into ADO-246 (GPT tone)
+- See PRD Section 10 for prompt template
 
 ---
 
-#### Story 2.2: Why It Matters & Pattern Analysis
-**Description:** Implement AI-generated "Why It Matters" and pattern analysis display.
+#### Story 2.1: GPT Tone Generation (ADO-246)
+**Description:** Generate editorial content using GPT based on Perplexity research data.
 
 **Acceptance Criteria:**
-- [ ] Display `why_it_matters` in detail modal (new section)
-- [ ] Display `pattern_analysis` (how this fits broader pardon patterns)
-- [ ] Visual formatting for analysis sections (distinct styling from basic info)
-- [ ] Loading/placeholder state if not yet enriched
-- [ ] "Enrich Now" button (calls enqueue, for future admin dashboard)
+- [ ] Takes research data from Perplexity (ADO-253)
+- [ ] Generates: `summary_neutral`, `summary_spicy`, `why_it_matters`, `pattern_analysis`
+- [ ] **Production Safeguards:**
+  - Idempotent enqueue via payload_hash
+  - Cooldown: skip if `enriched_at > NOW() - 12 hours`
+  - Budget enforcement ($5/day cap)
+  - JSON schema validation
+- [ ] Sets `is_public=true` after successful enrichment
+- [ ] npm script: `npm run enrich:pardons [--force]`
+
+**Technical Notes:**
+- Cost: ~$0.003/pardon (GPT-4o-mini)
+- **Depends on ADO-253** - needs research data first
+- Follow existing story enrichment pattern
 
 ---
 
-#### Story 2.3: Related Stories Linking
+#### Story 2.2: Display Enrichment (ADO-247)
+**Description:** Display AI-generated content in the pardon detail modal.
+
+**Acceptance Criteria:**
+- [ ] Display `why_it_matters` in detail modal
+- [ ] Display `pattern_analysis` section
+- [ ] Visual formatting distinct from basic info
+- [ ] Loading/placeholder state if not yet enriched
+- [ ] "Enrich Now" button (future admin use)
+
+---
+
+#### Story 2.3: Related Stories Linking (ADO-248)
 **Description:** Link pardons to related news stories from RSS feeds.
 
 **Acceptance Criteria:**

@@ -1,7 +1,8 @@
 # PRD: Trump Pardons Tracker
 
-**Status:** Draft - Aligns with ADO-109
+**Status:** In Progress - MVP Complete, AI Enrichment In Progress
 **Created:** 2026-01-10
+**Updated:** 2026-01-13 (Added Perplexity integration approach)
 **Author:** Josh + Claude
 **Related ADO:** Epic 109 (Trump Pardons Tracker)
 
@@ -32,18 +33,22 @@ A dedicated Pardons Tracker that:
 
 ## 2. Scope
 
-### In Scope (MVP)
-- **Term 2 only** (2025-present)
-- Individual named pardons (not mass Jan 6 pardons initially)
-- Relationship-based categorization
-- Full AI analysis (severity, why it matters, background research)
-- Admin manual entry (no automation)
+### In Scope (MVP) - ✅ COMPLETE
+- **Term 2 only** (2025-present) ✅
+- Individual named pardons + mass pardons (Jan 6, fake electors) ✅
+- Relationship-based categorization ✅
+- DOJ scraper for automated ingestion ✅ (ADO-250)
+- Frontend UI with filtering and search ✅
+
+### In Progress (AI Enrichment)
+- Perplexity API for research/facts (ADO-253)
+- GPT for editorial tone generation (ADO-246)
+- Related stories linking (ADO-248)
 
 ### Out of Scope (Future)
 - Term 1 backfill (could add later)
-- Mass pardon tracking (1,500+ Jan 6 individuals)
-- Automated ingestion from DOJ/news
 - Pardon request tracking (rumors/pending)
+- Connection network visualization
 
 ---
 
@@ -87,30 +92,40 @@ For each pardon, we research the Trump connection using factual sources:
 
 ---
 
-## 4. User Workflow
+## 4. Data Pipeline (Automated)
 
 ```
-DOJ/News announces pardon
+DOJ publishes pardon
     ↓
-Admin enters pardon in system
-    ├── Recipient name
-    ├── Pardon date
-    ├── Crime description
-    └── Clemency type (pardon/commutation/pre-emptive)
+DOJ Scraper (daily via GitHub Actions)           [ADO-250 ✅]
+    ├── Scrapes DOJ clemency page
+    ├── Extracts: name, date, district, offense
+    ├── Deduplicates via source_key hash
+    └── Inserts with is_public=false, research_status='pending'
     ↓
-Admin/AI researches recipient
-    ├── How they know Trump
-    ├── Original conviction details
-    └── Any "shady" news about the deal
+Perplexity Research (daily via GitHub Actions)   [ADO-253]
+    ├── Queries Perplexity Sonar for each pardon
+    ├── Researches: Trump connection, corruption indicators
+    ├── Populates: connection_type, corruption_level, receipts_timeline
+    └── Sets research_status='complete'
     ↓
-AI enrichment
-    ├── Why it matters
-    ├── Pattern analysis
-    ├── Severity rating
-    └── Related stories (from existing RSS)
+GPT Tone Generation                              [ADO-246]
+    ├── Takes research data from Perplexity
+    ├── Generates: summary_spicy, why_it_matters, pattern_analysis
+    ├── Sets is_public=true
+    └── Updates enriched_at timestamp
     ↓
 Public display on Pardons tab
 ```
+
+### Two-Phase AI Pipeline
+
+| Phase | Tool | Purpose | Cost |
+|-------|------|---------|------|
+| **Research** | Perplexity Sonar | Gather facts (connection, corruption, timeline) | ~$0.0065/pardon |
+| **Tone** | GPT-4o-mini | Generate editorial content (spicy summaries) | ~$0.003/pardon |
+
+**Why split?** Perplexity excels at web research with citations. GPT excels at creative writing with specific tone. Combined: ~$0.01/pardon.
 
 ---
 
@@ -264,28 +279,85 @@ CREATE INDEX idx_pardons_search ON pardons USING GIN(search_vector);
 
 ---
 
-## 10. AI Enrichment Prompt (Draft)
+## 10. AI Enrichment System
+
+### Phase 1: Perplexity Research (ADO-253)
+
+**Model:** Perplexity Sonar (~$0.0065/pardon)
+**Trigger:** Daily GitHub Actions workflow (`research-pardons.yml`)
 
 ```
-You are analyzing a presidential pardon. Given the pardon details, provide:
+Research the following pardon recipient and provide structured JSON:
 
-1. SUMMARY_NEUTRAL: Factual 2-3 sentence summary of who was pardoned and why
-2. SUMMARY_SPICY: Engaging summary with accountability framing
+RECIPIENT: {recipient_name}
+PARDON DATE: {pardon_date}
+OFFENSE: {offense_raw}
+DISTRICT: {conviction_district}
+
+Return JSON with:
+{
+  "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|no_connection",
+  "trump_connection_detail": "2-3 sentence explanation of relationship to Trump",
+  "corruption_level": 1-5,  // 5=paid-to-play, 1=arguably justified
+  "corruption_reasoning": "Why this corruption level",
+  "receipts_timeline": [
+    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing", "description": "What happened", "amount_usd": null, "source_url": "citation"}
+  ],
+  "donation_amount_usd": null,  // If applicable
+  "sources": ["url1", "url2"]
+}
+
+RULES:
+- Only include facts with citations
+- If no Trump connection found, use "no_connection"
+- Include FEC donation records if available
+- Note any ongoing investigations affected by pardon
+```
+
+### Phase 2: GPT Tone Generation (ADO-246)
+
+**Model:** GPT-4o-mini (~$0.003/pardon)
+**Trigger:** After Perplexity research completes
+
+```
+You are writing for TrumpyTracker, a political accountability site with a sharp, snarky editorial voice.
+
+Given this research data about a pardon:
+{perplexity_research_output}
+
+Generate:
+
+1. SUMMARY_NEUTRAL: Factual 2-3 sentence summary (for accessibility)
+
+2. SUMMARY_SPICY: "THE REAL STORY" - Sharp, engaging summary that:
+   - Leads with the most damning detail
+   - Uses active voice and punchy sentences
+   - Calls out hypocrisy or corruption directly
+   - Avoids both-sidesing obvious wrongdoing
+
 3. WHY_IT_MATTERS: What this pardon means for:
-   - The justice system
-   - Presidential power precedents
-   - Ongoing investigations
-   - Pattern of corruption
-4. PATTERN_ANALYSIS: How this fits Trump's broader pardon pattern:
-   - Similar recipients (allies, donors, etc.)
-   - Timing (before trials, after conviction)
-   - Benefits to Trump personally
+   - The justice system ("rules for thee, not for me")
+   - Ongoing investigations (did this kill a case?)
+   - Pattern of corruption (how does this fit the broader scheme?)
 
-CRITICAL RULES:
-- All claims must be sourced/verifiable
-- Note if recipient was cooperating with investigations
-- Flag any evidence of quid pro quo
-- Identify if pardon benefits Trump's legal exposure
+4. PATTERN_ANALYSIS: How this fits Trump's pardon pattern:
+   - Similar recipients pardoned
+   - Timing significance
+   - Who benefits (follow the money/power)
+
+TONE GUIDELINES:
+- Be factual but don't be boring
+- Righteous anger is appropriate for corruption
+- Use specific details, not vague accusations
+- Cite the receipts timeline events
+```
+
+### Workflow Sequence
+
+```
+1. DOJ Scraper runs → inserts raw pardon data (research_status='pending')
+2. Perplexity workflow runs → populates facts (research_status='complete')
+3. GPT workflow runs → generates tone (is_public=true, enriched_at=NOW())
 ```
 
 ---
@@ -355,40 +427,70 @@ Last updated: [Date]
 
 ---
 
-## 12. MVP Phasing
+## 12. Implementation Phases
 
-### Phase 1: Foundation (MVP)
-- [ ] Database schema + migrations
-- [ ] Admin entry form (basic)
-- [ ] Pardons tab UI (list view)
-- [ ] Card component
-- [ ] Detail modal
-- [ ] Filtering (relationship, severity)
+### Phase 1: Foundation (MVP) ✅ COMPLETE
+- [x] Database schema + migrations (ADO-241)
+- [x] Edge Functions: pardons-active, pardons-detail, pardons-stats (ADO-242)
+- [x] Pardons tab UI: list, cards, modal (ADO-251)
+- [x] Receipts timeline + What Happened Next (ADO-244)
+- [x] Filtering & Search (ADO-245)
+- [x] DOJ Scraper - automated ingestion (ADO-250)
 
-### Phase 2: Enrichment
-- [ ] AI enrichment prompt
-- [ ] Enrichment job type
-- [ ] "Why it matters" + pattern analysis
-- [ ] Related stories linking
+### Phase 2: AI Enrichment 🚧 IN PROGRESS
+- [ ] **Perplexity Research Integration** (ADO-253)
+  - [ ] Perplexity API client setup
+  - [ ] Research prompt for facts extraction
+  - [ ] GitHub Actions workflow (`research-pardons.yml`) - daily
+  - [ ] Populate: connection_type, corruption_level, receipts_timeline
+- [ ] **GPT Tone Generation** (ADO-246)
+  - [ ] Tone prompt for editorial content
+  - [ ] Generate: summary_spicy, why_it_matters, pattern_analysis
+  - [ ] Set is_public=true after enrichment
+- [ ] **Related Stories Linking** (ADO-248)
+  - [ ] Query stories table for pardon mentions
+  - [ ] Populate pardon_story junction table
+- [ ] **Display Enrichment** (ADO-247)
+  - [ ] Show why_it_matters in modal
+  - [ ] Show pattern_analysis
+  - [ ] Loading states for unenriched pardons
 
-### Phase 3: Polish
-- [ ] Search functionality
-- [ ] Crime category filtering
-- [ ] Statistics dashboard (counts by category)
-- [ ] Mass pardon summary (Jan 6 as single entry)
+### Phase 3: Social & Polish
+- [ ] Social sharing (ADO-236)
+- [ ] Statistics dashboard enhancements
+- [ ] Connection network visualization (future)
 
 ---
 
 ## 13. Cost Analysis
 
-| Component | Cost | Notes |
-|-----------|------|-------|
-| Database storage | Free | Within Supabase limits |
-| Pardon enrichment | ~$0.003/pardon | GPT-4o-mini (~1K tokens) |
-| 150 pardons (Term 2) | ~$0.45 total | One-time cost |
-| Ongoing (monthly) | ~$0.05/month | ~15-20 new pardons/month |
+### Per-Pardon Costs
 
-**Budget Impact:** Negligible (<1% of monthly budget)
+| Phase | Tool | Cost/Pardon | Notes |
+|-------|------|-------------|-------|
+| Research | Perplexity Sonar | ~$0.0065 | Tokens + request fee |
+| Tone | GPT-4o-mini | ~$0.003 | ~1K tokens |
+| **Total** | | **~$0.01** | Both phases |
+
+### Estimated Spend
+
+| Scenario | Pardons | Cost |
+|----------|---------|------|
+| Initial backfill | 92 | ~$0.92 |
+| Monthly new pardons | ~10 | ~$0.10 |
+| Re-enrichment buffer | ~20 | ~$0.20 |
+| **Monthly total** | | **~$1-2/month** |
+
+### Budget Impact
+
+| Service | Monthly Cost | % of $50 Budget |
+|---------|-------------|-----------------|
+| Perplexity (pardons) | ~$1 | 2% |
+| OpenAI (pardons + stories) | ~$20 | 40% |
+| Supabase | Free tier | 0% |
+| **Total** | ~$21-22 | 42-44% |
+
+**Verdict:** Well within budget. Perplexity adds negligible cost for significant research quality improvement.
 
 ---
 
