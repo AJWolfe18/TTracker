@@ -2431,6 +2431,12 @@
   transform: scale(1.1);
 }
 
+.tt-corruption-pill:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+  border-color: var(--text-link);
+}
+
 .tt-corruption-pill.active {
   color: #ffffff;
   border-color: transparent;
@@ -2502,6 +2508,22 @@
   border-color: var(--severity-critical-bg);
   color: var(--severity-critical-bg);
   background: rgba(220, 38, 38, 0.05);
+}
+
+.tt-clear-filters-btn:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+}
+
+/* Dark mode contrast fix for clear filters button */
+[data-theme="dark"] .tt-clear-filters-btn {
+  color: #d1d5db;
+  border-color: #6b7280;
+}
+
+[data-theme="dark"] .tt-clear-filters-btn:hover {
+  color: #fca5a5;
+  border-color: #dc2626;
 }
 
 /* Results summary */

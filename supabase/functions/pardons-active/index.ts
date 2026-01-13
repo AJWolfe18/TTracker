@@ -44,6 +44,21 @@ function isValidCursorId(id: unknown): id is number | string {
   return typeof id === 'string' && /^\d+$/.test(id)
 }
 
+function isValidCursorCorruption(c: unknown): c is number | null {
+  return c === null || c === undefined ||
+    (typeof c === 'number' && Number.isInteger(c) && c >= 1 && c <= 5)
+}
+
+function isValidCursorName(n: unknown): n is string {
+  return typeof n === 'string' && n.length > 0 && n.length <= 200
+}
+
+// Escape special characters for PostgREST filter strings
+function escapePostgrestValue(value: string): string {
+  // Escape double quotes and backslashes for PostgREST string literals
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 // Enum validation sets
 const VALID_CONNECTION_TYPES = new Set([
   'mar_a_lago_vip', 'major_donor', 'family', 'political_ally',
@@ -96,9 +111,17 @@ serve(async (req: Request) => {
     const cursor = url.searchParams.get('cursor') || undefined
     let cursorData = parseCursor(cursor)
 
-    // Validate cursor data
-    if (cursorData && (!isValidCursorDate(cursorData.d) || !isValidCursorId(cursorData.id))) {
-      cursorData = null
+    // Validate cursor data comprehensively
+    if (cursorData) {
+      const isValid =
+        isValidCursorId(cursorData.id) &&
+        VALID_SORT_OPTIONS.has(cursorData.s) &&
+        (cursorData.d === undefined || isValidCursorDate(cursorData.d)) &&
+        (cursorData.c === undefined || isValidCursorCorruption(cursorData.c)) &&
+        (cursorData.n === undefined || isValidCursorName(cursorData.n))
+      if (!isValid) {
+        cursorData = null
+      }
     }
 
     // Search param (full-text via TSVECTOR)
@@ -201,8 +224,10 @@ serve(async (req: Request) => {
         }
       } else if (sort === 'name' && cursorData.n) {
         // recipient_name ASC, id ASC - get items with greater name or same name with greater id
+        // Escape the name value to prevent injection attacks
+        const escapedName = escapePostgrestValue(cursorData.n)
         query = query.or(
-          `recipient_name.gt.${cursorData.n},and(recipient_name.eq.${cursorData.n},id.gt.${cursorData.id})`
+          `recipient_name.gt."${escapedName}",and(recipient_name.eq."${escapedName}",id.gt.${cursorData.id})`
         )
       } else if (cursorData.d) {
         // date sort: pardon_date DESC, id DESC

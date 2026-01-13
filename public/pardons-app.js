@@ -680,11 +680,7 @@
       onSubmit(localValue.trim());
     };
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        handleSubmit(e);
-      }
-    };
+    // Note: No onKeyDown needed - form's onSubmit handles Enter natively
 
     const handleClear = () => {
       setLocalValue('');
@@ -705,7 +701,6 @@
           placeholder: 'Search pardons...',
           value: localValue,
           onChange: (e) => setLocalValue(e.target.value),
-          onKeyDown: handleKeyDown,
           'aria-label': 'Search pardons'
         }),
         localValue && React.createElement('button', {
@@ -1081,13 +1076,14 @@
       }
     }, [nextCursor, loadingMore, loadPardons]);
 
-    // Filter change handler - updates state and URL
+    // Sync filters to URL in effect (avoids race conditions with batched updates)
+    useEffect(() => {
+      updateUrlFromFilters(filters);
+    }, [filters]);
+
+    // Filter change handler - updates state only (URL sync handled by effect)
     const handleFilterChange = useCallback((key, value) => {
-      setFilters(prev => {
-        const newFilters = { ...prev, [key]: value };
-        updateUrlFromFilters(newFilters);
-        return newFilters;
-      });
+      setFilters(prev => ({ ...prev, [key]: value }));
       trackEvent('pardons_filter_change', { filter: key, value });
     }, []);
 
@@ -1153,8 +1149,13 @@
         hasActiveFilters
       }),
 
-      // Results count
-      React.createElement('div', { className: 'tt-results-summary' },
+      // Results count (with aria-live for screen readers)
+      React.createElement('div', {
+        className: 'tt-results-summary',
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-atomic': 'true'
+      },
         React.createElement('span', { className: 'tt-results-count' },
           loading ? 'Loading...' : `${pardons.length} ${pardons.length === 1 ? 'pardon' : 'pardons'}${hasMore ? '+' : ''}`
         )
