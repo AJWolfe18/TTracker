@@ -18,13 +18,13 @@ Comprehensive analytics tracking, newsletter signup, and retention/loyalty metri
 
 | ADO | Title | Points | Status |
 |-----|-------|--------|--------|
-| 255 | Analytics DB Schema + GA4 Setup | 2 | Active |
-| 256 | Newsletter Backend (Edge Functions) | 3 | New |
-| 257 | Newsletter Frontend (UI Components) | 2 | New |
+| 255 | Analytics DB Schema + GA4 Setup | 2 | **Ready for Prod** |
+| 256 | Newsletter Backend (Edge Functions) | 3 | **Ready for Prod** |
+| 257 | Newsletter Frontend (UI Components) | 2 | **Ready for Prod** |
 | 258 | Frontend Analytics Events | 3 | New |
 | 259 | Pre-Commerce + Search Intelligence | 2 | New |
 
-**Total:** 12 points across 5 stories
+**Total:** 12 points | **Ready for Prod:** 7 points (58%)
 
 ---
 
