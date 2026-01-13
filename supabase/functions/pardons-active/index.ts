@@ -5,8 +5,11 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { getSupabaseClient } from '../_shared/auth.ts'
 
 interface CursorData {
-  d: string  // pardon_date
-  id: string // record id
+  d?: string  // pardon_date (for date sort)
+  c?: number  // corruption_level (for corruption sort)
+  n?: string  // recipient_name (for name sort)
+  id: string  // record id
+  s: string   // sort type indicator
 }
 
 function parseCursor(cursor?: string): CursorData | null {
@@ -19,8 +22,16 @@ function parseCursor(cursor?: string): CursorData | null {
   }
 }
 
-function createCursor(pardonDate: string, id: string): string {
-  return btoa(JSON.stringify({ d: pardonDate, id }))
+function createCursor(item: any, sort: string): string {
+  const base: CursorData = { id: String(item.id), s: sort }
+  if (sort === 'corruption') {
+    base.c = item.corruption_level
+  } else if (sort === 'name') {
+    base.n = item.recipient_name
+  } else {
+    base.d = item.pardon_date
+  }
+  return btoa(JSON.stringify(base))
 }
 
 // Cursor validation helpers
@@ -50,6 +61,8 @@ const VALID_RESEARCH_STATUSES = new Set(['complete', 'in_progress', 'pending'])
 const VALID_POST_PARDON_STATUSES = new Set(['quiet', 'under_investigation', 're_offended'])
 
 const VALID_RECIPIENT_TYPES = new Set(['person', 'group'])
+
+const VALID_SORT_OPTIONS = new Set(['date', 'corruption', 'name'])
 
 function badParam(name: string, value: string) {
   return new Response(
@@ -98,6 +111,7 @@ serve(async (req: Request) => {
     const recipientType = url.searchParams.get('recipient_type')
     const researchStatus = url.searchParams.get('research_status')
     const postPardonStatus = url.searchParams.get('post_pardon_status')
+    const sort = url.searchParams.get('sort') || 'date'
 
     // Validate enum params
     if (connectionType && !VALID_CONNECTION_TYPES.has(connectionType)) {
@@ -120,6 +134,9 @@ serve(async (req: Request) => {
       if (isNaN(level) || level < 1 || level > 5) {
         return badParam('corruption_level', corruptionLevel)
       }
+    }
+    if (!VALID_SORT_OPTIONS.has(sort)) {
+      return badParam('sort', sort)
     }
 
     const supabase = getSupabaseClient(req)
@@ -149,16 +166,50 @@ serve(async (req: Request) => {
         is_public
       `)
       .eq('is_public', true) // RLS backup - only public pardons
-      .order('pardon_date', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(limit + 1) // Get one extra to check for next page
 
-    // Apply cursor pagination
-    if (cursorData) {
-      // (pardon_date, id) < (cursor_date, cursor_id)
-      query = query.or(
-        `pardon_date.lt.${cursorData.d},and(pardon_date.eq.${cursorData.d},id.lt.${cursorData.id})`
-      )
+    // Apply sort order
+    if (sort === 'corruption') {
+      // Highest corruption first, nulls last
+      query = query
+        .order('corruption_level', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false })
+    } else if (sort === 'name') {
+      // Alphabetical A-Z
+      query = query
+        .order('recipient_name', { ascending: true })
+        .order('id', { ascending: true })
+    } else {
+      // Default: date (newest first)
+      query = query
+        .order('pardon_date', { ascending: false })
+        .order('id', { ascending: false })
+    }
+
+    query = query.limit(limit + 1) // Get one extra to check for next page
+
+    // Apply cursor pagination based on sort type
+    if (cursorData && cursorData.s === sort) {
+      if (sort === 'corruption' && cursorData.c !== undefined) {
+        // corruption_level DESC, id DESC - get items with lower corruption or same corruption with lower id
+        // Handle nulls: if cursor has null, only get items with lower id
+        if (cursorData.c === null) {
+          query = query.is('corruption_level', null).lt('id', cursorData.id)
+        } else {
+          query = query.or(
+            `corruption_level.lt.${cursorData.c},corruption_level.is.null,and(corruption_level.eq.${cursorData.c},id.lt.${cursorData.id})`
+          )
+        }
+      } else if (sort === 'name' && cursorData.n) {
+        // recipient_name ASC, id ASC - get items with greater name or same name with greater id
+        query = query.or(
+          `recipient_name.gt.${cursorData.n},and(recipient_name.eq.${cursorData.n},id.gt.${cursorData.id})`
+        )
+      } else if (cursorData.d) {
+        // date sort: pardon_date DESC, id DESC
+        query = query.or(
+          `pardon_date.lt.${cursorData.d},and(pardon_date.eq.${cursorData.d},id.lt.${cursorData.id})`
+        )
+      }
     }
 
     // Full-text search
@@ -207,10 +258,7 @@ serve(async (req: Request) => {
 
     // Create next cursor from last item
     const nextCursor = hasMore && items.length > 0
-      ? createCursor(
-          items[items.length - 1].pardon_date,
-          String(items[items.length - 1].id)
-        )
+      ? createCursor(items[items.length - 1], sort)
       : null
 
     return new Response(

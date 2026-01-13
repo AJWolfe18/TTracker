@@ -663,10 +663,283 @@
   }
 
   // ===========================================
+  // SEARCH INPUT COMPONENT
+  // ===========================================
+
+  function SearchInput({ value, onChange, onSubmit }) {
+    const [localValue, setLocalValue] = useState(value || '');
+    const inputRef = React.useRef(null);
+
+    // Sync local value when prop changes (e.g., clear filters)
+    useEffect(() => {
+      setLocalValue(value || '');
+    }, [value]);
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      onSubmit(localValue.trim());
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        handleSubmit(e);
+      }
+    };
+
+    const handleClear = () => {
+      setLocalValue('');
+      onSubmit('');
+      inputRef.current?.focus();
+    };
+
+    return React.createElement('form', {
+      className: 'tt-search-form',
+      onSubmit: handleSubmit
+    },
+      React.createElement('div', { className: 'tt-search-input-wrapper' },
+        React.createElement('span', { className: 'tt-search-icon' }, '🔍'),
+        React.createElement('input', {
+          ref: inputRef,
+          type: 'text',
+          className: 'tt-search-input',
+          placeholder: 'Search pardons...',
+          value: localValue,
+          onChange: (e) => setLocalValue(e.target.value),
+          onKeyDown: handleKeyDown,
+          'aria-label': 'Search pardons'
+        }),
+        localValue && React.createElement('button', {
+          type: 'button',
+          className: 'tt-search-clear',
+          onClick: handleClear,
+          'aria-label': 'Clear search'
+        }, '×')
+      ),
+      React.createElement('button', {
+        type: 'submit',
+        className: 'tt-search-btn'
+      }, 'Search')
+    );
+  }
+
+  // ===========================================
+  // CORRUPTION LEVEL PILLS
+  // ===========================================
+
+  function CorruptionPills({ value, onChange }) {
+    const levels = [5, 4, 3, 2, 1];
+
+    return React.createElement('div', {
+      className: 'tt-corruption-pills',
+      role: 'group',
+      'aria-label': 'Filter by corruption level'
+    },
+      React.createElement('span', { className: 'tt-filter-label' }, 'Corruption:'),
+      levels.map(level => {
+        const config = CORRUPTION_LABELS[level];
+        const isActive = value === level;
+        return React.createElement('button', {
+          key: level,
+          className: `tt-corruption-pill ${isActive ? 'active' : ''}`,
+          onClick: () => onChange(isActive ? null : level),
+          'aria-pressed': isActive,
+          'aria-label': `Filter by corruption level ${level}: ${config.label}`,
+          style: isActive ? { backgroundColor: config.color, borderColor: config.color } : {}
+        }, level);
+      })
+    );
+  }
+
+  // ===========================================
+  // FILTER DROPDOWN COMPONENT
+  // ===========================================
+
+  function FilterDropdown({ label, value, options, onChange, placeholder }) {
+    return React.createElement('div', { className: 'tt-filter-dropdown' },
+      React.createElement('label', { className: 'tt-filter-label' }, label),
+      React.createElement('select', {
+        className: 'tt-filter-select',
+        value: value || '',
+        onChange: (e) => onChange(e.target.value || null),
+        'aria-label': label
+      },
+        React.createElement('option', { value: '' }, placeholder || 'All'),
+        Object.entries(options).map(([key, labelText]) =>
+          React.createElement('option', { key, value: key },
+            typeof labelText === 'object' ? labelText.label : labelText
+          )
+        )
+      )
+    );
+  }
+
+  // ===========================================
+  // SORT DROPDOWN
+  // ===========================================
+
+  const SORT_OPTIONS = {
+    date: 'Newest First',
+    corruption: 'Most Corrupt',
+    name: 'Name (A-Z)'
+  };
+
+  function SortDropdown({ value, onChange }) {
+    return React.createElement('div', { className: 'tt-sort-dropdown' },
+      React.createElement('label', { className: 'tt-filter-label' }, 'Sort:'),
+      React.createElement('select', {
+        className: 'tt-filter-select',
+        value: value || 'date',
+        onChange: (e) => onChange(e.target.value),
+        'aria-label': 'Sort by'
+      },
+        Object.entries(SORT_OPTIONS).map(([key, label]) =>
+          React.createElement('option', { key, value: key }, label)
+        )
+      )
+    );
+  }
+
+  // ===========================================
+  // CLEAR FILTERS BUTTON
+  // ===========================================
+
+  function ClearFiltersButton({ hasFilters, onClear }) {
+    if (!hasFilters) return null;
+
+    return React.createElement('button', {
+      className: 'tt-clear-filters-btn',
+      onClick: onClear,
+      'aria-label': 'Clear all filters'
+    }, '× Clear Filters');
+  }
+
+  // ===========================================
+  // FILTER BAR COMPONENT
+  // ===========================================
+
+  function FilterBar({
+    filters,
+    onFilterChange,
+    onSearch,
+    onClearFilters,
+    hasActiveFilters
+  }) {
+    return React.createElement('div', { className: 'tt-filter-bar' },
+      // Row 1: Search and Sort
+      React.createElement('div', { className: 'tt-filter-row tt-filter-row-main' },
+        React.createElement(SearchInput, {
+          value: filters.q,
+          onChange: () => {},
+          onSubmit: onSearch
+        }),
+        React.createElement(SortDropdown, {
+          value: filters.sort,
+          onChange: (val) => onFilterChange('sort', val)
+        })
+      ),
+
+      // Row 2: Recipient type and Corruption pills
+      React.createElement('div', { className: 'tt-filter-row' },
+        React.createElement(RecipientTypeFilter, {
+          value: filters.recipientType || 'all',
+          onChange: (val) => onFilterChange('recipientType', val === 'all' ? null : val)
+        }),
+        React.createElement(CorruptionPills, {
+          value: filters.corruptionLevel,
+          onChange: (val) => onFilterChange('corruptionLevel', val)
+        })
+      ),
+
+      // Row 3: Dropdowns
+      React.createElement('div', { className: 'tt-filter-row tt-filter-row-dropdowns' },
+        React.createElement(FilterDropdown, {
+          label: 'Connection',
+          value: filters.connectionType,
+          options: CONNECTION_TYPES,
+          onChange: (val) => onFilterChange('connectionType', val),
+          placeholder: 'All Connections'
+        }),
+        React.createElement(FilterDropdown, {
+          label: 'Crime',
+          value: filters.crimeCategory,
+          options: CRIME_CATEGORIES,
+          onChange: (val) => onFilterChange('crimeCategory', val),
+          placeholder: 'All Crimes'
+        }),
+        React.createElement(FilterDropdown, {
+          label: 'Status',
+          value: filters.postPardonStatus,
+          options: POST_PARDON_STATUSES,
+          onChange: (val) => onFilterChange('postPardonStatus', val),
+          placeholder: 'All Statuses'
+        }),
+        React.createElement(ClearFiltersButton, {
+          hasFilters: hasActiveFilters,
+          onClear: onClearFilters
+        })
+      )
+    );
+  }
+
+  // ===========================================
   // PARDONS FEED COMPONENT
   // ===========================================
 
   const { useRef, useMemo } = React;
+
+  // URL param names map to filter state keys
+  const FILTER_URL_PARAMS = {
+    q: 'q',
+    sort: 'sort',
+    recipient_type: 'recipientType',
+    corruption_level: 'corruptionLevel',
+    connection_type: 'connectionType',
+    crime_category: 'crimeCategory',
+    post_pardon_status: 'postPardonStatus'
+  };
+
+  // Default filter state
+  const DEFAULT_FILTERS = {
+    q: null,
+    sort: 'date',
+    recipientType: null,
+    corruptionLevel: null,
+    connectionType: null,
+    crimeCategory: null,
+    postPardonStatus: null
+  };
+
+  // Initialize filters from URL
+  function getFiltersFromUrl() {
+    const filters = { ...DEFAULT_FILTERS };
+    Object.entries(FILTER_URL_PARAMS).forEach(([urlParam, stateKey]) => {
+      const value = window.TTShared?.getUrlParam(urlParam);
+      if (value) {
+        // Parse corruption_level as integer
+        if (stateKey === 'corruptionLevel') {
+          const num = parseInt(value);
+          if (!isNaN(num) && num >= 1 && num <= 5) {
+            filters[stateKey] = num;
+          }
+        } else {
+          filters[stateKey] = value;
+        }
+      }
+    });
+    return filters;
+  }
+
+  // Update URL from filters
+  function updateUrlFromFilters(filters) {
+    Object.entries(FILTER_URL_PARAMS).forEach(([urlParam, stateKey]) => {
+      const value = filters[stateKey];
+      if (value && value !== DEFAULT_FILTERS[stateKey]) {
+        window.TTShared?.pushUrlParam(urlParam, String(value));
+      } else {
+        window.TTShared?.removeUrlParam(urlParam);
+      }
+    });
+  }
 
   function PardonsFeed() {
     const [pardons, setPardons] = useState([]);
@@ -679,13 +952,14 @@
     const [nextCursor, setNextCursor] = useState(null);
     const [hasMore, setHasMore] = useState(false);
 
-    const [recipientType, setRecipientType] = useState('all');
+    // Initialize filters from URL
+    const [filters, setFilters] = useState(() => getFiltersFromUrl());
     const [detailPardon, setDetailPardon] = useState(null);
 
     // Use ref for abort controller to avoid race conditions
     const listFetchControllerRef = useRef(null);
 
-    // Check for deep link
+    // Check for detail deep link
     useEffect(() => {
       const urlId = window.TTShared?.getUrlParam('id');
       if (urlId) {
@@ -696,6 +970,14 @@
         }
       }
     }, []);
+
+    // Check if any filters are active (for clear button)
+    const hasActiveFilters = useMemo(() => {
+      return Object.entries(filters).some(([key, value]) => {
+        if (key === 'sort') return value !== 'date';
+        return value !== null && value !== DEFAULT_FILTERS[key];
+      });
+    }, [filters]);
 
     // Load stats
     useEffect(() => {
@@ -742,9 +1024,16 @@
           setHasMore(false);
         }
 
+        // Build params from filters
         const params = { limit: ITEMS_PER_PAGE };
         if (cursor) params.cursor = cursor;
-        if (recipientType !== 'all') params.recipient_type = recipientType;
+        if (filters.q) params.q = filters.q;
+        if (filters.sort && filters.sort !== 'date') params.sort = filters.sort;
+        if (filters.recipientType) params.recipient_type = filters.recipientType;
+        if (filters.corruptionLevel) params.corruption_level = filters.corruptionLevel;
+        if (filters.connectionType) params.connection_type = filters.connectionType;
+        if (filters.crimeCategory) params.crime_category = filters.crimeCategory;
+        if (filters.postPardonStatus) params.post_pardon_status = filters.postPardonStatus;
 
         const data = await edgeFunctionRequest('pardons-active', params, currentController.signal);
 
@@ -770,9 +1059,9 @@
           setLoadingMore(false);
         }
       }
-    }, [recipientType]);
+    }, [filters]);
 
-    // Load pardons when filter changes
+    // Load pardons when filters change
     useEffect(() => {
       loadPardons();
 
@@ -792,9 +1081,30 @@
       }
     }, [nextCursor, loadingMore, loadPardons]);
 
-    const handleRecipientTypeChange = useCallback((type) => {
-      setRecipientType(type);
-      trackEvent('pardons_filter_recipient_type', { type });
+    // Filter change handler - updates state and URL
+    const handleFilterChange = useCallback((key, value) => {
+      setFilters(prev => {
+        const newFilters = { ...prev, [key]: value };
+        updateUrlFromFilters(newFilters);
+        return newFilters;
+      });
+      trackEvent('pardons_filter_change', { filter: key, value });
+    }, []);
+
+    // Search handler
+    const handleSearch = useCallback((query) => {
+      handleFilterChange('q', query || null);
+      trackEvent('pardons_search', { query });
+    }, [handleFilterChange]);
+
+    // Clear all filters
+    const handleClearFilters = useCallback(() => {
+      setFilters(DEFAULT_FILTERS);
+      // Clear all filter URL params
+      Object.keys(FILTER_URL_PARAMS).forEach(param => {
+        window.TTShared?.removeUrlParam(param);
+      });
+      trackEvent('pardons_clear_filters');
     }, []);
 
     const handleViewDetail = useCallback((pardon) => {
@@ -835,14 +1145,18 @@
       React.createElement(StatsBar, { stats, loading: statsLoading, error: statsError }),
 
       // Filter bar
-      React.createElement('div', { className: 'tt-pardons-filters' },
-        React.createElement(RecipientTypeFilter, {
-          value: recipientType,
-          onChange: handleRecipientTypeChange
-        }),
+      React.createElement(FilterBar, {
+        filters,
+        onFilterChange: handleFilterChange,
+        onSearch: handleSearch,
+        onClearFilters: handleClearFilters,
+        hasActiveFilters
+      }),
+
+      // Results count
+      React.createElement('div', { className: 'tt-results-summary' },
         React.createElement('span', { className: 'tt-results-count' },
-          `${pardons.length} ${pardons.length === 1 ? 'pardon' : 'pardons'}`,
-          hasMore && '+'
+          loading ? 'Loading...' : `${pardons.length} ${pardons.length === 1 ? 'pardon' : 'pardons'}${hasMore ? '+' : ''}`
         )
       ),
 
