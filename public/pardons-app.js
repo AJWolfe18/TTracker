@@ -640,25 +640,26 @@
   // ===========================================
 
   function RecipientTypeFilter({ value, onChange }) {
-    return React.createElement('div', { className: 'tt-recipient-filter', role: 'group', 'aria-label': 'Filter by recipient type' },
-      React.createElement('button', {
-        className: `tt-filter-pill ${value === 'all' ? 'active' : ''}`,
-        onClick: () => onChange('all'),
-        'aria-pressed': value === 'all',
-        'aria-label': 'Show all pardons'
-      }, 'All'),
-      React.createElement('button', {
-        className: `tt-filter-pill ${value === 'person' ? 'active' : ''}`,
-        onClick: () => onChange('person'),
-        'aria-pressed': value === 'person',
-        'aria-label': 'Show individual pardons'
-      }, 'People'),
-      React.createElement('button', {
-        className: `tt-filter-pill ${value === 'group' ? 'active' : ''}`,
-        onClick: () => onChange('group'),
-        'aria-pressed': value === 'group',
-        'aria-label': 'Show group pardons'
-      }, 'Groups')
+    const types = [
+      { key: 'all', label: 'All' },
+      { key: 'person', label: 'People' },
+      { key: 'group', label: 'Groups' }
+    ];
+
+    return React.createElement('div', {
+      className: 'tt-recipient-filter',
+      role: 'group',
+      'aria-label': 'Filter by recipient type'
+    },
+      React.createElement('span', { className: 'tt-filter-label' }, 'Type:'),
+      types.map(({ key, label }) =>
+        React.createElement('button', {
+          key,
+          className: `tt-severity-pill ${value === key ? 'active' : ''}`,
+          onClick: () => onChange(key),
+          'aria-pressed': value === key
+        }, label)
+      )
     );
   }
 
@@ -666,6 +667,7 @@
   // SEARCH INPUT COMPONENT
   // ===========================================
 
+  // Search input - matches Stories pattern (no button, Enter to search)
   function SearchInput({ value, onChange, onSubmit }) {
     const [localValue, setLocalValue] = useState(value || '');
     const inputRef = React.useRef(null);
@@ -675,12 +677,12 @@
       setLocalValue(value || '');
     }, [value]);
 
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      onSubmit(localValue.trim());
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        onSubmit(localValue.trim());
+      }
     };
-
-    // Note: No onKeyDown needed - form's onSubmit handles Enter natively
 
     const handleClear = () => {
       setLocalValue('');
@@ -688,59 +690,57 @@
       inputRef.current?.focus();
     };
 
-    return React.createElement('form', {
-      className: 'tt-search-form',
-      onSubmit: handleSubmit
-    },
-      React.createElement('div', { className: 'tt-search-input-wrapper' },
-        React.createElement('span', { className: 'tt-search-icon' }, '🔍'),
-        React.createElement('input', {
-          ref: inputRef,
-          type: 'text',
-          className: 'tt-search-input',
-          placeholder: 'Search pardons...',
-          value: localValue,
-          onChange: (e) => setLocalValue(e.target.value),
-          'aria-label': 'Search pardons'
-        }),
-        localValue && React.createElement('button', {
-          type: 'button',
-          className: 'tt-search-clear',
-          onClick: handleClear,
-          'aria-label': 'Clear search'
-        }, '×')
-      ),
-      React.createElement('button', {
-        type: 'submit',
-        className: 'tt-search-btn'
-      }, 'Search')
+    return React.createElement('div', { className: 'tt-search-wrapper' },
+      React.createElement('span', { className: 'tt-search-icon' }, '🔍'),
+      React.createElement('input', {
+        ref: inputRef,
+        type: 'text',
+        className: 'tt-search',
+        placeholder: 'Search pardons...',
+        value: localValue,
+        onChange: (e) => setLocalValue(e.target.value),
+        onKeyDown: handleKeyDown,
+        'aria-label': 'Search pardons'
+      }),
+      localValue && React.createElement('button', {
+        type: 'button',
+        className: 'tt-search-clear',
+        onClick: handleClear,
+        'aria-label': 'Clear search'
+      }, '×')
     );
   }
 
   // ===========================================
-  // CORRUPTION LEVEL PILLS
+  // CORRUPTION LEVEL PILLS (text labels like severity)
   // ===========================================
 
-  function CorruptionPills({ value, onChange }) {
-    const levels = [5, 4, 3, 2, 1];
+  // Short labels for pills (matches severity filter pattern)
+  const CORRUPTION_PILL_LABELS = [
+    { level: null, label: 'All', color: null },
+    { level: 5, label: 'Pay-to-Play', color: '#7f1d1d' },
+    { level: 4, label: 'Friends & Fam', color: '#dc2626' },
+    { level: 3, label: 'Swamp', color: '#ea580c' },
+    { level: 2, label: 'Celebrity', color: '#ca8a04' },
+    { level: 1, label: 'Broken Clock', color: '#16a34a' }
+  ];
 
+  function CorruptionPills({ value, onChange }) {
     return React.createElement('div', {
-      className: 'tt-corruption-pills',
+      className: 'tt-severity-filters',
       role: 'group',
       'aria-label': 'Filter by corruption level'
     },
       React.createElement('span', { className: 'tt-filter-label' }, 'Corruption:'),
-      levels.map(level => {
-        const config = CORRUPTION_LABELS[level];
+      CORRUPTION_PILL_LABELS.map(({ level, label, color }) => {
         const isActive = value === level;
         return React.createElement('button', {
-          key: level,
-          className: `tt-corruption-pill ${isActive ? 'active' : ''}`,
-          onClick: () => onChange(isActive ? null : level),
+          key: label,
+          className: `tt-severity-pill ${isActive ? 'active' : ''}`,
+          onClick: () => onChange(level),
           'aria-pressed': isActive,
-          'aria-label': `Filter by corruption level ${level}: ${config.label}`,
-          style: isActive ? { backgroundColor: config.color, borderColor: config.color } : {}
-        }, level);
+          style: isActive && color ? { backgroundColor: color, borderColor: color, color: '#fff' } : {}
+        }, label);
       })
     );
   }
@@ -809,7 +809,7 @@
   }
 
   // ===========================================
-  // FILTER BAR COMPONENT
+  // FILTER BAR COMPONENT (Streamlined - matches Stories pattern)
   // ===========================================
 
   function FilterBar({
@@ -817,24 +817,47 @@
     onFilterChange,
     onSearch,
     onClearFilters,
-    hasActiveFilters
+    hasActiveFilters,
+    filteredCount,
+    totalCount
   }) {
-    return React.createElement('div', { className: 'tt-filter-bar' },
-      // Row 1: Search and Sort
-      React.createElement('div', { className: 'tt-filter-row tt-filter-row-main' },
+    return React.createElement('div', { className: 'tt-filters' },
+      // Row 1: Search + Category dropdown + Sort dropdown
+      React.createElement('div', { className: 'tt-filters-row' },
         React.createElement(SearchInput, {
           value: filters.q,
           onChange: () => {},
           onSubmit: onSearch
         }),
-        React.createElement(SortDropdown, {
-          value: filters.sort,
-          onChange: (val) => onFilterChange('sort', val)
-        })
+
+        // Connection type dropdown (primary filter)
+        React.createElement('select', {
+          className: 'tt-dropdown',
+          value: filters.connectionType || 'all',
+          onChange: (e) => onFilterChange('connectionType', e.target.value === 'all' ? null : e.target.value),
+          'aria-label': 'Filter by connection type'
+        },
+          React.createElement('option', { value: 'all' }, 'All Connections'),
+          Object.entries(CONNECTION_TYPES).map(([key, config]) =>
+            React.createElement('option', { key, value: key }, config.label)
+          )
+        ),
+
+        // Sort dropdown
+        React.createElement('select', {
+          className: 'tt-dropdown tt-dropdown-sort',
+          value: filters.sort || 'date',
+          onChange: (e) => onFilterChange('sort', e.target.value),
+          'aria-label': 'Sort by'
+        },
+          Object.entries(SORT_OPTIONS).map(([key, label]) =>
+            React.createElement('option', { key, value: key }, label)
+          )
+        )
       ),
 
-      // Row 2: Recipient type and Corruption pills
-      React.createElement('div', { className: 'tt-filter-row' },
+      // Row 2: Recipient type pills + Corruption pills
+      React.createElement('div', { className: 'tt-severity-filters' },
         React.createElement(RecipientTypeFilter, {
           value: filters.recipientType || 'all',
           onChange: (val) => onFilterChange('recipientType', val === 'all' ? null : val)
@@ -845,33 +868,57 @@
         })
       ),
 
-      // Row 3: Dropdowns
-      React.createElement('div', { className: 'tt-filter-row tt-filter-row-dropdowns' },
-        React.createElement(FilterDropdown, {
-          label: 'Connection',
-          value: filters.connectionType,
-          options: CONNECTION_TYPES,
-          onChange: (val) => onFilterChange('connectionType', val),
-          placeholder: 'All Connections'
-        }),
-        React.createElement(FilterDropdown, {
-          label: 'Crime',
-          value: filters.crimeCategory,
-          options: CRIME_CATEGORIES,
-          onChange: (val) => onFilterChange('crimeCategory', val),
-          placeholder: 'All Crimes'
-        }),
-        React.createElement(FilterDropdown, {
-          label: 'Status',
-          value: filters.postPardonStatus,
-          options: POST_PARDON_STATUSES,
-          onChange: (val) => onFilterChange('postPardonStatus', val),
-          placeholder: 'All Statuses'
-        }),
-        React.createElement(ClearFiltersButton, {
-          hasFilters: hasActiveFilters,
-          onClear: onClearFilters
-        })
+      // Row 3: Results count + Active filter chips
+      React.createElement('div', { className: 'tt-filters-status' },
+        React.createElement('span', {
+          className: 'tt-results-count',
+          role: 'status',
+          'aria-live': 'polite'
+        },
+          `${filteredCount} ${filteredCount === 1 ? 'pardon' : 'pardons'}`,
+          filteredCount !== totalCount && ` (of ${totalCount})`
+        ),
+
+        hasActiveFilters && React.createElement('div', { className: 'tt-active-filters' },
+          // Show active filter chips
+          filters.q && React.createElement('span', { className: 'tt-filter-chip' },
+            `Search: "${filters.q.substring(0, 15)}${filters.q.length > 15 ? '...' : ''}"`,
+            React.createElement('button', {
+              className: 'tt-chip-remove',
+              onClick: () => onSearch(''),
+              'aria-label': 'Clear search'
+            }, '×')
+          ),
+          filters.connectionType && React.createElement('span', { className: 'tt-filter-chip' },
+            CONNECTION_TYPES[filters.connectionType]?.label || filters.connectionType,
+            React.createElement('button', {
+              className: 'tt-chip-remove',
+              onClick: () => onFilterChange('connectionType', null),
+              'aria-label': 'Remove connection filter'
+            }, '×')
+          ),
+          filters.corruptionLevel && React.createElement('span', { className: 'tt-filter-chip' },
+            CORRUPTION_LABELS[filters.corruptionLevel]?.label || `Level ${filters.corruptionLevel}`,
+            React.createElement('button', {
+              className: 'tt-chip-remove',
+              onClick: () => onFilterChange('corruptionLevel', null),
+              'aria-label': 'Remove corruption filter'
+            }, '×')
+          ),
+          filters.recipientType && React.createElement('span', { className: 'tt-filter-chip' },
+            filters.recipientType === 'person' ? 'People' : 'Groups',
+            React.createElement('button', {
+              className: 'tt-chip-remove',
+              onClick: () => onFilterChange('recipientType', null),
+              'aria-label': 'Remove recipient type filter'
+            }, '×')
+          ),
+          // Clear all button
+          React.createElement('button', {
+            className: 'tt-clear-all',
+            onClick: onClearFilters
+          }, 'Clear all')
+        )
       )
     );
   }
@@ -1140,26 +1187,16 @@
       // Stats bar
       React.createElement(StatsBar, { stats, loading: statsLoading, error: statsError }),
 
-      // Filter bar
+      // Filter bar (includes results count)
       React.createElement(FilterBar, {
         filters,
         onFilterChange: handleFilterChange,
         onSearch: handleSearch,
         onClearFilters: handleClearFilters,
-        hasActiveFilters
+        hasActiveFilters,
+        filteredCount: loading ? '...' : `${pardons.length}${hasMore ? '+' : ''}`,
+        totalCount: stats?.total_pardons || pardons.length
       }),
-
-      // Results count (with aria-live for screen readers)
-      React.createElement('div', {
-        className: 'tt-results-summary',
-        role: 'status',
-        'aria-live': 'polite',
-        'aria-atomic': 'true'
-      },
-        React.createElement('span', { className: 'tt-results-count' },
-          loading ? 'Loading...' : `${pardons.length} ${pardons.length === 1 ? 'pardon' : 'pardons'}${hasMore ? '+' : ''}`
-        )
-      ),
 
       // Feed
       React.createElement('div', { className: 'tt-feed' },

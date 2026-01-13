@@ -1,7 +1,7 @@
 # TrumpyTracker UI Patterns Guide
 
 **Created:** 2025-12-30
-**Last Updated:** 2025-12-30
+**Last Updated:** 2026-01-12
 **Status:** Active standard for all new UI work
 
 This document defines UI patterns established in the theme preview implementation (TTRC-334) that should be followed for all future frontend development.
@@ -264,30 +264,114 @@ setTimeout(() => { closingRef.current = false; }, 50);
 
 ## Filter Patterns
 
-### 1. Native Dropdowns
+### 1. Filter Bar Layout
+
+Standard filter bar has 3 rows:
+
+```
+Row 1: [🔍 Search...        ] [Category ▼] [Sort ▼]
+Row 2: [All] [Option1] [Option2] ... (severity/status pills)
+Row 3: X results (of Y)  [Filter: X] [Clear all]
+```
+
+CSS classes:
+- `.tt-filters` - Main container
+- `.tt-filters-row` - Row for search + dropdowns
+- `.tt-severity-filters` - Row for pills
+- `.tt-filters-status` - Row for results + chips
+
+### 2. Search Input (No Button)
+
+Search uses Enter-to-submit, no explicit button:
+
+```javascript
+React.createElement('div', { className: 'tt-search-wrapper' },
+  React.createElement('span', { className: 'tt-search-icon' }, '🔍'),
+  React.createElement('input', {
+    type: 'text',
+    className: 'tt-search',
+    placeholder: 'Search...',
+    value: searchTerm,
+    onChange: (e) => setSearchTerm(e.target.value),
+    onKeyDown: (e) => e.key === 'Enter' && handleSearch()
+  }),
+  searchTerm && React.createElement('button', {
+    className: 'tt-search-clear',
+    onClick: clearSearch
+  }, '×')
+)
+```
+
+### 3. Pill Filters (Severity/Status)
+
+Use text labels, not numbers. Always include "All" option first:
+
+```javascript
+const SEVERITY_PILLS = [
+  { value: null, label: 'All' },
+  { value: 'critical', label: 'Critical', color: '#dc2626' },
+  { value: 'severe', label: 'Severe', color: '#ea580c' },
+  // ...
+];
+
+React.createElement('div', { className: 'tt-severity-filters' },
+  React.createElement('span', { className: 'tt-filter-label' }, 'Severity:'),
+  SEVERITY_PILLS.map(({ value, label, color }) =>
+    React.createElement('button', {
+      className: `tt-severity-pill ${selected === value ? 'active' : ''}`,
+      onClick: () => setSelected(value),
+      style: selected === value && color ? { backgroundColor: color } : {}
+    }, label)
+  )
+)
+```
+
+### 4. Native Dropdowns
 
 Use native `<select>` for accessibility:
 
 ```javascript
 React.createElement('select', {
   className: 'tt-dropdown',
-  value: category,
-  onChange: (e) => setCategory(e.target.value)
+  value: category || 'all',
+  onChange: (e) => setCategory(e.target.value === 'all' ? null : e.target.value)
 },
   React.createElement('option', { value: 'all' }, 'All Categories'),
   // ... more options
 )
 ```
 
-### 2. State Persistence
+### 5. Active Filter Chips
+
+Show active filters as removable chips:
+
+```javascript
+hasActiveFilters && React.createElement('div', { className: 'tt-active-filters' },
+  selectedFilter && React.createElement('span', { className: 'tt-filter-chip' },
+    `Filter: ${filterLabel}`,
+    React.createElement('button', {
+      className: 'tt-chip-remove',
+      onClick: () => clearFilter()
+    }, '×')
+  ),
+  React.createElement('button', {
+    className: 'tt-clear-all',
+    onClick: clearAllFilters
+  }, 'Clear all')
+)
+```
+
+### 6. State Persistence
 
 | State | Storage | Scope |
 |-------|---------|-------|
 | Theme | localStorage | Cross-session |
-| Filters | sessionStorage | Within session |
-| Search | sessionStorage | Within session |
+| Filters | URL params | Shareable/bookmarkable |
+| Search | URL params | Shareable/bookmarkable |
 
-### 3. Empty State
+**Prefer URL params for filters** - allows deep linking and sharing.
+
+### 7. Empty State
 
 Always provide recovery:
 
