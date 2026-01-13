@@ -1,8 +1,8 @@
 # Plan: Pardons Tracker Epic Breakdown (ADO-109)
 
-**Status:** IN PROGRESS - Stories 1.1 + 1.2 + 1.3A Complete, 1.3B Testing
+**Status:** IN PROGRESS - MVP Stories Complete, Starting Ingestion Pipeline
 **Created:** 2026-01-11
-**Updated:** 2026-01-12 (Session 6)
+**Updated:** 2026-01-12 (Session 8)
 **PRD:** `docs/features/pardons-tracker/prd.md`
 
 ## Overview
@@ -23,28 +23,47 @@ The Pardons Tracker is a dedicated section tracking presidential pardons with:
 
 ---
 
-## Proposed ADO Structure
+## ADO Structure (Current)
 
 ```
 Epic 109: Trump Pardons Tracker
-├── Feature: Pardons Tracker MVP (ADO-239)
-│   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ DONE
-│   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ DONE
-│   ├── Story 1.3A: Frontend List + Cards + Basic Modal (ADO-251) ✅ DONE
-│   ├── Story 1.3B: Receipts Timeline + What Happened Next (ADO-244) 🧪 TESTING
-│   └── Story 1.4: Filtering & Search (ADO-245) ← NEXT
+├── Feature: Pardons Tracker MVP (ADO-239) - ACTIVE
+│   ├── Story 1.1: Database Schema & Migrations (ADO-241) ✅ Ready for Prod
+│   ├── Story 1.2: Backend Edge Functions (ADO-242) ✅ Ready for Prod
+│   ├── Story 1.3A: Frontend List + Cards + Basic Modal (ADO-251) ✅ Closed
+│   ├── Story 1.3B: Receipts Timeline + What Happened Next (ADO-244) 🧪 Testing
+│   ├── Story 1.4: Filtering & Search (ADO-245) 🧪 Testing
+│   └── Story 1.5: DOJ Scraper - Pardon Ingestion (ADO-250) ← IN PROGRESS
 │
-├── Feature: Pardons AI Enrichment (NEW - to create)
-│   ├── Story 2.1: AI Enrichment Prompt & Job Type
-│   ├── Story 2.2: Why It Matters & Pattern Analysis
+├── Feature: Pardons AI Enrichment (NEW - to create after ADO-250)
+│   ├── Story 2.1: Perplexity API Integration + Research Prompts
+│   ├── Story 2.2: GPT Tone Layer (summary_spicy, why_it_matters)
 │   └── Story 2.3: Related Stories Linking
 │
-├── Feature: Social Sharing for Pardon Cards (ADO-236 - NOW A FEATURE ✓)
+├── Feature: Social Sharing for Pardon Cards (ADO-236)
 │   └── Story 3.1: Social Sharing + OG Meta Endpoint
 │
-└── Feature: Admin Dashboard - Pardons (NEW - future, separate work)
-    └── (Stories TBD when this is prioritized)
+└── Feature: Admin Dashboard - Pardons (future)
+    └── (Stories TBD when prioritized)
 ```
+
+### ADO-250 Scope Refinement (Session 8)
+
+**Original scope:** DOJ Scraper + AI Enrichment (too large)
+**New scope:** DOJ Scraper only (AI enrichment → Feature 2)
+
+**ADO-250 Acceptance Criteria (Refined):**
+- [x] DOJ registry scraper extracts: name, date, offense, district
+- [x] Idempotent: doesn't duplicate existing pardons (uses source_system + source_key)
+- [x] Sets is_public = false until enrichment complete
+- [x] Manual trigger script: npm run ingest:pardons
+- [ ] ~~AI prompt researches~~ → Moved to Feature 2
+
+**Deferred to Feature 2 (AI Enrichment):**
+- Perplexity API for connection research
+- GPT for spicy tone generation
+- Connection type, corruption level inference
+- receipts_timeline population
 
 ---
 
