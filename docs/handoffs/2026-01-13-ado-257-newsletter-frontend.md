@@ -3,7 +3,7 @@
 **Date:** 2026-01-13
 **Epic:** ADO-254 (Analytics Enhancement)
 **Story:** ADO-257 (Newsletter Frontend)
-**Status:** Ready for Prod
+**Status:** Ready for Prod (bug fix applied)
 
 ---
 
@@ -48,14 +48,29 @@
 
 ---
 
+## Bug Fixes Applied (2026-01-13)
+
+### Issue 1: Duplicate Newsletter Banners
+- **Problem:** Inline CTA rendered as full-width block alongside footer (two forms visible)
+- **Fix:** Changed `.tt-newsletter-inline-wrapper` to fixed-position bottom-right corner slide-in
+- **Commit:** `3edd121`
+
+### Issue 2: Turnstile "Invalid domain" Error
+- **Problem:** Test site domain not in Turnstile allowed hostnames
+- **Fix:** User action required - add `test--trumpytracker.netlify.app` to Turnstile widget
+- **Instructions:** See `docs/features/analytics/ga4-turnstile-setup.md` section 2.1b
+
+---
+
 ## Test on TEST Site
 
 After Netlify deploys (~2 min):
-1. Go to https://test--trumpytracker.netlify.app/
-2. Scroll to footer - newsletter form should appear
-3. Scroll 50% down - inline CTA should slide in
-4. Complete Turnstile and submit - should show success message
-5. Verify in Supabase: `SELECT * FROM newsletter_subscribers`
+1. **First:** Add test domain to Turnstile (see Issue 2 fix above)
+2. Go to https://test--trumpytracker.netlify.app/
+3. Scroll to footer - newsletter form should appear at bottom
+4. Scroll 50% down - inline CTA should slide in from bottom-right corner
+5. Complete Turnstile and submit - should show success message
+6. Verify in Supabase: `SELECT * FROM newsletter_subscribers`
 
 ---
 
