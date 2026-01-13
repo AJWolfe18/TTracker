@@ -445,7 +445,20 @@
               href: eo.source_url,
               target: '_blank',
               rel: 'noopener noreferrer',
-              className: 'tt-back-btn'
+              className: 'tt-back-btn',
+              onClick: () => {
+                if (window.TTShared?.trackOutboundClick) {
+                  try {
+                    const domain = new URL(eo.source_url).hostname;
+                    window.TTShared.trackOutboundClick({
+                      targetType: 'official_source',
+                      sourceDomain: domain,
+                      contentType: 'executive_order',
+                      contentId: String(eo.id)
+                    });
+                  } catch (e) { /* ignore URL parse errors */ }
+                }
+              }
             }, 'View Official Text ↗')
           )
         )
@@ -636,7 +649,17 @@
             React.createElement(EOCard, {
               key: eo.id,
               eo,
-              onViewAnalysis: (eo) => { setDetailEO(eo); trackEvent('view_eo_analysis', { eo_id: eo.id, eo_number: eo.eo_number, impact_type: eo.eo_impact_type }); }
+              onViewAnalysis: (eo) => {
+                setDetailEO(eo);
+                if (window.TTShared?.trackDetailOpen) {
+                  window.TTShared.trackDetailOpen({
+                    objectType: 'eo',
+                    contentType: 'executive_order',
+                    contentId: String(eo.id),
+                    source: 'card_click'
+                  });
+                }
+              }
             })
           )
         ),
@@ -650,7 +673,16 @@
 
       detailEO && React.createElement(EODetailModal, {
         eo: detailEO,
-        onClose: () => setDetailEO(null)
+        onClose: () => {
+          if (window.TTShared?.trackDetailClose) {
+            window.TTShared.trackDetailClose({
+              objectType: 'eo',
+              contentType: 'executive_order',
+              contentId: String(detailEO.id)
+            });
+          }
+          setDetailEO(null);
+        }
       })
     );
   }
@@ -778,6 +810,13 @@
 
   function EOPreviewApp() {
     const { theme, toggleTheme } = useTheme();
+
+    // Initialize scroll depth tracking
+    useEffect(() => {
+      if (window.TTShared?.initScrollDepthTracking) {
+        window.TTShared.initScrollDepthTracking('eos');
+      }
+    }, []);
 
     return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),

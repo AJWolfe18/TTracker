@@ -336,15 +336,188 @@
   // ANALYTICS
   // ===========================================
 
+  // PII-safe param allowlist - only these params are sent to GA4
+  const ALLOWED_PARAMS = new Set([
+    // outbound_click
+    'target_type', 'source_domain', 'content_type', 'content_id',
+    // detail_toggle
+    'object_type', 'action', 'duration_ms', 'source',
+    // content_interaction
+    'type', 'page', 'from_tab', 'to_tab', 'location',
+    // newsletter_signup
+    'result', 'signup_source', 'signup_page', 'utm_source', 'utm_medium', 'utm_campaign',
+    // search_action
+    'has_results', 'result_count', 'term_len', 'term_hash',
+    // error_logged
+    'error_type', 'component',
+    // merch tracking
+    'method',
+    // schema version
+    'schema_v'
+  ]);
+
+  // Allowed transport types for beacon
+  const ALLOWED_TRANSPORTS = new Set(['beacon', 'xhr', 'image']);
+
   /**
-   * Track analytics event (Google Analytics)
-   * @param {string} eventName - Event name (e.g., 'search', 'view_story')
-   * @param {Object} eventParams - Event parameters (optional)
+   * Track analytics event (Google Analytics) with PII protection
+   * @param {string} eventName - Event name (e.g., 'outbound_click', 'detail_toggle')
+   * @param {Object} eventParams - Event parameters
+   * @param {Object} opts - Options (e.g., { transport_type: 'beacon' })
    */
-  function trackEvent(eventName, eventParams = {}) {
-    if (typeof gtag === 'function') {
-      gtag('event', eventName, eventParams);
+  function trackEvent(eventName, eventParams = {}, opts = {}) {
+    if (typeof gtag !== 'function') return;
+
+    // Build safe params with allowlist
+    const safeParams = { schema_v: 1 };
+
+    for (const [key, val] of Object.entries(eventParams)) {
+      if (ALLOWED_PARAMS.has(key) && val !== undefined && val !== null) {
+        safeParams[key] = val;
+      } else if (!ALLOWED_PARAMS.has(key) && val !== undefined) {
+        console.warn(`[Analytics] Blocked param: ${key}`);
+      }
     }
+
+    // Handle transport_type for beacon (special-cased)
+    if (opts.transport_type && ALLOWED_TRANSPORTS.has(opts.transport_type)) {
+      safeParams.transport_type = opts.transport_type;
+    }
+
+    gtag('event', eventName, safeParams);
+  }
+
+  /**
+   * Track event only once per session (prevents noisy funnels)
+   * @param {string} eventName - Event name
+   * @param {Object} eventParams - Event parameters
+   * @param {string} storageKey - Unique key for session storage (defaults to eventName)
+   * @param {Object} opts - Options for trackEvent
+   */
+  function trackOncePerSession(eventName, eventParams = {}, storageKey = null, opts = {}) {
+    const key = `tt_fired_${storageKey || eventName}`;
+    if (sessionStorage.getItem(key)) return false; // Already fired
+
+    trackEvent(eventName, eventParams, opts);
+    sessionStorage.setItem(key, 'true');
+    return true;
+  }
+
+  /**
+   * Initialize scroll depth tracking for a page
+   * Tracks 25%, 50%, 75%, 100% thresholds once per session
+   * @param {string} pageName - Page identifier ('stories', 'eos', 'pardons')
+   */
+  function initScrollDepthTracking(pageName) {
+    const thresholds = [25, 50, 75, 100];
+    let timeout;
+
+    const checkScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (docHeight <= 0) return;
+
+      const scrollPercent = Math.round((scrollTop / docHeight) * 100);
+
+      thresholds.forEach(threshold => {
+        if (scrollPercent >= threshold) {
+          trackOncePerSession('content_interaction', {
+            type: `scroll_${threshold}`,
+            page: pageName
+          }, `scroll_${threshold}_${pageName}`);
+        }
+      });
+    };
+
+    // Debounce: prevents rapid-fire on mobile "flick" scrolls
+    window.addEventListener('scroll', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(checkScroll, 150);
+    }, { passive: true });
+
+    // Check initial position
+    checkScroll();
+  }
+
+  /**
+   * Log an error event (sanitized, no PII)
+   * @param {string} errorType - Error type enum: API_FAIL, TURNSTILE_TIMEOUT, JS_ERROR, EDGE_FUNCTION_ERROR
+   * @param {string} component - Component name: newsletter, search, detail_modal, etc.
+   */
+  function logError(errorType, component) {
+    const validTypes = new Set(['API_FAIL', 'TURNSTILE_TIMEOUT', 'JS_ERROR', 'EDGE_FUNCTION_ERROR']);
+    if (!validTypes.has(errorType)) {
+      console.warn(`[Analytics] Invalid error_type: ${errorType}`);
+      return;
+    }
+
+    trackEvent('error_logged', {
+      error_type: errorType,
+      component: component || 'unknown'
+    });
+  }
+
+  /**
+   * Track outbound link click with beacon transport
+   * @param {Object} params - Click parameters
+   * @param {string} params.targetType - Type of link (article, source, external)
+   * @param {string} params.sourceDomain - Domain being linked to
+   * @param {string} params.contentType - Content type (story, eo, pardon)
+   * @param {string} params.contentId - Content ID (optional)
+   */
+  function trackOutboundClick({ targetType, sourceDomain, contentType, contentId }) {
+    trackEvent('outbound_click', {
+      target_type: targetType || 'external',
+      source_domain: sourceDomain,
+      content_type: contentType,
+      content_id: contentId
+    }, { transport_type: 'beacon' });
+  }
+
+  // Detail modal open timestamps (for duration tracking)
+  const modalOpenTimes = new Map();
+
+  /**
+   * Track detail modal open
+   * @param {Object} params - Modal parameters
+   * @param {string} params.objectType - Object type (story, eo, pardon)
+   * @param {string} params.contentType - Content type
+   * @param {string} params.contentId - Content ID
+   * @param {string} params.source - How modal was opened (card_click, deep_link)
+   */
+  function trackDetailOpen({ objectType, contentType, contentId, source }) {
+    const key = `${objectType}_${contentId}`;
+    modalOpenTimes.set(key, Date.now());
+
+    trackEvent('detail_toggle', {
+      object_type: objectType,
+      action: 'open',
+      content_type: contentType,
+      content_id: contentId,
+      source: source || 'card_click'
+    });
+  }
+
+  /**
+   * Track detail modal close (includes duration)
+   * @param {Object} params - Modal parameters
+   * @param {string} params.objectType - Object type (story, eo, pardon)
+   * @param {string} params.contentType - Content type
+   * @param {string} params.contentId - Content ID
+   */
+  function trackDetailClose({ objectType, contentType, contentId }) {
+    const key = `${objectType}_${contentId}`;
+    const openTime = modalOpenTimes.get(key);
+    const durationMs = openTime ? Date.now() - openTime : undefined;
+    modalOpenTimes.delete(key);
+
+    trackEvent('detail_toggle', {
+      object_type: objectType,
+      action: 'close',
+      content_type: contentType,
+      content_id: contentId,
+      duration_ms: durationMs
+    });
   }
 
   // ===========================================
@@ -512,6 +685,12 @@
 
     // Analytics
     trackEvent,
+    trackOncePerSession,
+    initScrollDepthTracking,
+    logError,
+    trackOutboundClick,
+    trackDetailOpen,
+    trackDetailClose,
 
     // Newsletter
     TURNSTILE_SITE_KEY,

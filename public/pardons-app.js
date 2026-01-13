@@ -333,7 +333,20 @@
               href: event.source_url,
               target: '_blank',
               rel: 'noopener noreferrer',
-              className: 'tt-timeline-source'
+              className: 'tt-timeline-source',
+              onClick: () => {
+                if (window.TTShared?.trackOutboundClick) {
+                  try {
+                    const domain = new URL(event.source_url).hostname;
+                    window.TTShared.trackOutboundClick({
+                      targetType: 'timeline_source',
+                      sourceDomain: domain,
+                      contentType: 'pardon',
+                      contentId: String(pardon?.id)
+                    });
+                  } catch (e) { /* ignore URL parse errors */ }
+                }
+              }
             }, 'Source')
           )
         );
@@ -610,7 +623,20 @@
                 href: p.primary_source_url,
                 target: '_blank',
                 rel: 'noopener noreferrer',
-                className: 'tt-back-btn'
+                className: 'tt-back-btn',
+                onClick: () => {
+                  if (window.TTShared?.trackOutboundClick) {
+                    try {
+                      const domain = new URL(p.primary_source_url).hostname;
+                      window.TTShared.trackOutboundClick({
+                        targetType: 'official_source',
+                        sourceDomain: domain,
+                        contentType: 'pardon',
+                        contentId: String(p.id)
+                      });
+                    } catch (e) { /* ignore URL parse errors */ }
+                  }
+                }
               }, 'View Source')
             )
           )
@@ -1130,17 +1156,27 @@
     const handleViewDetail = useCallback((pardon) => {
       setDetailPardon(pardon);
       window.TTShared?.pushUrlParam('id', pardon.id);
-      trackEvent('view_pardon_detail', {
-        pardon_id: pardon.id,
-        recipient_name: pardon.recipient_name,
-        connection_type: pardon.primary_connection_type
-      });
+      if (window.TTShared?.trackDetailOpen) {
+        window.TTShared.trackDetailOpen({
+          objectType: 'pardon',
+          contentType: 'pardon',
+          contentId: String(pardon.id),
+          source: 'card_click'
+        });
+      }
     }, []);
 
     const handleCloseDetail = useCallback(() => {
+      if (window.TTShared?.trackDetailClose && detailPardon) {
+        window.TTShared.trackDetailClose({
+          objectType: 'pardon',
+          contentType: 'pardon',
+          contentId: String(detailPardon.id)
+        });
+      }
       setDetailPardon(null);
       window.TTShared?.removeUrlParam('id');
-    }, []);
+    }, [detailPardon]);
 
     if (loading && pardons.length === 0) {
       return React.createElement('div', { className: 'tt-loading' },
@@ -1311,6 +1347,13 @@
 
   function PardonsApp() {
     const { theme, toggleTheme } = useTheme();
+
+    // Initialize scroll depth tracking
+    useEffect(() => {
+      if (window.TTShared?.initScrollDepthTracking) {
+        window.TTShared.initScrollDepthTracking('pardons');
+      }
+    }, []);
 
     return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),

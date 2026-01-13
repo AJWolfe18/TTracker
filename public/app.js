@@ -442,7 +442,20 @@
                   href: article.url,
                   target: '_blank',
                   rel: 'noopener noreferrer',
-                  className: 'tt-source-link'
+                  className: 'tt-source-link',
+                  onClick: () => {
+                    if (window.TTShared?.trackOutboundClick) {
+                      try {
+                        const domain = new URL(article.url).hostname;
+                        window.TTShared.trackOutboundClick({
+                          targetType: 'article',
+                          sourceDomain: domain,
+                          contentType: 'story',
+                          contentId: String(story?.id)
+                        });
+                      } catch (e) { /* ignore URL parse errors */ }
+                    }
+                  }
                 }, article.title || 'Untitled')
               )
             )
@@ -604,7 +617,20 @@
                       href: article.url,
                       target: '_blank',
                       rel: 'noopener noreferrer',
-                      className: 'tt-source-title'
+                      className: 'tt-source-title',
+                      onClick: () => {
+                        if (window.TTShared?.trackOutboundClick) {
+                          try {
+                            const domain = new URL(article.url).hostname;
+                            window.TTShared.trackOutboundClick({
+                              targetType: 'article',
+                              sourceDomain: domain,
+                              contentType: 'story',
+                              contentId: String(story?.id)
+                            });
+                          } catch (e) { /* ignore URL parse errors */ }
+                        }
+                      }
                     },
                       article.title || 'Untitled',
                       React.createElement('span', { className: 'tt-external-icon' }, ' ↗')
@@ -891,12 +917,13 @@
       setDetailLoading(true);
       setDetailError(null);
 
-      // Track story view (only from user clicks, not deep links)
-      if (!fromDeepLink) {
-        trackEvent('view_story', {
-          story_id: story.id,
-          category: story.category,
-          severity: story.severity
+      // Track detail modal open
+      if (window.TTShared) {
+        window.TTShared.trackDetailOpen({
+          objectType: 'story',
+          contentType: 'story',
+          contentId: String(story.id),
+          source: fromDeepLink ? 'deep_link' : 'card_click'
         });
       }
 
@@ -962,6 +989,15 @@
       // Set closing guard to prevent deep-link useEffect race condition
       detailClosingRef.current = true;
 
+      // Track detail modal close (with duration)
+      if (window.TTShared && detailStory) {
+        window.TTShared.trackDetailClose({
+          objectType: 'story',
+          contentType: 'story',
+          contentId: String(detailStory.id)
+        });
+      }
+
       // Unlock scroll
       if (window.TTShared) window.TTShared.unlockScroll();
 
@@ -977,7 +1013,7 @@
 
       // Clear closing guard after a tick (allow URL to update)
       setTimeout(() => { detailClosingRef.current = false; }, 50);
-    }, []);
+    }, [detailStory]);
 
     // Handle popstate (back button)
     useEffect(() => {
@@ -1424,6 +1460,13 @@
         if (tabParam && (tabParam === 'scotus' || tabParam === 'merch')) {
           setActiveTab(tabParam);
         }
+      }
+    }, []);
+
+    // Initialize scroll depth tracking
+    useEffect(() => {
+      if (window.TTShared?.initScrollDepthTracking) {
+        window.TTShared.initScrollDepthTracking('stories');
       }
     }, []);
 
