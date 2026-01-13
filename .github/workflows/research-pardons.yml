@@ -25,10 +25,10 @@ on:
 
 permissions:
   contents: read
-  actions: write
+  actions: read
 
 concurrency:
-  group: research-pardons-test
+  group: research-pardons-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -63,6 +63,10 @@ jobs:
           set -Eeuo pipefail
           LIMIT="${{ inputs.limit }}"
           FORCE="${{ inputs.force }}"
+          # Default limit if not provided
+          if [[ -z "${LIMIT:-}" ]]; then
+            LIMIT="20"
+          fi
           # Validate numeric limit to avoid shell/arg injection
           if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
             echo "Invalid limit: $LIMIT" >&2
