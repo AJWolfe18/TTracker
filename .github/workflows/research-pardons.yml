@@ -28,7 +28,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: research-pardons-${{ github.ref }}
+  group: research-pardons-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -71,6 +71,12 @@ jobs:
           if ! [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
             echo "Invalid limit: $LIMIT" >&2
             exit 2
+          fi
+          # Cap limit to avoid accidental high-cost runs (92 pardons total)
+          MAX_LIMIT=100
+          if (( LIMIT > MAX_LIMIT )); then
+            echo "Limit $LIMIT exceeds max $MAX_LIMIT; capping to $MAX_LIMIT." >&2
+            LIMIT="$MAX_LIMIT"
           fi
           ARGS=( "--limit=$LIMIT" )
           if [[ "$FORCE" == "true" ]]; then
