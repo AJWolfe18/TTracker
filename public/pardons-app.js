@@ -856,17 +856,11 @@
         )
       ),
 
-      // Row 2: Recipient type pills + Corruption pills
-      React.createElement('div', { className: 'tt-severity-filters' },
-        React.createElement(RecipientTypeFilter, {
-          value: filters.recipientType || 'all',
-          onChange: (val) => onFilterChange('recipientType', val === 'all' ? null : val)
-        }),
-        React.createElement(CorruptionPills, {
-          value: filters.corruptionLevel,
-          onChange: (val) => onFilterChange('corruptionLevel', val)
-        })
-      ),
+      // Row 2: Corruption level pills
+      React.createElement(CorruptionPills, {
+        value: filters.corruptionLevel,
+        onChange: (val) => onFilterChange('corruptionLevel', val)
+      }),
 
       // Row 3: Results count + Active filter chips
       React.createElement('div', { className: 'tt-filters-status' },
@@ -905,14 +899,6 @@
               'aria-label': 'Remove corruption filter'
             }, '×')
           ),
-          filters.recipientType && React.createElement('span', { className: 'tt-filter-chip' },
-            filters.recipientType === 'person' ? 'People' : 'Groups',
-            React.createElement('button', {
-              className: 'tt-chip-remove',
-              onClick: () => onFilterChange('recipientType', null),
-              'aria-label': 'Remove recipient type filter'
-            }, '×')
-          ),
           // Clear all button
           React.createElement('button', {
             className: 'tt-clear-all',
@@ -933,22 +919,16 @@
   const FILTER_URL_PARAMS = {
     q: 'q',
     sort: 'sort',
-    recipient_type: 'recipientType',
     corruption_level: 'corruptionLevel',
-    connection_type: 'connectionType',
-    crime_category: 'crimeCategory',
-    post_pardon_status: 'postPardonStatus'
+    connection_type: 'connectionType'
   };
 
   // Default filter state
   const DEFAULT_FILTERS = {
     q: null,
     sort: 'date',
-    recipientType: null,
     corruptionLevel: null,
-    connectionType: null,
-    crimeCategory: null,
-    postPardonStatus: null
+    connectionType: null
   };
 
   // Initialize filters from URL
@@ -1071,11 +1051,8 @@
         if (cursor) params.cursor = cursor;
         if (filters.q) params.q = filters.q;
         if (filters.sort && filters.sort !== 'date') params.sort = filters.sort;
-        if (filters.recipientType) params.recipient_type = filters.recipientType;
         if (filters.corruptionLevel) params.corruption_level = filters.corruptionLevel;
         if (filters.connectionType) params.connection_type = filters.connectionType;
-        if (filters.crimeCategory) params.crime_category = filters.crimeCategory;
-        if (filters.postPardonStatus) params.post_pardon_status = filters.postPardonStatus;
 
         const data = await edgeFunctionRequest('pardons-active', params, currentController.signal);
 

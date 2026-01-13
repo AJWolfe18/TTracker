@@ -2305,26 +2305,3 @@
   background: var(--text-secondary);
 }
 
-/* Recipient type filter inline with corruption pills */
-.tt-recipient-filter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Pardons page: Corruption pills with divider before them */
-.tt-severity-filters .tt-recipient-filter + div {
-  margin-left: 8px;
-  padding-left: 16px;
-  border-left: 1px solid var(--card-border);
-}
-
-/* Mobile: Stack Type and Corruption pills vertically */
-@media (max-width: 768px) {
-  .tt-severity-filters .tt-recipient-filter + div {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
-    margin-top: 8px;
-  }
-}
