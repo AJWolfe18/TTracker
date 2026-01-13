@@ -21,7 +21,8 @@
 ### Files Created
 1. `migrations/058_analytics_tables.sql` - All 3 tables with RLS
 2. `scripts/apply-058-migration.js` - Verification script
-3. `docs/guides/ga4-turnstile-setup.md` - Manual setup instructions
+3. `docs/features/analytics/ga4-turnstile-setup.md` - Manual setup instructions
+4. `docs/features/analytics/plan.md` - Feature plan overview
 
 ### Schema Created (in migration 058)
 - `newsletter_subscribers` - Email signups with UUID unsubscribe tokens
@@ -44,13 +45,13 @@ node scripts/apply-058-migration.js
 ```
 
 ### 2. Configure GA4 (Property 498284230)
-Follow `docs/guides/ga4-turnstile-setup.md` Part 1:
+Follow `docs/features/analytics/ga4-turnstile-setup.md` Part 1:
 - [ ] Change data retention: 2 months → 14 months
 - [ ] Register 13 custom dimensions
 - [ ] Create `newsletter_subscriber` user property
 
 ### 3. Set Up Turnstile (Before Story 2)
-Follow `docs/guides/ga4-turnstile-setup.md` Part 2:
+Follow `docs/features/analytics/ga4-turnstile-setup.md` Part 2:
 - [ ] Create Turnstile widget at cloudflare.com
 - [ ] Note Site Key (for frontend later)
 - [ ] Add `TURNSTILE_SECRET_KEY` to Supabase secrets
@@ -71,9 +72,10 @@ Once manual setup complete, Story 2 creates:
 
 | File | Purpose |
 |------|---------|
+| `docs/features/analytics/plan.md` | Feature plan overview |
 | `.claude/plans/soft-sparking-barto.md` | Master plan (800+ lines) |
 | `migrations/058_analytics_tables.sql` | Schema definition |
-| `docs/guides/ga4-turnstile-setup.md` | Manual setup guide |
+| `docs/features/analytics/ga4-turnstile-setup.md` | Manual setup guide |
 
 ---
 
