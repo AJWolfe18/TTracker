@@ -2305,3 +2305,233 @@
   background: var(--text-secondary);
 }
 
+/* ===========================================
+   NEWSLETTER SIGNUP STYLES
+   =========================================== */
+
+/* Footer Newsletter */
+.tt-newsletter-footer {
+  background: var(--header-bg);
+  border-top: 1px solid var(--header-border);
+  padding: 2rem 1rem;
+  margin-top: auto;
+}
+
+.tt-newsletter-inner {
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.tt-newsletter-title {
+  font-family: var(--font-headline);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.tt-newsletter-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+.tt-newsletter-form {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.tt-newsletter-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  border: 1px solid var(--filter-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.tt-newsletter-input:focus {
+  outline: none;
+  border-color: var(--text-link);
+  box-shadow: 0 0 0 3px var(--search-focus-ring);
+}
+
+.tt-newsletter-input::placeholder {
+  color: var(--text-muted);
+}
+
+.tt-newsletter-submit {
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--filter-active-bg);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.tt-newsletter-submit:hover {
+  background: var(--text-link-hover);
+  transform: translateY(-1px);
+}
+
+.tt-newsletter-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tt-newsletter-message {
+  width: 100%;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.tt-newsletter-message.success {
+  color: #16a34a;
+}
+
+.tt-newsletter-message.error {
+  color: #dc2626;
+}
+
+/* Honeypot field - invisible to real users */
+.tt-newsletter-hp {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+/* Turnstile widget wrapper */
+.tt-newsletter-turnstile {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+/* Inline Newsletter CTA (50% scroll) */
+.tt-newsletter-inline {
+  background: linear-gradient(135deg, var(--filter-active-bg) 0%, var(--text-link) 100%);
+  border-radius: var(--card-radius);
+  padding: 1.5rem;
+  margin: 2rem 0;
+  text-align: center;
+  box-shadow: var(--card-shadow);
+  animation: tt-newsletter-slide-in 0.3s ease-out;
+}
+
+@keyframes tt-newsletter-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tt-newsletter-inline .tt-newsletter-title {
+  color: #ffffff;
+  font-size: 1.125rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-input {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: transparent;
+}
+
+.tt-newsletter-inline .tt-newsletter-submit {
+  background: #ffffff;
+  color: var(--filter-active-bg);
+}
+
+.tt-newsletter-inline .tt-newsletter-submit:hover {
+  background: #f3f4f6;
+}
+
+.tt-newsletter-inline .tt-newsletter-message.success {
+  color: #bbf7d0;
+}
+
+.tt-newsletter-inline .tt-newsletter-message.error {
+  color: #fecaca;
+}
+
+/* Close button for inline CTA */
+.tt-newsletter-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+}
+
+.tt-newsletter-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tt-newsletter-inline-wrapper {
+  position: relative;
+}
+
+/* Privacy note */
+.tt-newsletter-privacy {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.75rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-privacy {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .tt-newsletter-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tt-newsletter-input {
+    max-width: none;
+  }
+
+  .tt-newsletter-submit {
+    width: 100%;
+  }
+}
+

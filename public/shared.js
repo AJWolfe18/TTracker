@@ -348,6 +348,126 @@
   }
 
   // ===========================================
+  // NEWSLETTER SIGNUP
+  // ===========================================
+
+  // Turnstile site key (public)
+  const TURNSTILE_SITE_KEY = '0x4AAAAAACMTyFRQ0ebtcHkK';
+
+  /**
+   * Submit newsletter signup
+   * @param {Object} params - Signup parameters
+   * @param {string} params.email - Email address
+   * @param {string} params.turnstileToken - Turnstile verification token
+   * @param {string} params.signupPage - Page name ('stories', 'eos', 'pardons')
+   * @param {string} params.signupSource - Source ('footer', 'inline_50pct')
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async function submitNewsletterSignup({
+    email,
+    turnstileToken,
+    signupPage = 'unknown',
+    signupSource = 'footer'
+  }) {
+    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[Newsletter] Missing Supabase config');
+      return { success: false, message: 'Configuration error. Please try again.' };
+    }
+
+    // Get UTM params from URL
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = params.get('utm_source');
+    const utmMedium = params.get('utm_medium');
+    const utmCampaign = params.get('utm_campaign');
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/newsletter-signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          email,
+          turnstile_token: turnstileToken,
+          honeypot: '', // Empty for real users
+          signup_page: signupPage,
+          signup_source: signupSource,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Set GA4 user property
+        if (typeof gtag === 'function') {
+          gtag('set', 'user_properties', { newsletter_subscriber: true });
+        }
+
+        // Track signup event
+        trackEvent('newsletter_signup', {
+          result: 'success',
+          signup_source: signupSource,
+          signup_page: signupPage,
+          utm_source: utmSource || undefined,
+          utm_campaign: utmCampaign || undefined
+        });
+
+        // Remember signup in localStorage
+        setLocalStorage('tt-newsletter-signed-up', true);
+
+        return { success: true, message: data.message || 'Thanks! Check your email soon.' };
+      } else {
+        // Track failed signup
+        trackEvent('newsletter_signup', {
+          result: 'error',
+          signup_source: signupSource,
+          signup_page: signupPage
+        });
+
+        return { success: false, message: data.error || 'Something went wrong. Please try again.' };
+      }
+    } catch (error) {
+      console.error('[Newsletter] Signup error:', error);
+      trackEvent('newsletter_signup', {
+        result: 'error',
+        signup_source: signupSource,
+        signup_page: signupPage
+      });
+      return { success: false, message: 'Network error. Please try again.' };
+    }
+  }
+
+  /**
+   * Check if user has already signed up
+   * @returns {boolean}
+   */
+  function hasNewsletterSignup() {
+    return getLocalStorage('tt-newsletter-signed-up', false);
+  }
+
+  /**
+   * Check if inline CTA has been dismissed this session
+   * @returns {boolean}
+   */
+  function isInlineCTADismissed() {
+    return getSessionStorage('tt-newsletter-inline-dismissed', false);
+  }
+
+  /**
+   * Dismiss inline CTA for this session
+   */
+  function dismissInlineCTA() {
+    setSessionStorage('tt-newsletter-inline-dismissed', true);
+  }
+
+  // ===========================================
   // EXPORT TO GLOBAL
   // ===========================================
 
@@ -391,7 +511,14 @@
     supabaseRequest,
 
     // Analytics
-    trackEvent
+    trackEvent,
+
+    // Newsletter
+    TURNSTILE_SITE_KEY,
+    submitNewsletterSignup,
+    hasNewsletterSignup,
+    isInlineCTADismissed,
+    dismissInlineCTA
   };
 
 })(window);

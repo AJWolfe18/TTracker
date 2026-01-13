@@ -656,16 +656,135 @@
   }
 
   // ===========================================
+  // NEWSLETTER COMPONENTS
+  // ===========================================
+
+  // Newsletter Form (reusable for footer and inline)
+  function NewsletterForm({ signupPage, signupSource, isInline = false }) {
+    const [email, setEmail] = useState('');
+    const [status, setStatus] = useState('idle');
+    const [message, setMessage] = useState('');
+    const turnstileRef = useRef(null);
+    const turnstileWidgetId = useRef(null);
+
+    useEffect(() => {
+      if (window.turnstile && turnstileRef.current && !turnstileWidgetId.current) {
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: window.TTShared?.TURNSTILE_SITE_KEY || '0x4AAAAAACMTyFRQ0ebtcHkK',
+          callback: () => {},
+          'error-callback': () => console.warn('[Turnstile] Widget error')
+        });
+      }
+      return () => {
+        if (turnstileWidgetId.current && window.turnstile) {
+          window.turnstile.remove(turnstileWidgetId.current);
+          turnstileWidgetId.current = null;
+        }
+      };
+    }, []);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      if (!email.trim()) {
+        setStatus('error');
+        setMessage('Please enter your email address.');
+        return;
+      }
+      let turnstileToken = '';
+      if (window.turnstile && turnstileWidgetId.current) {
+        turnstileToken = window.turnstile.getResponse(turnstileWidgetId.current);
+        if (!turnstileToken) {
+          setStatus('error');
+          setMessage('Please complete the verification.');
+          return;
+        }
+      }
+      setStatus('loading');
+      setMessage('');
+      const result = await window.TTShared.submitNewsletterSignup({
+        email: email.trim(), turnstileToken, signupPage, signupSource
+      });
+      if (result.success) {
+        setStatus('success');
+        setMessage(result.message);
+        setEmail('');
+        if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+      } else {
+        setStatus('error');
+        setMessage(result.message);
+        if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+      }
+    };
+
+    if (window.TTShared?.hasNewsletterSignup()) return null;
+
+    return React.createElement('form', { className: 'tt-newsletter-form', onSubmit: handleSubmit },
+      React.createElement('input', { type: 'text', name: 'website', className: 'tt-newsletter-hp', tabIndex: -1, autoComplete: 'off' }),
+      React.createElement('input', { type: 'email', className: 'tt-newsletter-input', placeholder: 'Enter your email', value: email, onChange: (e) => setEmail(e.target.value), disabled: status === 'loading', 'aria-label': 'Email address' }),
+      React.createElement('button', { type: 'submit', className: 'tt-newsletter-submit', disabled: status === 'loading' }, status === 'loading' ? 'Subscribing...' : 'Subscribe'),
+      React.createElement('div', { className: 'tt-newsletter-turnstile', ref: turnstileRef }),
+      message && React.createElement('div', { className: `tt-newsletter-message ${status}` }, message),
+      React.createElement('p', { className: 'tt-newsletter-privacy' }, 'No spam, ever. Unsubscribe anytime.')
+    );
+  }
+
+  function NewsletterFooter() {
+    if (window.TTShared?.hasNewsletterSignup()) return null;
+    return React.createElement('footer', { className: 'tt-newsletter-footer' },
+      React.createElement('div', { className: 'tt-newsletter-inner' },
+        React.createElement('h3', { className: 'tt-newsletter-title' }, 'Stay in the Loop'),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' }, 'Get weekly updates on the latest political bullshit.'),
+        React.createElement(NewsletterForm, { signupPage: 'eos', signupSource: 'footer' })
+      )
+    );
+  }
+
+  function InlineNewsletterCTA({ signupPage }) {
+    const [show, setShow] = useState(false);
+    useEffect(() => {
+      if (window.TTShared?.hasNewsletterSignup() || window.TTShared?.isInlineCTADismissed()) return;
+      let hasTriggered = false;
+      const checkScroll = () => {
+        if (hasTriggered) return;
+        const scrollTop = window.scrollY;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollPercent = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+        if (scrollPercent >= 50) {
+          hasTriggered = true;
+          setShow(true);
+          window.removeEventListener('scroll', checkScroll);
+        }
+      };
+      window.addEventListener('scroll', checkScroll, { passive: true });
+      return () => window.removeEventListener('scroll', checkScroll);
+    }, []);
+    const handleDismiss = () => { setShow(false); window.TTShared?.dismissInlineCTA(); };
+    if (!show) return null;
+    return React.createElement('div', { className: 'tt-newsletter-inline-wrapper' },
+      React.createElement('div', { className: 'tt-newsletter-inline' },
+        React.createElement('button', { className: 'tt-newsletter-close', onClick: handleDismiss, 'aria-label': 'Dismiss' }, '×'),
+        React.createElement('h3', { className: 'tt-newsletter-title' }, 'Like what you\'re reading?'),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' }, 'Get the weekly roundup of political corruption delivered to your inbox.'),
+        React.createElement(NewsletterForm, { signupPage, signupSource: 'inline_50pct', isInline: true })
+      )
+    );
+  }
+
+  // ===========================================
   // MAIN APP
   // ===========================================
 
   function EOPreviewApp() {
     const { theme, toggleTheme } = useTheme();
 
-    return React.createElement('div', { className: 'tt-preview-root' },
+    return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),
       React.createElement(TabNavigation, { activeTab: 'eo' }),
-      React.createElement(EOFeed)
+      React.createElement('div', { style: { flex: 1 } },
+        React.createElement(EOFeed),
+        React.createElement(InlineNewsletterCTA, { signupPage: 'eos' })
+      ),
+      React.createElement(NewsletterFooter)
     );
   }
 
