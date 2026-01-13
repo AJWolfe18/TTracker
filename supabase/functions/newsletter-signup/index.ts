@@ -58,6 +58,9 @@ async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
 }
 
 // Check and update rate limits
+// TODO: Non-atomic limiter (read-check-write race condition possible).
+// Acceptable because Turnstile is primary bot protection; this is defense-in-depth.
+// Revisit if abuse observed in logs (search for "[RateLimit] EXCEEDED").
 async function checkRateLimit(
   supabase: ReturnType<typeof getAdminClient>,
   ipHash: string
@@ -82,6 +85,7 @@ async function checkRateLimit(
     .single()
 
   if (minuteData && minuteData.request_count >= 5) {
+    console.warn('[RateLimit] EXCEEDED minute limit for IP hash:', ipHash.substring(0, 16), 'count:', minuteData.request_count)
     return { allowed: false, reason: 'rate_limit_minute' }
   }
 
@@ -95,6 +99,7 @@ async function checkRateLimit(
     .single()
 
   if (dayData && dayData.request_count >= 20) {
+    console.warn('[RateLimit] EXCEEDED day limit for IP hash:', ipHash.substring(0, 16), 'count:', dayData.request_count)
     return { allowed: false, reason: 'rate_limit_day' }
   }
 
