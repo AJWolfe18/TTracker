@@ -53,7 +53,8 @@ const EVENT_TYPES = [
 ];
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-const URL_REGEX = /^https?:\/\/.+/;
+// URL must be http(s)://, have at least one dot in host, no spaces
+const URL_REGEX = /^https?:\/\/[^\s]+\.[^\s]+/;
 const MAX_TIMELINE_LENGTH = 30;
 const MAX_SOURCES_LENGTH = 20;
 
@@ -115,6 +116,14 @@ function validateResearchResponse(json) {
   if (typeof json.corruption_level !== 'number' ||
       json.corruption_level < 1 || json.corruption_level > 5) {
     errors.push(`Invalid corruption_level: ${json.corruption_level}`);
+  }
+
+  // 2b. corruption_reasoning: required for levels 2-5, flexible for no_connection level 1
+  const isNoConnection = json.primary_connection_type === 'no_connection' && json.corruption_level === 1;
+  if (!isNoConnection) {
+    if (typeof json.corruption_reasoning !== 'string' || json.corruption_reasoning.trim().length < 5) {
+      errors.push('corruption_reasoning required for corruption_level 2-5 (min 5 chars)');
+    }
   }
 
   // 3. Required: trump_connection_detail (non-empty string)
@@ -347,10 +356,10 @@ class PardonResearchWorker {
         primary_connection_type: data.primary_connection_type,
         trump_connection_detail: data.trump_connection_detail,
         corruption_level: data.corruption_level,
-        // Store reasoning in existing field or notes
+        corruption_reasoning: data.corruption_reasoning ?? null,
         receipts_timeline: data.receipts_timeline,
-        donation_amount_usd: data.donation_amount_usd,
-        source_urls: data.sources,  // Map 'sources' from prompt to 'source_urls' in DB
+        donation_amount_usd: data.donation_amount_usd ?? null,
+        source_urls: data.sources ?? [],  // Map 'sources' from prompt to 'source_urls' in DB
         research_status: 'complete',
         research_prompt_version: PROMPT_VERSION,
         researched_at: new Date().toISOString()
@@ -454,17 +463,17 @@ class PardonResearchWorker {
       return this.stats;
     }
 
-    for (const pardon of pardons) {
+    for (let i = 0; i < pardons.length; i++) {
       // Runtime guard
       if (Date.now() - this.startTime > RUNTIME_LIMIT_MS) {
         console.log('\n⏱️ Runtime limit reached. Stopping.');
         break;
       }
 
-      await this.researchPardon(pardon);
+      await this.researchPardon(pardons[i]);
 
-      // Delay between calls (except dry run)
-      if (!this.dryRun && pardons.indexOf(pardon) < pardons.length - 1) {
+      // Delay between calls (except dry run and last item)
+      if (!this.dryRun && i < pardons.length - 1) {
         await new Promise(r => setTimeout(r, DELAY_BETWEEN_CALLS_MS));
       }
     }
