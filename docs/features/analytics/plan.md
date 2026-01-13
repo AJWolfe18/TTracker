@@ -1,7 +1,7 @@
 # Analytics Enhancement Plan
 
 **Epic:** ADO-254
-**Status:** In Progress (Story 1 of 5)
+**Status:** In Progress (3 of 5 stories ready for prod)
 **Full Plan:** `C:\Users\Josh\.claude\plans\soft-sparking-barto.md`
 
 ---
@@ -63,6 +63,15 @@ Comprehensive analytics tracking, newsletter signup, and retention/loyalty metri
 
 ### Error Tracking
 - `error_logged` - API/JS errors by type
+
+---
+
+## Fixes Applied (Post-Implementation)
+
+| Date | Issue | Fix |
+|------|-------|-----|
+| 2026-01-13 | Inline CTA rendered as full-width block alongside footer | Changed to fixed-position bottom-right slide-in |
+| 2026-01-13 | Turnstile "Invalid domain" error on test site | Added `test--trumpytracker.netlify.app` to Turnstile allowed domains (user action required) |
 
 ---
 
