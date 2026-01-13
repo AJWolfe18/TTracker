@@ -1,7 +1,14 @@
 # Session Handoff: 2026-01-13 (ADO-253)
 
 ## Summary
-ADO-253 Perplexity Research Integration - **COMPLETE**. Migration applied, workflow deployed to main + test, tested with 4 pardons successfully. Ready for Prod.
+ADO-253 Perplexity Research Integration - **COMPLETE**. Migration 057 applied, code review fixes added (migration 058). Ready for Prod.
+
+### Post-Review Fix (Migration 058)
+Expert code review found `corruption_reasoning` was collected but not stored. Fixed:
+- Migration 058: `corruption_reasoning TEXT` column added
+- Script: Now stores reasoning with flexible validation (required for levels 2-5, optional for no_connection level 1)
+- Loop: Fixed O(n²) to O(n)
+- URL regex: Improved to require dot in host
 
 ---
 
@@ -64,7 +71,8 @@ ADO-253 Perplexity Research Integration - **COMPLETE**. Migration applied, workf
 | File | Action |
 |------|--------|
 | `migrations/057_pardon_research_tables.sql` | NEW |
-| `scripts/enrichment/perplexity-research.js` | NEW |
+| `migrations/058_pardon_corruption_reasoning.sql` | NEW (code review fix) |
+| `scripts/enrichment/perplexity-research.js` | NEW + MODIFIED (code review fixes) |
 | `.github/workflows/research-pardons.yml` | NEW (main + test) |
 | `package.json` | MODIFIED (npm scripts) |
 | `.claude/test-only-paths.md` | MODIFIED |
@@ -79,11 +87,18 @@ ADO-253 Perplexity Research Integration - **COMPLETE**. Migration applied, workf
 
 ## Backfill (Operational Task)
 
-Not a separate card - just running the completed work when ready:
+Not a separate card - just running the completed work when ready.
+
+**Before backfill, apply migration 058:**
+```sql
+ALTER TABLE public.pardons ADD COLUMN IF NOT EXISTS corruption_reasoning TEXT;
+```
+
+**Then run:**
 ```bash
 gh workflow run "Research Pardons (Perplexity)" --ref test -f limit=93
 ```
-- **Remaining:** 93 pardons
+- **Remaining:** 93 pardons (4 already done, but missing corruption_reasoning - use `--force` to re-research)
 - **Est. cost:** ~$1.16
 - **Est. time:** ~5 min
 
