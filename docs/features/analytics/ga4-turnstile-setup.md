@@ -76,7 +76,7 @@
    - **Site name:** TrumpyTracker Newsletter
    - **Hostnames:** (add ALL of these)
      - `trumpytracker.com` (PROD)
-     - `test--trumpytracker.netlify.app` (TEST)
+     - `test--taupe-capybara-0ff2ed.netlify.app` (TEST)
      - `localhost` (local development)
    - **Widget Mode:** Managed (recommended)
    - **Pre-Clearance:** Disabled
@@ -89,7 +89,7 @@ If you see "Invalid domain" error:
 2. Click on your TrumpyTracker widget
 3. Scroll to **Hostname** section
 4. Add missing domains:
-   - `test--trumpytracker.netlify.app`
+   - `test--taupe-capybara-0ff2ed.netlify.app`
    - `localhost`
 5. Click **Save**
 
@@ -165,7 +165,7 @@ supabase secrets unset KEY_NAME --project-ref wnrjrywpcadwutfykflu
 - **FIX:** See section 2.1b above - add the missing domain to Turnstile settings
 - Required hostnames:
   - `trumpytracker.com` (PROD)
-  - `test--trumpytracker.netlify.app` (TEST)
+  - `test--taupe-capybara-0ff2ed.netlify.app` (TEST)
   - `localhost` (development)
 
 ### Turnstile widget not loading

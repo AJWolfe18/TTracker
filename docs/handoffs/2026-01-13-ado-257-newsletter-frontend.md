@@ -57,7 +57,7 @@
 
 ### Issue 2: Turnstile "Invalid domain" Error
 - **Problem:** Test site domain not in Turnstile allowed hostnames
-- **Fix:** User action required - add `test--trumpytracker.netlify.app` to Turnstile widget
+- **Fix:** User action required - add `test--taupe-capybara-0ff2ed.netlify.app` to Turnstile widget
 - **Instructions:** See `docs/features/analytics/ga4-turnstile-setup.md` section 2.1b
 
 ---
@@ -66,7 +66,7 @@
 
 After Netlify deploys (~2 min):
 1. **First:** Add test domain to Turnstile (see Issue 2 fix above)
-2. Go to https://test--trumpytracker.netlify.app/
+2. Go to https://test--taupe-capybara-0ff2ed.netlify.app/
 3. Scroll to footer - newsletter form should appear at bottom
 4. Scroll 50% down - inline CTA should slide in from bottom-right corner
 5. Complete Turnstile and submit - should show success message
