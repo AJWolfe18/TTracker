@@ -32,7 +32,7 @@ dotenv.config();
 // Constants
 // ============================================================
 
-const PROMPT_VERSION = '1.0';
+const PROMPT_VERSION = '1.1';  // Expanded to search beyond Trump, stricter evidence requirements
 const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
@@ -42,14 +42,15 @@ const RUNTIME_LIMIT_MS = 4 * 60 * 1000;  // 4 minutes (workflow timeout is 10)
 const CONNECTION_TYPES = [
   'major_donor', 'political_ally', 'family', 'business_associate',
   'celebrity', 'jan6_defendant', 'fake_electors', 'mar_a_lago_vip',
-  'no_connection', 'campaign_staff'
+  'cabinet_connection', 'lobbyist', 'campaign_staff', 'no_connection'
 ];
 
 // Event types for receipts_timeline
 const EVENT_TYPES = [
   'donation', 'conviction', 'pardon_granted', 'pardon_request',
   'mar_a_lago_visit', 'investigation', 'sentencing', 'legal_filing',
-  'indictment', 'arrest', 'campaign_event', 'plea_deal', 'appeal', 'other'
+  'indictment', 'arrest', 'campaign_event', 'plea_deal', 'appeal',
+  'lobbying', 'advocacy', 'other'
 ];
 
 // Accept YYYY, YYYY-MM, or YYYY-MM-DD (Perplexity sometimes returns partial dates)
@@ -72,31 +73,45 @@ OFFENSE: ${pardon.offense_raw || pardon.crime_description || 'Unknown'}
 DISTRICT: ${pardon.conviction_district || 'Unknown'}
 TYPE: ${pardon.recipient_type === 'group' ? `GROUP PARDON (~${pardon.recipient_count} people)` : 'Individual'}
 
+SEARCH SCOPE - Look for connections to ANY of these:
+- Trump directly (donations, business, personal relationship)
+- Trump family (Don Jr, Eric, Ivanka, Jared Kushner)
+- Cabinet members (AG Pam Bondi, other officials)
+- Trump administration officials
+- GOP/RNC donors or fundraisers
+- Lobbyists with Trump administration access
+- Mar-a-Lago members or guests
+- Who specifically advocated for this pardon?
+- Any future business arrangements with Trump orbit
+
 Return JSON with EXACTLY these fields:
 {
-  "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|campaign_staff|no_connection",
-  "trump_connection_detail": "2-3 sentence explanation of relationship to Trump",
+  "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|cabinet_connection|lobbyist|campaign_staff|no_connection",
+  "trump_connection_detail": "2-3 sentence explanation of connection (or lack thereof) to Trump orbit",
   "corruption_level": 1-5,
-  "corruption_reasoning": "Why this corruption level (1 sentence)",
+  "corruption_reasoning": "Why this corruption level based on DOCUMENTED evidence (1 sentence)",
   "receipts_timeline": [
-    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing|legal_filing|pardon_request|indictment|arrest|campaign_event|plea_deal|appeal|other", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
+    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing|legal_filing|pardon_request|indictment|arrest|campaign_event|plea_deal|appeal|lobbying|advocacy|other", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
   ],
   "donation_amount_usd": null,
+  "pardon_advocate": "Who publicly advocated for this pardon, if known",
   "sources": ["url1", "url2"]
 }
 
-CORRUPTION LEVEL GUIDE:
-5 = "Paid-to-Play" - Direct financial quid pro quo, donor bought the pardon
-4 = "Friends & Family" - Inner circle, personal relationship, self-dealing
-3 = "Swamp Creature" - Political ally, lobbyist connection, covers up wrongdoing
-2 = "Celebrity Request" - Kim K called, media campaign, no direct corruption
-1 = "Broken Clock" - Actually arguably justified, criminal justice reform
+CORRUPTION LEVEL GUIDE (requires DOCUMENTED evidence):
+5 = "Paid-to-Play" - DOCUMENTED donation/payment + pardon. Must have financial evidence.
+4 = "Friends & Family" - Inner circle, cabinet connection, family ties, or legal team ties (e.g., attorney is AG's sibling)
+3 = "Swamp Creature" - Political ally, lobbyist involvement, or covers up admin wrongdoing
+2 = "Celebrity Request" - Public advocacy campaign, media attention, no corruption evidence
+1 = "Broken Clock" - No connection found, legitimate criminal justice case, or bipartisan support
 
-RULES:
+CRITICAL RULES:
+- Corruption level MUST match documented evidence, not inference
+- Level 5 REQUIRES documented financial connection (donation, payment, business deal)
+- If no connection to Trump orbit found after searching, use "no_connection" and corruption_level=1
+- Do NOT rate level 4-5 based on "pattern" or "lack of justification" alone
+- The CRIME being bad does not make the PARDON corrupt — focus on the pardon decision
 - Only include facts with citations in sources array
-- If no Trump connection found, use "no_connection" and corruption_level=1
-- Include FEC donation records if available
-- Note any ongoing investigations affected by pardon
 - receipts_timeline must be an array (empty [] if no events found)
 - For GROUP pardons (like Jan 6), research the group's connection to Trump, not individuals`;
 }

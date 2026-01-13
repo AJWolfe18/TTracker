@@ -146,10 +146,15 @@ export function getPoolType(level, connectionType) {
     return 'donor';
   }
 
-  // Inner circle types
-  const innerCircleTypes = ['family', 'campaign_staff', 'business_associate'];
+  // Inner circle types (includes cabinet connections)
+  const innerCircleTypes = ['family', 'campaign_staff', 'business_associate', 'cabinet_connection'];
   if (level === 4 || innerCircleTypes.includes(connectionType)) {
     return 'inner_circle';
+  }
+
+  // Lobbyist gets political pool (swamp creature energy)
+  if (connectionType === 'lobbyist') {
+    return 'political';
   }
 
   // Default for level 3 and political types
