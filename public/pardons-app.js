@@ -226,14 +226,15 @@
   // STATS BAR COMPONENT
   // ===========================================
 
-  function StatsBar({ stats, loading }) {
+  function StatsBar({ stats, loading, error }) {
     if (loading) {
       return React.createElement('div', { className: 'tt-stats-bar tt-stats-loading' },
         React.createElement('span', null, 'Loading stats...')
       );
     }
 
-    if (!stats) return null;
+    // Hide stats bar on error or no data
+    if (error || !stats) return null;
 
     return React.createElement('div', { className: 'tt-stats-bar' },
       React.createElement('div', { className: 'tt-stat-item' },
@@ -259,7 +260,14 @@
 
   // Spicy Status - badge style like severity badges on other tabs
   function SpicyStatus({ level }) {
-    if (!level || level < 1 || level > 5) return null;
+    // Show "Not Rated" for null/invalid levels to maintain consistent card layout
+    if (!level || level < 1 || level > 5) {
+      return React.createElement('span', {
+        className: 'tt-spicy-badge',
+        style: { backgroundColor: '#6b7280' },
+        title: 'Corruption level not yet rated'
+      }, 'Not Rated');
+    }
 
     const config = CORRUPTION_LABELS[level] || { label: 'Unknown', color: '#6b7280' };
 
@@ -275,14 +283,15 @@
   // ===========================================
 
   function ReceiptsTimeline({ events }) {
-    if (!events || events.length === 0) {
+    // Memoize sorted events to avoid re-sorting on every render
+    const sortedEvents = React.useMemo(() => {
+      if (!events || events.length === 0) return [];
+      return [...events].sort((a, b) => new Date(a.date) - new Date(b.date));
+    }, [events]);
+
+    if (sortedEvents.length === 0) {
       return null;
     }
-
-    // Sort events by date (oldest first for timeline)
-    const sortedEvents = [...events].sort((a, b) =>
-      new Date(a.date) - new Date(b.date)
-    );
 
     return React.createElement('div', { className: 'tt-timeline' },
       sortedEvents.map((event, index) => {
@@ -429,6 +438,10 @@
           if (!controller.signal.aborted) {
             console.error('Failed to load pardon detail:', err);
             setError(err.name === 'AbortError' ? null : err.message);
+            // Clear URL param on error to avoid perpetual error state on refresh
+            if (err.name !== 'AbortError') {
+              window.TTShared?.removeUrlParam('id');
+            }
           }
         } finally {
           if (!controller.signal.aborted) {
@@ -627,18 +640,24 @@
   // ===========================================
 
   function RecipientTypeFilter({ value, onChange }) {
-    return React.createElement('div', { className: 'tt-recipient-filter' },
+    return React.createElement('div', { className: 'tt-recipient-filter', role: 'group', 'aria-label': 'Filter by recipient type' },
       React.createElement('button', {
         className: `tt-filter-pill ${value === 'all' ? 'active' : ''}`,
-        onClick: () => onChange('all')
+        onClick: () => onChange('all'),
+        'aria-pressed': value === 'all',
+        'aria-label': 'Show all pardons'
       }, 'All'),
       React.createElement('button', {
         className: `tt-filter-pill ${value === 'person' ? 'active' : ''}`,
-        onClick: () => onChange('person')
+        onClick: () => onChange('person'),
+        'aria-pressed': value === 'person',
+        'aria-label': 'Show individual pardons'
       }, 'People'),
       React.createElement('button', {
         className: `tt-filter-pill ${value === 'group' ? 'active' : ''}`,
-        onClick: () => onChange('group')
+        onClick: () => onChange('group'),
+        'aria-pressed': value === 'group',
+        'aria-label': 'Show group pardons'
       }, 'Groups')
     );
   }
@@ -647,8 +666,7 @@
   // PARDONS FEED COMPONENT
   // ===========================================
 
-  // Track current list fetch AbortController
-  let listFetchController = null;
+  const { useRef, useMemo } = React;
 
   function PardonsFeed() {
     const [pardons, setPardons] = useState([]);
@@ -656,12 +674,16 @@
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [statsLoading, setStatsLoading] = useState(true);
+    const [statsError, setStatsError] = useState(false);
     const [error, setError] = useState(null);
     const [nextCursor, setNextCursor] = useState(null);
     const [hasMore, setHasMore] = useState(false);
 
     const [recipientType, setRecipientType] = useState('all');
     const [detailPardon, setDetailPardon] = useState(null);
+
+    // Use ref for abort controller to avoid race conditions
+    const listFetchControllerRef = useRef(null);
 
     // Check for deep link
     useEffect(() => {
@@ -688,6 +710,7 @@
         } catch (err) {
           if (!controller.signal.aborted && err.name !== 'AbortError') {
             console.error('Failed to load stats:', err);
+            setStatsError(true);
           }
         } finally {
           if (!controller.signal.aborted) {
@@ -703,11 +726,11 @@
     // Memoized loadPardons with abort support
     const loadPardons = useCallback(async (cursor = null) => {
       // Abort any in-flight request
-      if (listFetchController) {
-        listFetchController.abort();
+      if (listFetchControllerRef.current) {
+        listFetchControllerRef.current.abort();
       }
-      listFetchController = new AbortController();
-      const currentController = listFetchController;
+      listFetchControllerRef.current = new AbortController();
+      const currentController = listFetchControllerRef.current;
 
       try {
         if (cursor) {
@@ -755,8 +778,9 @@
 
       // Cleanup: abort on unmount or filter change
       return () => {
-        if (listFetchController) {
-          listFetchController.abort();
+        if (listFetchControllerRef.current) {
+          listFetchControllerRef.current.abort();
+          listFetchControllerRef.current = null;
         }
       };
     }, [loadPardons]);
@@ -808,7 +832,7 @@
 
     return React.createElement(React.Fragment, null,
       // Stats bar
-      React.createElement(StatsBar, { stats, loading: statsLoading }),
+      React.createElement(StatsBar, { stats, loading: statsLoading, error: statsError }),
 
       // Filter bar
       React.createElement('div', { className: 'tt-pardons-filters' },
