@@ -44,11 +44,23 @@ Total processed: 92
 
 ---
 
+## Testing Completed
+
+| Test | Result |
+|------|--------|
+| Idempotency | ✅ 92 duplicates detected, 0 new inserts |
+| Data Validation | ✅ Names, dates, districts correct |
+| Clemency Types | ✅ Pardons + commutations both captured |
+| Group Pardons | ✅ Jan 6 + fake electors present |
+| Dry-Run Mode | ✅ No DB writes, preview works |
+
+---
+
 ## ADO Status
 
 | ADO | Title | Status |
 |-----|-------|--------|
-| 250 | DOJ Scraper - Pardon Ingestion | **Testing** |
+| 250 | DOJ Scraper - Pardon Ingestion | **Closed** ✅ |
 | 244 | Story 1.3B: Receipts Timeline | Testing |
 | 245 | Story 1.4: Filtering & Search | Testing |
 
@@ -56,7 +68,7 @@ Total processed: 92
 
 ## Next Steps
 
-1. **Test scraper idempotency** - Run again to verify duplicates skipped
+1. ~~**Test scraper idempotency**~~ - ✅ Done (Session 8B)
 2. **Feature 2: AI Enrichment** - Create ADO items for Perplexity integration
 3. **Make new pardons public** - After review, set `is_public=true`
 
