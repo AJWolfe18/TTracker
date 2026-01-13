@@ -52,7 +52,8 @@ const EVENT_TYPES = [
   'indictment', 'arrest', 'campaign_event', 'plea_deal', 'appeal', 'other'
 ];
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+// Accept YYYY, YYYY-MM, or YYYY-MM-DD (Perplexity sometimes returns partial dates)
+const DATE_REGEX = /^\d{4}(-\d{2})?(-\d{2})?$/;
 // URL must be http(s)://, have at least one dot in host, no spaces
 const URL_REGEX = /^https?:\/\/[^\s]+\.[^\s]+/;
 const MAX_TIMELINE_LENGTH = 30;
