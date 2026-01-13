@@ -1203,11 +1203,14 @@
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState('idle'); // idle, loading, success, error
     const [message, setMessage] = useState('');
+    const [showTurnstile, setShowTurnstile] = useState(false); // Only show on focus
     const turnstileRef = useRef(null);
     const turnstileWidgetId = useRef(null);
 
-    // Initialize Turnstile widget
+    // Initialize Turnstile widget only when showTurnstile is true
     useEffect(() => {
+      if (!showTurnstile) return;
+
       if (window.turnstile && turnstileRef.current && !turnstileWidgetId.current) {
         turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
           sitekey: window.TTShared?.TURNSTILE_SITE_KEY || '0x4AAAAAACMTyFRQ0ebtcHkK',
@@ -1224,7 +1227,7 @@
           turnstileWidgetId.current = null;
         }
       };
-    }, []);
+    }, [showTurnstile]);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -1298,6 +1301,7 @@
         placeholder: 'Enter your email',
         value: email,
         onChange: (e) => setEmail(e.target.value),
+        onFocus: () => setShowTurnstile(true),
         disabled: status === 'loading',
         'aria-label': 'Email address'
       }),
@@ -1307,8 +1311,8 @@
         className: 'tt-newsletter-submit',
         disabled: status === 'loading'
       }, status === 'loading' ? 'Subscribing...' : 'Subscribe'),
-      // Turnstile widget
-      React.createElement('div', {
+      // Turnstile widget (only renders after email input focus)
+      showTurnstile && React.createElement('div', {
         className: 'tt-newsletter-turnstile',
         ref: turnstileRef
       }),

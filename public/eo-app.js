@@ -664,10 +664,12 @@
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState('idle');
     const [message, setMessage] = useState('');
+    const [showTurnstile, setShowTurnstile] = useState(false);
     const turnstileRef = useRef(null);
     const turnstileWidgetId = useRef(null);
 
     useEffect(() => {
+      if (!showTurnstile) return;
       if (window.turnstile && turnstileRef.current && !turnstileWidgetId.current) {
         turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
           sitekey: window.TTShared?.TURNSTILE_SITE_KEY || '0x4AAAAAACMTyFRQ0ebtcHkK',
@@ -681,7 +683,7 @@
           turnstileWidgetId.current = null;
         }
       };
-    }, []);
+    }, [showTurnstile]);
 
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -720,9 +722,9 @@
 
     return React.createElement('form', { className: 'tt-newsletter-form', onSubmit: handleSubmit },
       React.createElement('input', { type: 'text', name: 'website', className: 'tt-newsletter-hp', tabIndex: -1, autoComplete: 'off' }),
-      React.createElement('input', { type: 'email', className: 'tt-newsletter-input', placeholder: 'Enter your email', value: email, onChange: (e) => setEmail(e.target.value), disabled: status === 'loading', 'aria-label': 'Email address' }),
+      React.createElement('input', { type: 'email', className: 'tt-newsletter-input', placeholder: 'Enter your email', value: email, onChange: (e) => setEmail(e.target.value), onFocus: () => setShowTurnstile(true), disabled: status === 'loading', 'aria-label': 'Email address' }),
       React.createElement('button', { type: 'submit', className: 'tt-newsletter-submit', disabled: status === 'loading' }, status === 'loading' ? 'Subscribing...' : 'Subscribe'),
-      React.createElement('div', { className: 'tt-newsletter-turnstile', ref: turnstileRef }),
+      showTurnstile && React.createElement('div', { className: 'tt-newsletter-turnstile', ref: turnstileRef }),
       message && React.createElement('div', { className: `tt-newsletter-message ${status}` }, message),
       React.createElement('p', { className: 'tt-newsletter-privacy' }, 'No spam, ever. Unsubscribe anytime.')
     );
