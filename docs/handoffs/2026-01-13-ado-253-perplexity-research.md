@@ -1,50 +1,61 @@
 # Session Handoff: 2026-01-13 (ADO-253)
 
 ## Summary
-Built Perplexity research integration for pardons AI enrichment (ADO-253). Code complete with extensive expert review. Migration pending application, then ready for testing.
+ADO-253 Perplexity Research Integration - **COMPLETE**. Migration applied, workflow deployed to main + test, tested with 4 pardons successfully. Ready for Prod.
 
 ---
 
 ## Completed
 
-### 1. Migration 057 (Production-Ready)
+### 1. Migration 057 (Applied to TEST)
 **File:** `migrations/057_pardon_research_tables.sql`
 
-**Features:**
 - Idempotency columns on `pardons`: `research_prompt_version`, `researched_at`
 - Cost tracking table: `pardon_research_costs`
 - Error tracking table with dedupe: `pardon_research_errors`
 - RLS + REVOKE (tables AND sequences)
 - Data integrity constraints (idempotent DO blocks with table-specific checks)
-- Optimized indexes for worker queries
+- Selective index for worker queries
 
 ### 2. Perplexity Research Script
 **File:** `scripts/enrichment/perplexity-research.js`
 
-**Features:**
 - Perplexity Sonar API client
 - JSON validation (connection types, corruption levels, dates, URLs)
 - UPSERT error handling with attempt_count increment
 - Cost tracking per pardon
 - CLI: `--dry-run`, `--force`, `--limit=N`
-- Runtime guard (4 min)
-- 2s delay between API calls
+- Runtime guard (4 min), 2s delay between API calls
 
 ### 3. GitHub Actions Workflow
 **File:** `.github/workflows/research-pardons.yml`
 
-**Features:**
-- Manual-only (no cron - runs from test branch)
+- Manual-only (workflow_dispatch)
 - Inputs: `limit` (default 20), `force` (default false)
-- Concurrency guard (cancel-in-progress)
+- Security hardened (4 rounds of AI code review):
+  - Input validation (numeric check + default)
+  - MAX_LIMIT cap (100)
+  - Least-privilege permissions
+  - Scoped concurrency group by ref_name
+- Branch guard: only runs on `test`
 - 10 min timeout
-- Passes RUN_ID for attribution
+- Deployed to **main** (PR #48) and **test**
 
 ### 4. npm Scripts
 ```json
 "research:pardons": "node scripts/enrichment/perplexity-research.js",
 "research:pardons:dry-run": "node scripts/enrichment/perplexity-research.js --dry-run"
 ```
+
+### 5. Testing Results
+| Pardon | Connection | Corruption | Cost |
+|--------|------------|------------|------|
+| Rudy Giuliani | political_ally | 4 | $0.017 |
+| Steve Bannon | campaign_staff | 4 | $0.008 |
+| Jan 6 Mass Pardon | political_ally | 3 | $0.010 |
+| Ross Ulbricht | no_connection | 2 | $0.010 |
+
+**Total:** 4 researched, $0.045 spent
 
 ---
 
@@ -54,21 +65,27 @@ Built Perplexity research integration for pardons AI enrichment (ADO-253). Code 
 |------|--------|
 | `migrations/057_pardon_research_tables.sql` | NEW |
 | `scripts/enrichment/perplexity-research.js` | NEW |
-| `.github/workflows/research-pardons.yml` | NEW |
-| `package.json` | MODIFIED (added npm scripts) |
-| `scripts/apply-057-migration.js` | NEW (helper, test-only) |
+| `.github/workflows/research-pardons.yml` | NEW (main + test) |
+| `package.json` | MODIFIED (npm scripts) |
 | `.claude/test-only-paths.md` | MODIFIED |
+| `docs/features/pardons-tracker/epic-breakdown.md` | MODIFIED |
 
 ---
 
-## NOT Completed
+## ADO Status
+- **ADO-253:** Ready for Prod
 
-| Task | Status | Next Step |
-|------|--------|-----------|
-| Apply migration 057 | PENDING | Run SQL in Supabase Dashboard |
-| Test with 3 pardons | PENDING | After migration |
-| Full backfill (92) | PENDING | After testing |
-| ADO-253 status update | PENDING | After backfill |
+---
+
+## Backfill (Operational Task)
+
+Not a separate card - just running the completed work when ready:
+```bash
+gh workflow run "Research Pardons (Perplexity)" --ref test -f limit=93
+```
+- **Remaining:** 93 pardons
+- **Est. cost:** ~$1.16
+- **Est. time:** ~5 min
 
 ---
 
@@ -82,45 +99,42 @@ Built Perplexity research integration for pardons AI enrichment (ADO-253). Code 
 6. **Manual-only workflow** - Cron doesn't work on non-default branch
 7. **Concurrency guard** - Prevent overlapping runs
 
----
-
-## Migration SQL (Final Version)
-
-Copy `migrations/057_pardon_research_tables.sql` contents into Supabase Dashboard SQL Editor for TrumpyTracker-Test.
+### AI Code Review Fixes (4 rounds)
+1. Shell injection prevention (input validation, bash arrays)
+2. Least-privilege permissions (contents: read, actions: read)
+3. Default limit fallback for empty inputs
+4. MAX_LIMIT cap (100) to prevent runaway costs
 
 ---
 
 ## Startup Prompt for Next Session
 
 ```
-ADO-253 Perplexity Research: Code complete, migration pending.
+ADO-253 Perplexity Research: COMPLETE, Ready for Prod.
 
-Current state:
-- Script: scripts/enrichment/perplexity-research.js ✅
-- Workflow: .github/workflows/research-pardons.yml ✅
-- Migration: migrations/057_pardon_research_tables.sql ✅ (NOT APPLIED)
-- 92 pardons with research_status='pending'
+Completed:
+- Migration 057 applied to TEST
+- Research script + workflow deployed (main + test)
+- 4 pardons tested successfully ($0.045)
+- 93 pardons pending backfill (~$1.16)
 
-Next steps:
-1. Apply migration 057 via Supabase Dashboard SQL Editor
-2. Test: npm run research:pardons:dry-run -- --limit=3
-3. Test live: npm run research:pardons -- --limit=3
-4. Backfill: npm run research:pardons -- --limit=92
-5. Update ADO-253 status, create PR if ready
+Options for this session:
+1. Expert code review of ADO-253 work (recommended)
+2. Run backfill: gh workflow run "Research Pardons (Perplexity)" --ref test -f limit=93
+3. Start next story (check epic-breakdown.md)
 
 Read: docs/handoffs/2026-01-13-ado-253-perplexity-research.md
-Plan: C:\Users\Josh\.claude\plans\cheerful-wiggling-puddle.md
-Migration: migrations/057_pardon_research_tables.sql
+Epic: docs/features/pardons-tracker/epic-breakdown.md
 ```
 
 ---
 
-## Cost Estimate
+## Cost Summary
 
-| Operation | Est. Cost |
-|-----------|-----------|
-| Test (3 pardons) | ~$0.02 |
-| Full backfill (92) | ~$0.60 |
-| Monthly ongoing | ~$0.10 |
+| Operation | Cost |
+|-----------|------|
+| Test (4 pardons) | $0.045 |
+| Full backfill (93) | ~$1.16 est |
+| Monthly ongoing | ~$0.10 est |
 
-**Budget impact:** Negligible (<1% of $50/month)
+**Budget impact:** <3% of $50/month
