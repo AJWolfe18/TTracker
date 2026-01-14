@@ -638,6 +638,22 @@
               )
             ),
 
+            // Section: Why It Matters (ADO-247)
+            p.why_it_matters && React.createElement('div', { className: 'tt-pardon-section' },
+              React.createElement('h3', { className: 'tt-section-title' }, 'Why It Matters'),
+              React.createElement('div', { className: 'tt-section-content' },
+                React.createElement('p', { className: 'tt-why-it-matters' }, p.why_it_matters)
+              )
+            ),
+
+            // Section: Pattern Analysis (ADO-247)
+            p.pattern_analysis && React.createElement('div', { className: 'tt-pardon-section' },
+              React.createElement('h3', { className: 'tt-section-title' }, 'The Pattern'),
+              React.createElement('div', { className: 'tt-section-content' },
+                React.createElement('p', { className: 'tt-pattern-analysis' }, p.pattern_analysis)
+              )
+            ),
+
             // Section: The Receipts (timeline)
             p.receipts_timeline && p.receipts_timeline.length > 0 && React.createElement('div', { className: 'tt-pardon-section' },
               React.createElement('h3', { className: 'tt-section-title' }, 'The Receipts'),
