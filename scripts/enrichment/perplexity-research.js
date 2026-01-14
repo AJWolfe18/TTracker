@@ -32,7 +32,7 @@ dotenv.config();
 // Constants
 // ============================================================
 
-const PROMPT_VERSION = '1.2';  // Simpler "rate what you find" approach, pardon_advocates array, date null rule
+const PROMPT_VERSION = '1.3';  // v1.2 + campaign promises for votes = level 3 political connection
 const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
@@ -123,6 +123,11 @@ KEY PRINCIPLE: Your corruption_level should match what you actually found, not w
 - If you find political ties → level 3
 - If you only find celebrity advocacy → level 2
 - If you find nothing → level 1
+
+IMPORTANT - These ARE political connections (Level 3), not "no connection":
+- Campaign promises to pardon someone in exchange for votes ("I'll free X if you vote for me")
+- Pardons fulfilling promises made to voting blocs (libertarians, crypto community, etc.)
+- Political quid pro quo is a SWAMP CREATURE connection, not legitimate clemency
 
 RULES:
 - The CRIME severity does not affect corruption level — focus on the CONNECTION
