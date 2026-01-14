@@ -368,6 +368,13 @@
   function trackEvent(eventName, eventParams = {}, opts = {}) {
     if (typeof gtag !== 'function') return;
 
+    // Skip analytics on test environments
+    const hostname = window.location.hostname;
+    if (hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.log('[Analytics:TEST]', eventName, eventParams);
+      return;
+    }
+
     // Build safe params with allowlist
     const safeParams = { schema_v: 1 };
 
@@ -578,8 +585,10 @@
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Set GA4 user property
-        if (typeof gtag === 'function') {
+        // Set GA4 user property (skip on test environments)
+        const hostname = window.location.hostname;
+        const isTest = hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1';
+        if (typeof gtag === 'function' && !isTest) {
           gtag('set', 'user_properties', { newsletter_subscriber: true });
         }
 
