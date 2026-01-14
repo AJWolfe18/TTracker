@@ -140,7 +140,27 @@ RULES:
 // Validation
 // ============================================================
 
+// Fix known Perplexity typos before validation
+const CONNECTION_TYPE_TYPOS = {
+  'political_ly': 'political_ally',
+  'politcal_ally': 'political_ally',
+  'political_alley': 'political_ally',
+  'no_conection': 'no_connection',
+  'campaign_staf': 'campaign_staff',
+};
+
+function fixPerplexityTypos(json) {
+  if (json.primary_connection_type && CONNECTION_TYPE_TYPOS[json.primary_connection_type]) {
+    console.log(`   ⚠️ Fixed typo: ${json.primary_connection_type} → ${CONNECTION_TYPE_TYPOS[json.primary_connection_type]}`);
+    json.primary_connection_type = CONNECTION_TYPE_TYPOS[json.primary_connection_type];
+  }
+  return json;
+}
+
 function validateResearchResponse(json) {
+  // Fix typos first
+  json = fixPerplexityTypos(json);
+
   const errors = [];
 
   // 1. Required: primary_connection_type (enum)
