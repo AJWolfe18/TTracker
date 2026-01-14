@@ -2589,3 +2589,23 @@
   }
 }
 
+/* ============================================
+   ACCESSIBILITY: Keyboard Focus States
+   ============================================ */
+
+/* Focus-visible states for keyboard navigation */
+.tt-merch-btn:focus-visible,
+.tt-theme-toggle:focus-visible,
+.tt-filter-pill:focus-visible,
+.tt-newsletter-submit:focus-visible,
+.tt-newsletter-close:focus-visible,
+.tt-load-more-btn:focus-visible,
+.tt-search-clear:focus-visible,
+.tt-timeline-source:focus-visible,
+.tt-back-btn:focus-visible,
+.tt-modal-close:focus-visible {
+  outline: 2px solid var(--text-link);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--search-focus-ring, rgba(59, 130, 246, 0.3));
+}
+

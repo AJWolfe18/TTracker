@@ -176,6 +176,12 @@
       const button = merchButtonRef.current;
       if (!button || !window.TTShared?.trackMerchImpression) return;
 
+      // Feature detection for older browsers
+      if (!('IntersectionObserver' in window)) {
+        try { window.TTShared.trackMerchImpression('nav'); } catch (e) {}
+        return;
+      }
+
       const observer = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting) {
           window.TTShared.trackMerchImpression('nav');
@@ -1311,13 +1317,21 @@
         turnstileToken = window.turnstile.getResponse(turnstileWidgetId.current);
         if (!turnstileToken) { setStatus('error'); setMessage('Please complete the verification.'); return; }
       }
+      if (!window.TTShared?.submitNewsletterSignup) {
+        setStatus('error'); setMessage('Signup is temporarily unavailable. Please try again later.'); return;
+      }
       setStatus('loading'); setMessage('');
-      const result = await window.TTShared.submitNewsletterSignup({ email: email.trim(), turnstileToken, signupPage, signupSource });
-      if (result.success) {
-        setStatus('success'); setMessage(result.message); setEmail('');
-        if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
-      } else {
-        setStatus('error'); setMessage(result.message);
+      try {
+        const result = await window.TTShared.submitNewsletterSignup({ email: email.trim(), turnstileToken, signupPage, signupSource });
+        if (result.success) {
+          setStatus('success'); setMessage(result.message); setEmail('');
+          if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+        } else {
+          setStatus('error'); setMessage(result.message);
+          if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+        }
+      } catch (err) {
+        setStatus('error'); setMessage(err?.message || 'Something went wrong. Please try again.');
         if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
       }
     };
