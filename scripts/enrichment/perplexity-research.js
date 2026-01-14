@@ -39,6 +39,7 @@ const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
 const RUNTIME_LIMIT_MS = 4 * 60 * 1000;  // 4 minutes (workflow timeout is 10)
 const MAX_RETRIES = 3;  // For rate limit (429) handling
 const RETRY_BASE_DELAY_MS = 5000;  // 5 second base for exponential backoff
+const MAX_RETRY_DELAY_MS = 15000;  // Clamp retry sleep to 15s max
 
 // Connection types enum (must match DB CHECK constraint)
 const CONNECTION_TYPES = [
@@ -75,6 +76,8 @@ function sanitizeForPrompt(text, maxLength = 500) {
   return String(text)
     .replace(/[\x00-\x1f\x7f]/g, '')  // Remove control chars
     .replace(/```/g, '')  // Prevent markdown code block injection
+    .replace(/\s+/g, ' ')  // Collapse excessive whitespace
+    .trim()
     .slice(0, maxLength);
 }
 
@@ -85,9 +88,15 @@ function sanitizeForPrompt(text, maxLength = 500) {
 function sanitizeErrorBody(body, maxLength = 500) {
   if (!body) return null;
   return String(body)
-    .replace(/Bearer\s+[A-Za-z0-9_-]+/gi, 'Bearer [REDACTED]')
-    .replace(/api[_-]?key["\s:=]+[A-Za-z0-9_-]{20,}/gi, 'api_key: [REDACTED]')
-    .replace(/[A-Za-z0-9_-]{32,}/g, '[LONG_STRING_REDACTED]')  // Redact long alphanumeric strings
+    // Redact Authorization/Bearer tokens including JWTs and base64-like chars (handles quoted keys)
+    .replace(/["']?\s*authorization\s*["']?\s*[:=]\s*["']?Bearer\s+[^\s'"]+/gi, 'Authorization: Bearer [REDACTED]')
+    .replace(/Bearer\s+[^\s'"]+/gi, 'Bearer [REDACTED]')
+    // Redact explicit api key fields
+    .replace(/api[_-]?key["\s:=]+[A-Za-z0-9._-]{20,}/gi, 'api_key: [REDACTED]')
+    // Redact common secret prefixes (e.g., sk-...)
+    .replace(/\bsk-[A-Za-z0-9._-]{20,}\b/gi, '[REDACTED_KEY]')
+    // Redact long token-like strings (incl. dots)
+    .replace(/[A-Za-z0-9._-]{32,}/g, '[LONG_STRING_REDACTED]')
     .slice(0, maxLength);
 }
 
@@ -307,8 +316,9 @@ class PerplexityClient {
 
     // Handle rate limiting (429) with exponential backoff
     if (response.status === 429 && retryCount < MAX_RETRIES) {
-      const retryAfter = parseInt(response.headers.get('retry-after') || '0', 10);
-      const delay = retryAfter * 1000 || RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
+      const retryAfterSec = parseInt(response.headers.get('retry-after') || '0', 10);
+      const baseDelay = retryAfterSec ? retryAfterSec * 1000 : RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
+      const delay = Math.min(baseDelay, MAX_RETRY_DELAY_MS);  // Cap at 15s to stay within runtime budget
       console.log(`   ⏳ Rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
       await new Promise(r => setTimeout(r, delay));
       return this.research(query, retryCount + 1);
