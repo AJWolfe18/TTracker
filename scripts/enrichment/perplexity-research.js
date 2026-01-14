@@ -37,6 +37,8 @@ const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
 const RUNTIME_LIMIT_MS = 4 * 60 * 1000;  // 4 minutes (workflow timeout is 10)
+const MAX_RETRIES = 3;  // For rate limit (429) handling
+const RETRY_BASE_DELAY_MS = 5000;  // 5 second base for exponential backoff
 
 // Connection types enum (must match DB CHECK constraint)
 const CONNECTION_TYPES = [
@@ -61,17 +63,53 @@ const MAX_TIMELINE_LENGTH = 30;
 const MAX_SOURCES_LENGTH = 20;
 
 // ============================================================
+// Security Helpers
+// ============================================================
+
+/**
+ * Sanitize text for prompt injection protection
+ * Removes control characters, limits length, escapes special patterns
+ */
+function sanitizeForPrompt(text, maxLength = 500) {
+  if (text == null) return '';
+  return String(text)
+    .replace(/[\x00-\x1f\x7f]/g, '')  // Remove control chars
+    .replace(/```/g, '')  // Prevent markdown code block injection
+    .slice(0, maxLength);
+}
+
+/**
+ * Sanitize error response body to prevent API key/secret exposure
+ * Removes anything that looks like an API key or secret
+ */
+function sanitizeErrorBody(body, maxLength = 500) {
+  if (!body) return null;
+  return String(body)
+    .replace(/Bearer\s+[A-Za-z0-9_-]+/gi, 'Bearer [REDACTED]')
+    .replace(/api[_-]?key["\s:=]+[A-Za-z0-9_-]{20,}/gi, 'api_key: [REDACTED]')
+    .replace(/[A-Za-z0-9_-]{32,}/g, '[LONG_STRING_REDACTED]')  // Redact long alphanumeric strings
+    .slice(0, maxLength);
+}
+
+// ============================================================
 // Perplexity Prompt
 // ============================================================
 
 function buildResearchPrompt(pardon) {
+  // Sanitize all pardon data to prevent prompt injection
+  const name = sanitizeForPrompt(pardon.recipient_name, 200);
+  const date = sanitizeForPrompt(pardon.pardon_date, 20);
+  const offense = sanitizeForPrompt(pardon.offense_raw || pardon.crime_description || 'Unknown', 500);
+  const district = sanitizeForPrompt(pardon.conviction_district || 'Unknown', 100);
+  const recipientType = pardon.recipient_type === 'group' ? `GROUP PARDON (~${pardon.recipient_count || 0} people)` : 'Individual';
+
   return `Research this pardon recipient and return structured JSON:
 
-RECIPIENT: ${pardon.recipient_name}
-PARDON DATE: ${pardon.pardon_date}
-OFFENSE: ${pardon.offense_raw || pardon.crime_description || 'Unknown'}
-DISTRICT: ${pardon.conviction_district || 'Unknown'}
-TYPE: ${pardon.recipient_type === 'group' ? `GROUP PARDON (~${pardon.recipient_count} people)` : 'Individual'}
+RECIPIENT: ${name}
+PARDON DATE: ${date}
+OFFENSE: ${offense}
+DISTRICT: ${district}
+TYPE: ${recipientType}
 
 SEARCH SCOPE - Look for connections to ANY of these:
 - Trump directly (donations, business, personal relationship)
@@ -243,7 +281,7 @@ class PerplexityClient {
     this.baseUrl = 'https://api.perplexity.ai';
   }
 
-  async research(query) {
+  async research(query, retryCount = 0) {
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -267,11 +305,21 @@ class PerplexityClient {
       })
     });
 
+    // Handle rate limiting (429) with exponential backoff
+    if (response.status === 429 && retryCount < MAX_RETRIES) {
+      const retryAfter = parseInt(response.headers.get('retry-after') || '0', 10);
+      const delay = retryAfter * 1000 || RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
+      console.log(`   ⏳ Rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+      return this.research(query, retryCount + 1);
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
       const error = new Error(`Perplexity API error: ${response.status}`);
       error.status = response.status;
-      error.body = errorText;
+      // Sanitize error body before storing (prevent API key exposure)
+      error.body = sanitizeErrorBody(errorText, 1000);
       throw error;
     }
 
@@ -358,12 +406,14 @@ class PardonResearchWorker {
         researchData = JSON.parse(jsonStr);
       } catch (parseErr) {
         console.error(`   ❌ JSON parse error: ${parseErr.message}`);
-        console.error(`   Raw response: ${content.slice(0, 500)}`);
+        // Sanitize response before logging (security: prevent sensitive data in logs)
+        const sanitizedPreview = sanitizeErrorBody(content, 300);
+        console.error(`   Response preview: ${sanitizedPreview}`);
         await this.logError(pardon.id, {
           code: 'JSON_PARSE_ERROR',
           message: parseErr.message,
           http_status: null,
-          error_json: { raw_response: content.slice(0, 2000) }
+          error_json: { raw_response: sanitizeErrorBody(content, 1000) }
         });
         this.stats.failed++;
         return { success: false, error: parseErr.message };
@@ -403,7 +453,8 @@ class PardonResearchWorker {
         code: error.code || 'API_ERROR',
         message: error.message,
         http_status: error.status || null,
-        error_json: error.body ? { raw: error.body.slice(0, 2000) } : null
+        // Sanitize error body to prevent API key/secret exposure in logs
+        error_json: error.body ? { raw: sanitizeErrorBody(error.body, 1000) } : null
       });
       this.stats.failed++;
       return { success: false, error: error.message };
@@ -447,7 +498,12 @@ class PardonResearchWorker {
       });
 
     if (error) {
-      console.warn(`   ⚠️ Failed to track cost: ${error.message}`);
+      // Cost tracking failure is serious - budget tracking becomes inaccurate
+      // Log prominently and track in stats so it's visible in summary
+      console.error(`   ❌ COST TRACKING FAILED: ${error.message}`);
+      console.error(`      Untracked cost: $${cost.toFixed(6)} for pardon ${pardonId}`);
+      this.stats.costTrackingFailures = (this.stats.costTrackingFailures || 0) + 1;
+      this.stats.untrackedCost = (this.stats.untrackedCost || 0) + cost;
     }
   }
 
@@ -547,6 +603,9 @@ class PardonResearchWorker {
     console.log(`   ❌ Failed: ${this.stats.failed}`);
     console.log(`   ⏭️ Skipped: ${this.stats.skipped}`);
     console.log(`   💰 Total Cost: $${this.stats.totalCost.toFixed(4)}`);
+    if (this.stats.costTrackingFailures) {
+      console.log(`   ⚠️ Cost Tracking Failures: ${this.stats.costTrackingFailures} ($${this.stats.untrackedCost.toFixed(4)} untracked)`);
+    }
     console.log(`   ⏱️ Duration: ${Math.round((Date.now() - this.startTime) / 1000)}s`);
     console.log('='.repeat(60));
 
