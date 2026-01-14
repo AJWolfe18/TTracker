@@ -32,7 +32,7 @@ dotenv.config();
 // Constants
 // ============================================================
 
-const PROMPT_VERSION = '1.1';  // Expanded to search beyond Trump, stricter evidence requirements
+const PROMPT_VERSION = '1.2';  // Simpler "rate what you find" approach, pardon_advocates array, date null rule
 const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
@@ -89,30 +89,45 @@ Return JSON with EXACTLY these fields:
   "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|cabinet_connection|lobbyist|campaign_staff|no_connection",
   "trump_connection_detail": "2-3 sentence explanation of connection (or lack thereof) to Trump orbit",
   "corruption_level": 1-5,
-  "corruption_reasoning": "Why this corruption level based on DOCUMENTED evidence (1 sentence)",
+  "corruption_reasoning": "Why this corruption level (1 sentence)",
   "receipts_timeline": [
-    {"date": "YYYY-MM-DD", "event_type": "donation|conviction|pardon_granted|mar_a_lago_visit|investigation|sentencing|legal_filing|pardon_request|indictment|arrest|campaign_event|plea_deal|appeal|lobbying|advocacy|other", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
+    {"date": "YYYY-MM-DD or null", "event_type": "see enum below", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
   ],
   "donation_amount_usd": null,
-  "pardon_advocate": "Who publicly advocated for this pardon, if known",
+  "pardon_advocates": ["Name/Org 1", "Name/Org 2"],
   "sources": ["url1", "url2"]
 }
 
-CORRUPTION LEVEL GUIDE (requires DOCUMENTED evidence):
-5 = "Paid-to-Play" - DOCUMENTED donation/payment + pardon. Must have financial evidence.
-4 = "Friends & Family" - Inner circle, cabinet connection, family ties, or legal team ties (e.g., attorney is AG's sibling)
-3 = "Swamp Creature" - Political ally, lobbyist involvement, or covers up admin wrongdoing
-2 = "Celebrity Request" - Public advocacy campaign, media attention, no corruption evidence
-1 = "Broken Clock" - No connection found, legitimate criminal justice case, or bipartisan support
+EVENT TYPE ENUM (use exactly one):
+"donation" | "conviction" | "pardon_granted" | "pardon_request" | "mar_a_lago_visit" |
+"investigation" | "sentencing" | "legal_filing" | "indictment" | "arrest" |
+"campaign_event" | "plea_deal" | "appeal" | "lobbying" | "advocacy" | "other"
 
-CRITICAL RULES:
-- Corruption level MUST match documented evidence, not inference
-- Level 5 REQUIRES documented financial connection (donation, payment, business deal)
-- If no connection to Trump orbit found after searching, use "no_connection" and corruption_level=1
-- Do NOT rate level 4-5 based on "pattern" or "lack of justification" alone
-- The CRIME being bad does not make the PARDON corrupt — focus on the pardon decision
-- Only include facts with citations in sources array
+DATE RULE:
+- Use "YYYY-MM-DD" when exact date is known
+- Use null if date unknown — do NOT guess or use partial dates
+
+TIMELINE REQUIREMENT:
+- ALWAYS include a "pardon_granted" event
+
+CORRUPTION LEVEL GUIDE - Rate what you find:
+5 = "Paid-to-Play" - Found donation records, paid event attendance, business deal, or financial connection
+4 = "Friends & Family" - Found inner circle ties, cabinet connection, family, campaign staff, legal team ties
+3 = "Swamp Creature" - Found political ally, lobbyist involvement, or impact on Trump-related matters
+2 = "Celebrity Request" - Found public advocacy campaign or media attention, but no deeper connection
+1 = "Broken Clock" - Found no connection to Trump orbit
+
+KEY PRINCIPLE: Your corruption_level should match what you actually found, not what you suspect.
+- If you find donation records → level 5
+- If you find inner circle relationship → level 4
+- If you find political ties → level 3
+- If you only find celebrity advocacy → level 2
+- If you find nothing → level 1
+
+RULES:
+- The CRIME severity does not affect corruption level — focus on the CONNECTION
 - receipts_timeline must be an array (empty [] if no events found)
+- pardon_advocates must be an array (empty [] if unknown)
 - For GROUP pardons (like Jan 6), research the group's connection to Trump, not individuals`;
 }
 
@@ -183,6 +198,11 @@ function validateResearchResponse(json) {
         errors.push(`sources[${i}] invalid URL: ${url}`);
       }
     });
+  }
+
+  // 6. pardon_advocates: must be array (v1.2)
+  if (json.pardon_advocates !== undefined && !Array.isArray(json.pardon_advocates)) {
+    errors.push('pardon_advocates must be an array');
   }
 
   return { valid: errors.length === 0, errors };
@@ -375,6 +395,7 @@ class PardonResearchWorker {
         corruption_reasoning: data.corruption_reasoning ?? null,
         receipts_timeline: data.receipts_timeline,
         donation_amount_usd: data.donation_amount_usd ?? null,
+        pardon_advocates: data.pardon_advocates ?? [],  // v1.2: array of advocates
         source_urls: data.sources ?? [],  // Map 'sources' from prompt to 'source_urls' in DB
         research_status: 'complete',
         research_prompt_version: PROMPT_VERSION,
