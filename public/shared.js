@@ -650,6 +650,121 @@
   }
 
   // ===========================================
+  // MERCH TRACKING (Pre-Commerce)
+  // ===========================================
+
+  /**
+   * Track merch button impression (fires once per session)
+   * Use with IntersectionObserver for reliable viewport detection
+   * @param {string} location - Where the button is ('nav', 'inline')
+   */
+  function trackMerchImpression(location = 'nav') {
+    trackOncePerSession('merch_impression', {
+      location
+    }, `merch_impression_${location}`);
+  }
+
+  /**
+   * Track merch button click
+   * @param {string} location - Where the button is ('nav', 'inline')
+   */
+  function trackMerchInterest(location = 'nav') {
+    trackEvent('merch_interest', {
+      location
+    });
+  }
+
+  // ===========================================
+  // SEARCH TRACKING
+  // ===========================================
+
+  /**
+   * Simple hash function for search terms (no PII to GA4)
+   * @param {string} term - Search term
+   * @returns {string} - First 16 chars of hash
+   */
+  function hashSearchTerm(term) {
+    const normalized = term.toLowerCase().trim();
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      const char = normalized.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0').substring(0, 16);
+  }
+
+  /**
+   * Sanitize search term for storage (fail-closed safety filter)
+   * Returns null if term looks like PII
+   * @param {string} term - Raw search term
+   * @returns {string|null} - Sanitized term or null if unsafe
+   */
+  function sanitizeSearchTerm(term) {
+    const t = term.trim().toLowerCase();
+
+    // Fail if any of these (return null)
+    if (t.includes('@')) return null;  // Email-ish
+    if (/\d{9,}/.test(t)) return null;  // 9+ digits (SSN, phone)
+    if (/\b(ssn|social security|address|phone|email)\b/i.test(t)) return null;
+    if (t.length > 40) return null;  // Too long
+    if (t.split(/\s+/).length > 6) return null;  // Too many words
+    if (/[;="]/.test(t)) return null;  // Suspicious punctuation
+    if (!t || /^(the|a|an|is|are|was|were)$/i.test(t)) return null;  // Stopwords only
+
+    return t;  // Safe to store
+  }
+
+  /**
+   * Track search action (sends hash to GA4, not raw term)
+   * @param {string} term - Search term
+   * @param {number} resultCount - Number of results
+   */
+  function trackSearchAction(term, resultCount) {
+    if (!term || term.trim().length === 0) return;
+
+    const termHash = hashSearchTerm(term);
+    trackEvent('search_action', {
+      has_results: resultCount > 0,
+      result_count: Math.min(resultCount, 100), // Cap at 100 for cardinality
+      term_len: term.length,
+      term_hash: termHash
+    });
+  }
+
+  /**
+   * Log zero-result search to database (for content gaps)
+   * Only logs sanitized terms that pass PII filter
+   * @param {string} term - Search term
+   */
+  async function logSearchGap(term) {
+    const sanitized = sanitizeSearchTerm(term);
+    if (!sanitized) return; // Term failed PII filter
+
+    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/log-search-gap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          term: sanitized,
+          result_count: 0  // Only called for zero-result searches
+        })
+      });
+    } catch (err) {
+      // Silently fail - don't break search for analytics
+      console.warn('[SearchGap] Failed to log:', err.message);
+    }
+  }
+
+  // ===========================================
   // EXPORT TO GLOBAL
   // ===========================================
 
@@ -700,6 +815,14 @@
     trackOutboundClick,
     trackDetailOpen,
     trackDetailClose,
+
+    // Merch (Pre-Commerce)
+    trackMerchImpression,
+    trackMerchInterest,
+
+    // Search
+    trackSearchAction,
+    logSearchGap,
 
     // Newsletter
     TURNSTILE_SITE_KEY,

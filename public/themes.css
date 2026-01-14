@@ -323,6 +323,43 @@
   color: var(--text-muted);
 }
 
+/* Header actions container */
+.tt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Merch Coming Soon button (ghost CTA) */
+.tt-merch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent-color), #ff6b35);
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+.tt-merch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+.tt-merch-btn:active {
+  transform: translateY(0);
+}
+
 /* Theme toggle button */
 .tt-theme-toggle {
   display: flex;

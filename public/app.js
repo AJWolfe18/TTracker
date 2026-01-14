@@ -132,6 +132,24 @@
   // ===========================================
 
   function Header({ theme, toggleTheme }) {
+    const merchButtonRef = useRef(null);
+
+    // IntersectionObserver for merch impression tracking
+    useEffect(() => {
+      const button = merchButtonRef.current;
+      if (!button || !window.TTShared?.trackMerchImpression) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          window.TTShared.trackMerchImpression('nav');
+          observer.disconnect(); // Only fire once
+        }
+      }, { threshold: 0.5 });
+
+      observer.observe(button);
+      return () => observer.disconnect();
+    }, []);
+
     return React.createElement('header', { className: 'tt-header' },
       React.createElement('div', { className: 'tt-header-inner' },
         // Logo
@@ -148,13 +166,30 @@
           )
         ),
 
-        // Theme toggle
-        React.createElement('button', {
-          className: 'tt-theme-toggle',
-          onClick: toggleTheme,
-          'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
-        },
-          theme === 'dark' ? '☀️ Light' : '🌙 Dark'
+        // Header actions (merch + theme toggle)
+        React.createElement('div', { className: 'tt-header-actions' },
+          // Merch Coming Soon button
+          React.createElement('button', {
+            ref: merchButtonRef,
+            className: 'tt-merch-btn',
+            onClick: () => {
+              if (window.TTShared?.trackMerchInterest) {
+                window.TTShared.trackMerchInterest('nav');
+              }
+              // Ghost button - no action yet, just tracking
+              alert('Merch coming soon! Sign up for our newsletter to be notified.');
+            },
+            'aria-label': 'Merch coming soon'
+          }, 'Merch Coming Soon'),
+
+          // Theme toggle
+          React.createElement('button', {
+            className: 'tt-theme-toggle',
+            onClick: toggleTheme,
+            'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
+          },
+            theme === 'dark' ? '☀️ Light' : '🌙 Dark'
+          )
         )
       )
     );
@@ -831,11 +866,35 @@
       searchDebounceRef.current = setTimeout(() => {
         setSearchTerm(value);
         setPage(1);
-        if (value.trim()) {
-          trackEvent('search', { search_term: value.trim() });
-        }
       }, 300);
     }, []);
+
+    // Track search after results are computed (debounced)
+    const searchTrackRef = useRef(null);
+    useEffect(() => {
+      if (!searchTerm.trim()) return;
+
+      // Debounce search tracking to avoid rapid fire
+      if (searchTrackRef.current) {
+        clearTimeout(searchTrackRef.current);
+      }
+      searchTrackRef.current = setTimeout(() => {
+        const resultCount = filteredStories.length;
+        if (window.TTShared?.trackSearchAction) {
+          window.TTShared.trackSearchAction(searchTerm, resultCount);
+        }
+        // Log zero-result searches to database for content gaps
+        if (resultCount === 0 && window.TTShared?.logSearchGap) {
+          window.TTShared.logSearchGap(searchTerm);
+        }
+      }, 500);
+
+      return () => {
+        if (searchTrackRef.current) {
+          clearTimeout(searchTrackRef.current);
+        }
+      };
+    }, [searchTerm, filteredStories.length]);
 
     // Handle category change
     const handleCategoryChange = useCallback((cat) => {

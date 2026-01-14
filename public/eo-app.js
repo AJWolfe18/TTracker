@@ -143,6 +143,24 @@
   // ===========================================
 
   function Header({ theme, toggleTheme }) {
+    const merchButtonRef = useRef(null);
+
+    // IntersectionObserver for merch impression tracking
+    useEffect(() => {
+      const button = merchButtonRef.current;
+      if (!button || !window.TTShared?.trackMerchImpression) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          window.TTShared.trackMerchImpression('nav');
+          observer.disconnect();
+        }
+      }, { threshold: 0.5 });
+
+      observer.observe(button);
+      return () => observer.disconnect();
+    }, []);
+
     return React.createElement('header', { className: 'tt-header' },
       React.createElement('div', { className: 'tt-header-inner' },
         React.createElement('a', { href: './', className: 'tt-logo' },
@@ -157,11 +175,24 @@
             React.createElement('div', { className: 'tt-tagline' }, 'Tracking the Corruption. Every Damn Day.')
           )
         ),
-        React.createElement('button', {
-          className: 'tt-theme-toggle',
-          onClick: toggleTheme,
-          'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
-        }, theme === 'dark' ? '☀️ Light' : '🌙 Dark')
+        React.createElement('div', { className: 'tt-header-actions' },
+          React.createElement('button', {
+            ref: merchButtonRef,
+            className: 'tt-merch-btn',
+            onClick: () => {
+              if (window.TTShared?.trackMerchInterest) {
+                window.TTShared.trackMerchInterest('nav');
+              }
+              alert('Merch coming soon! Sign up for our newsletter to be notified.');
+            },
+            'aria-label': 'Merch coming soon'
+          }, 'Merch Coming Soon'),
+          React.createElement('button', {
+            className: 'tt-theme-toggle',
+            onClick: toggleTheme,
+            'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
+          }, theme === 'dark' ? '☀️ Light' : '🌙 Dark')
+        )
       )
     );
   }
