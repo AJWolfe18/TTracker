@@ -336,14 +336,431 @@
   // ANALYTICS
   // ===========================================
 
+  // PII-safe param allowlist - only these params are sent to GA4
+  const ALLOWED_PARAMS = new Set([
+    // outbound_click
+    'target_type', 'source_domain', 'content_type', 'content_id',
+    // detail_toggle
+    'object_type', 'action', 'duration_ms', 'source',
+    // content_interaction
+    'type', 'page', 'from_tab', 'to_tab', 'location',
+    // newsletter_signup
+    'result', 'signup_source', 'signup_page', 'utm_source', 'utm_medium', 'utm_campaign',
+    // search_action
+    'has_results', 'result_count', 'term_len', 'term_hash',
+    // error_logged
+    'error_type', 'component',
+    // merch tracking
+    'method',
+    // schema version
+    'schema_v'
+  ]);
+
+  // Allowed transport types for beacon
+  const ALLOWED_TRANSPORTS = new Set(['beacon', 'xhr', 'image']);
+
   /**
-   * Track analytics event (Google Analytics)
-   * @param {string} eventName - Event name (e.g., 'search', 'view_story')
-   * @param {Object} eventParams - Event parameters (optional)
+   * Track analytics event (Google Analytics) with PII protection
+   * @param {string} eventName - Event name (e.g., 'outbound_click', 'detail_toggle')
+   * @param {Object} eventParams - Event parameters
+   * @param {Object} opts - Options (e.g., { transport_type: 'beacon' })
    */
-  function trackEvent(eventName, eventParams = {}) {
-    if (typeof gtag === 'function') {
-      gtag('event', eventName, eventParams);
+  function trackEvent(eventName, eventParams = {}, opts = {}) {
+    if (typeof gtag !== 'function') return;
+
+    // Skip analytics on test environments
+    const hostname = window.location.hostname;
+    if (hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1') {
+      console.log('[Analytics:TEST]', eventName, eventParams);
+      return;
+    }
+
+    // Build safe params with allowlist
+    const safeParams = { schema_v: 1 };
+
+    for (const [key, val] of Object.entries(eventParams)) {
+      if (ALLOWED_PARAMS.has(key) && val !== undefined && val !== null) {
+        safeParams[key] = val;
+      } else if (!ALLOWED_PARAMS.has(key) && val !== undefined) {
+        console.warn(`[Analytics] Blocked param: ${key}`);
+      }
+    }
+
+    // Handle transport_type for beacon (special-cased)
+    if (opts.transport_type && ALLOWED_TRANSPORTS.has(opts.transport_type)) {
+      safeParams.transport_type = opts.transport_type;
+    }
+
+    gtag('event', eventName, safeParams);
+  }
+
+  /**
+   * Track event only once per session (prevents noisy funnels)
+   * @param {string} eventName - Event name
+   * @param {Object} eventParams - Event parameters
+   * @param {string} storageKey - Unique key for session storage (defaults to eventName)
+   * @param {Object} opts - Options for trackEvent
+   */
+  function trackOncePerSession(eventName, eventParams = {}, storageKey = null, opts = {}) {
+    const key = `tt_fired_${storageKey || eventName}`;
+    if (sessionStorage.getItem(key)) return false; // Already fired
+
+    trackEvent(eventName, eventParams, opts);
+    sessionStorage.setItem(key, 'true');
+    return true;
+  }
+
+  /**
+   * Initialize scroll depth tracking for a page
+   * Tracks 25%, 50%, 75%, 100% thresholds once per session
+   * @param {string} pageName - Page identifier ('stories', 'eos', 'pardons')
+   */
+  function initScrollDepthTracking(pageName) {
+    const thresholds = [25, 50, 75, 100];
+    let timeout;
+
+    const checkScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (docHeight <= 0) return;
+
+      const scrollPercent = Math.round((scrollTop / docHeight) * 100);
+
+      thresholds.forEach(threshold => {
+        if (scrollPercent >= threshold) {
+          trackOncePerSession('content_interaction', {
+            type: `scroll_${threshold}`,
+            page: pageName
+          }, `scroll_${threshold}_${pageName}`);
+        }
+      });
+    };
+
+    // Debounce: prevents rapid-fire on mobile "flick" scrolls
+    window.addEventListener('scroll', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(checkScroll, 150);
+    }, { passive: true });
+
+    // Check initial position
+    checkScroll();
+  }
+
+  /**
+   * Log an error event (sanitized, no PII)
+   * @param {string} errorType - Error type enum: API_FAIL, TURNSTILE_TIMEOUT, JS_ERROR, EDGE_FUNCTION_ERROR
+   * @param {string} component - Component name: newsletter, search, detail_modal, etc.
+   */
+  function logError(errorType, component) {
+    const validTypes = new Set(['API_FAIL', 'TURNSTILE_TIMEOUT', 'JS_ERROR', 'EDGE_FUNCTION_ERROR']);
+    if (!validTypes.has(errorType)) {
+      console.warn(`[Analytics] Invalid error_type: ${errorType}`);
+      return;
+    }
+
+    trackEvent('error_logged', {
+      error_type: errorType,
+      component: component || 'unknown'
+    });
+  }
+
+  /**
+   * Track outbound link click with beacon transport
+   * @param {Object} params - Click parameters
+   * @param {string} params.targetType - Type of link (article, source, external)
+   * @param {string} params.sourceDomain - Domain being linked to
+   * @param {string} params.contentType - Content type (story, eo, pardon)
+   * @param {string} params.contentId - Content ID (optional)
+   */
+  function trackOutboundClick({ targetType, sourceDomain, contentType, contentId }) {
+    trackEvent('outbound_click', {
+      target_type: targetType || 'external',
+      source_domain: sourceDomain,
+      content_type: contentType,
+      content_id: contentId
+    }, { transport_type: 'beacon' });
+  }
+
+  // Detail modal open timestamps (for duration tracking)
+  const modalOpenTimes = new Map();
+
+  /**
+   * Track detail modal open
+   * @param {Object} params - Modal parameters
+   * @param {string} params.objectType - Object type (story, eo, pardon)
+   * @param {string} params.contentType - Content type
+   * @param {string} params.contentId - Content ID
+   * @param {string} params.source - How modal was opened (card_click, deep_link)
+   */
+  function trackDetailOpen({ objectType, contentType, contentId, source }) {
+    const key = `${objectType}_${contentId}`;
+    modalOpenTimes.set(key, Date.now());
+
+    trackEvent('detail_toggle', {
+      object_type: objectType,
+      action: 'open',
+      content_type: contentType,
+      content_id: contentId,
+      source: source || 'card_click'
+    });
+  }
+
+  /**
+   * Track detail modal close (includes duration)
+   * @param {Object} params - Modal parameters
+   * @param {string} params.objectType - Object type (story, eo, pardon)
+   * @param {string} params.contentType - Content type
+   * @param {string} params.contentId - Content ID
+   */
+  function trackDetailClose({ objectType, contentType, contentId }) {
+    const key = `${objectType}_${contentId}`;
+    const openTime = modalOpenTimes.get(key);
+    const durationMs = openTime ? Date.now() - openTime : undefined;
+    modalOpenTimes.delete(key);
+
+    trackEvent('detail_toggle', {
+      object_type: objectType,
+      action: 'close',
+      content_type: contentType,
+      content_id: contentId,
+      duration_ms: durationMs
+    });
+  }
+
+  // ===========================================
+  // NEWSLETTER SIGNUP
+  // ===========================================
+
+  // Turnstile site key (public)
+  const TURNSTILE_SITE_KEY = '0x4AAAAAACMTyFRQ0ebtcHkK';
+
+  /**
+   * Submit newsletter signup
+   * @param {Object} params - Signup parameters
+   * @param {string} params.email - Email address
+   * @param {string} params.turnstileToken - Turnstile verification token
+   * @param {string} params.signupPage - Page name ('stories', 'eos', 'pardons')
+   * @param {string} params.signupSource - Source ('footer', 'inline_50pct')
+   * @returns {Promise<{success: boolean, message: string}>}
+   */
+  async function submitNewsletterSignup({
+    email,
+    turnstileToken,
+    signupPage = 'unknown',
+    signupSource = 'footer'
+  }) {
+    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[Newsletter] Missing Supabase config');
+      return { success: false, message: 'Configuration error. Please try again.' };
+    }
+
+    // Get UTM params from URL
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = params.get('utm_source');
+    const utmMedium = params.get('utm_medium');
+    const utmCampaign = params.get('utm_campaign');
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/newsletter-signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          email,
+          turnstile_token: turnstileToken,
+          honeypot: '', // Empty for real users
+          signup_page: signupPage,
+          signup_source: signupSource,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Set GA4 user property (skip on test environments)
+        const hostname = window.location.hostname;
+        const isTest = hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1';
+        if (typeof gtag === 'function' && !isTest) {
+          gtag('set', 'user_properties', { newsletter_subscriber: true });
+        }
+
+        // Track signup event
+        trackEvent('newsletter_signup', {
+          result: 'success',
+          signup_source: signupSource,
+          signup_page: signupPage,
+          utm_source: utmSource || undefined,
+          utm_campaign: utmCampaign || undefined
+        });
+
+        // Remember signup in localStorage
+        setLocalStorage('tt-newsletter-signed-up', true);
+
+        return { success: true, message: data.message || 'Thanks! Check your email soon.' };
+      } else {
+        // Track failed signup
+        trackEvent('newsletter_signup', {
+          result: 'error',
+          signup_source: signupSource,
+          signup_page: signupPage
+        });
+
+        return { success: false, message: data.error || 'Something went wrong. Please try again.' };
+      }
+    } catch (error) {
+      console.error('[Newsletter] Signup error:', error);
+      trackEvent('newsletter_signup', {
+        result: 'error',
+        signup_source: signupSource,
+        signup_page: signupPage
+      });
+      return { success: false, message: 'Network error. Please try again.' };
+    }
+  }
+
+  /**
+   * Check if user has already signed up
+   * @returns {boolean}
+   */
+  function hasNewsletterSignup() {
+    return getLocalStorage('tt-newsletter-signed-up', false);
+  }
+
+  /**
+   * Check if inline CTA has been dismissed this session
+   * @returns {boolean}
+   */
+  function isInlineCTADismissed() {
+    return getSessionStorage('tt-newsletter-inline-dismissed', false);
+  }
+
+  /**
+   * Dismiss inline CTA for this session
+   */
+  function dismissInlineCTA() {
+    setSessionStorage('tt-newsletter-inline-dismissed', true);
+  }
+
+  // ===========================================
+  // MERCH TRACKING (Pre-Commerce)
+  // ===========================================
+
+  /**
+   * Track merch button impression (fires once per session)
+   * Use with IntersectionObserver for reliable viewport detection
+   * @param {string} location - Where the button is ('nav', 'inline')
+   */
+  function trackMerchImpression(location = 'nav') {
+    trackOncePerSession('merch_impression', {
+      location
+    }, `merch_impression_${location}`);
+  }
+
+  /**
+   * Track merch button click
+   * @param {string} location - Where the button is ('nav', 'inline')
+   */
+  function trackMerchInterest(location = 'nav') {
+    trackEvent('merch_interest', {
+      location
+    });
+  }
+
+  // ===========================================
+  // SEARCH TRACKING
+  // ===========================================
+
+  /**
+   * Simple hash function for search terms (no PII to GA4)
+   * @param {string} term - Search term
+   * @returns {string} - First 16 chars of hash
+   */
+  function hashSearchTerm(term) {
+    const normalized = term.toLowerCase().trim();
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      const char = normalized.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0').substring(0, 16);
+  }
+
+  /**
+   * Sanitize search term for storage (fail-closed safety filter)
+   * Returns null if term looks like PII
+   * @param {string} term - Raw search term
+   * @returns {string|null} - Sanitized term or null if unsafe
+   */
+  function sanitizeSearchTerm(term) {
+    const t = term.trim().toLowerCase();
+
+    // Fail if any of these (return null)
+    if (t.includes('@')) return null;  // Email-ish
+    if (/\d{9,}/.test(t)) return null;  // 9+ digits (SSN, phone)
+    if (/\b(ssn|social security|address|phone|email)\b/i.test(t)) return null;
+    if (t.length > 40) return null;  // Too long
+    if (t.split(/\s+/).length > 6) return null;  // Too many words
+    if (/[;="]/.test(t)) return null;  // Suspicious punctuation
+    if (!t || /^(the|a|an|is|are|was|were)$/i.test(t)) return null;  // Stopwords only
+
+    return t;  // Safe to store
+  }
+
+  /**
+   * Track search action (sends hash to GA4, not raw term)
+   * @param {string} term - Search term
+   * @param {number} resultCount - Number of results
+   */
+  function trackSearchAction(term, resultCount) {
+    if (!term || term.trim().length === 0) return;
+
+    const termHash = hashSearchTerm(term);
+    trackEvent('search_action', {
+      has_results: resultCount > 0,
+      result_count: Math.min(resultCount, 100), // Cap at 100 for cardinality
+      term_len: term.length,
+      term_hash: termHash
+    });
+  }
+
+  /**
+   * Log zero-result search to database (for content gaps)
+   * Only logs sanitized terms that pass PII filter
+   * @param {string} term - Search term
+   */
+  async function logSearchGap(term) {
+    const sanitized = sanitizeSearchTerm(term);
+    if (!sanitized) return; // Term failed PII filter
+
+    const SUPABASE_URL = window.SUPABASE_CONFIG?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/log-search-gap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          term: sanitized,
+          result_count: 0  // Only called for zero-result searches
+        })
+      });
+    } catch (err) {
+      // Silently fail - don't break search for analytics
+      console.warn('[SearchGap] Failed to log:', err.message);
     }
   }
 
@@ -391,7 +808,28 @@
     supabaseRequest,
 
     // Analytics
-    trackEvent
+    trackEvent,
+    trackOncePerSession,
+    initScrollDepthTracking,
+    logError,
+    trackOutboundClick,
+    trackDetailOpen,
+    trackDetailClose,
+
+    // Merch (Pre-Commerce)
+    trackMerchImpression,
+    trackMerchInterest,
+
+    // Search
+    trackSearchAction,
+    logSearchGap,
+
+    // Newsletter
+    TURNSTILE_SITE_KEY,
+    submitNewsletterSignup,
+    hasNewsletterSignup,
+    isInlineCTADismissed,
+    dismissInlineCTA
   };
 
 })(window);

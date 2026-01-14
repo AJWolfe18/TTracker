@@ -323,6 +323,43 @@
   color: var(--text-muted);
 }
 
+/* Header actions container */
+.tt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Merch Coming Soon button (ghost CTA) */
+.tt-merch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent-color), #ff6b35);
+  color: white;
+  border: none;
+  border-radius: 9999px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+.tt-merch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+.tt-merch-btn:active {
+  transform: translateY(0);
+}
+
 /* Theme toggle button */
 .tt-theme-toggle {
   display: flex;
@@ -1670,3 +1707,885 @@
   font-size: 0.875rem;
   color: var(--text-muted);
 }
+
+/* ============================================
+   PARDONS TRACKER STYLING
+   ============================================ */
+
+/* Stats Bar */
+.tt-stats-bar {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  flex-wrap: wrap;
+}
+
+.tt-stats-bar.tt-stats-loading {
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.tt-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.tt-stat-value {
+  font-family: var(--font-headline);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tt-stat-value.tt-stat-danger {
+  color: var(--severity-critical-bg);
+}
+
+.tt-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tt-stat-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--card-border);
+}
+
+/* Pardons filters bar */
+.tt-pardons-filters {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Recipient type filter pills */
+.tt-recipient-filter {
+  display: flex;
+  gap: 8px;
+}
+
+.tt-filter-pill {
+  padding: 8px 16px;
+  background: var(--filter-bg);
+  border: 1px solid var(--filter-border);
+  border-radius: 9999px;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tt-filter-pill:hover {
+  background: var(--filter-hover-bg);
+  border-color: var(--text-link);
+}
+
+.tt-filter-pill.active {
+  background: var(--filter-active-bg);
+  border-color: var(--filter-active-bg);
+  color: var(--filter-active-text);
+}
+
+[data-theme="dark"] .tt-filter-pill {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Connection type badge */
+.tt-connection-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.tt-connection-badge.tt-badge-large {
+  font-size: 0.8125rem;
+  padding: 6px 14px;
+}
+
+/* Crime category badge */
+.tt-crime-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: var(--cat-corruption);
+  color: var(--cat-corruption-text);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Corruption Meter */
+.tt-corruption-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tt-corruption-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tt-corruption-bars {
+  display: flex;
+  gap: 3px;
+}
+
+.tt-corruption-bar {
+  width: 8px;
+  height: 16px;
+  background: var(--filter-border);
+  border-radius: 2px;
+  transition: all var(--transition-fast);
+}
+
+.tt-corruption-bar.active {
+  background: var(--severity-critical-bg);
+}
+
+.tt-corruption-bar.active[data-level="1"] {
+  background: #16a34a;
+}
+.tt-corruption-bar.active[data-level="2"] {
+  background: #ca8a04;
+}
+.tt-corruption-bar.active[data-level="3"] {
+  background: #ea580c;
+}
+.tt-corruption-bar.active[data-level="4"] {
+  background: #dc2626;
+}
+.tt-corruption-bar.active[data-level="5"] {
+  background: #7f1d1d;
+}
+
+/* Nickname styling */
+.tt-nickname {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Muted card header (connection type + date) */
+.tt-card-header-muted {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tt-meta-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tt-meta-right {
+  margin-left: auto;
+}
+
+.tt-mass-pardon-badge {
+  padding: 3px 8px;
+  background: var(--severity-critical-bg);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Group subtitle (count) */
+.tt-group-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
+/* Spicy Badge - matches tt-severity exactly */
+.tt-spicy-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  white-space: nowrap;
+  margin: 8px 0;
+}
+
+/* Pardon card meta row (legacy - can remove later) */
+.tt-pardon-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* Group pardon indicator */
+.tt-group-indicator {
+  background: var(--summary-bg);
+  border-left: 3px solid var(--text-link);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: 0 6px 6px 0;
+}
+
+.tt-group-indicator.tt-group-large {
+  margin-bottom: 20px;
+}
+
+.tt-group-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--text-link);
+  color: #ffffff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.tt-group-count {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.tt-group-criteria {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Pardon Detail Modal */
+.tt-pardon-modal {
+  max-width: 700px;
+}
+
+.tt-pardon-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* Pardon Section in modal */
+.tt-pardon-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.tt-pardon-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 16px;
+  padding-bottom: 0;
+}
+
+.tt-section-title {
+  font-family: var(--font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.tt-section-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.tt-section-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tt-item-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tt-item-value {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.tt-section-content {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.tt-crime-description {
+  margin-top: 12px;
+  white-space: pre-wrap;
+}
+
+.tt-sentence {
+  margin-top: 12px;
+}
+
+.tt-connection-detail {
+  white-space: pre-wrap;
+}
+
+.tt-connection-placeholder {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.tt-donation {
+  margin-top: 12px;
+  color: var(--severity-severe-bg);
+}
+
+/* Post-pardon status badge */
+.tt-post-status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.tt-post-notes {
+  white-space: pre-wrap;
+  margin-top: 8px;
+}
+
+.tt-pardon-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+  text-align: center;
+}
+
+/* Load more button */
+.tt-load-more {
+  justify-content: center;
+}
+
+.tt-load-more-btn {
+  padding: 14px 32px;
+  background: var(--toggle-bg);
+  color: var(--toggle-text);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tt-load-more-btn:hover:not(:disabled) {
+  background: var(--toggle-hover-bg);
+  transform: translateY(-1px);
+}
+
+.tt-load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Modal loading/error states */
+.tt-modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  text-align: center;
+}
+
+.tt-modal-error {
+  text-align: center;
+  padding: 32px;
+  color: var(--severity-critical-bg);
+}
+
+/* Mobile responsive pardon styles */
+@media (max-width: 640px) {
+  .tt-stats-bar {
+    padding: 12px 16px;
+    gap: 16px;
+  }
+
+  .tt-stat-value {
+    font-size: 1.25rem;
+  }
+
+  .tt-stat-divider {
+    height: 32px;
+  }
+
+  .tt-pardons-filters {
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tt-recipient-filter {
+    justify-content: center;
+  }
+
+  .tt-section-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .tt-pardon-modal-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ===========================================
+   RECEIPTS TIMELINE
+   =========================================== */
+
+.tt-timeline {
+  position: relative;
+  padding-left: 24px;
+}
+
+.tt-timeline-event {
+  position: relative;
+  display: flex;
+  padding-bottom: 20px;
+}
+
+.tt-timeline-event:last-child {
+  padding-bottom: 0;
+}
+
+.tt-timeline-marker {
+  position: absolute;
+  left: -24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tt-timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.tt-timeline-line {
+  width: 2px;
+  flex-grow: 1;
+  background: var(--card-border);
+  margin-top: 4px;
+  position: absolute;
+  top: 16px;
+  bottom: -20px;
+}
+
+.tt-timeline-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.tt-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.tt-timeline-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.tt-timeline-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tt-timeline-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tt-timeline-amount {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #16a34a;
+  margin: 4px 0 0 0;
+}
+
+.tt-timeline-source {
+  font-size: 0.75rem;
+  color: var(--text-link);
+  text-decoration: none;
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.tt-timeline-source:hover {
+  text-decoration: underline;
+}
+
+/* Real Story section */
+.tt-real-story {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.tt-placeholder {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ===========================================
+   PARDONS FILTER OVERRIDES
+   Uses Stories filter pattern (.tt-filters, .tt-severity-filters, etc.)
+   =========================================== */
+
+/* Search clear button (positioned inside .tt-search-wrapper) */
+.tt-search-clear {
+  position: absolute;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: var(--text-muted);
+  border: none;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--card-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+}
+
+.tt-search-clear:hover {
+  background: var(--text-secondary);
+}
+
+/* ===========================================
+   NEWSLETTER SIGNUP STYLES
+   =========================================== */
+
+/* Footer Newsletter */
+.tt-newsletter-footer {
+  background: var(--header-bg);
+  border-top: 1px solid var(--header-border);
+  padding: 2rem 1rem;
+  margin-top: auto;
+}
+
+.tt-newsletter-inner {
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.tt-newsletter-title {
+  font-family: var(--font-headline);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.tt-newsletter-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin: 0 0 1rem;
+}
+
+.tt-newsletter-form {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.tt-newsletter-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  border: 1px solid var(--filter-border);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.tt-newsletter-input:focus {
+  outline: none;
+  border-color: var(--text-link);
+  box-shadow: 0 0 0 3px var(--search-focus-ring);
+}
+
+.tt-newsletter-input::placeholder {
+  color: var(--text-muted);
+}
+
+.tt-newsletter-submit {
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--filter-active-bg);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.tt-newsletter-submit:hover {
+  background: var(--text-link-hover);
+  transform: translateY(-1px);
+}
+
+.tt-newsletter-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tt-newsletter-message {
+  width: 100%;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.tt-newsletter-message.success {
+  color: #16a34a;
+}
+
+.tt-newsletter-message.error {
+  color: #dc2626;
+}
+
+/* Honeypot field - invisible to real users */
+.tt-newsletter-hp {
+  position: absolute;
+  left: -9999px;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+/* Turnstile widget wrapper */
+.tt-newsletter-turnstile {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+/* Inline Newsletter CTA (50% scroll - fixed position slide-in) */
+.tt-newsletter-inline {
+  background: linear-gradient(135deg, var(--filter-active-bg) 0%, var(--text-link) 100%);
+  border-radius: var(--card-radius);
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: tt-newsletter-slide-in 0.4s ease-out;
+}
+
+@keyframes tt-newsletter-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tt-newsletter-inline .tt-newsletter-title {
+  color: #ffffff;
+  font-size: 1.125rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-input {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: transparent;
+}
+
+.tt-newsletter-inline .tt-newsletter-submit {
+  background: #ffffff;
+  color: var(--filter-active-bg);
+}
+
+.tt-newsletter-inline .tt-newsletter-submit:hover {
+  background: #f3f4f6;
+}
+
+.tt-newsletter-inline .tt-newsletter-message.success {
+  color: #bbf7d0;
+}
+
+.tt-newsletter-inline .tt-newsletter-message.error {
+  color: #fecaca;
+}
+
+/* Close button for inline CTA */
+.tt-newsletter-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast);
+}
+
+.tt-newsletter-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.tt-newsletter-inline-wrapper {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  max-width: 360px;
+  width: calc(100% - 3rem);
+}
+
+/* Privacy note */
+.tt-newsletter-privacy {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.75rem;
+}
+
+.tt-newsletter-inline .tt-newsletter-privacy {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .tt-newsletter-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tt-newsletter-input {
+    max-width: none;
+  }
+
+  .tt-newsletter-submit {
+    width: 100%;
+  }
+
+  /* Make inline CTA full-width on mobile */
+  .tt-newsletter-inline-wrapper {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    width: auto;
+    max-width: none;
+  }
+
+  .tt-newsletter-inline {
+    padding: 1rem;
+  }
+}
+

@@ -143,6 +143,24 @@
   // ===========================================
 
   function Header({ theme, toggleTheme }) {
+    const merchButtonRef = useRef(null);
+
+    // IntersectionObserver for merch impression tracking
+    useEffect(() => {
+      const button = merchButtonRef.current;
+      if (!button || !window.TTShared?.trackMerchImpression) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          window.TTShared.trackMerchImpression('nav');
+          observer.disconnect();
+        }
+      }, { threshold: 0.5 });
+
+      observer.observe(button);
+      return () => observer.disconnect();
+    }, []);
+
     return React.createElement('header', { className: 'tt-header' },
       React.createElement('div', { className: 'tt-header-inner' },
         React.createElement('a', { href: './', className: 'tt-logo' },
@@ -157,11 +175,24 @@
             React.createElement('div', { className: 'tt-tagline' }, 'Tracking the Corruption. Every Damn Day.')
           )
         ),
-        React.createElement('button', {
-          className: 'tt-theme-toggle',
-          onClick: toggleTheme,
-          'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
-        }, theme === 'dark' ? '☀️ Light' : '🌙 Dark')
+        React.createElement('div', { className: 'tt-header-actions' },
+          React.createElement('button', {
+            ref: merchButtonRef,
+            className: 'tt-merch-btn',
+            onClick: () => {
+              if (window.TTShared?.trackMerchInterest) {
+                window.TTShared.trackMerchInterest('nav');
+              }
+              alert('Merch coming soon! Sign up for our newsletter to be notified.');
+            },
+            'aria-label': 'Merch coming soon'
+          }, 'Merch Coming Soon'),
+          React.createElement('button', {
+            className: 'tt-theme-toggle',
+            onClick: toggleTheme,
+            'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
+          }, theme === 'dark' ? '☀️ Light' : '🌙 Dark')
+        )
       )
     );
   }
@@ -173,6 +204,7 @@
   const TABS = [
     { id: 'stories', label: 'Stories', href: './' },
     { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
+    { id: 'pardons', label: 'Pardons', href: './pardons.html' },
     { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
@@ -444,7 +476,20 @@
               href: eo.source_url,
               target: '_blank',
               rel: 'noopener noreferrer',
-              className: 'tt-back-btn'
+              className: 'tt-back-btn',
+              onClick: () => {
+                if (window.TTShared?.trackOutboundClick) {
+                  try {
+                    const domain = new URL(eo.source_url).hostname;
+                    window.TTShared.trackOutboundClick({
+                      targetType: 'official_source',
+                      sourceDomain: domain,
+                      contentType: 'executive_order',
+                      contentId: String(eo.id)
+                    });
+                  } catch (e) { /* ignore URL parse errors */ }
+                }
+              }
             }, 'View Official Text ↗')
           )
         )
@@ -635,7 +680,17 @@
             React.createElement(EOCard, {
               key: eo.id,
               eo,
-              onViewAnalysis: (eo) => { setDetailEO(eo); trackEvent('view_eo_analysis', { eo_id: eo.id, eo_number: eo.eo_number, impact_type: eo.eo_impact_type }); }
+              onViewAnalysis: (eo) => {
+                setDetailEO(eo);
+                if (window.TTShared?.trackDetailOpen) {
+                  window.TTShared.trackDetailOpen({
+                    objectType: 'eo',
+                    contentType: 'executive_order',
+                    contentId: String(eo.id),
+                    source: 'card_click'
+                  });
+                }
+              }
             })
           )
         ),
@@ -649,8 +704,134 @@
 
       detailEO && React.createElement(EODetailModal, {
         eo: detailEO,
-        onClose: () => setDetailEO(null)
+        onClose: () => {
+          if (window.TTShared?.trackDetailClose) {
+            window.TTShared.trackDetailClose({
+              objectType: 'eo',
+              contentType: 'executive_order',
+              contentId: String(detailEO.id)
+            });
+          }
+          setDetailEO(null);
+        }
       })
+    );
+  }
+
+  // ===========================================
+  // NEWSLETTER COMPONENTS
+  // ===========================================
+
+  // Newsletter Form (reusable for footer and inline)
+  function NewsletterForm({ signupPage, signupSource, isInline = false }) {
+    const [email, setEmail] = useState('');
+    const [status, setStatus] = useState('idle');
+    const [message, setMessage] = useState('');
+    const [showTurnstile, setShowTurnstile] = useState(false);
+    const turnstileRef = useRef(null);
+    const turnstileWidgetId = useRef(null);
+
+    useEffect(() => {
+      if (!showTurnstile) return;
+      if (window.turnstile && turnstileRef.current && !turnstileWidgetId.current) {
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: window.TTShared?.TURNSTILE_SITE_KEY || '0x4AAAAAACMTyFRQ0ebtcHkK',
+          callback: () => {},
+          'error-callback': () => console.warn('[Turnstile] Widget error')
+        });
+      }
+      return () => {
+        if (turnstileWidgetId.current && window.turnstile) {
+          window.turnstile.remove(turnstileWidgetId.current);
+          turnstileWidgetId.current = null;
+        }
+      };
+    }, [showTurnstile]);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      if (!email.trim()) {
+        setStatus('error');
+        setMessage('Please enter your email address.');
+        return;
+      }
+      let turnstileToken = '';
+      if (window.turnstile && turnstileWidgetId.current) {
+        turnstileToken = window.turnstile.getResponse(turnstileWidgetId.current);
+        if (!turnstileToken) {
+          setStatus('error');
+          setMessage('Please complete the verification.');
+          return;
+        }
+      }
+      setStatus('loading');
+      setMessage('');
+      const result = await window.TTShared.submitNewsletterSignup({
+        email: email.trim(), turnstileToken, signupPage, signupSource
+      });
+      if (result.success) {
+        setStatus('success');
+        setMessage(result.message);
+        setEmail('');
+        if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+      } else {
+        setStatus('error');
+        setMessage(result.message);
+        if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+      }
+    };
+
+    if (window.TTShared?.hasNewsletterSignup()) return null;
+
+    return React.createElement('form', { className: 'tt-newsletter-form', onSubmit: handleSubmit },
+      React.createElement('input', { type: 'text', name: 'website', className: 'tt-newsletter-hp', tabIndex: -1, autoComplete: 'off' }),
+      React.createElement('input', { type: 'email', className: 'tt-newsletter-input', placeholder: 'Enter your email', value: email, onChange: (e) => setEmail(e.target.value), onFocus: () => setShowTurnstile(true), disabled: status === 'loading', 'aria-label': 'Email address' }),
+      React.createElement('button', { type: 'submit', className: 'tt-newsletter-submit', disabled: status === 'loading' }, status === 'loading' ? 'Subscribing...' : 'Subscribe'),
+      showTurnstile && React.createElement('div', { className: 'tt-newsletter-turnstile', ref: turnstileRef }),
+      message && React.createElement('div', { className: `tt-newsletter-message ${status}` }, message),
+      React.createElement('p', { className: 'tt-newsletter-privacy' }, 'No spam, ever. Unsubscribe anytime.')
+    );
+  }
+
+  function NewsletterFooter() {
+    if (window.TTShared?.hasNewsletterSignup()) return null;
+    return React.createElement('footer', { className: 'tt-newsletter-footer' },
+      React.createElement('div', { className: 'tt-newsletter-inner' },
+        React.createElement('h3', { className: 'tt-newsletter-title' }, 'Stay in the Loop'),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' }, 'Get weekly updates on the latest political bullshit.'),
+        React.createElement(NewsletterForm, { signupPage: 'eos', signupSource: 'footer' })
+      )
+    );
+  }
+
+  function InlineNewsletterCTA({ signupPage }) {
+    const [show, setShow] = useState(false);
+    useEffect(() => {
+      if (window.TTShared?.hasNewsletterSignup() || window.TTShared?.isInlineCTADismissed()) return;
+      let hasTriggered = false;
+      const checkScroll = () => {
+        if (hasTriggered) return;
+        const scrollTop = window.scrollY;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollPercent = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+        if (scrollPercent >= 50) {
+          hasTriggered = true;
+          setShow(true);
+          window.removeEventListener('scroll', checkScroll);
+        }
+      };
+      window.addEventListener('scroll', checkScroll, { passive: true });
+      return () => window.removeEventListener('scroll', checkScroll);
+    }, []);
+    const handleDismiss = () => { setShow(false); window.TTShared?.dismissInlineCTA(); };
+    if (!show) return null;
+    return React.createElement('div', { className: 'tt-newsletter-inline-wrapper' },
+      React.createElement('div', { className: 'tt-newsletter-inline' },
+        React.createElement('button', { className: 'tt-newsletter-close', onClick: handleDismiss, 'aria-label': 'Dismiss' }, '×'),
+        React.createElement('h3', { className: 'tt-newsletter-title' }, 'Like what you\'re reading?'),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' }, 'Get the weekly roundup of political corruption delivered to your inbox.'),
+        React.createElement(NewsletterForm, { signupPage, signupSource: 'inline_50pct', isInline: true })
+      )
     );
   }
 
@@ -661,10 +842,21 @@
   function EOPreviewApp() {
     const { theme, toggleTheme } = useTheme();
 
-    return React.createElement('div', { className: 'tt-preview-root' },
+    // Initialize scroll depth tracking
+    useEffect(() => {
+      if (window.TTShared?.initScrollDepthTracking) {
+        window.TTShared.initScrollDepthTracking('eos');
+      }
+    }, []);
+
+    return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),
       React.createElement(TabNavigation, { activeTab: 'eo' }),
-      React.createElement(EOFeed)
+      React.createElement('div', { style: { flex: 1 } },
+        React.createElement(EOFeed),
+        React.createElement(InlineNewsletterCTA, { signupPage: 'eos' })
+      ),
+      React.createElement(NewsletterFooter)
     );
   }
 

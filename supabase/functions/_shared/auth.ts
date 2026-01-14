@@ -1,24 +1,18 @@
 // Authentication utilities for Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
-const MAX_API_KEY_LEN = 256 // prevent abuse via oversized headers (bytes)
-const textEncoder = new TextEncoder()
-
-// Timing-safe string comparison to prevent timing attacks.
-// Compares as bytes over the max length of both inputs.
+// Timing-safe string comparison to prevent timing attacks
 function timingSafeEqual(a: string, b: string): boolean {
-  const aBytes = textEncoder.encode(a)
-  const bBytes = textEncoder.encode(b)
-
-  const len = Math.max(aBytes.length, bBytes.length)
-  let diff = aBytes.length === bBytes.length ? 0 : 1
-
-  for (let i = 0; i < len; i++) {
-    const x = aBytes[i] ?? 0
-    const y = bBytes[i] ?? 0
-    diff |= x ^ y
+  if (a.length !== b.length) {
+    // Still compare to maintain constant time even on length mismatch
+    b = a
   }
-  return diff === 0
+
+  let result = a.length === b.length ? 0 : 1
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return result === 0
 }
 
 export function getSupabaseClient(req: Request) {
@@ -54,12 +48,6 @@ export function checkAdminAuth(req: Request): boolean {
   }
 
   if (!apiKey) {
-    return false
-  }
-
-  // Check byte length (not code units) to prevent oversized headers
-  const keyBytes = textEncoder.encode(apiKey)
-  if (keyBytes.length > MAX_API_KEY_LEN) {
     return false
   }
 
