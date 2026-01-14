@@ -69,10 +69,22 @@ async function checkRateLimit(
   const minuteBucket = Math.floor(now / 60000)
   const dayBucket = Math.floor(now / 86400000)
 
-  // Probabilistic cleanup (1-in-50 requests)
+  // Probabilistic cleanup (1-in-50 requests) - prune old buckets by type
   if (Math.random() < 0.02) {
-    const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000).toISOString()
-    await supabase.from('rate_limits').delete().lt('created_at', twoHoursAgo)
+    const oldMinuteBucket = minuteBucket - 120 // ~2 hours of minute buckets
+    const oldDayBucket = dayBucket - 2 // ~2 days of day buckets
+
+    await supabase
+      .from('rate_limits')
+      .delete()
+      .eq('bucket_type', 'minute')
+      .lt('bucket', oldMinuteBucket)
+
+    await supabase
+      .from('rate_limits')
+      .delete()
+      .eq('bucket_type', 'day')
+      .lt('bucket', oldDayBucket)
   }
 
   // Check minute limit
@@ -165,12 +177,22 @@ serve(async (req: Request) => {
       utm_campaign,
     } = body
 
-    // Get client IP for rate limiting
-    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || req.headers.get('cf-connecting-ip')
-      || 'unknown'
+    // Get client IP for rate limiting (prefer trusted proxy headers)
+    const clientIP =
+      req.headers.get('cf-connecting-ip') ||
+      req.headers.get('x-real-ip') ||
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      '0.0.0.0'
 
-    const salt = Deno.env.get('RATE_LIMIT_SALT') || 'default-salt'
+    // Fail closed if salt not configured
+    const salt = Deno.env.get('RATE_LIMIT_SALT')
+    if (!salt) {
+      console.error('[Newsletter] Missing RATE_LIMIT_SALT env var')
+      return new Response(
+        JSON.stringify({ success: false, message: 'Service temporarily unavailable. Please try again later.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     const ipHash = await sha256(clientIP + salt)
 
     const supabase = getAdminClient()
