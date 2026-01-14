@@ -132,6 +132,24 @@
   // ===========================================
 
   function Header({ theme, toggleTheme }) {
+    const merchButtonRef = useRef(null);
+
+    // IntersectionObserver for merch impression tracking
+    useEffect(() => {
+      const button = merchButtonRef.current;
+      if (!button || !window.TTShared?.trackMerchImpression) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          window.TTShared.trackMerchImpression('nav');
+          observer.disconnect(); // Only fire once
+        }
+      }, { threshold: 0.5 });
+
+      observer.observe(button);
+      return () => observer.disconnect();
+    }, []);
+
     return React.createElement('header', { className: 'tt-header' },
       React.createElement('div', { className: 'tt-header-inner' },
         // Logo
@@ -148,13 +166,30 @@
           )
         ),
 
-        // Theme toggle
-        React.createElement('button', {
-          className: 'tt-theme-toggle',
-          onClick: toggleTheme,
-          'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
-        },
-          theme === 'dark' ? '☀️ Light' : '🌙 Dark'
+        // Header actions (merch + theme toggle)
+        React.createElement('div', { className: 'tt-header-actions' },
+          // Merch Coming Soon button
+          React.createElement('button', {
+            ref: merchButtonRef,
+            className: 'tt-merch-btn',
+            onClick: () => {
+              if (window.TTShared?.trackMerchInterest) {
+                window.TTShared.trackMerchInterest('nav');
+              }
+              // Ghost button - no action yet, just tracking
+              alert('Merch coming soon! Sign up for our newsletter to be notified.');
+            },
+            'aria-label': 'Merch coming soon'
+          }, 'Merch Coming Soon'),
+
+          // Theme toggle
+          React.createElement('button', {
+            className: 'tt-theme-toggle',
+            onClick: toggleTheme,
+            'aria-label': `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`
+          },
+            theme === 'dark' ? '☀️ Light' : '🌙 Dark'
+          )
         )
       )
     );
@@ -442,7 +477,20 @@
                   href: article.url,
                   target: '_blank',
                   rel: 'noopener noreferrer',
-                  className: 'tt-source-link'
+                  className: 'tt-source-link',
+                  onClick: () => {
+                    if (window.TTShared?.trackOutboundClick) {
+                      try {
+                        const domain = new URL(article.url).hostname;
+                        window.TTShared.trackOutboundClick({
+                          targetType: 'article',
+                          sourceDomain: domain,
+                          contentType: 'story',
+                          contentId: String(story?.id)
+                        });
+                      } catch (e) { /* ignore URL parse errors */ }
+                    }
+                  }
                 }, article.title || 'Untitled')
               )
             )
@@ -604,7 +652,20 @@
                       href: article.url,
                       target: '_blank',
                       rel: 'noopener noreferrer',
-                      className: 'tt-source-title'
+                      className: 'tt-source-title',
+                      onClick: () => {
+                        if (window.TTShared?.trackOutboundClick) {
+                          try {
+                            const domain = new URL(article.url).hostname;
+                            window.TTShared.trackOutboundClick({
+                              targetType: 'article',
+                              sourceDomain: domain,
+                              contentType: 'story',
+                              contentId: String(story?.id)
+                            });
+                          } catch (e) { /* ignore URL parse errors */ }
+                        }
+                      }
                     },
                       article.title || 'Untitled',
                       React.createElement('span', { className: 'tt-external-icon' }, ' ↗')
@@ -805,11 +866,35 @@
       searchDebounceRef.current = setTimeout(() => {
         setSearchTerm(value);
         setPage(1);
-        if (value.trim()) {
-          trackEvent('search', { search_term: value.trim() });
-        }
       }, 300);
     }, []);
+
+    // Track search after results are computed (debounced)
+    const searchTrackRef = useRef(null);
+    useEffect(() => {
+      if (!searchTerm.trim()) return;
+
+      // Debounce search tracking to avoid rapid fire
+      if (searchTrackRef.current) {
+        clearTimeout(searchTrackRef.current);
+      }
+      searchTrackRef.current = setTimeout(() => {
+        const resultCount = filteredStories.length;
+        if (window.TTShared?.trackSearchAction) {
+          window.TTShared.trackSearchAction(searchTerm, resultCount);
+        }
+        // Log zero-result searches to database for content gaps
+        if (resultCount === 0 && window.TTShared?.logSearchGap) {
+          window.TTShared.logSearchGap(searchTerm);
+        }
+      }, 500);
+
+      return () => {
+        if (searchTrackRef.current) {
+          clearTimeout(searchTrackRef.current);
+        }
+      };
+    }, [searchTerm, filteredStories.length]);
 
     // Handle category change
     const handleCategoryChange = useCallback((cat) => {
@@ -891,12 +976,13 @@
       setDetailLoading(true);
       setDetailError(null);
 
-      // Track story view (only from user clicks, not deep links)
-      if (!fromDeepLink) {
-        trackEvent('view_story', {
-          story_id: story.id,
-          category: story.category,
-          severity: story.severity
+      // Track detail modal open
+      if (window.TTShared) {
+        window.TTShared.trackDetailOpen({
+          objectType: 'story',
+          contentType: 'story',
+          contentId: String(story.id),
+          source: fromDeepLink ? 'deep_link' : 'card_click'
         });
       }
 
@@ -962,6 +1048,15 @@
       // Set closing guard to prevent deep-link useEffect race condition
       detailClosingRef.current = true;
 
+      // Track detail modal close (with duration)
+      if (window.TTShared && detailStory) {
+        window.TTShared.trackDetailClose({
+          objectType: 'story',
+          contentType: 'story',
+          contentId: String(detailStory.id)
+        });
+      }
+
       // Unlock scroll
       if (window.TTShared) window.TTShared.unlockScroll();
 
@@ -977,7 +1072,7 @@
 
       // Clear closing guard after a tick (allow URL to update)
       setTimeout(() => { detailClosingRef.current = false; }, 50);
-    }, []);
+    }, [detailStory]);
 
     // Handle popstate (back button)
     useEffect(() => {
@@ -1137,6 +1232,7 @@
   const TABS = [
     { id: 'stories', label: 'Stories', href: './' },
     { id: 'eo', label: 'Executive Orders', href: './executive-orders.html' },
+    { id: 'pardons', label: 'Pardons', href: './pardons.html' },
     { id: 'scotus', label: 'Supreme Court', href: './?tab=scotus' },
     { id: 'merch', label: 'Merchandise', href: './?tab=merch' }
   ];
@@ -1194,6 +1290,221 @@
   }
 
   // ===========================================
+  // NEWSLETTER COMPONENTS
+  // ===========================================
+
+  // Newsletter Form (reusable for footer and inline)
+  function NewsletterForm({ signupPage, signupSource, isInline = false }) {
+    const [email, setEmail] = useState('');
+    const [status, setStatus] = useState('idle'); // idle, loading, success, error
+    const [message, setMessage] = useState('');
+    const [showTurnstile, setShowTurnstile] = useState(false); // Only show on focus
+    const turnstileRef = useRef(null);
+    const turnstileWidgetId = useRef(null);
+
+    // Initialize Turnstile widget only when showTurnstile is true
+    useEffect(() => {
+      if (!showTurnstile) return;
+
+      if (window.turnstile && turnstileRef.current && !turnstileWidgetId.current) {
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: window.TTShared?.TURNSTILE_SITE_KEY || '0x4AAAAAACMTyFRQ0ebtcHkK',
+          callback: () => {},
+          'error-callback': () => {
+            console.warn('[Turnstile] Widget error');
+          }
+        });
+      }
+
+      return () => {
+        if (turnstileWidgetId.current && window.turnstile) {
+          window.turnstile.remove(turnstileWidgetId.current);
+          turnstileWidgetId.current = null;
+        }
+      };
+    }, [showTurnstile]);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+
+      if (!email.trim()) {
+        setStatus('error');
+        setMessage('Please enter your email address.');
+        return;
+      }
+
+      // Get Turnstile token
+      let turnstileToken = '';
+      if (window.turnstile && turnstileWidgetId.current) {
+        turnstileToken = window.turnstile.getResponse(turnstileWidgetId.current);
+        if (!turnstileToken) {
+          setStatus('error');
+          setMessage('Please complete the verification.');
+          return;
+        }
+      }
+
+      setStatus('loading');
+      setMessage('');
+
+      const result = await window.TTShared.submitNewsletterSignup({
+        email: email.trim(),
+        turnstileToken,
+        signupPage,
+        signupSource
+      });
+
+      if (result.success) {
+        setStatus('success');
+        setMessage(result.message);
+        setEmail('');
+        // Reset Turnstile
+        if (window.turnstile && turnstileWidgetId.current) {
+          window.turnstile.reset(turnstileWidgetId.current);
+        }
+      } else {
+        setStatus('error');
+        setMessage(result.message);
+        // Reset Turnstile on error too
+        if (window.turnstile && turnstileWidgetId.current) {
+          window.turnstile.reset(turnstileWidgetId.current);
+        }
+      }
+    };
+
+    // Don't show if already signed up
+    if (window.TTShared?.hasNewsletterSignup()) {
+      return null;
+    }
+
+    return React.createElement('form', {
+      className: 'tt-newsletter-form',
+      onSubmit: handleSubmit
+    },
+      // Honeypot field (hidden from real users)
+      React.createElement('input', {
+        type: 'text',
+        name: 'website',
+        className: 'tt-newsletter-hp',
+        tabIndex: -1,
+        autoComplete: 'off'
+      }),
+      // Email input
+      React.createElement('input', {
+        type: 'email',
+        className: 'tt-newsletter-input',
+        placeholder: 'Enter your email',
+        value: email,
+        onChange: (e) => setEmail(e.target.value),
+        onFocus: () => setShowTurnstile(true),
+        disabled: status === 'loading',
+        'aria-label': 'Email address'
+      }),
+      // Submit button
+      React.createElement('button', {
+        type: 'submit',
+        className: 'tt-newsletter-submit',
+        disabled: status === 'loading'
+      }, status === 'loading' ? 'Subscribing...' : 'Subscribe'),
+      // Turnstile widget (only renders after email input focus)
+      showTurnstile && React.createElement('div', {
+        className: 'tt-newsletter-turnstile',
+        ref: turnstileRef
+      }),
+      // Status message
+      message && React.createElement('div', {
+        className: `tt-newsletter-message ${status}`
+      }, message),
+      // Privacy note
+      React.createElement('p', { className: 'tt-newsletter-privacy' },
+        'No spam, ever. Unsubscribe anytime.'
+      )
+    );
+  }
+
+  // Newsletter Footer
+  function NewsletterFooter() {
+    // Don't show if already signed up
+    if (window.TTShared?.hasNewsletterSignup()) {
+      return null;
+    }
+
+    return React.createElement('footer', { className: 'tt-newsletter-footer' },
+      React.createElement('div', { className: 'tt-newsletter-inner' },
+        React.createElement('h3', { className: 'tt-newsletter-title' },
+          'Stay in the Loop'
+        ),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' },
+          'Get weekly updates on the latest political bullshit.'
+        ),
+        React.createElement(NewsletterForm, {
+          signupPage: 'stories',
+          signupSource: 'footer'
+        })
+      )
+    );
+  }
+
+  // Inline Newsletter CTA (appears at 50% scroll)
+  function InlineNewsletterCTA({ signupPage }) {
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+      // Don't show if already signed up or dismissed
+      if (window.TTShared?.hasNewsletterSignup() || window.TTShared?.isInlineCTADismissed()) {
+        return;
+      }
+
+      let hasTriggered = false;
+
+      const checkScroll = () => {
+        if (hasTriggered) return;
+
+        const scrollTop = window.scrollY;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const scrollPercent = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+
+        if (scrollPercent >= 50) {
+          hasTriggered = true;
+          setShow(true);
+          window.removeEventListener('scroll', checkScroll);
+        }
+      };
+
+      window.addEventListener('scroll', checkScroll, { passive: true });
+      return () => window.removeEventListener('scroll', checkScroll);
+    }, []);
+
+    const handleDismiss = () => {
+      setShow(false);
+      window.TTShared?.dismissInlineCTA();
+    };
+
+    if (!show) return null;
+
+    return React.createElement('div', { className: 'tt-newsletter-inline-wrapper' },
+      React.createElement('div', { className: 'tt-newsletter-inline' },
+        React.createElement('button', {
+          className: 'tt-newsletter-close',
+          onClick: handleDismiss,
+          'aria-label': 'Dismiss'
+        }, '×'),
+        React.createElement('h3', { className: 'tt-newsletter-title' },
+          'Like what you\'re reading?'
+        ),
+        React.createElement('p', { className: 'tt-newsletter-subtitle' },
+          'Get the weekly roundup of political corruption delivered to your inbox.'
+        ),
+        React.createElement(NewsletterForm, {
+          signupPage,
+          signupSource: 'inline_50pct',
+          isInline: true
+        })
+      )
+    );
+  }
+
+  // ===========================================
   // MAIN APP COMPONENT
   // ===========================================
 
@@ -1211,6 +1522,13 @@
       }
     }, []);
 
+    // Initialize scroll depth tracking
+    useEffect(() => {
+      if (window.TTShared?.initScrollDepthTracking) {
+        window.TTShared.initScrollDepthTracking('stories');
+      }
+    }, []);
+
     // Handle back to stories
     const handleBack = useCallback(() => {
       setActiveTab('stories');
@@ -1222,12 +1540,18 @@
     // Determine what content to show
     const showComingSoon = activeTab === 'scotus' || activeTab === 'merch';
 
-    return React.createElement('div', { className: 'tt-preview-root' },
+    return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),
       React.createElement(TabNavigation, { activeTab }),
-      showComingSoon
-        ? React.createElement(ComingSoon, { tabId: activeTab, onBack: handleBack })
-        : React.createElement(StoryFeed)
+      React.createElement('div', { style: { flex: 1 } },
+        showComingSoon
+          ? React.createElement(ComingSoon, { tabId: activeTab, onBack: handleBack })
+          : React.createElement(React.Fragment, null,
+              React.createElement(StoryFeed),
+              React.createElement(InlineNewsletterCTA, { signupPage: 'stories' })
+            )
+      ),
+      React.createElement(NewsletterFooter)
     );
   }
 
