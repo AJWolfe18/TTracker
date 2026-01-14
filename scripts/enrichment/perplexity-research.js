@@ -74,7 +74,8 @@ const MAX_SOURCES_LENGTH = 20;
 function sanitizeForPrompt(text, maxLength = 500) {
   if (text == null) return '';
   return String(text)
-    .replace(/[\x00-\x1f\x7f]/g, '')  // Remove control chars
+    .replace(/[\x00-\x1f\x7f]/g, '')  // Remove ASCII control chars
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, '')  // Remove Unicode bidi controls
     .replace(/```/g, '')  // Prevent markdown code block injection
     .replace(/\s+/g, ' ')  // Collapse excessive whitespace
     .trim()
@@ -88,13 +89,19 @@ function sanitizeForPrompt(text, maxLength = 500) {
 function sanitizeErrorBody(body, maxLength = 500) {
   if (!body) return null;
   return String(body)
-    // Redact Authorization/Bearer tokens including JWTs and base64-like chars (handles quoted keys)
+    // Redact Authorization credentials (Bearer/Basic), including JSON-like fields
     .replace(/["']?\s*authorization\s*["']?\s*[:=]\s*["']?Bearer\s+[^\s'"]+/gi, 'Authorization: Bearer [REDACTED]')
+    .replace(/["']?\s*authorization\s*["']?\s*[:=]\s*["']?Basic\s+[^\s'"]+/gi, 'Authorization: Basic [REDACTED]')
     .replace(/Bearer\s+[^\s'"]+/gi, 'Bearer [REDACTED]')
     // Redact explicit api key fields
     .replace(/api[_-]?key["\s:=]+[A-Za-z0-9._-]{20,}/gi, 'api_key: [REDACTED]')
-    // Redact common secret prefixes (e.g., sk-...)
+    // Redact x-api-key header fields
+    .replace(/["']?\s*x[-_]?api[-_]?key["']?\s*[:=]\s*["']?[^"'\s]+/gi, 'x-api-key: [REDACTED]')
+    // Redact access_token and refresh_token fields
+    .replace(/\b(access|refresh)_token["\s:=]+[A-Za-z0-9._-]{20,}/gi, '$1_token: [REDACTED]')
+    // Redact common secret prefixes (e.g., sk-..., pplx-...)
     .replace(/\bsk-[A-Za-z0-9._-]{20,}\b/gi, '[REDACTED_KEY]')
+    .replace(/\bpplx-[A-Za-z0-9._-]{20,}\b/gi, '[REDACTED_KEY]')
     // Redact long token-like strings (incl. dots)
     .replace(/[A-Za-z0-9._-]{32,}/g, '[LONG_STRING_REDACTED]')
     .slice(0, maxLength);
