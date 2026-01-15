@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrumpyTracker - Pardons Tracker</title>
+  <meta name="description" content="Track and analyze Trump administration pardons. See who got pardoned, their connections, and what happened next.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="./trumpytracker-logo.jpeg">
+
+  <!-- Theme CSS Variables -->
+  <link rel="stylesheet" href="./themes.css">
+
+  <!-- React 18 CDN (pinned to exact version for security) -->
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel for JSX transformation (pinned version for security)
+       Note: Required for type="text/babel" scripts. Future optimization: pre-compile JSX. -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+
+  <!-- Prevent FOUC: Set theme immediately -->
+  <script>
+    (function() {
+      const saved = localStorage.getItem('tt-theme');
+      const theme = saved || 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+
+  <style>
+    /* Critical CSS to prevent layout shift */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #root {
+      min-height: 100vh;
+    }
+
+    /* Initial loading state */
+    .initial-loader {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--page-bg);
+      font-family: var(--font-body);
+      color: var(--text-muted);
+    }
+
+    .initial-loader-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--card-border, #e5e7eb);
+      border-top-color: var(--text-link, #1d4ed8);
+      border-radius: 50%;
+      animation: initialSpin 0.8s linear infinite;
+    }
+
+    @keyframes initialSpin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <!-- Cloudflare Turnstile (newsletter bot protection) -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5MDT4HFMNB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5MDT4HFMNB');
+  </script>
+</head>
+<body>
+  <div id="root">
+    <!-- Initial loading state (replaced by React) -->
+    <div class="initial-loader">
+      <div class="initial-loader-spinner"></div>
+    </div>
+  </div>
+
+  <!-- Supabase configuration (environment-aware) -->
+  <script src="supabase-browser-config.js"></script>
+
+  <!-- Shared Utilities -->
+  <script src="./shared.js"></script>
+
+  <!-- Pardons App Components -->
+  <script type="text/babel" src="./pardons-app.js"></script>
+</body>
+</html>
