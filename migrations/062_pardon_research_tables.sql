@@ -111,12 +111,16 @@ BEGIN
   seq1 := pg_get_serial_sequence('public.pardon_research_costs', 'id');
   seq2 := pg_get_serial_sequence('public.pardon_research_errors', 'id');
 
-  EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq1);
-  EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq2);
+  -- Only revoke/grant if sequence exists (pg_get_serial_sequence can return NULL)
+  IF seq1 IS NOT NULL THEN
+    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq1);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq1);
+  END IF;
 
-  -- Grant to service_role for script inserts
-  EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq1);
-  EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq2);
+  IF seq2 IS NOT NULL THEN
+    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq2);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq2);
+  END IF;
 END $$;
 
 -- ============================================================

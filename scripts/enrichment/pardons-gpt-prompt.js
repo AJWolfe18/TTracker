@@ -79,7 +79,10 @@ WHAT TO AVOID:
 - Listing facts without connecting them to corruption narrative
 - Profanity at levels 1-3
 
-OUTPUT FORMAT (JSON):
+OUTPUT FORMAT:
+Return ONLY valid JSON with no additional text, markdown, or explanation.
+Do not wrap the JSON in code blocks or add any prose before/after.
+
 {
   "summary_spicy": "2-4 sentences. The hook + key facts + why it matters. Sharp, memorable.",
   "why_it_matters": "1-2 sentences. Broader implications: precedent, signal, system critique.",
@@ -154,7 +157,7 @@ Primary Connection: ${primary_connection_type} - ${connectionLabel}${secondaryTe
 
 RESEARCH FINDINGS:
 Trump Connection: ${trump_connection_detail || 'No detailed connection found'}
-${donation_amount_usd ? `Documented Donation: $${donation_amount_usd.toLocaleString()}` : ''}
+${donation_amount_usd ? `Documented Donation: $${new Intl.NumberFormat('en-US').format(donation_amount_usd)}` : ''}
 ${advocatesText}
 
 RECEIPTS TIMELINE:
@@ -185,7 +188,7 @@ function formatTimeline(timeline) {
       if (event.date) parts.push(event.date);
       if (event.event_type) parts.push(`[${event.event_type}]`);
       if (event.description) parts.push(event.description);
-      if (event.amount_usd) parts.push(`($${event.amount_usd.toLocaleString()})`);
+      if (event.amount_usd) parts.push(`($${new Intl.NumberFormat('en-US').format(event.amount_usd)})`);
       return `- ${parts.join(' ')}`;
     })
     .join('\n');

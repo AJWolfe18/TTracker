@@ -4,7 +4,7 @@
 (function() {
   'use strict';
 
-  const { useState, useEffect, useCallback } = React;
+  const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
   // ===========================================
   // CONFIGURATION
@@ -319,9 +319,9 @@
   // RECEIPTS TIMELINE COMPONENT
   // ===========================================
 
-  function ReceiptsTimeline({ events }) {
+  function ReceiptsTimeline({ events, pardonId }) {
     // Memoize sorted events to avoid re-sorting on every render
-    const sortedEvents = React.useMemo(() => {
+    const sortedEvents = useMemo(() => {
       if (!events || events.length === 0) return [];
       return [...events].sort((a, b) => new Date(a.date) - new Date(b.date));
     }, [events]);
@@ -379,7 +379,7 @@
                       targetType: 'timeline_source',
                       sourceDomain: domain,
                       contentType: 'pardon',
-                      contentId: String(pardon?.id)
+                      contentId: pardonId ? String(pardonId) : undefined
                     });
                   } catch (e) { /* ignore URL parse errors */ }
                 }
@@ -657,7 +657,7 @@
             // Section: The Receipts (timeline)
             p.receipts_timeline && p.receipts_timeline.length > 0 && React.createElement('div', { className: 'tt-pardon-section' },
               React.createElement('h3', { className: 'tt-section-title' }, 'The Receipts'),
-              React.createElement(ReceiptsTimeline, { events: p.receipts_timeline })
+              React.createElement(ReceiptsTimeline, { events: p.receipts_timeline, pardonId: p.id })
             ),
 
             // What Happened Next (only show if noteworthy - not "quiet", or has notes)
@@ -991,8 +991,6 @@
   // ===========================================
   // PARDONS FEED COMPONENT
   // ===========================================
-
-  const { useRef, useMemo } = React;
 
   // URL param names map to filter state keys
   const FILTER_URL_PARAMS = {

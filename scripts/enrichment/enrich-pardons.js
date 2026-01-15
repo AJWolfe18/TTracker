@@ -94,8 +94,10 @@ async function checkDailyBudget(supabase) {
     .single();
 
   if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
-    console.error('   Budget check error:', error.message);
-    return { ok: false, spent: 0, remaining: 0 };
+    // Warn but proceed - budget tracking shouldn't block enrichment
+    console.warn('   Budget check warning:', error.message);
+    console.warn('   Proceeding without budget tracking (table may not exist)');
+    return { ok: true, spent: 0, remaining: DAILY_BUDGET_CAP_USD };
   }
 
   const spent = data?.spent_usd || 0;
@@ -272,10 +274,10 @@ class PardonEnrichmentWorker {
       this.recentOpeningTexts.push(response.summary_spicy.slice(0, 50));
       if (this.recentOpeningTexts.length > 5) this.recentOpeningTexts.shift();
 
-      // 5. Update pardon
+      // 5. Update pardon with optimistic concurrency check
+      // Only update if enriched_at is still null (prevents double-enrichment race)
       // Note: enrichment_prompt_version column requires migration 060
-      // Skipping it for now - will be added after migration is applied
-      const { error: updateError } = await this.supabase
+      const { data: updateData, error: updateError } = await this.supabase
         .from('pardons')
         .update({
           summary_spicy: response.summary_spicy,
@@ -285,10 +287,19 @@ class PardonEnrichmentWorker {
           // enrichment_prompt_version: PROMPT_VERSION, // Requires migration 060
           is_public: true // Make visible after enrichment
         })
-        .eq('id', id);
+        .eq('id', id)
+        .is('enriched_at', null) // Optimistic concurrency: only update if not already enriched
+        .select('id');
 
       if (updateError) {
         throw new Error(`Update failed: ${updateError.message}`);
+      }
+
+      // Check if row was actually updated (concurrency check)
+      if (!updateData || updateData.length === 0) {
+        console.log(`   Skipped (already enriched by another worker)`);
+        this.stats.skipped++;
+        return { success: true, skipped: true };
       }
 
       // 6. Track cost

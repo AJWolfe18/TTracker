@@ -11,7 +11,7 @@
 -- Prerequisites: Migration 056_pardons_table.sql applied
 -- ============================================================
 
-SET search_path = public;
+-- Note: Using fully qualified names so no search_path needed
 
 -- ============================================================
 -- 1. Add idempotency column to pardons table
@@ -64,6 +64,13 @@ ALTER TABLE public.pardon_enrichment_costs ENABLE ROW LEVEL SECURITY;
 -- Hard-deny for anon, authenticated, AND public
 REVOKE ALL ON TABLE public.pardon_enrichment_costs FROM anon, authenticated, PUBLIC;
 
+-- Grant to service_role for script inserts
+GRANT SELECT, INSERT ON TABLE public.pardon_enrichment_costs TO service_role;
+
+-- Unique constraint for idempotency (one cost record per pardon+prompt_version)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pardon_enrichment_costs_pardon_prompt
+  ON public.pardon_enrichment_costs(pardon_id, prompt_version);
+
 -- Lock down sequence
 DO $$
 DECLARE
@@ -71,8 +78,11 @@ DECLARE
 BEGIN
   seq_name := pg_get_serial_sequence('public.pardon_enrichment_costs', 'id');
 
-  EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq_name);
-  EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq_name);
+  -- Only revoke/grant if sequence exists (pg_get_serial_sequence can return NULL)
+  IF seq_name IS NOT NULL THEN
+    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq_name);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq_name);
+  END IF;
 END $$;
 
 -- ============================================================

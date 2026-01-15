@@ -12,7 +12,7 @@
 -- Prerequisites: Migration 057_pardon_research_tables.sql applied
 -- ============================================================
 
-SET search_path = public;
+-- Note: Using fully qualified names (public.pardons) so no search_path needed
 
 ALTER TABLE public.pardons
   ADD COLUMN IF NOT EXISTS corruption_reasoning TEXT;
