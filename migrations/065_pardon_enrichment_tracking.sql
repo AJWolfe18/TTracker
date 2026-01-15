@@ -67,6 +67,12 @@ REVOKE ALL ON TABLE public.pardon_enrichment_costs FROM anon, authenticated, PUB
 -- Grant to service_role for script inserts
 GRANT SELECT, INSERT ON TABLE public.pardon_enrichment_costs TO service_role;
 
+-- Ensure idempotency key columns are NOT NULL (defensive, should already be set by CREATE)
+-- This makes the unique index effective (Postgres UNIQUE allows multiple NULLs otherwise)
+ALTER TABLE public.pardon_enrichment_costs
+  ALTER COLUMN pardon_id SET NOT NULL,
+  ALTER COLUMN prompt_version SET NOT NULL;
+
 -- Unique constraint for idempotency (one cost record per pardon+prompt_version)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_pardon_enrichment_costs_pardon_prompt
   ON public.pardon_enrichment_costs(pardon_id, prompt_version);
@@ -74,14 +80,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_pardon_enrichment_costs_pardon_prompt
 -- Lock down sequence
 DO $$
 DECLARE
-  seq_name text;
+  seq_reg regclass;
 BEGIN
-  seq_name := pg_get_serial_sequence('public.pardon_enrichment_costs', 'id');
+  -- Use regclass for proper identifier quoting
+  SELECT pg_get_serial_sequence('public.pardon_enrichment_costs', 'id')::regclass INTO seq_reg;
 
   -- Only revoke/grant if sequence exists (pg_get_serial_sequence can return NULL)
-  IF seq_name IS NOT NULL THEN
-    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq_name);
-    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq_name);
+  IF seq_reg IS NOT NULL THEN
+    EXECUTE format('REVOKE ALL ON SEQUENCE %s FROM PUBLIC, anon, authenticated;', seq_reg);
+    EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role;', seq_reg);
   END IF;
 END $$;
 

@@ -53,7 +53,9 @@ jobs:
           INPUT_LIMIT: ${{ inputs.limit }}
           INPUT_FORCE: ${{ inputs.force }}
           INPUT_PARDON_ID: ${{ inputs.pardon_id }}
+        shell: bash
         run: |
+          set -Eeuo pipefail
           ARGS=("--limit=${INPUT_LIMIT}")
           if [ "${INPUT_FORCE}" = "true" ]; then
             ARGS+=("--force")

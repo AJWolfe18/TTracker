@@ -94,10 +94,15 @@ async function checkDailyBudget(supabase) {
     .single();
 
   if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
-    // Warn but proceed - budget tracking shouldn't block enrichment
     console.warn('   Budget check warning:', error.message);
-    console.warn('   Proceeding without budget tracking (table may not exist)');
-    return { ok: true, spent: 0, remaining: DAILY_BUDGET_CAP_USD };
+    // Fail closed on unknown errors to honor budget cap
+    // Use ALLOW_BUDGET_BYPASS=1 to explicitly override in TEST environment
+    if (process.env.ALLOW_BUDGET_BYPASS === '1') {
+      console.warn('   ALLOW_BUDGET_BYPASS=1 set; proceeding without budget enforcement');
+      return { ok: true, spent: 0, remaining: DAILY_BUDGET_CAP_USD };
+    }
+    console.error('   Halting enrichment - budget tracking unavailable');
+    return { ok: false, spent: 0, remaining: 0 };
   }
 
   const spent = data?.spent_usd || 0;
