@@ -160,7 +160,73 @@ gh pr create --title "feat(db): new schema"
 
 ---
 
-## 8. Troubleshooting
+## 8. Large Feature Deployment Strategy
+
+### Problem: Big PRs = Slow Reviews
+
+| PR Size | Files | Review Time |
+|---------|-------|-------------|
+| Small | 3-5 files | ~3-5 min |
+| Medium | 6-10 files | ~8-12 min |
+| Large | 15+ files | 15-20+ min |
+
+Large PRs (like a full feature with migrations + edge functions + frontend + scripts) can take 15-20 minutes to review, creating bottlenecks.
+
+### Solution: Split PRs by Layer
+
+**Key Insight:** Backend components can deploy to PROD before the feature is "live" because:
+- Migrations don't affect users until code uses them
+- Edge functions don't affect users until frontend calls them
+- Only the **frontend** "activates" the feature for users
+
+### Recommended Deployment Order
+
+```
+Week 1: PR #1 - Migrations (invisible)
+        └── Tables exist but nothing uses them
+
+Week 1: PR #2 - Edge Functions (invisible)
+        └── Endpoints exist but nothing calls them
+
+Week 2: PR #3 - Backend Scripts (invisible)
+        └── Scripts exist but data pipeline hasn't run
+
+Week 2: PR #4 - Frontend (ACTIVATES feature)
+        └── Nav tab appears, users can access feature
+        └── Run data pipeline after this merges
+```
+
+### Benefits
+
+| Benefit | Why |
+|---------|-----|
+| **Faster reviews** | 3-5 min each vs 15-20 min combined |
+| **Easier debugging** | If review fails, smaller scope to fix |
+| **Incremental progress** | Backend ready before frontend complete |
+| **Lower risk** | Each PR is smaller, easier to revert |
+
+### Example: Pardons Feature (What We Should Have Done)
+
+Instead of 1 PR with 17 files:
+
+| PR | Contents | Review Time | Can Deploy |
+|----|----------|-------------|------------|
+| #1 | 5 migrations | ~3 min | Day 1 |
+| #2 | 3 edge functions | ~4 min | Day 2 |
+| #3 | 4 enrichment scripts | ~4 min | Day 3 |
+| #4 | 2 frontend files + nav | ~3 min | Day 4 (LIVE) |
+
+**Total review time:** ~14 min (but spread across days, not blocking)
+
+### When NOT to Split
+
+- **Tightly coupled changes** - If migration + function must deploy together
+- **Tiny features** - <5 files, just do one PR
+- **Hotfixes** - Speed matters more than review time
+
+---
+
+## 9. Troubleshooting
 
 ### Review Not Posting
 1. Check workflow run in Actions tab
@@ -177,7 +243,7 @@ gh pr create --title "feat(db): new schema"
 
 ---
 
-## 9. Configuration
+## 10. Configuration
 
 | Item | Location |
 |------|----------|
@@ -188,7 +254,7 @@ gh pr create --title "feat(db): new schema"
 
 ---
 
-## 10. Setup Checklist
+## 11. Setup Checklist
 
 ### GitHub
 - [ ] Branch protection on `main`
