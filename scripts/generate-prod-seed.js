@@ -24,21 +24,29 @@ const raw = fs.readFileSync(INPUT_FILE, 'utf8');
 const parsed = JSON.parse(raw);
 const data = JSON.parse(parsed[0].text);
 
-// Filter out test records
+// Filter out test records and duplicates
 const realPardons = data.filter(p =>
-  !p.recipient_name.toLowerCase().includes('test')
+  !p.recipient_name.toLowerCase().includes('test') &&
+  // Remove manual duplicates (keep DOJ-sourced versions)
+  p.recipient_name !== 'January 6th Mass Pardon' &&
+  p.recipient_name !== 'Ross Ulbricht'
 );
 
 console.log(`Total pardons in TEST: ${data.length}`);
 console.log(`Real pardons (excluding test): ${realPardons.length}`);
 
 // Escape single quotes for SQL
-function esc(val) {
+function esc(val, colName) {
   if (val === null || val === undefined) return 'NULL';
   if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
   if (typeof val === 'number') return val.toString();
   if (Array.isArray(val)) {
-    // Use explicit ARRAY[]::TEXT[] for consistency (not '{}' literal)
+    // source_urls is JSONB, not TEXT[]
+    if (colName === 'source_urls') {
+      if (val.length === 0) return "'[]'::jsonb";
+      return "'" + JSON.stringify(val).replace(/'/g, "''") + "'::jsonb";
+    }
+    // Other arrays use TEXT[]
     if (val.length === 0) return "ARRAY[]::TEXT[]";
     return "ARRAY['" + val.map(v => String(v).replace(/'/g, "''")).join("','") + "']::TEXT[]";
   }
@@ -64,10 +72,9 @@ sql += '-- AI columns (corruption_level, trump_connection_detail, summary_spicy,
 // ON CONFLICT uses composite key: (recipient_slug, clemency_type, pardon_date)
 // This allows multiple clemency actions per person while preventing true duplicates
 realPardons.forEach(p => {
-  const values = cols.map(c => esc(p[c]));
+  const values = cols.map(c => esc(p[c], c));
   sql += 'INSERT INTO pardons (' + cols.join(', ') + ')\n';
-  sql += 'VALUES (' + values.join(', ') + ')\n';
-  sql += 'ON CONFLICT (recipient_slug, clemency_type, pardon_date) DO NOTHING;\n\n';
+  sql += 'VALUES (' + values.join(', ') + ');\n\n';
 });
 
 // Write to file
