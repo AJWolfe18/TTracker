@@ -40,7 +40,7 @@ jobs:
         env:
           # Use PROD secrets on main, TEST secrets on test
           SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RUN_ID: ${{ github.run_id }}
           INPUT_LIMIT: ${{ inputs.limit }}
