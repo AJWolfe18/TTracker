@@ -296,6 +296,22 @@ WHERE day = CURRENT_DATE;
 
 **NEVER merge test→main. Always cherry-pick tested commits.**
 
+### GitHub Secrets (EXACT names)
+| Secret | Purpose |
+|--------|---------|
+| `SUPABASE_URL` | PROD Supabase URL |
+| `SUPABASE_SERVICE_KEY` | PROD service role key |
+| `SUPABASE_ANON_KEY` | PROD anon key |
+| `SUPABASE_TEST_URL` | TEST Supabase URL |
+| `SUPABASE_TEST_SERVICE_KEY` | TEST service role key |
+| `SUPABASE_TEST_ANON_KEY` | TEST anon key |
+| `OPENAI_API_KEY` | OpenAI (shared) |
+| `PERPLEXITY_API_KEY` | Perplexity (shared) |
+| `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
+| `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
+
+**Important:** Workflows use `SUPABASE_SERVICE_KEY` not `SUPABASE_SERVICE_ROLE_KEY`.
+
 ## Development Commands
 
 ### Local Development
