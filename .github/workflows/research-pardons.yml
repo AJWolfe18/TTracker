@@ -34,10 +34,8 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/test'
+    if: github.ref == 'refs/heads/test' || github.ref == 'refs/heads/main'
     timeout-minutes: 10
-    environment:
-      name: test
 
     steps:
       - name: Checkout code
@@ -54,13 +52,15 @@ jobs:
 
       - name: Research pardons
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          # Use PROD secrets on main, TEST secrets on test
+          SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "Running on branch: ${{ github.ref_name }}"
           LIMIT="${{ inputs.limit }}"
           FORCE="${{ inputs.force }}"
           # Default limit if not provided
@@ -72,7 +72,7 @@ jobs:
             echo "Invalid limit: $LIMIT" >&2
             exit 2
           fi
-          # Cap limit to avoid accidental high-cost runs (92 pardons total)
+          # Cap limit to avoid accidental high-cost runs (96 pardons total)
           MAX_LIMIT=100
           if (( LIMIT > MAX_LIMIT )); then
             echo "Limit $LIMIT exceeds max $MAX_LIMIT; capping to $MAX_LIMIT." >&2

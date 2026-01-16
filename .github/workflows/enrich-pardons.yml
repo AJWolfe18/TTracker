@@ -23,7 +23,7 @@ concurrency:
 jobs:
   enrich:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/test'
+    if: github.ref == 'refs/heads/test' || github.ref == 'refs/heads/main'
     timeout-minutes: 15
 
     steps:
@@ -36,18 +36,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Run migration (if needed)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
-        run: |
-          echo "Checking if migration 060 needs to be applied..."
-          # Migration will be run manually or via apply-migrations.js
-
       - name: Enrich pardons
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          # Use PROD secrets on main, TEST secrets on test
+          SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           RUN_ID: ${{ github.run_id }}
           INPUT_LIMIT: ${{ inputs.limit }}
@@ -56,6 +49,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo "Running on branch: ${{ github.ref_name }}"
           ARGS=("--limit=${INPUT_LIMIT}")
           if [ "${INPUT_FORCE}" = "true" ]; then
             ARGS+=("--force")
