@@ -25,6 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/docs/features/[feature]/` - PRD, plans, notes for active features
 - `/docs/handoffs/` - Session handoffs
 - `/docs/guides/ado-workflow.md` - ADO states and work item types
+- `/docs/guides/prod-deployment-checklist.md` - PROD deployment requirements
 - `/docs/database/database-schema.md` - Full schema reference
 
 **Feature folders:** Each major feature gets its own folder in `/docs/features/`:
@@ -137,6 +138,8 @@ docs/features/
 - [ ] `npm run qa:smoke` passes
 - [ ] AI code review passed
 - [ ] Security quick-check: `/docs/guides/security-checklist.md`
+- [ ] **PROD deployment checklist:** `/docs/guides/prod-deployment-checklist.md`
+  - Migrations, edge functions, workflows, secrets all accounted for
 - [ ] Check `.claude/test-only-paths.md` - skip test-only files
 
 ### Test-Only Tracking:

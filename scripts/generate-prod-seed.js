@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 
 const INPUT_FILE = process.argv[2] || path.join(
   os.homedir(),
-  '.claude/projects/C--Users-Josh-OneDrive-Desktop-GitHub-TTracker/1e23f198-5d99-4be8-9fce-aa719af58869/tool-results/mcp-supabase-test-postgrestRequest-1768522073997.txt'
+  '.claude/projects/C--Users-Josh-OneDrive-Desktop-GitHub-TTracker/1e23f198-5d99-4be8-9fce-aa719af58869/tool-results/mcp-supabase-test-postgrestRequest-1768524251663.txt'
 );
 
 const OUTPUT_FILE = path.join(__dirname, 'prod-seed-pardons.sql');
@@ -38,7 +38,8 @@ function esc(val) {
   if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
   if (typeof val === 'number') return val.toString();
   if (Array.isArray(val)) {
-    if (val.length === 0) return "'{}'";
+    // Use explicit ARRAY[]::TEXT[] for consistency (not '{}' literal)
+    if (val.length === 0) return "ARRAY[]::TEXT[]";
     return "ARRAY['" + val.map(v => String(v).replace(/'/g, "''")).join("','") + "']::TEXT[]";
   }
   return "'" + String(val).replace(/'/g, "''") + "'";
@@ -60,11 +61,13 @@ sql += '-- Note: This imports SEED data only. Run research + enrichment pipeline
 sql += '-- AI columns (corruption_level, trump_connection_detail, summary_spicy, etc.) will be NULL.\n\n';
 
 // Generate INSERT statements
+// ON CONFLICT uses composite key: (recipient_slug, clemency_type, pardon_date)
+// This allows multiple clemency actions per person while preventing true duplicates
 realPardons.forEach(p => {
   const values = cols.map(c => esc(p[c]));
   sql += 'INSERT INTO pardons (' + cols.join(', ') + ')\n';
   sql += 'VALUES (' + values.join(', ') + ')\n';
-  sql += 'ON CONFLICT (recipient_slug) DO NOTHING;\n\n';
+  sql += 'ON CONFLICT (recipient_slug, clemency_type, pardon_date) DO NOTHING;\n\n';
 });
 
 // Write to file
