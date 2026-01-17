@@ -141,6 +141,7 @@ Track all files/migrations needed to deploy SCOTUS feature to production.
 - [x] `scripts/enrichment/scotus-variation-pools.js` - Anti-repetition pools
 - [x] `docs/features/scotus-tracker/prd.md` - This PRD
 - [x] `docs/features/scotus-tracker/field-mapping.md` - CourtListener field mapping
+- [x] `docs/architecture/business-logic-mapping.md` - SCOTUS section added (lines 569-709)
 
 ### Files To Create
 - [ ] `migrations/050-scotus-cases.sql` - Database schema
