@@ -32,9 +32,12 @@ jobs:
       
     - name: Run executive orders tracker in TEST
       env:
+        ENVIRONMENT: test
+        TARGET_ENV: test
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
         BACKFILL_DAYS: ${{ github.event.inputs.backfill_days }}
       run: |
         echo "🧪 Running executive orders tracker in TEST environment..."
