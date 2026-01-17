@@ -52,3 +52,36 @@ function generateStringId() {
 ✅ Use string IDs for all new entries
 ✅ Test ID generation before deploying
 ✅ Check existing ID formats before changing strategy
+
+---
+
+## Executive Orders Table - Schema Mismatch (January 2026)
+
+**⚠️ WARNING: TEST and PROD have DIFFERENT id column types for `executive_orders`**
+
+| Environment | id Type | id Behavior | Script Behavior |
+|-------------|---------|-------------|-----------------|
+| **PROD** | VARCHAR | No default, no auto-increment | Script provides `generateOrderId()` string |
+| **TEST** | INTEGER | Auto-increment (SERIAL) | Script omits id, DB generates |
+
+### Why This Matters
+- The same script (`executive-orders-tracker-supabase.js`) has **different code** on main vs test branches
+- Main branch: Uses `id: generateOrderId()` (required for PROD's VARCHAR column)
+- Test branch: Omits id field (works with TEST's auto-increment)
+- **Testing on TEST does not fully validate PROD behavior** for ID handling
+
+### How This Happened
+- Original PROD setup used VARCHAR with generated string IDs (`eo_xxx` format)
+- TEST was likely recreated/reset at some point with standard INTEGER auto-increment
+- January 2026: Bug fix required different solutions per environment (ADO-267)
+
+### Current Workaround
+- Keep code different between branches for ID handling
+- Both environments work correctly with their respective strategies
+- Document here so future devs don't get confused
+
+### Future Fix (Tech Debt)
+- **ADO-268**: Align executive_orders schema between TEST and PROD
+- Migrate PROD to INTEGER auto-increment to match TEST
+- Then sync the code to remove `generateOrderId()`
+- See ADO ticket for migration plan
