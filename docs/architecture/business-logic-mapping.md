@@ -401,15 +401,15 @@ const FEATURE_FLAGS = {
 corruption_level: 1 | 2 | 3 | 4 | 5
 primary_connection_type: 'major_donor' | 'political_ally' | 'family' |
   'business_associate' | 'celebrity' | 'jan6_defendant' | 'fake_electors' |
-  'mar_a_lago_vip' | 'campaign_staff' | 'no_connection'
+  'mar_a_lago_vip' | 'campaign_staff' | 'wealthy_unknown' | 'no_connection'
 ```
 
 #### Spicy Labels (In-App Display)
 ```javascript
 const CORRUPTION_LABELS_SPICY = {
   5: "Paid-to-Play 💰",
-  4: "Friends & Family 👥",
-  3: "Swamp Creature 🐊",
+  4: "Loyalty Reward 🎖️",
+  3: "Swamp Royalty 👑",
   2: "Celebrity Request ⭐",
   1: "Broken Clock 🔧"
 };
@@ -419,10 +419,10 @@ const CORRUPTION_LABELS_SPICY = {
 ```javascript
 const CORRUPTION_LABELS_NEUTRAL = {
   5: "Direct Financial Connection",
-  4: "Personal/Inner Circle",
-  3: "Political Alliance",
+  4: "Service to Trump",
+  3: "Swamp Access",
   2: "Public Campaign",
-  1: "Policy-Based"
+  1: "Legitimate Clemency"
 };
 ```
 
@@ -449,27 +449,33 @@ const CORRUPTION_COLORS = {
 
 **Evidence types:** FEC filings, inauguration fund records, business contracts, membership records
 
-#### Level 4: Friends & Family
+#### Level 4: Loyalty Reward
 **Triggers:**
-- Inner circle (campaign staff, advisors, family members)
-- Personal relationship with Trump
+- Committed crimes FOR Trump (Jan 6 defendants, fake electors)
+- Refused to flip/testify against Trump
+- Inner circle who served Trump (Rudy Giuliani, cabinet members)
+- Family members
+- Campaign staff who took legal risk for Trump
 - Could testify against Trump (pardon = potential silence)
-- Self-dealing indicators
-- Proximity to ongoing investigations
 
-**Evidence types:** Employment records, testimony transcripts, investigation documents
+**Evidence types:** Jan 6 charges, fake elector indictments, cooperation refusals, employment records
 
-**Tone rule:** Pose implications as questions ("What did they know?") unless research explicitly documents witness-related effects. Do not assert "witness tampering" without explicit record.
+**Tone rule:** Profanity allowed. These people committed crimes to help Trump or refused to hold him accountable.
 
-#### Level 3: Swamp Creature
+#### Level 3: Swamp Royalty
 **Triggers:**
+- Rich unknown person with no documented Trump connection (wealthy_unknown)
+- "Weaponized DOJ" or "political persecution" claims
 - Political ally (endorsed Trump, fundraised, etc.)
 - Lobbyist or industry connection
 - Pardon covers up related wrongdoing
 - Benefits Republican political interests
 - Standard political favor-trading
+- Campaign promises to pardon in exchange for votes
 
-**Evidence types:** Endorsements, campaign appearances, lobbying records
+**Evidence types:** Endorsements, campaign appearances, lobbying records, wealth indicators
+
+**Note:** This is the DEFAULT when no clear reason is found. Rich people don't get pardons for no reason.
 
 #### Level 2: Celebrity Request
 **Triggers:**
@@ -483,17 +489,19 @@ const CORRUPTION_COLORS = {
 
 **Tone rule:** No profanity. Critique the system, not the individual.
 
-#### Level 1: Broken Clock
+#### Level 1: Broken Clock (RARE)
 **Triggers:**
-- Criminal justice reform case
-- Disproportionate original sentence
-- Bipartisan support for clemency
-- No Trump connection whatsoever
+- Criminal justice reform case with bipartisan support
+- Disproportionate original sentence (documented)
+- Reform organizations actively advocated
 - Actually defensible on merits
+- REQUIRES positive evidence of legitimacy
 
 **Evidence types:** Sentencing records, bipartisan advocacy, reform organization support
 
 **Tone rule:** Acknowledge legitimacy. Can express cautious approval. Contrast with corrupt pardons.
+
+**CRITICAL:** Level 1 should be RARE. Do not default here. Requires POSITIVE evidence of legitimacy, not just "no connection found."
 
 ### Connection Type Taxonomy
 
@@ -508,7 +516,8 @@ const CONNECTION_TYPES = {
   fake_electors: "Involved in fake electors scheme",
   mar_a_lago_vip: "Known Mar-a-Lago member or frequent guest",
   campaign_staff: "Worked on Trump campaign in official capacity",
-  no_connection: "No documented Trump relationship found"
+  wealthy_unknown: "Rich person with no documented Trump connection (default to Level 3)",
+  no_connection: "No documented Trump relationship found (requires Level 1 legitimacy evidence)"
 };
 ```
 
@@ -550,8 +559,8 @@ Frame as categorical decision and signal to future actors.
 ```javascript
 const PROFANITY_ALLOWED = {
   5: true,   // Paid-to-Play - full spice
-  4: true,   // Friends & Family - allowed
-  3: false,  // Swamp Creature - sardonic, not profane
+  4: true,   // Loyalty Reward - allowed (crimes FOR Trump)
+  3: false,  // Swamp Royalty - sardonic, not profane
   2: false,  // Celebrity Request - measured
   1: false   // Broken Clock - respectful acknowledgment
 };

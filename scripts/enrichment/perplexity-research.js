@@ -32,7 +32,7 @@ dotenv.config();
 // Constants
 // ============================================================
 
-const PROMPT_VERSION = '1.3';  // v1.2 + campaign promises for votes = level 3 political connection
+const PROMPT_VERSION = '1.4';  // v1.3 + ADO-264 corruption scoring overhaul (new labels, better logic)
 const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
@@ -45,7 +45,8 @@ const MAX_RETRY_DELAY_MS = 15000;  // Clamp retry sleep to 15s max
 const CONNECTION_TYPES = [
   'major_donor', 'political_ally', 'family', 'business_associate',
   'celebrity', 'jan6_defendant', 'fake_electors', 'mar_a_lago_vip',
-  'cabinet_connection', 'lobbyist', 'campaign_staff', 'no_connection'
+  'cabinet_connection', 'lobbyist', 'campaign_staff', 'wealthy_unknown',
+  'no_connection'
 ];
 
 // Event types for receipts_timeline
@@ -140,7 +141,7 @@ SEARCH SCOPE - Look for connections to ANY of these:
 
 Return JSON with EXACTLY these fields:
 {
-  "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|cabinet_connection|lobbyist|campaign_staff|no_connection",
+  "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|cabinet_connection|lobbyist|campaign_staff|wealthy_unknown|no_connection",
   "trump_connection_detail": "2-3 sentence explanation of connection (or lack thereof) to Trump orbit",
   "corruption_level": 1-5,
   "corruption_reasoning": "Why this corruption level (1 sentence)",
@@ -164,30 +165,31 @@ DATE RULE:
 TIMELINE REQUIREMENT:
 - ALWAYS include a "pardon_granted" event
 
-CORRUPTION LEVEL GUIDE - Rate what you find:
-5 = "Paid-to-Play" - Found donation records, paid event attendance, business deal, or financial connection
-4 = "Friends & Family" - Found inner circle ties, cabinet connection, family, campaign staff, legal team ties
-3 = "Swamp Creature" - Found political ally, lobbyist involvement, or impact on Trump-related matters
-2 = "Celebrity Request" - Found public advocacy campaign or media attention, but no deeper connection
-1 = "Broken Clock" - Found no connection to Trump orbit
+CORRUPTION LEVEL GUIDE - Answer: WHY did Trump pardon this person?
+5 = "Paid-to-Play" - Documented $$$ (donations, business deals, paid access, Mar-a-Lago fees for access)
+4 = "Loyalty Reward" - Did something FOR Trump (Jan 6 defendants, fake electors, refused to flip, Rudy types, crimes to help Trump)
+3 = "Swamp Royalty" - Benefited from the swamp (rich unknowns, "weaponized DOJ" claims, political allies, lobbyist connections)
+2 = "Celebrity Request" - Famous person advocated publicly, no deeper Trump connection
+1 = "Broken Clock" - Actually legitimate clemency (RARE - bipartisan support, criminal justice reform, disproportionate sentence)
 
-KEY PRINCIPLE: Your corruption_level should match what you actually found, not what you suspect.
-- If you find donation records → level 5
-- If you find inner circle relationship → level 4
-- If you find political ties → level 3
-- If you only find celebrity advocacy → level 2
-- If you find nothing → level 1
+KEY PRINCIPLE: Score based on WHY Trump pardoned them, not whether you found a personal connection.
+- Jan 6 defendants = Level 4 (crimes FOR Trump, even if no personal relationship)
+- Fake electors = Level 4 (helped Trump's coup attempt)
+- Rich person you can't find connection for = Level 3 (swamp access, not "no connection")
+- "Weaponized DOJ" framing = Level 3 (that's a swamp excuse, not legitimacy)
+- Level 1 should be RARE - reserved for cases with bipartisan support or clear reform merit
 
-IMPORTANT - These ARE political connections (Level 3), not "no connection":
-- Campaign promises to pardon someone in exchange for votes ("I'll free X if you vote for me")
-- Pardons fulfilling promises made to voting blocs (libertarians, crypto community, etc.)
-- Political quid pro quo is a SWAMP CREATURE connection, not legitimate clemency
+CRITICAL SCORING RULES:
+- Jan 6 / fake electors / election crimes = MINIMUM Level 4 (they committed crimes FOR Trump)
+- Unknown wealthy person = Level 3, connection_type = "wealthy_unknown" (not Level 1)
+- "Weaponized DOJ" or "political persecution" claims = Level 3 (swamp excuse)
+- Default when unclear = Level 3 (NOT Level 1)
+- Level 1 requires POSITIVE evidence of legitimacy (bipartisan support, reform advocacy)
 
 RULES:
-- The CRIME severity does not affect corruption level — focus on the CONNECTION
 - receipts_timeline must be an array (empty [] if no events found)
 - pardon_advocates must be an array (empty [] if unknown)
-- For GROUP pardons (like Jan 6), research the group's connection to Trump, not individuals`;
+- For GROUP pardons (like Jan 6), the group connection IS the crime FOR Trump = Level 4`;
 }
 
 // ============================================================

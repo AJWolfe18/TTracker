@@ -15,10 +15,10 @@
 
 export const CORRUPTION_LABELS = {
   5: { spicy: 'Paid-to-Play', neutral: 'Direct Financial Connection' },
-  4: { spicy: 'Friends & Family', neutral: 'Personal/Inner Circle' },
-  3: { spicy: 'Swamp Creature', neutral: 'Political Alliance' },
+  4: { spicy: 'Loyalty Reward', neutral: 'Service to Trump' },
+  3: { spicy: 'Swamp Royalty', neutral: 'Swamp Access' },
   2: { spicy: 'Celebrity Request', neutral: 'Public Campaign' },
-  1: { spicy: 'Broken Clock', neutral: 'Policy-Based' }
+  1: { spicy: 'Broken Clock', neutral: 'Legitimate Clemency' }
 };
 
 export const CONNECTION_TYPE_LABELS = {
@@ -33,6 +33,7 @@ export const CONNECTION_TYPE_LABELS = {
   campaign_staff: 'Worked on Trump campaign',
   cabinet_connection: 'Cabinet member or appointee',
   lobbyist: 'Lobbyist or industry connection',
+  wealthy_unknown: 'Rich person with no documented Trump connection',
   no_connection: 'No documented Trump relationship'
 };
 
@@ -42,10 +43,10 @@ export const CONNECTION_TYPE_LABELS = {
 
 export const PROFANITY_ALLOWED = {
   5: true,   // Paid-to-Play - full spice allowed
-  4: true,   // Friends & Family - allowed
-  3: false,  // Swamp Creature - sardonic, not profane
+  4: true,   // Loyalty Reward - allowed (crimes FOR Trump deserve anger)
+  3: false,  // Swamp Royalty - sardonic, not profane
   2: false,  // Celebrity Request - measured critique
-  1: false   // Broken Clock - respectful acknowledgment
+  1: false   // Broken Clock - respectful acknowledgment (rare legitimate cases)
 };
 
 // ============================================================================

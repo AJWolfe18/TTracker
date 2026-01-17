@@ -26,6 +26,9 @@
     jan6_defendant: { label: 'Jan 6 Defendant', color: '#be123c' },
     fake_electors: { label: 'Fake Elector', color: '#c026d3' },
     celebrity: { label: 'Celebrity', color: '#ea580c' },
+    cabinet_connection: { label: 'Cabinet Connection', color: '#7c3aed' },
+    lobbyist: { label: 'Lobbyist', color: '#059669' },
+    wealthy_unknown: { label: 'Wealthy Unknown', color: '#78716c' },
     no_connection: { label: 'No Known Connection', color: '#6b7280' }
   };
 
@@ -71,8 +74,8 @@
   // Corruption level spicy labels (5 = most corrupt, 1 = least)
   const CORRUPTION_LABELS = {
     5: { label: 'Paid-to-Play', color: '#7f1d1d' },
-    4: { label: 'Friends & Family Discount', color: '#dc2626' },
-    3: { label: 'Swamp Creature', color: '#ea580c' },
+    4: { label: 'Loyalty Reward', color: '#dc2626' },
+    3: { label: 'Swamp Royalty', color: '#ea580c' },
     2: { label: 'Celebrity Request', color: '#ca8a04' },
     1: { label: 'Broken Clock', color: '#16a34a' }
   };
