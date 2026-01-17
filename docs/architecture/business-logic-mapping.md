@@ -566,4 +566,144 @@ const PROFANITY_ALLOWED = {
 };
 ```
 
+## SCOTUS Ruling Impact System
+
+### Database Values → Display Labels
+
+#### Database Storage
+```sql
+-- scotus_cases table (future - migration 050)
+ruling_impact_level: 0 | 1 | 2 | 3 | 4 | 5
+ruling_label: 'Constitutional Crisis' | 'Rubber-stamping Tyranny' |
+  'Institutional Sabotage' | 'Judicial Sidestepping' |
+  'Crumbs from the Bench' | 'Democracy Wins'
+```
+
+#### Spicy Labels (In-App Display)
+```javascript
+const RULING_IMPACT_LABELS = {
+  5: "Constitutional Crisis 🔴",
+  4: "Rubber-stamping Tyranny 🟠",
+  3: "Institutional Sabotage 🟡",
+  2: "Judicial Sidestepping 🔵",
+  1: "Crumbs from the Bench ⚪",
+  0: "Democracy Wins 🟢"
+};
+```
+
+#### Color Mapping
+```javascript
+const RULING_IMPACT_COLORS = {
+  5: { bg: "#fee2e2", text: "#7f1d1d", border: "#dc2626", emoji: "🔴" }, // red
+  4: { bg: "#fed7aa", text: "#7c2d12", border: "#ea580c", emoji: "🟠" }, // orange
+  3: { bg: "#fef3c7", text: "#713f12", border: "#f59e0b", emoji: "🟡" }, // yellow
+  2: { bg: "#dbeafe", text: "#1e3a8a", border: "#3b82f6", emoji: "🔵" }, // blue
+  1: { bg: "#f3f4f6", text: "#374151", border: "#9ca3af", emoji: "⚪" }, // gray
+  0: { bg: "#d1fae5", text: "#064e3b", border: "#10b981", emoji: "🟢" }  // green
+};
+```
+
+### Ruling Impact Level Determination Rules
+
+#### Level 5: Constitutional Crisis
+**Triggers:**
+- Precedent overturned (Roe, Chevron, etc.)
+- Raw power or billionaire money replaces the law
+- Federalist Society wishlist fulfilled
+- Dark money groups (Leonard Leo, Koch network) directly benefit
+
+**Tone:** Alarm bells. Name who killed what precedent and who profits. Profanity allowed.
+
+#### Level 4: Rubber-stamping Tyranny
+**Triggers:**
+- Court green-lights police violence, surveillance, state overreach
+- Executive power grabs blessed
+- Immunity expanded for those in power
+- Victims have less recourse
+
+**Tone:** Angry. Focus on the victims. Name the power they just blessed. Profanity allowed.
+
+#### Level 3: Institutional Sabotage
+**Triggers:**
+- Technical, "boring" legal moves that gut rights
+- Standing denied to avoid ruling
+- Burden of proof shifted against plaintiffs
+- Regulatory gaps opened for corporations
+- Rights exist on paper but can't be used
+
+**Tone:** Sardonic/Snarky. Explain the "trick" - how this technical move screws people.
+
+#### Level 2: Judicial Sidestepping
+**Triggers:**
+- Case punted, avoided, kicked the can
+- Declared moot conveniently
+- Remanded to lower court (years more litigation)
+- Narrow ruling that decides nothing
+- Non-decision benefits status quo (usually bad)
+
+**Tone:** Eye-roll. Lazy employees energy. Explain what they refused to decide.
+
+#### Level 1: Crumbs from the Bench
+**Triggers:**
+- Win for the people, but narrow/fragile/temporary
+- Limiting language could undo it
+- Concurrence signals future trouble
+- Easily distinguished in future cases
+
+**Tone:** Cautiously skeptical. Credit the win, then flag why it might not last.
+
+#### Level 0: Democracy Wins (RARE)
+**Triggers:**
+- Rare win where the system protects the vulnerable
+- Strong ruling that's hard to walk back
+- Corporate/government interests actually lost
+- Constitution worked as intended
+
+**Tone:** Sincere. Credit where due. Note why this actually protects people.
+
+**CRITICAL:** Level 0 should be RARE. Requires genuinely good outcome, not just "not terrible."
+
+### Issue Area Special Pools
+
+Certain issue areas override level-based framing:
+
+```javascript
+const SPECIAL_ISSUE_AREAS = {
+  voting_rights: "VRA, gerrymandering, voter access - frame around who can't vote",
+  agency_power: "Chevron, regulations, expertise - frame around regulatory gaps"
+};
+```
+
+### Profanity Rules
+
+```javascript
+const SCOTUS_PROFANITY_ALLOWED = {
+  5: true,   // Constitutional Crisis - full spice
+  4: true,   // Rubber-stamping Tyranny - allowed
+  3: false,  // Institutional Sabotage - sardonic, not profane
+  2: false,  // Judicial Sidestepping - eye-roll tone
+  1: false,  // Crumbs from the Bench - cautious
+  0: false   // Democracy Wins - sincere
+};
+```
+
+### Tone & Style Rules
+
+1. **FOLLOW THE MONEY**: Name Federalist Society, Leonard Leo, Koch, Harlan Crow when relevant
+2. **HUMAN COST**: Always explain impact on wallet, body, or freedom (YOUR rights, not abstract)
+3. **NO LEGALESE**: Translate legal jargon to plain English
+4. **NO BOTH-SIDES**: Pro-people, anti-fascist editorial perspective
+5. **EVIDENCE ANCHORED**: Cite [syllabus], [majority], [dissent] for claims
+
+### Key Difference from Pardons
+
+| Aspect | Pardons | SCOTUS |
+|--------|---------|--------|
+| Scale direction | 1 (good) → 5 (corrupt) | 0 (good) → 5 (crisis) |
+| Level 0 | N/A | Democracy Wins |
+| Default assumption | Corruption unless proven otherwise | Institutional bias unless proven otherwise |
+| Evidence source | FEC, business records, testimony | Syllabus, majority opinion, dissent |
+
+---
+
 This document should be updated as business logic evolves.
