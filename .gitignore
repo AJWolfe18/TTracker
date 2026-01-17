@@ -98,3 +98,6 @@ supabase/.temp/
 _ul*
 _UL*
 tmpclaude-*
+
+# Environment marker (should only exist on test branch, never main)
+TEST_BRANCH_MARKER.md

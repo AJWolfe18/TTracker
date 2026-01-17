@@ -47,11 +47,10 @@ async function generateAIAnalysis(title, orderNumber, abstract = '') {
             severity_rating: 'medium',
             policy_direction: 'modify',
             implementation_timeline: 'ongoing',
-            impact_areas: [],
-            full_text_available: true
+            impact_areas: []
         };
     }
-    
+
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -76,8 +75,7 @@ Provide a JSON response with these exact fields:
   "severity_rating": "low|medium|high based on scope and impact",
   "policy_direction": "expand|restrict|modify|create|eliminate",
   "implementation_timeline": "immediate|30_days|90_days|ongoing",
-  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"],
-  "full_text_available": true
+  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"]
 }
 
 Respond ONLY with valid JSON.`
@@ -95,8 +93,7 @@ Respond ONLY with valid JSON.`
                 severity_rating: 'medium',
                 policy_direction: 'modify',
                 implementation_timeline: 'ongoing',
-                impact_areas: [],
-                full_text_available: true
+                impact_areas: []
             };
         }
 
@@ -113,11 +110,10 @@ Respond ONLY with valid JSON.`
                 severity_rating: 'medium',
                 policy_direction: 'modify',
                 implementation_timeline: 'ongoing',
-                impact_areas: [],
-                full_text_available: true
+                impact_areas: []
             };
         }
-        
+
     } catch (error) {
         console.log(`   ⚠️ Error generating AI analysis: ${error.message}`);
         return {
@@ -125,8 +121,7 @@ Respond ONLY with valid JSON.`
             severity_rating: 'medium',
             policy_direction: 'modify',
             implementation_timeline: 'ongoing',
-            impact_areas: [],
-            full_text_available: true
+            impact_areas: []
         };
     }
 }
@@ -330,7 +325,6 @@ async function fetchFromFederalRegister() {
                     policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
                     implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
                     impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
-                    full_text_available: aiAnalysis ? aiAnalysis.full_text_available : true,
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
