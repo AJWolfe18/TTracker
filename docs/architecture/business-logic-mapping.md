@@ -1,5 +1,25 @@
 # TrumpyTracker Business Logic Mapping Document
 
+## Table of Contents
+
+1. [Severity System Mapping](#severity-system-mapping)
+2. [Topic Categories Mapping](#topic-categories-mapping)
+3. [Source Tier System](#source-tier-system)
+4. [Content Type Classification](#content-type-classification)
+5. [Time Display Rules](#time-display-rules)
+6. [Story Status Rules](#story-status-rules)
+7. [Source Count Display](#source-count-display)
+8. [URL Handling](#url-handling)
+9. [Share Text Templates](#share-text-templates)
+10. [Pagination Cursor Logic](#pagination-cursor-logic)
+11. [Cache TTL Rules](#cache-ttl-rules)
+12. [Error Message Mapping](#error-message-mapping)
+13. [Feature Flags](#feature-flags)
+14. [Pardon Corruption Level System](#pardon-corruption-level-system)
+15. [SCOTUS Ruling Impact System](#scotus-ruling-impact-system)
+
+---
+
 ## Severity System Mapping
 
 ### Database Values → Display Labels
@@ -703,6 +723,160 @@ const SCOTUS_PROFANITY_ALLOWED = {
 | Level 0 | N/A | Democracy Wins |
 | Default assumption | Corruption unless proven otherwise | Institutional bias unless proven otherwise |
 | Evidence source | FEC, business records, testimony | Syllabus, majority opinion, dissent |
+
+### Anti-Repetition System (Variation Pools)
+
+To prevent GPT from generating repetitive summaries, we inject randomized "creative direction" for each enrichment call. The system selects from stratified pools based on ruling impact level.
+
+#### How It Works
+
+1. **Get pool type** from `ruling_impact_level` (or override by `issue_area`)
+2. **Select random variation** from 4 categories: opening, device, structure, closing
+3. **Inject into prompt** as creative direction
+4. **Track recent openings** to avoid repetition
+
+```javascript
+// Selection logic
+const poolType = getPoolType(ruling_impact_level, issue_area);
+const variation = selectVariation(poolType, recentOpeningIds);
+const injection = buildVariationInjection(variation, recentOpenings);
+```
+
+#### Opening Patterns by Level
+
+**Level 5: Constitutional Crisis** (10 options)
+- "Lead with what precedent died: '[X] years of precedent. Gone. Because five justices said so.'"
+- "Follow the money: 'The Federalist Society spent decades on this. Today: payday.'"
+- "Name the buyer: 'Leonard Leo's wishlist just got shorter.'"
+- "Lead with human cost: 'How many people will die because of this ruling? Start counting.'"
+- "Mask off: 'They're not even pretending anymore.'"
+- "Historical framing: 'History will remember this as the day the Court...'"
+- "Billionaire framing: 'Another ruling from the billionaire's bench.'"
+- "Plain statement: 'This is what judicial corruption looks like.'"
+- "Constitution angle: 'The Constitution means whatever they say it means now.'"
+- "Rigged game: 'The game was rigged. Now it's official.'"
+
+**Level 4: Rubber-stamping Tyranny** (10 options)
+- "Police state: 'Good news for cops who shoot first. Bad news for everyone else.'"
+- "Personal impact: 'Your Fourth Amendment rights just got smaller. Again.'"
+- "Green light framing: 'The Court just gave [agency/cops/president] permission to...'"
+- "Lead with victims: 'Another ruling that makes it harder to hold [cops/government] accountable.'"
+- "Immunity angle: 'More immunity for those in power. Less recourse for you.'"
+- "Surveillance: 'Big Brother just got the Court's blessing. Again.'"
+- "Quote dissent warning: 'As Justice [X] warned: [quote the consequence].'"
+- "Playbook: 'Another page from the authoritarian playbook, now with judicial approval.'"
+- "Accountability: 'Who polices the police? According to this Court: nobody.'"
+- "Direct: 'The boot just got heavier. The Court made sure of it.'"
+
+**Level 3: Institutional Sabotage** (10 options)
+- "Boring but deadly: 'This ruling sounds boring. That's the point. Here's what they actually did...'"
+- "Explain the trick: 'The technical move: [standing/burden/procedure]. The real effect: [outcome].'"
+- "Paper rights: 'You still have the right to [X]. You just can't use it anymore.'"
+- "Termite framing: 'Termites in the foundation. You won't notice until the floor collapses.'"
+- "Papercuts: 'Not a killing blow. Just another cut. The bleeding continues.'"
+- "Plain sabotage: 'They didn't overturn it. They just made it impossible to use.'"
+- "Burden shift: 'The burden just shifted. Guess which direction?'"
+- "Loophole: 'A new loophole just opened. Corporations are already walking through.'"
+- "Fine print: 'The devil is in the [standing requirement/procedural bar/burden of proof].'"
+- "Slow poison: 'This won't make headlines. It'll just quietly poison [regulatory area] for years.'"
+
+**Level 2: Judicial Sidestepping** (10 options)
+- "No comment: 'The Court's answer to [major question]: ¯\\_(ツ)_/¯'"
+- "Kicked can: 'They punted. The question lives to haunt us another day.'"
+- "Standing dodge: 'No standing. Translation: we don't want to decide this.'"
+- "Cowardice: 'Nine justices. Zero courage. Case dismissed.'"
+- "Technical excuse: 'They found a technicality to avoid the actual question.'"
+- "Remand: 'Sent back to the lower court. Years more litigation. Problem unsolved.'"
+- "Delay benefits: 'They didn't decide. And that non-decision benefits [who].'"
+- "Convenient mootness: 'Declared moot. How convenient for [beneficiary].'"
+- "Narrow to nothing: 'Decided on the narrowest possible grounds. Translation: nothing changes.'"
+- "Live to fight: 'Not today, apparently. Maybe next term. Maybe never.'"
+
+**Level 1: Crumbs from the Bench** (10 options)
+- "But wait: 'A win for [group]. But read the footnotes before celebrating.'"
+- "Fine print: 'You won. Now read the limiting language that could undo it.'"
+- "Fragile: 'A win today. A target tomorrow. Here's why it might not last.'"
+- "Narrow grounds: 'They ruled in your favor. On the narrowest possible grounds.'"
+- "Tempered: 'Good news, sort of. Don't break out the champagne.'"
+- "Asterisk: 'You won*. The asterisk matters.'"
+- "This time: 'This time, the Court got it right. Emphasis on \"this time.\"'"
+- "Small mercy: 'A small mercy in a sea of bad rulings.'"
+- "Temporary: 'Enjoy it while it lasts. This Court giveth, this Court taketh away.'"
+- "Concurrence warning: 'The win is real. But [Justice]'s concurrence signals trouble ahead.'"
+
+**Level 0: Democracy Wins** (10 options)
+- "System worked: 'The system actually worked. Mark your calendar.'"
+- "Credit due: 'Credit where it's due. This ruling actually protects people.'"
+- "Unanimous good: '9-0 for the people. Write it down.'"
+- "Rights protected: 'Your [specific right] held. The Constitution worked as intended.'"
+- "Rare win: 'A rare win against [corporation/government]. Savor it.'"
+- "Durable: 'A strong ruling that's actually hard to weasel out of.'"
+- "Dissent wrong: 'Even the dissenters couldn't find much to complain about.'"
+- "Template: 'This is what SCOTUS rulings should look like. Save it as a template.'"
+- "Corporate loss: 'Corporate interests lost. Mark your calendar.'"
+- "People first: 'For once, the Court put people over profits.'"
+
+#### Special Issue Area Pools
+
+**Voting Rights** (8 options) - overrides level when `issue_area === 'voting_rights'`
+- "VRA ghost: 'The Voting Rights Act's ghost watches another piece die.'"
+- "Who can't vote: 'Ask yourself who can't vote now. That's the point.'"
+- "Math: 'Do the math. How many voters just got disenfranchised?'"
+- "Gerrymandering: 'Gerrymandering gets another blessing from on high.'"
+- "Shelby legacy: 'Shelby County's legacy continues. State by state.'"
+- "Access: 'Voting just got harder for [group]. Mission accomplished.'"
+- "Preclearance: 'Remember when discrimination required approval? Good times.'"
+- "Test: 'Democracy stress test. We're failing.'"
+
+**Agency Power / Chevron** (8 options) - overrides level when `issue_area === 'agency_power'`
+- "Chevron: 'Chevron deference takes another hit. Experts need not apply.'"
+- "Self-regulate: 'Industry can self-regulate now. What could go wrong?'"
+- "Major questions: 'Too major for agencies, apparently. Only Congress can act. Congress won't.'"
+- "Gap: 'A new regulatory gap just opened. Corporations are already walking through.'"
+- "Experts: 'Scientists and experts: overruled by lawyers. As intended.'"
+- "Agency gutted: '[Agency] just lost the ability to [function]. Enjoy the consequences.'"
+- "Bingo: 'Another square on the deregulation bingo card.'"
+- "Industry wish: 'Another item checked off the industry wishlist.'"
+
+#### Rhetorical Devices (8 options)
+
+Selected randomly alongside opening pattern:
+- **Juxtaposition**: "The claim: [X]. The reality: [Y]."
+- **Rhetorical question**: Open with question based on the ruling
+- **Understatement**: "Interesting timing on this one."
+- **Direct**: State the ruling plainly, let it indict itself
+- **Flat sequence**: State events in order - the sequence IS the commentary
+- **Dark humor**: Let the absurdity speak for itself
+- **Quote dissent**: Lead with dissent quote that captures the stakes
+- **Follow the money**: Name donors, dark money groups, or billionaire plaintiffs
+
+#### Sentence Structures (6 options)
+
+- **Punchy**: One-liner opening, then expand
+- **Setup-payoff**: Setup the official framing, then hit with the real impact
+- **Who wins/loses**: Lead with who wins and who loses, then explain why
+- **Question-answer**: Pose the question the case asked, then give the brutal answer
+- **Contrast-pivot**: Start with what they claim the ruling does, pivot to reality
+- **Dissent-frame**: Frame around what the dissent warned, then show they were right
+
+#### Closing Approaches (6 options)
+
+- **Pattern note**: "Add it to the list of [theme] rulings."
+- **What next**: "Watch for [consequence] in the next term."
+- **Who pays**: "And who pays for this? [Specific group]."
+- **Precedent impact**: "This ruling will be cited to justify [future harm]."
+- **Dissent prophecy**: "Remember [Justice]'s warning when [consequence]."
+- **System note**: "This is how the system is designed to work. For them, not you."
+
+#### Banned Openings
+
+GPT is explicitly told to NEVER use these overused phrases:
+- "This is outrageous..."
+- "In a shocking move..."
+- "Once again..."
+- "It's no surprise..."
+- "Make no mistake..."
+- "Let that sink in..."
 
 ---
 
