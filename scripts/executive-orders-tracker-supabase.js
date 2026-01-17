@@ -375,20 +375,21 @@ function extractAgencies(item) {
 }
 
 // Determine category based on content
+// Must match database enum: eo_category
 function determineCategory(title, abstract) {
     const text = `${title} ${abstract}`.toLowerCase();
-    
-    if (text.includes('immigration') || text.includes('border')) return 'immigration';
-    if (text.includes('climate') || text.includes('energy') || text.includes('environment')) return 'environment';
-    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid')) return 'healthcare';
-    if (text.includes('defense') || text.includes('military')) return 'defense';
-    if (text.includes('trade') || text.includes('tariff')) return 'trade';
-    if (text.includes('education')) return 'education';
-    if (text.includes('court') || text.includes('judicial')) return 'judicial';
-    if (text.includes('tax') || text.includes('economy')) return 'economic';
-    if (text.includes('regulation') || text.includes('deregulation')) return 'regulatory';
-    
-    return 'government_operations';
+
+    if (text.includes('immigration') || text.includes('border') || text.includes('asylum') || text.includes('deportation')) return 'immigration_border';
+    if (text.includes('climate') || text.includes('energy') || text.includes('environment') || text.includes('oil') || text.includes('gas') || text.includes('drilling')) return 'environment_energy';
+    if (text.includes('health') || text.includes('medicare') || text.includes('medicaid') || text.includes('hospital')) return 'health_care';
+    if (text.includes('defense') || text.includes('military') || text.includes('foreign') || text.includes('security') || text.includes('nato') || text.includes('sanctions')) return 'natsec_foreign';
+    if (text.includes('trade') || text.includes('tariff') || text.includes('tax') || text.includes('economy') || text.includes('jobs') || text.includes('inflation')) return 'economy_jobs_taxes';
+    if (text.includes('education') || text.includes('school') || text.includes('student')) return 'education';
+    if (text.includes('court') || text.includes('judicial') || text.includes('civil rights') || text.includes('voting') || text.includes('justice')) return 'justice_civil_rights_voting';
+    if (text.includes('technology') || text.includes('data') || text.includes('privacy') || text.includes('ai') || text.includes('cyber')) return 'technology_data_privacy';
+    if (text.includes('infrastructure') || text.includes('housing') || text.includes('transport') || text.includes('highway') || text.includes('bridge')) return 'infra_housing_transport';
+
+    return 'gov_ops_workforce';
 }
 
 // Calculate impact score
