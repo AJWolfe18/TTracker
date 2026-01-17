@@ -132,6 +132,40 @@ scotus_cases (
 
 ---
 
+## PROD Deployment Checklist
+
+Track all files/migrations needed to deploy SCOTUS feature to production.
+
+### Files Ready (created in TEST)
+- [x] `scripts/enrichment/scotus-gpt-prompt.js` - System prompt, validation
+- [x] `scripts/enrichment/scotus-variation-pools.js` - Anti-repetition pools
+- [x] `docs/features/scotus-tracker/prd.md` - This PRD
+- [x] `docs/features/scotus-tracker/field-mapping.md` - CourtListener field mapping
+
+### Files To Create
+- [ ] `migrations/050-scotus-cases.sql` - Database schema
+- [ ] `scripts/scotus/fetch-cases.js` - CourtListener fetch worker (or edge function)
+- [ ] `scripts/scotus/enrich-cases.js` - GPT enrichment worker
+- [ ] UI components (TBD - may reuse existing story card pattern)
+
+### Secrets/Config
+- [ ] `COURTLISTENER_API_TOKEN` - GitHub secret (TEST + PROD)
+- [ ] Budget table entry for SCOTUS enrichment spending
+
+### Edge Functions (if applicable)
+- [ ] TBD based on architecture decision (inline script vs edge function)
+
+### Migration Order
+1. Apply migration 050 first (creates table)
+2. Deploy enrichment scripts
+3. Trigger initial fetch
+4. Verify data in TEST
+5. Cherry-pick to PROD branch
+6. Create PR, run AI review
+7. Merge and deploy
+
+---
+
 ## References
 
 - CourtListener API: https://www.courtlistener.com/api/
