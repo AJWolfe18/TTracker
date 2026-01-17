@@ -101,3 +101,6 @@ tmpclaude-*
 
 # Environment marker (should only exist on test branch, never main)
 TEST_BRANCH_MARKER.md
+
+# Test environment marker files (should only exist on test branch)
+TEST_FILES_DO_NOT_DEPLOY.md
