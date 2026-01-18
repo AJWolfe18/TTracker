@@ -71,14 +71,40 @@
     other: { label: 'Other', color: '#6b7280', icon: '•' }
   };
 
-  // Corruption level spicy labels (5 = most corrupt, 1 = least)
-  const CORRUPTION_LABELS = {
-    5: { label: 'Paid-to-Play', color: '#7f1d1d' },
-    4: { label: 'Loyalty Reward', color: '#dc2626' },
-    3: { label: 'Swamp Royalty', color: '#ea580c' },
-    2: { label: 'Celebrity Request', color: '#ca8a04' },
-    1: { label: 'Broken Clock', color: '#16a34a' }
+  // Corruption level labels - populated from tone-system.json
+  // Fallback values match JSON exactly (no user-visible difference if fetch is slow)
+  // TODO: Move to React state/context if labels need to differ from fallback
+  let CORRUPTION_LABELS = {
+    5: { label: 'Pay 2 Win', color: '#dc2626' },
+    4: { label: 'Cronies-in-Chief', color: '#ea580c' },
+    3: { label: 'The Party Favor', color: '#ca8a04' },
+    2: { label: 'The PR Stunt', color: '#3b82f6' },
+    1: { label: 'The Ego Discount', color: '#06b6d4' },
+    0: { label: 'Actual Mercy', color: '#16a34a' }
   };
+
+  // Load tone system from shared JSON (single source of truth)
+  fetch('/shared/tone-system.json')
+    .then(res => res.json())
+    .then(toneSystem => {
+      const pardonsLabels = toneSystem.labels?.pardons || {};
+      const colors = toneSystem.colors || {};
+
+      // Build CORRUPTION_LABELS from JSON
+      for (let level = 0; level <= 5; level++) {
+        const levelStr = String(level);
+        if (pardonsLabels[levelStr] && colors[levelStr]) {
+          CORRUPTION_LABELS[level] = {
+            label: pardonsLabels[levelStr].spicy,
+            color: colors[levelStr].border
+          };
+        }
+      }
+      console.log('[Pardons] Loaded tone system from JSON');
+    })
+    .catch(err => {
+      console.warn('[Pardons] Failed to load tone-system.json, using fallback labels:', err.message);
+    });
 
   // ===========================================
   // UTILITIES
@@ -301,7 +327,7 @@
   // Spicy Status - badge style like severity badges on other tabs
   function SpicyStatus({ level }) {
     // Show "Not Rated" for null/invalid levels to maintain consistent card layout
-    if (!level || level < 1 || level > 5) {
+    if (level === null || level === undefined || level < 0 || level > 5) {
       return React.createElement('span', {
         className: 'tt-spicy-badge',
         style: { backgroundColor: '#6b7280' },
@@ -314,7 +340,7 @@
     return React.createElement('span', {
       className: 'tt-spicy-badge',
       style: { backgroundColor: config.color },
-      title: `Corruption Level: ${level}/5`
+      title: `Corruption Level: ${level} (0=Mercy, 5=Pay2Win)`
     }, config.label);
   }
 

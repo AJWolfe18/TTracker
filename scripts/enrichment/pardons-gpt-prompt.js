@@ -1,25 +1,32 @@
 /**
- * GPT Enrichment Prompt for Pardons (ADO-246)
+ * GPT Enrichment Prompt for Pardons (ADO-246, ADO-269)
  *
  * This prompt transforms Perplexity research data into reader-facing copy.
  * Uses corruption_level to set tone intensity (profanity at 4-5 only).
  *
  * Dependencies:
+ *   - Shared tone system: public/shared/tone-system.json (single source of truth)
  *   - Business logic: docs/architecture/business-logic-mapping.md
  *   - Variation pools: scripts/enrichment/pardons-variation-pools.js
  */
 
+import { SEVERITY_LABELS, getEditorialVoice } from '../shared/severity-config.js';
+import { isProfanityAllowed, getToneCalibration } from '../shared/profanity-rules.js';
+import { getBannedOpeningsForPrompt } from '../shared/banned-openings.js';
+
 // ============================================================================
-// CORRUPTION LABELS (for GPT context)
+// CORRUPTION LABELS (from shared tone system)
 // ============================================================================
 
-export const CORRUPTION_LABELS = {
-  5: { spicy: 'Paid-to-Play', neutral: 'Direct Financial Connection' },
-  4: { spicy: 'Loyalty Reward', neutral: 'Service to Trump' },
-  3: { spicy: 'Swamp Royalty', neutral: 'Swamp Access' },
-  2: { spicy: 'Celebrity Request', neutral: 'Public Campaign' },
-  1: { spicy: 'Broken Clock', neutral: 'Legitimate Clemency' }
-};
+// Re-export for backwards compatibility
+export const CORRUPTION_LABELS = Object.fromEntries(
+  Object.entries(SEVERITY_LABELS.pardons)
+    .filter(([key]) => !key.startsWith('_'))
+    .map(([level, labels]) => [level, { spicy: labels.spicy, neutral: labels.neutral }])
+);
+
+// Editorial voice for pardons
+const { voice: PARDONS_VOICE, framing: PARDONS_FRAMING } = getEditorialVoice('pardons');
 
 export const CONNECTION_TYPE_LABELS = {
   major_donor: 'Documented campaign/PAC/fund donor',
@@ -38,30 +45,43 @@ export const CONNECTION_TYPE_LABELS = {
 };
 
 // ============================================================================
-// PROFANITY RULES
+// PROFANITY RULES (from shared tone system)
 // ============================================================================
 
+// Re-export for backwards compatibility - uses shared isProfanityAllowed()
+export { isProfanityAllowed };
+
+// Legacy export format for any code expecting the object
 export const PROFANITY_ALLOWED = {
-  5: true,   // Paid-to-Play - full spice allowed
-  4: true,   // Loyalty Reward - allowed (crimes FOR Trump deserve anger)
-  3: false,  // Swamp Royalty - sardonic, not profane
-  2: false,  // Celebrity Request - measured critique
-  1: false   // Broken Clock - respectful acknowledgment (rare legitimate cases)
+  5: isProfanityAllowed(5),
+  4: isProfanityAllowed(4),
+  3: isProfanityAllowed(3),
+  2: isProfanityAllowed(2),
+  1: isProfanityAllowed(1),
+  0: isProfanityAllowed(0)
 };
 
 // ============================================================================
-// SYSTEM PROMPT
+// SYSTEM PROMPT (with "The Transaction" voice)
 // ============================================================================
+
+// Build banned openings list from shared module
+const BANNED_OPENINGS_TEXT = getBannedOpeningsForPrompt();
 
 export const SYSTEM_PROMPT = `You are writing for TrumpyTracker, an accountability site tracking Trump administration pardons.
 
-Your job: Transform research data into sharp, factual, reader-facing copy.
+EDITORIAL VOICE: "${PARDONS_VOICE}"
+Your framing: ${PARDONS_FRAMING}
 
-TONE CALIBRATION:
-- Levels 5 & 4: Profanity allowed. Be angry. The corruption is documented.
-- Level 3: Sardonic and pointed, but no swearing. Skeptical voice.
-- Level 2: Measured critique of the system. Don't attack the individual.
-- Level 1: Acknowledge legitimacy. Can express cautious approval. Contrast with corrupt pardons.
+Your job: Transform research data into sharp, factual, reader-facing copy that exposes the transactional nature of these pardons.
+
+TONE CALIBRATION BY LEVEL:
+${getToneCalibration(5)}
+${getToneCalibration(4)}
+${getToneCalibration(3)}
+${getToneCalibration(2)}
+${getToneCalibration(1)}
+${getToneCalibration(0)}
 
 CORE RULES:
 1. Every claim must be sourced from the provided research data
@@ -72,13 +92,17 @@ CORE RULES:
 6. Timeline events should reinforce the narrative (donations before pardon, etc.)
 7. For group pardons, focus on the signal/message, not individuals
 8. For Jan 6 / fake electors: emphasize impunity and future deterrence effects
+9. Frame as transactions, not mercy - who paid what, who benefited how
+
+BANNED OPENINGS (never start with these):
+${BANNED_OPENINGS_TEXT}
 
 WHAT TO AVOID:
 - Speculation beyond what's documented
 - "What we don't know" framing (just omit missing info)
 - Repeating the same opening pattern across pardons
 - Listing facts without connecting them to corruption narrative
-- Profanity at levels 1-3
+- Profanity at levels 0-3
 
 OUTPUT FORMAT (JSON):
 {

@@ -263,7 +263,7 @@ After all 4 stories complete:
 
 ## STATUS
 
-- **ADO-269 (Pardons)**: ✅ Phase 1 COMPLETE (JSON architecture). Ready for Phase 2.
+- **ADO-269 (Pardons)**: ✅ COMPLETE (Phase 1 + Phase 2)
 - **ADO-270 (Stories)**: Not started. Shared module now available.
 - **ADO-271 (EOs)**: Not started. Shared module now available.
 - **ADO-272 (SCOTUS)**: Not started. Shared module now available.
@@ -276,4 +276,12 @@ After all 4 stories complete:
 - `scripts/shared/banned-openings.js` - Node wrapper with checkForBannedOpening()
 - `scripts/shared/profanity-rules.js` - Node wrapper with isProfanityAllowed(), getToneCalibration()
 
-**Next Action**: Execute ADO-269 Phase 2 (wire pardons to shared module)
+**Completed (Phase 2 - Pardons Wiring):**
+- `scripts/enrichment/pardons-gpt-prompt.js` - Now imports from shared module
+  - "The Transaction" voice framing added to SYSTEM_PROMPT
+  - Banned openings injected from shared
+  - Tone calibration per level injected from shared
+- `scripts/enrichment/pardons-variation-pools.js` - Added Level 0 "mercy" pool (suspicious celebration)
+- `public/pardons-app.js` - Now fetches labels from tone-system.json
+
+**Next Action**: ADO-270 (Stories) or ADO-272 (SCOTUS alignment)

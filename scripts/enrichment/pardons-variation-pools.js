@@ -67,7 +67,7 @@ export const OPENING_PATTERNS = {
     { id: 'spotlight', instruction: "Spotlight effect: 'Fame is access. Access is outcomes. Here's the proof.'" }
   ],
 
-  // Level 1: Legitimate
+  // Level 1: Legitimate (cautious skepticism)
   legitimate: [
     { id: 'broken-clock', instruction: "Broken clock: 'Even a broken clock is right twice a day. This is one of those times.'" },
     { id: 'credit-due', instruction: "Credit due: 'Credit where it's due: this one actually makes sense.'" },
@@ -75,6 +75,16 @@ export const OPENING_PATTERNS = {
     { id: 'exception', instruction: "Exception: 'The exception that proves the rule. This pardon is defensible.'" },
     { id: 'contrast', instruction: "Contrast setup: 'Unlike the donor pardons, this one has actual merit.'" },
     { id: 'rare', instruction: "Rare legitimacy: 'A rare case where clemency was used for its intended purpose.'" }
+  ],
+
+  // Level 0: Actual mercy (suspicious celebration)
+  mercy: [
+    { id: 'system-worked', instruction: "Suspicious celebration: 'Don't get used to it, but the system actually worked here.'" },
+    { id: 'swamp-drained', instruction: "Rare win: 'The swamp accidentally drained an inch today.'" },
+    { id: 'checked-twice', instruction: "Double-take: 'We checked the math twice — this is actually... good news?'" },
+    { id: 'genuine-case', instruction: "Genuine merit: 'This is what mercy looks like when it's not for sale.'" },
+    { id: 'baseline', instruction: "Baseline restored: 'A pardon based on the facts, not the checkbook. Remarkable.'" },
+    { id: 'outlier', instruction: "Outlier framing: 'The outlier that reminds us what the pardon power was designed for.'" }
   ]
 };
 
@@ -123,12 +133,15 @@ export const CLOSING_APPROACHES = [
 
 /**
  * Map corruption_level and connection_type to appropriate pool
- * @param {number} level - Corruption level 1-5
+ * @param {number} level - Corruption level 0-5
  * @param {string} connectionType - primary_connection_type from research
  * @returns {string} Pool type key
  */
 export function getPoolType(level, connectionType) {
-  // Level 1 always uses legitimate pool
+  // Level 0 uses mercy pool (suspicious celebration)
+  if (level === 0) return 'mercy';
+
+  // Level 1 uses legitimate pool (cautious skepticism)
   if (level === 1) return 'legitimate';
 
   // Level 2 uses celebrity pool
