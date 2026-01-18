@@ -165,26 +165,33 @@ DATE RULE:
 TIMELINE REQUIREMENT:
 - ALWAYS include a "pardon_granted" event
 
-CORRUPTION LEVEL GUIDE - Answer: WHY did Trump pardon this person?
-5 = "Paid-to-Play" - Documented $$$ (donations, business deals, paid access, Mar-a-Lago fees for access)
-4 = "Loyalty Reward" - Did something FOR Trump (Jan 6 defendants, fake electors, refused to flip, Rudy types, crimes to help Trump)
-3 = "Swamp Royalty" - Benefited from the swamp (rich unknowns, "weaponized DOJ" claims, political allies, lobbyist connections)
-2 = "Celebrity Request" - Famous person advocated publicly, no deeper Trump connection
-1 = "Broken Clock" - Actually legitimate clemency (RARE - bipartisan support, criminal justice reform, disproportionate sentence)
+CORRUPTION LEVEL GUIDE - Answer: What MECHANISM got them the pardon?
 
-KEY PRINCIPLE: Score based on WHY Trump pardoned them, not whether you found a personal connection.
-- Jan 6 defendants = Level 4 (crimes FOR Trump, even if no personal relationship)
-- Fake electors = Level 4 (helped Trump's coup attempt)
-- Rich person you can't find connection for = Level 3 (swamp access, not "no connection")
-- "Weaponized DOJ" framing = Level 3 (that's a swamp excuse, not legitimacy)
-- Level 1 should be RARE - reserved for cases with bipartisan support or clear reform merit
+| Level | Label | Mechanism | Question |
+|-------|-------|-----------|----------|
+| 5 | Pay 2 Win | MONEY | Did they pay? (donations, PAC, legal fund, inaugural) |
+| 4 | Cronies-in-Chief | DIRECT | Know Trump directly? (inner circle, family, staff, Rudy, Meadows) |
+| 3 | The Party Favor | NETWORK | Know someone who knows Trump? (MAGA world, GOP allies, Alice Johnson) |
+| 2 | The PR Stunt | FAME | Are they famous? (celebrity, media attention) |
+| 1 | The Ego Discount | FLATTERY | Did they just suck up? (DM'd Trump, no other connection) |
+| 0 | Actual Mercy | MERIT | Genuinely deserved? (EXTREMELY RARE - no Trump world ties) |
+
+KEY PRINCIPLE: Score based on HOW they got the pardon, not "why."
+- Direct Trump relationship (worked for him, family) = Level 4
+- Indirect connection (MAGA celebrity, GOP ally, senators advocated) = Level 3
+- If Alice Marie Johnson advocated = Level 3 (she's Trump's pardon ambassador)
+- Rich person, no connection found = Level 3 (wealthy_unknown)
+- Celebrity with no network = Level 2
+- Pure flattery only = Level 1 (rare)
+- Level 0 = probably empty
 
 CRITICAL SCORING RULES:
-- Jan 6 / fake electors / election crimes = MINIMUM Level 4 (they committed crimes FOR Trump)
-- Unknown wealthy person = Level 3, connection_type = "wealthy_unknown" (not Level 1)
-- "Weaponized DOJ" or "political persecution" claims = Level 3 (swamp excuse)
-- Default when unclear = Level 3 (NOT Level 1)
-- Level 1 requires POSITIVE evidence of legitimacy (bipartisan support, reform advocacy)
+- Money (donations, PAC, inaugural fund) = Level 5
+- Inner circle / direct Trump contact = Level 4 (family, staff, lawyers)
+- MAGA world / GOP network / friend of friend = Level 3 (THIS IS THE DEFAULT)
+- Celebrity with no network connection = Level 2
+- Pure flattery, no other mechanism = Level 1 (RARE)
+- True merit with NO Trump world connection = Level 0 (EXTREMELY RARE, probably empty)
 
 RULES:
 - receipts_timeline must be an array (empty [] if no events found)

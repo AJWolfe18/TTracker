@@ -284,4 +284,4 @@ After all 4 stories complete:
 - `scripts/enrichment/pardons-variation-pools.js` - Added Level 0 "mercy" pool (suspicious celebration)
 - `public/pardons-app.js` - Now fetches labels from tone-system.json
 
-**Next Action**: ADO-270 (Stories) or ADO-272 (SCOTUS alignment)
+**Next Action**: Execute ADO-270 (Stories) - create variation pools, wire to shared module

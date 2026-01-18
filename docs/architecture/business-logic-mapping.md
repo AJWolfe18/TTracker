@@ -419,7 +419,7 @@ const FEATURE_FLAGS = {
 #### Database Storage
 ```sql
 -- pardons table
-corruption_level: 1 | 2 | 3 | 4 | 5
+corruption_level: 0 | 1 | 2 | 3 | 4 | 5
 primary_connection_type: 'major_donor' | 'political_ally' | 'family' |
   'business_associate' | 'celebrity' | 'jan6_defendant' | 'fake_electors' |
   'mar_a_lago_vip' | 'campaign_staff' | 'wealthy_unknown' | 'no_connection'
@@ -428,24 +428,36 @@ primary_connection_type: 'major_donor' | 'political_ally' | 'family' |
 #### Spicy Labels (In-App Display)
 ```javascript
 const CORRUPTION_LABELS_SPICY = {
-  5: "Paid-to-Play 💰",
-  4: "Loyalty Reward 🎖️",
-  3: "Swamp Royalty 👑",
-  2: "Celebrity Request ⭐",
-  1: "Broken Clock 🔧"
+  5: "Pay 2 Win 🔴",
+  4: "Cronies-in-Chief 🟠",
+  3: "The Party Favor 🟡",
+  2: "The PR Stunt 🔵",
+  1: "The Ego Discount 💎",
+  0: "Actual Mercy 🟢"
 };
 ```
 
 #### Neutral Labels (For Exports/Sharing)
 ```javascript
 const CORRUPTION_LABELS_NEUTRAL = {
-  5: "Direct Financial Connection",
-  4: "Service to Trump",
-  3: "Swamp Access",
-  2: "Public Campaign",
-  1: "Legitimate Clemency"
+  5: "Transaction",
+  4: "Direct Relationship",
+  3: "Network Connection",
+  2: "Celebrity/Fame",
+  1: "Flattery",
+  0: "Merit-Based"
 };
 ```
+
+#### Mechanism Summary
+| Level | Label | Mechanism | The Question |
+|-------|-------|-----------|--------------|
+| 5 | Pay 2 Win | 💰 MONEY | Did they pay? |
+| 4 | Cronies-in-Chief | 👥 RELATIONSHIP | Do they know Trump directly? |
+| 3 | The Party Favor | 🔗 NETWORK | Do they know someone who knows Trump? |
+| 2 | The PR Stunt | 📺 FAME | Are they famous? |
+| 1 | The Ego Discount | 🪞 FLATTERY | Did they just suck up? |
+| 0 | Actual Mercy | ⚖️ MERIT | Is it genuinely deserved? (rare) |
 
 #### Color Mapping
 ```javascript
@@ -453,76 +465,117 @@ const CORRUPTION_COLORS = {
   5: { bg: "#fee2e2", text: "#7f1d1d", border: "#dc2626" }, // red
   4: { bg: "#fed7aa", text: "#7c2d12", border: "#ea580c" }, // orange
   3: { bg: "#fef3c7", text: "#713f12", border: "#f59e0b" }, // yellow
-  2: { bg: "#e0e7ff", text: "#3730a3", border: "#6366f1" }, // indigo
-  1: { bg: "#d1fae5", text: "#064e3b", border: "#10b981" }  // green
+  2: { bg: "#e0e7ff", text: "#3730a3", border: "#6366f1" }, // blue
+  1: { bg: "#cffafe", text: "#155e75", border: "#06b6d4" }, // cyan
+  0: { bg: "#d1fae5", text: "#064e3b", border: "#10b981" }  // green
 };
 ```
 
 ### Corruption Level Determination Rules
 
-#### Level 5: Paid-to-Play
+#### Level 5: Pay 2 Win (💰 MONEY)
+**The Question:** Did they pay?
+
 **Triggers:**
 - Documented donations to Trump campaign/PAC/legal fund/inauguration
 - Direct financial relationship (business deals, loans)
 - Payment timing correlates with pardon timing
 - FEC records show pattern
-- Mar-a-Lago membership with clear access-for-benefit pattern
+- Mar-a-Lago membership fees as access payment
 
 **Evidence types:** FEC filings, inauguration fund records, business contracts, membership records
 
-#### Level 4: Loyalty Reward
+**Example:** Imaad Zuberi - $900K to Trump inaugural fund
+
+**Tone rule:** Profanity allowed. This is straight-up corruption.
+
+#### Level 4: Cronies-in-Chief (👥 DIRECT RELATIONSHIP)
+**The Question:** Do they know Trump directly?
+
 **Triggers:**
-- Committed crimes FOR Trump (Jan 6 defendants, fake electors)
-- Refused to flip/testify against Trump
-- Inner circle who served Trump (Rudy Giuliani, cabinet members)
-- Family members
-- Campaign staff who took legal risk for Trump
-- Could testify against Trump (pardon = potential silence)
+- Inner circle who worked directly for Trump (Rudy Giuliani, Mark Meadows)
+- Family members or extended family connections
+- Campaign staff with direct Trump contact
+- Cabinet members and appointees
+- Personal lawyers and advisors
+- Co-conspirators in legal matters
 
-**Evidence types:** Jan 6 charges, fake elector indictments, cooperation refusals, employment records
+**Evidence types:** Employment records, court filings, public appearances with Trump
 
-**Tone rule:** Profanity allowed. These people committed crimes to help Trump or refused to hold him accountable.
+**Example:** Rudy Giuliani - Trump's personal lawyer
 
-#### Level 3: Swamp Royalty
+**Tone rule:** Profanity allowed. These are Trump's people.
+
+#### Level 3: The Party Favor (🔗 NETWORK/INDIRECT)
+**The Question:** Do they know someone who knows Trump?
+
 **Triggers:**
-- Rich unknown person with no documented Trump connection (wealthy_unknown)
+- MAGA world celebrities (never met Trump but aligned)
+- GOP allies and Republican politicians
+- "Friends of friends" - one degree removed
+- Alice Marie Johnson advocated (she's in Trump's orbit)
+- Senators or politicians requested pardon
 - "Weaponized DOJ" or "political persecution" claims
-- Political ally (endorsed Trump, fundraised, etc.)
-- Lobbyist or industry connection
-- Pardon covers up related wrongdoing
-- Benefits Republican political interests
-- Standard political favor-trading
-- Campaign promises to pardon in exchange for votes
+- Lobbyist or industry connections
+- Rich unknowns with no documented direct connection
 
-**Evidence types:** Endorsements, campaign appearances, lobbying records, wealth indicators
+**Evidence types:** Endorsements, political affiliation, advocacy letters from Trump allies
 
-**Note:** This is the DEFAULT when no clear reason is found. Rich people don't get pardons for no reason.
+**Example:** Tina Peters - MAGA celebrity, Trump called her "Patriot" but never met her
 
-#### Level 2: Celebrity Request
+**Note:** This is the DEFAULT when someone has ANY connection to Trump's world. If Alice Johnson advocated, that's Level 3 (not Level 0).
+
+**Tone rule:** Sardonic, no profanity.
+
+#### Level 2: The PR Stunt (📺 FAME)
+**The Question:** Are they famous?
+
 **Triggers:**
-- High-profile advocacy campaign
-- Media attention drove the pardon
-- No direct Trump connection found
-- Legitimate policy argument may exist
-- Fame provided access that others don't have
+- Celebrity with media platform
+- High-profile advocacy campaign drove the pardon
+- "Kim Kardashian style" cases
+- Media attention was the mechanism
+- No network connection, just fame
 
 **Evidence types:** Media coverage, advocacy campaigns, public statements
 
-**Tone rule:** No profanity. Critique the system, not the individual.
+**Example:** Darryl Strawberry - Baseball legend, no corruption angle
 
-#### Level 1: Broken Clock (RARE)
+**Tone rule:** No profanity. Critique the system that favors famous people.
+
+#### Level 1: The Ego Discount (🪞 FLATTERY)
+**The Question:** Did they just suck up?
+
 **Triggers:**
-- Criminal justice reform case with bipartisan support
+- No money, no relationship, no network, no fame
+- Appealed directly to Trump's ego (DM'd him, public flattery)
+- "Good people" who praised Trump
+- Small gestures that made Trump feel good
+- Somehow got through purely by kissing ass
+
+**Evidence types:** Social media posts, public statements praising Trump
+
+**Example:** Cade Cothren - DM'd Trump on Twitter, no prior connection
+
+**Note:** This is RARE. Most pardons have some network connection (Level 3+).
+
+**Tone rule:** No profanity. Note the absurdity.
+
+#### Level 0: Actual Mercy (⚖️ MERIT)
+**The Question:** Is it genuinely deserved?
+
+**Triggers:**
+- Criminal justice reform case with GENUINE bipartisan support
 - Disproportionate original sentence (documented)
-- Reform organizations actively advocated
+- Reform organizations actively advocated (NOT Trump allies)
 - Actually defensible on merits
-- REQUIRES positive evidence of legitimacy
+- Would have gotten clemency from ANY president
 
-**Evidence types:** Sentencing records, bipartisan advocacy, reform organization support
+**Evidence types:** Sentencing records, bipartisan advocacy from non-Trump sources
 
-**Tone rule:** Acknowledge legitimacy. Can express cautious approval. Contrast with corrupt pardons.
+**CRITICAL:** Level 0 should be EXTREMELY RARE or empty. If Alice Marie Johnson (Trump's pardon ambassador) advocated, that's Level 3, not Level 0. True merit-based pardons require NO connection to Trump's world.
 
-**CRITICAL:** Level 1 should be RARE. Do not default here. Requires POSITIVE evidence of legitimacy, not just "no connection found."
+**Tone rule:** Acknowledge legitimacy. Can express approval.
 
 ### Connection Type Taxonomy
 
@@ -579,11 +632,12 @@ Frame as categorical decision and signal to future actors.
 
 ```javascript
 const PROFANITY_ALLOWED = {
-  5: true,   // Paid-to-Play - full spice
-  4: true,   // Loyalty Reward - allowed (crimes FOR Trump)
-  3: false,  // Swamp Royalty - sardonic, not profane
-  2: false,  // Celebrity Request - measured
-  1: false   // Broken Clock - respectful acknowledgment
+  5: true,   // Pay 2 Win - full spice, this is corruption
+  4: true,   // Cronies-in-Chief - allowed, these are Trump's people
+  3: false,  // The Party Favor - sardonic, not profane
+  2: false,  // The PR Stunt - measured critique of system
+  1: false,  // The Ego Discount - note the absurdity
+  0: false   // Actual Mercy - respectful acknowledgment
 };
 ```
 
