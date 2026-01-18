@@ -1,55 +1,33 @@
 /**
- * Shared Banned Openings
+ * Banned Openings - Node.js wrapper
  *
- * Master list of cliched/overused phrases that AI summaries should NOT start with.
- * Used across all content types: Pardons, Stories, EOs, SCOTUS
- *
- * These phrases either:
- * - Sound like generic AI output ("In a shocking move...")
- * - Are lazy filler ("So, " / "Well, ")
- * - Show false outrage that numbs readers ("Once again...")
+ * Loads from public/shared/tone-system.json (single source of truth)
+ * Provides helper functions for backend scripts
  */
 
-export const BANNED_OPENINGS = [
-  // Generic outrage openers
-  "This is outrageous",
-  "In a shocking move",
-  "Once again",
-  "It's no surprise",
-  "Make no mistake",
-  "Let that sink in",
+import { readFileSync, existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-  // Lazy filler openers
-  "Guess what?",
-  "So, ",
-  "Well, ",
-  "Look, ",
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-  // Cliched dramatic openers
-  "In a stunning",
-  "In a brazen",
-  "Shocking absolutely no one",
-  "In the latest move",
-  "In yet another",
+// Load from JSON - single source of truth
+const jsonPath = join(__dirname, '../../public/shared/tone-system.json');
 
-  // Empty phrases
-  "It remains to be seen",
-  "Crucially",
-  "Interestingly",
-  "Notably",
+if (!existsSync(jsonPath)) {
+  throw new Error(`Tone system JSON not found at: ${jsonPath}`);
+}
 
-  // Tired political commentary
-  "The walls are closing in",
-  "This is a bombshell",
-  "Breaking:",
-  "BREAKING:",
-  "Just in:",
+let toneSystem;
+try {
+  toneSystem = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+} catch (error) {
+  throw new Error(`Failed to parse tone-system.json: ${error.message}`);
+}
 
-  // Passive voice starters
-  "It has been reported",
-  "It was announced",
-  "It appears that"
-];
+// Export data from JSON
+export const BANNED_OPENINGS = toneSystem.bannedOpenings;
 
 /**
  * Check if text starts with any banned opening
@@ -63,7 +41,7 @@ export function checkForBannedOpening(text) {
 
   const normalized = text.trim().toLowerCase();
 
-  for (const banned of BANNED_OPENINGS) {
+  for (const banned of toneSystem.bannedOpenings) {
     if (normalized.startsWith(banned.toLowerCase())) {
       return { banned: true, match: banned };
     }
@@ -77,5 +55,5 @@ export function checkForBannedOpening(text) {
  * @returns {string}
  */
 export function getBannedOpeningsForPrompt() {
-  return BANNED_OPENINGS.map(b => `- "${b}"`).join('\n');
+  return toneSystem.bannedOpenings.map(b => `- "${b}"`).join('\n');
 }

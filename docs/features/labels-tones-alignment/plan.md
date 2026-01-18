@@ -46,16 +46,23 @@ Each content type has a distinct persona. This prevents "Generic Angry News" and
 
 ---
 
-## Shared Infrastructure (scripts/shared/)
+## Shared Infrastructure
 
-**What's COMMON across all content types:**
+**Architecture:** JSON single source of truth + Node.js wrappers
 
 ```
+public/shared/
+└── tone-system.json      → Single source of truth (browser fetch + Node read)
+
 scripts/shared/
-├── severity-config.js    → 0-5 numeric scale, colors, emojis
-├── banned-openings.js    → Master list of 15+ banned phrases
-└── profanity-rules.js    → { 5: true, 4: true, 3: false, 2: false, 1: false, 0: false }
+├── severity-config.js    → Node wrapper with helper functions
+├── banned-openings.js    → Node wrapper with checker function
+└── profanity-rules.js    → Node wrapper with tone calibration
 ```
+
+**How consumers use it:**
+- **Browser (frontend):** `fetch('/shared/tone-system.json')` then use data directly
+- **Node (backend scripts):** `import { getSeverityDisplay } from './scripts/shared/severity-config.js'`
 
 ### Color Scheme (Unified)
 ```javascript
@@ -256,14 +263,17 @@ After all 4 stories complete:
 
 ## STATUS
 
-- **ADO-269 (Pardons)**: ✅ Phase 1 COMPLETE (shared module created). Ready for Phase 2.
+- **ADO-269 (Pardons)**: ✅ Phase 1 COMPLETE (JSON architecture). Ready for Phase 2.
 - **ADO-270 (Stories)**: Not started. Shared module now available.
 - **ADO-271 (EOs)**: Not started. Shared module now available.
 - **ADO-272 (SCOTUS)**: Not started. Shared module now available.
 
-**Completed:**
-- `scripts/shared/severity-config.js` - Colors, labels (per content type), helper functions
-- `scripts/shared/banned-openings.js` - 27 banned phrases, checker function
-- `scripts/shared/profanity-rules.js` - Level 4-5 only, tone calibration
+**Completed (Phase 1 - Revised):**
+- `public/shared/tone-system.json` - Single source of truth for all content types
+  - Colors (0-5), profanity rules, tone calibration, banned openings
+  - Labels per content type (pardons/stories/eos/scotus) with voice + framing
+- `scripts/shared/severity-config.js` - Node wrapper with getSeverityDisplay(), getEditorialVoice()
+- `scripts/shared/banned-openings.js` - Node wrapper with checkForBannedOpening()
+- `scripts/shared/profanity-rules.js` - Node wrapper with isProfanityAllowed(), getToneCalibration()
 
 **Next Action**: Execute ADO-269 Phase 2 (wire pardons to shared module)

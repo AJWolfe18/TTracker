@@ -1,22 +1,34 @@
 /**
- * Shared Profanity Rules
+ * Profanity Rules - Node.js wrapper
  *
- * Controls when profanity is allowed based on severity level.
- * Consistent across all content types: Pardons, Stories, EOs, SCOTUS
- *
- * Philosophy:
- * - Levels 5-4: Constitutional crisis / criminal behavior deserves full intensity
- * - Levels 3-0: Sardonic or positive - profanity undermines the tone
+ * Loads from public/shared/tone-system.json (single source of truth)
+ * Provides helper functions for backend scripts
  */
 
-export const PROFANITY_ALLOWED = {
-  5: true,   // Full spice - constitutional crisis / corruption - "They actually fucking did it"
-  4: true,   // Allowed - criminal / crony / tyranny - anger is appropriate
-  3: false,  // Sardonic, no swearing - let absurdity speak
-  2: false,  // Measured critique - eye-roll energy
-  1: false,  // Cautious/surprised - credit where due
-  0: false   // Positive acknowledgment - suspicious celebration
-};
+import { readFileSync, existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load from JSON - single source of truth
+const jsonPath = join(__dirname, '../../public/shared/tone-system.json');
+
+if (!existsSync(jsonPath)) {
+  throw new Error(`Tone system JSON not found at: ${jsonPath}`);
+}
+
+let toneSystem;
+try {
+  toneSystem = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+} catch (error) {
+  throw new Error(`Failed to parse tone-system.json: ${error.message}`);
+}
+
+// Export data from JSON
+export const PROFANITY_ALLOWED = toneSystem.profanityAllowed;
+export const TONE_CALIBRATION = toneSystem.toneCalibration;
 
 /**
  * Check if profanity is allowed at a given severity level
@@ -24,8 +36,8 @@ export const PROFANITY_ALLOWED = {
  * @returns {boolean}
  */
 export function isProfanityAllowed(level) {
-  const validLevel = Math.max(0, Math.min(5, Math.round(level)));
-  return PROFANITY_ALLOWED[validLevel] === true;
+  const validLevel = Math.max(0, Math.min(5, Math.round(level || 0)));
+  return toneSystem.profanityAllowed[String(validLevel)] === true;
 }
 
 /**
@@ -46,15 +58,6 @@ export function getProfanityGuidance(level) {
  * @returns {string}
  */
 export function getToneCalibration(level) {
-  const tones = {
-    5: "Level 5 - ALARM BELLS: Cold fury, prosecutorial. Profanity allowed for INCREDULITY. Example: 'They actually fucking did it.'",
-    4: "Level 4 - ANGRY ACCOUNTABILITY: Suspicious, pointed. Name names, focus on victims and beneficiaries. Profanity allowed.",
-    3: "Level 3 - SARDONIC CRITIQUE: Weary, 'seen this before' energy. Dark humor, let absurdity speak. NO profanity.",
-    2: "Level 2 - EYE-ROLL: 'Lazy employees' energy. Measured critique of system dysfunction. NO profanity.",
-    1: "Level 1 - CAUTIOUS SKEPTICISM: Credit where due, but flag the asterisk. 'Read the limiting language.' NO profanity.",
-    0: "Level 0 - SUSPICIOUS CELEBRATION: Genuine disbelief the system worked. 'Don't get used to it.' NO profanity."
-  };
-
-  const validLevel = Math.max(0, Math.min(5, Math.round(level)));
-  return tones[validLevel];
+  const validLevel = Math.max(0, Math.min(5, Math.round(level || 0)));
+  return toneSystem.toneCalibration[String(validLevel)] || `Level ${validLevel}`;
 }
