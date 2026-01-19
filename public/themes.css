@@ -86,6 +86,13 @@
   --severity-minor-bg: #16a34a;
   --severity-minor-text: #ffffff;
   --severity-minor-glow: none;
+  /* ADO-270: New alarm levels for 0-1 */
+  --severity-low-bg: #06b6d4;
+  --severity-low-text: #ffffff;
+  --severity-low-glow: none;
+  --severity-positive-bg: #10b981;
+  --severity-positive-text: #ffffff;
+  --severity-positive-glow: none;
 
   /* Pagination */
   --pagination-bg: #ffffff;
@@ -191,6 +198,13 @@
   --severity-minor-bg: #16a34a;
   --severity-minor-text: #ffffff;
   --severity-minor-glow: 0 1px 4px rgba(22, 163, 74, 0.3);
+  /* ADO-270: New alarm levels for 0-1 */
+  --severity-low-bg: #06b6d4;
+  --severity-low-text: #ffffff;
+  --severity-low-glow: 0 1px 4px rgba(6, 182, 212, 0.3);
+  --severity-positive-bg: #10b981;
+  --severity-positive-text: #ffffff;
+  --severity-positive-glow: 0 1px 4px rgba(16, 185, 129, 0.3);
 
   /* Pagination */
   --pagination-bg: rgba(31, 41, 55, 0.6);
@@ -687,6 +701,17 @@
   background: var(--severity-minor-bg);
   color: var(--severity-minor-text);
   box-shadow: var(--severity-minor-glow);
+}
+/* ADO-270: New alarm levels for 0-1 */
+.tt-severity[data-severity="low"] {
+  background: var(--severity-low-bg);
+  color: var(--severity-low-text);
+  box-shadow: var(--severity-low-glow);
+}
+.tt-severity[data-severity="positive"] {
+  background: var(--severity-positive-bg);
+  color: var(--severity-positive-text);
+  box-shadow: var(--severity-positive-glow);
 }
 
 /* Summary block */

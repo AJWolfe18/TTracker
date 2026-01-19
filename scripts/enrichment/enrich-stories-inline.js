@@ -2,13 +2,19 @@
  * Story enrichment for inline RSS pipeline.
  * SYSTEM_PROMPT imported from ./prompts.js (shared with job-queue-worker.js)
  *
- * TODO TTRC-267: Consider full shared enrichment module if worker
- * is kept for article.enrich operations.
+ * ADO-270: Updated to use variation pools and alarm_level (0-5)
  */
 
 import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from './prompts.js';
 import { normalizeEntities } from '../lib/entity-normalization.js';
+import {
+  getPoolKey,
+  selectVariation,
+  buildVariationInjection,
+  normalizeAlarmLevel,
+  alarmLevelToLegacySeverity
+} from './stories-variation-pools.js';
 
 // =====================================================================
 // Constants
@@ -162,21 +168,39 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   });
 
   // ========================================
-  // 2. OPENAI CALL (JSON MODE)
+  // 2. BUILD VARIATION INJECTION (ADO-270)
+  // ========================================
+  // Use story's existing category if available, otherwise default
+  // For first-time enrichment, category won't exist yet, so use 'default' pool
+  const existingCategory = story.category || 'other';
+  const poolKey = getPoolKey(existingCategory);
+
+  // Select random variation elements (alarm_level unknown on first pass, default to 3)
+  const variation = selectVariation(poolKey, 3, []);
+  const variationInjection = buildVariationInjection(variation, []);
+
+  // Inject variation into system prompt
+  const systemPromptWithVariation = SYSTEM_PROMPT.replace(
+    '{variation_injection}',
+    variationInjection
+  );
+
+  // ========================================
+  // 3. OPENAI CALL (JSON MODE)
   // ========================================
   const completion = await openaiClient.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPromptWithVariation },
       { role: 'user', content: userPayload }
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 500,
+    max_tokens: 600, // Slightly higher for alarm_level calibration
     temperature: 0.7
   });
 
   // ========================================
-  // 3. PARSE & VALIDATE JSON
+  // 4. PARSE & VALIDATE JSON
   // ========================================
   const text = completion.choices?.[0]?.message?.content || '{}';
   let obj;
@@ -191,10 +215,11 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   const summary_neutral = obj.summary_neutral?.trim();
   const summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
   const category_db = obj.category ? toDbCategory(obj.category) : null;
-  const severity = ['critical', 'severe', 'moderate', 'minor'].includes(obj.severity)
-    ? obj.severity
-    : 'moderate';
   const primary_actor = (obj.primary_actor || '').trim() || null;
+
+  // ADO-270: Extract alarm_level (0-5) and derive legacy severity
+  const alarm_level = normalizeAlarmLevel(obj.alarm_level);
+  const severity = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
 
   // TTRC-235: Extract entities and format correctly
   // TTRC-236: Normalize entity IDs for consistent merge detection
@@ -208,7 +233,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   }
 
   // ========================================
-  // 4. UPDATE STORY
+  // 5. UPDATE STORY
   // ========================================
   const { error: uErr } = await supabase
     .from('stories')
@@ -216,10 +241,11 @@ export async function enrichStory(story, { supabase, openaiClient }) {
       summary_neutral,
       summary_spicy,
       category: category_db,
-      severity,
+      alarm_level,           // ADO-270: numeric 0-5
+      severity,              // Legacy: derived from alarm_level, null for 0-1
       primary_actor,
-      top_entities,        // TTRC-235: text[] of canonical IDs
-      entity_counter,      // TTRC-235: jsonb {id: count}
+      top_entities,          // TTRC-235: text[] of canonical IDs
+      entity_counter,        // TTRC-235: jsonb {id: count}
       last_enriched_at: new Date().toISOString()
     })
     .eq('id', story_id);
@@ -227,7 +253,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   if (uErr) throw new Error(`Failed to update story: ${uErr.message}`);
 
   // ========================================
-  // 5. COST TRACKING
+  // 6. COST TRACKING
   // ========================================
   const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0 };
   const costInput = (usage.prompt_tokens / 1000) * 0.00015;  // GPT-4o-mini input
@@ -241,6 +267,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
     summary_neutral,
     summary_spicy,
     category: category_db,
+    alarm_level,
     severity,
     primary_actor
   };
