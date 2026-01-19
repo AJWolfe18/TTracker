@@ -264,7 +264,7 @@ After all 4 stories complete:
 ## STATUS
 
 - **ADO-269 (Pardons)**: ✅ COMPLETE (Phase 1 + Phase 2)
-- **ADO-270 (Stories)**: Not started. Shared module now available.
+- **ADO-270 (Stories)**: ✅ COMPLETE (All phases)
 - **ADO-271 (EOs)**: Not started. Shared module now available.
 - **ADO-272 (SCOTUS)**: Not started. Shared module now available.
 
@@ -284,4 +284,15 @@ After all 4 stories complete:
 - `scripts/enrichment/pardons-variation-pools.js` - Added Level 0 "mercy" pool (suspicious celebration)
 - `public/pardons-app.js` - Now fetches labels from tone-system.json
 
-**Next Action**: Execute ADO-270 (Stories) - create variation pools, wire to shared module
+**Completed (ADO-270 - Stories):**
+- `migrations/064_add_alarm_level_to_stories.sql` - Numeric 0-5 field with backfill from legacy severity
+- `scripts/enrichment/stories-variation-pools.js` - 4 pools (donor, state_power, democracy, default)
+  - Category-based pool selection via getPoolKey()
+  - Level-based opening patterns (0-5) in each pool
+  - "The Chaos" voice framing
+- `scripts/enrichment/prompts.js` SYSTEM_PROMPT - Tone calibration, variation injection, alarm_level output
+- `scripts/enrichment/enrich-stories-inline.js` - Imports pools, builds injection, extracts alarm_level
+- `public/app.js` - Fetches from tone-system.json, uses ALARM_LABELS/COLORS
+- `public/themes.css` - CSS variables and rules for levels 0-1 (low, positive)
+
+**Next Action**: Execute ADO-271 (EOs) - create variation pools, wire to shared module
