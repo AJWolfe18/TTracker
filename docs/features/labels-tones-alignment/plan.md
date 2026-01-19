@@ -263,10 +263,22 @@ After all 4 stories complete:
 
 ## STATUS
 
-- **ADO-269 (Pardons)**: ✅ COMPLETE (Phase 1 + Phase 2)
-- **ADO-270 (Stories)**: ✅ COMPLETE - Code complete, migration 064 pending apply in Supabase
-- **ADO-271 (EOs)**: ✅ COMPLETE - Code complete, migration 065 pending apply in Supabase
-- **ADO-272 (SCOTUS)**: ✅ COMPLETE - Backend prompts updated (frontend doesn't exist yet - tab shows "coming soon")
+- **ADO-269 (Pardons)**: ✅ COMPLETE - perplexity-research.js v1.5 supports 0-5 scale + string coercion
+- **ADO-270 (Stories)**: 🧪 TESTING - Pipeline wired correctly, needs end-to-end test
+- **ADO-271 (EOs)**: ⚠️ BLOCKED - Pipeline broken, see `eo-pipeline-fix-plan.md`
+- **ADO-272 (SCOTUS)**: ✅ COMPLETE - Backend prompts updated (frontend doesn't exist yet)
+
+### ADO-271 Pipeline Issue (Discovered 2026-01-18)
+
+The EO enrichment code exists but **never runs**:
+1. `executive-orders-tracker-supabase.js` has OLD inline AI that generates `summary` with old prompt
+2. `enrich-executive-orders.js` has new tone system but NO workflow triggers it
+3. New enrichment doesn't generate `summary` field (old tracker does)
+
+**Fix Required:** See `eo-pipeline-fix-plan.md`
+- Move `summary` generation from tracker to enrichment script
+- Strip old AI from tracker (just import raw data)
+- Add enrichment step to workflow OR create separate workflow
 
 **Completed (Phase 1 - Revised):**
 - `public/shared/tone-system.json` - Single source of truth for all content types
@@ -310,4 +322,4 @@ After all 4 stories complete:
 - `scripts/enrichment/scotus-variation-pools.js` - Level 0 "suspicious celebration" variations added
 - Note: scotus-app.js doesn't exist yet (tab shows "coming soon"), tone-system.json has SCOTUS labels ready
 
-**Next Action**: Apply migrations 064 + 065 to Supabase TEST, then trigger RSS tracker to test
+**Next Action**: Fix ADO-271 EO pipeline per `eo-pipeline-fix-plan.md`, then test all pipelines end-to-end
