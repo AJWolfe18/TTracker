@@ -1,25 +1,19 @@
 // executive-orders-tracker-supabase.js
-// Fetches and stores executive orders in Supabase
+// Fetches and stores executive orders in Supabase - RAW DATA ONLY
 // FIXED VERSION - Only collects actual Executive Orders, not all presidential documents
-// HYBRID: Uses Federal Register for data + OpenAI for AI-powered analysis
+// ADO-271: AI analysis removed - now handled by separate enrichment workflow (enrich-executive-orders.js)
 // Smart detection: Full import if empty, daily updates (3-day window) otherwise
-// STATUS: Production-ready - successfully backfilled 190 EOs on Aug 15, 2025
+// STATUS: Production-ready - 190+ EOs imported, AI enrichment via separate workflow
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
-// FIX: Using correct function name generateEOTranslation (not generateSpicyEOTranslation)
-import { generateEOTranslation } from './spicy-eo-translator.js';
+// ADO-271: Removed spicy-eo-translator import - AI analysis now done by separate enrichment workflow
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
+console.log('================================================');
+console.log('   Mode: RAW DATA IMPORT (no inline AI)');
+console.log('   Note: AI enrichment runs as separate workflow step');
 console.log('================================================\n');
-
-// Check if OpenAI is available
-const OPENAI_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_KEY) {
-    console.log('⚠️  WARNING: No OPENAI_API_KEY found - summaries will be basic');
-} else {
-    console.log('✅ OpenAI API key found - will generate AI summaries');
-}
 
 // Generate unique ID for executive orders
 function generateOrderId() {
@@ -38,93 +32,8 @@ async function orderExists(orderNumber) {
     }
 }
 
-// Generate AI analysis using OpenAI (summary + all metadata)
-async function generateAIAnalysis(title, orderNumber, abstract = '') {
-    if (!OPENAI_KEY) {
-        // Fallback if no OpenAI key - return basic defaults
-        return {
-            summary: `Executive Order ${orderNumber}: ${title}`,
-            severity_rating: 'medium',
-            policy_direction: 'modify',
-            implementation_timeline: 'ongoing',
-            impact_areas: []
-        };
-    }
-
-    try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${OPENAI_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a political analyst. Context: Donald Trump is the current President of the United States (inaugurated January 20, 2025). You are analyzing Executive Orders issued by President Trump. Analyze executive orders and provide structured JSON output.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Analyze Executive Order ${orderNumber}: "${title}" issued by President Trump.${abstract ? ` Abstract: ${abstract}` : ''}.
-
-Provide a JSON response with these exact fields:
-{
-  "summary": "2-3 sentence summary of what this order does and its key impacts",
-  "severity_rating": "low|medium|high based on scope and impact",
-  "policy_direction": "expand|restrict|modify|create|eliminate",
-  "implementation_timeline": "immediate|30_days|90_days|ongoing",
-  "impact_areas": ["list of policy areas affected like immigration, economy, healthcare, etc"]
-}
-
-Respond ONLY with valid JSON.`
-                    }
-                ],
-                max_tokens: 300,
-                temperature: 0.3
-            }),
-        });
-
-        if (!response.ok) {
-            console.log(`   ⚠️ OpenAI API error: ${response.status}`);
-            return {
-                summary: `Executive Order ${orderNumber}: ${title}`,
-                severity_rating: 'medium',
-                policy_direction: 'modify',
-                implementation_timeline: 'ongoing',
-                impact_areas: []
-            };
-        }
-
-        const data = await response.json();
-        const content = data.choices[0]?.message?.content;
-        
-        try {
-            const analysis = JSON.parse(content);
-            return analysis;
-        } catch (parseError) {
-            console.log(`   ⚠️ Could not parse AI response as JSON`);
-            return {
-                summary: content || `Executive Order ${orderNumber}: ${title}`,
-                severity_rating: 'medium',
-                policy_direction: 'modify',
-                implementation_timeline: 'ongoing',
-                impact_areas: []
-            };
-        }
-
-    } catch (error) {
-        console.log(`   ⚠️ Error generating AI analysis: ${error.message}`);
-        return {
-            summary: `Executive Order ${orderNumber}: ${title}`,
-            severity_rating: 'medium',
-            policy_direction: 'modify',
-            implementation_timeline: 'ongoing',
-            impact_areas: []
-        };
-    }
-}
+// ADO-271: Removed generateAIAnalysis() - AI enrichment now handled by enrich-executive-orders.js workflow
+// This script now only imports RAW data from Federal Register API
 
 // Fetch from Federal Register API - FIXED to only get Executive Orders
 async function fetchFromFederalRegister() {
@@ -270,44 +179,18 @@ async function fetchFromFederalRegister() {
                     console.log(`   ✓ Already have EO ${orderNumber}`);
                     continue;
                 }
-                
-                // Generate AI analysis for all missing fields
-                let aiAnalysis = null;
-                if (!item.abstract || item.abstract.trim() === '') {
-                    console.log(`   🤖 Generating AI analysis for EO ${orderNumber}...`);
-                    aiAnalysis = await generateAIAnalysis(item.title, orderNumber, item.abstract);
-                }
-                
-                // Generate spicy EO translation using the new system
-                let spicyTranslation = {};
-                try {
-                    console.log(`   🌶️ Generating spicy translation for EO ${orderNumber}...`);
-                    const summaryForTranslation = aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`);
-                    
-                    spicyTranslation = await generateEOTranslation({
-                        title: item.title || 'Untitled Executive Order',
-                        summary: summaryForTranslation,
-                        order_number: orderNumber,
-                        federal_register_number: item.document_number
-                    });
-                    console.log(`   🎯 Impact type: ${spicyTranslation.eo_impact_type}`);
-                } catch (spicyError) {
-                    console.log(`   ⚠️ Spicy translation generation failed:`, spicyError.message);
-                    spicyTranslation = {
-                        eo_impact_type: null,
-                        spicy_summary: null,
-                        shareable_hook: null,
-                        severity_label_inapp: null,
-                        severity_label_share: null
-                    };
-                }
-                
+
+                // ADO-271: RAW DATA IMPORT ONLY - No inline AI
+                // AI enrichment (summary, alarm_level, sections, etc.) is handled by separate workflow:
+                //   enrich-executive-orders.js (runs after this import completes)
+
                 const order = {
                     // id auto-generated by database
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
                     date: item.publication_date || today,
-                    summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`),
+                    // summary will be populated by enrichment workflow
+                    summary: null,
                     category: determineCategory(item.title, item.abstract),
                     agencies_affected: extractAgencies(item),
                     source_url: item.html_url || `https://www.federalregister.gov/documents/${item.document_number}`,
@@ -320,27 +203,26 @@ async function fetchFromFederalRegister() {
                     added_at: new Date().toISOString(),
                     impact_score: calculateImpactScore(item),
                     implementation_status: 'issued',
-                    // New fields from AI analysis
-                    severity_rating: aiAnalysis ? aiAnalysis.severity_rating : 'medium',
-                    policy_direction: aiAnalysis ? aiAnalysis.policy_direction : 'modify',
-                    implementation_timeline: aiAnalysis ? aiAnalysis.implementation_timeline : 'ongoing',
-                    impact_areas: aiAnalysis ? aiAnalysis.impact_areas : [],
+                    // AI-enriched fields set to NULL - populated by enrichment workflow
+                    severity_rating: null,
+                    alarm_level: null,
+                    policy_direction: null,
+                    implementation_timeline: null,
+                    impact_areas: [],
                     type: 'executive_order',
                     legal_challenges: [],
                     related_orders: [],
-                    // Add spicy translation fields with EO-specific categorization
-                    eo_impact_type: spicyTranslation.eo_impact_type,
-                    spicy_summary: spicyTranslation.spicy_summary,
-                    shareable_hook: spicyTranslation.shareable_hook,
-                    severity_label_inapp: spicyTranslation.severity_label_inapp,
-                    severity_label_share: spicyTranslation.severity_label_share
-                    // editorial_summary field removed - not in database schema
-                    // editorial_summary: aiAnalysis ? aiAnalysis.summary : (item.abstract || `Executive Order ${orderNumber}: ${item.title}`)
+                    // Spicy translation fields - populated by enrichment workflow
+                    eo_impact_type: null,
+                    spicy_summary: null,
+                    shareable_hook: null,
+                    severity_label_inapp: null,
+                    severity_label_share: null
                 };
-                
+
                 orders.push(order);
-                console.log(`   ✅ Found EO ${orderNumber}: ${order.title.substring(0, 50)}...`);
-                console.log(`      Source: ${item.document_number} | ${item.html_url}`);
+                console.log(`   ✅ Imported EO ${orderNumber}: ${order.title.substring(0, 50)}...`);
+                console.log(`      Source: ${item.document_number} (needs enrichment)`);
             }
             
             console.log(`\n   📊 Results:`);

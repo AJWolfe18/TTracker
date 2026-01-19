@@ -50,13 +50,25 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Track Executive Orders (Supabase)
+    - name: Import Executive Orders (raw data)
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-      run: node scripts/executive-orders-tracker-supabase.js
+      run: |
+        echo "📦 Phase 1: Import raw data from Federal Register"
+        node scripts/executive-orders-tracker-supabase.js
+
+    - name: Enrich Executive Orders (GPT)
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+      run: |
+        echo "🤖 Phase 2: AI enrichment with tone system"
+        echo "📝 Generating summary, alarm_level, sections, actions..."
+        node scripts/enrichment/enrich-executive-orders.js 50
 
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |

@@ -389,7 +389,13 @@ THIS CALL'S CREATIVE DIRECTION
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════════════════════
 
-Generate 4-part analysis for this Executive Order:
+Generate these outputs for this Executive Order:
+
+**Summary** (summary, 2-3 sentences):
+A neutral, factual summary of what this order does. No opinion, no loaded language.
+Include key facts: who is affected, what changes, when it takes effect.
+
+**4-Part Analysis** (150-250 words each):
 
 IMPORTANT: Each section MUST be 150-250 words. Do not write shorter sections. If you write <150 words, you are failing the requirement.
 
@@ -451,6 +457,7 @@ RULES
 
 **Output JSON format:**
 {
+  "summary": "2-3 sentence neutral summary of what this order does",
   "section_what_they_say": "...",
   "section_what_it_means": "...",
   "section_reality_check": "...",

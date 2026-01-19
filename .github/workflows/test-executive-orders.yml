@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: npm install
       
-    - name: Run executive orders tracker in TEST
+    - name: Import Executive Orders (raw data)
       env:
         ENVIRONMENT: test
         TARGET_ENV: test
@@ -43,9 +43,23 @@ jobs:
         echo "🧪 Running executive orders tracker in TEST environment..."
         echo "📍 Using test database"
         echo "📅 Backfill days: $BACKFILL_DAYS"
+        echo "📦 Phase 1: Import raw data from Federal Register"
         node scripts/executive-orders-tracker-supabase.js
-        
+
+    - name: Enrich Executive Orders (GPT)
+      env:
+        ENVIRONMENT: test
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+      run: |
+        echo "🤖 Phase 2: AI enrichment with tone system"
+        echo "📝 Generating summary, alarm_level, sections, actions..."
+        node scripts/enrichment/enrich-executive-orders.js 50
+
     - name: Summary
       run: |
-        echo "✅ Test executive orders tracker completed"
+        echo "✅ Test executive orders pipeline completed"
         echo "🧪 Environment: TEST"
+        echo "📦 Phase 1: Raw data import"
+        echo "🤖 Phase 2: GPT enrichment (tone system)"

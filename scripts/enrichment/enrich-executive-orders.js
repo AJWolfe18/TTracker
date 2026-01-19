@@ -219,10 +219,11 @@ class EOEnrichmentWorker {
       const alarm_level = normalizeAlarmLevel(enrichment.alarm_level);
       const severity_rating = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
 
-      // Update database
+      // Update database (ADO-271: now includes summary field)
       const { error: updateError } = await supabase
       .from('executive_orders')
       .update({
+      summary: enrichment.summary,                 // ADO-271: neutral summary from enrichment
       section_what_they_say: enrichment.section_what_they_say,
       section_what_it_means: enrichment.section_what_it_means,
       section_reality_check: enrichment.section_reality_check,
