@@ -32,7 +32,7 @@ dotenv.config();
 // Constants
 // ============================================================
 
-const PROMPT_VERSION = '1.4';  // v1.3 + ADO-264 corruption scoring overhaul (new labels, better logic)
+const PROMPT_VERSION = '1.5';  // v1.4 + ADO-269 fixes: 0-5 scale, partial dates, secondary_connection_types, money validation, string coercion
 const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
@@ -137,18 +137,19 @@ SEARCH SCOPE - Look for connections to ANY of these:
 - Lobbyists with Trump administration access
 - Mar-a-Lago members or guests
 - Who specifically advocated for this pardon?
-- Any future business arrangements with Trump orbit
+- Any documented future business arrangements with Trump orbit (only include if sourced, otherwise omit)
 
 Return JSON with EXACTLY these fields:
 {
   "primary_connection_type": "major_donor|political_ally|family|business_associate|celebrity|jan6_defendant|fake_electors|mar_a_lago_vip|cabinet_connection|lobbyist|campaign_staff|wealthy_unknown|no_connection",
+  "secondary_connection_types": ["type1", "type2"] or null,
   "trump_connection_detail": "2-3 sentence explanation of connection (or lack thereof) to Trump orbit",
-  "corruption_level": 1-5,
+  "corruption_level": 0-5,
   "corruption_reasoning": "Why this corruption level (1 sentence)",
   "receipts_timeline": [
-    {"date": "YYYY-MM-DD or null", "event_type": "see enum below", "description": "What happened", "amount_usd": null, "source_url": "citation URL"}
+    {"date": "YYYY-MM-DD or YYYY-MM or YYYY or null", "event_type": "see enum below", "description": "What happened", "amount_usd": number or null, "source_url": "citation URL"}
   ],
-  "donation_amount_usd": null,
+  "donation_amount_usd": number or null,
   "pardon_advocates": ["Name/Org 1", "Name/Org 2"],
   "sources": ["url1", "url2"]
 }
@@ -160,10 +161,8 @@ EVENT TYPE ENUM (use exactly one):
 
 DATE RULE:
 - Use "YYYY-MM-DD" when exact date is known
-- Use null if date unknown — do NOT guess or use partial dates
-
-TIMELINE REQUIREMENT:
-- ALWAYS include a "pardon_granted" event
+- Use "YYYY-MM" or "YYYY" if only partial date is known
+- Use null if date completely unknown — do NOT guess
 
 CORRUPTION LEVEL GUIDE - Answer: What MECHANISM got them the pardon?
 
@@ -217,6 +216,16 @@ function fixPerplexityTypos(json) {
     console.log(`   ⚠️ Fixed typo: ${json.primary_connection_type} → ${CONNECTION_TYPE_TYPOS[json.primary_connection_type]}`);
     json.primary_connection_type = CONNECTION_TYPE_TYPOS[json.primary_connection_type];
   }
+
+  // Coerce corruption_level from string to number (Perplexity sometimes returns "0" instead of 0)
+  if (typeof json.corruption_level === 'string') {
+    const parsed = parseInt(json.corruption_level, 10);
+    if (!isNaN(parsed)) {
+      console.log(`   ⚠️ Coerced corruption_level: "${json.corruption_level}" → ${parsed}`);
+      json.corruption_level = parsed;
+    }
+  }
+
   return json;
 }
 
@@ -231,17 +240,18 @@ function validateResearchResponse(json) {
     errors.push(`Invalid primary_connection_type: ${json.primary_connection_type}`);
   }
 
-  // 2. Required: corruption_level (1-5)
+  // 2. Required: corruption_level (0-5)
   if (typeof json.corruption_level !== 'number' ||
-      json.corruption_level < 1 || json.corruption_level > 5) {
+      json.corruption_level < 0 || json.corruption_level > 5) {
     errors.push(`Invalid corruption_level: ${json.corruption_level}`);
   }
 
-  // 2b. corruption_reasoning: required for levels 2-5, flexible for no_connection level 1
-  const isNoConnection = json.primary_connection_type === 'no_connection' && json.corruption_level === 1;
-  if (!isNoConnection) {
+  // 2b. corruption_reasoning: required for levels 1-5, flexible for level 0 (actual mercy) and no_connection
+  const isLevelZeroOrNoConnection = json.corruption_level === 0 ||
+      (json.primary_connection_type === 'no_connection' && json.corruption_level <= 1);
+  if (!isLevelZeroOrNoConnection) {
     if (typeof json.corruption_reasoning !== 'string' || json.corruption_reasoning.trim().length < 5) {
-      errors.push('corruption_reasoning required for corruption_level 2-5 (min 5 chars)');
+      errors.push('corruption_reasoning required for corruption_level 1-5 (min 5 chars)');
     }
   }
 
@@ -271,6 +281,10 @@ function validateResearchResponse(json) {
       if (event.source_url && !URL_REGEX.test(event.source_url)) {
         errors.push(`receipts_timeline[${i}].source_url invalid URL`);
       }
+      // Amount validation (must be number or null, not string like "$50k")
+      if (event.amount_usd !== null && event.amount_usd !== undefined && typeof event.amount_usd !== 'number') {
+        errors.push(`receipts_timeline[${i}].amount_usd must be number or null, got: ${typeof event.amount_usd}`);
+      }
     });
   }
 
@@ -291,6 +305,25 @@ function validateResearchResponse(json) {
   // 6. pardon_advocates: must be array (v1.2)
   if (json.pardon_advocates !== undefined && !Array.isArray(json.pardon_advocates)) {
     errors.push('pardon_advocates must be an array');
+  }
+
+  // 7. donation_amount_usd: must be number or null (v1.5)
+  if (json.donation_amount_usd !== null && json.donation_amount_usd !== undefined && typeof json.donation_amount_usd !== 'number') {
+    errors.push(`donation_amount_usd must be number or null, got: ${typeof json.donation_amount_usd}`);
+  }
+
+  // 8. secondary_connection_types: must be array or null (v1.5)
+  if (json.secondary_connection_types !== null && json.secondary_connection_types !== undefined) {
+    if (!Array.isArray(json.secondary_connection_types)) {
+      errors.push('secondary_connection_types must be array or null');
+    } else {
+      // Validate each type is in the enum
+      json.secondary_connection_types.forEach((type, i) => {
+        if (!CONNECTION_TYPES.includes(type)) {
+          errors.push(`secondary_connection_types[${i}] invalid: ${type}`);
+        }
+      });
+    }
   }
 
   return { valid: errors.length === 0, errors };
@@ -459,6 +492,20 @@ class PardonResearchWorker {
         return { success: false, error: validation.errors.join('; ') };
       }
 
+      // Auto-insert pardon_granted event if missing (we have authoritative date from DOJ)
+      const hasPardonGrantedEvent = researchData.receipts_timeline?.some(e => e.event_type === 'pardon_granted');
+      if (!hasPardonGrantedEvent && pardon.pardon_date) {
+        researchData.receipts_timeline = researchData.receipts_timeline || [];
+        researchData.receipts_timeline.push({
+          date: pardon.pardon_date,
+          event_type: 'pardon_granted',
+          description: 'Pardon granted by President Trump',
+          amount_usd: null,
+          source_url: pardon.primary_source_url || null
+        });
+        console.log(`   📅 Auto-inserted pardon_granted event for ${pardon.pardon_date}`);
+      }
+
       // Update pardon with research data
       await this.updatePardon(pardon.id, researchData);
 
@@ -492,6 +539,7 @@ class PardonResearchWorker {
       .from('pardons')
       .update({
         primary_connection_type: data.primary_connection_type,
+        secondary_connection_types: data.secondary_connection_types ?? null,  // v1.5: additional connections
         trump_connection_detail: data.trump_connection_detail,
         corruption_level: data.corruption_level,
         corruption_reasoning: data.corruption_reasoning ?? null,
