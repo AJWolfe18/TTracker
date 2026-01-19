@@ -37,7 +37,7 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-const PROMPT_VERSION = 'v1';
+const PROMPT_VERSION = 'v3-ado271';  // ADO-271: Updated to include summary field + tone system
 const DAILY_CAP_USD = 5.00;
 const MAX_RETRIES = 3;
 const BACKOFF_MS = [5000, 20000, 60000]; // 5s, 20s, 60s
