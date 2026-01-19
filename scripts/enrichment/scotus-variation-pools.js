@@ -88,18 +88,20 @@ export const OPENING_PATTERNS = {
     { id: 'concurrence-warning', instruction: "Concurrence warning: 'The win is real. But [Justice]'s concurrence signals trouble ahead.'" }
   ],
 
-  // Level 0: Democracy Wins - Actual good ruling
+  // Level 0: Democracy Wins - Actual good ruling (ADO-272: "suspicious celebration" tone)
   democracy_wins: [
-    { id: 'actually-worked', instruction: "System worked: 'The system actually worked. Mark your calendar.'" },
-    { id: 'credit-due', instruction: "Credit due: 'Credit where it's due. This ruling actually protects people.'" },
-    { id: 'unanimous-good', instruction: "Unanimous good: '9-0 for the people. Write it down.'" },
-    { id: 'rights-protected', instruction: "Rights protected: 'Your [specific right] held. The Constitution worked as intended.'" },
-    { id: 'rare-win', instruction: "Rare win: 'A rare win against [corporation/government]. Savor it.'" },
-    { id: 'hard-to-undo', instruction: "Durable: 'A strong ruling that's actually hard to weasel out of.'" },
-    { id: 'dissent-wrong', instruction: "Dissent wrong: 'Even the dissenters couldn't find much to complain about.'" },
-    { id: 'template', instruction: "Template: 'This is what SCOTUS rulings should look like. Save it as a template.'" },
-    { id: 'corporate-lost', instruction: "Corporate loss: 'Corporate interests lost. Mark your calendar.'" },
-    { id: 'people-first', instruction: "People first: 'For once, the Court put people over profits.'" }
+    { id: 'actually-worked', instruction: "Suspicious celebration: 'The system actually worked. Mark your calendar. Don't get used to it.'" },
+    { id: 'credit-due', instruction: "Credit due: 'Credit where it's due. This ruling actually protects people. We checked twice.'" },
+    { id: 'unanimous-good', instruction: "Disbelief: '9-0 for the people. Is this real? Write it down before they change their minds.'" },
+    { id: 'rights-protected', instruction: "Rights protected: 'Your [specific right] held. The Constitution worked as intended. For once.'" },
+    { id: 'rare-win', instruction: "Rare win: 'A rare win against [corporation/government]. Savor it. This doesn't happen often.'" },
+    { id: 'hard-to-undo', instruction: "Durable: 'A strong ruling that's actually hard to weasel out of. They'll try anyway.'" },
+    { id: 'dissent-wrong', instruction: "Dissent thin: 'Even the usual suspects couldn't find much to complain about.'" },
+    { id: 'template', instruction: "Template: 'This is what SCOTUS rulings should look like. Screenshot it.'" },
+    { id: 'corporate-lost', instruction: "Corporate loss: 'Corporate interests lost. The sun is still rising in the east, somehow.'" },
+    { id: 'people-first', instruction: "People first: 'For once, the Court put people over profits. Don't get comfortable.'" },
+    { id: 'skeptical-joy', instruction: "Skeptical joy: 'Good news. Real good news. Now we wait for the catch.'" },
+    { id: 'broken-clock', instruction: "Broken clock: 'Even this Court gets it right sometimes. Enjoy it while it lasts.'" }
   ],
 
   // Special: Voting Rights cases
