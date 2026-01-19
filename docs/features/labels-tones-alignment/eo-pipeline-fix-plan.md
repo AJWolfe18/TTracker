@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-18
 **ADO:** 271
-**Status:** PLANNING
+**Status:** ✅ COMPLETED (2026-01-19)
 
 ---
 
@@ -156,11 +156,11 @@ on:
 
 ## Acceptance Criteria
 
-- [ ] EO tracker imports raw data without AI call
-- [ ] EO enrichment generates `summary` + all tone system fields
-- [ ] Workflow triggers enrichment after import
-- [ ] Frontend displays correct labels/colors from tone-system.json
-- [ ] No regression in Stories or Pardons pipelines
+- [x] EO tracker imports raw data without AI call
+- [x] EO enrichment generates `summary` + all tone system fields
+- [x] Workflow triggers enrichment after import
+- [ ] Frontend displays correct labels/colors from tone-system.json (needs verification)
+- [ ] No regression in Stories or Pardons pipelines (needs verification)
 
 ---
 
