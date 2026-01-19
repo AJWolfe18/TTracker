@@ -264,9 +264,9 @@ After all 4 stories complete:
 ## STATUS
 
 - **ADO-269 (Pardons)**: ✅ COMPLETE (Phase 1 + Phase 2)
-- **ADO-270 (Stories)**: ✅ COMPLETE (All phases)
-- **ADO-271 (EOs)**: Not started. Shared module now available.
-- **ADO-272 (SCOTUS)**: Not started. Shared module now available.
+- **ADO-270 (Stories)**: ✅ COMPLETE - Code complete, migration 064 pending apply in Supabase
+- **ADO-271 (EOs)**: ✅ COMPLETE - Code complete, migration 065 pending apply in Supabase
+- **ADO-272 (SCOTUS)**: ✅ COMPLETE - Backend prompts updated (frontend doesn't exist yet - tab shows "coming soon")
 
 **Completed (Phase 1 - Revised):**
 - `public/shared/tone-system.json` - Single source of truth for all content types
@@ -295,4 +295,19 @@ After all 4 stories complete:
 - `public/app.js` - Fetches from tone-system.json, uses ALARM_LABELS/COLORS
 - `public/themes.css` - CSS variables and rules for levels 0-1 (low, positive)
 
-**Next Action**: Execute ADO-271 (EOs) - create variation pools, wire to shared module
+**Completed (ADO-271 - EOs):**
+- `migrations/065_add_alarm_level_to_executive_orders.sql` - Numeric 0-5 field with backfill from legacy severity_rating
+- `scripts/enrichment/eo-variation-pools.js` - 3 pools (miller, donor, default)
+  - Category/impact_type-based pool selection via getPoolKey()
+  - Level-based opening patterns (0-5) in each pool
+  - "The Power Grab" voice framing
+- `scripts/enrichment/prompts.js` EO_ENRICHMENT_PROMPT - Tone calibration, variation injection, alarm_level output
+- `scripts/enrichment/enrich-executive-orders.js` - Imports pools, builds injection, writes alarm_level, derives severity_rating
+- `public/eo-app.js` - Fetches from tone-system.json, uses getAlarmLevel() with legacy fallback
+
+**Completed (ADO-272 - SCOTUS):**
+- `scripts/enrichment/scotus-gpt-prompt.js` - "THE BETRAYAL" voice, profanity enabled at levels 4-5
+- `scripts/enrichment/scotus-variation-pools.js` - Level 0 "suspicious celebration" variations added
+- Note: scotus-app.js doesn't exist yet (tab shows "coming soon"), tone-system.json has SCOTUS labels ready
+
+**Next Action**: Apply migrations 064 + 065 to Supabase TEST, then trigger RSS tracker to test
