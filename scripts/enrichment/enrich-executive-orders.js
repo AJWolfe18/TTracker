@@ -22,6 +22,13 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts.js';
+import {
+  getPoolKey,
+  selectVariation,
+  buildVariationInjection,
+  normalizeAlarmLevel,
+  alarmLevelToLegacySeverity
+} from './eo-variation-pools.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -172,6 +179,18 @@ class EOEnrichmentWorker {
     try {
       console.log(`🤖 Enriching EO ${eo.order_number}: ${eo.title.substring(0, 50)}...`);
 
+      // ADO-271: Build variation injection based on category and impact type
+      const poolKey = getPoolKey(eo.category, eo.eo_impact_type);
+      // Use default alarm level 3 for first pass - GPT will determine actual level
+      const variation = selectVariation(poolKey, 3, []);
+      const variationInjection = buildVariationInjection(variation, []);
+
+      // Inject variation into system prompt
+      const systemPromptWithVariation = EO_ENRICHMENT_PROMPT.replace(
+        '{variation_injection}',
+        variationInjection
+      );
+
       // Call OpenAI with timeout
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -180,7 +199,7 @@ class EOEnrichmentWorker {
         {
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: EO_ENRICHMENT_PROMPT },
+            { role: 'system', content: systemPromptWithVariation },
             { role: 'user', content: buildEOPayload(eo) }
           ],
           response_format: { type: 'json_object' },
@@ -196,6 +215,10 @@ class EOEnrichmentWorker {
       const enrichment = JSON.parse(completion.choices[0].message.content);
       this.validateEnrichment(enrichment);
 
+      // ADO-271: Extract alarm_level and derive legacy severity_rating
+      const alarm_level = normalizeAlarmLevel(enrichment.alarm_level);
+      const severity_rating = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
+
       // Update database
       const { error: updateError } = await supabase
       .from('executive_orders')
@@ -204,6 +227,8 @@ class EOEnrichmentWorker {
       section_what_it_means: enrichment.section_what_it_means,
       section_reality_check: enrichment.section_reality_check,
       section_why_it_matters: enrichment.section_why_it_matters,
+      alarm_level,                         // ADO-271: numeric 0-5
+      severity_rating,                     // Legacy: derived from alarm_level, null for 0-1
       category: enrichment.category,
       regions: enrichment.regions || [],
       policy_areas: enrichment.policy_areas || [],
@@ -248,12 +273,13 @@ class EOEnrichmentWorker {
    * @throws {Error} if validation fails
    */
   validateEnrichment(data) {
-    // Required fields
+    // Required fields (ADO-271: alarm_level replaces severity)
     const required = [
       'section_what_they_say',
       'section_what_it_means',
       'section_reality_check',
       'section_why_it_matters',
+      'alarm_level',
       'category',
       'action_tier',
       'action_confidence',
@@ -300,12 +326,13 @@ class EOEnrichmentWorker {
       throw new Error(`Invalid category: ${data.category}`);
     }
 
-    // Severity validation (SKIPPED - only FE labels matter)
-    // Backend severity can be remapped later if needed
-    // const validSeverities = ['critical', 'severe', 'moderate', 'minor'];
-    // if (!validSeverities.includes(data.severity)) {
-    //   throw new Error(`Invalid severity: ${data.severity}`);
-    // }
+    // ADO-271: alarm_level validation (0-5 numeric)
+    if (typeof data.alarm_level !== 'number' ||
+        data.alarm_level < 0 ||
+        data.alarm_level > 5 ||
+        !Number.isInteger(data.alarm_level)) {
+      throw new Error(`alarm_level must be integer 0-5 (got ${data.alarm_level})`);
+    }
 
     // Action tier validation
     const validTiers = ['direct', 'systemic', 'tracking'];
