@@ -295,35 +295,61 @@ SECTION-SPECIFIC BANNED PHRASE STARTS:
 
 ### Phase 1: Executive Orders (ADO-273)
 
-**Files to modify:**
+**Status:** ✅ CODE COMPLETE | ⏳ VALIDATION PENDING
 
-| File | Changes |
-|------|---------|
-| `scripts/executive-orders-tracker-supabase.js` | Store FR abstract in `description` field |
-| `scripts/enrichment/eo-style-patterns.js` | NEW: frame buckets + approach-only patterns + deterministic selection |
-| `scripts/enrichment/prompts.js` | Fix `buildEOPayload()`, add REQUIRED VARIATION block, summary openers, section bans, mismatch fuse |
-| `scripts/enrichment/enrich-executive-orders.js` | Wire seed construction, track recent IDs in batch, add post-gen validation |
+**Files created/modified:**
 
-**New exports from eo-style-patterns.js:**
-```javascript
-export function estimateFrame(title, description, category)
-export function selectVariation(poolKey, seed, recentIds)
-export function buildVariationInjection(variation)
-export const EO_STYLE_PATTERNS = { ... }
+| File | Changes | Status |
+|------|---------|--------|
+| `scripts/shared/style-patterns-core.js` | NEW: 21 universal patterns + FNV-1a hash | ✅ Done |
+| `scripts/shared/style-patterns-lint.js` | NEW: Instructional pattern checker | ✅ Done |
+| `scripts/enrichment/eo-style-patterns.js` | NEW: Frame estimation + deterministic selection | ✅ Done |
+| `scripts/executive-orders-tracker-supabase.js` | Store FR abstract in `description` field | ✅ Done |
+| `scripts/enrichment/prompts.js` | Fix `buildEOPayload()`, add section bans | ✅ Done |
+| `scripts/enrichment/enrich-executive-orders.js` | Wire frame-based variation system | ✅ Done |
+
+**Files to promote to main (after validation):**
 ```
+scripts/shared/style-patterns-core.js      (NEW)
+scripts/shared/style-patterns-lint.js      (NEW)
+scripts/enrichment/eo-style-patterns.js    (NEW)
+scripts/executive-orders-tracker-supabase.js
+scripts/enrichment/prompts.js
+scripts/enrichment/enrich-executive-orders.js
+```
+
+**Commits:**
+- `0bdc462` - feat(ado-273): implement frame-based EO tone variation system
+- `764434e` - fix(ado-273): address code review findings
+
+**Code Review Findings (2026-01-19):**
+| Issue | Severity | Status |
+|-------|----------|--------|
+| FNV-1a hash bit-width handling | Critical | ✅ Fixed |
+| Input validation in selectVariation | Important | ✅ Fixed |
+| Empty input warning in estimateFrame | Important | ✅ Fixed |
+| Repair logic checking all sections | Important | ✅ Fixed |
+| Pattern linter false positives | Low | WAI (different regex) |
+| Pool size imbalance for grudging_credit | Low | WAI (rare frame) |
+| Description field migration | Low | WAI (field exists) |
 
 **Prompt version:** `v4-ado273`
 
 **Acceptance criteria:**
-- [ ] No repeated `variation.id` within batch
-- [ ] Same EO + prompt_version = same variation (deterministic)
-- [ ] 0 banned phrase starts in specified sections (sample of 30)
-- [ ] Top summary opener < 25% of sample
-- [ ] Frame distribution: mostly `critical`, some `alarmed`, rare `grudging_credit`
-- [ ] Style pattern lint passes (no instructional patterns)
-- [ ] Post-gen validation catches and repairs any banned starters
+- [x] Style pattern lint passes (no instructional patterns) - Verified
+- [x] Same EO + prompt_version = same variation (deterministic) - Verified via hash
+- [ ] No repeated `variation.id` within batch - **Needs validation test**
+- [ ] 0 banned phrase starts in specified sections (sample of 30) - **Needs validation test**
+- [ ] Top summary opener < 25% of sample - **Needs validation test**
+- [ ] Frame distribution: mostly `critical`, some `alarmed`, rare `grudging_credit` - **Needs validation test**
+- [ ] Post-gen validation catches and repairs any banned starters - **Needs validation test**
 
-**Estimated effort:** 1 session
+**Remaining work for this card:**
+1. Re-enrich 30-50 EOs with v4-ado273: `node scripts/enrichment/enrich-executive-orders.js 30`
+2. Review output for variety (check openers, frames, banned phrases)
+3. If validation passes → ready for PROD promotion
+
+**Estimated effort:** 1 session (code) + 0.5 session (validation)
 
 ---
 
