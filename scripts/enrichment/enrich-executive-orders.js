@@ -22,13 +22,20 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts.js';
+// ADO-273: Updated to use new frame-based style patterns
 import {
+  estimateFrame,
   getPoolKey,
   selectVariation,
   buildVariationInjection,
+  getEOContentId,
   normalizeAlarmLevel,
-  alarmLevelToLegacySeverity
-} from './eo-variation-pools.js';
+  alarmLevelToLegacySeverity,
+  SECTION_BANS,
+  findBannedStarter,
+  repairBannedStarter,
+  PROMPT_VERSION as EO_PROMPT_VERSION
+} from './eo-style-patterns.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -37,7 +44,7 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-const PROMPT_VERSION = 'v3-ado271';  // ADO-271: Updated to include summary field + tone system
+const PROMPT_VERSION = EO_PROMPT_VERSION;  // ADO-273: v4-ado273 with frame-based variation
 const DAILY_CAP_USD = 5.00;
 const MAX_RETRIES = 3;
 const BACKOFF_MS = [5000, 20000, 60000]; // 5s, 20s, 60s
@@ -113,6 +120,9 @@ class EOEnrichmentWorker {
     this.rateLimiter = new TokenBucket(10, 10); // 10 req/min
     this.successCount = 0;
     this.failCount = 0;
+    // ADO-273: Track recently used pattern IDs for batch deduplication
+    this.recentPatternIds = [];
+    this.MAX_RECENT_PATTERNS = 10; // Keep last 10 patterns in memory
   }
 
   /**
@@ -179,11 +189,27 @@ class EOEnrichmentWorker {
     try {
       console.log(`🤖 Enriching EO ${eo.order_number}: ${eo.title.substring(0, 50)}...`);
 
-      // ADO-271: Build variation injection based on category and impact type
-      const poolKey = getPoolKey(eo.category, eo.eo_impact_type);
-      // Use default alarm level 3 for first pass - GPT will determine actual level
-      const variation = selectVariation(poolKey, 3, []);
-      const variationInjection = buildVariationInjection(variation, []);
+      // ADO-273: Frame-based variation system
+      // 1. Estimate frame from title + description + category (pre-GPT)
+      const frame = estimateFrame(eo.title, eo.description, eo.category);
+      console.log(`   Frame: ${frame} (estimated from metadata)`);
+
+      // 2. Get pool key (category + frame)
+      const poolKey = getPoolKey(eo.category, frame);
+
+      // 3. Deterministic selection based on content ID
+      const contentId = getEOContentId(eo);
+      const variation = selectVariation(poolKey, contentId, PROMPT_VERSION, this.recentPatternIds);
+      console.log(`   Pattern: ${variation.id}`);
+
+      // 4. Track pattern ID for batch deduplication
+      this.recentPatternIds.push(variation.id);
+      if (this.recentPatternIds.length > this.MAX_RECENT_PATTERNS) {
+        this.recentPatternIds.shift(); // Remove oldest
+      }
+
+      // 5. Build variation injection with frame guidance
+      const variationInjection = buildVariationInjection(variation, frame);
 
       // Inject variation into system prompt
       const systemPromptWithVariation = EO_ENRICHMENT_PROMPT.replace(
@@ -215,11 +241,30 @@ class EOEnrichmentWorker {
       const enrichment = JSON.parse(completion.choices[0].message.content);
       this.validateEnrichment(enrichment);
 
+      // ADO-273: Post-generation validation and repair for banned starters
+      const sectionsToCheck = ['section_what_it_means', 'section_reality_check', 'section_why_it_matters'];
+      for (const section of sectionsToCheck) {
+        if (!enrichment[section] || !SECTION_BANS[section]) continue;
+
+        const banned = findBannedStarter(enrichment[section], SECTION_BANS[section]);
+        if (banned) {
+          console.log(`   ⚠️ Found banned starter in ${section}: "${banned}"`);
+          const repair = repairBannedStarter(section, enrichment[section], banned);
+          if (repair.success) {
+            enrichment[section] = repair.content;
+            console.log(`   ✓ Repaired ${section}`);
+          } else {
+            // Log but don't fail - better to have some output than none
+            console.log(`   ⚠️ Could not repair ${section}, keeping original`);
+          }
+        }
+      }
+
       // ADO-271: Extract alarm_level and derive legacy severity_rating
       const alarm_level = normalizeAlarmLevel(enrichment.alarm_level);
       const severity_rating = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
 
-      // Update database (ADO-271: now includes summary field)
+      // Update database (ADO-273: includes post-validation repaired content)
       const { error: updateError } = await supabase
       .from('executive_orders')
       .update({

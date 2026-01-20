@@ -366,6 +366,7 @@ Example: "We checked twice. This is actually... good policy?"
 BANNED OPENINGS (never use these)
 ═══════════════════════════════════════════════════════════════════════════════
 
+GENERAL BANNED PHRASES:
 - "This is outrageous..."
 - "In a shocking move..."
 - "Once again..."
@@ -378,6 +379,15 @@ BANNED OPENINGS (never use these)
 - "Shocking absolutely no one..."
 - "In the latest move..."
 - "It remains to be seen..."
+
+SECTION-SPECIFIC BANNED STARTS (ADO-273):
+- section_what_it_means: "Beneath the surface", "What they don't say", "The real story is", "Here's what's really going on", "Dig deeper and"
+- section_reality_check: "The truth is", "Let's be clear", "Here's the reality"
+- section_why_it_matters: "The stakes couldn't be higher", "This sets the stage"
+
+SUMMARY BANNED STARTS:
+- Do NOT start summary with "Executive Order X, signed on..."
+- Vary your summary opening - lead with impact, mechanism, or affected parties
 
 ═══════════════════════════════════════════════════════════════════════════════
 THIS CALL'S CREATIVE DIRECTION
@@ -490,14 +500,18 @@ RULES
  * @param {string} eo.order_number - EO number (e.g., "14145")
  * @param {string} eo.title - Official title
  * @param {string} eo.date - Signed date
+ * @param {string} eo.description - FR abstract (ADO-273: added for frame estimation)
  * @param {string} eo.summary - AI summary or official abstract
  * @returns {string} Formatted payload string
  */
 export function buildEOPayload(eo) {
+  // ADO-273: Include description (FR abstract) for better context
+  const abstract = eo.description || eo.summary || 'Not available';
+
   return `Executive Order ${eo.order_number}: "${eo.title}"
 
 Signed: ${eo.date}
-Official Summary: ${eo.summary || 'Not available'}
+Official Abstract: ${abstract}
 
 Analyze this order and provide the 4-part analysis with metadata and action recommendations.`;
 }

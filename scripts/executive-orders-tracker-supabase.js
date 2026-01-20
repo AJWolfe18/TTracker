@@ -189,6 +189,8 @@ async function fetchFromFederalRegister() {
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
                     date: item.publication_date || today,
+                    // ADO-273: Store FR abstract for frame estimation during enrichment
+                    description: item.abstract || null,
                     // summary will be populated by enrichment workflow
                     summary: null,
                     category: determineCategory(item.title, item.abstract),
