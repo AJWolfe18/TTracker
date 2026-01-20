@@ -158,6 +158,11 @@ const PATTERN_BY_ID = Object.fromEntries(ALL_EO_PATTERNS.map(p => [p.id, p]));
  * @returns {'alarmed' | 'critical' | 'grudging_credit'} Frame bucket
  */
 export function estimateFrame(title, description, category) {
+  // Warn if no title or description provided (data quality issue)
+  if (!title && !description) {
+    console.warn('estimateFrame: No title or description provided, defaulting to critical frame');
+  }
+
   const text = `${title || ''} ${description || ''}`.toLowerCase();
 
   // ALARMED: Strong crisis signals
@@ -307,6 +312,17 @@ function getPatternsForPool(poolKey) {
  * @returns {Object} Selected pattern with metadata
  */
 export function selectVariation(poolKey, contentId, promptVersion, recentIds = []) {
+  // Input validation (prevents silent failures)
+  if (!poolKey || typeof poolKey !== 'string') {
+    throw new Error('selectVariation: poolKey must be a non-empty string');
+  }
+  if (contentId === undefined || contentId === null) {
+    throw new Error('selectVariation: contentId must be provided');
+  }
+  if (!promptVersion) {
+    throw new Error('selectVariation: promptVersion must be provided');
+  }
+
   const frame = poolKey.split('_')[1];
   const patterns = getPatternsForPool(poolKey);
 
@@ -461,12 +477,11 @@ export function repairBannedStarter(section, content, bannedPhrase) {
   // Rebuild with lowercase first letter of remainder
   const repaired = `${template} ${remainder.charAt(0).toLowerCase()}${remainder.slice(1)}`;
 
-  // Verify repair doesn't also start with banned phrase
-  for (const section of Object.keys(SECTION_BANS)) {
-    const banned = findBannedStarter(repaired, SECTION_BANS[section]);
-    if (banned) {
-      return { success: false, content: null };
-    }
+  // Verify repair doesn't also start with banned phrase for THIS section only
+  const bannedList = SECTION_BANS[section] || [];
+  const stillBanned = findBannedStarter(repaired, bannedList);
+  if (stillBanned) {
+    return { success: false, content: null };
   }
 
   return { success: true, content: repaired };

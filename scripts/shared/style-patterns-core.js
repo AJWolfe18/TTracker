@@ -25,12 +25,12 @@
  * @returns {number} 32-bit unsigned integer hash
  */
 export function fnv1a32(str) {
-  let hash = 2166136261; // FNV offset basis
+  let hash = 2166136261; // FNV offset basis (unsigned 32-bit)
   for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0; // FNV prime, keep as 32-bit unsigned
+    // Combine XOR and multiply in single expression, convert to unsigned 32-bit
+    hash = ((hash ^ str.charCodeAt(i)) * 16777619) >>> 0;
   }
-  return hash >>> 0;
+  return hash;
 }
 
 // ============================================================================
