@@ -2,8 +2,8 @@
 
 **Date:** 2026-01-19
 **Branch:** test
-**Commit:** 0bdc462
-**Status:** Phase 1 code complete, ready for validation testing
+**Commits:** 0bdc462, 764434e, fed4f80
+**Status:** Phase 1 CODE COMPLETE | VALIDATION PENDING
 
 ---
 
@@ -118,9 +118,36 @@ If something seems off:
 
 ---
 
+## Code Review Findings (2026-01-19)
+
+| Issue | Severity | Status |
+|-------|----------|--------|
+| FNV-1a hash bit-width handling | Critical | ✅ Fixed (764434e) |
+| Input validation in selectVariation | Important | ✅ Fixed |
+| Empty input warning in estimateFrame | Important | ✅ Fixed |
+| Repair logic checking all sections | Important | ✅ Fixed |
+| Pattern linter false positives | Low | WAI (different regex) |
+| Pool size imbalance for grudging_credit | Low | WAI (rare frame) |
+| Description field migration | Low | WAI (field exists) |
+
+---
+
+## Files to Promote to Main (after validation)
+
+```
+scripts/shared/style-patterns-core.js      (NEW)
+scripts/shared/style-patterns-lint.js      (NEW)
+scripts/enrichment/eo-style-patterns.js    (NEW)
+scripts/executive-orders-tracker-supabase.js
+scripts/enrichment/prompts.js
+scripts/enrichment/enrich-executive-orders.js
+```
+
+---
+
 ## ADO Status
 
-- **ADO-273** (EOs): Resolved - Phase 1 code complete
+- **ADO-273** (EOs): Active - Code complete, validation pending
 - **ADO-274** (Stories): New - Blocked by 273 validation
 - **ADO-275** (SCOTUS): New - Blocked by 274
 - **ADO-276** (Pardons): New - Blocked by 275
