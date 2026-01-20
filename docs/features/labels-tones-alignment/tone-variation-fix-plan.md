@@ -295,7 +295,13 @@ SECTION-SPECIFIC BANNED PHRASE STARTS:
 
 ### Phase 1: Executive Orders (ADO-273)
 
-**Status:** ✅ CODE COMPLETE | ⏳ VALIDATION PENDING
+**Status:** ✅ CODE COMPLETE | ⛔ VALIDATION BLOCKED (schema cache)
+
+**Blocker (2026-01-20):**
+- Supabase JS client can't find `alarm_level` column (schema cache stale)
+- Column exists in DB (verified via SQL and MCP PATCH)
+- Tried `NOTIFY pgrst, 'reload schema';` - didn't help
+- **Fix:** Pause/resume TEST project in Supabase dashboard to restart PostgREST
 
 **Files created/modified:**
 
