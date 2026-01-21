@@ -18,7 +18,8 @@ Track Supreme Court decisions with AI-powered editorial analysis. Fetches cases 
 |-----------|--------|-----|-------|
 | Database Schema | ✅ Complete | ADO-87 | Migration 066 applied to TEST |
 | CourtListener API | ✅ Complete | ADO-86 | fetch-cases.js working |
-| Enrichment Script | 🔲 Not Started | ADO-85 | Blocked by ADO-275 (tone guide) |
+| Tone/Voice | ✅ Complete | ADO-272 | scotus-gpt-prompt.js has "The Betrayal" voice |
+| Enrichment Script | 🔄 In Progress | ADO-85 | Ready to implement |
 | Edge Functions | 🔲 Not Started | TBD | Need scotus-list, scotus-detail |
 | Frontend UI | 🔲 Not Started | TBD | Need page design |
 
@@ -91,18 +92,20 @@ Frontend UI
 
 ## Dependencies
 
-- **ADO-275**: Tone/style guide must be complete before ADO-85 (enrichment)
-- **CourtListener Token**: Required in environment or GitHub secrets
+- ✅ **ADO-272**: Tone/voice complete (profanity at 4-5, "The Betrayal" voice)
+- ⏳ **ADO-275**: Frame bucket architecture (enhancement, not blocker)
+- ✅ **CourtListener Token**: Configured in environment and GitHub secrets
 
 ---
 
 ## Next Steps
 
 1. ~~Quality review fetch script~~ ✅ (Fixed author + syllabus extraction)
-2. Wait for ADO-275 completion (tone guide)
-3. Implement ADO-85 (enrichment script)
+2. ~~Tone/voice setup~~ ✅ (ADO-272 complete)
+3. **Implement ADO-85 (enrichment script)** ← CURRENT
 4. Create edge functions (scotus-list, scotus-detail)
 5. Build frontend UI page
+6. Apply ADO-275 frame bucket architecture (enhancement)
 
 ---
 

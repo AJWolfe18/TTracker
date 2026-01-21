@@ -195,7 +195,7 @@ export function buildUserPrompt(scotusCase, variationInjection = '') {
   const {
     case_name,
     case_name_short,
-    docket_numbers,
+    docket_number,
     term,
     decided_at,
     argued_at,
@@ -203,11 +203,19 @@ export function buildUserPrompt(scotusCase, variationInjection = '') {
     majority_author,
     dissent_authors,
     syllabus,
-    holding_summary,
+    opinion_excerpt,
     issue_area,
     petitioner_type,
     respondent_type
   } = scotusCase;
+
+  // Normalize text fields (handle null/empty)
+  const docketNumber = (docket_number || '').trim();
+  const syllabusText = (syllabus || '').trim();
+  const excerptText = (opinion_excerpt || '').trim();
+
+  // Use syllabus if available, otherwise fall back to opinion excerpt
+  const textToAnalyze = syllabusText || excerptText || 'No syllabus available - use opinion text provided';
 
   // Format dissenting justices
   const dissentText = dissent_authors?.length > 0
@@ -224,7 +232,7 @@ export function buildUserPrompt(scotusCase, variationInjection = '') {
 
   let prompt = `CASE DATA:
 Case: ${case_name}${case_name_short ? ` (${case_name_short})` : ''}
-Docket: ${Array.isArray(docket_numbers) ? docket_numbers.join(', ') : docket_numbers || 'Unknown'}
+Docket: ${docketNumber || 'N/A'}
 Term: ${term || 'Unknown'}
 Decided: ${decided_at || 'Pending'}${argued_at ? `\nArgued: ${argued_at}` : ''}
 ${partyContext}
@@ -237,7 +245,7 @@ ${dissentText}
 ISSUE AREA: ${issueLabel}
 
 SYLLABUS/HOLDING:
-${syllabus || holding_summary || 'No syllabus available - use opinion text provided'}
+${textToAnalyze}
 
 ${variationInjection ? `\n${variationInjection}\n` : ''}
 Analyze this ruling and generate the editorial JSON. Remember:

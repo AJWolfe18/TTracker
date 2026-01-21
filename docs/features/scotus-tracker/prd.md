@@ -124,11 +124,13 @@ scotus_cases (
 
 ## Blockers
 
+All blockers resolved:
+
 1. ~~Define severity labels~~ ✅ Done (see scale above)
-2. ~~Create prompt files~~ ✅ Done
-3. [ ] CourtListener API token - need to register
-4. [ ] Live field verification with token
-5. [ ] Migration 050 (schema)
+2. ~~Create prompt files~~ ✅ Done (`scotus-gpt-prompt.js`, `scotus-variation-pools.js`)
+3. ~~CourtListener API token~~ ✅ Done (registered, token working)
+4. ~~Live field verification~~ ✅ Done (see `field-mapping.md`)
+5. ~~Schema migration~~ ✅ Done (migration 066 applied to TEST)
 
 ---
 
@@ -144,13 +146,13 @@ Track all files/migrations needed to deploy SCOTUS feature to production.
 - [x] `docs/architecture/business-logic-mapping.md` - SCOTUS section added (lines 569-709)
 
 ### Files To Create
-- [ ] `migrations/050-scotus-cases.sql` - Database schema
-- [ ] `scripts/scotus/fetch-cases.js` - CourtListener fetch worker (or edge function)
-- [ ] `scripts/scotus/enrich-cases.js` - GPT enrichment worker
+- [x] `migrations/066_scotus_cases.sql` - Database schema ✅
+- [x] `scripts/scotus/fetch-cases.js` - CourtListener fetch worker ✅
+- [ ] `scripts/scotus/enrich-scotus.js` - GPT enrichment worker (ADO-85)
 - [ ] UI components (TBD - may reuse existing story card pattern)
 
 ### Secrets/Config
-- [ ] `COURTLISTENER_API_TOKEN` - GitHub secret (TEST + PROD)
+- [x] `COURTLISTENER_API_TOKEN` - GitHub secret (TEST + PROD) ✅
 - [ ] Budget table entry for SCOTUS enrichment spending
 
 ### Edge Functions (if applicable)
