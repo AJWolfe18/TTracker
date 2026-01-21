@@ -177,7 +177,7 @@ Focus: Why this actually protects people. Why it's hard to walk back.
   "who_loses": "Explicit victim - be specific (workers, voters, patients, etc.)",
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone for that level.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
-  "dissent_highlights": "1-2 sentences. Key dissent warning. Use null if unanimous good ruling.",
+  "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null (not 'None' or 'N/A').",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }`;
 
@@ -355,14 +355,23 @@ export function validateEnrichmentResponse(response) {
     errors.push('why_it_matters too long (max 600 chars)');
   }
 
-  // Optional: dissent_highlights (can be null for unanimous good rulings)
-  if (response.dissent_highlights !== null && response.dissent_highlights !== undefined) {
-    if (typeof response.dissent_highlights !== 'string') {
-      errors.push('dissent_highlights must be string or null');
-    } else if (response.dissent_highlights.length > 0 && response.dissent_highlights.length < 30) {
-      errors.push('dissent_highlights too short if provided (min 30 chars)');
-    } else if (response.dissent_highlights.length > 500) {
-      errors.push('dissent_highlights too long (max 500 chars)');
+  // Optional: dissent_highlights (can be null for unanimous/no-dissent rulings)
+  // Strings < 30 chars are treated as "no meaningful content" and allowed
+  // Only validate length if >= 30 chars (then must be <= 500)
+  {
+    const dissent = response.dissent_highlights;
+
+    if (dissent !== null && dissent !== undefined) {
+      if (typeof dissent !== 'string') {
+        errors.push('dissent_highlights must be string or null');
+      } else {
+        const trimmed = dissent.trim();
+        // Only enforce max length if there's substantial content
+        if (trimmed.length >= 30 && trimmed.length > 500) {
+          errors.push('dissent_highlights too long (max 500 chars)');
+        }
+        // Anything < 30 chars is treated as null-equivalent (placeholder text)
+      }
     }
   }
 
