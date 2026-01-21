@@ -328,6 +328,7 @@ export function selectVariation(poolKey, contentId, promptVersion, recentIds = [
 
   if (patterns.length === 0) {
     // Fallback to a basic pattern
+    console.warn(`⚠️ Pattern pool empty for "${poolKey}" - using fallback pattern`);
     return {
       id: 'fallback',
       opening_approach: 'Lead with the key change this order makes.',

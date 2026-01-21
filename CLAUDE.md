@@ -324,7 +324,7 @@ WHERE day = CURRENT_DATE;
 | `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
 | `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
 
-**Important:** Workflows use `SUPABASE_SERVICE_KEY` not `SUPABASE_SERVICE_ROLE_KEY`.
+**Important:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Development Commands
 
