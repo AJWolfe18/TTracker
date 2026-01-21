@@ -265,7 +265,7 @@ After all 4 stories complete:
 
 - **ADO-269 (Pardons)**: ✅ COMPLETE - perplexity-research.js v1.5 supports 0-5 scale + string coercion
 - **ADO-270 (Stories)**: ✅ COMPLETE - Pipeline wired, needs end-to-end test
-- **ADO-271 (EOs)**: ⚠️ BLOCKED - Pipeline broken, see `eo-pipeline-fix-plan.md`
+- **ADO-271 (EOs)**: ✅ CLOSED - Pipeline fixed (dc8912d, c74096f)
 - **ADO-272 (SCOTUS)**: ✅ CLOSED - Phases 1-2 complete (profanity + betrayal voice). Phase 3 (shared module wiring) deferred to ADO-275
 - **ADO-274 (Stories Variation Fix)**: ✅ COMPLETE - Frame-based deterministic variation system
 
@@ -345,4 +345,4 @@ The EO enrichment code exists but **never runs**:
   - `repairBannedStarter()` returns `reason` field for debugging
   - Improved logging with story_id, pattern_id, failure reason
 
-**Next Action**: Fix ADO-271 EO pipeline per `eo-pipeline-fix-plan.md`, then test all pipelines end-to-end
+**Next Action**: Close ADO-271 (already Resolved), then test all pipelines end-to-end
