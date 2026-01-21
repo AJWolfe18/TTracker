@@ -1,8 +1,37 @@
 # ADO-85: SCOTUS Enrichment Script Plan
 
 **Created:** 2026-01-20
-**Status:** Ready for Implementation
+**Updated:** 2026-01-21
+**Status:** ⚠️ BLOCKED - Quality Issues Discovered
 **ADO:** [ADO-85](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/85)
+
+---
+
+## 🚨 Current Status
+
+### Completed ✅
+- `enrich-scotus.js` script created with full safety guards
+- PROD safety: `--prod` flag required, 3-second abort window
+- Budget tracking, retry logic, batch limits (MAX_SAFE_LIMIT=100)
+- Column alignment: `docket_number`, `opinion_excerpt` (matching DB schema)
+- Validation: short `dissent_highlights` treated as null-equivalent
+- 3 test cases enriched in TEST DB
+
+### Blocking Issue ❌
+**GPT hallucination when source material is insufficient:**
+
+| Case | Source Quality | GPT Said | Reality |
+|------|----------------|----------|---------|
+| FDA v. Alliance | 481 chars (header only) | "Pharma wins, loophole opened" | Standing dismissal - no merits ruling |
+| Starbucks v. McKinney | Full syllabus | "Workers win temporarily" | Made injunctions *harder* for NLRB |
+| Connelly v. United States | Truncated syllabus | "Corps vs small business" | Estate tax valuation case |
+
+**Root cause:** Single-pass enrichment conflates fact extraction with editorial framing. GPT hallucinates facts while trying to be "spicy."
+
+### Next Steps
+1. **[ADO-280](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/280)** - Two-pass architecture for factual accuracy
+2. **Better source data** - Improve syllabus extraction from CourtListener
+3. **DO NOT run bulk enrichment until ADO-280 is complete**
 
 ---
 
@@ -234,23 +263,99 @@ Well within $50/month budget.
 
 ## Acceptance Criteria
 
-- [ ] Script queries unenriched cases with syllabus
-- [ ] Calls GPT with existing prompt infrastructure
-- [ ] Validates responses before writing
-- [ ] Sets `enriched_at` and `is_public = true`
-- [ ] Tracks cost in budgets table
-- [ ] Handles errors gracefully (logs, continues)
-- [ ] CLI flags: `--limit`, `--dry-run`
+- [x] Script queries unenriched cases with syllabus OR excerpt
+- [x] Calls GPT with existing prompt infrastructure
+- [x] Validates responses before writing
+- [x] Sets `enriched_at` and `is_public = true`
+- [x] Tracks cost in budgets table
+- [x] Handles errors gracefully (logs, continues)
+- [x] CLI flags: `--limit`, `--dry-run`, `--prod`
+- [ ] **Factual accuracy** - GPT output matches actual case holdings ⚠️ BLOCKED
 
 ---
 
 ## Test Plan
 
-1. **Dry run with 3 cases** - Verify prompt construction
-2. **Enrich 3 cases** - Verify DB writes
-3. **Check validation** - Force bad response, verify rejection
-4. **Check RLS** - Enriched cases visible via anon role
-5. **Review output quality** - Manual review of summary_spicy, who_wins/loses
+1. **Dry run with 3 cases** - ✅ Verified prompt construction
+2. **Enrich 3 cases** - ✅ DB writes working
+3. **Check validation** - ✅ Validation catches malformed responses
+4. **Check RLS** - ✅ Enriched cases have `is_public = true`
+5. **Review output quality** - ❌ FAILED - GPT hallucinated facts on all 3 cases
+
+### Test Results (2026-01-21)
+
+| Case ID | Case Name | Validation | DB Write | Factual Accuracy |
+|---------|-----------|------------|----------|------------------|
+| 11 | FDA v. Alliance | ✅ | ✅ | ❌ Wrong (standing case, not pharma win) |
+| 12 | Starbucks v. McKinney | ✅ | ✅ | ❌ Wrong (bad for workers, not good) |
+| 4 | Connelly v. United States | ✅ | ✅ | ❌ Wrong (tax case, not corps vs small biz) |
+
+**Conclusion:** Script works mechanically, but output is factually unreliable. Need two-pass architecture.
+
+---
+
+## 🔧 Proposed Fix: Two-Pass Architecture ([ADO-280](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/280))
+
+### Problem
+Single-pass enrichment asks GPT to simultaneously:
+1. Extract facts from legal text
+2. Determine who won/lost
+3. Apply editorial tone
+
+When source material is insufficient or complex, GPT conflates these tasks and hallucinates facts to fit the requested tone.
+
+### Solution: Separate Concerns
+
+**Pass 1: Fact Extraction** (no editorial tone)
+```
+Input: Syllabus/excerpt text
+Output: {
+  "holding": "Court ruled X",
+  "prevailing_party": "Petitioner/Respondent",
+  "practical_effect": "This means Y for Z",
+  "dissent_exists": true/false,
+  "confidence": "high/medium/low"
+}
+```
+
+**Pass 2: Editorial Framing** (facts provided, just add tone)
+```
+Input: Pass 1 output + variation injection
+Output: {
+  "ruling_impact_level": 3,
+  "who_wins": "...",
+  "who_loses": "...",
+  "summary_spicy": "...",
+  ...
+}
+```
+
+### Why This Works
+- Pass 1 can't hallucinate to match a tone (no tone requested)
+- Pass 2 can't hallucinate facts (facts provided as input)
+- If Pass 1 returns `confidence: "low"`, flag for manual review
+
+### Cost Impact
+- Current: ~$0.0004/case (1 pass)
+- Two-pass: ~$0.0008/case (2 passes)
+- Still well under budget
+
+### Should All Content Types Use This?
+
+| Type | Source Redundancy | Hallucination Risk | Two-Pass? |
+|------|-------------------|-------------------|-----------|
+| Stories | Multiple articles | Lower | Maybe not |
+| Pardons | Structured DOJ data | Lower | No |
+| SCOTUS | Single legal doc | **High** | **Yes** |
+
+SCOTUS is highest risk: single source, legal nuance, no redundancy.
+
+### Implementation Plan
+1. Create `extractFactsFromCase()` function (Pass 1)
+2. Modify `enrichCase()` to use two-pass flow
+3. Add `fact_extraction_confidence` field to schema
+4. Flag low-confidence cases for manual review
+5. Update validation to check Pass 1 → Pass 2 consistency
 
 ---
 
