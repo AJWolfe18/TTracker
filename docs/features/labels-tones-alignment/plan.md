@@ -340,5 +340,9 @@ The EO enrichment code exists but **never runs**:
   - Deterministic variation selection with PROMPT_VERSION
   - Post-gen validation for banned starters in summary_spicy
 - Old `stories-variation-pools.js` retained for reference (no longer imported)
+- **Code review fixes (423fad6):**
+  - Negative context patterns now allow 0-3 bridge words ("Trump blocked DOJ investigation" → critical)
+  - `repairBannedStarter()` returns `reason` field for debugging
+  - Improved logging with story_id, pattern_id, failure reason
 
 **Next Action**: Fix ADO-271 EO pipeline per `eo-pipeline-fix-plan.md`, then test all pipelines end-to-end
