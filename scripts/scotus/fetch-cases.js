@@ -119,8 +119,9 @@ function sleep(ms) {
 /**
  * Select the majority opinion author using preference order
  * Opinion types are strings like "020majority", "015lead", etc.
+ * Falls back to resolving author_id via API when author_str is empty
  */
-function selectMajorityAuthor(opinions) {
+async function selectMajorityAuthor(opinions) {
   const preference = [
     /majority/i,     // 020majority, MAJORITY, etc.
     /per.?curiam/i,  // per_curiam, per curiam
@@ -131,32 +132,79 @@ function selectMajorityAuthor(opinions) {
 
   for (const pattern of preference) {
     // Guard against null/undefined type
-    const op = opinions.find(o => pattern.test(o.type || '') && o.author_str);
-    if (op) return op.author_str;
+    const op = opinions.find(o => pattern.test(o.type || ''));
+    if (op) {
+      // Prefer author_str if available, otherwise resolve from author_id
+      if (op.author_str) return op.author_str;
+      if (op.author_id) {
+        const name = await fetchAuthorName(op.author_id);
+        if (name) return name;
+      }
+    }
   }
-  return opinions[0]?.author_str || null;
+
+  // Fallback to first opinion
+  const first = opinions[0];
+  if (first?.author_str) return first.author_str;
+  if (first?.author_id) return await fetchAuthorName(first.author_id);
+
+  return null;
 }
 
 /**
  * Aggregate dissent authors (de-duped)
+ * Resolves author_id via API when author_str is empty
  */
-function aggregateDissents(opinions) {
-  return [...new Set(
-    opinions
-      .filter(o => /dissent/i.test(o.type || '') && o.author_str)
-      .map(o => o.author_str)
-  )];
+async function aggregateDissents(opinions) {
+  const dissents = opinions.filter(o => /dissent/i.test(o.type || ''));
+  const names = [];
+
+  for (const op of dissents) {
+    let name = op.author_str;
+    if (!name && op.author_id) {
+      name = await fetchAuthorName(op.author_id);
+    }
+    if (name && !names.includes(name)) {
+      names.push(name);
+    }
+  }
+
+  return names;
 }
 
 /**
  * Extract syllabus from opinion plain_text
+ * SCOTUS opinions have two "Syllabus" markers - skip the NOTE: and find the actual case syllabus
  */
 function extractSyllabus(plainText) {
   if (!plainText) return null;
 
-  // Try to find syllabus marker
-  const syllabusMatch = plainText.match(/Syllabus\n([\s\S]{100,2000}?)(?=\nOpinion|\nORDER|$)/i);
-  if (syllabusMatch) return syllabusMatch[1].trim();
+  // SCOTUS format: after "SUPREME COURT" header there's a "Syllabus" followed by case name and actual content
+  // Look for pattern: Syllabus followed by case name pattern (ALL CAPS v. ALL CAPS or similar)
+  // Then extract the actual summary content
+
+  // Strategy 1: Find syllabus after "SUPREME COURT" header
+  const supremeCourtIdx = plainText.indexOf('SUPREME COURT');
+  if (supremeCourtIdx > 0) {
+    const afterSupreme = plainText.slice(supremeCourtIdx);
+    // Find "Syllabus" after SUPREME COURT, then look for the case summary
+    const syllabusIdx = afterSupreme.indexOf('Syllabus');
+    if (syllabusIdx > 0) {
+      const afterSyllabus = afterSupreme.slice(syllabusIdx + 8);
+      // Find where the actual case facts begin (after docket number and date line)
+      // Pattern: "Argued ... —Decided ..." followed by actual content
+      const decidedMatch = afterSyllabus.match(/Decided\s+[A-Z][a-z]+\s+\d+,\s+\d{4}\s*\n([\s\S]{100,3000}?)(?=\nHeld:|Reversed|Affirmed|Opinion of|THOMAS|ROBERTS|ALITO|SOTOMAYOR|KAGAN|GORSUCH|KAVANAUGH|BARRETT|JACKSON|$)/i);
+      if (decidedMatch) {
+        return decidedMatch[1].trim().replace(/\n\s+/g, ' ').slice(0, 2000);
+      }
+    }
+  }
+
+  // Strategy 2: Fallback - find content after docket number pattern
+  const docketMatch = plainText.match(/No\.\s*\d+[–-]\d+\..*?Decided.*?\d{4}\s*\n([\s\S]{100,2000}?)(?=\nHeld:|Opinion|$)/i);
+  if (docketMatch) {
+    return docketMatch[1].trim().replace(/\n\s+/g, ' ').slice(0, 2000);
+  }
 
   return null;
 }
@@ -258,6 +306,32 @@ async function fetchOpinions(clusterId) {
   }
 }
 
+// Cache for author lookups to avoid duplicate API calls
+const authorCache = new Map();
+
+async function fetchAuthorName(authorId) {
+  if (!authorId) return null;
+
+  // Check cache first
+  if (authorCache.has(authorId)) {
+    return authorCache.get(authorId);
+  }
+
+  const url = `${COURTLISTENER_BASE}/people/${authorId}/`;
+  try {
+    const data = await fetchWithRetry(url);
+    const name = data.name_last
+      ? `${data.name_first || ''} ${data.name_last}`.trim()
+      : null;
+    authorCache.set(authorId, name);
+    return name;
+  } catch (err) {
+    console.log(`   [WARN] Failed to fetch author ${authorId}: ${err.message}`);
+    authorCache.set(authorId, null);
+    return null;
+  }
+}
+
 async function processCluster(cluster) {
   const clusterId = cluster.id;
   console.log(`   Processing cluster ${clusterId}: ${cluster.case_name?.slice(0, 50)}...`);
@@ -282,6 +356,10 @@ async function processCluster(cluster) {
   const syllabus = extractSyllabus(plainText);
   const excerpt = syllabus ? null : extractExcerpt(plainText);
 
+  // Resolve authors (async - may need API calls)
+  const majorityAuthor = await selectMajorityAuthor(opinions);
+  const dissentAuthors = await aggregateDissents(opinions);
+
   // Build the case record
   const caseRecord = {
     courtlistener_cluster_id: clusterId,
@@ -295,8 +373,8 @@ async function processCluster(cluster) {
     argued_at: docket?.date_argued || null,
     citation: selectCitation(cluster.citations),
     vote_split: null,  // SCDB data unreliable, skip for MVP
-    majority_author: selectMajorityAuthor(opinions),
-    dissent_authors: aggregateDissents(opinions),
+    majority_author: majorityAuthor,
+    dissent_authors: dissentAuthors,
     syllabus: syllabus,
     opinion_excerpt: excerpt,
     source_url: `https://www.courtlistener.com/opinion/${clusterId}/`,

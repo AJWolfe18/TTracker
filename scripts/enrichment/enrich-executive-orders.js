@@ -58,10 +58,10 @@ const OUTPUT_COST_PER_1K = 0.0006;
 // CLIENTS
 // ============================================================================
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Use TEST env vars when available (for local development on test branch)
+const supabaseUrl = process.env.SUPABASE_TEST_URL || process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_TEST_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

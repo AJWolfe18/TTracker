@@ -573,6 +573,29 @@ gh run watch
 **DO NOT USE** (legacy endpoints - creates orphaned jobs):
 - `curl .../rss-enqueue`
 
+### Fetch SCOTUS Cases (CourtListener API)
+**Script:** `scripts/scotus/fetch-cases.js`
+**Requires:** `COURTLISTENER_API_TOKEN` environment variable
+
+```bash
+# Fetch recent cases (2024+) - limit to 20 for testing
+COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=20
+
+# Dry run (no database writes)
+COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=5 --dry-run
+
+# Resume from last sync state (for incremental fetches)
+COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --resume
+
+# Check cases in database
+SELECT id, case_name, term, decided_at, majority_author FROM scotus_cases ORDER BY decided_at DESC LIMIT 10;
+```
+
+**Notes:**
+- Cases start with `is_public = false` (need enrichment/review before publishing)
+- Sync state tracked in `scotus_sync_state` table (singleton)
+- API rate limit: 5000 requests/hour with exponential backoff on 429
+
 ## Feature-Dev Plugin Usage
 
 When starting work on:
@@ -607,6 +630,6 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ---
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-01-20
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`

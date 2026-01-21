@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-01-20
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -232,6 +232,85 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 
 **RLS Policies:**
 - `pardon_story_anon_select` - Only show links to public pardons
+
+---
+
+## SCOTUS Tracker Tables
+
+### `scotus_cases`
+**Purpose:** Track Supreme Court decisions with AI enrichment
+**Row Count:** ~12 cases (MVP in development)
+**Migration:** `066_scotus_cases.sql`
+**Data Source:** CourtListener API
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (GENERATED ALWAYS AS IDENTITY) |
+| courtlistener_cluster_id | BIGINT | UNIQUE NOT NULL - CourtListener cluster ID |
+| courtlistener_docket_id | BIGINT | CourtListener docket ID |
+| case_name | TEXT | NOT NULL - Full case name |
+| case_name_short | TEXT | Short name (e.g., "Connelly") |
+| case_name_full | TEXT | Full case name with parties |
+| docket_number | TEXT | e.g., "No. 23-146" |
+| term | TEXT | SCOTUS term year (e.g., "2024") |
+| decided_at | TIMESTAMPTZ | Decision date |
+| argued_at | TIMESTAMPTZ | Oral argument date |
+| citation | TEXT | Best citation (e.g., "599 U.S. 123") |
+| vote_split | TEXT | "6-3" format (nullable, SCDB data sparse) |
+| majority_author | TEXT | Justice who wrote majority/plurality |
+| dissent_authors | TEXT[] | Array of dissenting justices |
+| syllabus | TEXT | Case syllabus extracted from opinion |
+| opinion_excerpt | TEXT | First ~500 chars if no syllabus |
+| issue_area | TEXT | Classification (justice_legal, voting_rights, etc.) |
+| petitioner_type | TEXT | individual, corporation, government |
+| respondent_type | TEXT | individual, corporation, government |
+| ruling_impact_level | SMALLINT | 0-5 impact scale (from enrichment) |
+| ruling_label | TEXT | Short ruling description |
+| who_wins | TEXT | Winning party description |
+| who_loses | TEXT | Losing party description |
+| summary_spicy | TEXT | AI: Engaging summary |
+| why_it_matters | TEXT | AI: Impact analysis |
+| dissent_highlights | TEXT | AI: Key dissent points |
+| evidence_anchors | TEXT[] | AI: Quote citations |
+| is_public | BOOLEAN | NOT NULL DEFAULT false - Publish gate |
+| enriched_at | TIMESTAMPTZ | When AI enrichment ran |
+| prompt_version | TEXT | Enrichment prompt version |
+| source_url | TEXT | CourtListener page URL |
+| pdf_url | TEXT | Opinion PDF URL |
+| created_at | TIMESTAMPTZ | Row created |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Key Constraints:**
+- UNIQUE on `courtlistener_cluster_id` (idempotent upserts)
+- CHECK on `ruling_impact_level` (0-5 range)
+
+**Key Indexes:**
+- `idx_scotus_cases_term` - btree on term
+- `idx_scotus_cases_decided` - btree on decided_at DESC
+- `idx_scotus_cases_impact` - btree on ruling_impact_level
+- `idx_scotus_cases_issue` - btree on issue_area
+- `idx_scotus_cases_unenriched` - Partial: unenriched public cases
+- `idx_scotus_cases_public` - Partial: public cases only
+
+**RLS Policies:**
+- `scotus_cases_anon_select` - Anon sees only `is_public = true`
+- `scotus_cases_service_all` - Service role has full access
+
+---
+
+### `scotus_sync_state`
+**Purpose:** Pagination checkpoint for CourtListener API fetching (singleton table)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INT | Primary key (always 1 - singleton) |
+| next_url | TEXT | CourtListener pagination URL |
+| last_date_filed | DATE | Most recent case date seen |
+| last_fetch_at | TIMESTAMPTZ | Last fetch timestamp |
+| total_fetched | INT | Running count of cases fetched |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Constraint:** `CHECK (id = 1)` ensures singleton
 
 ---
 
