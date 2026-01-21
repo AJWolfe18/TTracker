@@ -307,7 +307,9 @@ async function fetchOpinions(clusterId) {
 }
 
 // Cache for author lookups to avoid duplicate API calls
+// Fix #1: Limit cache size (SCOTUS has ~115 total justices historically)
 const authorCache = new Map();
+const MAX_AUTHOR_CACHE_SIZE = 200;
 
 async function fetchAuthorName(authorId) {
   if (!authorId) return null;
@@ -315,6 +317,12 @@ async function fetchAuthorName(authorId) {
   // Check cache first
   if (authorCache.has(authorId)) {
     return authorCache.get(authorId);
+  }
+
+  // Fix #1: Prevent unbounded cache growth (LRU-style eviction)
+  if (authorCache.size >= MAX_AUTHOR_CACHE_SIZE) {
+    const firstKey = authorCache.keys().next().value;
+    authorCache.delete(firstKey);
   }
 
   const url = `${COURTLISTENER_BASE}/people/${authorId}/`;
@@ -327,7 +335,11 @@ async function fetchAuthorName(authorId) {
     return name;
   } catch (err) {
     console.log(`   [WARN] Failed to fetch author ${authorId}: ${err.message}`);
-    authorCache.set(authorId, null);
+    // Fix #3: Only cache permanent failures (404), not transient errors
+    // Transient errors (rate limit, network) can be retried on next run
+    if (err.message.includes('404') || err.message.includes('Not Found')) {
+      authorCache.set(authorId, null);
+    }
     return null;
   }
 }
