@@ -3,24 +3,110 @@
  * SYSTEM_PROMPT imported from ./prompts.js (shared with job-queue-worker.js)
  *
  * ADO-270: Updated to use variation pools and alarm_level (0-5)
+ * ADO-274: Frame-based variation system with deterministic selection
  */
 
 import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from './prompts.js';
 import { normalizeEntities } from '../lib/entity-normalization.js';
 import {
-  getPoolKey,
+  PROMPT_VERSION,
+  estimateStoryFrame,
+  getStoryPoolKey,
+  getStoryContentId,
   selectVariation,
   buildVariationInjection,
   normalizeAlarmLevel,
-  alarmLevelToLegacySeverity
-} from './stories-variation-pools.js';
+  alarmLevelToLegacySeverity,
+  findBannedStarter,
+  repairBannedStarter,
+  SECTION_BANS
+} from './stories-style-patterns.js';
 
 // =====================================================================
 // Constants
 // =====================================================================
 
 const ENRICHMENT_COOLDOWN_HOURS = 12; // Match worker cooldown
+
+// =====================================================================
+// Feed Registry Cache (ADO-274: avoid N+1 queries)
+// =====================================================================
+
+let feedRegistryCache = null;          // Map<string, {topics: string[], tier: number}>
+let feedRegistryLoadPromise = null;
+
+/**
+ * Reset feed registry cache (call between batches if script stays alive)
+ */
+export function resetFeedRegistryCache() {
+  feedRegistryCache = null;
+  feedRegistryLoadPromise = null;
+}
+
+/**
+ * Load feed registry into memory (topics and tier only)
+ * Call once per batch to avoid N+1 queries
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Map<string, {topics: string[], tier: number}>>}
+ */
+export async function loadFeedRegistry(supabase) {
+  if (feedRegistryCache) return feedRegistryCache;
+  if (feedRegistryLoadPromise) return feedRegistryLoadPromise;
+
+  feedRegistryLoadPromise = (async () => {
+    const { data, error } = await supabase
+      .from('feed_registry')
+      .select('id, topics, tier')
+      .eq('is_active', true);
+
+    // Always set cache so we don't spam queries on repeated failures
+    const cache = new Map();
+
+    if (error) {
+      console.warn('Failed to load feed registry:', error.message);
+      feedRegistryCache = cache;
+      return feedRegistryCache;
+    }
+
+    for (const feed of data || []) {
+      const key = String(feed.id);
+      const tierRaw = Number(feed.tier);
+      // Tier must be 1-3; default to 2 if invalid
+      const tier = Number.isFinite(tierRaw) && tierRaw >= 1 && tierRaw <= 3 ? tierRaw : 2;
+      cache.set(key, {
+        topics: Array.isArray(feed.topics) ? feed.topics : [],
+        tier
+      });
+    }
+
+    feedRegistryCache = cache;
+    return feedRegistryCache;
+  })();
+
+  try {
+    return await feedRegistryLoadPromise;
+  } finally {
+    feedRegistryLoadPromise = null;
+  }
+}
+
+/**
+ * Get feed metadata by ID (uses cache if available)
+ * @param {number|string} feedId - Feed ID
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{topics: string[], tier: number}>}
+ */
+async function getFeedMeta(feedId, supabase) {
+  const key = String(feedId);
+
+  if (feedRegistryCache?.has(key)) {
+    return feedRegistryCache.get(key);
+  }
+
+  const registry = await loadFeedRegistry(supabase);
+  return registry.get(key) || { topics: [], tier: 2 };
+}
 
 // Category mapping: UI labels → DB enum values
 const UI_TO_DB_CATEGORIES = {
@@ -110,11 +196,12 @@ export function shouldEnrichStory(story) {
 
 /**
  * Fetch up to 6 articles for a story, ordered by relevance
+ * ADO-274: Now includes feed_id for frame estimation
  */
 async function fetchStoryArticles(story_id, supabase) {
   const { data, error } = await supabase
     .from('article_story')
-    .select('is_primary_source, similarity_score, matched_at, articles(title, source_name, content, excerpt)')
+    .select('is_primary_source, similarity_score, matched_at, articles(title, source_name, content, excerpt, feed_id)')
     .eq('story_id', story_id)
     .order('is_primary_source', { ascending: false })
     .order('similarity_score', { ascending: false })
@@ -168,16 +255,28 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   });
 
   // ========================================
-  // 2. BUILD VARIATION INJECTION (ADO-270)
+  // 2. BUILD VARIATION INJECTION (ADO-274)
   // ========================================
-  // Use story's existing category if available, otherwise default
-  // For first-time enrichment, category won't exist yet, so use 'default' pool
-  const existingCategory = story.category || 'other';
-  const poolKey = getPoolKey(existingCategory);
+  // Use frame-based variation system with deterministic selection
+  // Frame estimated from headline + feed tier (pre-enrichment signals only)
 
-  // Select random variation elements (alarm_level unknown on first pass, default to 3)
-  const variation = selectVariation(poolKey, 3, []);
-  const variationInjection = buildVariationInjection(variation, []);
+  // Get feed metadata from primary article (first in list, ordered by is_primary_source)
+  const primaryFeedId = links[0]?.articles?.feed_id;
+  const feedMeta = primaryFeedId
+    ? await getFeedMeta(primaryFeedId, supabase)
+    : { topics: [], tier: 2 };
+
+  // Estimate frame from headline and feed tier
+  const frame = estimateStoryFrame(primary_headline, feedMeta.tier);
+  const poolKey = getStoryPoolKey(feedMeta.topics, frame);
+  const contentId = getStoryContentId(story);
+
+  // Deterministic variation selection
+  const variation = selectVariation(poolKey, contentId, PROMPT_VERSION, []);
+  const variationInjection = buildVariationInjection(variation, frame);
+
+  // Debug logging for variation system (ADO-274)
+  console.log(`[ADO-274] Story ${story_id}: frame=${frame}, pool=${poolKey}, pattern=${variation.id}`);
 
   // Inject variation into system prompt
   const systemPromptWithVariation = SYSTEM_PROMPT.replace(
@@ -213,13 +312,27 @@ export async function enrichStory(story, { supabase, openaiClient }) {
 
   // Extract and validate fields
   const summary_neutral = obj.summary_neutral?.trim();
-  const summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
+  let summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
   const category_db = obj.category ? toDbCategory(obj.category) : null;
   const primary_actor = (obj.primary_actor || '').trim() || null;
 
   // ADO-270: Extract alarm_level (0-5) and derive legacy severity
   const alarm_level = normalizeAlarmLevel(obj.alarm_level);
   const severity = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
+
+  // ADO-274: Post-gen validation for banned starters
+  const bannedPhrases = SECTION_BANS.summary_spicy || [];
+  const bannedStarter = findBannedStarter(summary_spicy, bannedPhrases);
+  if (bannedStarter) {
+    console.warn(`Banned starter detected in summary_spicy: "${bannedStarter}"`);
+    const repair = repairBannedStarter('summary_spicy', summary_spicy, bannedStarter);
+    if (repair.success) {
+      console.log(`Repaired banned starter with template`);
+      summary_spicy = repair.content;
+    } else {
+      console.warn(`Could not repair banned starter - keeping original`);
+    }
+  }
 
   // TTRC-235: Extract entities and format correctly
   // TTRC-236: Normalize entity IDs for consistent merge detection

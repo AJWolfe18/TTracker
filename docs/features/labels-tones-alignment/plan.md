@@ -264,9 +264,10 @@ After all 4 stories complete:
 ## STATUS
 
 - **ADO-269 (Pardons)**: ✅ COMPLETE - perplexity-research.js v1.5 supports 0-5 scale + string coercion
-- **ADO-270 (Stories)**: 🧪 TESTING - Pipeline wired correctly, needs end-to-end test
+- **ADO-270 (Stories)**: ✅ COMPLETE - Pipeline wired, needs end-to-end test
 - **ADO-271 (EOs)**: ⚠️ BLOCKED - Pipeline broken, see `eo-pipeline-fix-plan.md`
-- **ADO-272 (SCOTUS)**: ✅ COMPLETE - Backend prompts updated (frontend doesn't exist yet)
+- **ADO-272 (SCOTUS)**: ✅ CLOSED - Phases 1-2 complete (profanity + betrayal voice). Phase 3 (shared module wiring) deferred to ADO-275
+- **ADO-274 (Stories Variation Fix)**: ✅ COMPLETE - Frame-based deterministic variation system
 
 ### ADO-271 Pipeline Issue (Discovered 2026-01-18)
 
@@ -321,5 +322,23 @@ The EO enrichment code exists but **never runs**:
 - `scripts/enrichment/scotus-gpt-prompt.js` - "THE BETRAYAL" voice, profanity enabled at levels 4-5
 - `scripts/enrichment/scotus-variation-pools.js` - Level 0 "suspicious celebration" variations added
 - Note: scotus-app.js doesn't exist yet (tab shows "coming soon"), tone-system.json has SCOTUS labels ready
+
+**Completed (ADO-274 - Stories Tone Variation Fix):**
+- `scripts/enrichment/stories-style-patterns.js` - NEW: Frame-based variation system
+  - 3 frame buckets: alarmed | critical | grudging_credit
+  - 3 topic pools: investigations | policy | general (from feed_registry.topics)
+  - 9 total pools (topic × frame)
+  - 14 Stories-specific patterns + 21 core patterns = 35 total
+  - Deterministic selection via FNV-1a hash (separate hashes for bias/index)
+  - Negative context guard for "blocked aid" false positives
+  - Post-gen banned-starter repair with fail-closed safety
+  - Exported tuning knob: STORIES_SPECIFIC_BIAS_THRESHOLD
+- `scripts/enrichment/enrich-stories-inline.js` - Updated for frame-based system
+  - Feed registry cache with race-condition prevention
+  - String-normalized Map keys for Supabase bigint compatibility
+  - Frame estimation from headline + feed tier (pre-enrichment signals)
+  - Deterministic variation selection with PROMPT_VERSION
+  - Post-gen validation for banned starters in summary_spicy
+- Old `stories-variation-pools.js` retained for reference (no longer imported)
 
 **Next Action**: Fix ADO-271 EO pipeline per `eo-pipeline-fix-plan.md`, then test all pipelines end-to-end
