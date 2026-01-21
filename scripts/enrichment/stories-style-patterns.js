@@ -235,11 +235,13 @@ export function mapFeedTopicsToPool(topics) {
 // ============================================================================
 
 // Negative-context patterns that indicate "blocked/stopped" is BAD news
+// NOTE: Allow a few bridge-words ("DOJ", "congressional", etc.) between the verb and the noun.
+// Example: "Trump blocked DOJ investigation" should be negative context (NOT grudging_credit).
 const NEGATIVE_CONTEXT_PATTERNS = [
-  /blocked\s+(aid|relief|funding|assistance|access)/i,
-  /stopped\s+(aid|relief|funding|assistance|access)/i,
-  /overturned\s+(protection|rights|ruling|decision)/i,
-  /struck\s+down\s+(protection|rights|law)/i
+  /\bblock(?:ed|s|ing)?\s+(?:\w+\s+){0,3}(aid|relief|funding|assistance|access|investigation|inquiry|oversight|probe|subpoena|testimony)\b/i,
+  /\bstop(?:ped|s|ping)?\s+(?:\w+\s+){0,3}(aid|relief|funding|assistance|access|investigation|inquiry|oversight|probe|subpoena|testimony)\b/i,
+  /\boverturned\s+(?:\w+\s+){0,2}(protection|rights|ruling|decision)\b/i,
+  /\bstruck\s+down\s+(?:\w+\s+){0,2}(protection|rights|law)\b/i
 ];
 
 /**
@@ -661,26 +663,28 @@ export function findBannedStarter(text, bannedPhrases) {
  * @param {string} section - Section name (for deterministic template selection)
  * @param {string} content - Original content
  * @param {string} bannedPhrase - The banned phrase found
- * @returns {{ success: boolean, content: string|null }}
+ * @returns {{ success: boolean, content: string|null, reason: string|null }}
  */
 export function repairBannedStarter(section, content, bannedPhrase) {
   const strippedContent = stripLeadingJunk(content);
 
-  // Find where the banned phrase starts in stripped content
-  const phraseStart = strippedContent.toLowerCase().indexOf(String(bannedPhrase).toLowerCase());
+  const phraseLower = String(bannedPhrase).toLowerCase();
+  const phraseStart = strippedContent.toLowerCase().indexOf(phraseLower);
 
   // Fail-closed: only repair if phrase is exactly at position 0
-  // If phraseStart > 0, something is misaligned - don't silently chop content
   if (phraseStart !== 0) {
-    return { success: false, content: null };
+    return {
+      success: false,
+      content: null,
+      reason: phraseStart < 0 ? 'PHRASE_NOT_FOUND' : 'PHRASE_NOT_AT_START'
+    };
   }
 
   const phraseEnd = bannedPhrase.length;
   let remainder = strippedContent.slice(phraseEnd).replace(/^[,\s]+/, '').trim();
 
   if (remainder.length < 20) {
-    // Not enough content left after removing banned phrase
-    return { success: false, content: null };
+    return { success: false, content: null, reason: 'REMAINDER_TOO_SHORT' };
   }
 
   // Select template deterministically based on section
@@ -694,10 +698,10 @@ export function repairBannedStarter(section, content, bannedPhrase) {
   const bannedList = SECTION_BANS[section] || [];
   const stillBanned = findBannedStarter(repaired, bannedList);
   if (stillBanned) {
-    return { success: false, content: null };
+    return { success: false, content: null, reason: `STILL_BANNED:${stillBanned}` };
   }
 
-  return { success: true, content: repaired };
+  return { success: true, content: repaired, reason: null };
 }
 
 // ============================================================================

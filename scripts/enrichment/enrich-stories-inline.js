@@ -323,14 +323,29 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   // ADO-274: Post-gen validation for banned starters
   const bannedPhrases = SECTION_BANS.summary_spicy || [];
   const bannedStarter = findBannedStarter(summary_spicy, bannedPhrases);
+
   if (bannedStarter) {
-    console.warn(`Banned starter detected in summary_spicy: "${bannedStarter}"`);
+    const storyIdForLog = (typeof story_id !== 'undefined' && story_id != null)
+      ? story_id
+      : (story?.id ?? 'unknown');
+
+    const patternIdForLog = variation?.id ?? 'unknown';
+
+    console.warn(
+      `[ADO-274] Banned starter in summary_spicy: "${bannedStarter}" (story=${storyIdForLog}, pattern=${patternIdForLog})`
+    );
+
     const repair = repairBannedStarter('summary_spicy', summary_spicy, bannedStarter);
+
     if (repair.success) {
-      console.log(`Repaired banned starter with template`);
+      console.log(
+        `[ADO-274] Repaired banned starter (story=${storyIdForLog}, pattern=${patternIdForLog})`
+      );
       summary_spicy = repair.content;
     } else {
-      console.warn(`Could not repair banned starter - keeping original`);
+      console.warn(
+        `[ADO-274] Repair failed - keeping original (story=${storyIdForLog}, pattern=${patternIdForLog}, reason=${repair.reason || 'unknown'})`
+      );
     }
   }
 
