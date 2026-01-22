@@ -1,8 +1,12 @@
 /**
- * GPT Enrichment Prompt for SCOTUS Cases (TTRC-340)
+ * GPT Enrichment Prompt for SCOTUS Cases (TTRC-340 / ADO-280)
  *
  * Transforms CourtListener case data into reader-facing editorial copy.
  * Uses ruling_impact_level (0-5) to calibrate tone.
+ *
+ * ADO-280 Two-Pass Architecture:
+ * - Pass 1: Fact extraction (handled by scotus-fact-extraction.js)
+ * - Pass 2: Editorial framing (this module) - receives locked facts
  *
  * Voice: Pro-people, anti-corporate, anti-authoritarian.
  * SCOTUS should protect regular people but usually serves corporations,
@@ -10,7 +14,8 @@
  *
  * Dependencies:
  *   - Variation pools: scripts/enrichment/scotus-variation-pools.js
- *   - Schema: migrations/050-scotus-cases.sql (TBD)
+ *   - Fact extraction: scripts/enrichment/scotus-fact-extraction.js
+ *   - Schema: migrations/066_scotus_cases.sql, 067_scotus_two_pass.sql
  */
 
 // ============================================================================
@@ -405,4 +410,178 @@ export function profanityAllowed(level) {
  */
 export function getLevelInfo(level) {
   return RULING_IMPACT_LEVELS[level] || RULING_IMPACT_LEVELS[3];
+}
+
+// ============================================================================
+// PASS 2: EDITORIAL FRAMING (ADO-280)
+// ============================================================================
+
+/**
+ * Pass 2 System Prompt - Editorial framing with locked facts
+ * Uses the same voice/tone system as SYSTEM_PROMPT but with constraints
+ */
+export const PASS2_SYSTEM_PROMPT = `You are the editorial engine for TrumpyTracker's SCOTUS tracker.
+
+═══════════════════════════════════════════════════════════════════════════════
+VOICE: "THE BETRAYAL"
+═══════════════════════════════════════════════════════════════════════════════
+
+The people supposed to protect the law are lighting it on fire.
+
+The Supreme Court is meant to be the guardian of rights. Instead, we're watching guardians become arsonists. When billionaire donors get favorable rulings from justices they wined and dined, when precedent gets torched to serve power, when "originalism" becomes whatever serves the agenda—that's The Betrayal.
+
+# MISSION
+Analyze Supreme Court rulings from a fiercely pro-people, anti-corporate, and anti-authoritarian perspective. You do NOT do "both sides." You expose how the Court favors capital and control over human life.
+
+# CRITICAL: FACTS ARE LOCKED
+You are receiving PASS 1 FACTS that have been extracted and verified. Your job is to apply EDITORIAL TONE to these facts.
+
+DO NOT:
+- Contradict the Pass 1 facts
+- Add claims not supported by the facts
+- Change who won/lost from what facts indicate
+- Invent numbers or statistics
+
+DO:
+- Use the appropriate tone for the ruling_impact_level you assign
+- Make the facts accessible and impactful for readers
+- Follow any CASE TYPE CONSTRAINTS provided (procedural, cert stage, shadow docket)
+
+═══════════════════════════════════════════════════════════════════════════════
+TONE CALIBRATION BY RULING IMPACT LEVEL (0-5)
+═══════════════════════════════════════════════════════════════════════════════
+
+LEVEL 5 🔴 [Constitutional Crisis]
+Tone: Cold fury. Prosecutorial. The guardians have become arsonists.
+Profanity: YES - for incredulity, not spray. "They actually fucking did it."
+
+LEVEL 4 🟠 [Rubber-stamping Tyranny]
+Tone: Angry accountability. The bench just blessed authoritarianism.
+Profanity: YES - when it lands.
+
+LEVEL 3 🟡 [Institutional Sabotage]
+Tone: Sardonic/Snarky. "This ruling sounds boring. That's the point."
+Profanity: NO.
+
+LEVEL 2 🔵 [Judicial Sidestepping]
+Tone: Eye-roll. Lazy employees energy. Nine robes, zero courage.
+Profanity: NO.
+
+LEVEL 1 ⚪ [Crumbs from the Bench]
+Tone: Cautiously skeptical. Credit the win, but flag the limiting language.
+Profanity: NO.
+
+LEVEL 0 🟢 [Democracy Wins]
+Tone: Suspicious celebration. Genuine disbelief the system worked.
+Profanity: NO.
+
+# OUTPUT FORMAT (JSON)
+{
+  "ruling_impact_level": 0-5,
+  "ruling_label": "Label from scale above",
+  "who_wins": "Explicit beneficiary - be specific (must align with facts)",
+  "who_loses": "Explicit victim - be specific (must align with facts)",
+  "summary_spicy": "3-4 sentences. Editorial spin using the designated tone. MUST include the disposition word.",
+  "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
+  "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
+  "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
+}`;
+
+/**
+ * Build Pass 2 user prompt with facts and constraints
+ *
+ * @param {Object} scotusCase - Case record
+ * @param {Object} facts - Pass 1 output (disposition, holding, case_type, etc.)
+ * @param {string} variationInjection - Creative direction from variation pools
+ * @returns {string} User prompt for Pass 2
+ */
+export function buildPass2UserPrompt(scotusCase, facts, variationInjection = '') {
+  let constraints = '';
+
+  // PROCEDURAL CASES: Lock who_wins/who_loses
+  if (facts.merits_reached === false || facts.case_type === 'procedural') {
+    constraints += `
+PROCEDURAL CASE CONSTRAINT:
+This is a procedural ruling (${facts.disposition || 'dismissal'}).
+- who_wins MUST be: "Procedural ruling - no merits decision" or similar
+- who_loses MUST be: "Case dismissed on procedural grounds" or similar
+- Do NOT claim a substantive winner/loser
+- summary_spicy should focus on WHY it was dismissed and who benefits from delay
+`;
+  }
+
+  // CERT_STAGE CASES: Grant/deny cert language only
+  if (facts.case_type === 'cert_stage') {
+    constraints += `
+CERT STAGE CONSTRAINT:
+This is a cert-stage action (grant/deny of certiorari).
+- Do NOT describe a merits outcome - no merits were decided
+- who_wins/who_loses must reflect access to SCOTUS review ONLY
+- Example who_wins: "Petitioner gains Supreme Court review"
+- Example who_loses: "Respondent must defend at highest level"
+- For cert denied: "Lower court ruling stands" NOT "X wins on the merits"
+`;
+  }
+
+  // SHADOW_DOCKET CASES: Emergency order language
+  if (facts.case_type === 'shadow_docket') {
+    constraints += `
+SHADOW DOCKET CONSTRAINT:
+This is an emergency order (stay/injunction/application) - NOT a final merits ruling.
+- Do NOT claim a final merits holding
+- Focus on IMMEDIATE operational effect only
+- who_wins/who_loses should reflect emergency posture
+- Use language like "emergency relief granted/denied" NOT "Court rules..."
+`;
+  }
+
+  // DISPOSITION LOCK
+  if (facts.disposition) {
+    constraints += `
+DISPOSITION LOCK:
+The disposition is "${facts.disposition}". This word MUST appear in summary_spicy.
+`;
+  }
+
+  // Format dissent info
+  const dissentInfo = scotusCase.dissent_authors?.length > 0
+    ? `Dissenting: ${scotusCase.dissent_authors.join(', ')}`
+    : 'No dissent (unanimous)';
+
+  const prompt = `${constraints}
+
+PASS 1 FACTS (LOCKED - your editorial must align with these):
+- Disposition: ${facts.disposition || 'unknown'}
+- Merits Reached: ${facts.merits_reached === true ? 'yes' : facts.merits_reached === false ? 'no' : 'unclear'}
+- Case Type: ${facts.case_type || 'unclear'}
+- Holding: ${facts.holding || 'not extracted'}
+- Prevailing Party: ${facts.prevailing_party || 'unclear'}
+- Practical Effect: ${facts.practical_effect || 'not extracted'}
+
+CASE DATA:
+Case: ${scotusCase.case_name}
+Term: ${scotusCase.term || 'Unknown'}
+Decided: ${scotusCase.decided_at || 'Pending'}
+Vote: ${scotusCase.vote_split || 'Unknown'}
+Majority: ${scotusCase.majority_author || 'Unknown'}
+${dissentInfo}
+
+${variationInjection ? `CREATIVE DIRECTION:\n${variationInjection}\n` : ''}
+Generate the editorial JSON. Remember:
+- Your who_wins/who_loses MUST align with the prevailing_party and case_type above
+- The disposition word "${facts.disposition || 'unknown'}" MUST appear in summary_spicy
+- Use the appropriate tone for the ruling_impact_level you assign
+- Do NOT contradict the Pass 1 facts`;
+
+  return prompt;
+}
+
+/**
+ * Build messages array for Pass 2 GPT call
+ */
+export function buildPass2Messages(scotusCase, facts, variationInjection = '') {
+  return [
+    { role: 'system', content: PASS2_SYSTEM_PROMPT },
+    { role: 'user', content: buildPass2UserPrompt(scotusCase, facts, variationInjection) }
+  ];
 }
