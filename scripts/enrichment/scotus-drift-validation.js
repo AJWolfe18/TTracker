@@ -128,17 +128,20 @@ export function validateNoDrift(facts, editorial) {
   // These are factual contradictions where Pass 2 claims something Pass 1 explicitly denies
 
   // 1. Procedural mismatch (HARD) - claims substantive winner when no merits reached
+  // Use word boundary regex to avoid false positives like "long-standing" or "outstanding"
   if (facts.merits_reached === false || facts.case_type === 'procedural') {
-    if (!whoWinsLower.includes('procedural') && !whoWinsLower.includes('dismissed') &&
-        !whoWinsLower.includes('no merits') && !whoWinsLower.includes('standing')) {
+    const proceduralSignals = /\b(procedural|dismissed|no merits|standing dismissal|lack of standing|standing to)\b/i;
+    if (!proceduralSignals.test(whoWinsLower)) {
       hardIssues.push('Procedural mismatch: who_wins claims substantive winner');
     }
   }
 
   // 2. Cert stage mismatch (HARD) - claims merits outcome for cert grant/deny
+  // Added "stands" for "Lower court ruling stands" language
   if (facts.case_type === 'cert_stage') {
     if (!whoWinsLower.includes('review') && !whoWinsLower.includes('cert') &&
-        !whoWinsLower.includes('denied') && !whoWinsLower.includes('granted')) {
+        !whoWinsLower.includes('denied') && !whoWinsLower.includes('granted') &&
+        !whoWinsLower.includes('stands')) {
       hardIssues.push('Cert stage mismatch: who_wins claims merits outcome');
     }
   }
@@ -159,6 +162,7 @@ export function validateNoDrift(facts, editorial) {
   }
 
   // 5. Meaning inversion (SOFT) - opposite words used
+  // Use word boundary regex to avoid false positives like "unlimited" matching "limits"
   const invertPairs = [
     ['harder', 'easier'],
     ['restricts', 'expands'],
@@ -170,10 +174,13 @@ export function validateNoDrift(facts, editorial) {
   ];
 
   for (const [word1, word2] of invertPairs) {
-    if (practicalLower.includes(word1) && summaryLower.includes(word2)) {
+    const regex1 = new RegExp(`\\b${word1}\\b`, 'i');
+    const regex2 = new RegExp(`\\b${word2}\\b`, 'i');
+
+    if (regex1.test(practicalLower) && regex2.test(summaryLower)) {
       softIssues.push(`Inversion: facts say "${word1}", editorial says "${word2}"`);
     }
-    if (practicalLower.includes(word2) && summaryLower.includes(word1)) {
+    if (regex2.test(practicalLower) && regex1.test(summaryLower)) {
       softIssues.push(`Inversion: facts say "${word2}", editorial says "${word1}"`);
     }
   }

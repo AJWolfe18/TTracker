@@ -91,13 +91,29 @@ export const DB_COLUMNS = new Set([
   'vote_split', 'dissent_exists',
 ]);
 
+// Known runtime-only fields that are expected to be dropped (not DB columns)
+const RUNTIME_ONLY_FIELDS = new Set([
+  'passed', 'validation_issues', 'consistency_check_failed',
+  'evidence_quotes_truncated', 'raw_response', 'usage'
+]);
+
 export function sanitizeForDB(payload) {
   const clean = {};
+  const dropped = [];
+
   for (const [key, value] of Object.entries(payload)) {
     if (DB_COLUMNS.has(key)) {
       clean[key] = value;
+    } else if (!RUNTIME_ONLY_FIELDS.has(key)) {
+      // Unknown field - log warning so we catch schema mismatches
+      dropped.push(key);
     }
   }
+
+  if (dropped.length > 0) {
+    console.warn(`[sanitizeForDB] Dropped unknown fields: ${dropped.join(', ')}`);
+  }
+
   return clean;
 }
 
@@ -193,7 +209,7 @@ OUTPUT SCHEMA:
   "holding": "1-2 sentences, neutral. What did the Court decide? If unclear, null.",
   "prevailing_party": "petitioner|respondent|partial|unclear|null",
   "practical_effect": "1 sentence. What changes? If unclear, null.",
-  "evidence_quotes": ["verbatim quote 1 (<=25 words)", "quote 2", ...],
+  "evidence_quotes": ["verbatim quote 1 (<=50 words)", "quote 2", ...],
   "fact_extraction_confidence": "high|medium|low",
   "low_confidence_reason": "if not high, explain why"
 }
@@ -265,7 +281,7 @@ Extract the facts from this SCOTUS ruling. Return JSON only.`;
 // Expanded anchor tokens - include all verb forms
 const ANCHOR_TOKEN_REGEX = /\b(held|hold|holds|holding|judgment|affirm(ed|s|ing)?|revers(ed|es|ing)?|vacat(ed|es|ing)?|remand(ed|s|ing)?|dismiss(ed|es|al|ing)?|grant(ed|s|ing)?|den(ied|ies|ying)?)\b/i;
 
-const MAX_QUOTE_WORDS = 25;
+const MAX_QUOTE_WORDS = 50; // Increased from 25 - legal quotes are often longer
 
 /**
  * Validate Pass 1 output and inject metadata

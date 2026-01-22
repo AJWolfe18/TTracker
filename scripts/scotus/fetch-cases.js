@@ -175,46 +175,88 @@ async function aggregateDissents(opinions) {
 /**
  * Extract syllabus from opinion plain_text
  * SCOTUS opinions have two "Syllabus" markers - skip the NOTE: and find the actual case syllabus
+ *
+ * FIXED (ADO-280): Previous regex stopped at justice names and "Affirmed/Reversed"
+ * which appear WITHIN syllabus text. Now we look for actual opinion START markers.
  */
 function extractSyllabus(plainText) {
   if (!plainText) return null;
 
-  // SCOTUS format: after "SUPREME COURT" header there's a "Syllabus" followed by case name and actual content
-  // Look for pattern: Syllabus followed by case name pattern (ALL CAPS v. ALL CAPS or similar)
-  // Then extract the actual summary content
+  // SCOTUS format: Syllabus ends when the actual opinion begins
+  // Opinion start markers (on their own line or clearly formatted):
+  // - "JUSTICE X delivered the opinion of the Court"
+  // - "CHIEF JUSTICE X delivered"
+  // - "PER CURIAM"
+  // - "Opinion of X, J."
+  // - Line starting with just a justice name in caps followed by "J."
 
-  // Strategy 1: Find syllabus after "SUPREME COURT" header
+  // Strategy 1: Find syllabus section after "SUPREME COURT" header
   const supremeCourtIdx = plainText.indexOf('SUPREME COURT');
   if (supremeCourtIdx > 0) {
     const afterSupreme = plainText.slice(supremeCourtIdx);
-    // Find "Syllabus" after SUPREME COURT, then look for the case summary
     const syllabusIdx = afterSupreme.indexOf('Syllabus');
     if (syllabusIdx > 0) {
       const afterSyllabus = afterSupreme.slice(syllabusIdx + 8);
-      // Find where the actual case facts begin (after docket number and date line)
-      // Pattern: "Argued ... —Decided ..." followed by actual content
-      const decidedMatch = afterSyllabus.match(/Decided\s+[A-Z][a-z]+\s+\d+,\s+\d{4}\s*\n([\s\S]{100,3000}?)(?=\nHeld:|Reversed|Affirmed|Opinion of|THOMAS|ROBERTS|ALITO|SOTOMAYOR|KAGAN|GORSUCH|KAVANAUGH|BARRETT|JACKSON|$)/i);
+
+      // Find where actual case facts begin (after "Decided" line)
+      const decidedMatch = afterSyllabus.match(/Decided\s+[A-Z][a-z]+\s+\d+,\s+\d{4}\s*\n/i);
       if (decidedMatch) {
-        return decidedMatch[1].trim().replace(/\n\s+/g, ' ').slice(0, 2000);
+        const contentStart = decidedMatch.index + decidedMatch[0].length;
+        const content = afterSyllabus.slice(contentStart);
+
+        // Find where opinion ACTUALLY starts (not just a mention of a justice)
+        // These patterns mark the TRUE end of syllabus:
+        const opinionStartPatterns = [
+          /\n\s*(CHIEF\s+)?JUSTICE\s+\w+\s+delivered\s+the\s+opinion/i,
+          /\n\s*PER\s+CURIAM\.?\s*\n/i,
+          /\n\s*Opinion\s+of\s+(the\s+Court|JUSTICE|\w+,\s*J\.)/i,
+          /\n\s{4,}(THOMAS|ROBERTS|ALITO|SOTOMAYOR|KAGAN|GORSUCH|KAVANAUGH|BARRETT|JACKSON),?\s*J\./i,
+          /\n\s*\[\s*Footnote\s*\d/i,  // Footnotes typically after syllabus
+        ];
+
+        let endIdx = content.length;
+        for (const pattern of opinionStartPatterns) {
+          const match = content.match(pattern);
+          if (match && match.index < endIdx) {
+            endIdx = match.index;
+          }
+        }
+
+        // Extract up to 5000 chars (matches content compliance limit)
+        const syllabusText = content.slice(0, Math.min(endIdx, 5000))
+          .trim()
+          .replace(/\n\s+/g, ' ')  // Normalize whitespace
+          .replace(/\s{2,}/g, ' '); // Remove double spaces
+
+        if (syllabusText.length >= 100) {
+          return syllabusText;
+        }
       }
     }
   }
 
   // Strategy 2: Fallback - find content after docket number pattern
-  const docketMatch = plainText.match(/No\.\s*\d+[–-]\d+\..*?Decided.*?\d{4}\s*\n([\s\S]{100,2000}?)(?=\nHeld:|Opinion|$)/i);
+  const docketMatch = plainText.match(/No\.\s*\d+[–-]\d+\..*?Decided.*?\d{4}\s*\n([\s\S]{100,5000}?)(?=\n\s*(CHIEF\s+)?JUSTICE\s+\w+\s+delivered|\n\s*PER\s+CURIAM|$)/i);
   if (docketMatch) {
-    return docketMatch[1].trim().replace(/\n\s+/g, ' ').slice(0, 2000);
+    return docketMatch[1].trim().replace(/\n\s+/g, ' ').replace(/\s{2,}/g, ' ');
   }
 
   return null;
 }
 
 /**
- * Extract first ~500 chars as excerpt fallback
+ * Extract opinion excerpt as fallback when syllabus extraction fails
+ * Increased to 15000 chars to give GPT enough context for enrichment
  */
-function extractExcerpt(plainText, maxLength = 500) {
+function extractExcerpt(plainText, maxLength = 15000) {
   if (!plainText) return null;
-  return plainText.slice(0, maxLength).trim();
+
+  // Try to skip the header/boilerplate and find the actual opinion content
+  // SCOTUS opinions often start with case name, docket, argued/decided dates
+  const contentStart = plainText.search(/\n\s*(The|This|In|Under|Petitioner|Respondent|Plaintiff|Defendant)/);
+  const startIdx = contentStart > 0 && contentStart < 2000 ? contentStart : 0;
+
+  return plainText.slice(startIdx, startIdx + maxLength).trim();
 }
 
 /**
@@ -366,7 +408,8 @@ async function processCluster(cluster) {
 
   const plainText = primaryOpinion?.plain_text || null;
   const syllabus = extractSyllabus(plainText);
-  const excerpt = syllabus ? null : extractExcerpt(plainText);
+  // Always store excerpt as fallback (15K chars of opinion text)
+  const excerpt = extractExcerpt(plainText);
 
   // Resolve authors (async - may need API calls)
   const majorityAuthor = await selectMajorityAuthor(opinions);
@@ -405,11 +448,17 @@ async function processCluster(cluster) {
     return true;
   }
 
-  // Upsert to database (idempotent on courtlistener_cluster_id)
+  // Normalize docket_number (CourtListener sometimes includes "No. " prefix)
+  if (caseRecord.docket_number) {
+    caseRecord.docket_number = caseRecord.docket_number.replace(/^No\.\s*/i, '');
+  }
+
+  // Upsert to database (idempotent on docket_number to prevent revision duplicates)
+  // CourtListener creates new cluster_ids for case revisions, but docket_number is unique
   const { error } = await supabase
     .from('scotus_cases')
     .upsert(caseRecord, {
-      onConflict: 'courtlistener_cluster_id',
+      onConflict: 'docket_number',
       ignoreDuplicates: false
     });
 
