@@ -89,6 +89,8 @@ export const DB_COLUMNS = new Set([
   'prompt_version', 'updated_at',
   // DB-only fields (not from GPT)
   'vote_split', 'dissent_exists',
+  'source_data_version',  // tracks v1-syllabus vs v2-full-opinion
+  // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
 // Known runtime-only fields that are expected to be dropped (not DB columns)
@@ -130,39 +132,82 @@ const ANCHOR_PATTERNS = [
   /\bthe\s+(petition|application)\s+(is\s+)?(granted|denied)\b/i,
 ];
 
-// Thresholds
-const HARD_MIN = 200;        // Below this, always fail (likely just a header)
-const SOFT_MIN = 600;        // Below this, need anchors to pass
+// Thresholds (updated for full opinion support)
+const HARD_MIN = 1000;       // Full opinion should be at least 1K
+const SOFT_MIN = 5000;       // Expect at least 5K for real opinions
+
+/**
+ * SCOTUS structural markers - at least ONE must be present
+ * Catches padded junk, malformed captures, duplicate headers
+ *
+ * INCLUDES our own section headers (=== MAJORITY/DISSENT ===)
+ * to handle edge cases where CourtListener text is stripped but
+ * canonical builder still produced valid output
+ */
+const SCOTUS_STRUCTURAL_MARKERS = [
+  /SUPREME COURT OF THE UNITED STATES/i,
+  /\bSyllabus\b/i,
+  /\bJUSTICE\s+\w+\s+delivered/i,
+  /\bPER CURIAM\b/i,
+  /\b(affirmed|reversed|vacated|remanded)\b/i,
+  /\bCertiorari\b/i,
+  // Our canonical section headers (v2)
+  /===\s*MAJORITY OPINION\s*===/,
+  /===\s*DISSENT\b/,
+];
+
+/**
+ * TOKEN WINDOWING STRATEGY
+ * For very long opinions (>100K chars / ~25K tokens):
+ * - First 40K chars: captures syllabus + majority holding
+ * - Last 30K chars: captures dissents (always at end)
+ * - Middle gap is acceptable - key facts are at ends
+ */
+const MAX_CHARS_FOR_GPT = 100000;  // ~25K tokens
+const FIRST_WINDOW = 40000;
+const LAST_WINDOW = 30000;
+
+/**
+ * Get the best source text for enrichment
+ * Prefers full opinion (v2), falls back to syllabus/excerpt (v1)
+ * Applies windowing for very long opinions
+ */
+export function getSourceText(scotusCase) {
+  // Prefer full opinion if available (v2)
+  let text = scotusCase.opinion_full_text
+    || scotusCase.syllabus
+    || scotusCase.opinion_excerpt
+    || '';
+
+  // Apply windowing for very long opinions
+  const originalLength = text.length;
+  if (originalLength > MAX_CHARS_FOR_GPT) {
+    const first = text.slice(0, FIRST_WINDOW);
+    const last = text.slice(-LAST_WINDOW);
+    const omitted = originalLength - FIRST_WINDOW - LAST_WINDOW;
+    text = `${first}\n\n[... ${omitted} chars omitted ...]\n\n${last}`;
+    console.log(`   [WINDOW] Applied windowing: ${scotusCase.case_name} (${originalLength} -> ${text.length} chars)`);
+  }
+
+  return text;
+}
 
 /**
  * Pass 0: Check source quality before calling GPT
  * Returns Pass 1-shaped object for consistent handling
  *
- * @param {Object} scotusCase - Case record with syllabus/opinion_excerpt
+ * @param {Object} scotusCase - Case record with syllabus/opinion_excerpt/opinion_full_text
  * @returns {Object} Either { passed: true, ...metadata } or { passed: false, ...failure_details }
  */
 export function checkSourceQuality(scotusCase) {
-  const sourceText = scotusCase.syllabus || scotusCase.opinion_excerpt || '';
+  const sourceText = scotusCase.opinion_full_text
+    || scotusCase.syllabus
+    || scotusCase.opinion_excerpt
+    || '';
   const charCount = sourceText.length;
 
-  const hasAnchors = ANCHOR_PATTERNS.some(p => p.test(sourceText));
-  const tooShort = charCount < SOFT_MIN;
-
-  // Logic: anchors can rescue short text, but not impossibly short
-  const isLow = (charCount < HARD_MIN) || (tooShort && !hasAnchors);
-
-  if (isLow) {
-    // Determine the specific failure reason
-    let reason;
-    if (charCount < HARD_MIN) {
-      reason = `Source text critically short (${charCount} chars < ${HARD_MIN}) - likely header-only junk`;
-    } else if (tooShort && !hasAnchors) {
-      reason = `Source text short (${charCount} chars < ${SOFT_MIN}) with no anchor phrases - high hallucination risk`;
-    } else {
-      reason = 'No dispositive anchor phrases found';
-    }
-
-    // Return failure object
+  // Length check - hard minimum
+  if (charCount < HARD_MIN) {
     return {
       passed: false,
 
@@ -176,13 +221,62 @@ export function checkSourceQuality(scotusCase) {
 
       // Confidence
       fact_extraction_confidence: 'low',
-      low_confidence_reason: reason,
+      low_confidence_reason: `Too short: ${charCount} chars < ${HARD_MIN}`,
 
       // Metadata
       source_char_count: charCount,
-      contains_anchor_terms: hasAnchors,
+      contains_anchor_terms: false,
 
       // Review flags
+      needs_manual_review: true,
+      is_public: false
+    };
+  }
+
+  // Structural validation: must have at least one SCOTUS marker
+  const hasStructuralMarker = SCOTUS_STRUCTURAL_MARKERS.some(p => p.test(sourceText));
+  if (!hasStructuralMarker) {
+    return {
+      passed: false,
+
+      holding: null,
+      disposition: null,
+      merits_reached: null,
+      prevailing_party: null,
+      practical_effect: null,
+      evidence_quotes: [],
+
+      fact_extraction_confidence: 'low',
+      low_confidence_reason: 'No SCOTUS structural markers found (may be junk/malformed)',
+
+      source_char_count: charCount,
+      contains_anchor_terms: false,
+
+      needs_manual_review: true,
+      is_public: false
+    };
+  }
+
+  const hasAnchors = ANCHOR_PATTERNS.some(p => p.test(sourceText));
+
+  // Soft minimum with anchor rescue
+  if (charCount < SOFT_MIN && !hasAnchors) {
+    return {
+      passed: false,
+
+      holding: null,
+      disposition: null,
+      merits_reached: null,
+      prevailing_party: null,
+      practical_effect: null,
+      evidence_quotes: [],
+
+      fact_extraction_confidence: 'low',
+      low_confidence_reason: `Below soft min (${charCount} < ${SOFT_MIN}) and no anchors`,
+
+      source_char_count: charCount,
+      contains_anchor_terms: hasAnchors,
+
       needs_manual_review: true,
       is_public: false
     };
@@ -192,7 +286,8 @@ export function checkSourceQuality(scotusCase) {
   return {
     passed: true,
     source_char_count: charCount,
-    contains_anchor_terms: hasAnchors
+    contains_anchor_terms: hasAnchors,
+    hasStructuralMarker: true
   };
 }
 
@@ -200,7 +295,24 @@ export function checkSourceQuality(scotusCase) {
 // PASS 1: FACT EXTRACTION PROMPT
 // ============================================================================
 
-export const FACT_EXTRACTION_PROMPT = `You are a SCOTUS fact extractor. Extract ONLY verifiable facts from the source text.
+export const FACT_EXTRACTION_PROMPT = `You are a SCOTUS fact extractor. You will receive the FULL opinion text with section headers.
+
+DOCUMENT STRUCTURE (sections marked with ===):
+1. === MAJORITY OPINION === - Contains syllabus + full legal reasoning
+2. === CONCURRENCE (Justice Name) === - Agreeing justices' separate views (if any)
+3. === DISSENT (Justice Name) === - Disagreeing justices' arguments (if any)
+
+EXTRACTION PRIORITY:
+1. Find DISPOSITION early in majority (syllabus section): affirmed/reversed/vacated/remanded
+2. Extract HOLDING from syllabus (first ~5K chars of majority)
+3. For DISSENT_EXISTS: check if === DISSENT sections exist
+4. For DISSENT highlights: look at === DISSENT sections specifically
+5. For vote split: look for "X-X" pattern near case header
+
+IMPORTANT:
+- Dissents are EXPLICITLY marked with === DISSENT headers - use them
+- If no dissent section exists, dissent_exists = false
+- Concurrences are NOT dissents
 
 OUTPUT SCHEMA:
 {
@@ -256,7 +368,8 @@ RULES:
  * Build Pass 1 messages for GPT
  */
 export function buildPass1Messages(scotusCase) {
-  const sourceText = scotusCase.syllabus || scotusCase.opinion_excerpt || '';
+  // Use getSourceText which handles windowing for long opinions
+  const sourceText = getSourceText(scotusCase);
 
   const userPrompt = `CASE: ${scotusCase.case_name}
 DOCKET: ${scotusCase.docket_number || 'N/A'}
@@ -687,16 +800,38 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
 
 /**
  * Get cases to enrich
+ * Uses LEFT JOIN to scotus_opinions for full text (v2 approach)
+ * CRITICAL: Use !left to ensure cases WITHOUT opinion rows are still returned
  */
 export async function getCasesToEnrich(limit, supabase) {
   const { data, error } = await supabase
     .from('scotus_cases')
-    .select('id, case_name, syllabus, opinion_excerpt, term, decided_at, vote_split, majority_author, dissent_authors, issue_area, docket_number')
+    .select(`
+      id, case_name, syllabus, opinion_excerpt, term, decided_at,
+      vote_split, majority_author, dissent_authors, issue_area, docket_number,
+      source_data_version,
+      scotus_opinions!left(opinion_full_text)
+    `)
     .in('enrichment_status', ['pending', 'failed'])
-    .or('syllabus.not.is.null,opinion_excerpt.not.is.null')
+    // REMOVED: .or('syllabus.not.is.null,opinion_excerpt.not.is.null')
+    // Reason: Would exclude v2 cases where only opinion_full_text exists
+    // Pass 0 gate handles "no source text" cases - don't filter here
     .order('decided_at', { ascending: false })
     .limit(limit);
 
   if (error) throw error;
-  return data;
+
+  // Flatten joined opinion text (Supabase can return object OR array depending on FK inference)
+  return data.map(row => {
+    const joined = row.scotus_opinions;
+    const opinion_full_text = Array.isArray(joined)
+      ? joined[0]?.opinion_full_text
+      : joined?.opinion_full_text;
+
+    return {
+      ...row,
+      opinion_full_text: opinion_full_text || null,
+      scotus_opinions: undefined  // Remove nested object
+    };
+  });
 }

@@ -23,6 +23,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { buildCanonicalOpinionText, upsertOpinionIfChanged } from './opinion-utils.js';
 dotenv.config();
 
 // ============================================================================
@@ -411,6 +412,9 @@ async function processCluster(cluster) {
   // Always store excerpt as fallback (15K chars of opinion text)
   const excerpt = extractExcerpt(plainText);
 
+  // Build canonical text from all opinions (v2 approach)
+  const canonicalText = buildCanonicalOpinionText(opinions);
+
   // Resolve authors (async - may need API calls)
   const majorityAuthor = await selectMajorityAuthor(opinions);
   const dissentAuthors = await aggregateDissents(opinions);
@@ -455,19 +459,51 @@ async function processCluster(cluster) {
 
   // Upsert to database (idempotent on docket_number to prevent revision duplicates)
   // CourtListener creates new cluster_ids for case revisions, but docket_number is unique
-  const { error } = await supabase
+  // PREREQ: docket_number must have UNIQUE constraint (migration 068_scotus_docket_unique.sql)
+  const { data: upsertedCase, error } = await supabase
     .from('scotus_cases')
     .upsert(caseRecord, {
       onConflict: 'docket_number',
       ignoreDuplicates: false
-    });
+    })
+    .select('id')
+    .single();
 
   if (error) {
     console.error(`   [ERROR] Failed to upsert cluster ${clusterId}:`, error.message);
     return false;
   }
 
+  const caseId = upsertedCase?.id;
+  if (!caseId) {
+    console.error(`   [ERROR] Upsert succeeded but no case ID returned`);
+    return false;
+  }
+
   console.log(`   [OK] Upserted case: ${caseRecord.case_name_short || caseRecord.case_name?.slice(0, 30)}`);
+
+  // Store full opinion in separate table (v2 approach)
+  if (canonicalText) {
+    const result = await upsertOpinionIfChanged(supabase, caseId, canonicalText);
+
+    if (result.error) {
+      // CRITICAL: Do NOT update source_data_version if opinion write failed
+      // Leave as v1 so backfill can retry later
+      console.warn(`   [WARN] Failed to store opinion text: ${result.error}`);
+      console.warn(`   [WARN] Leaving source_data_version as v1 for retry`);
+    } else if (!result.changed) {
+      // Content unchanged - skip version update too (already v2)
+      console.log(`   [SKIP] Opinion unchanged (hash match)`);
+    } else {
+      // ONLY update version AFTER successful opinion write
+      console.log(`   [OK] Opinion stored (${canonicalText.length} chars, hash: ${result.content_hash.slice(0, 8)}...)`);
+      await supabase
+        .from('scotus_cases')
+        .update({ source_data_version: 'v2-full-opinion' })
+        .eq('id', caseId);
+    }
+  }
+
   return true;
 }
 
