@@ -107,10 +107,14 @@ async function backfillCase(scotusCase) {
   if (!result.changed) {
     console.log(`   [SKIP] Content unchanged (hash match)`);
     // Still ensure version is set (idempotent)
-    await supabase
+    const { error: versionErr } = await supabase
       .from('scotus_cases')
       .update({ source_data_version: 'v2-full-opinion' })
       .eq('id', scotusCase.id);
+    if (versionErr) {
+      console.error(`   [ERROR] version update: ${versionErr.message}`);
+      return false;
+    }
     return true;
   }
 
