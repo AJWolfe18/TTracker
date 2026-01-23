@@ -2,8 +2,8 @@
 
 **Created:** 2026-01-20
 **Updated:** 2026-01-22
-**Status:** ✅ IMPLEMENTED - Two-Pass Architecture Complete
-**ADO:** [ADO-85](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/85) / [ADO-280](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/280) (CLOSED)
+**Status:** ✅ IMPLEMENTED - Full Opinion Architecture Complete
+**ADO:** [ADO-85](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/85) / [ADO-280](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/280) (CLOSED) / [ADO-283](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/283) (Active)
 
 ---
 
@@ -47,18 +47,1030 @@
 
 ### Next Steps
 1. ~~**[ADO-280](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/280)** - Two-pass architecture~~ ✅ DONE
-2. **Better source data** - Improve syllabus extraction from CourtListener (future ADO)
-3. **Bulk enrichment** - Can now run safely with two-pass architecture
+2. ~~**[ADO-283](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/283)** - Full Opinion Architecture~~ ✅ CODE COMPLETE (2026-01-22)
+   - Migration 069 applied to TEST
+   - Code reviewed, type fix (UUID→BIGINT) and error handling fixed
+   - **Next:** Test with `COURTLISTENER_API_TOKEN` to verify full flow
+3. **Bulk enrichment** - Can now run safely with two-pass architecture + full opinions
 
 ---
 
-## Overview
+## 🚨 ARCHITECTURAL CHANGE: Full Opinion Input (2026-01-22)
+
+### Quick Reference: Files to Modify
+
+| File | Lines | Change |
+|------|-------|--------|
+| `migrations/068_scotus_full_opinion.sql` | NEW | Create `scotus_opinions` table + CHECK + RLS + backfill NULLs |
+| `scripts/scotus/opinion-utils.js` | NEW | Shared `buildCanonicalOpinionText()` (import in fetch + backfill) |
+| `scripts/scotus/fetch-cases.js` | ~245, ~400-440, ~456-470 | Import canonical builder, upsert to new table, conditional version update |
+| `scripts/enrichment/scotus-fact-extraction.js` | ~79, ~126, ~145, ~259, ~691 | DB_COLUMNS, thresholds, getSourceText (windowing), getCasesToEnrich (!left JOIN) |
+| `scripts/enrichment/scotus-gpt-prompt.js` | ~50-80 | Update FACT_EXTRACTION_PROMPT for section headers |
+| `scripts/scotus/backfill-opinions.js` | NEW | Full implementation provided in Section 7 |
+
+### Problem Discovery
+
+Investigation revealed that our syllabus extraction approach is fundamentally flawed:
+
+| Issue | Finding |
+|-------|---------|
+| CourtListener `syllabus` field | **ALWAYS EMPTY** for SCOTUS clusters |
+| CourtListener `summary` field | **ALWAYS EMPTY** for SCOTUS clusters |
+| CourtListener `headnotes` field | **ALWAYS EMPTY** for SCOTUS clusters |
+| Our regex extraction | Fragile - misses edge cases, causes Pass 0 failures |
+| Oyez API `description` | Only ~200 chars - not enough context |
+
+**The syllabus exists in `plain_text`** but extracting it via regex is unreliable.
+
+### Solution: Send Full Opinion
+
+**Decision:** Send the complete `opinion.plain_text` to GPT instead of extracted syllabus.
+
+### Data Analysis (2024 Term)
+
+| Metric | Size | Tokens | Cost (GPT-4o-mini) |
+|--------|------|--------|-------------------|
+| Minimum | 3,806 chars | ~950 | $0.0001 |
+| **Median** | 38,000 chars | ~9,500 | $0.0014 |
+| **Average** | 40,000 chars | ~10,000 | $0.0015 |
+| 90th percentile | 82,000 chars | ~20,500 | $0.0031 |
+| Maximum | 142,000 chars | ~35,000 | $0.0053 |
+
+**Full term cost (50 cases at average): $0.07**
+
+### GPT Quality Testing
+
+| Test Case | Size | Result |
+|-----------|------|--------|
+| TikTok v. Garland | 68K chars (unanimous) | ✅ Correct vote split, correct "no dissent" |
+| Williams v. Reed | 54K chars (5-4 with Thomas dissent) | ✅ Correct vote split, extracted dissent arguments accurately |
+
+**GPT handles full opinions well:**
+- Correctly identifies vote splits
+- Extracts dissent arguments from end of document
+- Doesn't confuse citations to other cases with actual dissents
+- Good editorial tone in output
+
+### Why Keep Two-Pass Architecture
+
+Even with full opinions, two-pass is still valuable:
+
+| Reason | Explanation |
+|--------|-------------|
+| Fact validation | Pass 1 locks facts before editorial creativity |
+| Drift detection | Can catch when Pass 2 contradicts Pass 1 facts |
+| Confidence gating | Low-confidence cases flagged before wasting Pass 2 tokens |
+| Cost efficiency | Pass 2 only receives extracted facts (~500 tokens), not full opinion |
+
+**Pass 1:** Full opinion (~10K tokens) → Extracted facts (~500 tokens)
+**Pass 2:** Extracted facts (~500 tokens) → Editorial output (~500 tokens)
+
+Two-pass is actually MORE efficient for long documents because Pass 2 works with compressed facts.
+
+### Implementation Changes Required
+
+> **⚠️ ARCHITECTURAL DECISIONS** (from code review)
+>
+> 1. **Separate table for full opinions** - Prevents accidental `SELECT *` pulling 40-140K per row
+> 2. **Multi-opinion canonical text** - CourtListener clusters have separate majority/concurrence/dissent docs
+> 3. **Token windowing** - First + Last N chars strategy for outliers (>100K chars)
+> 4. **Structural validation** - Check for SCOTUS markers, not just length
+> 5. **In-place backfill** - Don't delete+refetch; update existing rows
+
+---
+
+#### 1. Schema Changes
+
+**File:** `migrations/068_scotus_full_opinion.sql`
+
+```sql
+-- Migration 068: Separate table for full opinion text
+-- Rationale: Prevents accidental egress from SELECT * on scotus_cases
+
+-- Create separate table for full opinion storage
+-- NOTE: No source_data_version here - if row exists, it's v2 by definition
+-- Single source of truth: scotus_cases.source_data_version
+CREATE TABLE IF NOT EXISTS scotus_opinions (
+  case_id UUID PRIMARY KEY REFERENCES scotus_cases(id) ON DELETE CASCADE,
+  opinion_full_text TEXT NOT NULL,
+  content_hash TEXT NOT NULL,  -- sha256 hex, enables skip-if-unchanged + change detection
+  char_count INTEGER GENERATED ALWAYS AS (LENGTH(opinion_full_text)) STORED,
+  fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Add version tracking to main table (lightweight)
+ALTER TABLE scotus_cases
+ADD COLUMN IF NOT EXISTS source_data_version TEXT DEFAULT 'v1-syllabus';
+
+-- CRITICAL: Backfill existing NULLs BEFORE adding CHECK constraint
+-- (Otherwise constraint fails on existing rows)
+UPDATE scotus_cases
+SET source_data_version = 'v1-syllabus'
+WHERE source_data_version IS NULL;
+
+-- IDEMPOTENT: Drop constraint if exists, then recreate
+-- (Plain ADD CONSTRAINT fails if already exists)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_source_data_version'
+  ) THEN
+    ALTER TABLE scotus_cases DROP CONSTRAINT chk_source_data_version;
+  END IF;
+END $$;
+
+ALTER TABLE scotus_cases
+ADD CONSTRAINT chk_source_data_version
+CHECK (source_data_version IN ('v1-syllabus', 'v2-full-opinion'));
+
+-- NOTE: No index needed on scotus_opinions(case_id) - PRIMARY KEY already creates one
+
+-- SECURITY: Enable RLS and do NOT add public read policies
+-- service_role bypasses RLS for ingestion/enrichment jobs
+ALTER TABLE scotus_opinions ENABLE ROW LEVEL SECURITY;
+
+-- No policies = no anon/authenticated access (only service_role can read/write)
+
+COMMENT ON TABLE scotus_opinions IS
+'Stores full opinion text separately to prevent accidental egress. Job-read-only. RLS enabled, no public policies.';
+```
+
+**Why separate table:**
+- UI queries on `scotus_cases` can't accidentally pull 40-140K per row
+- Enrichment job explicitly JOINs when needed
+- Clear separation: `scotus_cases` = metadata, `scotus_opinions` = text blob
+
+---
+
+#### 2. fetch-cases.js Changes
+
+**File:** `scripts/scotus/fetch-cases.js`
+
+**2a. Add hash + upsert helpers (new functions, add near top of file)**
+
+```javascript
+import crypto from 'crypto';
+
+/**
+ * Compute sha256 hex hash of text
+ * Used to detect content changes and skip no-op writes
+ */
+function sha256Hex(text) {
+  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/**
+ * Upsert opinion only if content changed (hash mismatch)
+ * Prevents wasted DB writes during backfill/retries
+ *
+ * @returns {{ changed: boolean, content_hash: string, error?: string }}
+ */
+async function upsertOpinionIfChanged(supabase, caseId, canonicalText) {
+  const content_hash = sha256Hex(canonicalText);
+
+  // Check existing hash
+  const { data: existing, error: readErr } = await supabase
+    .from('scotus_opinions')
+    .select('content_hash')
+    .eq('case_id', caseId)
+    .maybeSingle();
+
+  if (readErr) {
+    return { changed: false, content_hash, error: readErr.message };
+  }
+
+  // Skip if unchanged
+  if (existing?.content_hash === content_hash) {
+    return { changed: false, content_hash };
+  }
+
+  // Upsert with new content
+  const { error: upsertErr } = await supabase
+    .from('scotus_opinions')
+    .upsert({
+      case_id: caseId,
+      opinion_full_text: canonicalText,
+      content_hash,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'case_id' });
+
+  if (upsertErr) {
+    return { changed: false, content_hash, error: upsertErr.message };
+  }
+
+  return { changed: true, content_hash };
+}
+```
+
+**2b. Add canonical text builder (new function, ~line 245)**
+
+```javascript
+/**
+ * Build canonical opinion text from all opinion documents
+ * Order: MAJORITY/LEAD → CONCURRENCES → DISSENTS → UNKNOWN
+ * Adds section headers for GPT parsing
+ *
+ * ROBUST HANDLING:
+ * - Includes ALL majority/lead docs (not just first)
+ * - Logs unknown opinion types for future tuning
+ * - Handles missing type values gracefully
+ *
+ * @param {Array} opinions - Array of opinion objects from CourtListener
+ * @returns {string} Concatenated text with section headers
+ */
+function buildCanonicalOpinionText(opinions) {
+  if (!opinions || opinions.length === 0) return null;
+
+  const sections = [];
+  const unknownTypes = [];
+  const processed = new Set();  // Track processed opinion IDs to avoid dupes
+
+  // Category patterns (order matters for classification)
+  const MAJORITY_PATTERN = /majority|lead|per.?curiam|combined|opinion.of.the.court/i;
+  const CONCUR_PATTERN = /concur/i;
+  const DISSENT_PATTERN = /dissent/i;
+  const STATEMENT_PATTERN = /statement/i;  // "statement of X" - treat as concurrence-like
+
+  // 1. ALL Majority/Lead/Per Curiam opinions (not just first)
+  const majorities = opinions.filter(o =>
+    MAJORITY_PATTERN.test(o.type || '') && !DISSENT_PATTERN.test(o.type || '')
+  );
+  for (const op of majorities) {
+    if (op.plain_text) {
+      const author = op.author_str || '';
+      const label = author ? `MAJORITY OPINION (${author})` : 'MAJORITY OPINION';
+      sections.push(`=== ${label} ===\n${op.plain_text}`);
+      processed.add(op.id);
+    }
+  }
+
+  // 2. Concurrences (including "statement of")
+  const concurrences = opinions.filter(o => {
+    const type = o.type || '';
+    return (CONCUR_PATTERN.test(type) || STATEMENT_PATTERN.test(type))
+      && !DISSENT_PATTERN.test(type)
+      && !processed.has(o.id);
+  });
+  for (const op of concurrences) {
+    if (op.plain_text) {
+      const author = op.author_str || 'Unknown';
+      sections.push(`=== CONCURRENCE (${author}) ===\n${op.plain_text}`);
+      processed.add(op.id);
+    }
+  }
+
+  // 3. Dissents last (critical for Pass 1 dissent extraction)
+  const dissents = opinions.filter(o =>
+    DISSENT_PATTERN.test(o.type || '') && !processed.has(o.id)
+  );
+  for (const op of dissents) {
+    if (op.plain_text) {
+      const author = op.author_str || 'Unknown';
+      sections.push(`=== DISSENT (${author}) ===\n${op.plain_text}`);
+      processed.add(op.id);
+    }
+  }
+
+  // 4. Handle unclassified opinions (log for future tuning)
+  const unprocessed = opinions.filter(o => !processed.has(o.id) && o.plain_text);
+  for (const op of unprocessed) {
+    const type = op.type || 'null';
+    unknownTypes.push(type);
+    const author = op.author_str || 'Unknown';
+    sections.push(`=== OTHER (${author}, type: ${type}) ===\n${op.plain_text}`);
+  }
+
+  // Log unknown types for debugging/tuning
+  if (unknownTypes.length > 0) {
+    console.log(`   [CANONICAL] Unknown opinion types encountered: ${unknownTypes.join(', ')}`);
+  }
+
+  // Fallback: if somehow nothing matched, use all opinions in order
+  if (sections.length === 0) {
+    for (const op of opinions) {
+      if (op.plain_text) {
+        sections.push(op.plain_text);
+      }
+    }
+  }
+
+  return sections.join('\n\n') || null;
+}
+```
+
+**2b. Update processCluster() (~line 400-440)**
+
+```javascript
+// BEFORE (line ~409):
+const plainText = primaryOpinion?.plain_text || null;
+
+// AFTER:
+const canonicalText = buildCanonicalOpinionText(opinions);
+
+// ... existing caseRecord build ...
+
+// AFTER caseRecord upsert succeeds, insert into scotus_opinions:
+if (canonicalText && !dryRun) {
+  const result = await upsertOpinionIfChanged(supabase, caseId, canonicalText);
+
+  if (result.error) {
+    // CRITICAL: Do NOT update source_data_version if opinion write failed
+    // Leave as v1 so backfill can retry later
+    console.warn(`   [WARN] Failed to store opinion text: ${result.error}`);
+    console.warn(`   [WARN] Leaving source_data_version as v1 for retry`);
+  } else if (!result.changed) {
+    // Content unchanged - skip version update too (already v2)
+    console.log(`   [SKIP] Opinion unchanged (hash match)`);
+  } else {
+    // ONLY update version AFTER successful opinion write
+    console.log(`   [OK] Opinion stored (${canonicalText.length} chars, hash: ${result.content_hash.slice(0, 8)}...)`);
+    await supabase
+      .from('scotus_cases')
+      .update({ source_data_version: 'v2-full-opinion' })
+      .eq('id', caseId);
+  }
+}
+```
+
+**2c. Get case ID from upsert (modify upsert call, ~line 456-470)**
+
+```javascript
+// BEFORE:
+const { error } = await supabase
+  .from('scotus_cases')
+  .upsert(caseRecord, { onConflict: 'docket_number' });
+
+// AFTER:
+// PREREQ: docket_number must have UNIQUE constraint in DB
+// (Already exists: migration 068_scotus_docket_unique.sql from ADO-281)
+// If duplicates exist, .single() will error - that's intentional (data bug)
+const { data: upsertedCase, error } = await supabase
+  .from('scotus_cases')
+  .upsert(caseRecord, { onConflict: 'docket_number' })
+  .select('id')
+  .single();
+
+if (error) {
+  console.error(`   [ERROR] Failed to upsert case: ${error.message}`);
+  return false;
+}
+
+const caseId = upsertedCase?.id;
+if (!caseId) {
+  console.error(`   [ERROR] Upsert succeeded but no case ID returned`);
+  return false;
+}
+```
+
+---
+
+#### 3. Enrichment Query Changes
+
+**File:** `scripts/enrichment/scotus-fact-extraction.js`
+
+**3a. Update getCasesToEnrich() (~line 691)**
+
+```javascript
+// BEFORE:
+.select('id, case_name, syllabus, opinion_excerpt, term, ...')
+
+// AFTER: LEFT JOIN to scotus_opinions for full text
+// CRITICAL: Use !left to ensure cases WITHOUT opinion rows are still returned
+// (otherwise cases during backfill rollout will be silently excluded)
+async function getCasesToEnrich(limit, supabase) {
+  const { data, error } = await supabase
+    .from('scotus_cases')
+    .select(`
+      id, case_name, syllabus, opinion_excerpt, term, decided_at,
+      vote_split, majority_author, dissent_authors, issue_area, docket_number,
+      source_data_version,
+      scotus_opinions!left(opinion_full_text)
+    `)
+    .in('enrichment_status', ['pending', 'failed'])
+    // REMOVED: .or('syllabus.not.is.null,opinion_excerpt.not.is.null')
+    // Reason: Would exclude v2 cases where only opinion_full_text exists
+    // Pass 0 gate handles "no source text" cases - don't filter here
+    .order('decided_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  // Flatten joined opinion text (Supabase can return object OR array depending on FK inference)
+  return data.map(row => {
+    const joined = row.scotus_opinions;
+    const opinion_full_text = Array.isArray(joined)
+      ? joined[0]?.opinion_full_text
+      : joined?.opinion_full_text;
+
+    return {
+      ...row,
+      opinion_full_text: opinion_full_text || null,
+      scotus_opinions: undefined  // Remove nested object
+    };
+  });
+}
+```
+
+**3b. Update getSourceText with windowing (~line 145)**
+
+```javascript
+/**
+ * TOKEN WINDOWING STRATEGY
+ * For very long opinions (>100K chars / ~25K tokens):
+ * - First 40K chars: captures syllabus + majority holding
+ * - Last 30K chars: captures dissents (always at end)
+ * - Middle gap is acceptable - key facts are at ends
+ */
+const MAX_CHARS_FOR_GPT = 100000;  // ~25K tokens
+const FIRST_WINDOW = 40000;
+const LAST_WINDOW = 30000;
+
+function getSourceText(scotusCase) {
+  // Prefer full opinion if available (v2)
+  let text = scotusCase.opinion_full_text
+    || scotusCase.syllabus
+    || scotusCase.opinion_excerpt
+    || '';
+
+  // Apply windowing for very long opinions
+  const originalLength = text.length;
+  if (originalLength > MAX_CHARS_FOR_GPT) {
+    const first = text.slice(0, FIRST_WINDOW);
+    const last = text.slice(-LAST_WINDOW);
+    const omitted = originalLength - FIRST_WINDOW - LAST_WINDOW;
+    text = `${first}\n\n[... ${omitted} chars omitted ...]\n\n${last}`;
+    console.log(`   [WINDOW] Applied windowing: ${scotusCase.case_name} (${originalLength} → ${text.length} chars)`);
+  }
+
+  return text;
+}
+```
+
+---
+
+#### 4. Pass 0 Gate Changes (Structural Validation)
+
+**File:** `scripts/enrichment/scotus-fact-extraction.js`
+
+```javascript
+// BEFORE: Length-only validation
+const HARD_MIN = 200;
+const SOFT_MIN = 600;
+
+// AFTER: Length + structural markers
+const HARD_MIN = 1000;   // Full opinion should be at least 1K
+const SOFT_MIN = 5000;   // Expect at least 5K for real opinions
+
+/**
+ * SCOTUS structural markers - at least ONE must be present
+ * Catches padded junk, malformed captures, duplicate headers
+ *
+ * INCLUDES our own section headers (=== MAJORITY/DISSENT ===)
+ * to handle edge cases where CourtListener text is stripped but
+ * canonical builder still produced valid output
+ */
+const SCOTUS_STRUCTURAL_MARKERS = [
+  /SUPREME COURT OF THE UNITED STATES/i,
+  /\bSyllabus\b/i,
+  /\bJUSTICE\s+\w+\s+delivered/i,
+  /\bPER CURIAM\b/i,
+  /\b(affirmed|reversed|vacated|remanded)\b/i,
+  /\bCertiorari\b/i,
+  // Our canonical section headers (v2)
+  /===\s*MAJORITY OPINION\s*===/,
+  /===\s*DISSENT\b/,
+];
+
+function checkSourceQuality(scotusCase) {
+  const sourceText = scotusCase.opinion_full_text
+    || scotusCase.syllabus
+    || scotusCase.opinion_excerpt
+    || '';
+  const charCount = sourceText.length;
+
+  // Length checks
+  if (charCount < HARD_MIN) {
+    return { passed: false, reason: `Too short: ${charCount} chars < ${HARD_MIN}` };
+  }
+
+  // Structural validation: must have at least one SCOTUS marker
+  const hasStructuralMarker = SCOTUS_STRUCTURAL_MARKERS.some(p => p.test(sourceText));
+  if (!hasStructuralMarker) {
+    return {
+      passed: false,
+      reason: 'No SCOTUS structural markers found (may be junk/malformed)',
+      charCount
+    };
+  }
+
+  // Soft minimum with anchor rescue
+  // NOTE: ANCHOR_PATTERNS already exists in this file (~line 133)
+  // Contains: /\b(affirmed|reversed|held|ruling)\b/i, /\bpetitioner\b/i, etc.
+  const hasAnchors = ANCHOR_PATTERNS.some(p => p.test(sourceText));
+  if (charCount < SOFT_MIN && !hasAnchors) {
+    return {
+      passed: false,
+      reason: `Below soft min (${charCount} < ${SOFT_MIN}) and no anchors`,
+      charCount
+    };
+  }
+
+  return { passed: true, charCount, hasStructuralMarker: true };
+}
+```
+
+---
+
+#### 5. Pass 1 Prompt Changes
+
+**File:** `scripts/enrichment/scotus-gpt-prompt.js`
+
+```javascript
+// AFTER: Prompt acknowledges full opinion with section headers
+const FACT_EXTRACTION_PROMPT = `
+You are a SCOTUS fact extractor. You will receive the FULL opinion text with section headers.
+
+DOCUMENT STRUCTURE (sections marked with ===):
+1. === MAJORITY OPINION === - Contains syllabus + full legal reasoning
+2. === CONCURRENCE (Justice Name) === - Agreeing justices' separate views (if any)
+3. === DISSENT (Justice Name) === - Disagreeing justices' arguments (if any)
+
+EXTRACTION PRIORITY:
+1. Find DISPOSITION early in majority (syllabus section): affirmed/reversed/vacated/remanded
+2. Extract HOLDING from syllabus (first ~5K chars of majority)
+3. For DISSENT_EXISTS: check if === DISSENT sections exist
+4. For DISSENT highlights: look at === DISSENT sections specifically
+5. For vote split: look for "X-X" pattern near case header
+
+IMPORTANT:
+- Dissents are EXPLICITLY marked with === DISSENT headers - use them
+- If no dissent section exists, dissent_exists = false
+- Concurrences are NOT dissents
+
+OUTPUT SCHEMA:
+{ ... same as before ... }
+`;
+```
+
+---
+
+#### 6. Cost Recalculation (Corrected)
+
+| Component | Tokens | Cost (GPT-4o-mini) | Notes |
+|-----------|--------|-------------------|-------|
+| Pass 1 Run #1 | ~10,000 input + ~500 output | $0.0016 | Full opinion input |
+| Pass 1 Run #2 | ~10,000 input + ~500 output | $0.0016 | Consensus check |
+| Pass 2 | ~500 input + ~500 output | $0.00015 | Compressed facts only |
+| **Total per case** | ~21,500 tokens | **$0.0033** | |
+| **50 cases/term** | ~1M tokens | **$0.17** | vs $0.01 with syllabus |
+
+**Additional cost vs syllabus approach: ~$0.16/term** - Still trivial.
+
+**Windowing savings:** Cases >100K chars get windowed to ~70K chars (~17.5K tokens) instead of full. Saves ~30% on outliers.
+
+---
+
+#### 7. Backfill Strategy (In-Place, Not Delete+Refetch)
+
+```bash
+# Step 1: Identify cases needing backfill
+SELECT id, case_name, source_data_version
+FROM scotus_cases
+WHERE source_data_version = 'v1-syllabus'
+   OR source_data_version IS NULL;
+
+# Step 2: Run backfill script (new script)
+node scripts/scotus/backfill-opinions.js --limit=50
+
+# Step 3: Verify backfill
+SELECT
+  sc.source_data_version,
+  COUNT(*) as count,
+  AVG(so.char_count) as avg_chars
+FROM scotus_cases sc
+LEFT JOIN scotus_opinions so ON so.case_id = sc.id
+GROUP BY sc.source_data_version;
+```
+
+**backfill-opinions.js implementation:**
+
+**File:** `scripts/scotus/backfill-opinions.js` (NEW)
+
+```javascript
+#!/usr/bin/env node
+/**
+ * Backfill scotus_opinions for existing cases
+ *
+ * Usage: COURTLISTENER_API_TOKEN=xxx node scripts/scotus/backfill-opinions.js --limit=50
+ *
+ * This script:
+ * 1. Queries scotus_cases WHERE source_data_version != 'v2-full-opinion'
+ * 2. For each case, fetches opinions from CourtListener using courtlistener_cluster_id
+ * 3. Builds canonical text with buildCanonicalOpinionText()
+ * 4. Upserts into scotus_opinions
+ * 5. Updates scotus_cases.source_data_version = 'v2-full-opinion'
+ *
+ * IMPORTANT: Does NOT modify enrichment fields - preserves existing enrichment state
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const COURTLISTENER_TOKEN = process.env.COURTLISTENER_API_TOKEN;
+
+// --- Hash helper ---
+function sha256Hex(text) {
+  return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+// --- Import from opinion-utils.js or copy from Section 2a ---
+// buildCanonicalOpinionText()
+// upsertOpinionIfChanged()
+const COURTLISTENER_BASE = 'https://www.courtlistener.com/api/rest/v4';
+
+// Parse CLI args
+const args = process.argv.slice(2).reduce((acc, arg) => {
+  const [key, val] = arg.replace('--', '').split('=');
+  acc[key] = val ?? true;
+  return acc;
+}, {});
+
+const limit = args.limit ? parseInt(args.limit) : 10;
+const dryRun = args['dry-run'] === true;
+const useProd = args.prod === true;
+
+// Environment detection (same pattern as other scripts)
+const supabaseUrl = useProd
+  ? process.env.SUPABASE_URL
+  : process.env.SUPABASE_TEST_URL;
+const supabaseKey = useProd
+  ? process.env.SUPABASE_SERVICE_KEY
+  : process.env.SUPABASE_TEST_SERVICE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error(`Missing Supabase credentials for ${useProd ? 'PROD' : 'TEST'}`);
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+console.log(`Environment: ${useProd ? 'PROD' : 'TEST'}`);
+
+// --- RECOMMENDED: Create shared module to avoid duplication ---
+// File: scripts/scotus/opinion-utils.js
+// Export buildCanonicalOpinionText() and import in both fetch-cases.js and backfill-opinions.js
+
+// For now, copy the FULL implementation from Section 2a above (the robust version)
+// See Section 2a for the complete buildCanonicalOpinionText() with:
+// - Multiple majority doc handling
+// - Unknown type logging
+// - Proper concurrence/dissent/statement classification
+import { buildCanonicalOpinionText } from './opinion-utils.js';
+// OR copy the ~80 line implementation from Section 2a
+
+async function fetchOpinions(clusterId) {
+  const allResults = [];
+  let url = `${COURTLISTENER_BASE}/opinions/?cluster=${clusterId}`;
+
+  // Handle pagination (CourtListener can paginate large result sets)
+  while (url) {
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${COURTLISTENER_TOKEN}` }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    allResults.push(...(data.results || []));
+    url = data.next || null;  // Follow pagination
+  }
+
+  return allResults;
+}
+
+async function backfillCase(scotusCase) {
+  console.log(`Processing: ${scotusCase.case_name}`);
+
+  // Fetch opinions from CourtListener
+  const opinions = await fetchOpinions(scotusCase.courtlistener_cluster_id);
+  if (!opinions.length) {
+    console.log(`   [SKIP] No opinions found`);
+    return false;
+  }
+
+  const canonicalText = buildCanonicalOpinionText(opinions);
+  if (!canonicalText) {
+    console.log(`   [SKIP] No text extracted`);
+    return false;
+  }
+
+  console.log(`   [OK] Built canonical text: ${canonicalText.length} chars`);
+
+  if (dryRun) {
+    const hash = sha256Hex(canonicalText);
+    console.log(`   [DRY RUN] Would upsert (hash: ${hash.slice(0, 8)}...)`);
+    return true;
+  }
+
+  // Upsert only if changed (uses content_hash)
+  const result = await upsertOpinionIfChanged(supabase, scotusCase.id, canonicalText);
+
+  if (result.error) {
+    console.error(`   [ERROR] scotus_opinions upsert: ${result.error}`);
+    return false;
+  }
+
+  if (!result.changed) {
+    console.log(`   [SKIP] Content unchanged (hash match)`);
+    // Still ensure version is set (idempotent)
+    await supabase
+      .from('scotus_cases')
+      .update({ source_data_version: 'v2-full-opinion' })
+      .eq('id', scotusCase.id);
+    return true;
+  }
+
+  // Update main table version (DO NOT touch enrichment fields)
+  const { error: caseErr } = await supabase
+    .from('scotus_cases')
+    .update({ source_data_version: 'v2-full-opinion' })
+    .eq('id', scotusCase.id);
+
+  if (caseErr) {
+    console.error(`   [ERROR] scotus_cases update: ${caseErr.message}`);
+    return false;
+  }
+
+  console.log(`   [OK] Backfilled (hash: ${result.content_hash.slice(0, 8)}...)`);
+  return true;
+}
+
+async function main() {
+  console.log(`\n=== Backfill SCOTUS Opinions ===\n`);
+  console.log(`Limit: ${limit}, Dry run: ${dryRun}\n`);
+
+  // Query cases needing backfill
+  const { data: cases, error } = await supabase
+    .from('scotus_cases')
+    .select('id, case_name, courtlistener_cluster_id, source_data_version')
+    .or('source_data_version.neq.v2-full-opinion,source_data_version.is.null')
+    .not('courtlistener_cluster_id', 'is', null)
+    .limit(limit);
+
+  if (error) {
+    console.error('Query error:', error.message);
+    process.exit(1);
+  }
+
+  console.log(`Found ${cases.length} cases to backfill\n`);
+
+  let success = 0, failed = 0;
+  for (const c of cases) {
+    try {
+      const ok = await backfillCase(c);
+      if (ok) success++; else failed++;
+    } catch (err) {
+      console.error(`   [ERROR] ${err.message}`);
+      failed++;
+    }
+    // Rate limiting
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  console.log(`\n=== Done: ${success} success, ${failed} failed ===\n`);
+}
+
+main().catch(console.error);
+```
+
+---
+
+#### 8. DB_COLUMNS Whitelist Update
+
+**File:** `scripts/enrichment/scotus-fact-extraction.js` (~line 79)
+
+```javascript
+// Add to DB_COLUMNS whitelist:
+export const DB_COLUMNS = new Set([
+  // ... existing columns ...
+  'source_data_version',  // NEW: tracks v1/v2 approach
+  // NOTE: opinion_full_text is in scotus_opinions table, not here
+]);
+```
+
+---
+
+#### 9. Verification Queries
+
+```sql
+-- After migration 068:
+SELECT table_name FROM information_schema.tables
+WHERE table_name = 'scotus_opinions';
+
+-- After fetch with canonical text:
+SELECT
+  sc.id, sc.case_name, sc.source_data_version,
+  so.char_count,
+  LEFT(so.opinion_full_text, 100) as preview
+FROM scotus_cases sc
+JOIN scotus_opinions so ON so.case_id = sc.id
+ORDER BY sc.decided_at DESC LIMIT 5;
+
+-- Verify section headers present:
+SELECT case_id,
+  (opinion_full_text LIKE '%=== MAJORITY OPINION ===%') as has_majority,
+  (opinion_full_text LIKE '%=== DISSENT%') as has_dissent
+FROM scotus_opinions LIMIT 10;
+
+-- After enrichment run:
+SELECT
+  source_data_version,
+  enrichment_status,
+  COUNT(*) as count
+FROM scotus_cases
+GROUP BY source_data_version, enrichment_status;
+```
+
+---
+
+#### 10. Deferred Items (from ADO-281, P3 priority)
+
+> These are nice-to-have polish items moved from ADO-281 (now closed).
+> Not blocking v2 release but should be addressed eventually.
+
+| Item | File | Issue | Fix |
+|------|------|-------|-----|
+| Number validation over-strict | `scotus-drift-validation.js:190-193` | Flags `$100,000` vs `$100K` as drift | Normalize numbers before comparison |
+| Pass 2 disposition lock | `scotus-gpt-prompt.js` | Lock only in user prompt, not system | Add to `PASS2_SYSTEM_PROMPT` |
+
+> **Resolved (no longer deferred):**
+> - ~~Content hash~~ → Added `content_hash` column to `scotus_opinions` (Section 1)
+> - ~~Version duplication~~ → Removed redundant version from `scotus_opinions` (Section 1)
+
+---
+
+### Testing Plan
+
+#### Phase 0: Apply Migration
+```bash
+# Apply migration 068
+node scripts/apply-migrations.js
+
+# Verify tables created
+SELECT table_name FROM information_schema.tables
+WHERE table_name IN ('scotus_cases', 'scotus_opinions');
+
+# Verify constraint
+SELECT constraint_name FROM information_schema.check_constraints
+WHERE constraint_name = 'chk_source_data_version';
+```
+
+#### Phase 1: Test Fetch with Canonical Text (Small Batch)
+```bash
+# Fetch 5 cases with new canonical text builder
+COURTLISTENER_API_TOKEN=xxx node scripts/scotus/fetch-cases.js --since=2024-10-01 --limit=5
+
+# Verify scotus_opinions populated
+SELECT
+  sc.id, sc.case_name, sc.source_data_version,
+  so.char_count,
+  (so.opinion_full_text LIKE '%=== MAJORITY OPINION ===%') as has_majority_header,
+  (so.opinion_full_text LIKE '%=== DISSENT%') as has_dissent_header
+FROM scotus_cases sc
+LEFT JOIN scotus_opinions so ON so.case_id = sc.id
+ORDER BY sc.decided_at DESC LIMIT 5;
+
+# Verify section headers in one case
+SELECT LEFT(opinion_full_text, 500) as preview
+FROM scotus_opinions LIMIT 1;
+```
+
+#### Phase 2: Test Enrichment with Full Opinions
+```bash
+# Dry run enrichment on 3 test cases
+node scripts/scotus/enrich-scotus.js --limit=3 --dry-run
+
+# Check output quality manually:
+# - Are vote splits correct?
+# - Are dissent highlights extracted from === DISSENT sections?
+# - Did windowing trigger for any case? (check logs for [WINDOW])
+# - Did structural validation pass? (check for SCOTUS markers)
+```
+
+#### Phase 3: Test Windowing on Large Case
+```bash
+# Find a case with >100K chars
+SELECT sc.case_name, sc.id, so.char_count
+FROM scotus_cases sc
+JOIN scotus_opinions so ON so.case_id = sc.id
+WHERE so.char_count > 100000
+LIMIT 1;
+
+# Reset that case to pending so it gets picked up
+UPDATE scotus_cases SET enrichment_status = 'pending' WHERE id = '<id>';
+
+# Run enrichment with limit=1 to test just that case
+node scripts/scotus/enrich-scotus.js --limit=1 --dry-run
+# Should see "[WINDOW] Applied windowing" in logs
+```
+
+> **Note:** If you want a `--case-id` flag for targeted testing, add to enrich-scotus.js:
+> ```javascript
+> const caseIdFilter = args['case-id'];
+> // In query: .eq('id', caseIdFilter) if caseIdFilter is set
+> ```
+
+#### Phase 4: Backfill Existing Cases
+```bash
+# Run backfill for cases without full opinions
+node scripts/scotus/backfill-opinions.js --limit=50
+
+# Verify all cases now have v2
+SELECT source_data_version, COUNT(*) FROM scotus_cases GROUP BY 1;
+```
+
+#### Phase 5: Full Enrichment Run
+```bash
+# If Phase 2-4 pass, run full enrichment
+node scripts/scotus/enrich-scotus.js --limit=50
+
+# Verify results
+SELECT enrichment_status, confidence, COUNT(*)
+FROM scotus_cases
+WHERE source_data_version = 'v2-full-opinion'
+GROUP BY 1, 2;
+```
+
+### Cost Comparison (Corrected)
+
+| Approach | Pass 1 (×2) | Pass 2 | Total/Case | 50 Cases/Term |
+|----------|-------------|--------|------------|---------------|
+| Syllabus (v1) | 2 × 1.5K tokens | 1K tokens | ~$0.0006 | $0.03 |
+| **Full opinion (v2)** | 2 × 10K tokens | 1K tokens | **$0.0033** | **$0.17** |
+| **With windowing (>100K)** | 2 × 17.5K tokens | 1K tokens | $0.0055 | $0.28 (if all outliers) |
+
+**Realistic term cost: ~$0.17** (most cases <100K chars)
+
+**Budget guardrail:** Token windowing caps outliers at ~70K chars (~17.5K tokens)
+
+### Benefits Summary
+
+| Benefit | Impact |
+|---------|--------|
+| No more regex extraction failures | Pass 0 should rarely fail |
+| Full dissent text with headers | GPT sees `=== DISSENT ===` markers explicitly |
+| Multi-opinion coverage | Concurrences and all dissents included |
+| Separate table isolation | UI can't accidentally pull 140K per row |
+| Structural validation | Catches junk/malformed before GPT call |
+| Token windowing | Cost-predictable even for outliers |
+| In-place backfill | Preserves existing enrichment state |
+
+### ADO Ticket: ADO-283
+
+**Created:** [ADO-283](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/283)
+
+**Scope (updated with architecture review):**
+1. ✅ Schema migration 068 (separate `scotus_opinions` table + CHECK constraint)
+2. Update `fetch-cases.js`:
+   - Add `buildCanonicalOpinionText()` function
+   - Upsert to `scotus_opinions` table
+   - Update `source_data_version` on main table
+3. Update `scotus-fact-extraction.js`:
+   - JOIN query for `getCasesToEnrich()`
+   - Add `getSourceText()` with windowing
+   - Add structural markers to `checkSourceQuality()`
+   - Update `DB_COLUMNS` whitelist
+4. Update `scotus-gpt-prompt.js`:
+   - Update prompts for section headers
+5. Create `backfill-opinions.js` script
+6. Test enrichment quality
+
+**Depends on:** ADO-280 (two-pass architecture) ✅ DONE
+
+---
+
+## 📦 ARCHIVED: Original v1 Syllabus Approach
+
+> **⚠️ SUPERSEDED BY ADO-283 (Full Opinion Architecture)**
+>
+> The sections below document the original v1 approach that used extracted syllabus text.
+> This approach was abandoned because:
+> 1. CourtListener's `syllabus` field is always empty for SCOTUS clusters
+> 2. Regex extraction from `plain_text` is fragile and misses edge cases
+> 3. Extracted text often truncated, causing GPT hallucination
+>
+> **For current implementation, see "Full Opinion Architecture" section above.**
+
+---
+
+## Overview (v1 - Archived)
 
 Create `enrich-scotus.js` script that calls GPT to generate editorial analysis for SCOTUS cases fetched by `fetch-cases.js`.
 
 ---
 
-## What We're Analyzing
+## What We're Analyzing (v1 - Archived)
 
 ### Input: The Syllabus
 
@@ -1556,13 +2568,23 @@ For MVP, option 1 is sufficient. Option 2 requires adding a "fact-locked re-enri
 
 ### 6.9 Run Selection Query
 
+> **⚠️ v1 ONLY - DEPRECATED**
+>
+> This query is for v1 (syllabus-based) enrichment.
+> **For v2 (full opinion), see Section 3a in "Full Opinion Architecture" above.**
+> The v2 query:
+> - Uses `!left` JOIN to `scotus_opinions`
+> - Removes `.or(syllabus/excerpt)` filter (Pass 0 handles that)
+> - Flattens joined opinion text robustly
+
 ```javascript
+// v1 ONLY - DO NOT USE FOR v2
 async function getCasesToEnrich(limit = 10, supabase) {
   const { data, error } = await supabase
     .from('scotus_cases')
     .select('id, case_name, syllabus, opinion_excerpt, term, decided_at, vote_split, majority_author, dissent_authors, issue_area')
     .in('enrichment_status', ['pending', 'failed'])
-    .or('syllabus.not.is.null,opinion_excerpt.not.is.null')
+    .or('syllabus.not.is.null,opinion_excerpt.not.is.null')  // v2 REMOVES THIS
     .order('decided_at', { ascending: false })
     .limit(limit);
 
