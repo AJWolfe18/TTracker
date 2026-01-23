@@ -5,7 +5,7 @@
 -- NOTE: No source_data_version here - if row exists, it's v2 by definition
 -- Single source of truth: scotus_cases.source_data_version
 CREATE TABLE IF NOT EXISTS scotus_opinions (
-  case_id UUID PRIMARY KEY REFERENCES scotus_cases(id) ON DELETE CASCADE,
+  case_id BIGINT PRIMARY KEY REFERENCES scotus_cases(id) ON DELETE CASCADE,
   opinion_full_text TEXT NOT NULL,
   content_hash TEXT NOT NULL,  -- sha256 hex, enables skip-if-unchanged + change detection
   char_count INTEGER GENERATED ALWAYS AS (LENGTH(opinion_full_text)) STORED,

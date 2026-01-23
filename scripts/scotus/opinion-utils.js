@@ -21,7 +21,7 @@ export function sha256Hex(text) {
  * Prevents wasted DB writes during backfill/retries
  *
  * @param {Object} supabase - Supabase client
- * @param {string} caseId - UUID of the case
+ * @param {string} caseId - ID of the case (BIGINT)
  * @param {string} canonicalText - Full canonical opinion text
  * @returns {{ changed: boolean, content_hash: string, error?: string }}
  */
