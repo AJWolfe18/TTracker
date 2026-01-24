@@ -44,16 +44,25 @@ Organization: (inferred from MCP connection)
 | **Bug** | `Bug` | Something is broken |
 | **Task** | `Task` | Sub-work items (rare) |
 
-### State Mappings (JIRA → ADO)
+### State Workflow (IMPORTANT - use correct states!)
 
-| JIRA Status | ADO State |
-|-------------|-----------|
-| Backlog | New |
-| To Do | New |
-| In Progress | Active |
-| In Review | Active |
-| Ready for Test | Active |
-| Done | Closed |
+```
+New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+```
+
+| State | Meaning | When to Use |
+|-------|---------|-------------|
+| **New** | Just created, not prioritized | Initial creation |
+| **Todo** | Ready to work on, in backlog | Prioritized but not started |
+| **Active** | Currently being worked on | During development |
+| **Review** | Code complete, awaiting review | PR created, waiting for review |
+| **Testing** | Deployed to TEST, being verified | Code on test branch, validating |
+| **Ready for Prod** | Verified on TEST, awaiting PROD | Ready for cherry-pick to main |
+| **Resolved** | Deployed to PROD, awaiting signoff | Live in production |
+| **Closed** | Done | Fully complete |
+| **Removed** | Cancelled/deleted | Won't do |
+
+**CRITICAL:** Don't skip states. A story being tested on TEST branch should be "Testing", NOT "Resolved".
 
 ---
 
@@ -109,6 +118,14 @@ mcp__azure-devops__wit_update_work_item(
     {"path": "/fields/System.Description", "value": "New description"}
   ]
 )
+
+**STATE WORKFLOW (use correct state!):**
+New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+
+- Testing = deployed to TEST, being verified
+- Ready for Prod = verified on TEST, awaiting PROD
+- Resolved = deployed to PROD
+- Don't skip states!
 
 **Example - Search:**
 mcp__azure-devops__search_workitem(searchText="clustering", project=["TTracker"])
