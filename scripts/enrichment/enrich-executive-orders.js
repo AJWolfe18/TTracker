@@ -145,10 +145,12 @@ class EOEnrichmentWorker {
     }
 
     // 2. Get unenriched EOs
+    // ADO-282: Fixed query to explicitly handle NULL prompt_version
+    // Include EOs where: enriched_at is NULL, OR prompt_version is NULL, OR prompt_version != current
     const { data: eos, error } = await supabase
       .from('executive_orders')
       .select('*')
-      .or(`enriched_at.is.null,prompt_version.neq.${PROMPT_VERSION}`)
+      .or(`enriched_at.is.null,prompt_version.is.null,prompt_version.neq.${PROMPT_VERSION}`)
       .order('date', { ascending: false })
       .limit(limit);
 
@@ -162,7 +164,15 @@ class EOEnrichmentWorker {
       return;
     }
 
-    console.log(`📋 Found ${eos.length} EOs to enrich\n`);
+    // ADO-282: Log breakdown of why EOs need enrichment
+    const nullEnrichedAt = eos.filter(e => !e.enriched_at).length;
+    const nullPromptVersion = eos.filter(e => !e.prompt_version).length;
+    const outdatedVersion = eos.filter(e => e.prompt_version && e.prompt_version !== PROMPT_VERSION).length;
+
+    console.log(`📋 Found ${eos.length} EOs to enrich:`);
+    console.log(`   - enriched_at = NULL: ${nullEnrichedAt}`);
+    console.log(`   - prompt_version = NULL: ${nullPromptVersion}`);
+    console.log(`   - prompt_version outdated: ${outdatedVersion}\n`);
 
     // 3. Process each with rate limiting
     for (const eo of eos) {
