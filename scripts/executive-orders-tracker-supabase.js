@@ -23,7 +23,8 @@ function generateOrderId() {
 // Check if order already exists in database
 async function orderExists(orderNumber) {
     try {
-        const query = `order_number=eq.${orderNumber}`;
+        // ADO-285: Ensure proper URL encoding for VARCHAR field
+        const query = `order_number=eq.${encodeURIComponent(String(orderNumber))}`;
         const existing = await supabaseRequest(`executive_orders?${query}&limit=1`);
         return existing && existing.length > 0;
     } catch (error) {

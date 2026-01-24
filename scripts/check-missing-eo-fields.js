@@ -14,7 +14,8 @@ async function checkMissingFields() {
     try {
         // First check EO 14338 specifically
         console.log('\n📋 Checking EO 14338 specifically...');
-        const eo14338Response = await fetch(`${SUPABASE_URL}/rest/v1/executive_orders?order_number=eq.14338`, {
+        // ADO-285: Ensure proper URL encoding for VARCHAR field
+        const eo14338Response = await fetch(`${SUPABASE_URL}/rest/v1/executive_orders?order_number=eq.${encodeURIComponent('14338')}`, {
             headers: {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
