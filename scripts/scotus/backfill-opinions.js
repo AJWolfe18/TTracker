@@ -137,12 +137,13 @@ async function main() {
   console.log(`\n=== Backfill SCOTUS Opinions ===\n`);
   console.log(`Limit: ${limit}, Dry run: ${dryRun}\n`);
 
-  // Query cases needing backfill
+  // Query cases needing backfill (recent cases first - more likely to have full text)
   const { data: cases, error } = await supabase
     .from('scotus_cases')
-    .select('id, case_name, courtlistener_cluster_id, source_data_version')
+    .select('id, case_name, courtlistener_cluster_id, source_data_version, decided_at')
     .or('source_data_version.neq.v2-full-opinion,source_data_version.is.null')
     .not('courtlistener_cluster_id', 'is', null)
+    .order('decided_at', { ascending: false })
     .limit(limit);
 
   if (error) {
