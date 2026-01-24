@@ -5,14 +5,57 @@
 
 ---
 
+## ADO is the Source of Truth
+
+- **Status lives in ADO** - not in plan docs, not in handoffs
+- **Issues/blockers go in ADO** - add as comments or update description
+- **Plan links go in ADO** - add `/docs/features/[feature]/plan.md` link to description
+- Plans are for implementation details, ADO is for tracking
+
+---
+
 ## Work Item Types
 
 | Type | Use When |
 |------|----------|
 | **Epic** | Major product area (e.g., SCOTUS Tracker, Pardons Tracker) |
+| **Feature** | Functional area within an Epic (grouping concept) |
 | **User Story** | Any dev work that fits in 1 Claude Code session |
 | **Bug** | Something is broken |
-| **Task** | Sub-item of a story (optional) |
+| **Task** | Sub-item of a story (optional, rarely used) |
+
+---
+
+## Status Workflow (Simplified)
+
+```
+New → Todo → Active → Testing → Ready for Prod → Closed
+```
+
+| State | Meaning | Move here when... |
+|-------|---------|-------------------|
+| **New** | Just created, not prioritized | Initial creation |
+| **Todo** | Ready to work on, in backlog | Prioritized for upcoming work |
+| **Active** | Currently being worked on | Starting a session on this item |
+| **Testing** | On test branch, ready for verification | See "Definition of Testing" below |
+| **Ready for Prod** | Verified on test, awaiting deploy | Manual verification passed on test site |
+| **Closed** | Done - deployed to PROD | PR merged to main, feature flag flipped (if applicable) |
+
+**Removed:** Review (rarely used), Done sub-columns (not used)
+
+---
+
+## Definition of "Testing" State
+
+Move a story to **Testing** when ALL of these are true:
+
+- [ ] Code committed and pushed to `test` branch
+- [ ] Acceptance criteria pass (you verified the feature works)
+- [ ] Code review completed (`Task(feature-dev:code-reviewer)`) - unless trivial change
+- [ ] Lint PROD References passes (automatic on push)
+- [ ] Deployed to test site (automatic via Netlify)
+
+**Testing ≠ "I'm testing"** - it means "code is done, deployed, ready for someone to verify"
 
 ---
 
@@ -23,6 +66,7 @@ Use `/ado` command for all operations:
 ```
 /ado 123 get status          # Query work item
 /ado 123 set state Active    # Update state
+/ado 123 set state Testing   # Mark ready for test
 /ado create story "Title"    # Create new story
 /ado search "clustering"     # Search work items
 ```
@@ -33,31 +77,24 @@ Full syntax: `.claude/commands/ado.md`
 
 ## Epic > Feature > Story Hierarchy
 
-**The 3-Tier Pattern:**
 ```
-Epic: [Product Area]
-├── Feature: [Functional Area 1]
-│   ├── Story: DB schema + migrations
-│   ├── Story: Edge function / API
-│   ├── Story: UI cards + list view
-│   └── Story: Detail modal
-├── Feature: [Functional Area 2]
-│   ├── Story: ...
-│   └── Story: ...
-└── Feature: [Functional Area 3]
-    └── Story: ...
+Epic: SCOTUS Tracker
+├── Feature: Case Data Pipeline
+│   ├── Story: Fetch cases from CourtListener API
+│   ├── Story: Enrich cases with GPT analysis
+│   └── Story: Schedule automated sync
+├── Feature: Frontend Display
+│   ├── Story: Case list page
+│   └── Story: Case detail modal
+└── Feature: Impact Scoring
+    └── Story: Calculate and display impact scores
 ```
 
 ---
 
-## Story Sizing: 1 Story = 1 Context Window
+## Story Sizing: 1 Story = 1 Session
 
 **Core Principle:** A Story must be completable in a single Claude Code session.
-- Planning happens BEFORE (separate session → creates plan + Stories)
-- Dev session: Code → Test → Deploy → Done
-- No multi-session Stories - if it doesn't fit, split it
-
-### Sizing Checklist
 
 | Fits in 1 session? | Guideline |
 |--------------------|-----------|
@@ -67,15 +104,6 @@ Epic: [Product Area]
 | ❌ No, split it | Multiple unrelated changes |
 | ❌ No, split it | Full stack (DB + API + UI) for new feature |
 | ❌ No, split it | Requires research/exploration first |
-
----
-
-## Planning vs Dev Sessions
-
-| Session Type | Purpose | Output |
-|--------------|---------|--------|
-| Planning | Research, design, decompose Epic | Plan doc + Features + Stories in ADO |
-| Dev | Execute 1 Story | Working code + tests + deploy + handoff |
 
 ---
 
@@ -89,32 +117,21 @@ Verify:
 
 ---
 
+## Recording Issues/Blockers
+
+When you hit a blocker or find an issue:
+
+1. **Add comment to ADO ticket** - not in plan doc or handoff
+2. **Update description** if scope changed
+3. **Create child Bug** if it's a separate issue to fix
+4. **Flag user** if decision needed
+
+---
+
 ## Labels
 
-Common labels for grouping: `clustering`, `security`, `ui`, `rss`, `infra`, `docs`
+Common labels: `clustering`, `security`, `ui`, `rss`, `infra`, `docs`, `scotus`, `pardons`
 
 ---
 
-## Status Workflow
-
-**Custom states for User Stories:**
-```
-New → Todo → Active → Review → Testing → Ready for Prod → Closed
-```
-
-| State | Meaning |
-|-------|---------|
-| **New** | Just created, not yet prioritized |
-| **Todo** | Ready to work on, in backlog |
-| **Active** | Currently being worked on |
-| **Review** | Code complete, awaiting review |
-| **Testing** | Deployed to TEST, being verified |
-| **Ready for Prod** | Verified on TEST, awaiting PROD deployment |
-| **Closed** | Done (deployed to PROD) |
-| **Removed** | Cancelled/deleted |
-
-**NOTE:** We don't use "Resolved" for User Stories - go straight to "Closed" after PROD deploy.
-
----
-
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-01-24

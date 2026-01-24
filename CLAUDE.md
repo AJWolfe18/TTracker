@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🚀 TLDR (Read This First)
 
-**Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)  
-**Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)  
-**Budget**: <$50/month HARD LIMIT  
-**Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)  
-**Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Auto-deploy (AI review only on PRs)  
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP  
+**Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)
+**Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
+**Budget**: <$50/month HARD LIMIT
+**Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
+**Workflow**: Code → Code Review → QA → Commit → Update ADO → Push test → Handoff
+**Source of Truth**: ADO for status, plans for implementation details only
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -55,17 +56,19 @@ docs/features/
 - [ ] Follow plan/todos linearly (don't jump around)
 - [ ] Validate with subagent BEFORE marking todos complete
 - [ ] Check MCP tools before claiming "I can't"
-- [ ] **Run code review** on significant changes (3+ files or complex logic): `Task(feature-dev:code-reviewer)` - catches bugs, security issues, pattern violations before commit
+- [ ] **Run code review** on any non-trivial change: `Task(feature-dev:code-reviewer)`
+  - Skip only for: typo fixes, single-line changes, config tweaks
+  - Run for: logic changes, new functions, bug fixes, refactoring
 
 ### ✅ End Every Session (10 min)
+- [ ] Run code review: `Task(feature-dev:code-reviewer)` - unless trivial change
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit & push to test branch → Auto-deploys to test site
-- [ ] **Note**: AI code review only runs on PRs (not direct pushes to test)
-  - For PROD deployments: Create PR → AI review runs automatically
-  - Check PR review: `bash scripts/check-code-review.sh` or `gh pr view`
-- [ ] Update ADO via `/ado` command (DO IT, don't just say "needs update")
+- [ ] **Update ADO** via `/ado` command - move to appropriate state (Active → Testing if done)
 - [ ] If schema/architecture/patterns changed → Update relevant doc in `/docs/`
-- [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
+- [ ] Create brief handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
+  - 1 paragraph max: ADO ticket, state change, what to do next
+  - Example: "ADO-123 moved to Testing. SCOTUS frontend complete. Next: verify on test site, then Ready for Prod."
 - [ ] Report token usage
 
 **Skip plan for:** Simple bugs, 1-2 file changes, well-understood patterns
@@ -74,6 +77,18 @@ docs/features/
 ---
 
 ## 📋 Working with Plans
+
+### Plans vs ADO
+
+| What | Where | Purpose |
+|------|-------|---------|
+| **Status** | ADO ticket | Current state, blockers, progress |
+| **Implementation details** | Plan doc | Technical steps, code patterns |
+| **Issues/blockers** | ADO comments | Problems encountered |
+| **What happened** | Handoff (brief) | Context for next session |
+
+**Plans are ephemeral** - they hold implementation details during active development.
+**ADO is persistent** - it tracks status across sessions.
 
 ### Decision Tree: Plan or Execute?
 
@@ -84,19 +99,18 @@ docs/features/
 | Simple task (1-2 files, clear scope) | **JUST DO IT** (no plan needed) |
 | Bug fix with known cause | **JUST DO IT** |
 
-### EXECUTION MODE (When Plan Exists):
+### When Plan Exists:
 1. Open plan file at specified location
-2. Check STATUS → identifies current phase
-3. Execute tasks sequentially
-4. Update STATUS when phase completes
-5. Create handoff pointing to next phase
+2. Check ADO ticket for current status
+3. Execute tasks from plan sequentially
+4. Update ADO when milestones complete
+5. Create brief handoff at session end
 
 ### DON'T DO THIS:
-- ❌ "Let me create a session plan based on the main plan"
+- ❌ Track STATUS in plan docs (use ADO)
 - ❌ Create new plan when one already exists
-- ❌ Summarize existing plan into smaller steps
-
-**Red Flag:** If saying "Let me plan..." when plan exists → STOP → Execute existing plan.
+- ❌ Write detailed handoffs (1 paragraph max)
+- ❌ Duplicate ADO info in multiple places
 
 ---
 
@@ -536,8 +550,11 @@ VALUES (
 
 ## ADO Workflow
 
-**Work Item Types:** Epic, User Story, Bug, Task
+**ADO is the source of truth for status.** Update it every session.
+
 **Project:** TTracker (`https://dev.azure.com/AJWolfe92/TTracker`)
+
+**States:** `New → Todo → Active → Testing → Ready for Prod → Closed`
 
 **Quick Rules:**
 | If the work is... | Create a... |
@@ -548,7 +565,13 @@ VALUES (
 
 **Use `/ado` command** for all operations. See `/docs/guides/ado-workflow.md` for full workflow details.
 
-**Story Sizing:** 1 Story = 1 Claude Code session (code → test → deploy → done)
+**Story Sizing:** 1 Story = 1 Claude Code session (code → review → test → deploy → done)
+
+**Where things go:**
+- Status/progress → ADO ticket state
+- Blockers/issues → ADO ticket comments
+- Plan link → ADO ticket description
+- Implementation details → Plan doc (if exists)
 
 ## Common Tasks
 
