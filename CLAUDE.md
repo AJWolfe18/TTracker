@@ -207,6 +207,13 @@ docs/features/
 - ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
 - ❌ Expecting AI review on test pushes - Review only runs on PRs (not direct pushes)
 
+### CI Workflows
+- ❌ Ignoring "Lint PROD References" failures - This workflow prevents hardcoded PROD URLs in test code
+  - If it fails: A script has a hardcoded PROD Supabase reference not in the allowlist
+  - To fix: Either remove the hardcoded ref OR add to allowlist in `.github/workflows/lint-prod-refs.yml`
+  - Allowlist is for legitimate uses (e.g., PROD detection for safety prompts, not actual connections)
+  - **Never ignore red badges** - they mean something is wrong
+
 ### Database
 - ❌ OFFSET pagination - Slow at scale (use cursor-based with `lt('id', cursor)`)
 - ❌ `timestamp` without timezone - Always use `timestamptz`
