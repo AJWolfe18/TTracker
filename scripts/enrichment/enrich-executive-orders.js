@@ -296,6 +296,14 @@ class EOEnrichmentWorker {
       action_section: enrichment.action_section || null,
       enriched_at: new Date().toISOString(),
       prompt_version: PROMPT_VERSION,
+      enrichment_meta: {
+        prompt_version: PROMPT_VERSION,
+        frame,
+        style_pattern_id: variation.id,
+        collision: variation._meta?.collision || false,
+        model: 'gpt-4o-mini',
+        enriched_at: new Date().toISOString(),
+      },
       })
       .eq('id', eo.id);
 
