@@ -1,8 +1,8 @@
-# Handoff: ADO-273/274 Variation System Testing
+# Handoff: ADO-273/274/276 Variation System Testing & Planning
 
 **Date:** 2026-01-24
 **Branch:** test
-**Commit:** 75932b0
+**Latest Commit:** b758c4a
 
 ## Summary
 
@@ -98,3 +98,47 @@ node scripts/enrichment/enrich-executive-orders.js 5
 # Test Stories enrichment (5 items)
 node scripts/test-spicy-prompts.js --limit=5
 ```
+
+---
+
+## ADO-276 Planning (Pardons Variation)
+
+### Status: Ready for Implementation
+
+**Plan document:** `docs/features/labels-tones-alignment/ado-276-pardons-variation-plan.md`
+
+**Migration ready:** `migrations/071_pardons_enrichment_meta.sql`
+
+### Key Decisions (from expert review)
+
+1. **3 frames** (not 2): `alarmed`, `critical`, `grudging_credit`
+   - `grudging_credit` only for legitimate/mercy at level 0-1
+   - Without it, defensible pardons get framed as corrupt (dishonest)
+
+2. **8 pools** (type+frame):
+   - `donor_alarmed`, `donor_critical`
+   - `inner_circle_alarmed`, `inner_circle_critical`
+   - `insurrection_alarmed` (always alarmed)
+   - `political_critical`, `celebrity_critical`
+   - `legitimate_grudging_credit`, `mercy_grudging_credit`
+
+3. **Hard-fail on missing inputs**: If `corruption_level` or `connection_type` is NULL, skip with loud log (don't silently default)
+
+4. **Connection type normalization**: Handle variants like `inner-circle` → `inner_circle`
+
+### Next Session Tasks
+
+1. Apply migration 071 to TEST
+2. Implement `pardons-variation-pools.js` rewrite
+3. Modify `pardons-gpt-prompt.js` with REQUIRED VARIATION
+4. Modify `enrich-pardons.js` with new wiring
+5. Test with 5 pardons
+6. Verify enrichment_meta populated
+
+### Expert Feedback Incorporated
+
+- Preflight should use API ping (not just JWT decode)
+- Job queue gate should check both `job_type` AND `type` columns
+- Deterministic selection with FNV-1a hash
+- REQUIRED VARIATION block (not "suggestions")
+- Mismatch fuse in prompt
