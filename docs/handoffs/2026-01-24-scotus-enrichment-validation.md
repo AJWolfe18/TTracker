@@ -2,7 +2,9 @@
 
 **Date:** 2026-01-24
 **Branch:** test
-**Status:** SCOTUS enrichment working for merits cases, cert-stage limitation identified
+**Status:** SCOTUS enrichment partially working - bugs identified in quote extraction
+
+**Critical:** 3 cases with good source text failing due to quote extraction bug. Need to investigate before fetching more cases.
 
 ---
 
@@ -63,16 +65,18 @@
 
 **Root cause:** Pass 2 generates "who wins/loses" as if merits decided, but cert denials have no real winner. Drift detector catches mismatch.
 
-### FLAGGED - CONSENSUS MISMATCH (2 cases)
-| ID | Case | Reason |
-|----|------|--------|
-| 50 | Murray v. UBS | "reversed and remanded" vs "reversed" |
-| 59 | McElrath v. Georgia | No anchor quote despite high confidence attempt |
+### FLAGGED - BUGS TO INVESTIGATE (3 cases)
+These have GOOD source text but fail - likely prompt/logic bugs:
 
-### FLAGGED - SOURCE QUALITY (2 cases)
+| ID | Case | Source | Has Anchors | Bug |
+|----|------|--------|-------------|-----|
+| 27 | Campos-Chaves v. Garland | 87,987 chars | YES | GPT quotes lack anchor terms |
+| 50 | Murray v. UBS | 44,416 chars | YES | Consensus too strict on "remanded" |
+| 59 | McElrath v. Georgia | 29,239 chars | YES | GPT quotes lack anchor terms |
+
+### FLAGGED - EXPECTED (1 case)
 | ID | Case | Reason |
 |----|------|--------|
-| 27 | Campos-Chaves v. Garland | No anchor quote in evidence |
 | 56 | 74 Pinehurst v. New York | Below soft min (2458 chars) + no anchors |
 
 ### FLAGGED - NO SOURCE TEXT (3 cases - 2020 term)
@@ -111,24 +115,40 @@ Without these, confidence capped to medium (might be syllabus-only).
 
 ## Next Session Tasks
 
-### Priority 1: Cert-Stage Fix
+### Priority 1: Fetch 2025 Cases
+We only have 2024 cases. Need current term:
+```bash
+node scripts/scotus/fetch-cases.js --since=2025-01-01 --limit=20
+```
+
+### Priority 2: Investigate Quote Extraction Bug
+**Cases 27, 50, 59 have good source text but fail enrichment:**
+
+| Case | Issue | Investigation |
+|------|-------|---------------|
+| Campos-Chaves (87K chars) | Quote lacks anchor token | GPT extracting wrong quotes |
+| McElrath (29K chars) | Quote lacks anchor token | GPT extracting wrong quotes |
+| Murray (44K chars) | "reversed and remanded" vs "reversed" | Consensus too strict |
+
+**Questions to answer:**
+1. Why does GPT extract quotes without anchor terms when source HAS them?
+2. Is "reversed and remanded" vs "reversed" a real difference or should we normalize?
+3. Check Pass 1 prompt - is it clear about extracting quotes WITH anchor terms?
+
+**Files to investigate:**
+- `scripts/enrichment/scotus-fact-extraction.js` - ANCHOR_TOKEN_REGEX, validatePass1()
+- Pass 1 prompt template - quote extraction instructions
+
+### Priority 3: Cert-Stage Skip
 After Pass 1, if `case_type: cert_stage` + `merits_reached: false`:
 - Set `enrichment_status: 'cert_stage'`
 - Skip Pass 2
 - Don't show on frontend
 
-Location: `scripts/scotus/enrich-scotus.js` around line 300
-
-### Priority 2: Publish Connelly
+### Priority 4: Publish Connelly
 ```sql
 UPDATE scotus_cases SET is_public = true WHERE id = 4;
 ```
-
-### Priority 3: Run ADO-282 on PROD
-```bash
-node scripts/enrichment/enrich-executive-orders.js 50 --prod
-```
-This will backfill 35 EOs with NULL enriched_at.
 
 ---
 
@@ -150,15 +170,14 @@ node scripts/scotus/enrich-scotus.js --limit=10
 
 ---
 
-## ADO Status
+## ADO Status (SCOTUS-related only)
 
 | Item | State | Notes |
 |------|-------|-------|
-| #285 | Testing | Test infra validated, commits pushed |
-| #282 | Resolved | Code fix done, needs PROD run |
-| #85 | Testing | Enrichment working, cert-stage limitation noted |
-| #273 | Testing | EO tone - blocked by #282 PROD run |
-| #274 | Testing | Stories tone - test infra ready |
+| #85 | Testing | Enrichment working for merits, bugs identified |
+| #285 | Testing | Test infra validated |
+
+**Bugs to track:** Quote extraction issue (cases 27, 50, 59) - may need new ADO item
 
 ---
 
