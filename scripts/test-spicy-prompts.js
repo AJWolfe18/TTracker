@@ -72,11 +72,8 @@ async function checkDatabaseAccess() {
       return false;
     }
 
-    // Test 2: Write access test (check we can update)
-    // We don't actually write, just verify we have a service key by checking auth
-    if (!supabaseKey.includes('service')) {
-      console.warn('   ⚠️ May not have service role key - write operations might fail');
-    }
+    // Test 2: Write access - verified implicitly when enrichment runs
+    // Note: Service key detection removed (JWT doesn't contain 'service' string)
 
     // Test 3: Check we can access article_story join (common failure point)
     const { error: joinError } = await supabase
