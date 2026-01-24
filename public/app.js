@@ -1097,9 +1097,9 @@
     const filteredCases = useMemo(() => {
       let result = [...cases];
 
-      // Impact filter
+      // Impact filter (use Number() to handle string/number type mismatch from DB)
       if (selectedImpact !== 'all') {
-        result = result.filter(c => c.ruling_impact_level === selectedImpact);
+        result = result.filter(c => Number(c.ruling_impact_level) === Number(selectedImpact));
       }
 
       // Term filter
