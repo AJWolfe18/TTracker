@@ -1,14 +1,14 @@
 # SCOTUS Tracker Feature
 
-**Status:** In Development (ADO-86, ADO-87 Active)
+**Status:** Frontend Development Phase
 **Epic:** [ADO-106](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/106)
-**Last Updated:** 2026-01-20
+**Last Updated:** 2026-01-23
 
 ---
 
 ## Overview
 
-Track Supreme Court decisions with AI-powered editorial analysis. Fetches cases from CourtListener API, enriches with GPT analysis, and displays with impact ratings.
+Track Supreme Court decisions with AI-powered editorial analysis. Fetches cases from CourtListener API, enriches with GPT analysis (two-pass architecture), and displays with impact ratings.
 
 ---
 
@@ -16,25 +16,62 @@ Track Supreme Court decisions with AI-powered editorial analysis. Fetches cases 
 
 | Component | Status | ADO | Notes |
 |-----------|--------|-----|-------|
-| Database Schema | ✅ Complete | ADO-87 | Migration 066 applied to TEST |
+| Database Schema | ✅ Complete | ADO-87 | Migrations 066-069 applied |
 | CourtListener API | ✅ Complete | ADO-86 | fetch-cases.js working |
-| Tone/Voice | ✅ Complete | ADO-272 | scotus-gpt-prompt.js has "The Betrayal" voice |
-| Enrichment Script | 🔄 In Progress | ADO-85 | Ready to implement |
-| Edge Functions | 🔲 Not Started | TBD | Need scotus-list, scotus-detail |
-| Frontend UI | 🔲 Not Started | TBD | Need page design |
+| Full Opinion Architecture | ✅ Testing | ADO-283 | 25-92K char opinions stored |
+| Two-Pass Enrichment | ✅ Complete | ADO-280 | Fact extraction + editorial |
+| Enrichment Script | ✅ Complete | ADO-85 | enrich-scotus.js working |
+| Tone/Voice | ✅ Complete | ADO-272 | "The Betrayal" voice ready |
+| Tone Variation | 🔲 Not Started | ADO-275 | Frame bucket architecture |
+| Frontend UI | 🔲 Not Started | ADO-83 | **NEXT** |
+| CSS Additions | 🔲 Not Started | ADO-82 | Impact badges, etc. |
+| Backfill | 🔲 Not Started | ADO-80 | ~50 cases for 2024-25 term |
+| GitHub Workflow | 🔲 Not Started | ADO-81 | Automation |
 
 ---
 
-## Files
+## Implementation Plan (Agreed 2026-01-23)
+
+### Phase 1: Make It Visible
+1. **#83 - Frontend page** - List view + detail modal
+2. **#82 - CSS additions** - Impact badge colors, styling
+
+### Phase 2: Content
+3. **#80 - Partial backfill** - 10-15 cases to verify display
+
+### Phase 3: Quality
+4. **#275 - Tone variation** - Apply frame bucket architecture
+
+### Phase 4: Scale
+5. **#80 - Full backfill** - Remaining 2024-25 term cases
+6. **#81 - GitHub workflow** - Automated ingestion
+
+### Deferred
+- #77 QA, #78 SEO, #79 Admin - After MVP working
+
+---
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `scotus_cases` | Main case data + enrichment results |
+| `scotus_opinions` | Full opinion text (ADO-283) - for enrichment only |
+| `scotus_sync_state` | Cursor tracking for incremental fetch |
+
+---
+
+## Key Files
 
 | File | Purpose |
 |------|---------|
-| `migrations/066_scotus_cases.sql` | Schema for scotus_cases + sync_state |
 | `scripts/scotus/fetch-cases.js` | CourtListener API fetcher |
-| `scripts/scotus/README.md` | Script usage documentation |
-| `scripts/enrichment/scotus-gpt-prompt.js` | GPT enrichment prompt (exists, needs tone update) |
-| `docs/features/scotus-tracker/prd.md` | Product requirements |
-| `docs/features/scotus-tracker/field-mapping.md` | API field mapping notes |
+| `scripts/scotus/enrich-scotus.js` | GPT enrichment (two-pass) |
+| `scripts/scotus/backfill-opinions.js` | Backfill full opinions for v1 cases |
+| `scripts/scotus/opinion-utils.js` | Shared utilities |
+| `scripts/enrichment/scotus-gpt-prompt.js` | GPT prompt templates |
+| `scripts/enrichment/scotus-fact-extraction.js` | Pass 1 fact extraction |
+| `scripts/enrichment/scotus-variation-pools.js` | Anti-repetition pools |
 
 ---
 
@@ -42,16 +79,19 @@ Track Supreme Court decisions with AI-powered editorial analysis. Fetches cases 
 
 ```bash
 # Fetch recent SCOTUS cases
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=20
+node scripts/scotus/fetch-cases.js --since=2024-06-01 --limit=10
 
-# Dry run (no DB writes)
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=5 --dry-run
+# Enrich pending cases
+node scripts/scotus/enrich-scotus.js --limit=5
+
+# Backfill full opinions for existing cases
+node scripts/scotus/backfill-opinions.js --limit=10
 
 # Check database
-SELECT id, case_name, term, decided_at, majority_author, syllabus
+SELECT id, case_name, ruling_impact_level, ruling_label, enrichment_status
 FROM scotus_cases
-ORDER BY decided_at DESC
-LIMIT 10;
+WHERE is_public = true
+ORDER BY decided_at DESC;
 ```
 
 ---
@@ -60,57 +100,45 @@ LIMIT 10;
 
 ```
 CourtListener API
-    ↓ fetch-cases.js (3 endpoints per case)
-    │   ├── /clusters/ - Main case data
-    │   ├── /dockets/{id}/ - Argued date, docket number
-    │   └── /opinions/?cluster={id} - Syllabus, authors
-    ↓
-scotus_cases table (is_public = false)
-    ↓ [ADO-85] enrich-scotus.js (future)
-    ↓
+    ↓ fetch-cases.js
+scotus_cases + scotus_opinions (is_public = false)
+    ↓ enrich-scotus.js (two-pass: facts → editorial)
 scotus_cases (enriched, is_public = true)
-    ↓ [TBD] Edge functions
-    ↓
-Frontend UI
+    ↓ Frontend query
+SCOTUS page (list + detail modal)
 ```
-
----
-
-## Key Technical Notes
-
-1. **Author Resolution**: CourtListener returns `author_id` not `author_str` - script resolves via `/people/{id}/` endpoint with caching
-
-2. **Syllabus Extraction**: SCOTUS opinions have complex formatting with multiple "Syllabus" headers - regex targets content after "SUPREME COURT" header
-
-3. **Idempotent Upserts**: Uses `courtlistener_cluster_id` as unique key for safe re-fetching
-
-4. **Pagination**: `scotus_sync_state` table tracks `next_url` for resumable fetching
-
-5. **RLS Gate**: `is_public = false` by default - cases need enrichment/review before publishing
-
----
-
-## Dependencies
-
-- ✅ **ADO-272**: Tone/voice complete (profanity at 4-5, "The Betrayal" voice)
-- ⏳ **ADO-275**: Frame bucket architecture (enhancement, not blocker)
-- ✅ **CourtListener Token**: Configured in environment and GitHub secrets
-
----
-
-## Next Steps
-
-1. ~~Quality review fetch script~~ ✅ (Fixed author + syllabus extraction)
-2. ~~Tone/voice setup~~ ✅ (ADO-272 complete)
-3. **Implement ADO-85 (enrichment script)** ← CURRENT
-4. Create edge functions (scotus-list, scotus-detail)
-5. Build frontend UI page
-6. Apply ADO-275 frame bucket architecture (enhancement)
 
 ---
 
 ## Related Docs
 
-- [PRD](./prd.md) - Full product requirements
+- [PRD](./prd.md) - Product requirements & ruling impact scale
+- [Frontend Spec](./frontend-spec.md) - UI field mapping & acceptance criteria
 - [Field Mapping](./field-mapping.md) - CourtListener API field mapping
-- [Database Schema](/docs/database/database-schema.md#scotus-tracker-tables) - Table definitions
+- [ADO-85 Plan](./ado-85-plan.md) - Detailed enrichment implementation plan
+
+---
+
+## ADO Items Under Feature #106
+
+| ID | Title | State |
+|----|-------|-------|
+| 77 | QA: End-to-end flow | New |
+| 78 | SEO: URLs + sitemap | New |
+| 79 | Admin review queue | New |
+| 80 | Backfill 2024-25 term | New |
+| 81 | GitHub Actions workflow | New |
+| 82 | CSS additions | New |
+| 83 | Frontend page | New |
+| 85 | Evidence anchoring | Active |
+| 86 | CourtListener API | Resolved |
+| 87 | Database schema | Resolved |
+| 272 | Enable profanity/betrayal | Ready for Prod |
+| 274 | Stories tone variation | Testing |
+| 275 | SCOTUS tone variation | New |
+| 277 | Improve syllabus extraction | New (may be obsolete) |
+| 278 | Harden regex | New (may be obsolete) |
+| 279 | Request queue | New |
+| 280 | Two-pass architecture | Closed |
+| 281 | Code quality fixes | Closed |
+| 283 | Full opinion input | Testing |
