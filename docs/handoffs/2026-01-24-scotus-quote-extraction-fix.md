@@ -1,12 +1,29 @@
-# Handoff: SCOTUS Quote Extraction Bug Fixes
+# Handoff: SCOTUS Section-Aware Disposition Extraction
 
 **Date:** 2026-01-24
 **Branch:** test
-**Status:** Fixed - 3 previously failing cases now enriched and published
+**Status:** Complete - Section-aware extraction implemented, 3 test cases passing
 
 ---
 
 ## Completed This Session
+
+### Major Refactor: Section-Aware Extraction
+
+Replaced naive "first match in text" approach with defensive, section-aware extraction that NEVER searches dissent/concurrence sections.
+
+**New search order:**
+1. Syllabus first window (5K chars)
+2. Syllabus last window
+3. Majority first window
+4. Majority last window
+5. Majority full (guarded - stops at dissent marker)
+
+**New telemetry fields (runtime-only until ADO-286):**
+- `disposition_source`: syllabus | majority | fulltext_fallback | unknown
+- `disposition_window`: first | last | full | none
+- `disposition_pattern`: pattern ID that matched
+- `disposition_raw`: original matched phrase before normalization
 
 ### Bug 1: GPT Quotes Missing Anchor Tokens (Cases 27, 59)
 
@@ -110,4 +127,20 @@ GET /scotus_cases?select=id,case_name,enrichment_status,is_public&order=decided_
 
 | File | Lines Changed |
 |------|---------------|
-| `scripts/enrichment/scotus-fact-extraction.js` | +115 / -9 |
+| `scripts/scotus/opinion-utils.js` | +280 (new utilities) |
+| `scripts/enrichment/scotus-fact-extraction.js` | +55 / -55 (refactor) |
+
+---
+
+## ADO Items Created
+
+| ID | Title | State |
+|----|-------|-------|
+| #286 | SCOTUS: Add disposition telemetry columns to schema | New |
+| #287 | SCOTUS: Disposition QA telemetry dashboard | New (blocked by #286) |
+
+---
+
+## Commits
+
+- `580ee25` - feat(scotus): section-aware disposition extraction
