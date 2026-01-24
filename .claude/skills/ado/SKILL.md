@@ -47,7 +47,7 @@ Organization: (inferred from MCP connection)
 ### State Workflow (IMPORTANT - use correct states!)
 
 ```
-New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+New → Todo → Active → Review → Testing → Ready for Prod → Closed
 ```
 
 | State | Meaning | When to Use |
@@ -58,11 +58,10 @@ New → Todo → Active → Review → Testing → Ready for Prod → Resolved �
 | **Review** | Code complete, awaiting review | PR created, waiting for review |
 | **Testing** | Deployed to TEST, being verified | Code on test branch, validating |
 | **Ready for Prod** | Verified on TEST, awaiting PROD | Ready for cherry-pick to main |
-| **Resolved** | Deployed to PROD, awaiting signoff | Live in production |
-| **Closed** | Done | Fully complete |
+| **Closed** | Done, deployed to PROD | Fully complete |
 | **Removed** | Cancelled/deleted | Won't do |
 
-**CRITICAL:** Don't skip states. A story being tested on TEST branch should be "Testing", NOT "Resolved".
+**NOTE:** We don't use "Resolved" for User Stories - go straight to "Closed" after PROD deploy.
 
 ---
 
@@ -120,12 +119,12 @@ mcp__azure-devops__wit_update_work_item(
 )
 
 **STATE WORKFLOW (use correct state!):**
-New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+New → Todo → Active → Review → Testing → Ready for Prod → Closed
 
 - Testing = deployed to TEST, being verified
 - Ready for Prod = verified on TEST, awaiting PROD
-- Resolved = deployed to PROD
-- Don't skip states!
+- Closed = deployed to PROD, done
+- Don't use "Resolved" for stories - use "Closed"
 
 **Example - Search:**
 mcp__azure-devops__search_workitem(searchText="clustering", project=["TTracker"])

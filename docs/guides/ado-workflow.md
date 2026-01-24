@@ -99,7 +99,7 @@ Common labels for grouping: `clustering`, `security`, `ui`, `rss`, `infra`, `doc
 
 **Custom states for User Stories:**
 ```
-New → Todo → Active → Review → Testing → Ready for Prod → Resolved → Closed
+New → Todo → Active → Review → Testing → Ready for Prod → Closed
 ```
 
 | State | Meaning |
@@ -110,9 +110,10 @@ New → Todo → Active → Review → Testing → Ready for Prod → Resolved �
 | **Review** | Code complete, awaiting review |
 | **Testing** | Deployed to TEST, being verified |
 | **Ready for Prod** | Verified on TEST, awaiting PROD deployment |
-| **Resolved** | Deployed to PROD, awaiting final signoff |
-| **Closed** | Done |
+| **Closed** | Done (deployed to PROD) |
 | **Removed** | Cancelled/deleted |
+
+**NOTE:** We don't use "Resolved" for User Stories - go straight to "Closed" after PROD deploy.
 
 ---
 
