@@ -714,10 +714,11 @@ export function repairBannedStarter(section, content, bannedPhrase) {
  * @returns {string|null} Legacy severity or null for levels 0-1
  */
 export function alarmLevelToLegacySeverity(alarmLevel) {
+  // Must match DB constraint: critical, severe, moderate, minor
   if (alarmLevel === 5) return 'critical';
-  if (alarmLevel === 4) return 'high';
-  if (alarmLevel === 3) return 'medium';
-  if (alarmLevel === 2) return 'low';
+  if (alarmLevel === 4) return 'severe';
+  if (alarmLevel === 3) return 'moderate';
+  if (alarmLevel === 2) return 'minor';
   return null; // 0-1 can't be represented in legacy enum
 }
 

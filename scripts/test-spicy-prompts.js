@@ -160,8 +160,11 @@ async function getTestCohort(targetCount) {
 }
 
 async function testSpicyPrompts() {
+  const runStartedAt = new Date().toISOString();
+
   console.log('\n🌶️  TESTING SPICY PROMPTS\n');
   console.log('='.repeat(60));
+  console.log(`RUN_START: ${runStartedAt}`);
   console.log(`Environment: ${useProd ? 'PROD' : 'TEST'}`);
   console.log(`Mode: ${forceMode ? 'FORCE (bypass cooldown)' : 'Normal (respect cooldown)'}`);
   console.log(`Dry run: ${dryRun}`);
@@ -184,15 +187,22 @@ async function testSpicyPrompts() {
   const stories = await getTestCohort(limit);
 
   if (!stories || stories.length === 0) {
-    console.log('⚠️  No stories found for test cohort!');
+    console.error('❌ No stories found for test cohort!');
     if (!forceMode) {
-      console.log(`\n💡 All stories may have been enriched within cooldown period (${ENRICHMENT_COOLDOWN_HOURS}h).`);
-      console.log('   Try: node scripts/test-spicy-prompts.js --force\n');
+      console.error(`\n💡 All stories may have been enriched within cooldown period (${ENRICHMENT_COOLDOWN_HOURS}h).`);
+      console.error('   Try: node scripts/test-spicy-prompts.js --force\n');
     }
-    return;
+    process.exit(1);
   }
 
-  console.log(`Found ${stories.length} stories to re-enrich\n`);
+  // Hard-fail if we can't get enough eligible stories (feedback: enforce exit codes)
+  if (stories.length < limit && !forceMode) {
+    console.error(`❌ Only found ${stories.length} cooldown-eligible stories (need ${limit})`);
+    console.error('Wait for cooldown to expire or use --force to bypass');
+    process.exit(1);
+  }
+
+  console.log(`✅ Selected ${stories.length} ${forceMode ? 'stories' : 'cooldown-eligible stories'}\n`);
 
   // ADO-285: Dry run mode - just show selection
   if (dryRun) {
@@ -247,10 +257,16 @@ async function testSpicyPrompts() {
   }
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`✅ Test complete!`);
-  console.log(`   Stories processed: ${successCount}/${stories.length}`);
-  console.log(`   Failed: ${failCount}`);
+  console.log(`📊 Results: ${successCount} enriched, ${failCount} failed`);
   console.log(`   Total cost: $${totalCost.toFixed(5)}`);
+
+  // Hard-fail if not all enriched (feedback: enforce exit codes)
+  if (successCount !== stories.length) {
+    console.error(`\n❌ Expected ${stories.length} enriched, got ${successCount} - FAIL`);
+    process.exit(1);
+  }
+
+  console.log(`\n✅ All ${stories.length} stories enriched successfully`);
   console.log(`\nCheck the summaries above - do they sound ANGRY and TRUTHFUL?`);
   console.log(`Look for: profanity, "YOUR taxes/rights", no "This is outrageous..."\n`);
 }

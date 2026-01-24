@@ -211,7 +211,7 @@ class EOEnrichmentWorker {
       // 3. Deterministic selection based on content ID
       const contentId = getEOContentId(eo);
       const variation = selectVariation(poolKey, contentId, PROMPT_VERSION, this.recentPatternIds);
-      console.log(`   Pattern: ${variation.id}`);
+      console.log(`   Pattern: ${variation.id}${variation._meta?.collision ? ' (COLLISION - pool exhausted)' : ''}`);
 
       // 4. Track pattern ID for batch deduplication
       this.recentPatternIds.push(variation.id);
@@ -598,14 +598,17 @@ export async function enrichExecutiveOrder(eo, skipIdempotencyCheck = false) {
 // ============================================================================
 
 async function main() {
-  // Validate environment variables
-  if (!process.env.SUPABASE_URL) {
-    console.error('❌ Missing SUPABASE_URL environment variable\n');
+  // Validate environment variables (match fallback logic: TEST_* || non-TEST)
+  const resolvedUrl = process.env.SUPABASE_TEST_URL || process.env.SUPABASE_URL;
+  const resolvedKey = process.env.SUPABASE_TEST_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!resolvedUrl) {
+    console.error('❌ Missing SUPABASE_TEST_URL or SUPABASE_URL environment variable\n');
     process.exit(1);
   }
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY environment variable\n');
+  if (!resolvedKey) {
+    console.error('❌ Missing SUPABASE_TEST_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable\n');
     process.exit(1);
   }
 
@@ -623,8 +626,18 @@ async function main() {
   }
 
   // Create worker and run
+  const runStartedAt = new Date().toISOString();
+  console.log(`RUN_START: ${runStartedAt}\n`);
+
   const worker = new EOEnrichmentWorker();
   await worker.enrichBatch(batchSize);
+
+  // Hard-fail if not all enriched (feedback: enforce exit codes)
+  if (worker.successCount !== batchSize) {
+    console.error(`\n❌ Expected ${batchSize} enriched, got ${worker.successCount} - FAIL`);
+    process.exit(1);
+  }
+  console.log(`\n✅ All ${batchSize} EOs enriched successfully`);
 }
 
 // Only run main if executed directly (not imported)
