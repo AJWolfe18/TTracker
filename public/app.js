@@ -776,6 +776,12 @@
     0: 'Democracy Wins'
   };
 
+  // Title case helper for DB fields like "affirmed" → "Affirmed"
+  function titleCase(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+
   // ===========================================
   // SCOTUS CARD COMPONENT
   // ===========================================
@@ -827,7 +833,7 @@
       // Footer
       React.createElement('div', { className: 'tt-card-footer' },
         React.createElement('span', { className: 'tt-sources-btn' },
-          scotusCase.disposition || 'View Ruling'
+          titleCase(scotusCase.disposition) || 'View Ruling'
         ),
         React.createElement('button', {
           className: 'tt-read-more',
@@ -946,12 +952,12 @@
             // Disposition
             scotusCase.disposition && React.createElement('div', { className: 'tt-scotus-meta-item' },
               React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Disposition'),
-              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.disposition)
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, titleCase(scotusCase.disposition))
             ),
             // Case Type
             scotusCase.case_type && React.createElement('div', { className: 'tt-scotus-meta-item' },
               React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Case Type'),
-              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.case_type)
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, titleCase(scotusCase.case_type))
             )
           ),
 
