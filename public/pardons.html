@@ -12,13 +12,13 @@
   <!-- Theme CSS Variables -->
   <link rel="stylesheet" href="./themes.css">
 
-  <!-- React 18 CDN (pinned to exact version for security) -->
-  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <!-- React 18 CDN (jsdelivr - more reliable than unpkg, pinned versions for security) -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 
   <!-- Babel for JSX transformation (pinned version for security)
        Note: Required for type="text/babel" scripts. Future optimization: pre-compile JSX. -->
-  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
 
   <!-- Prevent FOUC: Set theme immediately -->
   <script>
