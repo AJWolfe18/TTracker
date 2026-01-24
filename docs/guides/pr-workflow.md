@@ -60,46 +60,45 @@ gh pr create --base main --title "feat: description"
 
 ### How It Works
 
-**Automatic Reviews** run when PRs modify risky files:
-- `scripts/**/*.js` - Backend scripts
-- `supabase/functions/**/*.js` - Edge Functions
-- `migrations/**/*.sql` - Database changes
-- `.github/workflows/**` - CI/CD
-- `.github/scripts/**` - Automation
+**OpenAI Codex** handles PR code reviews. It's included in the ChatGPT Plus subscription.
 
-**Skipped Files** (never auto-reviewed):
-- Documentation (`**/*.md`)
-- Assets (`**/*.png`, `**/*.jpg`)
-- Tests (`**/*test*`)
-
-### Manual Trigger
-
-For files not auto-reviewed (frontend, docs):
+**To trigger a review:**
 ```
-Add "ai:review" label to PR in GitHub UI
+Comment "@codex review" on the PR
 ```
 
-### Thorough Review Mode
+Codex will post a standard GitHub code review with findings categorized by priority (P0, P1, P2).
 
-For complex/critical changes:
+**Automatic reviews:** Enabled - Codex reviews all new PRs automatically.
+
+### Configuration
+
+Review guidelines are in `AGENTS.md` at the repo root. This tells Codex:
+- P0 (blockers): Security issues, exposed secrets, breaking changes
+- P1 (should fix): Missing validation, wrong patterns, missing error handling
+- P2 (nice to have): Style, refactoring opportunities
+
+### Codex Can Also Fix Issues
+
+Beyond review, you can ask Codex to fix things:
 ```
-Add BOTH labels:
-1. "ai:review" (trigger)
-2. "thorough" (deeper analysis)
+@codex fix the CI failures
+@codex update the tests for this change
 ```
+
+Codex will create a commit or PR with the fix.
 
 ---
 
-## 4. Cost Optimization
+## 4. Cost
 
-| Review Type | Effort | Tokens | Cost | When to Use |
-|-------------|--------|--------|------|-------------|
-| **Default** | low | 2000 | ~$0.30 | Normal changes |
-| **Thorough** | medium | 6000 | ~$1.00 | Complex/critical |
+**Codex reviews are included in ChatGPT Plus ($20/mo)** - no additional cost per review.
 
-**Monthly Estimate:** $1-2/month (90% savings from path filtering)
+Usage limits:
+- Plus: 30-150 tasks per 5 hours (plenty for our PR volume)
+- Reviews count as 1 task each
 
-**For unlimited analysis:** Paste PR link directly to Claude Code
+**For deeper analysis:** Paste PR link directly to Claude Code (uses Claude tokens instead)
 
 ---
 
@@ -247,10 +246,11 @@ Instead of 1 PR with 17 files:
 
 | Item | Location |
 |------|----------|
-| Workflow | `.github/workflows/ai-code-review.yml` |
-| Script | `.github/scripts/ai_review.sh` |
-| API Key | Repository secret: `OPENAI_API_KEY` |
-| Model | GPT-5 via OpenAI Responses API |
+| Review guidelines | `AGENTS.md` (repo root) |
+| Codex setup | [codex.openai.com](https://codex.openai.com) |
+| Model | GPT-5.2-Codex (code-optimized) |
+
+**Legacy workflow** (deprecated): `.github/workflows/ai-code-review.yml` - can be deleted once Codex is confirmed working.
 
 ---
 

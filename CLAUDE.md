@@ -194,7 +194,9 @@ docs/features/
 
 7. **State cost implications** - Always mention $ impact for new features
 
-8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR and AI review process
+8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR process
+   - **PR code review:** Comment `@codex review` on the PR (uses OpenAI Codex, included in ChatGPT Plus)
+   - Codex follows guidelines in `AGENTS.md`
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
