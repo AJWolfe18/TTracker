@@ -54,6 +54,7 @@ docs/features/
 - [ ] Follow plan/todos linearly (don't jump around)
 - [ ] Validate with subagent BEFORE marking todos complete
 - [ ] Check MCP tools before claiming "I can't"
+- [ ] **Run code review** on significant changes (3+ files or complex logic): `Task(feature-dev:code-reviewer)` - catches bugs, security issues, pattern violations before commit
 
 ### ✅ End Every Session (10 min)
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
