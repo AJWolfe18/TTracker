@@ -397,14 +397,66 @@ const ANCHOR_TOKEN_REGEX = /\b(held|hold|holds|holding|judgment|affirm(ed|s|ing)
 const MAX_QUOTE_WORDS = 50; // Increased from 25 - legal quotes are often longer
 
 /**
+ * Extract a short anchor quote from source text.
+ * Finds disposition phrase in context (e.g., "The judgment is affirmed.")
+ * Returns null if no good anchor found.
+ *
+ * @param {string} sourceText - Full opinion text
+ * @returns {string|null} Extracted quote or null
+ */
+function extractAnchorQuoteFromSource(sourceText) {
+  if (!sourceText) return null;
+
+  // Patterns to find disposition statements with context
+  const ANCHOR_EXTRACT_PATTERNS = [
+    // "The judgment of the [court] is [affirmed/reversed/vacated]"
+    /(?:The\s+)?judgment(?:\s+of\s+[^.]{5,60})?\s+is\s+(?:hereby\s+)?(?:affirmed|reversed|vacated|remanded)[^.]*\./gi,
+    // "We hold that..."
+    /We\s+hold\s+that\s+[^.]{10,150}\./gi,
+    // "Held: ..."
+    /Held:\s+[^.]{10,150}\./gi,
+    // "The Court held..."
+    /The\s+Court\s+held\s+[^.]{10,150}\./gi,
+    // "It is so ordered" (often at end)
+    /It\s+is\s+so\s+ordered\./gi,
+    // "[petition/application] is [granted/denied]"
+    /(?:The\s+)?(?:petition|application)(?:\s+for[^.]{5,40})?\s+is\s+(?:hereby\s+)?(?:granted|denied)[^.]*\./gi,
+    // Citation + disposition: "123 F. 4th 456, reversed and remanded." (common in SCOTUS syllabus)
+    /\d+\s+[A-Z][a-z]*\.?\s+(?:\d+[a-z]{2}\s+)?\d+,\s+(?:reversed|affirmed|vacated|remanded)(?:\s+(?:and|in\s+part)[^.]{0,30})?\./gi,
+    // Simple disposition at end: "[Pp. XX-XX.]\n[citation], reversed..."
+    /(?:Pp?\.\s*\d+[^.]*\.)\s*\n[^,]+,\s*(?:reversed|affirmed|vacated)[^.]*\./gi,
+  ];
+
+  for (const pattern of ANCHOR_EXTRACT_PATTERNS) {
+    const matches = sourceText.match(pattern);
+    if (matches && matches.length > 0) {
+      // Take first match, clean it up
+      let quote = matches[0].trim();
+      // Truncate if too long (target ~40 words max)
+      const words = quote.split(/\s+/);
+      if (words.length > 40) {
+        quote = words.slice(0, 40).join(' ') + '...';
+      }
+      // Verify it contains an anchor token
+      if (ANCHOR_TOKEN_REGEX.test(quote)) {
+        return quote;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Validate Pass 1 output and inject metadata
  * Forces low confidence if grounding requirements not met
  *
  * @param {Object} facts - Raw GPT output
  * @param {Object} pass0Metadata - { source_char_count, contains_anchor_terms }
+ * @param {string} [sourceText] - Optional source text for fallback anchor extraction
  * @returns {Object} Enhanced facts object
  */
-export function validatePass1(facts, pass0Metadata) {
+export function validatePass1(facts, pass0Metadata, sourceText = null) {
   const issues = [];
 
   // Inject Pass 0 metadata
@@ -448,10 +500,24 @@ export function validatePass1(facts, pass0Metadata) {
   }
 
   // Check: HIGH requires at least one quote with anchor token
+  // NEW: Auto-extract fallback if source has anchors but GPT quotes don't
   if (facts.fact_extraction_confidence === 'high') {
     const hasAnchorQuote = (facts.evidence_quotes || []).some(q => ANCHOR_TOKEN_REGEX.test(q));
     if (!hasAnchorQuote) {
-      issues.push('High confidence requires quote with anchor token');
+      // TRY FALLBACK: Extract anchor quote from source if available
+      if (pass0Metadata.contains_anchor_terms && sourceText) {
+        const fallbackQuote = extractAnchorQuoteFromSource(sourceText);
+        if (fallbackQuote) {
+          // Add fallback quote to evidence_quotes
+          facts.evidence_quotes = facts.evidence_quotes || [];
+          facts.evidence_quotes.push(fallbackQuote);
+          console.log(`   [FALLBACK] Auto-extracted anchor quote: "${fallbackQuote.slice(0, 60)}..."`);
+        } else {
+          issues.push('High confidence requires quote with anchor token');
+        }
+      } else {
+        issues.push('High confidence requires quote with anchor token');
+      }
     }
   }
 
@@ -485,6 +551,36 @@ export function validatePass1(facts, pass0Metadata) {
 const CONSENSUS_FIELDS = ['disposition', 'merits_reached', 'prevailing_party'];
 
 /**
+ * Normalize disposition for comparison and DB storage.
+ * "reversed and remanded" -> "reversed"
+ * "affirmed in part" -> "affirmed"
+ * Handles compound dispositions by extracting primary action.
+ *
+ * DB constraint allows: affirmed, reversed, vacated, remanded, dismissed, granted, denied, other
+ */
+export function normalizeDisposition(val) {
+  if (!val || typeof val !== 'string') return val;
+  const lower = val.toLowerCase().trim();
+
+  // Extract primary disposition from compound forms
+  // "reversed and remanded" -> "reversed"
+  // "vacated and remanded" -> "vacated"
+  // "affirmed in part, reversed in part" -> "other" (mixed outcome)
+  if (/affirmed.*reversed|reversed.*affirmed/i.test(lower)) {
+    return 'other';  // DB constraint doesn't have 'partial'
+  }
+  if (lower.startsWith('reversed')) return 'reversed';
+  if (lower.startsWith('vacated')) return 'vacated';
+  if (lower.startsWith('affirmed')) return 'affirmed';
+  if (lower.startsWith('remanded')) return 'remanded';
+  if (lower.startsWith('dismissed')) return 'dismissed';
+  if (lower.startsWith('granted')) return 'granted';
+  if (lower.startsWith('denied')) return 'denied';
+
+  return 'other'; // Return 'other' for unrecognized patterns (DB-safe)
+}
+
+/**
  * Compares two Pass 1 outputs and merges them.
  * If critical fields mismatch, force low confidence.
  */
@@ -493,10 +589,17 @@ export function consensusMerge(a, b) {
 
   for (const field of CONSENSUS_FIELDS) {
     // Normalize null/undefined for comparison
-    const aVal = a?.[field] ?? null;
-    const bVal = b?.[field] ?? null;
+    let aVal = a?.[field] ?? null;
+    let bVal = b?.[field] ?? null;
+
+    // Normalize dispositions before comparing (handles "reversed and remanded" vs "reversed")
+    if (field === 'disposition') {
+      aVal = normalizeDisposition(aVal);
+      bVal = normalizeDisposition(bVal);
+    }
+
     if (aVal !== bVal) {
-      mismatches.push(`${field}: "${aVal}" vs "${bVal}"`);
+      mismatches.push(`${field}: "${a?.[field]}" vs "${b?.[field]}"`);
     }
   }
 
@@ -557,12 +660,15 @@ export async function callGPTWithRetry(openai, messages, { temperature = 0, maxR
 export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadata, skipConsensus = false) {
   const messages = buildPass1Messages(scotusCase);
 
+  // Get source text for fallback anchor extraction
+  const sourceText = getSourceText(scotusCase);
+
   // First pass
   const { parsed: facts1, usage: usage1 } = await callGPTWithRetry(openai, messages, { temperature: 0 });
 
   if (skipConsensus) {
     return {
-      facts: validatePass1(facts1, pass0Metadata),
+      facts: validatePass1(facts1, pass0Metadata, sourceText),
       usage: usage1
     };
   }
@@ -571,7 +677,7 @@ export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadat
   const { parsed: facts2, usage: usage2 } = await callGPTWithRetry(openai, messages, { temperature: 0 });
 
   const merged = consensusMerge(facts1, facts2);
-  const validated = validatePass1(merged, pass0Metadata);
+  const validated = validatePass1(merged, pass0Metadata, sourceText);
 
   // Combine usage
   const totalUsage = {
@@ -744,8 +850,8 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     enrichment_status: 'enriched',
     enriched_at: new Date().toISOString(),
 
-    // Pass 1 facts
-    disposition: data.disposition,
+    // Pass 1 facts (normalize disposition for DB constraint)
+    disposition: normalizeDisposition(data.disposition),
     merits_reached: data.merits_reached,
     case_type: data.case_type,
     holding: data.holding,
