@@ -26,6 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/docs/handoffs/` - Session handoffs
 - `/docs/guides/ado-workflow.md` - ADO states and work item types
 - `/docs/guides/prod-deployment-checklist.md` - PROD deployment requirements
+- `/docs/guides/feature-flags.md` - Feature flag system for safe deployments
 - `/docs/database/database-schema.md` - Full schema reference
 
 **Feature folders:** Each major feature gets its own folder in `/docs/features/`:
@@ -194,6 +195,13 @@ docs/features/
    - **NEVER fetch `embedding` or `content` fields** unless absolutely required (embeddings = 6KB each, content = 5KB+ each)
    - **Re-cluster/backfill scripts are EXPENSIVE:** Fetching 1800 articles with embeddings = ~5-7GB egress
    - **Before running bulk scripts:** Warn about egress cost, consider if necessary
+
+13. **🚩 FEATURE FLAGS: Use for new features deploying to PROD**
+   - New features deploy with flag OFF in `public/shared/flags-prod.json`
+   - Test on PROD with URL override: `?ff_featurename=true`
+   - Flip flag ON only after verification
+   - See `/docs/guides/feature-flags.md` for full guide
+   - **v1→v2 migrations:** Plan compatibility upfront (database, backend, frontend layers)
 
 **For session workflow, communication style, and documentation structure, see `/docs/PROJECT_INSTRUCTIONS.md`**
 
