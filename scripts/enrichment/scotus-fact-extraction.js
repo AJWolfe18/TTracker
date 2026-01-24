@@ -13,8 +13,14 @@
  *
  * Dependencies:
  * - OpenAI client (passed in)
- * - scotus-gpt-prompt.js (FACT_EXTRACTION_PROMPT)
+ * - opinion-utils.js (section extraction, disposition evidence)
  */
+
+import {
+  extractDispositionEvidence,
+  safeTruncate,
+  normalizeDispositionText,
+} from '../scotus/opinion-utils.js';
 
 // ============================================================================
 // CONSTANTS (SINGLE SOURCE OF TRUTH)
@@ -94,9 +100,12 @@ export const DB_COLUMNS = new Set([
 ]);
 
 // Known runtime-only fields that are expected to be dropped (not DB columns)
+// NOTE: disposition_* telemetry fields will be added to schema in future migration
 const RUNTIME_ONLY_FIELDS = new Set([
   'passed', 'validation_issues', 'consistency_check_failed',
-  'evidence_quotes_truncated', 'raw_response', 'usage'
+  'evidence_quotes_truncated', 'raw_response', 'usage',
+  // Disposition telemetry (TODO: add to schema for QA visibility)
+  'disposition_source', 'disposition_window', 'disposition_pattern', 'disposition_raw',
 ]);
 
 export function sanitizeForDB(payload) {
@@ -397,54 +406,32 @@ const ANCHOR_TOKEN_REGEX = /\b(held|hold|holds|holding|judgment|affirm(ed|s|ing)
 const MAX_QUOTE_WORDS = 50; // Increased from 25 - legal quotes are often longer
 
 /**
- * Extract a short anchor quote from source text.
- * Finds disposition phrase in context (e.g., "The judgment is affirmed.")
- * Returns null if no good anchor found.
+ * Extract anchor quote using section-aware disposition extraction
+ * IMPORTANT: Only searches syllabus → majority section, NEVER dissent/concurrence
  *
+ * @param {Object} scotusCase - Case object with syllabus field
  * @param {string} sourceText - Full opinion text
- * @returns {string|null} Extracted quote or null
+ * @returns {{ quote: string|null, telemetry: Object }} Quote and telemetry
  */
-function extractAnchorQuoteFromSource(sourceText) {
-  if (!sourceText) return null;
+function extractAnchorQuoteFromSource(scotusCase, sourceText) {
+  const result = extractDispositionEvidence(scotusCase, sourceText);
 
-  // Patterns to find disposition statements with context
-  const ANCHOR_EXTRACT_PATTERNS = [
-    // "The judgment of the [court] is [affirmed/reversed/vacated]"
-    /(?:The\s+)?judgment(?:\s+of\s+[^.]{5,60})?\s+is\s+(?:hereby\s+)?(?:affirmed|reversed|vacated|remanded)[^.]*\./gi,
-    // "We hold that..."
-    /We\s+hold\s+that\s+[^.]{10,150}\./gi,
-    // "Held: ..."
-    /Held:\s+[^.]{10,150}\./gi,
-    // "The Court held..."
-    /The\s+Court\s+held\s+[^.]{10,150}\./gi,
-    // "It is so ordered" (often at end)
-    /It\s+is\s+so\s+ordered\./gi,
-    // "[petition/application] is [granted/denied]"
-    /(?:The\s+)?(?:petition|application)(?:\s+for[^.]{5,40})?\s+is\s+(?:hereby\s+)?(?:granted|denied)[^.]*\./gi,
-    // Citation + disposition: "123 F. 4th 456, reversed and remanded." (common in SCOTUS syllabus)
-    /\d+\s+[A-Z][a-z]*\.?\s+(?:\d+[a-z]{2}\s+)?\d+,\s+(?:reversed|affirmed|vacated|remanded)(?:\s+(?:and|in\s+part)[^.]{0,30})?\./gi,
-    // Simple disposition at end: "[Pp. XX-XX.]\n[citation], reversed..."
-    /(?:Pp?\.\s*\d+[^.]*\.)\s*\n[^,]+,\s*(?:reversed|affirmed|vacated)[^.]*\./gi,
-  ];
-
-  for (const pattern of ANCHOR_EXTRACT_PATTERNS) {
-    const matches = sourceText.match(pattern);
-    if (matches && matches.length > 0) {
-      // Take first match, clean it up
-      let quote = matches[0].trim();
-      // Truncate if too long (target ~40 words max)
-      const words = quote.split(/\s+/);
-      if (words.length > 40) {
-        quote = words.slice(0, 40).join(' ') + '...';
-      }
-      // Verify it contains an anchor token
-      if (ANCHOR_TOKEN_REGEX.test(quote)) {
-        return quote;
-      }
-    }
+  // Always return telemetry for tracking (even on failure)
+  if (!result.disposition || result.telemetry.disposition_source === 'unknown') {
+    return {
+      quote: null,
+      telemetry: result.telemetry,
+    };
   }
 
-  return null;
+  // Build a readable quote from the matched disposition phrase
+  // Use safeTruncate for clean truncation
+  const quote = safeTruncate(result.telemetry.disposition_raw || '', 150);
+
+  return {
+    quote: quote || null,
+    telemetry: result.telemetry,
+  };
 }
 
 /**
@@ -453,15 +440,22 @@ function extractAnchorQuoteFromSource(sourceText) {
  *
  * @param {Object} facts - Raw GPT output
  * @param {Object} pass0Metadata - { source_char_count, contains_anchor_terms }
+ * @param {Object} scotusCase - Case object with syllabus field (for section-aware extraction)
  * @param {string} [sourceText] - Optional source text for fallback anchor extraction
  * @returns {Object} Enhanced facts object
  */
-export function validatePass1(facts, pass0Metadata, sourceText = null) {
+export function validatePass1(facts, pass0Metadata, scotusCase = null, sourceText = null) {
   const issues = [];
 
   // Inject Pass 0 metadata
   facts.source_char_count = pass0Metadata.source_char_count;
   facts.contains_anchor_terms = pass0Metadata.contains_anchor_terms;
+
+  // Initialize telemetry (always set, even on failure - for QA visibility)
+  facts.disposition_source = 'unknown';
+  facts.disposition_window = 'none';
+  facts.disposition_pattern = null;
+  facts.disposition_raw = null;
 
   // Check: non-null facts MUST have quotes
   const claimFields = ['holding', 'disposition', 'practical_effect', 'prevailing_party', 'merits_reached'];
@@ -482,7 +476,7 @@ export function validatePass1(facts, pass0Metadata, sourceText = null) {
     issues.push('Too many quotes (max 3)');
   }
 
-  // Check: quote word count (<=25 words each)
+  // Check: quote word count (<=50 words each)
   let hasLongQuotes = false;
   if (facts.evidence_quotes) {
     facts.evidence_quotes.forEach((quote, i) => {
@@ -500,18 +494,25 @@ export function validatePass1(facts, pass0Metadata, sourceText = null) {
   }
 
   // Check: HIGH requires at least one quote with anchor token
-  // NEW: Auto-extract fallback if source has anchors but GPT quotes don't
+  // Uses section-aware extraction: syllabus → majority → NEVER dissent
   if (facts.fact_extraction_confidence === 'high') {
     const hasAnchorQuote = (facts.evidence_quotes || []).some(q => ANCHOR_TOKEN_REGEX.test(q));
     if (!hasAnchorQuote) {
-      // TRY FALLBACK: Extract anchor quote from source if available
-      if (pass0Metadata.contains_anchor_terms && sourceText) {
-        const fallbackQuote = extractAnchorQuoteFromSource(sourceText);
-        if (fallbackQuote) {
+      // TRY FALLBACK: Section-aware extraction (never searches dissent)
+      if (pass0Metadata.contains_anchor_terms && sourceText && scotusCase) {
+        const { quote, telemetry } = extractAnchorQuoteFromSource(scotusCase, sourceText);
+
+        // Always inject telemetry (for QA visibility)
+        facts.disposition_source = telemetry.disposition_source;
+        facts.disposition_window = telemetry.disposition_window;
+        facts.disposition_pattern = telemetry.disposition_pattern;
+        facts.disposition_raw = telemetry.disposition_raw;
+
+        if (quote) {
           // Add fallback quote to evidence_quotes
           facts.evidence_quotes = facts.evidence_quotes || [];
-          facts.evidence_quotes.push(fallbackQuote);
-          console.log(`   [FALLBACK] Auto-extracted anchor quote: "${fallbackQuote.slice(0, 60)}..."`);
+          facts.evidence_quotes.push(quote);
+          console.log(`   [FALLBACK] Section-aware extraction: "${safeTruncate(quote, 60)}" (${telemetry.disposition_source}/${telemetry.disposition_window})`);
         } else {
           issues.push('High confidence requires quote with anchor token');
         }
@@ -668,7 +669,7 @@ export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadat
 
   if (skipConsensus) {
     return {
-      facts: validatePass1(facts1, pass0Metadata, sourceText),
+      facts: validatePass1(facts1, pass0Metadata, scotusCase, sourceText),
       usage: usage1
     };
   }
@@ -677,7 +678,7 @@ export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadat
   const { parsed: facts2, usage: usage2 } = await callGPTWithRetry(openai, messages, { temperature: 0 });
 
   const merged = consensusMerge(facts1, facts2);
-  const validated = validatePass1(merged, pass0Metadata, sourceText);
+  const validated = validatePass1(merged, pass0Metadata, scotusCase, sourceText);
 
   // Combine usage
   const totalUsage = {
