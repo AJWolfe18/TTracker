@@ -1,30 +1,55 @@
-# 2026-01-25: ADO-275 Plan Updated
+# 2026-01-25: ADO-275 Plan Updated & Reviewed
 
-**ADO-275** moved to Active. Phase 3 of tone-variation-fix-plan.md updated with ADO-300 integration.
+**ADO-275** at Active. Phase 3 plan complete, reviewed, and implementation-ready.
 
 ## What Happened
-- Reviewed ADO-300 validation results (Sidestepping at 53.8% overall due to pre-fix cases)
-- Moved ADO-300 to Ready for Prod (core clamp/retry fixes validated at 21%)
-- Reviewed ADO-275 plan and identified gaps (missing ADO-300 integration, post-gen validation)
-- Updated Phase 3 with comprehensive spec including procedural frame bucket
+1. Reviewed ADO-300 validation (53.8% Sidestepping overall, 21% in recent validation)
+2. Moved ADO-300 to Ready for Prod
+3. Updated Phase 3 plan with ADO-300 integration, post-gen validation
+4. Critical review found timing issues (ruling_impact_level unavailable pre-Pass2)
+5. Fixed plan: pre-Pass2 hint system, inferIssueOverride fallback, 6 pools
+6. Verified implementation points in enrich-scotus.js
 
-## Key Updates to Phase 3
-- **ADO-300 integration:** Procedural frame bucket for clamped cases
-- **Frame priority:** clamp_reason → issue_area → ruling_impact_level
-- **Post-gen validation:** SCOTUS-specific banned patterns (regex-based)
-- **15 SCOTUS-specific patterns:** Approach-only descriptions
-- **Effort revised:** 0.5 → 1 session
+## Key Plan Elements
+- **Frame hint system:** clamp_reason → inferIssueOverride → estimateImpactLevel
+- **6 pools:** procedural, alarmed, critical, grudging_credit, voting_rights_override, agency_power_override
+- **issue_area is 100% NULL** - must use fallback detector
+- **Clamped cases:** procedural frame, no reroll (mismatch fuse disabled)
 
 ## Commits
 ```
 774f7eb docs(ado-275): update Phase 3 SCOTUS tone variation plan
+9c58ed7 docs(ado-275): fix critical review issues in Phase 3 plan
 ```
 
-## Next Session
-1. Implement `scotus-style-patterns.js` using Stories as scaffold
-2. Follow Phase 3 implementation order in plan
-3. Run 25-case validation batch
+## Next Session Prompt
 
-## Reference
-- Plan: `docs/features/labels-tones-alignment/tone-variation-fix-plan.md` (Phase 3)
-- Reference impl: `scripts/enrichment/stories-style-patterns.js`
+```
+Continue ADO-275: SCOTUS tone variation implementation.
+
+Read the handoff: docs/handoffs/2026-01-25-ado-275-plan-updated.md
+Read the plan: docs/features/labels-tones-alignment/tone-variation-fix-plan.md (Phase 3)
+Reference impl: scripts/enrichment/stories-style-patterns.js
+
+Implementation order:
+1. Create scripts/enrichment/scotus-style-patterns.js using Stories as scaffold
+2. Update scripts/enrichment/scotus-gpt-prompt.js (REQUIRED VARIATION block)
+3. Update scripts/scotus/enrich-scotus.js (swap imports, wire selection, post-gen validation)
+4. Run 25-case validation batch
+
+Key implementation notes:
+- clamp_reason available after line 404 in enrich-scotus.js
+- Replace lines 417-420 with new frame hint system
+- inferIssueOverride() needed (issue_area is 100% NULL)
+- Clamped cases: no reroll, always procedural frame
+
+DO NOT deploy to PROD. Test only.
+```
+
+## Files to Create/Modify
+| File | Action |
+|------|--------|
+| `scripts/enrichment/scotus-style-patterns.js` | **NEW** |
+| `scripts/enrichment/scotus-gpt-prompt.js` | Update |
+| `scripts/scotus/enrich-scotus.js` | Update |
+| `scripts/enrichment/scotus-variation-pools.js` | Deprecate |
