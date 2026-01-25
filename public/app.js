@@ -794,13 +794,17 @@
     // Show summary_spicy on card (like Stories), with who_wins as fallback
     const summary = scotusCase.summary_spicy || scotusCase.who_wins || '';
     const hasLongSummary = summary.length > 180;
+    // Disposition for prominent header badge
+    const disposition = scotusCase.disposition || '';
+    const dispositionDisplay = titleCase(disposition) || '';
 
     return React.createElement('article', { className: 'tt-card' },
-      // Header: Term + Date
-      React.createElement('div', { className: 'tt-scotus-card-header' },
-        scotusCase.term && React.createElement('span', { className: 'tt-scotus-term' },
-          `Term ${scotusCase.term}`
-        ),
+      // Header: Disposition badge (prominent) + Date
+      React.createElement('div', { className: 'tt-card-header' },
+        dispositionDisplay && React.createElement('span', {
+          className: 'tt-disposition-badge',
+          'data-disposition': disposition.toLowerCase().replace(/\s+/g, '-')
+        }, dispositionDisplay),
         React.createElement('span', { className: 'tt-timestamp' },
           formatDate(scotusCase.decided_at)
         )
@@ -809,14 +813,11 @@
       // Case name (headline)
       React.createElement('h2', { className: 'tt-headline' }, displayName),
 
-      // Meta row: Author + Vote + Impact Badge
+      // Meta row: Author + Impact Badge (like Stories' Actor + Alarm)
       React.createElement('div', { className: 'tt-scotus-meta-row' },
         scotusCase.majority_author && React.createElement('span', { className: 'tt-scotus-author' },
           React.createElement('span', { className: 'tt-scotus-author-icon' }, '⚖️'),
           scotusCase.majority_author
-        ),
-        scotusCase.vote_split && React.createElement('span', { className: 'tt-scotus-vote' },
-          `(${scotusCase.vote_split})`
         ),
         impactLabel && React.createElement('span', {
           className: 'tt-scotus-impact',
@@ -831,10 +832,10 @@
         )
       ),
 
-      // Footer
+      // Footer: Term (muted) + View Details
       React.createElement('div', { className: 'tt-card-footer' },
-        React.createElement('span', { className: 'tt-sources-btn' },
-          titleCase(scotusCase.disposition) || 'View Ruling'
+        scotusCase.term && React.createElement('span', { className: 'tt-scotus-term-muted' },
+          `Term ${scotusCase.term}`
         ),
         React.createElement('button', {
           className: 'tt-read-more',

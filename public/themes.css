@@ -2735,6 +2735,62 @@
   letter-spacing: 0.02em;
 }
 
+/* SCOTUS Term - muted version for footer */
+.tt-scotus-term-muted {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* SCOTUS Disposition badge - prominent outcome indicator */
+.tt-disposition-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  /* Default - gray */
+  background: #6b7280;
+  color: #fff;
+}
+
+/* Disposition colors - semantic by outcome */
+.tt-disposition-badge[data-disposition="reversed"],
+.tt-disposition-badge[data-disposition="reversed-and-remanded"] {
+  background: #dc2626;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="affirmed"],
+.tt-disposition-badge[data-disposition="affirmed-and-remanded"] {
+  background: #16a34a;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="vacated"],
+.tt-disposition-badge[data-disposition="vacated-and-remanded"] {
+  background: #ca8a04;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="remanded"] {
+  background: #2563eb;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="dismissed"] {
+  background: #6b7280;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="granted"],
+.tt-disposition-badge[data-disposition="denied"] {
+  background: #7c3aed;
+  color: #fff;
+}
+
 /* SCOTUS Case metadata row */
 .tt-scotus-meta-row {
   display: flex;
