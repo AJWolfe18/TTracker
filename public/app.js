@@ -824,7 +824,6 @@
       // Meta row: Author + Impact Badge (like Stories' Actor + Alarm)
       React.createElement('div', { className: 'tt-scotus-meta-row' },
         scotusCase.majority_author && React.createElement('span', { className: 'tt-scotus-author' },
-          React.createElement('span', { className: 'tt-scotus-author-icon' }, '⚖️'),
           scotusCase.majority_author
         ),
         impactLabel && React.createElement('span', {
@@ -848,10 +847,7 @@
         React.createElement('button', {
           className: 'tt-read-more',
           onClick: () => onViewDetails(scotusCase)
-        },
-          'View details ',
-          React.createElement('span', { className: 'tt-arrow-icon' }, '↗')
-        )
+        }, 'View details')
       )
     );
   }
