@@ -113,6 +113,19 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Generate URL slug from case name (CourtListener format)
+ * "Coney Island Auto Parts v. Burton" -> "coney-island-auto-parts-v-burton"
+ */
+function generateSlug(caseName) {
+  if (!caseName) return '';
+  return caseName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 // ============================================================================
 // DATA EXTRACTION HELPERS
 // ============================================================================
@@ -436,7 +449,9 @@ async function processCluster(cluster) {
     dissent_authors: dissentAuthors,
     syllabus: syllabus,
     opinion_excerpt: excerpt,
-    source_url: `https://www.courtlistener.com/opinion/${clusterId}/`,
+    source_url: cluster.absolute_url
+      ? `https://www.courtlistener.com${cluster.absolute_url}`
+      : `https://www.courtlistener.com/opinion/${clusterId}/${generateSlug(cluster.case_name)}/`,
     pdf_url: primaryOpinion?.download_url || null,
     is_public: false,  // Not public by default, needs enrichment/review
     updated_at: new Date().toISOString()

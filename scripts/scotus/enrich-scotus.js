@@ -250,7 +250,7 @@ function estimateImpactLevel(scotusCase) {
 /**
  * Enrich a single SCOTUS case using two-pass architecture
  */
-async function enrichCase(supabase, openai, scotusCase, recentPatternIds, args) {
+async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recentOpenings, args) {
   const displayName = safeCaseName(scotusCase);
   console.log(`\n🤖 Enriching: ${displayName.substring(0, 60)}...`);
   console.log(`   ID: ${scotusCase.id} | Term: ${scotusCase.term || 'N/A'} | Decided: ${scotusCase.decided_at?.slice(0, 10) || 'N/A'}`);
@@ -330,7 +330,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, args) 
   const estimatedLevel = estimateImpactLevel(scotusCase);
   const poolType = getPoolType(estimatedLevel, scotusCase.issue_area);
   const variation = selectVariation(poolType, recentPatternIds);
-  const variationInjection = buildVariationInjection(variation, []);
+  const variationInjection = buildVariationInjection(variation, recentOpenings);
   const patternId = variation.opening?.id || 'unknown';
 
   console.log(`     Pool: ${poolType} | Pattern: ${patternId}`);
@@ -426,7 +426,9 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, args) 
     tokens: totalTokens,
     cost: totalCost,
     isPublic,
-    needsReview
+    needsReview,
+    // For anti-repetition: first 50 chars of summary_spicy
+    summaryOpening: (editorial.summary_spicy || '').substring(0, 50)
   };
 }
 
@@ -518,6 +520,7 @@ async function main() {
 
   // Process cases
   const recentPatternIds = [];
+  const recentOpenings = [];  // Track recent summary_spicy openings for anti-repetition
   let successCount = 0;
   let skipCount = 0;
   let failCount = 0;
@@ -533,13 +536,18 @@ async function main() {
 
   for (const scotusCase of cases) {
     try {
-      const result = await enrichCase(supabase, openai, scotusCase, recentPatternIds, args);
+      const result = await enrichCase(supabase, openai, scotusCase, recentPatternIds, recentOpenings, args);
 
       if (result.success) {
         successCount++;
         if (result.patternId) {
           recentPatternIds.push(result.patternId);
           if (recentPatternIds.length > 10) recentPatternIds.shift();
+        }
+        // Track recent summary openings for anti-repetition
+        if (result.summaryOpening) {
+          recentOpenings.push(result.summaryOpening);
+          if (recentOpenings.length > 10) recentOpenings.shift();
         }
         if (result.cost) totalCost += result.cost;
 
