@@ -10,6 +10,8 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 | `9fddda5` | fix(scotus): consistent impact colors + remove disposition from cards | Pending verification on test |
 | `d121927` | fix(scotus): remove emojis from card (author icon + view details arrow) | Pending verification on test |
 | `d00faa7` | fix(scotus): simplify sources section - remove citations, add header | Pending verification on test |
+| `3754ab2` | fix(scotus): add missing closing paren in sources section | Pending verification on test |
+| `df7ec09` | fix(scotus): correct dark theme box-shadow colors for levels 3 and 1 | Pending verification on test |
 
 ## Changes in 9fddda5
 
@@ -36,5 +38,5 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 
 ## Cherry-pick Command
 ```bash
-git cherry-pick 9fddda5 d121927 d00faa7
+git cherry-pick 9fddda5 d121927 d00faa7 3754ab2 df7ec09
 ```
