@@ -9,6 +9,7 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 |--------|-------------|--------|
 | `9fddda5` | fix(scotus): consistent impact colors + remove disposition from cards | Pending verification on test |
 | `d121927` | fix(scotus): remove emojis from card (author icon + view details arrow) | Pending verification on test |
+| `d00faa7` | fix(scotus): simplify sources section - remove citations, add header | Pending verification on test |
 
 ## Changes in 9fddda5
 
@@ -30,8 +31,10 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 - [ ] Date appears on right side of card
 - [ ] No ⚖️ emoji next to judge name
 - [ ] No ↗ arrow on "View details" button
+- [ ] Modal shows "Sources" header with CourtListener + PDF links
+- [ ] No citations/evidence anchors section in modal
 
 ## Cherry-pick Command
 ```bash
-git cherry-pick 9fddda5 d121927
+git cherry-pick 9fddda5 d121927 d00faa7
 ```
