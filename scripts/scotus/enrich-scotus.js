@@ -354,15 +354,24 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
       // Check for issues that warrant retry
       const issues = getFactsIssues(extractedFacts);
-      if (issues.length === 0) {
+
+      // ADO-300: stage_mismatch is clampable (cert/procedural posture vs winner). Do not fail Pass 1 on it.
+      const fatalIssues = issues.filter(i => i !== 'stage_mismatch');
+
+      if (fatalIssues.length === 0) {
         facts = extractedFacts;
+
+        // Keep full issues string for telemetry if we accepted a clampable mismatch.
+        retry_reason = issues.length ? issues.join(',') : null;
+
         console.log(`   ✓ Pass 1 (${model}): ${pass1Usage?.total_tokens || 0} tokens`);
         console.log(`     Disposition: ${facts.disposition || 'null'} | Merits: ${facts.merits_reached}`);
         console.log(`     Case Type: ${facts.case_type} | Confidence: ${facts.fact_extraction_confidence}`);
+        if (retry_reason) console.log(`     (telemetry) Pass 1 issues accepted: ${retry_reason}`);
         break;
       }
 
-      retry_reason = issues.join(',');
+      retry_reason = fatalIssues.join(',');
       console.log(`   ⚠️ Issues with ${model}: ${retry_reason}`);
     } catch (err) {
       console.log(`   ⚠️ ${model} failed: ${err.message}`);

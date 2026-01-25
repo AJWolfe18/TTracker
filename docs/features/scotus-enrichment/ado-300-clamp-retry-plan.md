@@ -1,7 +1,11 @@
 # ADO-300: SCOTUS Post-Processing Clamp Rules + Pass1 Retry Ladder
 
+> **IMPLEMENTED** - Final code differs from plan examples below.
+> See commits: `b0157b1`, `3fac9b1`, `d96f223`, and stage_mismatch fix.
+> Key differences: gpt-5 param compatibility, tighter `looksCertOrProcedural()`, stage_mismatch as clampable.
+
 **ADO Card:** [#300](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/300)
-**Status:** Planning Complete - Ready to Implement
+**Status:** Implemented - In Testing
 **Related:** ADO-295 (Backfill System - deferred to PR2)
 
 ## Problem
