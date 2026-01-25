@@ -308,9 +308,10 @@ export function estimateFrameFromMetadata(scotusCase) {
  */
 export function selectFrame(clampedFacts, scotusCase) {
   // Priority 1: Clamp reason (authoritative)
+  // Note: 'missing_text' cases are skipped in Pass 0 and never reach selectFrame()
   if (clampedFacts?.clamp_reason) {
     const clampReason = clampedFacts.clamp_reason;
-    if (['cert_no_merits', 'procedural_no_merits', 'missing_text'].includes(clampReason)) {
+    if (['cert_no_merits', 'procedural_no_merits'].includes(clampReason)) {
       return {
         frame: 'procedural',
         poolKey: 'procedural',
