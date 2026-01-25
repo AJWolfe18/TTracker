@@ -8,6 +8,7 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 | Commit | Description | Status |
 |--------|-------------|--------|
 | `9fddda5` | fix(scotus): consistent impact colors + remove disposition from cards | Pending verification on test |
+| `d121927` | fix(scotus): remove emojis from card (author icon + view details arrow) | Pending verification on test |
 
 ## Changes in 9fddda5
 
@@ -27,8 +28,10 @@ Track UI fixes for SCOTUS cards that need to go to prod.
 - [ ] Disposition not visible on cards
 - [ ] Disposition still visible in modal
 - [ ] Date appears on right side of card
+- [ ] No ⚖️ emoji next to judge name
+- [ ] No ↗ arrow on "View details" button
 
 ## Cherry-pick Command
 ```bash
-git cherry-pick 9fddda5
+git cherry-pick 9fddda5 d121927
 ```
