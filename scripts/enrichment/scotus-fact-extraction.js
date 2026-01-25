@@ -962,7 +962,7 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
     out.who_wins = 'Procedural ruling - no merits decision';
     out.who_loses = 'Case resolved without a merits ruling';
     out.ruling_label = 'Judicial Sidestepping';
-    out.ruling_impact_level = Math.min(out.ruling_impact_level ?? 2, 2);
+    // NOTE: ruling_impact_level derived from label in enrich-scotus.js (ADO-302)
     console.log(`   [CLAMP] Applied ${clamp_reason} → Sidestepping`);
     return out;
   }
@@ -976,7 +976,7 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
       out.who_wins = 'Procedural ruling - no merits decision';
       out.who_loses = 'Case resolved without a merits ruling';
       out.ruling_label = 'Judicial Sidestepping';
-      out.ruling_impact_level = Math.min(out.ruling_impact_level ?? 2, 2);
+      // NOTE: ruling_impact_level derived from label in enrich-scotus.js (ADO-302)
       console.log(`   [CLAMP] Drift + procedural → Sidestepping`);
       return out;
     }
