@@ -787,12 +787,13 @@
   // ===========================================
 
   function ScotusCard({ scotusCase, onViewDetails }) {
-    // Get display values
-    const displayName = scotusCase.case_name_short || scotusCase.case_name || 'Unknown Case';
+    // Get display values - use full case_name, not short version
+    const displayName = scotusCase.case_name || scotusCase.case_name_short || 'Unknown Case';
     const impactLevel = scotusCase.ruling_impact_level;
     const impactLabel = scotusCase.ruling_label || SCOTUS_IMPACT_LABELS[impactLevel] || '';
-    const whoWins = scotusCase.who_wins || '';
-    const hasLongWins = whoWins.length > 120;
+    // Show summary_spicy on card (like Stories), with who_wins as fallback
+    const summary = scotusCase.summary_spicy || scotusCase.who_wins || '';
+    const hasLongSummary = summary.length > 180;
 
     return React.createElement('article', { className: 'tt-card' },
       // Header: Term + Date
@@ -823,10 +824,10 @@
         }, impactLabel)
       ),
 
-      // Who Wins preview
-      whoWins && React.createElement('div', { className: 'tt-scotus-wins' },
-        React.createElement('p', { className: 'tt-scotus-wins-text' },
-          hasLongWins ? whoWins.substring(0, 120) + '...' : whoWins
+      // Summary preview (like Stories tab)
+      summary && React.createElement('div', { className: 'tt-summary' },
+        React.createElement('p', { className: 'tt-summary-text' },
+          hasLongSummary ? summary.substring(0, 180) + '...' : summary
         )
       ),
 
