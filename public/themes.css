@@ -782,13 +782,13 @@
   box-shadow: 0 1px 4px rgba(234, 88, 12, 0.4);
 }
 [data-theme="dark"] .tt-scotus-impact[data-impact="3"] {
-  box-shadow: 0 1px 4px rgba(202, 138, 4, 0.4);
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4);
 }
 [data-theme="dark"] .tt-scotus-impact[data-impact="2"] {
   box-shadow: 0 1px 4px rgba(59, 130, 246, 0.4);
 }
 [data-theme="dark"] .tt-scotus-impact[data-impact="1"] {
-  box-shadow: 0 1px 4px rgba(107, 114, 128, 0.4);
+  box-shadow: 0 1px 4px rgba(156, 163, 175, 0.4);
 }
 [data-theme="dark"] .tt-scotus-impact[data-impact="0"] {
   box-shadow: 0 1px 4px rgba(16, 185, 129, 0.4);
