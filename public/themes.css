@@ -729,37 +729,37 @@
   white-space: nowrap;
 }
 
-/* Impact level 5: Constitutional Crisis - Deep Red */
+/* Impact level 5: Constitutional Crisis - Red 🔴 */
 .tt-scotus-impact[data-impact="5"] {
   background: #dc2626;
   color: #ffffff;
 }
 
-/* Impact level 4: Rubber-stamping Tyranny - Orange */
+/* Impact level 4: Rubber-stamping Tyranny - Orange 🟠 */
 .tt-scotus-impact[data-impact="4"] {
   background: #ea580c;
   color: #ffffff;
 }
 
-/* Impact level 3: Institutional Sabotage - Yellow/Amber */
+/* Impact level 3: Institutional Sabotage - Yellow 🟡 */
 .tt-scotus-impact[data-impact="3"] {
-  background: #ca8a04;
+  background: #f59e0b;
   color: #ffffff;
 }
 
-/* Impact level 2: Judicial Sidestepping - Blue */
+/* Impact level 2: Judicial Sidestepping - Blue 🔵 */
 .tt-scotus-impact[data-impact="2"] {
   background: #3b82f6;
   color: #ffffff;
 }
 
-/* Impact level 1: Crumbs from the Bench - Gray */
+/* Impact level 1: Crumbs from the Bench - Gray ⚪ */
 .tt-scotus-impact[data-impact="1"] {
-  background: #6b7280;
+  background: #9ca3af;
   color: #ffffff;
 }
 
-/* Impact level 0: Democracy Wins - Green */
+/* Impact level 0: Democracy Wins - Green 🟢 */
 .tt-scotus-impact[data-impact="0"] {
   background: #10b981;
   color: #ffffff;

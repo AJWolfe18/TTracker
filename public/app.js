@@ -776,6 +776,16 @@
     0: 'Democracy Wins'
   };
 
+  // Reverse lookup: label → level (ensures consistent colors regardless of DB data)
+  const SCOTUS_LABEL_TO_LEVEL = {
+    'Constitutional Crisis': 5,
+    'Rubber-stamping Tyranny': 4,
+    'Institutional Sabotage': 3,
+    'Judicial Sidestepping': 2,
+    'Crumbs from the Bench': 1,
+    'Democracy Wins': 0
+  };
+
   // Title case helper for DB fields like "affirmed" → "Affirmed"
   function titleCase(str) {
     if (!str) return '';
@@ -789,8 +799,10 @@
   function ScotusCard({ scotusCase, onViewDetails }) {
     // Get display values - use full case_name, not short version
     const displayName = scotusCase.case_name || scotusCase.case_name_short || 'Unknown Case';
-    const impactLevel = scotusCase.ruling_impact_level;
-    const impactLabel = scotusCase.ruling_label || SCOTUS_IMPACT_LABELS[impactLevel] || '';
+    // Get label first, then derive level from label for consistent coloring
+    const impactLabel = scotusCase.ruling_label || SCOTUS_IMPACT_LABELS[scotusCase.ruling_impact_level] || '';
+    // Use label→level lookup to ensure same label = same color (fixes DB inconsistency)
+    const impactLevel = SCOTUS_LABEL_TO_LEVEL[impactLabel] ?? scotusCase.ruling_impact_level ?? 3;
     // Show summary_spicy on card (like Stories), with who_wins as fallback
     const summary = scotusCase.summary_spicy || scotusCase.who_wins || '';
     const hasLongSummary = summary.length > 180;
@@ -799,14 +811,11 @@
     const dispositionDisplay = titleCase(disposition) || '';
 
     return React.createElement('article', { className: 'tt-card' },
-      // Header: Disposition badge (prominent) + Date
+      // Header: Date + Disposition (demoted to text)
       React.createElement('div', { className: 'tt-card-header' },
-        dispositionDisplay && React.createElement('span', {
-          className: 'tt-disposition-badge',
-          'data-disposition': disposition.toLowerCase().replace(/\s+/g, '-')
-        }, dispositionDisplay),
         React.createElement('span', { className: 'tt-timestamp' },
-          formatDate(scotusCase.decided_at)
+          formatDate(scotusCase.decided_at),
+          dispositionDisplay && ` · ${dispositionDisplay}`
         )
       ),
 
@@ -872,9 +881,9 @@
       };
     }, []);
 
-    // Get display values
-    const impactLevel = scotusCase?.ruling_impact_level;
-    const impactLabel = scotusCase?.ruling_label || SCOTUS_IMPACT_LABELS[impactLevel] || '';
+    // Get display values - derive level from label for consistent coloring
+    const impactLabel = scotusCase?.ruling_label || SCOTUS_IMPACT_LABELS[scotusCase?.ruling_impact_level] || '';
+    const impactLevel = SCOTUS_LABEL_TO_LEVEL[impactLabel] ?? scotusCase?.ruling_impact_level ?? 3;
 
     // Parse dissent authors
     const dissentAuthors = Array.isArray(scotusCase?.dissent_authors)
