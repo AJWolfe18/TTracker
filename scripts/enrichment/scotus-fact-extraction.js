@@ -633,12 +633,21 @@ export function consensusMerge(a, b) {
 export async function callGPTWithRetry(openai, messages, { temperature = 0, maxRetries = 1, model = 'gpt-4o-mini' } = {}) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // gpt-5 series uses different parameters:
+      // - max_completion_tokens instead of max_tokens
+      // - temperature only supports 1 (default), not 0
+      const isGpt5 = model.startsWith('gpt-5');
+      const tokenParam = isGpt5
+        ? { max_completion_tokens: 1500 }
+        : { max_tokens: 1500 };
+      const tempParam = isGpt5 ? {} : { temperature }; // gpt-5 doesn't support temperature=0
+
       const response = await openai.chat.completions.create({
         model,
         messages,
         response_format: { type: 'json_object' },
-        temperature,
-        max_tokens: 1500
+        ...tempParam,
+        ...tokenParam
       });
 
       const content = response.choices[0]?.message?.content;
@@ -794,17 +803,21 @@ function buildEvidenceText(evidenceQuotes) {
  */
 function looksCertOrProcedural(facts, evidenceText) {
   const typeRaw = (facts?.case_type || '').toLowerCase();
+  const disp = (facts?.disposition || '').toLowerCase();
   const ev = (evidenceText || '').toLowerCase();
 
+  // IMPORTANT: Don't clamp merits cases just because they mention "certiorari"
+  // All SCOTUS cases have "ON WRIT OF CERTIORARI" - that's not a cert-stage case
+  // Only clamp if: (1) case_type is cert_stage, OR (2) disposition is granted/denied AND no merits reached
   const isCert =
     typeRaw === 'cert_stage' ||
-    (ev.includes('certiorari') && (ev.includes('denied') || ev.includes('granted'))) ||
-    (ev.includes('petition') && ev.includes('denied'));
+    ((disp === 'granted' || disp === 'denied') && facts?.merits_reached !== true);
 
+  // Procedural: explicit merits_reached=false OR dismissed on procedural grounds
+  // Don't clamp affirmed/reversed cases even if they mention "standing" etc.
   const isProcedural =
     typeRaw === 'procedural' ||
-    facts?.merits_reached === false ||
-    /(standing|moot|jurisdiction|improvidently granted|\bdig\b)/i.test(ev);
+    (facts?.merits_reached === false && !['affirmed', 'reversed'].includes(disp));
 
   return { isCert, isProcedural };
 }
