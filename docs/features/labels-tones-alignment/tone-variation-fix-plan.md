@@ -430,34 +430,235 @@ function estimateStoryFrame(headline, tier) {
 
 ---
 
-### Phase 3: SCOTUS (ADO-275)
+### Phase 3: SCOTUS Tone + Variation System (ADO-275)
 
-**Files to modify:**
+**Updated:** 2026-01-25 (ADO-300 integration added)
 
-| File | Changes |
-|------|---------|
-| `scripts/enrichment/scotus-style-patterns.js` | NEW: frame buckets (can use actual level since known pre-enrich) |
-| `scripts/enrichment/scotus-gpt-prompt.js` | Add frame system, mismatch fuse |
+#### Goal
 
-**SCOTUS-specific considerations:**
-- `ruling_impact_level` is known BEFORE enrichment (from case metadata)
-- Can map level directly to frame: 4-5 → alarmed, 2-3 → critical, 0-1 → grudging_credit
-- Keep special issue pools (`voting_rights`, `agency_power`) as overrides
-- Frontend doesn't exist yet - lower priority
+Replace `scotus-variation-pools.js` (literal text + Math.random) with the Stories-style pattern system:
+- **Approach-only** style patterns (no literal "say this line" openers)
+- **Deterministic** pattern selection (FNV-1a hashing)
+- **REQUIRED VARIATION** prompt block (must-follow)
+- **Post-gen validation + repair/reroll** to prevent opener repetition within a run
 
-**Pool structure:**
+**Reference implementation:** Stories (ADO-274) - `scripts/enrichment/stories-style-patterns.js`
+
+---
+
+#### Files to Modify / Add
+
+| File | Action | Notes |
+|------|--------|-------|
+| `scripts/enrichment/scotus-style-patterns.js` | **NEW** | Main implementation |
+| `scripts/enrichment/scotus-gpt-prompt.js` | Update | Add REQUIRED VARIATION block, mismatch fuse |
+| `scripts/enrichment/scotus-variation-pools.js` | Deprecate | Leave for history, no longer imported |
+
+**References:**
+- `scripts/enrichment/stories-style-patterns.js` (primary scaffold)
+- `scripts/enrichment/eo-style-patterns.js` (secondary reference)
+- `scripts/shared/style-patterns-core.js` (shared patterns + FNV-1a hash)
+
+---
+
+#### Integration with ADO-300 (Clamp + Constraints)
+
+ADO-275 must **read** ADO-300 runtime fields but must not alter clamp/drift logic.
+
+**Relevant ADO-300 fields:**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `clamp_reason` | DB | `cert_no_merits`, `procedural_no_merits`, `missing_text` |
+| `_sidestepping_forbidden` | Runtime | Prevents forbidden label selection |
+| `label_policy` / constraint block | Runtime | Editorial constraints |
+| `publish_override` | DB | Manual override for publishing |
+
+**Procedural Frame Bucket (NEW):**
+- Frame name: `procedural`
+- Used ONLY when `clamp_reason in ('cert_no_merits', 'procedural_no_merits')`
+- Voice: "no merits decision, procedural posture, lower court stands / no ruling on substance"
+- Clamped cases must NOT sound like substantive wins/losses
+
+---
+
+#### Frame Selection Priority Order
+
+Frame selection must be deterministic and follow this priority:
+
 ```
-Level-based:
-  scotus_alarmed, scotus_critical, scotus_grudging_credit
+1. CLAMP REASON OVERRIDE (highest priority)
+   If clamp_reason in ('cert_no_merits', 'procedural_no_merits') → frame = 'procedural'
 
-Issue-based (override):
-  voting_rights_alarmed, voting_rights_critical  (no grudging_credit - VRA cases are never good news)
-  agency_power_alarmed, agency_power_critical    (no grudging_credit - Chevron gutting is never good)
+2. SPECIAL ISSUE POOLS
+   If issue_area in ('voting_rights', 'agency_power') → use dedicated issue pool
+   (unless clamped procedural, which always wins)
+
+3. LEVEL → FRAME MAPPING (default)
+   ruling_impact_level 4-5 → 'alarmed'
+   ruling_impact_level 2-3 → 'critical'
+   ruling_impact_level 0-1 → 'grudging_credit'
 ```
+
+---
+
+#### Pool Structure (Updated)
 
 ~7 pools × ~8 patterns = ~56 total
 
-**Estimated effort:** 0.5 session
+```
+Frame-based (default):
+  alarmed
+  critical
+  grudging_credit
+  procedural          (NEW - for clamped cases)
+
+Issue-based (override, unless clamped):
+  voting_rights       (no grudging_credit - VRA cases are never good news)
+  agency_power        (no grudging_credit - Chevron gutting is never good)
+```
+
+Each pattern MUST be **approach-only**. No quoted openers. No "Lead with: 'exact sentence'".
+
+---
+
+#### Deterministic Pattern Selection
+
+SCOTUS must stop using `Math.random()`. Use Stories' deterministic selection approach:
+
+**Seed inputs:** `case_id:prompt_version:poolKey`
+- `case_id` = stable database ID
+- `prompt_version` = e.g., `v4-ado275`
+- `poolKey` = frame bucket (encodes frame already)
+
+**Algorithm:**
+```javascript
+const seed = `${caseId}:${promptVersion}:${poolKey}`;
+const hashIdx = fnv1a32(seed);
+const idx = hashIdx % pool.length;
+
+// Collision step: walk through pool to find unused pattern
+for (let step = 0; step < pool.length; step++) {
+  if (!recentIds.includes(pool[idx].id)) return pool[idx];
+  idx = (idx + 1) % pool.length;
+}
+```
+
+**Goal:** Same case + same prompt version = same pattern. Small batches avoid collisions.
+
+---
+
+#### REQUIRED VARIATION Block (Prompt Update)
+
+Replace current "suggestions" language with strict MUST/DO NOT block:
+
+```
+REQUIRED VARIATION (do not ignore)
+
+FRAME: [frame_name] - [stance description]
+
+STYLE PATTERN: [pattern_id]
+- Opening approach: [approach description]
+- Rhetorical device: [device description]
+- Structure: [structure description]
+- Closing approach: [closing description]
+
+MUST follow this pattern's APPROACH and SPIRIT.
+DO NOT copy any literal example lines or template phrases.
+DO NOT reuse opener structures recently used in this batch.
+MUST create a fresh opener unique to this case.
+
+MISMATCH FUSE: If your determined ruling_impact_level conflicts with this frame,
+keep the style pattern structure but adjust stance to match your actual assessment.
+```
+
+---
+
+#### Post-Gen Validation Spec (NEW)
+
+Add post-gen validation + repair for `summary_spicy` (mirror Stories approach).
+
+**What to detect:**
+
+A) **Banned "literal template" starters** - SCOTUS-specific `SECTION_BANS`:
+```javascript
+const SCOTUS_SECTION_BANS = {
+  summary_spicy: [
+    /^.{0,5}years? of precedent\.? gone/i,
+    /^the game was rigged/i,
+    /^this ruling sounds boring/i,
+    /^history will remember this as/i,
+    /^this is how the system is designed/i,
+    /^leonard leo.?s wishlist/i,
+    /^they.?re not even pretending/i
+  ]
+};
+```
+
+B) **Near-duplicate signature sentences** within batch:
+- Extract first 2-3 sentences, normalize (lowercase, strip punctuation, `\d+` → `X`)
+- Compare against recent batch outputs
+
+**Repair strategy:**
+- Attempt 1: Single reroll of Pass 2 with:
+  - "Your opener was rejected for repetition. Write a new opener with a different structure."
+  - Include rejected opener + avoid list for this batch
+- Max rerolls: **1** (cost control)
+- If repair fails: mark `needs_review=true`
+
+---
+
+#### SCOTUS-Specific Patterns (~15 patterns)
+
+Add SCOTUS-specific patterns beyond core patterns. Examples (approach-only):
+
+1. **Legitimacy framing** - Open with Court's credibility/legitimacy angle without stock catchphrases
+2. **Downstream effect** - Lead with concrete downstream effect (rights, enforcement, access), pivot to who benefits
+3. **What changed + who pays** - Short "what changed" statement, then one-sentence "who pays" sting
+4. **Power center naming** - Name the power center (state, agency, corporate actor) and what Court just enabled
+5. **Technical-but-not-boring** - Open with "this looks technical" framing without using "boring" template
+6. **Dissent as prophecy** - Frame around what the dissent warned
+7. **Precedent erosion** - Lead with specific precedent being weakened/overturned
+8. **Vote fracture** - Open with the vote split and what it signals
+9. **Emergency docket** - For shadow docket: emphasize procedural irregularity
+10. **Standing dodge** - For dismissals: frame the avoidance itself as the story
+11. **Cert denial impact** - For cert denials: what lower court ruling now stands
+12. **Unanimous surprise** - For rare unanimous rulings: suspicious optimism framing
+13. **Concurrence warning** - Flag concerning concurrence language
+14. **Remedies gutted** - Focus on what remedies/recourse are now unavailable
+15. **Agency handcuffs** - For admin law: what agencies can no longer do
+
+Ensure patterns vary **structure**, not just adjectives.
+
+---
+
+#### Acceptance Criteria
+
+1. **No literal-text patterns** in `scotus-style-patterns.js` (passes `style-patterns-lint.js`)
+2. **Deterministic selection** replaces `Math.random()`
+3. Within a 25-case run, **no exact duplicate signature sentence** across summaries
+4. **Significant drop** in repeated openers like:
+   - "This ruling sounds boring. That's the point."
+   - "The game was rigged. Now it's official."
+   - "X years of precedent. Gone."
+5. **Clamped cases** use procedural frame bucket and do not sound like merits wins/losses
+6. **Frame distribution** matches case characteristics (not uniform random)
+
+---
+
+#### Implementation Order
+
+1. Create `scotus-style-patterns.js` using Stories as scaffold
+2. Update `scotus-gpt-prompt.js` to:
+   - Select frame via priority order (clamp → issue → level)
+   - Inject REQUIRED VARIATION block (strict language)
+3. Wire deterministic selection + pattern injection in `enrich-scotus.js`
+4. Add post-gen validation + single reroll
+5. Run validation batch (25 cases) and measure:
+   - Duplicate signatures (target: 0)
+   - Opener variety (target: >80% unique first sentences)
+   - Frame distribution alignment
+
+**Estimated effort:** 1 session (increased from 0.5 due to ADO-300 integration + post-gen validation)
 
 ---
 
@@ -609,3 +810,11 @@ After full rollout:
 | | - Added post-gen validation with surgical repair |
 | | - Added stable content_id ladder per pipeline |
 | | - Called out broken Stories code as smoking gun |
+| 2026-01-25 | **Phase 3 (SCOTUS) major update:** |
+| | - Added ADO-300 integration spec (clamp_reason, procedural frame bucket) |
+| | - Added frame selection priority order (clamp → issue → level) |
+| | - Added post-gen validation spec with SCOTUS-specific banned patterns |
+| | - Added 15 SCOTUS-specific pattern descriptions |
+| | - Added deterministic selection requirements |
+| | - Updated estimated effort: 0.5 → 1 session |
+| | - Stories (ADO-274) designated as reference implementation |
