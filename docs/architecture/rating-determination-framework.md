@@ -251,6 +251,52 @@ Flag cases where:
 
 ---
 
+## The Problem: Real Example
+
+**Case:** Barrett v. United States (January 2026)
+
+**What GPT produced:**
+```
+ruling_impact_level: 2 (Judicial Sidestepping)
+ruling_label: "Institutional Sabotage" (Level 3 - mismatch!)
+who_wins: "defendants facing overlapping convictions"
+who_loses: "the punitive justice system"
+summary_spicy: "The game was rigged. Now it's official. The Court reversed
+the previous convictions, ruling that Congress did not clearly authorize
+multiple convictions for a single act..."
+```
+
+**What's wrong:**
+1. **Rating/label mismatch** - Level 2 but labeled as Level 3
+2. **Wrong rating entirely** - Defendants WIN, prosecutorial overreach LIMITED, unanimous decision. This is Level 0-1, not Level 2-3.
+3. **Wrong tone** - "The game was rigged" is a Level 5 cynical opening, but this is a GOOD outcome for regular people
+4. **Contradiction** - "who_wins = defendants" and "who_loses = punitive justice system" describes a WIN for people, but the tone treats it like a loss
+
+**What it should have been:**
+```
+ruling_impact_level: 1
+ruling_label: "Crumbs from the Bench"
+summary_spicy: "A win for defendants facing stacked charges. The Court ruled
+you can't be convicted multiple times for a single act under different
+subsections - a small but real limit on prosecutorial overreach. Don't
+celebrate too hard; this is narrow and won't stop prosecutors from finding
+other ways to pile on charges."
+```
+
+**Why GPT got it wrong:**
+- GPT defaulted to cynical framing because it's a political accountability site
+- Didn't consider that "defendant wins" + "limits prosecution" = GOOD for regular people
+- Picked a dramatic tone without checking if the outcome warranted it
+
+**How the framework prevents this:**
+- Q1: Who benefits? → Regular people (defendants facing overreach)
+- Q2: What does it do? → Protects rights, limits overreach
+- Q3: Durable? → Narrow ruling, could be limited
+- Rating derivation: Q1=A, Q2=A, Q3=B → Level 1
+- Tone check: Level 1 = cautiously optimistic, NOT cynical
+
+---
+
 ## Why This Matters
 
 Without this framework, GPT tends to:
