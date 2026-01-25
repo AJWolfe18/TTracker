@@ -450,9 +450,10 @@ Replace `scotus-variation-pools.js` (literal text + Math.random) with the Storie
 
 | File | Action | Notes |
 |------|--------|-------|
-| `scripts/enrichment/scotus-style-patterns.js` | **NEW** | Main implementation |
+| `scripts/enrichment/scotus-style-patterns.js` | **NEW** | Main implementation (patterns, selection, validation) |
 | `scripts/enrichment/scotus-gpt-prompt.js` | Update | Add REQUIRED VARIATION block, mismatch fuse |
-| `scripts/enrichment/scotus-variation-pools.js` | Deprecate | Leave for history, no longer imported |
+| `scripts/scotus/enrich-scotus.js` | Update | Swap imports, wire selection, add post-gen validation |
+| `scripts/enrichment/scotus-variation-pools.js` | Deprecate | Remove all imports, add deprecation comment |
 
 **References:**
 - `scripts/enrichment/stories-style-patterns.js` (primary scaffold)
@@ -481,41 +482,99 @@ ADO-275 must **read** ADO-300 runtime fields but must not alter clamp/drift logi
 
 ---
 
-#### Frame Selection Priority Order
+#### Frame Selection: Pre-Pass2 Hint System
 
-Frame selection must be deterministic and follow this priority:
+**Critical timing note:** `ruling_impact_level` is produced BY Pass 2, so frame selection cannot depend on it. Frame selection uses only data available AFTER Pass 1 but BEFORE Pass 2.
+
+**Available signals for frame hint:**
+- `clamp_reason` (set by `clampAndLabel()` after Pass 1) ✅
+- `merits_reached` from Pass 1 facts ✅
+- `disposition` from Pass 1 facts ✅
+- `case_name`, `syllabus`, `opinion_excerpt` (case metadata) ✅
+- `issue_area` - **100% NULL in DB**, must use fallback detector ⚠️
+
+**Frame hint priority order:**
 
 ```
 1. CLAMP REASON OVERRIDE (highest priority)
    If clamp_reason in ('cert_no_merits', 'procedural_no_merits') → frame = 'procedural'
+   (This is authoritative, not a hint. No reroll possible.)
 
-2. SPECIAL ISSUE POOLS
-   If issue_area in ('voting_rights', 'agency_power') → use dedicated issue pool
-   (unless clamped procedural, which always wins)
+2. ISSUE OVERRIDE (from inferIssueOverride fallback)
+   If inferIssueOverride(scotusCase) returns 'voting_rights' or 'agency_power'
+   → use dedicated issue pool (overrides frame-based pool)
 
-3. LEVEL → FRAME MAPPING (default)
-   ruling_impact_level 4-5 → 'alarmed'
-   ruling_impact_level 2-3 → 'critical'
-   ruling_impact_level 0-1 → 'grudging_credit'
+3. PASS 1 FACTS HEURISTIC
+   If merits_reached === false OR disposition is procedural → frame = 'critical'
+   (Procedural-ish but not clamped = standard critical voice)
+
+4. METADATA HEURISTIC (existing estimateImpactLevel)
+   Use case_name + syllabus + excerpt signals to estimate:
+   - Crisis signals (insurrection, constitutional, overturn) → 'alarmed'
+   - Positive signals (victory, blocked, protected) → 'grudging_credit'
+   - Default → 'critical'
+```
+
+**Post-Pass2 mismatch handling:**
+If Pass 2 returns `ruling_impact_level` that conflicts with the hint frame:
+- If clamped: **no reroll** (clamp is authoritative)
+- If not clamped: optional single reroll with corrected frame (mismatch fuse)
+
+---
+
+#### Issue Override Fallback Detector (NEW)
+
+`issue_area` is 100% NULL in the database. Implement `inferIssueOverride(scotusCase)`:
+
+```javascript
+function inferIssueOverride(scotusCase) {
+  const text = [
+    scotusCase.case_name,
+    scotusCase.syllabus,
+    scotusCase.opinion_excerpt
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  // Voting rights signals
+  if (/voting rights act|vra|section 2|preclearance|gerrymandering|redistricting|voter id|ballot access/.test(text)) {
+    return 'voting_rights';
+  }
+
+  // Agency power / Chevron signals
+  if (/chevron|agency deference|major questions|nondelegation|epa|osha|fda|sec|ftc|nlrb/.test(text)) {
+    return 'agency_power';
+  }
+
+  return null; // No override, use frame-based pool
+}
 ```
 
 ---
 
 #### Pool Structure (Updated)
 
-~7 pools × ~8 patterns = ~56 total
+**6 pools × ~8 patterns = ~48 total**
 
 ```
-Frame-based (default):
-  alarmed
-  critical
-  grudging_credit
-  procedural          (NEW - for clamped cases)
+Frame-based pools (selected via hint):
+  procedural          - For clamped cases (authoritative, not a hint)
+  alarmed             - Crisis/attack framing
+  critical            - Default sardonic voice
+  grudging_credit     - Rare wins, credit with skepticism
 
-Issue-based (override, unless clamped):
-  voting_rights       (no grudging_credit - VRA cases are never good news)
-  agency_power        (no grudging_credit - Chevron gutting is never good)
+Issue override pools (replace frame pool entirely):
+  voting_rights_override   - VRA, gerrymandering, voter access
+  agency_power_override    - Chevron, deference, regulatory
 ```
+
+**Key design decisions:**
+- Issue pools are NOT subdivided by frame (avoids complexity with unreliable inputs)
+- Issue override replaces the frame-based pool entirely (unless clamped)
+- Clamped cases ALWAYS use `procedural` pool regardless of issue
+
+**Frame vs Label (explicitly orthogonal):**
+- **Frame** (ADO-275) = how we write (voice, structure, rhetorical approach)
+- **Label** (ADO-300) = what we call it (Judicial Sidestepping, etc.)
+- Clamped cases will have "Judicial Sidestepping" label but use procedural VOICE
 
 Each pattern MUST be **approach-only**. No quoted openers. No "Lead with: 'exact sentence'".
 
@@ -570,6 +629,8 @@ MUST create a fresh opener unique to this case.
 MISMATCH FUSE: If your determined ruling_impact_level conflicts with this frame,
 keep the style pattern structure but adjust stance to match your actual assessment.
 ```
+
+**Mismatch fuse exception:** When `clamp_reason` is set, mismatch fuse is **disabled**. Clamped cases must use procedural frame regardless of GPT's level assessment. No reroll.
 
 ---
 
@@ -635,13 +696,14 @@ Ensure patterns vary **structure**, not just adjectives.
 
 1. **No literal-text patterns** in `scotus-style-patterns.js` (passes `style-patterns-lint.js`)
 2. **Deterministic selection** replaces `Math.random()`
-3. Within a 25-case run, **no exact duplicate signature sentence** across summaries
-4. **Significant drop** in repeated openers like:
-   - "This ruling sounds boring. That's the point."
-   - "The game was rigged. Now it's official."
-   - "X years of precedent. Gone."
-5. **Clamped cases** use procedural frame bucket and do not sound like merits wins/losses
-6. **Frame distribution** matches case characteristics (not uniform random)
+3. **0 exact duplicate normalized signature sentences** in a 25-case run
+   - Normalized = lowercase, strip punctuation, `\d+` → `X`
+4. **No pattern ID used >2x** in a 25-case run (after collision avoidance)
+5. **0 banned template starters** pass post-gen validation (all caught + repaired/flagged)
+6. **Clamped cases** use procedural frame and do not sound like merits wins/losses:
+   - ❌ Bad: "The Court ruled in favor of X" (sounds like merits decision)
+   - ✅ Good: "The Court declined to hear the case" (sounds procedural)
+7. **Frame distribution** aligns with case characteristics (manual review of 5 samples per frame)
 
 ---
 
@@ -818,3 +880,11 @@ After full rollout:
 | | - Added deterministic selection requirements |
 | | - Updated estimated effort: 0.5 → 1 session |
 | | - Stories (ADO-274) designated as reference implementation |
+| 2026-01-25 | **Phase 3 critical review fixes:** |
+| | - Fixed timing: frame is pre-Pass2 hint, not based on ruling_impact_level |
+| | - Added inferIssueOverride() fallback (issue_area is 100% NULL) |
+| | - Simplified pool structure: 6 pools, issue pools override frame entirely |
+| | - Clarified Frame vs Label orthogonality |
+| | - Added mismatch fuse exception for clamped cases |
+| | - Added enrich-scotus.js to files list |
+| | - Quantified acceptance criteria (0 duplicates, no pattern >2x) |
