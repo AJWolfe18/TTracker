@@ -635,6 +635,10 @@
   white-space: nowrap;
 }
 
+.tt-timestamp-right {
+  margin-left: auto;
+}
+
 /* Headline */
 .tt-headline {
   font-family: var(--font-headline);

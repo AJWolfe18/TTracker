@@ -811,11 +811,10 @@
     const dispositionDisplay = titleCase(disposition) || '';
 
     return React.createElement('article', { className: 'tt-card' },
-      // Header: Date + Disposition (demoted to text)
+      // Header: Date on right (disposition removed from card, stays in modal)
       React.createElement('div', { className: 'tt-card-header' },
-        React.createElement('span', { className: 'tt-timestamp' },
-          formatDate(scotusCase.decided_at),
-          dispositionDisplay && ` · ${dispositionDisplay}`
+        React.createElement('span', { className: 'tt-timestamp tt-timestamp-right' },
+          formatDate(scotusCase.decided_at)
         )
       ),
 
