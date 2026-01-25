@@ -978,33 +978,33 @@
             )
           ),
 
+          // Summary (spicy) - ADO-302: moved to top
+          scotusCase.summary_spicy && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Summary'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.summary_spicy)
+          ),
+
           // Who Wins
           scotusCase.who_wins && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '👍 Who Wins'),
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Who Wins'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.who_wins)
           ),
 
           // Who Loses
           scotusCase.who_loses && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '👎 Who Loses'),
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Who Loses'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.who_loses)
-          ),
-
-          // Summary (spicy)
-          scotusCase.summary_spicy && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '📜 Summary'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.summary_spicy)
           ),
 
           // Why It Matters
           scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '⚡ Why It Matters'),
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
           // Dissent Highlights
           dissentHighlights && React.createElement('div', { className: 'tt-scotus-section tt-scotus-dissent' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '🔥 Dissent Highlights'),
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Dissent Highlights'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, dissentHighlights)
           ),
 

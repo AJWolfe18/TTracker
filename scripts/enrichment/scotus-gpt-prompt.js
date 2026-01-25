@@ -178,8 +178,8 @@ Focus: Why this actually protects people. Why it's hard to walk back.
 {
   "ruling_impact_level": 0-5,
   "ruling_label": "Label from scale above",
-  "who_wins": "Explicit beneficiary - be specific (corporations, police, billionaires, etc.)",
-  "who_loses": "Explicit victim - be specific (workers, voters, patients, etc.)",
+  "who_wins": "1-2 sentences. Who benefits from this ruling and HOW it specifically helps them.",
+  "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone for that level.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null (not 'None' or 'N/A').",
@@ -492,8 +492,8 @@ Profanity: NO.
 {
   "ruling_impact_level": 0-5,
   "ruling_label": "Label from scale above",
-  "who_wins": "Explicit beneficiary - be specific (must align with facts)",
-  "who_loses": "Explicit victim - be specific (must align with facts)",
+  "who_wins": "1-2 sentences. Who benefits from this ruling and HOW it specifically helps them.",
+  "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone. MUST include the disposition word.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",

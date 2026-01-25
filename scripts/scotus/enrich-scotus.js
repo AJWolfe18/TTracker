@@ -481,6 +481,19 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
   const constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
 
+  // ADO-302: Derive ruling_impact_level from ruling_label (label is source of truth)
+  const LABEL_TO_LEVEL = {
+    'Constitutional Crisis': 5,
+    'Rubber-stamping Tyranny': 4,
+    'Institutional Sabotage': 3,
+    'Judicial Sidestepping': 2,
+    'Crumbs from the Bench': 1,
+    'Democracy Wins': 0
+  };
+  if (constrainedEditorial.ruling_label && LABEL_TO_LEVEL[constrainedEditorial.ruling_label] !== undefined) {
+    constrainedEditorial.ruling_impact_level = LABEL_TO_LEVEL[constrainedEditorial.ruling_label];
+  }
+
   // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking
   if (driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
     // Only block on hard drift if NOT a clamped case (clamped cases are rescued by constraints)
