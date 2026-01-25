@@ -1,0 +1,3 @@
+# 2026-01-24: SCOTUS Quality - ADO-300 Planning Complete
+
+**ADO-300** created for "SCOTUS: Post-processing clamp rules + Pass1 retry ladder (publish, don't block)". Plan complete at `docs/features/scotus-enrichment/ado-300-clamp-retry-plan.md`. Also fixed anti-repetition bug (commit `c463388`) and CourtListener URLs (149 records). **Next session:** Implement ADO-300 starting with migration `072_scotus_clamp_fields.sql`, then wire up `clampAndLabel()`, retry ladder, and label constraints. Goal is reducing Sidestepping from 56% to 15-25% and publishing cert/procedural cases instead of blocking. Backfill system deferred to ADO-295.
