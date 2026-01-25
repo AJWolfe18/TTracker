@@ -49,10 +49,16 @@ import {
 } from '../enrichment/scotus-gpt-prompt.js';
 
 import {
-  getPoolType,
+  selectFrame,
   selectVariation,
-  buildVariationInjection
-} from '../enrichment/scotus-variation-pools.js';
+  buildVariationInjection,
+  validateSummarySpicy,
+  repairBannedStarter,
+  extractSignatureSentence,
+  getScotusContentId,
+  SCOTUS_SECTION_BANS,
+  PROMPT_VERSION as STYLE_PROMPT_VERSION
+} from '../enrichment/scotus-style-patterns.js';
 
 dotenv.config();
 
@@ -60,7 +66,7 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-const PROMPT_VERSION = 'v2-ado300';
+const PROMPT_VERSION = STYLE_PROMPT_VERSION;  // v4-ado275 from scotus-style-patterns.js
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_SAFE_LIMIT = 100;
 const DEFAULT_DAILY_CAP_USD = 5.00;
@@ -228,34 +234,9 @@ async function checkDailyCap(supabase) {
 // TWO-PASS ENRICHMENT LOGIC
 // ============================================================================
 
-/**
- * Estimate impact level from case metadata (heuristic for variation selection)
- */
-function estimateImpactLevel(scotusCase) {
-  const name = (scotusCase.case_name || '').toLowerCase();
-  const syllabusOrExcerpt = (scotusCase.syllabus || scotusCase.opinion_excerpt || '').toLowerCase();
-  const combined = `${name} ${syllabusOrExcerpt}`;
-
-  const crisisSignals = ['overturn', 'overrule', 'precedent', 'unconstitutional'];
-  const tyrannySignals = ['immunity', 'qualified immunity', 'police', 'enforcement', 'executive power'];
-  const sabotageSignals = ['standing', 'moot', 'procedural', 'jurisdiction'];
-  const winSignals = ['affirm', 'plaintiff', 'worker', 'employee', 'union', 'rights'];
-
-  for (const signal of crisisSignals) {
-    if (combined.includes(signal)) return 5;
-  }
-  for (const signal of tyrannySignals) {
-    if (combined.includes(signal)) return 4;
-  }
-  for (const signal of winSignals) {
-    if (combined.includes(signal)) return 1;
-  }
-  for (const signal of sabotageSignals) {
-    if (combined.includes(signal)) return 3;
-  }
-
-  return 3;
-}
+// NOTE: estimateImpactLevel() removed in ADO-275. Frame selection now handled by
+// selectFrame() in scotus-style-patterns.js using priority chain:
+// clamp_reason → inferIssueOverride() → Pass1 facts → estimateFrameFromMetadata()
 
 /**
  * ADO-300: Check Pass 1 facts for issues that warrant retry with stronger model
@@ -409,18 +390,26 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // =========================================================================
-  // PASS 2: Editorial Framing
+  // PASS 2: Editorial Framing (ADO-275: New Variation System)
   // =========================================================================
   console.log(`   📋 Pass 2: Applying editorial framing...`);
 
-  // Select variation for creative direction
-  const estimatedLevel = estimateImpactLevel(scotusCase);
-  const poolType = getPoolType(estimatedLevel, scotusCase.issue_area);
-  const variation = selectVariation(poolType, recentPatternIds);
-  const variationInjection = buildVariationInjection(variation, recentOpenings);
-  const patternId = variation.opening?.id || 'unknown';
+  // ADO-275: Select frame using priority order (clamp → issue → facts → metadata)
+  const { frame, poolKey, frameSource } = selectFrame(clampedFacts, scotusCase);
+  const caseContentId = getScotusContentId(scotusCase);
+  const variation = selectVariation(poolKey, caseContentId, PROMPT_VERSION, recentPatternIds);
 
-  console.log(`     Pool: ${poolType} | Pattern: ${patternId}`);
+  // Validate variation was selected
+  if (!variation || !variation.id) {
+    console.error(`   ❌ Failed to select variation for poolKey=${poolKey}`);
+    await markFailed(scotusCase.id, `Variation selection failed for pool ${poolKey}`, supabase);
+    return { success: false, error: `Variation selection failed`, cost: totalCost };
+  }
+
+  const variationInjection = buildVariationInjection(variation, frame, clampedFacts.clamp_reason);
+  const patternId = variation.id;
+
+  console.log(`     Frame: ${frame} (${frameSource}) | Pool: ${poolKey} | Pattern: ${patternId}`);
 
   let editorial;
   try {
@@ -449,6 +438,38 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     console.error(`   ❌ Pass 2 validation failed: ${errors.join(', ')}`);
     await markFailed(scotusCase.id, `Pass 2 validation: ${errors.join(', ')}`, supabase);
     return { success: false, error: errors.join(', '), cost: totalCost };
+  }
+
+  // =========================================================================
+  // ADO-275: POST-GEN VALIDATION (banned starters + duplicate detection)
+  // =========================================================================
+  console.log(`   📋 Checking for banned starters/duplicates...`);
+  const recentSignatures = recentOpenings.map(o => extractSignatureSentence(o));
+  const { valid: spicyValid, reason: spicyReason, matchedPattern, isDuplicate } =
+    validateSummarySpicy(editorial.summary_spicy, recentSignatures);
+
+  if (!spicyValid) {
+    console.log(`   ⚠️ summary_spicy validation failed: ${spicyReason}`);
+
+    // Attempt repair for banned starters (not duplicates)
+    if (matchedPattern && !isDuplicate) {
+      const repairResult = repairBannedStarter('summary_spicy', editorial.summary_spicy, matchedPattern);
+      if (repairResult.success) {
+        console.log(`   ✓ Repaired banned starter`);
+        editorial.summary_spicy = repairResult.content;
+      } else {
+        console.log(`   ⚠️ Repair failed: ${repairResult.reason} - marking needs_review`);
+        editorial._banned_starter_detected = true;
+        editorial._banned_starter_reason = spicyReason;
+        // Will be caught by needsReview logic below
+      }
+    } else if (isDuplicate) {
+      console.log(`   ⚠️ Duplicate signature detected - marking needs_review`);
+      editorial._duplicate_detected = true;
+      // Don't auto-publish items with duplicate signatures
+    }
+  } else {
+    console.log(`   ✓ No banned starters or duplicates`);
   }
 
   // =========================================================================
@@ -483,6 +504,14 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
                  clampedFacts.publish_override === true;
   let needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
                     !clampedFacts.publish_override;
+
+  // ADO-275: Don't auto-publish if banned starter or duplicate detected
+  if (editorial._banned_starter_detected || editorial._duplicate_detected) {
+    if (!clampedFacts.publish_override) {
+      isPublic = false;
+      needsReview = true;
+    }
+  }
 
   if (driftCheck.severity === 'soft') {
     console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
@@ -526,7 +555,9 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   return {
     success: true,
     patternId,
-    poolType,
+    poolKey,  // ADO-275: renamed from poolType
+    frame,    // ADO-275: frame bucket
+    frameSource,  // ADO-275: how frame was determined
     level: constrainedEditorial.ruling_impact_level,
     confidence: clampedFacts.fact_extraction_confidence,
     caseType: clampedFacts.case_type,
@@ -535,8 +566,8 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     cost: totalCost,
     isPublic,
     needsReview,
-    // For anti-repetition: first 50 chars of summary_spicy
-    summaryOpening: (constrainedEditorial.summary_spicy || '').substring(0, 50)
+    // For anti-repetition: track summary_spicy for signature detection
+    summaryOpening: (constrainedEditorial.summary_spicy || '').substring(0, 150)
   };
 }
 
@@ -547,7 +578,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 async function main() {
   const args = parseArgs();
 
-  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-300: Clamp/Retry)`);
+  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-275: Tone Variation + ADO-300: Clamp/Retry)`);
   console.log(`================================================`);
   console.log(`Batch size: ${args.limit}`);
   console.log(`Dry run: ${args.dryRun}`);

@@ -446,6 +446,19 @@ DO:
 - Use the appropriate tone for the ruling_impact_level you assign
 - Make the facts accessible and impactful for readers
 - Follow any CASE TYPE CONSTRAINTS provided (procedural, cert stage, shadow docket)
+- Follow the REQUIRED VARIATION block in user message (see below)
+
+# REQUIRED VARIATION (ADO-275)
+You will receive a REQUIRED VARIATION block with:
+- FRAME: The directional stance to use (procedural, alarmed, critical, grudging_credit)
+- STYLE PATTERN: A structural approach to follow (opening, device, structure, closing)
+
+RULES:
+- MUST follow the pattern's APPROACH and SPIRIT
+- DO NOT copy any literal phrases from the pattern - create fresh openers
+- DO NOT use banned template starters (e.g., "Years of precedent. Gone.", "The game was rigged")
+- If a MISMATCH FUSE is mentioned, it tells you when/whether to adjust stance
+- For CLAMPED cases: mismatch fuse is DISABLED - procedural frame is authoritative
 
 ═══════════════════════════════════════════════════════════════════════════════
 TONE CALIBRATION BY RULING IMPACT LEVEL (0-5)
@@ -613,7 +626,7 @@ Vote: ${scotusCase.vote_split || 'Unknown'}
 Majority: ${scotusCase.majority_author || 'Unknown'}
 ${dissentInfo}
 
-${variationInjection ? `CREATIVE DIRECTION:\n${variationInjection}\n` : ''}
+${variationInjection ? `${variationInjection}\n` : ''}
 Generate the editorial JSON. Remember:
 - Your who_wins/who_loses MUST align with the prevailing_party and case_type above
 - The disposition word "${facts.disposition || 'unknown'}" MUST appear in summary_spicy

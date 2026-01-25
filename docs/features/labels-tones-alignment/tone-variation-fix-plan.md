@@ -520,6 +520,8 @@ If Pass 2 returns `ruling_impact_level` that conflicts with the hint frame:
 - If clamped: **no reroll** (clamp is authoritative)
 - If not clamped: optional single reroll with corrected frame (mismatch fuse)
 
+**⚠️ Critical Rule:** Clamped cases must use procedural frame even if Pass 2 would choose a high alarm label; mismatch fuse is disabled when clamped.
+
 ---
 
 #### Issue Override Fallback Detector (NEW)
@@ -534,13 +536,13 @@ function inferIssueOverride(scotusCase) {
     scotusCase.opinion_excerpt
   ].filter(Boolean).join(' ').toLowerCase();
 
-  // Voting rights signals
-  if (/voting rights act|vra|section 2|preclearance|gerrymandering|redistricting|voter id|ballot access/.test(text)) {
+  // Voting rights signals (expanded for recall)
+  if (/voting rights act|vra|section 2|preclearance|gerrymandering|redistricting|voter id|ballot access|one person one vote|racial gerrymander|districting plan|vote dilution/.test(text)) {
     return 'voting_rights';
   }
 
-  // Agency power / Chevron signals
-  if (/chevron|agency deference|major questions|nondelegation|epa|osha|fda|sec|ftc|nlrb/.test(text)) {
+  // Agency power / Chevron signals (expanded for recall)
+  if (/chevron|agency deference|major questions|nondelegation|epa|osha|fda|sec|ftc|nlrb|administrative procedure act|apa|arbitrary and capricious|rulemaking|deference/.test(text)) {
     return 'agency_power';
   }
 
@@ -593,7 +595,7 @@ SCOTUS must stop using `Math.random()`. Use Stories' deterministic selection app
 ```javascript
 const seed = `${caseId}:${promptVersion}:${poolKey}`;
 const hashIdx = fnv1a32(seed);
-const idx = hashIdx % pool.length;
+let idx = hashIdx % pool.length;  // NOTE: must be 'let' not 'const'
 
 // Collision step: walk through pool to find unused pattern
 for (let step = 0; step < pool.length; step++) {
@@ -699,7 +701,7 @@ Ensure patterns vary **structure**, not just adjectives.
 3. **0 exact duplicate normalized signature sentences** in a 25-case run
    - Normalized = lowercase, strip punctuation, `\d+` → `X`
 4. **No pattern ID used >2x** in a 25-case run (after collision avoidance)
-5. **0 banned template starters** pass post-gen validation (all caught + repaired/flagged)
+5. **0 published items with banned starters** or duplicate signatures (if repair fails: mark needs_review=true, do not auto-publish)
 6. **Clamped cases** use procedural frame and do not sound like merits wins/losses:
    - ❌ Bad: "The Court ruled in favor of X" (sounds like merits decision)
    - ✅ Good: "The Court declined to hear the case" (sounds procedural)
@@ -719,6 +721,24 @@ Ensure patterns vary **structure**, not just adjectives.
    - Duplicate signatures (target: 0)
    - Opener variety (target: >80% unique first sentences)
    - Frame distribution alignment
+
+**Validation SQL Query (duplicate rate check):**
+```sql
+-- Quick sanity check after 25-case run
+with s as (
+  select id,
+    lower(regexp_replace(split_part(summary_spicy, '.', 1), '[^a-z0-9 ]', '', 'g')) as first_sentence_norm
+  from scotus_cases
+  where enrichment_status = 'enriched'
+  order by updated_at desc
+  limit 25
+)
+select first_sentence_norm, count(*) as ct
+from s
+group by first_sentence_norm
+having count(*) > 1
+order by ct desc;
+```
 
 **Estimated effort:** 1 session (increased from 0.5 due to ADO-300 integration + post-gen validation)
 
@@ -836,7 +856,7 @@ After full rollout:
 |--------|-----|---------|--------|---------|
 | **Category pools** | 3 (miller/donor/default) | 3 (investigations/policy/general) | 2 special + level-based | type-based |
 | **Frame buckets** | 3 | 3 | 3 + special overrides | 3 |
-| **Input for frame** | title + abstract + category | headline + tier (nudge) | level (known!) + issue_area | corruption_level + connection_type |
+| **Input for frame** | title + abstract + category | headline + tier (nudge) | clamp_reason → inferIssueOverride() → Pass1 facts → estimateImpactLevel | corruption_level + connection_type |
 | **Total pools** | 9 | 9 | ~7 | ~8 |
 | **Patterns per pool** | ~5-6 | ~5 | ~8 | ~6 |
 | **Priority** | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
@@ -888,3 +908,10 @@ After full rollout:
 | | - Added mismatch fuse exception for clamped cases |
 | | - Added enrich-scotus.js to files list |
 | | - Quantified acceptance criteria (0 duplicates, no pattern >2x) |
+| 2026-01-25 | **Phase 3 implementation review fixes:** |
+| | - Fixed code example: `const idx` → `let idx` for collision loop |
+| | - Clarified acceptance criteria: "0 published items with banned starters" (not flagged) |
+| | - Expanded inferIssueOverride keywords for better recall (voting rights + agency power) |
+| | - Updated Content Type Comparison table with correct SCOTUS frame input chain |
+| | - Added explicit rule sentence: clamped cases use procedural frame, mismatch fuse disabled |
+| | - Added validation SQL query for duplicate rate check |

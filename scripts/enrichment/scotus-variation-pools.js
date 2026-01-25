@@ -1,4 +1,25 @@
 /**
+ * ========================================================================
+ * DEPRECATED - ADO-275 (2026-01-25)
+ * ========================================================================
+ *
+ * This file has been replaced by scotus-style-patterns.js
+ *
+ * Reasons for deprecation:
+ * - Uses Math.random() for selection (non-deterministic, can't reproduce results)
+ * - Contains literal text openers that GPT copies verbatim (causes repetition)
+ * - No integration with ADO-300 clamp system
+ *
+ * New implementation (scotus-style-patterns.js) provides:
+ * - Deterministic selection via FNV-1a hash
+ * - Approach-only patterns (no literal text for GPT to copy)
+ * - Frame-based pools with ADO-300 clamp integration
+ * - Post-gen validation with banned starter detection
+ *
+ * DO NOT import from this file. Use scotus-style-patterns.js instead.
+ * ========================================================================
+ *
+ * Original description:
  * Variation Pools for SCOTUS GPT Enrichment (TTRC-340)
  *
  * Provides stratified opening patterns, rhetorical devices, and structures
@@ -6,11 +27,7 @@
  *
  * Based on pardons-variation-pools.js pattern.
  *
- * Usage:
- *   import { selectVariation, buildVariationInjection, getPoolType } from './scotus-variation-pools.js';
- *   const poolType = getPoolType(ruling_impact_level, issue_area);
- *   const variation = selectVariation(poolType, recentlyUsedIds);
- *   const injection = buildVariationInjection(variation, recentOpeningTexts);
+ * Usage: DEPRECATED - see scotus-style-patterns.js
  */
 
 // ============================================================================
