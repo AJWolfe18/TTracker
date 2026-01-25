@@ -70,7 +70,8 @@ const INPUT_COST_PER_1K = 0.00015;
 const OUTPUT_COST_PER_1K = 0.0006;
 
 // ADO-300: Retry ladder config
-const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-4o-mini,gpt-4o')
+// Default chain: gpt-5-mini (best accuracy) → gpt-4o-mini (fallback) → gpt-4o (last resort)
+const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-5-mini,gpt-4o-mini,gpt-4o')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
