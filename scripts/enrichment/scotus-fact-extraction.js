@@ -96,6 +96,8 @@ export const DB_COLUMNS = new Set([
   // DB-only fields (not from GPT)
   'vote_split', 'dissent_exists',
   'source_data_version',  // tracks v1-syllabus vs v2-full-opinion
+  // ADO-300: Clamp/retry fields
+  'clamp_reason', 'publish_override', 'facts_model_used', 'retry_reason',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
@@ -106,6 +108,8 @@ const RUNTIME_ONLY_FIELDS = new Set([
   'evidence_quotes_truncated', 'raw_response', 'usage',
   // Disposition telemetry (TODO: add to schema for QA visibility)
   'disposition_source', 'disposition_window', 'disposition_pattern', 'disposition_raw',
+  // ADO-300: Clamp ephemeral fields (used for Pass 2 prompt, never persisted)
+  'label_policy', '_evidence_text', '_sidestepping_forbidden', '_is_vr', '_is_gvr',
 ]);
 
 export function sanitizeForDB(payload) {
@@ -622,12 +626,15 @@ export function consensusMerge(a, b) {
 
 /**
  * Call GPT with retry logic
+ * @param {Object} openai - OpenAI client
+ * @param {Array} messages - Chat messages
+ * @param {Object} opts - Options: temperature, maxRetries, model
  */
-export async function callGPTWithRetry(openai, messages, { temperature = 0, maxRetries = 1 } = {}) {
+export async function callGPTWithRetry(openai, messages, { temperature = 0, maxRetries = 1, model = 'gpt-4o-mini' } = {}) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model,
         messages,
         response_format: { type: 'json_object' },
         temperature,
@@ -654,7 +661,7 @@ export async function callGPTWithRetry(openai, messages, { temperature = 0, maxR
  *
  * @param {Object} openai - OpenAI client
  * @param {Object} scotusCase - Case record
- * @param {Object} pass0Metadata - From checkSourceQuality()
+ * @param {Object} pass0Metadata - From checkSourceQuality(). May include facts_model_override.
  * @param {boolean} skipConsensus - Skip second pass (for testing)
  * @returns {Object} Validated and merged facts
  */
@@ -664,8 +671,11 @@ export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadat
   // Get source text for fallback anchor extraction
   const sourceText = getSourceText(scotusCase);
 
+  // ADO-300: Model override for retry ladder
+  const model = pass0Metadata?.facts_model_override ?? 'gpt-4o-mini';
+
   // First pass
-  const { parsed: facts1, usage: usage1 } = await callGPTWithRetry(openai, messages, { temperature: 0 });
+  const { parsed: facts1, usage: usage1 } = await callGPTWithRetry(openai, messages, { temperature: 0, model });
 
   if (skipConsensus) {
     return {
@@ -675,7 +685,7 @@ export async function extractFactsWithConsensus(openai, scotusCase, pass0Metadat
   }
 
   // Second pass for consensus
-  const { parsed: facts2, usage: usage2 } = await callGPTWithRetry(openai, messages, { temperature: 0 });
+  const { parsed: facts2, usage: usage2 } = await callGPTWithRetry(openai, messages, { temperature: 0, model });
 
   const merged = consensusMerge(facts1, facts2);
   const validated = validatePass1(merged, pass0Metadata, scotusCase, sourceText);
@@ -766,13 +776,228 @@ export function deriveCaseType({ disposition, merits_reached }, caseName = '') {
 }
 
 // ============================================================================
+// ADO-300: CLAMP AND LABEL POST-PROCESSING
+// ============================================================================
+
+/**
+ * Build evidence text blob from quotes array
+ */
+function buildEvidenceText(evidenceQuotes) {
+  if (!Array.isArray(evidenceQuotes)) return '';
+  return evidenceQuotes.filter(Boolean).join(' | ');
+}
+
+/**
+ * Detect if case looks like cert stage or procedural
+ * @param {Object} facts - Pass 1 output
+ * @param {string} evidenceText - Combined evidence text (raw source or joined quotes)
+ */
+function looksCertOrProcedural(facts, evidenceText) {
+  const typeRaw = (facts?.case_type || '').toLowerCase();
+  const ev = (evidenceText || '').toLowerCase();
+
+  const isCert =
+    typeRaw === 'cert_stage' ||
+    (ev.includes('certiorari') && (ev.includes('denied') || ev.includes('granted'))) ||
+    (ev.includes('petition') && ev.includes('denied'));
+
+  const isProcedural =
+    typeRaw === 'procedural' ||
+    facts?.merits_reached === false ||
+    /(standing|moot|jurisdiction|improvidently granted|\bdig\b)/i.test(ev);
+
+  return { isCert, isProcedural };
+}
+
+/**
+ * Detect GVR-ish patterns (vacated & remanded for reconsideration)
+ */
+function detectGVRish(evidenceText) {
+  const ev = (evidenceText || '').toLowerCase();
+  return (
+    /granted.{0,60}vacat.{0,60}remand/i.test(ev) ||
+    /vacat.{0,40}remand.{0,80}(in light of|for further|for reconsideration)/i.test(ev) ||
+    /remand.{0,80}(in light of|for further|for reconsideration)/i.test(ev)
+  );
+}
+
+/**
+ * Fallback label picker when model violates constraints
+ */
+function fallbackMeritsLabel(facts) {
+  const disp = (facts?.disposition || '').toLowerCase();
+  const prevailing = (facts?.prevailing_party || 'unknown').toLowerCase();
+
+  if (prevailing === 'petitioner') return 'Crumbs from the Bench';
+  if (prevailing === 'respondent') return 'Rubber-stamping Tyranny';
+
+  // Coarse fallback from disposition only
+  if (disp.includes('affirm')) return 'Rubber-stamping Tyranny';
+  if (disp.includes('revers') || disp.includes('vacat')) return 'Crumbs from the Bench';
+  return 'Institutional Sabotage';
+}
+
+/**
+ * Post-processing: Clamp and route facts to publishable output
+ * Runs AFTER Pass 1 facts extraction, BEFORE Pass 2 editorial
+ *
+ * Goals:
+ * 1. Turn drift detection into "route + clamp + publish" (not block)
+ * 2. Remove "Sidestepping" as the model's safety blanket
+ * 3. Deterministic label assignment when rules are clear
+ *
+ * @param {Object} facts - Pass 1 output
+ * @param {Object} opts - Options: { sourceText } for reliable pattern detection
+ * @returns {Object} Clamped facts with label_policy for Pass 2
+ */
+export function clampAndLabel(facts, { sourceText } = {}) {
+  // ADO-300: Use raw source text first, fall back to joined quotes
+  // For long opinions: check first 12K + last 12K to catch procedural patterns at end
+  let evidenceText = '';
+  if (sourceText) {
+    if (sourceText.length <= 24000) {
+      evidenceText = sourceText;
+    } else {
+      evidenceText = sourceText.slice(0, 12000) + ' ... ' + sourceText.slice(-12000);
+    }
+  }
+  evidenceText = evidenceText || buildEvidenceText(facts?.evidence_quotes || []);
+
+  const disp = (facts?.disposition || '').toLowerCase();
+
+  const { isCert, isProcedural } = looksCertOrProcedural(facts, evidenceText);
+
+  // Deterministic clamp for cert/procedural
+  let clamp_reason = null;
+  let publish_override = false;
+
+  if (isCert) {
+    clamp_reason = 'cert_no_merits';
+    publish_override = true;
+  } else if (isProcedural) {
+    clamp_reason = 'procedural_no_merits';
+    publish_override = true;
+  }
+
+  // Check for explicit precedent overrule
+  const explicitOverrule = /\boverrule(d|s)?\b|\bwe overrule\b/i.test(evidenceText);
+
+  // V&R subtype detection
+  const isVR = disp.includes('vacat') || disp.includes('remand');
+  const gvrish = isVR ? detectGVRish(evidenceText) : false;
+
+  // Sidestepping forbidden when clear merits disposition + clear winner
+  const meritsDisposition = /(affirm|revers)/i.test(disp) || (isVR && !gvrish);
+  const prevailing = (facts?.prevailing_party || 'unknown').toLowerCase();
+  const clearWinner = prevailing && prevailing !== 'unknown' && prevailing !== 'unclear';
+
+  const sidesteppingForbidden = !!(meritsDisposition && clearWinner);
+
+  // Build label policy for Pass 2
+  const label_policy = {
+    forbid: [],
+    allow: []
+  };
+
+  if (clamp_reason) {
+    // Clamped: force Sidestepping
+    label_policy.allow = ['Judicial Sidestepping'];
+  } else if (explicitOverrule) {
+    // Explicit overrule: force Constitutional Crisis
+    label_policy.allow = ['Constitutional Crisis'];
+  } else {
+    // Normal merits: forbid Sidestepping when clear winner
+    if (sidesteppingForbidden) {
+      label_policy.forbid.push('Judicial Sidestepping');
+    }
+    label_policy.allow = [
+      'Crumbs from the Bench',
+      'Institutional Sabotage',
+      'Rubber-stamping Tyranny',
+      'Constitutional Crisis',
+      'Democracy Wins'
+    ];
+  }
+
+  return {
+    ...facts,
+    _evidence_text: evidenceText, // ephemeral, not persisted
+    clamp_reason,
+    publish_override,
+    _sidestepping_forbidden: sidesteppingForbidden,
+    _is_vr: isVR,
+    _is_gvr: gvrish,
+    label_policy
+  };
+}
+
+/**
+ * Enforce clamp rules + label constraints after Pass 2
+ * Called AFTER Pass 2 returns, as the "last mile" guardrail
+ *
+ * @param {Object} facts - Clamped facts from clampAndLabel()
+ * @param {Object} editorial - Raw Pass 2 output
+ * @param {Object} driftResult - Output from validateNoDrift()
+ * @returns {Object} Constrained editorial output
+ */
+export function enforceEditorialConstraints(facts, editorial, driftResult = {}) {
+  const out = { ...(editorial || {}) };
+  const clamp_reason = facts?.clamp_reason || null;
+
+  // Clamp behavior: force safe procedural output
+  if (clamp_reason === 'cert_no_merits' || clamp_reason === 'procedural_no_merits') {
+    out.who_wins = 'Procedural ruling - no merits decision';
+    out.who_loses = 'Case resolved without a merits ruling';
+    out.ruling_label = 'Judicial Sidestepping';
+    out.ruling_impact_level = Math.min(out.ruling_impact_level ?? 2, 2);
+    console.log(`   [CLAMP] Applied ${clamp_reason} → Sidestepping`);
+    return out;
+  }
+
+  // If drift detected but not already clamped, check if it looks cert/procedural
+  const isDrift = driftResult?.severity === 'hard';
+  if (isDrift) {
+    const evidenceText = facts?._evidence_text || buildEvidenceText(facts?.evidence_quotes || []);
+    const { isCert, isProcedural } = looksCertOrProcedural(facts, evidenceText);
+    if (isCert || isProcedural) {
+      out.who_wins = 'Procedural ruling - no merits decision';
+      out.who_loses = 'Case resolved without a merits ruling';
+      out.ruling_label = 'Judicial Sidestepping';
+      out.ruling_impact_level = Math.min(out.ruling_impact_level ?? 2, 2);
+      console.log(`   [CLAMP] Drift + procedural → Sidestepping`);
+      return out;
+    }
+  }
+
+  // Enforce label policy constraints
+  const label = out.ruling_label || '';
+  const forbid = facts?.label_policy?.forbid || [];
+  const allow = facts?.label_policy?.allow || [];
+
+  const violatesForbid = forbid.includes(label);
+  const violatesAllow = allow.length > 0 && !allow.includes(label);
+
+  if (violatesForbid || violatesAllow) {
+    const newLabel = fallbackMeritsLabel(facts);
+    console.log(`   [CLAMP] Label violation: ${label} → ${newLabel}`);
+    out.ruling_label = newLabel;
+  }
+
+  return out;
+}
+
+// ============================================================================
 // DB HELPERS
 // ============================================================================
 
 /**
  * Marks a case as flagged (low confidence) - will NOT be retried automatically.
+ * @param {string} caseId - Case ID
+ * @param {Object} details - Pass 0/1 details
+ * @param {Object} supabase - Supabase client
+ * @param {Object} extraFields - ADO-300: Additional fields like clamp_reason, facts_model_used
  */
-export async function flagAndSkip(caseId, details, supabase) {
+export async function flagAndSkip(caseId, details, supabase, extraFields = {}) {
   const payload = {
     // Clear all enrichment fields first
     ...buildClearPayload(),
@@ -800,6 +1025,12 @@ export async function flagAndSkip(caseId, details, supabase) {
     // Versioning
     prompt_version: 'v2-ado280-flagged',
     updated_at: new Date().toISOString(),
+
+    // ADO-300: Extra clamp/retry fields
+    clamp_reason: extraFields.clamp_reason ?? null,
+    publish_override: extraFields.publish_override ?? false,
+    facts_model_used: extraFields.facts_model_used ?? null,
+    retry_reason: extraFields.retry_reason ?? null,
   };
 
   const { error } = await supabase
@@ -887,12 +1118,21 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     drift_detected: data.drift_detected || false,
     drift_reason: data.drift_reason || null,
 
+    // ADO-300: Clamp/retry fields
+    // - For Pass 0 failures: only clamp_reason set (facts_model_used/retry_reason are null)
+    // - For Pass 1 low confidence: all fields set (tracking which model failed and why)
+    clamp_reason: data.clamp_reason ?? null,
+    // Validate: publish_override only allowed when clamp_reason is set
+    publish_override: (data.publish_override && data.clamp_reason) ? true : false,
+    facts_model_used: data.facts_model_used ?? null,
+    retry_reason: data.retry_reason ?? null,
+
     // Review flags
     needs_manual_review: data.needs_manual_review,
     is_public: data.is_public,
 
     // Versioning
-    prompt_version: 'v2-ado280',
+    prompt_version: 'v2-ado300',
     updated_at: new Date().toISOString(),
   };
 
@@ -902,7 +1142,7 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     .eq('id', caseId);
 
   if (error) throw error;
-  console.log(`[writeEnrichment] Case ${caseId} enriched (public: ${data.is_public})`);
+  console.log(`[writeEnrichment] Case ${caseId} enriched (public: ${data.is_public}, clamp: ${data.clamp_reason || 'none'})`);
 }
 
 /**

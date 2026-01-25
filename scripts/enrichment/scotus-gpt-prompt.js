@@ -487,6 +487,51 @@ Profanity: NO.
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }`;
 
+// ============================================================================
+// ADO-300: LABEL CONSTRAINTS FOR CLAMP SYSTEM
+// ============================================================================
+
+/**
+ * Build label constraints block for Pass 2 prompt
+ * Tells GPT which labels are allowed/forbidden based on clamp rules
+ *
+ * @param {Object} facts - Clamped facts with label_policy from clampAndLabel()
+ * @returns {string} Constraint block to inject into Pass 2 prompt
+ */
+export function buildLabelConstraintsBlock(facts) {
+  const allow = facts?.label_policy?.allow || [];
+  const forbid = facts?.label_policy?.forbid || [];
+  const clamp_reason = facts?.clamp_reason || null;
+
+  // If clamped, be very explicit
+  if (clamp_reason) {
+    return `
+LABEL CONSTRAINT (MANDATORY):
+This is a ${clamp_reason.replace(/_/g, ' ')} case.
+- ruling_label MUST be "Judicial Sidestepping"
+- who_wins MUST be "Procedural ruling - no merits decision"
+- who_loses MUST be "Case resolved without a merits ruling"
+- Do NOT claim a substantive winner or loser
+`.trim();
+  }
+
+  // Normal case: provide allowed/forbidden lists
+  let block = 'LABEL CONSTRAINTS:\n';
+
+  if (allow.length > 0) {
+    block += `- Allowed labels: ${allow.join(', ')}\n`;
+  }
+  if (forbid.length > 0) {
+    block += `- FORBIDDEN labels (do NOT use): ${forbid.join(', ')}\n`;
+  }
+
+  if (forbid.includes('Judicial Sidestepping')) {
+    block += `- This case has a clear merits disposition and prevailing party. "Judicial Sidestepping" is NOT appropriate.\n`;
+  }
+
+  return block.trim();
+}
+
 /**
  * Build Pass 2 user prompt with facts and constraints
  *
@@ -496,7 +541,9 @@ Profanity: NO.
  * @returns {string} User prompt for Pass 2
  */
 export function buildPass2UserPrompt(scotusCase, facts, variationInjection = '') {
-  let constraints = '';
+  // ADO-300: Build and inject label constraints from clampAndLabel()
+  const labelConstraints = buildLabelConstraintsBlock(facts);
+  let constraints = labelConstraints ? `${labelConstraints}\n\n` : '';
 
   // PROCEDURAL CASES: Lock who_wins/who_loses
   if (facts.merits_reached === false || facts.case_type === 'procedural') {

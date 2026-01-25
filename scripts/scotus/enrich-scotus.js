@@ -33,7 +33,10 @@ import {
   writeEnrichment,
   getCasesToEnrich,
   callGPTWithRetry,
-  sanitizeForDB
+  sanitizeForDB,
+  getSourceText,           // ADO-300
+  clampAndLabel,           // ADO-300
+  enforceEditorialConstraints,  // ADO-300
 } from '../enrichment/scotus-fact-extraction.js';
 
 import {
@@ -57,7 +60,7 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-const PROMPT_VERSION = 'v2-ado280';
+const PROMPT_VERSION = 'v2-ado300';
 const DEFAULT_BATCH_SIZE = 10;
 const MAX_SAFE_LIMIT = 100;
 const DEFAULT_DAILY_CAP_USD = 5.00;
@@ -65,6 +68,12 @@ const DEFAULT_DAILY_CAP_USD = 5.00;
 // OpenAI pricing (gpt-4o-mini as of 2025-01-01)
 const INPUT_COST_PER_1K = 0.00015;
 const OUTPUT_COST_PER_1K = 0.0006;
+
+// ADO-300: Retry ladder config
+const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-4o-mini,gpt-4o')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
 // ============================================================================
 // PARSE CLI ARGUMENTS
@@ -248,6 +257,32 @@ function estimateImpactLevel(scotusCase) {
 }
 
 /**
+ * ADO-300: Check Pass 1 facts for issues that warrant retry with stronger model
+ * @param {Object} facts - Pass 1 output
+ * @returns {string[]} List of issue codes
+ */
+function getFactsIssues(facts) {
+  const issues = [];
+  if (!facts) return ['no_facts'];
+
+  if (!facts.disposition) issues.push('missing_disposition');
+
+  const eq = facts.evidence_quotes || [];
+  if (!Array.isArray(eq) || eq.length === 0) issues.push('missing_evidence');
+
+  const typeRaw = (facts.case_type || '').toLowerCase();
+  const prevailing = (facts.prevailing_party || 'unknown').toLowerCase();
+
+  // Stage mismatch: cert/procedural shouldn't have clear winner
+  if ((typeRaw === 'cert_stage' || typeRaw === 'procedural') &&
+      prevailing !== 'unknown' && prevailing !== 'unclear') {
+    issues.push('stage_mismatch');
+  }
+
+  return issues;
+}
+
+/**
  * Enrich a single SCOTUS case using two-pass architecture
  */
 async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recentOpenings, args) {
@@ -267,7 +302,11 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   if (!pass0.passed) {
     console.log(`   ⚠️ Pass 0 FAILED: ${pass0.low_confidence_reason}`);
     if (!args.dryRun) {
-      await flagAndSkip(scotusCase.id, pass0, supabase);
+      // ADO-300: Set clamp_reason for missing_text
+      await flagAndSkip(scotusCase.id, pass0, supabase, {
+        clamp_reason: 'missing_text',
+        publish_override: false,
+      });
     }
     return { success: false, skipped: true, reason: pass0.low_confidence_reason };
   }
@@ -280,7 +319,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   };
 
   // =========================================================================
-  // PASS 1: Fact Extraction (with consensus check)
+  // PASS 1: Fact Extraction (with retry ladder - ADO-300)
   // =========================================================================
   console.log(`   📋 Pass 1: Extracting facts${args.skipConsensus ? ' (consensus disabled)' : ''}...`);
 
@@ -289,36 +328,74 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     return { success: true, dryRun: true };
   }
 
-  let facts;
-  try {
-    const { facts: extractedFacts, usage: pass1Usage } = await extractFactsWithConsensus(
-      openai,
-      scotusCase,
-      pass0Metadata,
-      args.skipConsensus
-    );
-    facts = extractedFacts;
-    totalCost += calculateCost(pass1Usage);
-    totalTokens += pass1Usage?.total_tokens || 0;
+  // ADO-300: Retry ladder for Pass 1
+  let facts = null;
+  let usedModel = 'gpt-4o-mini';
+  let retry_reason = null;
 
-    console.log(`   ✓ Pass 1: ${pass1Usage?.total_tokens || 0} tokens`);
-    console.log(`     Disposition: ${facts.disposition || 'null'} | Merits: ${facts.merits_reached}`);
-    console.log(`     Confidence: ${facts.fact_extraction_confidence}`);
-  } catch (err) {
-    console.error(`   ❌ Pass 1 failed: ${err.message}`);
-    await markFailed(scotusCase.id, `Pass 1 error: ${err.message}`, supabase);
-    return { success: false, error: err.message };
+  for (const model of FACTS_MODEL_FALLBACKS) {
+    usedModel = model;
+    console.log(`   📋 Pass 1: Trying ${model}...`);
+
+    try {
+      const { facts: extractedFacts, usage: pass1Usage } = await extractFactsWithConsensus(
+        openai,
+        scotusCase,
+        { ...pass0Metadata, facts_model_override: model },
+        args.skipConsensus
+      );
+
+      totalCost += calculateCost(pass1Usage);
+      totalTokens += pass1Usage?.total_tokens || 0;
+
+      // Compute case_type early for issue detection
+      extractedFacts.case_type = deriveCaseType(extractedFacts, scotusCase.case_name);
+
+      // Check for issues that warrant retry
+      const issues = getFactsIssues(extractedFacts);
+      if (issues.length === 0) {
+        facts = extractedFacts;
+        console.log(`   ✓ Pass 1 (${model}): ${pass1Usage?.total_tokens || 0} tokens`);
+        console.log(`     Disposition: ${facts.disposition || 'null'} | Merits: ${facts.merits_reached}`);
+        console.log(`     Case Type: ${facts.case_type} | Confidence: ${facts.fact_extraction_confidence}`);
+        break;
+      }
+
+      retry_reason = issues.join(',');
+      console.log(`   ⚠️ Issues with ${model}: ${retry_reason}`);
+    } catch (err) {
+      console.log(`   ⚠️ ${model} failed: ${err.message}`);
+      retry_reason = `error:${err.message.slice(0, 50)}`;
+    }
   }
 
-  // Compute case_type BEFORE checking confidence (needed for Pass 2 constraints)
-  facts.case_type = deriveCaseType(facts, scotusCase.case_name);
-  console.log(`     Case Type: ${facts.case_type}`);
+  // ADO-300: All models failed - mark as failed (retry-able, not terminal)
+  if (!facts) {
+    console.error(`   ❌ All models failed for Pass 1`);
+    await markFailed(scotusCase.id, `Pass 1 all models failed: ${retry_reason}`, supabase);
+    return { success: false, error: retry_reason, cost: totalCost };
+  }
 
-  // Check if Pass 1 confidence is too low
+  // Check if Pass 1 confidence is too low (after successful extraction)
   if (facts.fact_extraction_confidence === 'low') {
     console.log(`   ⚠️ Pass 1 confidence LOW: ${facts.low_confidence_reason}`);
-    await flagAndSkip(scotusCase.id, facts, supabase);
+    await flagAndSkip(scotusCase.id, facts, supabase, {
+      facts_model_used: usedModel,
+      retry_reason: retry_reason,
+    });
     return { success: false, skipped: true, reason: facts.low_confidence_reason, cost: totalCost };
+  }
+
+  // =========================================================================
+  // ADO-300: CLAMP AND LABEL POST-PROCESSING
+  // =========================================================================
+  // Get source text for reliable pattern detection
+  const sourceText = getSourceText(scotusCase);
+  const clampedFacts = clampAndLabel(facts, { sourceText });
+
+  console.log(`   Clamp: ${clampedFacts.clamp_reason || 'none'} | Sidestepping forbidden: ${clampedFacts._sidestepping_forbidden}`);
+  if (clampedFacts.clamp_reason) {
+    console.log(`   📋 Clamped case will get Sidestepping label`);
   }
 
   // =========================================================================
@@ -337,7 +414,8 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
   let editorial;
   try {
-    const messages = buildPass2Messages(scotusCase, facts, variationInjection);
+    // ADO-300: Pass clampedFacts (with label_policy) to Pass 2
+    const messages = buildPass2Messages(scotusCase, clampedFacts, variationInjection);
     const { parsed: pass2Result, usage: pass2Usage } = await callGPTWithRetry(
       openai,
       messages,
@@ -364,34 +442,51 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // =========================================================================
-  // DRIFT VALIDATION
+  // DRIFT VALIDATION + ADO-300: ENFORCE CONSTRAINTS
   // =========================================================================
   console.log(`   📋 Checking for drift...`);
-  const driftCheck = validateNoDrift(facts, editorial);
+  const driftCheck = validateNoDrift(clampedFacts, editorial);
 
-  if (driftCheck.severity === 'hard') {
+  // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
+  const constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
+
+  // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking
+  if (driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
+    // Only block on hard drift if NOT a clamped case (clamped cases are rescued by constraints)
     console.log(`   ❌ HARD drift detected: ${driftCheck.reason}`);
     await flagAndSkip(scotusCase.id, {
       fact_extraction_confidence: 'low',
       low_confidence_reason: `Hard drift: ${driftCheck.reason}`,
-      source_char_count: facts.source_char_count,
-      contains_anchor_terms: facts.contains_anchor_terms,
+      source_char_count: clampedFacts.source_char_count,
+      contains_anchor_terms: clampedFacts.contains_anchor_terms,
       drift_detected: true,
       drift_reason: driftCheck.reason,
-    }, supabase);
+    }, supabase, {
+      facts_model_used: usedModel,
+      retry_reason: retry_reason,
+    });
     return { success: false, skipped: true, reason: `Drift: ${driftCheck.reason}`, cost: totalCost };
   }
 
-  // Determine publishing rules
-  let isPublic = facts.fact_extraction_confidence === 'high';
-  let needsReview = facts.fact_extraction_confidence === 'medium';
+  // ADO-300: Determine publishing rules with publish_override support
+  let isPublic = clampedFacts.fact_extraction_confidence === 'high' ||
+                 clampedFacts.publish_override === true;
+  let needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
+                    !clampedFacts.publish_override;
 
   if (driftCheck.severity === 'soft') {
     console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
-    isPublic = false;
-    needsReview = true;
-    facts.drift_detected = true;
-    facts.drift_reason = `Soft drift: ${driftCheck.reason}`;
+    if (!clampedFacts.publish_override) {
+      isPublic = false;
+      needsReview = true;
+    }
+    clampedFacts.drift_detected = true;
+    clampedFacts.drift_reason = `Soft drift: ${driftCheck.reason}`;
+  } else if (driftCheck.severity === 'hard' && clampedFacts.clamp_reason) {
+    // Clamped case with hard drift - rescued by constraints
+    console.log(`   ⚠️ Hard drift rescued by clamp: ${driftCheck.reason}`);
+    clampedFacts.drift_detected = true;
+    clampedFacts.drift_reason = `Hard drift (clamped): ${driftCheck.reason}`;
   } else {
     console.log(`   ✓ No drift detected`);
   }
@@ -402,8 +497,10 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   console.log(`   📋 Writing to database...`);
 
   await writeEnrichment(scotusCase.id, scotusCase, {
-    ...facts,
-    ...editorial,
+    ...clampedFacts,
+    ...constrainedEditorial,
+    facts_model_used: usedModel,
+    retry_reason: retry_reason,
     needs_manual_review: needsReview,
     is_public: isPublic
   }, supabase);
@@ -411,24 +508,25 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // Track cost
   await incrementBudgetAtomic(supabase, totalCost);
 
-  console.log(`   ✅ Enriched! (${totalTokens} tokens, $${totalCost.toFixed(4)})`);
-  console.log(`   Level: ${editorial.ruling_impact_level} (${editorial.ruling_label})`);
-  console.log(`   Public: ${isPublic} | Review: ${needsReview}`);
-  console.log(`   Who wins: ${(editorial.who_wins || '').substring(0, 50)}...`);
+  console.log(`   ✅ Enriched! (${totalTokens} tokens, $${totalCost.toFixed(4)}, model: ${usedModel})`);
+  console.log(`   Level: ${constrainedEditorial.ruling_impact_level} (${constrainedEditorial.ruling_label})`);
+  console.log(`   Public: ${isPublic} | Review: ${needsReview} | Clamp: ${clampedFacts.clamp_reason || 'none'}`);
+  console.log(`   Who wins: ${(constrainedEditorial.who_wins || '').substring(0, 50)}...`);
 
   return {
     success: true,
     patternId,
     poolType,
-    level: editorial.ruling_impact_level,
-    confidence: facts.fact_extraction_confidence,
-    caseType: facts.case_type,
+    level: constrainedEditorial.ruling_impact_level,
+    confidence: clampedFacts.fact_extraction_confidence,
+    caseType: clampedFacts.case_type,
+    clampReason: clampedFacts.clamp_reason,
     tokens: totalTokens,
     cost: totalCost,
     isPublic,
     needsReview,
     // For anti-repetition: first 50 chars of summary_spicy
-    summaryOpening: (editorial.summary_spicy || '').substring(0, 50)
+    summaryOpening: (constrainedEditorial.summary_spicy || '').substring(0, 50)
   };
 }
 
@@ -439,7 +537,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 async function main() {
   const args = parseArgs();
 
-  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-280: Two-Pass)`);
+  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-300: Clamp/Retry)`);
   console.log(`================================================`);
   console.log(`Batch size: ${args.limit}`);
   console.log(`Dry run: ${args.dryRun}`);
