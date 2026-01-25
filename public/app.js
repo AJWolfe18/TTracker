@@ -885,11 +885,6 @@
       ? scotusCase.dissent_authors.join(', ')
       : scotusCase?.dissent_authors || '';
 
-    // Parse evidence anchors
-    const evidenceAnchors = Array.isArray(scotusCase?.evidence_anchors)
-      ? scotusCase.evidence_anchors
-      : [];
-
     // Check for "null" string in dissent highlights
     const dissentHighlights = scotusCase?.dissent_highlights && scotusCase.dissent_highlights !== 'null'
       ? scotusCase.dissent_highlights
@@ -1013,18 +1008,10 @@
             React.createElement('p', { className: 'tt-scotus-section-content' }, dissentHighlights)
           ),
 
-          // Evidence Anchors
-          evidenceAnchors.length > 0 && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, '📌 Sources'),
-            React.createElement('div', { className: 'tt-scotus-evidence' },
-              evidenceAnchors.map((anchor, idx) =>
-                React.createElement('span', { key: idx, className: 'tt-scotus-evidence-tag' }, anchor)
-              )
-            )
-          ),
-
-          // External Links
-          (scotusCase.source_url || scotusCase.pdf_url) && React.createElement('div', { className: 'tt-scotus-links' },
+          // Sources (CourtListener + PDF)
+          (scotusCase.source_url || scotusCase.pdf_url) && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Sources'),
+            React.createElement('div', { className: 'tt-scotus-links' },
             scotusCase.source_url && React.createElement('a', {
               href: scotusCase.source_url,
               target: '_blank',
@@ -1041,8 +1028,7 @@
                 }
               }
             },
-              '📖 View on CourtListener',
-              React.createElement('span', { className: 'tt-external-icon' }, ' ↗')
+              'View on CourtListener'
             ),
             scotusCase.pdf_url && React.createElement('a', {
               href: scotusCase.pdf_url,
@@ -1060,8 +1046,7 @@
                 }
               }
             },
-              '📄 Download PDF',
-              React.createElement('span', { className: 'tt-external-icon' }, ' ↗')
+              'Download PDF'
             )
           )
         )
