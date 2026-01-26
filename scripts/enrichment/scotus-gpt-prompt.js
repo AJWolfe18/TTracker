@@ -166,13 +166,24 @@ Focus: Why this actually protects people. Why it's hard to walk back.
    - [dissent, Sotomayor J.] for dissent quotes
    - [concurrence, Kagan J.] for concurrences
 
-# BANNED OPENINGS (Never use these)
+# BANNED OPENINGS (Never use these - they're boring and formulaic)
+- "The Court..." or "The Supreme Court..." (NEVER start with this)
+- "In a [X-Y] decision..." or "In a ruling..."
 - "This is outrageous..."
 - "In a shocking move..."
 - "Once again..."
 - "It's no surprise..."
 - "Make no mistake..."
 - "Let that sink in..."
+
+# SUMMARY_SPICY OPENER RULES (Critical - read carefully)
+Jump right into the IMPACT. Start with:
+- The human cost: "Your voting rights just got gutted."
+- The winner's gain: "Texas can now gerrymander freely."
+- The stakes: "Federal prisoners finally caught a break."
+- A punchy fact: "Unanimous. Not a single justice dissented."
+
+Do NOT start with "The Court" - we know it's the Court, get to the point.
 
 # OUTPUT FORMAT (JSON)
 {
@@ -537,13 +548,27 @@ LEVEL 0 🟢 [Democracy Wins]
 Tone: Suspicious celebration. Genuine disbelief the system worked.
 Profanity: NO.
 
+# SUMMARY_SPICY OPENER RULES (Critical)
+BANNED OPENERS - Never start with:
+- "The Court..." or "The Supreme Court..."
+- "In a [X-Y] decision..." or "In a ruling..."
+- "In a move..." or "In a landmark..."
+
+REQUIRED - Jump right into the IMPACT:
+- Human cost: "Your voting rights just got gutted."
+- Winner's gain: "Texas can now gerrymander freely."
+- Stakes: "Federal prisoners finally caught a break."
+- Punchy fact: "Unanimous. Not a single justice dissented."
+
+We know it's the Court - get to the point.
+
 # OUTPUT FORMAT (JSON)
 {
   "ruling_impact_level": 0-5,
   "ruling_label": "Label from scale above",
   "who_wins": "1-2 sentences. Who benefits from this ruling and HOW it specifically helps them.",
   "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
-  "summary_spicy": "3-4 sentences. Editorial spin using the designated tone. MUST include the disposition word.",
+  "summary_spicy": "3-4 sentences. Jump straight into impact - NO 'The Court' openers. MUST include disposition word.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
