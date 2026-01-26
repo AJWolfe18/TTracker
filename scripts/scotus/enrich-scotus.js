@@ -154,6 +154,70 @@ function getSupabaseConfig(allowProd) {
 }
 
 // ============================================================================
+// ADO-303: CERT GRANT/DENIAL DETECTION (Skip non-merits cases)
+// ============================================================================
+
+/**
+ * Detect if a case is a cert grant/denial (not a merits decision)
+ * These should be skipped - they have no merits outcome to summarize
+ *
+ * @param {Object} scotusCase - Case object with opinion_excerpt, syllabus
+ * @returns {{ isCert: boolean, certType: string|null, reason: string|null }}
+ */
+function detectCertCase(scotusCase) {
+  // Normalize: remove hyphenated line breaks (e.g., "de-\nnied" → "denied")
+  const sourceText = [
+    scotusCase.opinion_excerpt || '',
+    scotusCase.syllabus || ''
+  ].join(' ')
+    .replace(/-\s*\n\s*/g, '')  // Remove hyphenated line breaks
+    .replace(/\s+/g, ' ')        // Normalize whitespace
+    .toLowerCase();
+
+  // Cert denial patterns (most common)
+  const certDeniedPatterns = [
+    /petition\s+for\s+(a\s+)?writ\s+of\s+certiorari\s+is\s+denied/i,
+    /certiorari\s+denied/i,
+    /cert\.\s*denied/i,
+  ];
+
+  // Cert granted patterns (case pending decision)
+  const certGrantedPatterns = [
+    /petition\s+for\s+(a\s+)?writ\s+of\s+certiorari\s+is\s+granted/i,
+    /certiorari\s+granted/i,
+    /cert\.\s*granted/i,
+  ];
+
+  // Check for cert denied
+  for (const pattern of certDeniedPatterns) {
+    if (pattern.test(sourceText)) {
+      return {
+        isCert: true,
+        certType: 'cert_denied',
+        reason: 'Cert denied - no merits decision'
+      };
+    }
+  }
+
+  // Check for cert granted (pending)
+  for (const pattern of certGrantedPatterns) {
+    if (pattern.test(sourceText)) {
+      // But make sure it's not a merits decision that mentions cert was granted
+      const hasMeritsDisposition = /\b(affirm(ed|s)?|revers(ed|es)?|vacat(ed|es)?)\b.*\bjudgment\b/i.test(sourceText);
+      if (!hasMeritsDisposition) {
+        return {
+          isCert: true,
+          certType: 'cert_granted',
+          reason: 'Cert granted - pending merits decision'
+        };
+      }
+    }
+  }
+
+  return { isCert: false, certType: null, reason: null };
+}
+
+// ============================================================================
 // SAFETY HELPERS
 // ============================================================================
 
@@ -274,17 +338,20 @@ function getFactsIssues(facts) {
  * ADO-303: Run publish gate checks on Pass 1 facts and Pass 2 editorial
  * Returns validation result with issues list
  *
+ * Note: Quote lint changed to truncate+telemetry (no longer a hard gate)
+ *
  * @param {Object} facts - Pass 1 output (clamped)
  * @param {Object} editorial - Pass 2 output
- * @returns {{ valid: boolean, issues: string[], canRetry: boolean }}
+ * @returns {{ valid: boolean, issues: string[], quoteTelemetry: string[] }}
  */
 function runPublishGate(facts, editorial) {
   const issues = [];
 
-  // 1. Quote lint on Pass 1 evidence_quotes
+  // 1. Quote lint: truncate+telemetry (NOT a failure condition)
+  // Quotes are not user-facing; truncation preserves grounding without false failures
   const quoteLint = lintQuotes(facts?.evidence_quotes);
-  if (!quoteLint.valid) {
-    issues.push(...quoteLint.issues.map(i => `[quote] ${i}`));
+  if (quoteLint.truncated) {
+    console.log(`   📊 [quote telemetry] ${quoteLint.telemetry.join('; ')}`);
   }
 
   // 2. Disposition check for merits cases
@@ -332,6 +399,24 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
   let totalCost = 0;
   let totalTokens = 0;
+
+  // =========================================================================
+  // ADO-303: CERT SKIP (before any GPT calls - saves cost)
+  // =========================================================================
+  const certCheck = detectCertCase(scotusCase);
+  if (certCheck.isCert) {
+    console.log(`   ⏭️ Skipping: ${certCheck.reason}`);
+    if (!args.dryRun) {
+      await flagAndSkip(scotusCase.id, {
+        low_confidence_reason: certCheck.reason,
+        case_type: certCheck.certType,
+      }, supabase, {
+        clamp_reason: certCheck.certType,
+        publish_override: false,
+      });
+    }
+    return { success: false, skipped: true, reason: certCheck.reason, certSkip: true };
+  }
 
   // =========================================================================
   // PASS 0: Source Quality Gate

@@ -415,45 +415,54 @@ Extract the facts from this SCOTUS ruling. Return JSON only.`;
 const ANCHOR_TOKEN_REGEX = /\b(held|hold|holds|holding|judgment|affirm(ed|s|ing)?|revers(ed|es|ing)?|vacat(ed|es|ing)?|remand(ed|s|ing)?|dismiss(ed|es|al|ing)?|grant(ed|s|ing)?|den(ied|ies|ying)?)\b/i;
 
 // ADO-303: Quote limits (anchor snippets, not verbatim copying)
-// Note: 12 words was too strict (64% failure rate in validation)
-// Adjusted to 25 words based on observed GPT-4o-mini output patterns
-const MAX_QUOTE_COUNT = 2;   // Max evidence_quotes items
-const MAX_QUOTE_WORDS = 25;  // Max words per quote (~150 chars)
+// Phase 0.1: Changed from hard gate to truncate+telemetry approach
+// Quotes are not user-facing; truncation preserves grounding without false failures
+const MAX_QUOTE_COUNT = 2;   // Max evidence_quotes items (truncate excess)
+const MAX_QUOTE_WORDS = 25;  // Max words per quote (truncate, don't fail)
 
 /**
- * ADO-303: Lint evidence_quotes for publish gate
- * Checks: count <= MAX_QUOTE_COUNT, each <= MAX_QUOTE_WORDS
+ * ADO-303: Truncate and lint evidence_quotes (no longer a hard gate)
  *
- * @param {string[]} quotes - evidence_quotes array
- * @returns {{ valid: boolean, issues: string[], hasLongQuotes: boolean }}
+ * Strategy: Truncate+telemetry instead of fail
+ * - Excess quotes: keep first MAX_QUOTE_COUNT
+ * - Long quotes: truncate to MAX_QUOTE_WORDS + "..."
+ * - Return telemetry for monitoring (not failures)
+ *
+ * @param {string[]} quotes - evidence_quotes array (MUTATED in place)
+ * @returns {{ truncated: boolean, telemetry: string[], originalCount: number }}
  */
 export function lintQuotes(quotes) {
-  const issues = [];
-  let hasLongQuotes = false;
+  const telemetry = [];
+  let truncated = false;
+  const originalCount = quotes?.length || 0;
 
   if (!quotes || !Array.isArray(quotes)) {
-    return { valid: true, issues: [], hasLongQuotes: false };
+    return { truncated: false, telemetry: [], originalCount: 0 };
   }
 
-  // Check count
+  // Truncate excess quotes (keep first MAX_QUOTE_COUNT)
   if (quotes.length > MAX_QUOTE_COUNT) {
-    issues.push(`Too many quotes (${quotes.length} > max ${MAX_QUOTE_COUNT})`);
+    telemetry.push(`Truncated ${quotes.length} quotes to ${MAX_QUOTE_COUNT}`);
+    quotes.length = MAX_QUOTE_COUNT;  // Mutate in place
+    truncated = true;
   }
 
-  // Check each quote length
+  // Truncate long quotes
   quotes.forEach((quote, i) => {
     if (typeof quote !== 'string') return;
     const words = quote.trim().split(/\s+/).filter(Boolean);
     if (words.length > MAX_QUOTE_WORDS) {
-      issues.push(`Quote ${i + 1} too long (${words.length} words > ${MAX_QUOTE_WORDS})`);
-      hasLongQuotes = true;
+      const truncatedQuote = words.slice(0, MAX_QUOTE_WORDS).join(' ') + '...';
+      telemetry.push(`Quote ${i + 1} truncated: ${words.length} → ${MAX_QUOTE_WORDS} words`);
+      quotes[i] = truncatedQuote;  // Mutate in place
+      truncated = true;
     }
   });
 
   return {
-    valid: issues.length === 0,
-    issues,
-    hasLongQuotes
+    truncated,
+    telemetry,
+    originalCount
   };
 }
 
@@ -523,13 +532,13 @@ export function validatePass1(facts, pass0Metadata, scotusCase = null, sourceTex
     issues.push('High/medium confidence requires evidence_quotes');
   }
 
-  // ADO-303: Use lintQuotes for quote validation
+  // ADO-303: Truncate+telemetry for quotes (NOT a failure condition)
+  // Quotes are internal grounding - truncation preserves utility without false failures
   const quoteLint = lintQuotes(facts.evidence_quotes);
-  if (!quoteLint.valid) {
-    issues.push(...quoteLint.issues);
-    if (quoteLint.hasLongQuotes) {
-      facts.evidence_quotes_truncated = true;
-    }
+  if (quoteLint.truncated) {
+    facts.evidence_quotes_truncated = true;
+    // Log telemetry but don't fail - quotes are not user-facing
+    console.log(`   [QUOTE TELEMETRY] ${quoteLint.telemetry.join('; ')}`);
   }
 
   // Check: HIGH requires at least one quote with anchor token
