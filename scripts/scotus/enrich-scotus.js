@@ -154,6 +154,122 @@ function getSupabaseConfig(allowProd) {
 }
 
 // ============================================================================
+// ADO-303: POST-GEN REPAIRS (deterministic, no LLM calls)
+// ============================================================================
+
+/**
+ * Split case caption into party names
+ * Handles: "A v. B", but NOT "In re X" (returns null)
+ */
+function splitCaseCaption(caseName) {
+  const parts = String(caseName || '').split(/\s+v\.?\s+/i);
+  if (parts.length < 2) return null;
+
+  const clean = (s) =>
+    String(s || '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*\(.*?\)\s*$/, '')  // strip trailing parenthetical
+      .replace(/,\s*(et al\.?|et\s+al)\s*$/i, '')
+      .trim();
+
+  const partyA = clean(parts[0]);
+  const partyB = clean(parts.slice(1).join(' v. '));  // handle extra splits
+
+  if (!partyA || !partyB) return null;
+  return { partyA, partyB };
+}
+
+/**
+ * Repair generic "petitioner/respondent" with actual party names
+ * Only expands if NOT already annotated (avoids double-insert)
+ */
+function repairGenericParty(text, caseName) {
+  const cap = splitCaseCaption(caseName);
+  if (!cap) return text;
+
+  const { partyA, partyB } = cap;
+
+  // Only expand if NOT already like "petitioner (X)"
+  const petitionerRe = /\b(the\s+)?petitioner(s)?\b(?!\s*\()/gi;
+  const respondentRe = /\b(the\s+)?respondent(s)?\b(?!\s*\()/gi;
+
+  return String(text || '')
+    .replace(petitionerRe, (_m, _the, plural) =>
+      plural ? `the petitioners (${partyA})` : `the petitioner (${partyA})`
+    )
+    .replace(respondentRe, (_m, _the, plural) =>
+      plural ? `the respondents (${partyB})` : `the respondent (${partyB})`
+    );
+}
+
+/**
+ * Apply party repair to all user-visible text fields
+ */
+function applyPartyRepair(editorial, caseName) {
+  const fieldsToRepair = [
+    'summary_spicy', 'who_wins', 'who_loses', 'why_it_matters',
+    'holding', 'practical_effect', 'dissent_highlights'
+  ];
+
+  let repaired = false;
+  for (const field of fieldsToRepair) {
+    if (editorial[field] && typeof editorial[field] === 'string') {
+      const original = editorial[field];
+      const fixed = repairGenericParty(original, caseName);
+      if (fixed !== original) {
+        editorial[field] = fixed;
+        repaired = true;
+      }
+    }
+  }
+  return repaired;
+}
+
+/**
+ * Deterministic "In a..." opener fixer (no LLM call)
+ * Rewrites first sentence if it starts with common journalist crutches
+ */
+function rewriteInAOpener(summary) {
+  const s = String(summary || '').trim();
+  if (!s) return { text: s, rewritten: false };
+
+  // Split first sentence (simple, deterministic)
+  const m = s.match(/^(.+?[.!?])(\s+|$)([\s\S]*)$/);
+  if (!m) return { text: s, rewritten: false };
+
+  let first = m[1];
+  const rest = (m[3] || '').trim();
+  const originalFirst = first;
+
+  // 1) "In a 6-3 decision, ..." -> "By a 6-3 vote, ..."
+  first = first.replace(
+    /^In a\s+(\d+)\s*[–-]\s*(\d+)\s+decision,\s*/i,
+    'By a $1–$2 vote, '
+  );
+
+  // 2) "In an opinion by Justice X, ..." -> "Justice X wrote for the Court, ..."
+  first = first.replace(
+    /^In an?\s+opinion\s+(?:by|written by)\s+([^,]+),\s*/i,
+    '$1 wrote for the Court, '
+  );
+
+  // 3) Generic "In a/an/this/the ..." -> "The Court ..." (fallback)
+  if (/^In (a|an|this|the)\b/i.test(first)) {
+    if (/\bthe Court\b/i.test(first)) {
+      // Already mentions "the Court", just drop the lead-in
+      first = first.replace(/^In (a|an|this|the)\b[^,]*,\s*/i, '');
+      first = first.charAt(0).toUpperCase() + first.slice(1);
+    } else {
+      first = first.replace(/^In (a|an|this|the)\b[^,]*,\s*/i, 'The Court ');
+    }
+  }
+
+  const rewritten = first !== originalFirst;
+  const text = rest ? `${first} ${rest}` : first;
+  return { text, rewritten };
+}
+
+// ============================================================================
 // ADO-303: CERT GRANT/DENIAL DETECTION (Skip non-merits cases)
 // ============================================================================
 
@@ -640,6 +756,25 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
   // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
   const constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
+
+  // =========================================================================
+  // ADO-303: POST-GEN REPAIRS (deterministic, no LLM calls)
+  // =========================================================================
+
+  // #3: Party specificity repair - expand "petitioner/respondent" to actual names
+  const partyRepaired = applyPartyRepair(constrainedEditorial, scotusCase.case_name);
+  if (partyRepaired) {
+    console.log(`   📝 Party repair: expanded generic petitioner/respondent`);
+  }
+
+  // #4: "In a..." opener fixer - deterministic rewrite of journalist crutch
+  if (constrainedEditorial.summary_spicy) {
+    const openerResult = rewriteInAOpener(constrainedEditorial.summary_spicy);
+    if (openerResult.rewritten) {
+      constrainedEditorial.summary_spicy = openerResult.text;
+      console.log(`   📝 Opener repair: rewrote "In a..." opener`);
+    }
+  }
 
   // ADO-302: Derive ruling_impact_level from ruling_label (label is source of truth)
   const LABEL_TO_LEVEL = {
