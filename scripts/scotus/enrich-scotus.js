@@ -255,8 +255,10 @@ function rewriteInAOpener(summary) {
 
   // 3) Generic "In a/an/this/the ..." -> "The Court ..." (fallback)
   if (/^In (a|an|this|the)\b/i.test(first)) {
-    if (/\bthe Court\b/i.test(first)) {
-      // Already mentions "the Court", just drop the lead-in
+    // Check for existing legal subjects that would make "The Court" redundant
+    const hasLegalSubject = /\b(the Court|the justices|the Supreme Court|the majority|the Chief Justice|Justice \w+)\b/i.test(first);
+    if (hasLegalSubject) {
+      // Already has a legal subject after the comma, just drop the lead-in
       first = first.replace(/^In (a|an|this|the)\b[^,]*,\s*/i, '');
       first = first.charAt(0).toUpperCase() + first.slice(1);
     } else {
