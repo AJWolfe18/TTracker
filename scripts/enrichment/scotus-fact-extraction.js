@@ -334,10 +334,17 @@ OUTPUT SCHEMA:
   "holding": "1-2 sentences, neutral. What did the Court decide? If unclear, null.",
   "prevailing_party": "petitioner|respondent|partial|unclear|null",
   "practical_effect": "1 sentence. What changes? If unclear, null.",
-  "evidence_quotes": ["verbatim quote 1 (<=50 words)", "quote 2", ...],
+  "evidence_quotes": ["anchor snippet 1", "anchor snippet 2"],
   "fact_extraction_confidence": "high|medium|low",
   "low_confidence_reason": "if not high, explain why"
 }
+
+EVIDENCE_QUOTES RULES (STRICT - ADO-303):
+- Max 2 quotes total
+- Max 25 words per quote (~150 chars)
+- Purpose: anchor snippets for disposition verification, NOT verbatim paragraph copying
+- Example good: "The judgment of the Court of Appeals is reversed" or "We hold that the statute requires..."
+- Example bad: Multiple-sentence paragraph copied from opinion
 
 NOTE: Do NOT output vote_split, dissent_exists, or case_type - those are computed from DB.
 
@@ -407,7 +414,48 @@ Extract the facts from this SCOTUS ruling. Return JSON only.`;
 // Expanded anchor tokens - include all verb forms
 const ANCHOR_TOKEN_REGEX = /\b(held|hold|holds|holding|judgment|affirm(ed|s|ing)?|revers(ed|es|ing)?|vacat(ed|es|ing)?|remand(ed|s|ing)?|dismiss(ed|es|al|ing)?|grant(ed|s|ing)?|den(ied|ies|ying)?)\b/i;
 
-const MAX_QUOTE_WORDS = 50; // Increased from 25 - legal quotes are often longer
+// ADO-303: Quote limits (anchor snippets, not verbatim copying)
+// Note: 12 words was too strict (64% failure rate in validation)
+// Adjusted to 25 words based on observed GPT-4o-mini output patterns
+const MAX_QUOTE_COUNT = 2;   // Max evidence_quotes items
+const MAX_QUOTE_WORDS = 25;  // Max words per quote (~150 chars)
+
+/**
+ * ADO-303: Lint evidence_quotes for publish gate
+ * Checks: count <= MAX_QUOTE_COUNT, each <= MAX_QUOTE_WORDS
+ *
+ * @param {string[]} quotes - evidence_quotes array
+ * @returns {{ valid: boolean, issues: string[], hasLongQuotes: boolean }}
+ */
+export function lintQuotes(quotes) {
+  const issues = [];
+  let hasLongQuotes = false;
+
+  if (!quotes || !Array.isArray(quotes)) {
+    return { valid: true, issues: [], hasLongQuotes: false };
+  }
+
+  // Check count
+  if (quotes.length > MAX_QUOTE_COUNT) {
+    issues.push(`Too many quotes (${quotes.length} > max ${MAX_QUOTE_COUNT})`);
+  }
+
+  // Check each quote length
+  quotes.forEach((quote, i) => {
+    if (typeof quote !== 'string') return;
+    const words = quote.trim().split(/\s+/).filter(Boolean);
+    if (words.length > MAX_QUOTE_WORDS) {
+      issues.push(`Quote ${i + 1} too long (${words.length} words > ${MAX_QUOTE_WORDS})`);
+      hasLongQuotes = true;
+    }
+  });
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    hasLongQuotes
+  };
+}
 
 /**
  * Extract anchor quote using section-aware disposition extraction
@@ -475,24 +523,11 @@ export function validatePass1(facts, pass0Metadata, scotusCase = null, sourceTex
     issues.push('High/medium confidence requires evidence_quotes');
   }
 
-  // Check: max 3 quotes
-  if (facts.evidence_quotes && facts.evidence_quotes.length > 3) {
-    issues.push('Too many quotes (max 3)');
-  }
-
-  // Check: quote word count (<=50 words each)
-  let hasLongQuotes = false;
-  if (facts.evidence_quotes) {
-    facts.evidence_quotes.forEach((quote, i) => {
-      const words = quote.trim().split(/\s+/);
-      if (words.length > MAX_QUOTE_WORDS) {
-        issues.push(`Quote ${i + 1} too long (${words.length} words > ${MAX_QUOTE_WORDS})`);
-        hasLongQuotes = true;
-      }
-    });
-
-    // Flag but don't truncate - keep original for inspection
-    if (hasLongQuotes) {
+  // ADO-303: Use lintQuotes for quote validation
+  const quoteLint = lintQuotes(facts.evidence_quotes);
+  if (!quoteLint.valid) {
+    issues.push(...quoteLint.issues);
+    if (quoteLint.hasLongQuotes) {
       facts.evidence_quotes_truncated = true;
     }
   }

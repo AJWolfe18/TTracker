@@ -303,6 +303,55 @@ export function suggestImpactLevel(caseData) {
 // RESPONSE VALIDATION
 // ============================================================================
 
+// ADO-303: Generic party patterns to ban in who_wins/who_loses
+const GENERIC_PARTY_PATTERNS = [
+  /^the\s+(petitioner|respondent|plaintiff|defendant)s?\.?$/i,
+  /^(petitioner|respondent|plaintiff|defendant)s?\.?$/i,
+  /^(petitioner|respondent|plaintiff|defendant)s?\s+(wins|loses|prevails|benefits)\.?$/i,
+];
+
+/**
+ * ADO-303: Check if text is a banned generic party label
+ * Banned: "petitioner", "the petitioner", "respondent", etc.
+ * Must include proper noun OR meaningful descriptor
+ *
+ * @param {string} text - who_wins or who_loses value
+ * @returns {boolean} true if generic (banned), false if specific (ok)
+ */
+export function isGenericParty(text) {
+  if (!text || typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  return GENERIC_PARTY_PATTERNS.some(p => p.test(trimmed));
+}
+
+/**
+ * ADO-303: Lint who_wins/who_loses for generic party labels
+ * For use in publish gate
+ *
+ * @param {Object} editorial - Pass 2 output with who_wins, who_loses
+ * @returns {{ valid: boolean, issues: string[], genericFields: string[] }}
+ */
+export function lintGenericParties(editorial) {
+  const issues = [];
+  const genericFields = [];
+
+  if (isGenericParty(editorial?.who_wins)) {
+    issues.push(`who_wins is generic: "${editorial.who_wins}"`);
+    genericFields.push('who_wins');
+  }
+
+  if (isGenericParty(editorial?.who_loses)) {
+    issues.push(`who_loses is generic: "${editorial.who_loses}"`);
+    genericFields.push('who_loses');
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    genericFields
+  };
+}
+
 /**
  * Validate GPT response structure
  * @param {Object} response - Parsed JSON response
@@ -498,7 +547,26 @@ Profanity: NO.
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
-}`;
+}
+
+# WHO_WINS / WHO_LOSES RULES (STRICT - ADO-303)
+BANNED standalone labels (will fail validation):
+- "petitioner", "the petitioner"
+- "respondent", "the respondent"
+- "plaintiff", "defendant"
+
+MUST include EITHER:
+- A proper noun (e.g., "Texas", "Smith", "the EPA", "Google")
+- OR a meaningful descriptor (e.g., "the federal government", "state election officials", "parents challenging the policy", "voters", "corporate defendants")
+
+GOOD examples:
+- "Texas and other Republican-led states gain expanded authority to..."
+- "Voters in gerrymandered districts lose their ability to..."
+- "The federal government loses regulatory power over..."
+
+BAD examples (will be rejected):
+- "The petitioner wins"
+- "Respondent"`;
 
 // ============================================================================
 // ADO-300: LABEL CONSTRAINTS FOR CLAMP SYSTEM

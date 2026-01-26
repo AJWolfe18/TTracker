@@ -37,6 +37,7 @@ import {
   getSourceText,           // ADO-300
   clampAndLabel,           // ADO-300
   enforceEditorialConstraints,  // ADO-300
+  lintQuotes,              // ADO-303
 } from '../enrichment/scotus-fact-extraction.js';
 
 import {
@@ -45,7 +46,8 @@ import {
 
 import {
   validateEnrichmentResponse,
-  buildPass2Messages
+  buildPass2Messages,
+  lintGenericParties
 } from '../enrichment/scotus-gpt-prompt.js';
 
 import {
@@ -75,12 +77,16 @@ const DEFAULT_DAILY_CAP_USD = 5.00;
 const INPUT_COST_PER_1K = 0.00015;
 const OUTPUT_COST_PER_1K = 0.0006;
 
-// ADO-300: Retry ladder config
-// Default chain: gpt-5-mini (best accuracy) → gpt-4o-mini (fallback) → gpt-4o (last resort)
-const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-5-mini,gpt-4o-mini,gpt-4o')
+// ADO-303: Model config (Phase 0 - gpt-4o-mini only)
+// Rationale: gpt-5-mini produced quote-heavy output causing 5/6 low-confidence failures
+// Fallback chain disabled by default; can re-enable via env var if needed
+const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-4o-mini')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+
+// ADO-303: Max retries for empty responses (same model, smaller context)
+const MAX_EMPTY_RETRIES = 2;
 
 // ============================================================================
 // PARSE CLI ARGUMENTS
@@ -265,6 +271,58 @@ function getFactsIssues(facts) {
 }
 
 /**
+ * ADO-303: Run publish gate checks on Pass 1 facts and Pass 2 editorial
+ * Returns validation result with issues list
+ *
+ * @param {Object} facts - Pass 1 output (clamped)
+ * @param {Object} editorial - Pass 2 output
+ * @returns {{ valid: boolean, issues: string[], canRetry: boolean }}
+ */
+function runPublishGate(facts, editorial) {
+  const issues = [];
+
+  // 1. Quote lint on Pass 1 evidence_quotes
+  const quoteLint = lintQuotes(facts?.evidence_quotes);
+  if (!quoteLint.valid) {
+    issues.push(...quoteLint.issues.map(i => `[quote] ${i}`));
+  }
+
+  // 2. Disposition check for merits cases
+  const caseType = (facts?.case_type || '').toLowerCase();
+  const isMerits = caseType === 'merits' || facts?.merits_reached === true;
+
+  if (isMerits) {
+    if (!facts?.disposition) {
+      issues.push('[merits] Missing disposition for merits case');
+    }
+
+    // Check disposition mentioned early in summary_spicy (first 200 chars)
+    const summaryStart = (editorial?.summary_spicy || '').slice(0, 200).toLowerCase();
+    const disp = (facts?.disposition || '').toLowerCase();
+    if (disp && !summaryStart.includes(disp)) {
+      // Soft warning - don't block on this
+      console.log(`   ⚠️ [gate] Disposition "${disp}" not in summary_spicy opening`);
+    }
+  }
+
+  // 3. Generic party lint on Pass 2 who_wins/who_loses
+  // Skip for clamped cases (they have procedural boilerplate)
+  if (!facts?.clamp_reason) {
+    const partyLint = lintGenericParties(editorial);
+    if (!partyLint.valid) {
+      issues.push(...partyLint.issues.map(i => `[party] ${i}`));
+    }
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues
+    // Note: Retry for gate failures not implemented in Phase 0
+    // Cases that fail gate are quarantined for manual review
+  };
+}
+
+/**
  * Enrich a single SCOTUS case using two-pass architecture
  */
 async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recentOpenings, args) {
@@ -301,7 +359,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   };
 
   // =========================================================================
-  // PASS 1: Fact Extraction (with retry ladder - ADO-300)
+  // PASS 1: Fact Extraction (ADO-303: single model with empty retry)
   // =========================================================================
   console.log(`   📋 Pass 1: Extracting facts${args.skipConsensus ? ' (consensus disabled)' : ''}...`);
 
@@ -310,14 +368,20 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     return { success: true, dryRun: true };
   }
 
-  // ADO-300: Retry ladder for Pass 1
+  // ADO-303: Single model with retry-on-empty/issues (up to MAX_EMPTY_RETRIES)
+  const model = FACTS_MODEL_FALLBACKS[0] || 'gpt-4o-mini';
   let facts = null;
-  let usedModel = 'gpt-4o-mini';
+  let usedModel = model;
   let retry_reason = null;
+  let retryCount = 0;
 
-  for (const model of FACTS_MODEL_FALLBACKS) {
-    usedModel = model;
-    console.log(`   📋 Pass 1: Trying ${model}...`);
+  while (retryCount <= MAX_EMPTY_RETRIES) {
+    const isRetry = retryCount > 0;
+    if (isRetry) {
+      console.log(`   📋 Pass 1: Retry ${retryCount}/${MAX_EMPTY_RETRIES} (${model})...`);
+    } else {
+      console.log(`   📋 Pass 1: Trying ${model}...`);
+    }
 
     try {
       const { facts: extractedFacts, usage: pass1Usage } = await extractFactsWithConsensus(
@@ -352,18 +416,22 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         break;
       }
 
+      // Fatal issues found - retry if we have attempts left
       retry_reason = fatalIssues.join(',');
-      console.log(`   ⚠️ Issues with ${model}: ${retry_reason}`);
+      console.log(`   ⚠️ Issues: ${retry_reason}`);
+      retryCount++;
+
     } catch (err) {
       console.log(`   ⚠️ ${model} failed: ${err.message}`);
       retry_reason = `error:${err.message.slice(0, 50)}`;
+      retryCount++;
     }
   }
 
-  // ADO-300: All models failed - mark as failed (retry-able, not terminal)
+  // ADO-303: All retries exhausted - mark as failed
   if (!facts) {
-    console.error(`   ❌ All models failed for Pass 1`);
-    await markFailed(scotusCase.id, `Pass 1 all models failed: ${retry_reason}`, supabase);
+    console.error(`   ❌ Pass 1 failed after ${retryCount} retries`);
+    await markFailed(scotusCase.id, `Pass 1 failed: ${retry_reason}`, supabase);
     return { success: false, error: retry_reason, cost: totalCost };
   }
 
@@ -430,6 +498,13 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     console.error(`   ❌ Pass 2 failed: ${err.message}`);
     await markFailed(scotusCase.id, `Pass 2 error: ${err.message}`, supabase);
     return { success: false, error: err.message, cost: totalCost };
+  }
+
+  // ADO-303: Check for empty/null editorial before validation
+  if (!editorial || typeof editorial !== 'object') {
+    console.error(`   ❌ Pass 2 returned empty/invalid response`);
+    await markFailed(scotusCase.id, `Pass 2 empty response`, supabase);
+    return { success: false, error: 'Empty Pass 2 response', cost: totalCost };
   }
 
   // Validate editorial response structure
@@ -512,11 +587,34 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     return { success: false, skipped: true, reason: `Drift: ${driftCheck.reason}`, cost: totalCost };
   }
 
+  // =========================================================================
+  // ADO-303: PUBLISH GATE (rule-based checks)
+  // =========================================================================
+  console.log(`   📋 Running publish gate...`);
+  const gateResult = runPublishGate(clampedFacts, constrainedEditorial);
+
+  if (!gateResult.valid) {
+    console.log(`   ⚠️ Gate issues: ${gateResult.issues.join(', ')}`);
+    // Gate failures → quarantine (don't auto-publish)
+    // Note: We don't retry Pass 2 here as the issues are typically in the source data
+  } else {
+    console.log(`   ✓ Publish gate passed`);
+  }
+
   // ADO-300: Determine publishing rules with publish_override support
   let isPublic = clampedFacts.fact_extraction_confidence === 'high' ||
                  clampedFacts.publish_override === true;
   let needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
                     !clampedFacts.publish_override;
+
+  // ADO-303: Gate failures → quarantine
+  if (!gateResult.valid && !clampedFacts.publish_override) {
+    isPublic = false;
+    needsReview = true;
+    clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+      (clampedFacts.low_confidence_reason ? '; ' : '') +
+      `Gate: ${gateResult.issues.join(', ')}`;
+  }
 
   // ADO-275: Don't auto-publish if banned starter or duplicate detected
   if (editorial._banned_starter_detected || editorial._duplicate_detected) {
