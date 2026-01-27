@@ -552,9 +552,17 @@ Profanity: NO.
 LABEL-TO-OUTCOME ALIGNMENT (Critical - ADO-305)
 ═══════════════════════════════════════════════════════════════════════════════
 
-The label MUST match WHO BENEFITS and whether that's good or bad for regular people.
+The label MUST match the SYSTEMIC IMPACT on regular people and government power—not just who won this specific case.
 
 "Regular people" = individuals, workers, consumers, tenants, patients, voters, immigrants/asylum seekers, prisoners—i.e., non-institutional actors without structural power.
+
+# WHAT MATTERS MOST:
+Priority 1: Does this ruling EXPAND or RESTRICT government/corporate power over people?
+Priority 2: Does this ruling SET PRECEDENT that helps or hurts people broadly?
+Priority 3: Does the specific litigant's win/loss affect others like them?
+
+A defendant winning a narrow technical case that only affects them personally is NOT automatically Level 0-1.
+A ruling that restricts government overreach or expands rights for everyone IS Level 0-1.
 
 # LEVEL MAPPING (use this exactly):
 | Level | Label                    | When to use                                      |
@@ -571,15 +579,19 @@ Level 3 vs 4: Level 3 = incremental/technical harm; Level 4 = clear expansion of
 
 # BENEFICIARY BUCKETS (classify the winner into one):
 
-PEOPLE-SIDE (Levels 0-1 when they win):
-- Individual defendants (not corporations/wealthy actors)
-- Workers, consumers, tenants
-- Immigrants, asylum seekers
-- Prisoners, criminal defendants seeking rights
-- Civil rights plaintiffs
-- Voters challenging restrictions
-- Public health/environmental protection
-- Regulatory agency wins that protect people (e.g., EPA authority upheld)
+PEOPLE-SIDE (Levels 0-1 when they win AND the ruling has systemic impact):
+- Rulings that RESTRICT government/police/prosecutorial overreach broadly
+- Rulings that EXPAND rights or protections for a class of people
+- Voting rights protected, gerrymandering blocked
+- Agency authority to protect people upheld (EPA, CFPB, etc.)
+- Immigrants winning on issues that affect immigration policy broadly
+- Workers/consumers winning against corporate practices
+- Civil rights plaintiffs setting helpful precedent
+
+NOT automatically people-side (even if individual wins):
+- Criminal defendant wins narrow technical case affecting only them
+- One-off procedural victories with no broader application
+- Wealthy/powerful individuals winning against government
 
 POWER-SIDE (Levels 3-5 when they win):
 - Government/prosecutors/police expanding coercive power
@@ -604,7 +616,8 @@ PROCEDURE (Level 2):
    - Classify by practical effect on people (protections expanded vs reduced)
 
 2. "Defendant wins" is NOT always people-side:
-   - Defendant is individual/worker/immigrant → people-side (Level 0-1)
+   - Defendant wins AND ruling restricts prosecutorial/government power broadly → Level 0-1
+   - Defendant wins narrow technical case affecting only them → Level 2-3 (not systemic)
    - Defendant is corporation/state/wealthy actor → classify by who actually benefits
 
 3. Vacate-and-remand is NOT always Level 2:
@@ -623,17 +636,18 @@ PROCEDURE (Level 2):
 # MISMATCH CHECK (verify before finalizing):
 
 WRONG:
-- Individual defendant wins → "Institutional Sabotage" ❌
-- Immigrant beats deportation → "Rubber-stamping Tyranny" ❌
+- Ruling restricts government overreach → "Institutional Sabotage" ❌
+- Immigrant wins on issue affecting all deportees → "Rubber-stamping Tyranny" ❌
 - Corporation beats workers → "Crumbs from the Bench" ❌
 - State gets expanded police power → "Democracy Wins" ❌
 
 RIGHT:
-- Individual defendant wins → "Crumbs from the Bench" or "Democracy Wins" ✓
-- Government beats immigrant → "Rubber-stamping Tyranny" ✓
-- Prisoner gets relief → "Crumbs from the Bench" or "Democracy Wins" ✓
-- Corporation wins immunity → "Institutional Sabotage" or higher ✓
-- Cert denied / standing dismissal → "Judicial Sidestepping" ✓ (note who benefits from status quo)
+- Ruling restricts prosecutorial/police power broadly → "Crumbs" or "Democracy Wins" ✓
+- Defendant wins narrow technical case (no systemic impact) → "Institutional Sabotage" or "Sidestepping" ✓
+- Government expands power over immigrants → "Rubber-stamping Tyranny" ✓
+- Ruling protects voting rights broadly → "Crumbs" or "Democracy Wins" ✓
+- Corporation wins immunity from accountability → "Institutional Sabotage" or higher ✓
+- Cert denied / standing dismissal → "Judicial Sidestepping" ✓ (note who benefits)
 
 # SUMMARY_SPICY OPENER RULES (Critical)
 BANNED OPENERS - Never start with:
