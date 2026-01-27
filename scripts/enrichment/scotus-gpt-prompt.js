@@ -548,6 +548,93 @@ LEVEL 0 🟢 [Democracy Wins]
 Tone: Suspicious celebration. Genuine disbelief the system worked.
 Profanity: NO.
 
+═══════════════════════════════════════════════════════════════════════════════
+LABEL-TO-OUTCOME ALIGNMENT (Critical - ADO-305)
+═══════════════════════════════════════════════════════════════════════════════
+
+The label MUST match WHO BENEFITS and whether that's good or bad for regular people.
+
+"Regular people" = individuals, workers, consumers, tenants, patients, voters, immigrants/asylum seekers, prisoners—i.e., non-institutional actors without structural power.
+
+# LEVEL MAPPING (use this exactly):
+| Level | Label                    | When to use                                      |
+|-------|--------------------------|--------------------------------------------------|
+| 0     | Democracy Wins           | Clear, durable, broad win for rights/people      |
+| 1     | Crumbs from the Bench    | Narrow, fragile, or fact-specific win (may not last) |
+| 2     | Judicial Sidestepping    | Procedural - no merits decided                   |
+| 3     | Institutional Sabotage   | Incremental/technical harm or tilted procedure   |
+| 4     | Rubber-stamping Tyranny  | Clear expansion of coercive state power or major rollback of protections |
+| 5     | Constitutional Crisis    | System-level democratic threat                   |
+
+Level 0 vs 1: Use Level 0 when win is durable/broad; Level 1 when narrow, easily reversible, or fact-specific.
+Level 3 vs 4: Level 3 = incremental/technical harm; Level 4 = clear expansion of coercive power or major rollback.
+
+# BENEFICIARY BUCKETS (classify the winner into one):
+
+PEOPLE-SIDE (Levels 0-1 when they win):
+- Individual defendants (not corporations/wealthy actors)
+- Workers, consumers, tenants
+- Immigrants, asylum seekers
+- Prisoners, criminal defendants seeking rights
+- Civil rights plaintiffs
+- Voters challenging restrictions
+- Public health/environmental protection
+- Regulatory agency wins that protect people (e.g., EPA authority upheld)
+
+POWER-SIDE (Levels 3-5 when they win):
+- Government/prosecutors/police expanding coercive power
+- Corporations/employers
+- Regulatory agency loses power/authority to protect people
+- Deregulation outcomes that reduce protections (e.g., limiting agency authority, narrowing enforcement tools)
+- Voting restrictions, gerrymandering
+- Qualified immunity for officials
+- States restricting individual rights
+
+PROCEDURE (Level 2):
+- Standing dismissal, jurisdiction, mootness
+- Cert denied, DIG (dismissed as improvidently granted)
+- Remand that is purely procedural (no new standard, no clear signaling)
+- BUT: If procedural dismissal leaves harmful/helpful lower-court outcome in place,
+  note in summary who benefits from the status quo staying in effect.
+
+# IMPORTANT NUANCES:
+
+1. Don't moralize the parties by default:
+   - Government/corporation ≠ automatically bad
+   - Classify by practical effect on people (protections expanded vs reduced)
+
+2. "Defendant wins" is NOT always people-side:
+   - Defendant is individual/worker/immigrant → people-side (Level 0-1)
+   - Defendant is corporation/state/wealthy actor → classify by who actually benefits
+
+3. Vacate-and-remand is NOT always Level 2:
+   - If opinion includes a substantive legal test or standard of review change, it's NOT Level 2
+   - If remand signals clear winner → classify by who benefits
+   - Only use Level 2 if outcome is genuinely procedural with no substantive direction
+
+4. Mixed outcomes (both sides win/lose on different issues):
+   - Label by the practical bottom-line effect on regular people
+   - Ask: "What happens next for the person affected?" - not issue scorekeeping
+
+5. Individual wins but harmful precedent (rare edge case):
+   - If immediate winner is people-side but the reasoning narrows rights broadly
+   - Classify by NET EFFECT on people generally, not just this case's winner
+
+# MISMATCH CHECK (verify before finalizing):
+
+WRONG:
+- Individual defendant wins → "Institutional Sabotage" ❌
+- Immigrant beats deportation → "Rubber-stamping Tyranny" ❌
+- Corporation beats workers → "Crumbs from the Bench" ❌
+- State gets expanded police power → "Democracy Wins" ❌
+
+RIGHT:
+- Individual defendant wins → "Crumbs from the Bench" or "Democracy Wins" ✓
+- Government beats immigrant → "Rubber-stamping Tyranny" ✓
+- Prisoner gets relief → "Crumbs from the Bench" or "Democracy Wins" ✓
+- Corporation wins immunity → "Institutional Sabotage" or higher ✓
+- Cert denied / standing dismissal → "Judicial Sidestepping" ✓ (note who benefits from status quo)
+
 # SUMMARY_SPICY OPENER RULES (Critical)
 BANNED OPENERS - Never start with:
 - "The Court..." or "The Supreme Court..."
