@@ -1199,9 +1199,11 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     is_public: data.is_public,
 
     // ADO-308: QA columns (always written, even in shadow mode)
+    // ADO-309: Added qa_retry_count
     qa_status: data.qa_status ?? 'pending_qa',
     qa_verdict: data.qa_verdict ?? null,
     qa_issues: data.qa_issues ?? null,
+    qa_retry_count: data.qa_retry_count ?? 0,
     // qa_reviewed_at and qa_review_note are set by human reviewers, not enrichment
 
     // Versioning
