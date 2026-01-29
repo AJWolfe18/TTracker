@@ -98,6 +98,8 @@ export const DB_COLUMNS = new Set([
   'source_data_version',  // tracks v1-syllabus vs v2-full-opinion
   // ADO-300: Clamp/retry fields
   'clamp_reason', 'publish_override', 'facts_model_used', 'retry_reason',
+  // ADO-308: QA columns
+  'qa_status', 'qa_verdict', 'qa_issues', 'qa_reviewed_at', 'qa_review_note',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
@@ -1088,6 +1090,11 @@ export async function flagAndSkip(caseId, details, supabase, extraFields = {}) {
     publish_override: extraFields.publish_override ?? false,
     facts_model_used: extraFields.facts_model_used ?? null,
     retry_reason: extraFields.retry_reason ?? null,
+
+    // ADO-308: QA fields (for REJECT cases when ENABLE_QA_GATE=true)
+    qa_status: extraFields.qa_status ?? null,
+    qa_verdict: extraFields.qa_verdict ?? null,
+    qa_issues: extraFields.qa_issues ?? null,
   };
 
   const { error } = await supabase
@@ -1188,8 +1195,14 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     needs_manual_review: data.needs_manual_review,
     is_public: data.is_public,
 
+    // ADO-308: QA columns (always written, even in shadow mode)
+    qa_status: data.qa_status ?? 'pending_qa',
+    qa_verdict: data.qa_verdict ?? null,
+    qa_issues: data.qa_issues ?? null,
+    // qa_reviewed_at and qa_review_note are set by human reviewers, not enrichment
+
     // Versioning
-    prompt_version: 'v2-ado300',
+    prompt_version: 'v2-ado308',
     updated_at: new Date().toISOString(),
   };
 

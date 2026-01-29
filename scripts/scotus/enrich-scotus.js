@@ -62,7 +62,19 @@ import {
   PROMPT_VERSION as STYLE_PROMPT_VERSION
 } from '../enrichment/scotus-style-patterns.js';
 
+// ADO-308: QA validators for deterministic quality checks
+import {
+  runDeterministicValidators,
+  deriveVerdict,
+  extractSourceExcerpt,
+} from '../enrichment/scotus-qa-validators.js';
+
 dotenv.config();
+
+// ADO-308: Feature flag for QA gate
+// - false (default): Shadow mode - writes QA data but doesn't block enrichment
+// - true: Enabled mode - REJECT blocks write, FLAG sets is_public=false
+const ENABLE_QA_GATE = process.env.ENABLE_QA_GATE === 'true';
 
 // ============================================================================
 // CONFIGURATION
@@ -864,6 +876,77 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // =========================================================================
+  // ADO-308: QA VALIDATORS (deterministic checks)
+  // =========================================================================
+  console.log(`   📋 Running QA validators...`);
+
+  // Build grounding object for scale word support checking
+  const grounding = {
+    holding: clampedFacts.holding,
+    practical_effect: clampedFacts.practical_effect,
+    evidence_quotes: clampedFacts.evidence_quotes || [],
+    source_excerpt: extractSourceExcerpt(scotusCase, 2400),
+  };
+
+  // Run deterministic validators
+  const qaIssues = runDeterministicValidators({
+    summary_spicy: constrainedEditorial.summary_spicy,
+    ruling_impact_level: constrainedEditorial.ruling_impact_level,
+    facts: clampedFacts,
+    grounding,
+  });
+
+  const qaVerdict = deriveVerdict(qaIssues);
+
+  // Determine QA status based on verdict
+  let qaStatus = 'pending_qa';
+  if (qaVerdict === 'APPROVE') {
+    qaStatus = 'approved';
+  } else if (qaVerdict === 'FLAG') {
+    qaStatus = 'flagged';
+  } else if (qaVerdict === 'REJECT') {
+    qaStatus = 'rejected';
+  }
+
+  console.log(`   QA Verdict: ${qaVerdict} (${qaIssues.length} issues)`);
+  if (qaIssues.length > 0) {
+    console.log(`   QA Issues: ${qaIssues.map(i => i.type).join(', ')}`);
+  }
+
+  // ADO-308: Apply QA gate if enabled (not shadow mode)
+  if (ENABLE_QA_GATE) {
+    if (qaVerdict === 'REJECT') {
+      // In enabled mode, REJECT blocks the write entirely
+      console.log(`   ❌ QA REJECT: Blocking enrichment (ENABLE_QA_GATE=true)`);
+      await flagAndSkip(scotusCase.id, {
+        fact_extraction_confidence: 'low',
+        low_confidence_reason: `QA REJECT: ${qaIssues.map(i => i.type).join(', ')}`,
+        source_char_count: clampedFacts.source_char_count,
+        contains_anchor_terms: clampedFacts.contains_anchor_terms,
+      }, supabase, {
+        facts_model_used: usedModel,
+        retry_reason: retry_reason,
+        qa_status: qaStatus,
+        qa_verdict: qaVerdict,
+        qa_issues: qaIssues,
+      });
+      return { success: false, skipped: true, reason: `QA REJECT`, cost: totalCost };
+    }
+
+    if (qaVerdict === 'FLAG') {
+      // In enabled mode, FLAG sets is_public=false
+      console.log(`   ⚠️ QA FLAG: Setting is_public=false (ENABLE_QA_GATE=true)`);
+      if (!clampedFacts.publish_override) {
+        isPublic = false;
+        needsReview = true;
+      }
+    }
+  } else {
+    // Shadow mode: log QA results but don't affect behavior
+    console.log(`   [shadow mode] QA gate disabled, verdict logged but not enforced`);
+  }
+
+  // =========================================================================
   // WRITE TO DATABASE
   // =========================================================================
   console.log(`   📋 Writing to database...`);
@@ -874,7 +957,11 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     facts_model_used: usedModel,
     retry_reason: retry_reason,
     needs_manual_review: needsReview,
-    is_public: isPublic
+    is_public: isPublic,
+    // ADO-308: QA columns (always written, even in shadow mode)
+    qa_status: qaStatus,
+    qa_verdict: qaVerdict,
+    qa_issues: qaIssues,
   }, supabase);
 
   // Track cost
