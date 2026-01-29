@@ -33,14 +33,45 @@ function safeLower(s) {
   return (s || "").toLowerCase();
 }
 
-function includesPhrase(haystack, phrase) {
-  return safeLower(haystack).includes(safeLower(phrase));
+/**
+ * Normalize text for phrase matching:
+ * - lowercase
+ * - replace most punctuation with spaces (but keep hyphens in words)
+ * - collapse whitespace
+ * Preserving hyphens prevents "every American-made" from matching "every american"
+ */
+function normalizeForPhraseMatch(s) {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, " ")  // punctuation → space (keep hyphens)
+    .replace(/\s+/g, " ")        // collapse whitespace
+    .trim();
 }
 
+/**
+ * Check if haystack contains phrase as complete words.
+ * Normalizes both, then uses regex to match phrase bounded by spaces or string edges.
+ * "every american made" does NOT contain "every american" as complete phrase.
+ */
+function includesPhrase(haystack, phrase) {
+  const normalizedHaystack = normalizeForPhraseMatch(haystack);
+  const normalizedPhrase = normalizeForPhraseMatch(phrase);
+
+  // Match phrase bounded by start/space at beginning and space/end at end
+  const regex = new RegExp(`(^|\\s)${normalizedPhrase}(\\s|$)`, 'i');
+  return regex.test(normalizedHaystack);
+}
+
+/**
+ * Check if any quote contains the phrase (lenient - allows hyphenated compounds).
+ * For support checking, "millions-strong" should match "millions".
+ */
 function anyQuoteIncludes(evidenceQuotes, phrase) {
   if (!Array.isArray(evidenceQuotes)) return false;
-  const p = safeLower(phrase);
-  return evidenceQuotes.some((q) => safeLower(q).includes(p));
+  const normalizedPhrase = normalizeForPhraseMatch(phrase);
+  // Lenient: match phrase at word boundary OR before hyphen
+  const regex = new RegExp(`(^|\\s)${normalizedPhrase}(\\s|$|-)`, 'i');
+  return evidenceQuotes.some((q) => regex.test(normalizeForPhraseMatch(q)));
 }
 
 function escapeRegExp(str) {
@@ -57,17 +88,21 @@ export function extractSentenceContaining(text, needle) {
 }
 
 export function isScaleSupported(phrase, grounding) {
-  const phraseLower = safeLower(phrase);
-  const sourceExcerpt = safeLower(grounding?.source_excerpt);
+  const normalizedPhrase = normalizeForPhraseMatch(phrase);
+  const normalizedExcerpt = normalizeForPhraseMatch(grounding?.source_excerpt);
   const evidenceQuotes = grounding?.evidence_quotes || [];
 
+  // Lenient for support: match phrase at word boundary OR before hyphen
+  // "millions-strong" should support "millions"
+  const regex = new RegExp(`(^|\\s)${normalizedPhrase}(\\s|$|-)`, 'i');
+
   const strongSupport =
-    (sourceExcerpt && sourceExcerpt.includes(phraseLower)) ||
-    anyQuoteIncludes(evidenceQuotes, phraseLower);
+    (normalizedExcerpt && regex.test(normalizedExcerpt)) ||
+    anyQuoteIncludes(evidenceQuotes, phrase);
 
   const weakSupport =
-    includesPhrase(grounding?.holding, phraseLower) ||
-    includesPhrase(grounding?.practical_effect, phraseLower);
+    includesPhrase(grounding?.holding, phrase) ||
+    includesPhrase(grounding?.practical_effect, phrase);
 
   return { supported: strongSupport || weakSupport, strong: strongSupport };
 }
