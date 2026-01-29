@@ -99,7 +99,8 @@ export const DB_COLUMNS = new Set([
   // ADO-300: Clamp/retry fields
   'clamp_reason', 'publish_override', 'facts_model_used', 'retry_reason',
   // ADO-308: QA columns
-  'qa_status', 'qa_verdict', 'qa_issues', 'qa_reviewed_at', 'qa_review_note',
+  // ADO-309: Added qa_retry_count to track retry attempts
+  'qa_status', 'qa_verdict', 'qa_issues', 'qa_reviewed_at', 'qa_review_note', 'qa_retry_count',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
@@ -1092,9 +1093,11 @@ export async function flagAndSkip(caseId, details, supabase, extraFields = {}) {
     retry_reason: extraFields.retry_reason ?? null,
 
     // ADO-308: QA fields (for REJECT cases when ENABLE_QA_GATE=true)
+    // ADO-309: Added qa_retry_count
     qa_status: extraFields.qa_status ?? null,
     qa_verdict: extraFields.qa_verdict ?? null,
     qa_issues: extraFields.qa_issues ?? null,
+    qa_retry_count: extraFields.qa_retry_count ?? 0,
   };
 
   const { error } = await supabase

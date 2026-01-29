@@ -63,10 +63,13 @@ import {
 } from '../enrichment/scotus-style-patterns.js';
 
 // ADO-308: QA validators for deterministic quality checks
+// ADO-309: Added hasFixableIssues, buildQAFixDirectives for retry logic
 import {
   runDeterministicValidators,
   deriveVerdict,
   extractSourceExcerpt,
+  hasFixableIssues,
+  buildQAFixDirectives,
 } from '../enrichment/scotus-qa-validators.js';
 
 dotenv.config();
@@ -674,6 +677,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
   // =========================================================================
   // PASS 2: Editorial Framing (ADO-275: New Variation System)
+  // ADO-309: Now includes QA retry loop (max 1 retry for fixable issues)
   // =========================================================================
   console.log(`   📋 Pass 2: Applying editorial framing...`);
 
@@ -689,20 +693,34 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     return { success: false, error: `Variation selection failed`, cost: totalCost };
   }
 
-  const variationInjection = buildVariationInjection(variation, frame, clampedFacts.clamp_reason);
+  const baseVariationInjection = buildVariationInjection(variation, frame, clampedFacts.clamp_reason);
   const patternId = variation.id;
 
   console.log(`     Frame: ${frame} (${frameSource}) | Pool: ${poolKey} | Pattern: ${patternId}`);
 
-  let editorial;
-  try {
-    // ADO-300: Pass clampedFacts (with label_policy) to Pass 2
-    const messages = buildPass2Messages(scotusCase, clampedFacts, variationInjection);
+  // ADO-309: Helper to run Pass 2 with optional QA fix directives
+  async function executePass2(qaFixDirectives = '') {
+    const fullVariationInjection = qaFixDirectives
+      ? `${baseVariationInjection}\n${qaFixDirectives}`
+      : baseVariationInjection;
+
+    const messages = buildPass2Messages(scotusCase, clampedFacts, fullVariationInjection);
     const { parsed: pass2Result, usage: pass2Usage } = await callGPTWithRetry(
       openai,
       messages,
       { temperature: 0.7, maxRetries: 1 }
     );
+
+    return { editorial: pass2Result, usage: pass2Usage };
+  }
+
+  let editorial;
+  let qaRetryCount = 0;
+  const MAX_QA_RETRIES = 1;  // ADO-309: Hard limit on QA retries
+
+  try {
+    // Initial Pass 2 execution
+    const { editorial: pass2Result, usage: pass2Usage } = await executePass2();
 
     editorial = pass2Result;
     totalCost += calculateCost(pass2Usage);
@@ -731,66 +749,22 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // =========================================================================
-  // ADO-275: POST-GEN VALIDATION (banned starters + duplicate detection)
+  // ADO-309: POST-GEN PROCESSING WITH QA RETRY LOOP
+  // Process editorial output, run validations, and retry if fixable QA issues
   // =========================================================================
-  console.log(`   📋 Checking for banned starters/duplicates...`);
+
+  // Build grounding object for QA validation (needed in loop)
+  const grounding = {
+    holding: clampedFacts.holding,
+    practical_effect: clampedFacts.practical_effect,
+    evidence_quotes: clampedFacts.evidence_quotes || [],
+    source_excerpt: extractSourceExcerpt(scotusCase, 2400),
+  };
+
+  // Pre-compute recent signatures for banned starter check
   const recentSignatures = recentOpenings.map(o => extractSignatureSentence(o));
-  const { valid: spicyValid, reason: spicyReason, matchedPattern, isDuplicate } =
-    validateSummarySpicy(editorial.summary_spicy, recentSignatures);
 
-  if (!spicyValid) {
-    console.log(`   ⚠️ summary_spicy validation failed: ${spicyReason}`);
-
-    // Attempt repair for banned starters (not duplicates)
-    if (matchedPattern && !isDuplicate) {
-      const repairResult = repairBannedStarter('summary_spicy', editorial.summary_spicy, matchedPattern);
-      if (repairResult.success) {
-        console.log(`   ✓ Repaired banned starter`);
-        editorial.summary_spicy = repairResult.content;
-      } else {
-        console.log(`   ⚠️ Repair failed: ${repairResult.reason} - marking needs_review`);
-        editorial._banned_starter_detected = true;
-        editorial._banned_starter_reason = spicyReason;
-        // Will be caught by needsReview logic below
-      }
-    } else if (isDuplicate) {
-      console.log(`   ⚠️ Duplicate signature detected - marking needs_review`);
-      editorial._duplicate_detected = true;
-      // Don't auto-publish items with duplicate signatures
-    }
-  } else {
-    console.log(`   ✓ No banned starters or duplicates`);
-  }
-
-  // =========================================================================
-  // DRIFT VALIDATION + ADO-300: ENFORCE CONSTRAINTS
-  // =========================================================================
-  console.log(`   📋 Checking for drift...`);
-  const driftCheck = validateNoDrift(clampedFacts, editorial);
-
-  // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
-  const constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
-
-  // =========================================================================
-  // ADO-303: POST-GEN REPAIRS (deterministic, no LLM calls)
-  // =========================================================================
-
-  // #3: Party specificity repair - expand "petitioner/respondent" to actual names
-  const partyRepaired = applyPartyRepair(constrainedEditorial, scotusCase.case_name);
-  if (partyRepaired) {
-    console.log(`   📝 Party repair: expanded generic petitioner/respondent`);
-  }
-
-  // #4: "In a..." opener fixer - deterministic rewrite of journalist crutch
-  if (constrainedEditorial.summary_spicy) {
-    const openerResult = rewriteInAOpener(constrainedEditorial.summary_spicy);
-    if (openerResult.rewritten) {
-      constrainedEditorial.summary_spicy = openerResult.text;
-      console.log(`   📝 Opener repair: rewrote "In a..." opener`);
-    }
-  }
-
-  // ADO-302: Derive ruling_impact_level from ruling_label (label is source of truth)
+  // ADO-302: Label to level mapping
   const LABEL_TO_LEVEL = {
     'Constitutional Crisis': 5,
     'Rubber-stamping Tyranny': 4,
@@ -799,140 +773,266 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     'Crumbs from the Bench': 1,
     'Democracy Wins': 0
   };
-  if (constrainedEditorial.ruling_label && LABEL_TO_LEVEL[constrainedEditorial.ruling_label] !== undefined) {
-    constrainedEditorial.ruling_impact_level = LABEL_TO_LEVEL[constrainedEditorial.ruling_label];
-  }
 
-  // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking
-  if (driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
-    // Only block on hard drift if NOT a clamped case (clamped cases are rescued by constraints)
-    console.log(`   ❌ HARD drift detected: ${driftCheck.reason}`);
-    await flagAndSkip(scotusCase.id, {
-      fact_extraction_confidence: 'low',
-      low_confidence_reason: `Hard drift: ${driftCheck.reason}`,
-      source_char_count: clampedFacts.source_char_count,
-      contains_anchor_terms: clampedFacts.contains_anchor_terms,
-      drift_detected: true,
-      drift_reason: driftCheck.reason,
-    }, supabase, {
-      facts_model_used: usedModel,
-      retry_reason: retry_reason,
-    });
-    return { success: false, skipped: true, reason: `Drift: ${driftCheck.reason}`, cost: totalCost };
-  }
+  // Variables that persist across retry iterations
+  let constrainedEditorial;
+  let driftCheck;
+  let gateResult;
+  let qaIssues;
+  let qaVerdict;
+  let qaStatus;
+  let isPublic;
+  let needsReview;
+  let qaFixDirectivesUsed = '';  // Track what fix directives we injected
 
-  // =========================================================================
-  // ADO-303: PUBLISH GATE (rule-based checks)
-  // =========================================================================
-  console.log(`   📋 Running publish gate...`);
-  const gateResult = runPublishGate(clampedFacts, constrainedEditorial);
+  // ADO-309: QA retry loop (max 1 retry for fixable REJECT issues)
+  QA_RETRY_LOOP:
+  for (let qaAttempt = 0; qaAttempt <= MAX_QA_RETRIES; qaAttempt++) {
+    const isRetry = qaAttempt > 0;
 
-  if (!gateResult.valid) {
-    console.log(`   ⚠️ Gate issues: ${gateResult.issues.join(', ')}`);
-    // Gate failures → quarantine (don't auto-publish)
-    // Note: We don't retry Pass 2 here as the issues are typically in the source data
-  } else {
-    console.log(`   ✓ Publish gate passed`);
-  }
+    if (isRetry) {
+      console.log(`   🔄 QA Retry ${qaAttempt}/${MAX_QA_RETRIES}: Regenerating Pass 2 with fix directives...`);
+      qaRetryCount = qaAttempt;
 
-  // ADO-300: Determine publishing rules with publish_override support
-  let isPublic = clampedFacts.fact_extraction_confidence === 'high' ||
-                 clampedFacts.publish_override === true;
-  let needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
-                    !clampedFacts.publish_override;
+      // Re-execute Pass 2 with QA fix directives
+      try {
+        const { editorial: retryResult, usage: retryUsage } = await executePass2(qaFixDirectivesUsed);
 
-  // ADO-303: Gate failures → quarantine
-  if (!gateResult.valid && !clampedFacts.publish_override) {
-    isPublic = false;
-    needsReview = true;
-    clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
-      (clampedFacts.low_confidence_reason ? '; ' : '') +
-      `Gate: ${gateResult.issues.join(', ')}`;
-  }
+        editorial = retryResult;
+        totalCost += calculateCost(retryUsage);
+        totalTokens += retryUsage?.total_tokens || 0;
 
-  // ADO-275: Don't auto-publish if banned starter or duplicate detected
-  if (editorial._banned_starter_detected || editorial._duplicate_detected) {
-    if (!clampedFacts.publish_override) {
-      isPublic = false;
-      needsReview = true;
+        console.log(`   ✓ Pass 2 retry: ${retryUsage?.total_tokens || 0} tokens`);
+      } catch (err) {
+        // ADO-309: On retry failure, mark as failed and return early (don't process invalid editorial)
+        console.error(`   ❌ Pass 2 retry failed: ${err.message}`);
+        await markFailed(scotusCase.id, `Pass 2 retry error: ${err.message}`, supabase);
+        return { success: false, error: `Pass 2 retry: ${err.message}`, cost: totalCost };
+      }
+
+      // Re-validate editorial response structure
+      if (!editorial || typeof editorial !== 'object') {
+        console.error(`   ❌ Pass 2 retry returned empty/invalid response`);
+        await markFailed(scotusCase.id, `Pass 2 retry empty response`, supabase);
+        return { success: false, error: 'Empty Pass 2 retry response', cost: totalCost };
+      }
+
+      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial);
+      if (!retryValid) {
+        console.error(`   ❌ Pass 2 retry validation failed: ${retryErrors.join(', ')}`);
+        await markFailed(scotusCase.id, `Pass 2 retry validation: ${retryErrors.join(', ')}`, supabase);
+        return { success: false, error: `Pass 2 retry: ${retryErrors.join(', ')}`, cost: totalCost };
+      }
     }
-  }
 
-  if (driftCheck.severity === 'soft') {
-    console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
-    if (!clampedFacts.publish_override) {
-      isPublic = false;
-      needsReview = true;
+    // =========================================================================
+    // ADO-275: POST-GEN VALIDATION (banned starters + duplicate detection)
+    // =========================================================================
+    console.log(`   📋 Checking for banned starters/duplicates...`);
+    const { valid: spicyValid, reason: spicyReason, matchedPattern, isDuplicate } =
+      validateSummarySpicy(editorial.summary_spicy, recentSignatures);
+
+    if (!spicyValid) {
+      console.log(`   ⚠️ summary_spicy validation failed: ${spicyReason}`);
+
+      // Attempt repair for banned starters (not duplicates)
+      if (matchedPattern && !isDuplicate) {
+        const repairResult = repairBannedStarter('summary_spicy', editorial.summary_spicy, matchedPattern);
+        if (repairResult.success) {
+          console.log(`   ✓ Repaired banned starter`);
+          editorial.summary_spicy = repairResult.content;
+        } else {
+          console.log(`   ⚠️ Repair failed: ${repairResult.reason} - marking needs_review`);
+          editorial._banned_starter_detected = true;
+          editorial._banned_starter_reason = spicyReason;
+        }
+      } else if (isDuplicate) {
+        console.log(`   ⚠️ Duplicate signature detected - marking needs_review`);
+        editorial._duplicate_detected = true;
+      }
+    } else {
+      console.log(`   ✓ No banned starters or duplicates`);
     }
-    clampedFacts.drift_detected = true;
-    clampedFacts.drift_reason = `Soft drift: ${driftCheck.reason}`;
-  } else if (driftCheck.severity === 'hard' && clampedFacts.clamp_reason) {
-    // Clamped case with hard drift - rescued by constraints
-    console.log(`   ⚠️ Hard drift rescued by clamp: ${driftCheck.reason}`);
-    clampedFacts.drift_detected = true;
-    clampedFacts.drift_reason = `Hard drift (clamped): ${driftCheck.reason}`;
-  } else {
-    console.log(`   ✓ No drift detected`);
-  }
 
-  // =========================================================================
-  // ADO-308: QA VALIDATORS (deterministic checks)
-  // =========================================================================
-  console.log(`   📋 Running QA validators...`);
+    // =========================================================================
+    // DRIFT VALIDATION + ADO-300: ENFORCE CONSTRAINTS
+    // =========================================================================
+    console.log(`   📋 Checking for drift...`);
+    driftCheck = validateNoDrift(clampedFacts, editorial);
 
-  // Build grounding object for scale word support checking
-  const grounding = {
-    holding: clampedFacts.holding,
-    practical_effect: clampedFacts.practical_effect,
-    evidence_quotes: clampedFacts.evidence_quotes || [],
-    source_excerpt: extractSourceExcerpt(scotusCase, 2400),
-  };
+    // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
+    constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
 
-  // Run deterministic validators
-  const qaIssues = runDeterministicValidators({
-    summary_spicy: constrainedEditorial.summary_spicy,
-    ruling_impact_level: constrainedEditorial.ruling_impact_level,
-    facts: clampedFacts,
-    grounding,
-  });
+    // =========================================================================
+    // ADO-303: POST-GEN REPAIRS (deterministic, no LLM calls)
+    // =========================================================================
 
-  const qaVerdict = deriveVerdict(qaIssues);
+    // #3: Party specificity repair - expand "petitioner/respondent" to actual names
+    const partyRepaired = applyPartyRepair(constrainedEditorial, scotusCase.case_name);
+    if (partyRepaired) {
+      console.log(`   📝 Party repair: expanded generic petitioner/respondent`);
+    }
 
-  // Determine QA status based on verdict
-  let qaStatus = 'pending_qa';
-  if (qaVerdict === 'APPROVE') {
-    qaStatus = 'approved';
-  } else if (qaVerdict === 'FLAG') {
-    qaStatus = 'flagged';
-  } else if (qaVerdict === 'REJECT') {
-    qaStatus = 'rejected';
-  }
+    // #4: "In a..." opener fixer - deterministic rewrite of journalist crutch
+    if (constrainedEditorial.summary_spicy) {
+      const openerResult = rewriteInAOpener(constrainedEditorial.summary_spicy);
+      if (openerResult.rewritten) {
+        constrainedEditorial.summary_spicy = openerResult.text;
+        console.log(`   📝 Opener repair: rewrote "In a..." opener`);
+      }
+    }
 
-  console.log(`   QA Verdict: ${qaVerdict} (${qaIssues.length} issues)`);
-  if (qaIssues.length > 0) {
-    console.log(`   QA Issues: ${qaIssues.map(i => i.type).join(', ')}`);
-  }
+    // ADO-302: Derive ruling_impact_level from ruling_label (label is source of truth)
+    if (constrainedEditorial.ruling_label && LABEL_TO_LEVEL[constrainedEditorial.ruling_label] !== undefined) {
+      constrainedEditorial.ruling_impact_level = LABEL_TO_LEVEL[constrainedEditorial.ruling_label];
+    }
 
-  // ADO-308: Apply QA gate if enabled (not shadow mode)
-  if (ENABLE_QA_GATE) {
-    if (qaVerdict === 'REJECT') {
-      // In enabled mode, REJECT blocks the write entirely
-      console.log(`   ❌ QA REJECT: Blocking enrichment (ENABLE_QA_GATE=true)`);
+    // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking
+    if (driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
+      // Only block on hard drift if NOT a clamped case (clamped cases are rescued by constraints)
+      console.log(`   ❌ HARD drift detected: ${driftCheck.reason}`);
       await flagAndSkip(scotusCase.id, {
         fact_extraction_confidence: 'low',
-        low_confidence_reason: `QA REJECT: ${qaIssues.map(i => i.type).join(', ')}`,
+        low_confidence_reason: `Hard drift: ${driftCheck.reason}`,
         source_char_count: clampedFacts.source_char_count,
         contains_anchor_terms: clampedFacts.contains_anchor_terms,
+        drift_detected: true,
+        drift_reason: driftCheck.reason,
       }, supabase, {
         facts_model_used: usedModel,
         retry_reason: retry_reason,
-        qa_status: qaStatus,
-        qa_verdict: qaVerdict,
-        qa_issues: qaIssues,
+        qa_retry_count: qaRetryCount,
       });
-      return { success: false, skipped: true, reason: `QA REJECT`, cost: totalCost };
+      return { success: false, skipped: true, reason: `Drift: ${driftCheck.reason}`, cost: totalCost };
     }
 
+    // =========================================================================
+    // ADO-303: PUBLISH GATE (rule-based checks)
+    // =========================================================================
+    console.log(`   📋 Running publish gate...`);
+    gateResult = runPublishGate(clampedFacts, constrainedEditorial);
+
+    if (!gateResult.valid) {
+      console.log(`   ⚠️ Gate issues: ${gateResult.issues.join(', ')}`);
+    } else {
+      console.log(`   ✓ Publish gate passed`);
+    }
+
+    // ADO-300: Determine publishing rules with publish_override support
+    isPublic = clampedFacts.fact_extraction_confidence === 'high' ||
+               clampedFacts.publish_override === true;
+    needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
+                  !clampedFacts.publish_override;
+
+    // ADO-303: Gate failures → quarantine
+    if (!gateResult.valid && !clampedFacts.publish_override) {
+      isPublic = false;
+      needsReview = true;
+      clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+        (clampedFacts.low_confidence_reason ? '; ' : '') +
+        `Gate: ${gateResult.issues.join(', ')}`;
+    }
+
+    // ADO-275: Don't auto-publish if banned starter or duplicate detected
+    if (editorial._banned_starter_detected || editorial._duplicate_detected) {
+      if (!clampedFacts.publish_override) {
+        isPublic = false;
+        needsReview = true;
+      }
+    }
+
+    if (driftCheck.severity === 'soft') {
+      console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
+      if (!clampedFacts.publish_override) {
+        isPublic = false;
+        needsReview = true;
+      }
+      clampedFacts.drift_detected = true;
+      clampedFacts.drift_reason = `Soft drift: ${driftCheck.reason}`;
+    } else if (driftCheck.severity === 'hard' && clampedFacts.clamp_reason) {
+      // Clamped case with hard drift - rescued by constraints
+      console.log(`   ⚠️ Hard drift rescued by clamp: ${driftCheck.reason}`);
+      clampedFacts.drift_detected = true;
+      clampedFacts.drift_reason = `Hard drift (clamped): ${driftCheck.reason}`;
+    } else {
+      console.log(`   ✓ No drift detected`);
+    }
+
+    // =========================================================================
+    // ADO-308/309: QA VALIDATORS (deterministic checks)
+    // =========================================================================
+    console.log(`   📋 Running QA validators...`);
+
+    // Run deterministic validators
+    qaIssues = runDeterministicValidators({
+      summary_spicy: constrainedEditorial.summary_spicy,
+      ruling_impact_level: constrainedEditorial.ruling_impact_level,
+      facts: clampedFacts,
+      grounding,
+    });
+
+    qaVerdict = deriveVerdict(qaIssues);
+
+    // Determine QA status based on verdict
+    qaStatus = 'pending_qa';
+    if (qaVerdict === 'APPROVE') {
+      qaStatus = 'approved';
+    } else if (qaVerdict === 'FLAG') {
+      qaStatus = 'flagged';
+    } else if (qaVerdict === 'REJECT') {
+      qaStatus = 'rejected';
+    }
+
+    console.log(`   QA Verdict: ${qaVerdict} (${qaIssues.length} issues)`);
+    if (qaIssues.length > 0) {
+      console.log(`   QA Issues: ${qaIssues.map(i => i.type).join(', ')}`);
+    }
+
+    // =========================================================================
+    // ADO-309: QA RETRY DECISION
+    // =========================================================================
+    if (ENABLE_QA_GATE && qaVerdict === 'REJECT') {
+      // Check if we have fixable issues and haven't exhausted retries
+      const canRetry = qaAttempt < MAX_QA_RETRIES && hasFixableIssues(qaIssues);
+
+      if (canRetry) {
+        // Build fix directives for retry
+        qaFixDirectivesUsed = buildQAFixDirectives(qaIssues);
+        console.log(`   🔄 QA REJECT with fixable issues - will retry Pass 2`);
+        console.log(`   Fix directives: ${qaIssues.filter(i => i.fixable).map(i => i.type).join(', ')}`);
+        continue QA_RETRY_LOOP;  // Retry Pass 2
+      }
+
+      // No retry possible - either no fixable issues or retries exhausted
+      if (qaAttempt >= MAX_QA_RETRIES) {
+        console.log(`   ❌ QA REJECT: Retry exhausted (${qaAttempt}/${MAX_QA_RETRIES}) - flagging for manual review`);
+        // ADO-309: After retry exhausted, flag for manual review instead of hard reject
+        qaStatus = 'flagged';  // Override to flagged for human review
+        isPublic = false;
+        needsReview = true;
+        clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+          (clampedFacts.low_confidence_reason ? '; ' : '') +
+          `QA retry exhausted: ${qaIssues.map(i => i.type).join(', ')}`;
+        break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
+      } else {
+        // No fixable issues - flag directly without retry
+        console.log(`   ❌ QA REJECT: No fixable issues - flagging for manual review`);
+        qaStatus = 'flagged';
+        isPublic = false;
+        needsReview = true;
+        clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+          (clampedFacts.low_confidence_reason ? '; ' : '') +
+          `QA REJECT (unfixable): ${qaIssues.map(i => i.type).join(', ')}`;
+        break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
+      }
+    }
+
+    // QA passed or FLAG verdict - exit loop
+    break QA_RETRY_LOOP;
+  }
+
+  // ADO-308: Apply QA gate if enabled (not shadow mode) - post-loop handling
+  if (ENABLE_QA_GATE) {
     if (qaVerdict === 'FLAG') {
       // In enabled mode, FLAG sets is_public=false
       console.log(`   ⚠️ QA FLAG: Setting is_public=false (ENABLE_QA_GATE=true)`);
@@ -959,9 +1059,11 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     needs_manual_review: needsReview,
     is_public: isPublic,
     // ADO-308: QA columns (always written, even in shadow mode)
+    // ADO-309: Added qa_retry_count to track retry attempts
     qa_status: qaStatus,
     qa_verdict: qaVerdict,
     qa_issues: qaIssues,
+    qa_retry_count: qaRetryCount,
   }, supabase);
 
   // Track cost

@@ -245,3 +245,43 @@ export function extractSourceExcerpt(scotusCase, maxChars = 2400) {
   const last = source.slice(-800);
   return `${first}\n...\n${last}`;
 }
+
+// ============================================================================
+// ADO-309: QA RETRY HELPERS
+// ============================================================================
+
+/**
+ * Check if any issues in the array are fixable
+ * @param {Array} issues - Array of QA issues from runDeterministicValidators
+ * @returns {boolean} - True if at least one issue has fixable: true
+ */
+export function hasFixableIssues(issues) {
+  if (!Array.isArray(issues)) return false;
+  return issues.some(i => i.fixable === true);
+}
+
+/**
+ * Build a prompt injection block with fix directives for fixable issues.
+ * Returns empty string if no fixable issues.
+ *
+ * @param {Array} issues - Array of QA issues from runDeterministicValidators
+ * @returns {string} - Formatted fix directives block for prompt injection
+ */
+export function buildQAFixDirectives(issues) {
+  if (!Array.isArray(issues)) return '';
+
+  const fixableIssues = issues.filter(i => i.fixable === true && i.fix_directive);
+  if (fixableIssues.length === 0) return '';
+
+  const directives = fixableIssues.map((issue, idx) => {
+    const context = issue.word || issue.phrase || issue.type;
+    return `${idx + 1}. [${issue.type}] ${issue.fix_directive}`;
+  });
+
+  return `
+QA FIX DIRECTIVES (CRITICAL - your previous output failed QA validation):
+The following issues were detected. You MUST fix them in this retry:
+${directives.join('\n')}
+
+Do NOT repeat the same issues. Apply these fixes while maintaining factual accuracy.`;
+}
