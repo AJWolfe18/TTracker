@@ -79,6 +79,11 @@ dotenv.config();
 // - true: Enabled mode - REJECT blocks write, FLAG sets is_public=false
 const ENABLE_QA_GATE = process.env.ENABLE_QA_GATE === 'true';
 
+// ADO-309: TEST-ONLY flag to force a REJECT on attempt 0 for E2E retry validation
+// Set FORCE_QA_REJECT_TEST=true to inject a fake procedural_merits_implication issue
+// This proves the retry loop works end-to-end. Remove after validation.
+const FORCE_QA_REJECT_TEST = process.env.FORCE_QA_REJECT_TEST === 'true';
+
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
@@ -972,6 +977,19 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     });
 
     qaVerdict = deriveVerdict(qaIssues);
+
+    // ADO-309: TEST-ONLY - Force REJECT on first attempt to validate retry loop E2E
+    if (FORCE_QA_REJECT_TEST && qaAttempt === 0) {
+      console.log(`   🧪 [FORCE_QA_REJECT_TEST] Injecting fake REJECT to test retry loop`);
+      qaVerdict = 'REJECT';
+      qaIssues = [{
+        type: 'procedural_merits_implication',
+        severity: 'high',
+        fixable: true,
+        why: '[FORCED TEST] Simulated merits language in procedural case',
+        fix_directive: 'Remove merits framing and add explicit procedural posture (dismissed, remanded, vacated)',
+      }];
+    }
 
     // Determine QA status based on verdict
     qaStatus = 'pending_qa';

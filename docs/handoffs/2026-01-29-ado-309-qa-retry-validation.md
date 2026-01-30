@@ -1,30 +1,37 @@
-# 2026-01-29: ADO-309 QA Retry Validation Complete
+# 2026-01-29: ADO-309 QA Retry E2E Validation Complete
 
 ## Summary
 
-ADO-309 moved to Ready for Prod. QA retry logic validated via unit tests - the code path is correct. In production testing, no natural REJECT occurred because upstream quality controls (clamping + well-tuned prompts) prevent most QA failures. This is actually a good sign.
+ADO-309 Ready for Prod. QA retry logic **validated end-to-end** using FORCE_QA_REJECT_TEST flag. The retry loop fires correctly, executes a second GPT call, and persists qa_retry_count to DB.
 
-## Validation Results
+## E2E Validation Results
 
-**Unit tests confirmed:**
-- `hasFixableIssues()` correctly identifies fixable issues
-- `buildQAFixDirectives()` generates proper prompt injection
-- `deriveVerdict()` returns REJECT only for high-severity issues (procedural_merits_implication, unsupported_scale)
-- Hyperbole at levels 0-2 returns FLAG (not REJECT) - handled via is_public=false, not retry
+**Pass criteria (all verified):**
+| Criteria | Result |
+|----------|--------|
+| Two GPT calls for same item | ✅ Pass 2: 3292 tokens + retry: 3409 tokens |
+| "🔄 QA Retry" in logs | ✅ Multiple log lines |
+| qa_retry_count > 0 in DB | ✅ qa_retry_count = 1 |
+| Retry output approved | ✅ Final verdict = APPROVE |
 
-**Why retry didn't fire in live runs:**
-1. Procedural cases get clamped → boilerplate templates already pass QA
-2. Low-level cases → GPT-4o-mini rarely generates hyperbole blocklist words
-3. REJECT requires high-severity issues which are rare with good prompts
+**Test case:** ID 230 (Hewitt v. United States) with FORCE_QA_REJECT_TEST=true
 
-## Test Cases Run
+## Current Scope (Important)
 
-| Case ID | Case Name | Result |
-|---------|-----------|--------|
-| 285 | Bowe v. United States | QA APPROVE (0 issues) |
-| 174 | Laboratory Corp v. Davis | QA APPROVE (clamped procedural) |
+QA Retry is a **narrow correctness backstop**, not a general cleanup:
+- REJECT only fires for: `procedural_merits_implication`, `unsupported_scale`
+- Hyperbole returns FLAG → manual review path (no retry)
+- This is by design - see ADO-313 for expanding scope
+
+## Code Changes
+
+Added `FORCE_QA_REJECT_TEST` env flag to `enrich-scotus.js`:
+- TEST-ONLY flag to inject fake REJECT on attempt 0
+- Enables deterministic E2E validation of retry loop
+- Keep in codebase for future regression testing
 
 ## Next Steps
 
-1. Cherry-pick to main for PROD deployment
-2. Monitor shadow mode QA data for patterns before enabling QA gate in PROD
+1. ✅ ADO-309 Ready for Prod - cherry-pick to main
+2. ADO-313 created for Step 2: "Expand QA Retry into General Cleanup Mechanism"
+3. Monitor shadow mode QA data before enabling ENABLE_QA_GATE in PROD
