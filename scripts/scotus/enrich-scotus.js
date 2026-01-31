@@ -72,6 +72,13 @@ import {
   buildQAFixDirectives,
 } from '../enrichment/scotus-qa-validators.js';
 
+// ADO-310: Layer B LLM QA for nuanced quality checks
+import {
+  runLayerBQA,
+  computeFinalVerdict,
+  buildCombinedFixDirectives,
+} from '../enrichment/scotus-qa-layer-b.js';
+
 dotenv.config();
 
 // ADO-308: Feature flag for QA gate
@@ -83,6 +90,17 @@ const ENABLE_QA_GATE = process.env.ENABLE_QA_GATE === 'true';
 // Set FORCE_QA_REJECT_TEST=true to inject a fake procedural_merits_implication issue
 // This proves the retry loop works end-to-end. Remove after validation.
 const FORCE_QA_REJECT_TEST = process.env.FORCE_QA_REJECT_TEST === 'true';
+
+// ADO-310: Layer B LLM QA configuration
+// LAYER_B_MODE controls Layer B behavior:
+// - 'off' (default): Skip Layer B entirely (no LLM call, no columns written)
+// - 'shadow': Run Layer B, write columns, but don't affect qa_status/is_public
+// - 'enforce': Run Layer B, write columns, AND use verdict for qa_status/is_public
+const LAYER_B_MODE = process.env.LAYER_B_MODE || 'off';
+
+// LAYER_B_RETRY: When true (and mode=enforce), retry Pass 2 if Layer B REJECT with fixable issues
+// Only meaningful when LAYER_B_MODE=enforce
+const LAYER_B_RETRY = process.env.LAYER_B_RETRY === 'true';
 
 // ============================================================================
 // CONFIGURATION
@@ -783,12 +801,19 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   let constrainedEditorial;
   let driftCheck;
   let gateResult;
-  let qaIssues;
-  let qaVerdict;
+  let qaIssues;       // Layer A issues
+  let qaVerdict;      // Layer A verdict
   let qaStatus;
   let isPublic;
   let needsReview;
   let qaFixDirectivesUsed = '';  // Track what fix directives we injected
+
+  // ADO-310: Layer B variables
+  let layerBResult = null;      // Full Layer B result object
+  let layerBVerdict = null;     // Layer B verdict (APPROVE|FLAG|REJECT|null)
+  let layerBIssues = [];        // Layer B issues
+  let finalVerdict = null;      // Combined Layer A + B verdict
+  let layerBRetryCount = 0;     // Separate counter for Layer B retries
 
   // ADO-309: QA retry loop (max 1 retry for fixable REJECT issues)
   QA_RETRY_LOOP:
@@ -1007,7 +1032,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     }
 
     // =========================================================================
-    // ADO-309: QA RETRY DECISION
+    // ADO-309: LAYER A RETRY DECISION
     // =========================================================================
     if (ENABLE_QA_GATE && qaVerdict === 'REJECT') {
       // Check if we have fixable issues and haven't exhausted retries
@@ -1016,48 +1041,133 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
       if (canRetry) {
         // Build fix directives for retry
         qaFixDirectivesUsed = buildQAFixDirectives(qaIssues);
-        console.log(`   🔄 QA REJECT with fixable issues - will retry Pass 2`);
+        console.log(`   🔄 Layer A REJECT with fixable issues - will retry Pass 2`);
         console.log(`   Fix directives: ${qaIssues.filter(i => i.fixable).map(i => i.type).join(', ')}`);
         continue QA_RETRY_LOOP;  // Retry Pass 2
       }
 
       // No retry possible - either no fixable issues or retries exhausted
+      // Skip Layer B (save cost) and flag for manual review
       if (qaAttempt >= MAX_QA_RETRIES) {
-        console.log(`   ❌ QA REJECT: Retry exhausted (${qaAttempt}/${MAX_QA_RETRIES}) - flagging for manual review`);
-        // ADO-309: After retry exhausted, flag for manual review instead of hard reject
-        qaStatus = 'flagged';  // Override to flagged for human review
-        isPublic = false;
-        needsReview = true;
-        clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
-          (clampedFacts.low_confidence_reason ? '; ' : '') +
-          `QA retry exhausted: ${qaIssues.map(i => i.type).join(', ')}`;
-        break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
+        console.log(`   ❌ Layer A REJECT: Retry exhausted (${qaAttempt}/${MAX_QA_RETRIES}) - flagging for manual review`);
       } else {
-        // No fixable issues - flag directly without retry
-        console.log(`   ❌ QA REJECT: No fixable issues - flagging for manual review`);
-        qaStatus = 'flagged';
-        isPublic = false;
-        needsReview = true;
-        clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
-          (clampedFacts.low_confidence_reason ? '; ' : '') +
-          `QA REJECT (unfixable): ${qaIssues.map(i => i.type).join(', ')}`;
-        break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
+        console.log(`   ❌ Layer A REJECT: No fixable issues - flagging for manual review`);
       }
+      console.log(`   ⏭️ Skipping Layer B (Layer A hard REJECT)`);
+      qaStatus = 'flagged';  // Override to flagged for human review
+      isPublic = false;
+      needsReview = true;
+      clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+        (clampedFacts.low_confidence_reason ? '; ' : '') +
+        `Layer A REJECT: ${qaIssues.map(i => i.type).join(', ')}`;
+      break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
     }
 
-    // QA passed or FLAG verdict - exit loop
+    // =========================================================================
+    // ADO-310: LAYER B LLM QA (if enabled)
+    // =========================================================================
+    if (LAYER_B_MODE !== 'off') {
+      console.log(`   📋 Running Layer B QA (mode: ${LAYER_B_MODE})...`);
+
+      try {
+        layerBResult = await runLayerBQA(openai, {
+          summary_spicy: constrainedEditorial.summary_spicy,
+          ruling_impact_level: constrainedEditorial.ruling_impact_level,
+          ruling_label: constrainedEditorial.ruling_label,
+          grounding,
+          facts: clampedFacts,
+        });
+
+        layerBVerdict = layerBResult.verdict;
+        layerBIssues = layerBResult.issues || [];
+        totalCost += calculateCost(layerBResult.usage);
+
+        console.log(`   Layer B Verdict: ${layerBVerdict ?? 'null (NO_DECISION)'} (${layerBIssues.length} issues, ${layerBResult.latency_ms}ms)`);
+        if (layerBIssues.length > 0 && !layerBIssues.every(i => i.internal)) {
+          console.log(`   Layer B Issues: ${layerBIssues.filter(i => !i.internal).map(i => i.type).join(', ')}`);
+        }
+        if (layerBResult.error) {
+          console.log(`   Layer B Error: ${layerBResult.error}`);
+        }
+
+        // Compute final verdict using Layer A + B
+        finalVerdict = computeFinalVerdict(qaVerdict, layerBVerdict);
+        console.log(`   Final Verdict: ${finalVerdict} (Layer A: ${qaVerdict}, Layer B: ${layerBVerdict ?? 'null'})`);
+
+        // =========================================================================
+        // ADO-310: LAYER B RETRY DECISION (only in enforce mode with LAYER_B_RETRY)
+        // =========================================================================
+        if (LAYER_B_MODE === 'enforce' && LAYER_B_RETRY && layerBVerdict === 'REJECT') {
+          const layerBFixable = layerBIssues.some(i => i.fixable === true && i.fix_directive);
+
+          if (layerBFixable && layerBRetryCount < 1) {
+            // Build combined fix directives from both layers
+            qaFixDirectivesUsed = buildCombinedFixDirectives(qaIssues, layerBIssues);
+            layerBRetryCount++;
+            console.log(`   🔄 Layer B REJECT with fixable issues - will retry Pass 2 (Layer B retry ${layerBRetryCount}/1)`);
+            console.log(`   Combined fix directives: ${[...qaIssues, ...layerBIssues].filter(i => i.fixable).map(i => i.type).join(', ')}`);
+            continue QA_RETRY_LOOP;  // Retry Pass 2 with combined directives
+          }
+        }
+
+        // Update qa_status based on final verdict (only in enforce mode)
+        if (LAYER_B_MODE === 'enforce') {
+          if (finalVerdict === 'APPROVE') {
+            qaStatus = 'approved';
+          } else if (finalVerdict === 'FLAG') {
+            qaStatus = 'flagged';
+          } else if (finalVerdict === 'REJECT') {
+            // Layer B REJECT (not retried or retry exhausted) - flag for manual review
+            console.log(`   ❌ Final REJECT (Layer B) - flagging for manual review`);
+            qaStatus = 'flagged';
+            isPublic = false;
+            needsReview = true;
+            clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
+              (clampedFacts.low_confidence_reason ? '; ' : '') +
+              `Layer B REJECT: ${layerBIssues.filter(i => !i.internal).map(i => i.type).join(', ')}`;
+          }
+        } else {
+          // Shadow mode: log but don't affect qa_status
+          console.log(`   [shadow mode] Layer B verdict logged but not enforced`);
+        }
+
+      } catch (err) {
+        // Layer B failure - log but don't block enrichment
+        console.error(`   ⚠️ Layer B failed: ${err.message}`);
+        layerBResult = {
+          verdict: null,
+          issues: [{
+            type: 'insufficient_qa_output',
+            why: `Layer B error: ${err.message}`,
+            internal: true,
+          }],
+          error: err.message,
+          latency_ms: 0,
+          ran_at: new Date().toISOString(),
+        };
+        layerBVerdict = null;
+        layerBIssues = layerBResult.issues;
+        finalVerdict = qaVerdict;  // Defer to Layer A
+      }
+    } else {
+      // Layer B disabled - final verdict is Layer A verdict
+      finalVerdict = qaVerdict;
+      console.log(`   [Layer B disabled] Using Layer A verdict only`);
+    }
+
+    // QA passed (or FLAG) - exit loop
     break QA_RETRY_LOOP;
   }
 
   // ADO-308: Apply QA gate if enabled (not shadow mode) - post-loop handling
+  // Note: Layer B verdict handling is done inside the loop (in enforce mode)
   if (ENABLE_QA_GATE) {
-    if (qaVerdict === 'FLAG') {
-      // In enabled mode, FLAG sets is_public=false
-      console.log(`   ⚠️ QA FLAG: Setting is_public=false (ENABLE_QA_GATE=true)`);
-      if (!clampedFacts.publish_override) {
-        isPublic = false;
-        needsReview = true;
-      }
+    // Use finalVerdict which considers both Layer A and Layer B (if run)
+    const effectiveVerdict = finalVerdict ?? qaVerdict;
+    if (effectiveVerdict === 'FLAG' && !clampedFacts.publish_override) {
+      console.log(`   ⚠️ Final FLAG: Setting is_public=false (ENABLE_QA_GATE=true)`);
+      isPublic = false;
+      needsReview = true;
     }
   } else {
     // Shadow mode: log QA results but don't affect behavior
@@ -1076,12 +1186,25 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     retry_reason: retry_reason,
     needs_manual_review: needsReview,
     is_public: isPublic,
-    // ADO-308: QA columns (always written, even in shadow mode)
+    // ADO-308: QA columns (Layer A, always written)
     // ADO-309: Added qa_retry_count to track retry attempts
     qa_status: qaStatus,
     qa_verdict: qaVerdict,
     qa_issues: qaIssues,
     qa_retry_count: qaRetryCount,
+    // ADO-310: Layer B QA columns (written when LAYER_B_MODE != 'off', includes error states)
+    ...(LAYER_B_MODE !== 'off' && layerBResult ? {
+      qa_layer_b_verdict: layerBVerdict,
+      qa_layer_b_issues: layerBIssues,
+      qa_layer_b_confidence: layerBResult.confidence ?? null,
+      qa_layer_b_severity_score: layerBResult.severity_score ?? null,
+      qa_layer_b_prompt_version: layerBResult.prompt_version ?? null,
+      qa_layer_b_model: layerBResult.model ?? null,
+      qa_layer_b_ran_at: layerBResult.ran_at ?? new Date().toISOString(),
+      qa_layer_b_error: layerBResult.error ?? null,
+      qa_layer_b_latency_ms: layerBResult.latency_ms ?? null,
+      layer_b_retry_count: layerBRetryCount,
+    } : {}),
   }, supabase);
 
   // Track cost
@@ -1118,13 +1241,14 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 async function main() {
   const args = parseArgs();
 
-  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-275: Tone Variation + ADO-300: Clamp/Retry)`);
+  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-275: Tone Variation + ADO-300: Clamp/Retry + ADO-310: Layer B)`);
   console.log(`================================================`);
   console.log(`Batch size: ${args.limit}`);
   console.log(`Dry run: ${args.dryRun}`);
   console.log(`Allow PROD: ${args.allowProd}`);
   console.log(`Skip consensus: ${args.skipConsensus}`);
-  console.log(`Prompt version: ${PROMPT_VERSION}\n`);
+  console.log(`Prompt version: ${PROMPT_VERSION}`);
+  console.log(`Layer B mode: ${LAYER_B_MODE} (retry: ${LAYER_B_RETRY})\n`);
 
   // Validate OpenAI key
   if (!process.env.OPENAI_API_KEY) {
