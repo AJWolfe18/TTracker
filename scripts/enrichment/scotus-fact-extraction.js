@@ -1210,6 +1210,38 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     qa_retry_count: data.qa_retry_count ?? 0,
     // qa_reviewed_at and qa_review_note are set by human reviewers, not enrichment
 
+    // ADO-310: Layer B QA columns (written when passed from caller)
+    ...(data.qa_layer_b_verdict !== undefined && {
+      qa_layer_b_verdict: data.qa_layer_b_verdict,
+    }),
+    ...(data.qa_layer_b_issues !== undefined && {
+      qa_layer_b_issues: data.qa_layer_b_issues,
+    }),
+    ...(data.qa_layer_b_confidence !== undefined && {
+      qa_layer_b_confidence: data.qa_layer_b_confidence,
+    }),
+    ...(data.qa_layer_b_severity_score !== undefined && {
+      qa_layer_b_severity_score: data.qa_layer_b_severity_score,
+    }),
+    ...(data.qa_layer_b_prompt_version !== undefined && {
+      qa_layer_b_prompt_version: data.qa_layer_b_prompt_version,
+    }),
+    ...(data.qa_layer_b_model !== undefined && {
+      qa_layer_b_model: data.qa_layer_b_model,
+    }),
+    ...(data.qa_layer_b_ran_at !== undefined && {
+      qa_layer_b_ran_at: data.qa_layer_b_ran_at,
+    }),
+    ...(data.qa_layer_b_error !== undefined && {
+      qa_layer_b_error: data.qa_layer_b_error,
+    }),
+    ...(data.qa_layer_b_latency_ms !== undefined && {
+      qa_layer_b_latency_ms: data.qa_layer_b_latency_ms,
+    }),
+    ...(data.layer_b_retry_count !== undefined && {
+      layer_b_retry_count: data.layer_b_retry_count,
+    }),
+
     // Versioning
     prompt_version: 'v2-ado308',
     updated_at: new Date().toISOString(),
