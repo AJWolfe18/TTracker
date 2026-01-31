@@ -101,6 +101,10 @@ export const DB_COLUMNS = new Set([
   // ADO-308: QA columns
   // ADO-309: Added qa_retry_count to track retry attempts
   'qa_status', 'qa_verdict', 'qa_issues', 'qa_reviewed_at', 'qa_review_note', 'qa_retry_count',
+  // ADO-310: Layer B QA columns
+  'qa_layer_b_verdict', 'qa_layer_b_issues', 'qa_layer_b_confidence', 'qa_layer_b_severity_score',
+  'qa_layer_b_prompt_version', 'qa_layer_b_model', 'qa_layer_b_ran_at', 'qa_layer_b_error',
+  'qa_layer_b_latency_ms', 'layer_b_retry_count',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 

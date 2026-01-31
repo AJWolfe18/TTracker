@@ -1,4 +1,10 @@
 // Phase 1a: deterministic validators (Hyperbole lint + Procedural posture check)
+// ADO-310: Now uses shared issue type constants for consistency with Layer B
+
+import {
+  LAYER_A_ISSUE_TYPES,
+  ISSUE_TYPE_SEVERITY,
+} from './qa-issue-types.js';
 
 export const HYPERBOLE_BLOCKLIST = [
   "guts", "obliterates", "sweeping", "massive", "tyranny", "crisis",
@@ -117,8 +123,8 @@ export function lintHyperbole(summarySpicy, level, grounding) {
       const re = new RegExp(`\\b${escapeRegExp(word)}\\b`, "i");
       if (re.test(text)) {
         issues.push({
-          type: "hyperbole",
-          severity: "medium",
+          type: LAYER_A_ISSUE_TYPES.hyperbole,
+          severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.hyperbole],
           fixable: true,
           word,
           affected_sentence: extractSentenceContaining(text, word),
@@ -134,16 +140,16 @@ export function lintHyperbole(summarySpicy, level, grounding) {
       const support = isScaleSupported(phrase, grounding);
       if (!support.supported) {
         issues.push({
-          type: "unsupported_scale",
-          severity: "high",
+          type: LAYER_A_ISSUE_TYPES.unsupported_scale,
+          severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.unsupported_scale],
           fixable: false,
           phrase,
           why: `Scale phrase "${phrase}" not supported by source_excerpt, evidence_quotes, holding, or practical_effect`,
         });
       } else if (!support.strong) {
         issues.push({
-          type: "weakly_supported_scale",
-          severity: "low",
+          type: LAYER_A_ISSUE_TYPES.weakly_supported_scale,
+          severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.weakly_supported_scale],
           fixable: true,
           phrase,
           why: `Scale phrase "${phrase}" supported only by derived facts, not by source text`,
@@ -157,8 +163,8 @@ export function lintHyperbole(summarySpicy, level, grounding) {
   for (const phrase of SCOPE_OVERCLAIM_PHRASES) {
     if (includesPhrase(text, phrase)) {
       issues.push({
-        type: "scope_overclaim_phrase",
-        severity: "low",
+        type: LAYER_A_ISSUE_TYPES.scope_overclaim_phrase,
+        severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.scope_overclaim_phrase],
         fixable: true,
         phrase,
         affected_sentence: extractSentenceContaining(text, phrase),
@@ -184,8 +190,8 @@ export function checkProceduralPosture(summarySpicy, facts) {
 
   if (hasMeritsImplication) {
     issues.push({
-      type: "procedural_merits_implication",
-      severity: "high",
+      type: LAYER_A_ISSUE_TYPES.procedural_merits_implication,
+      severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.procedural_merits_implication],
       fixable: true,
       why: "Merits implication language present in a procedural case",
       fix_directive: "Remove merits framing and add explicit procedural posture (dismissed, remanded, vacated, standing, mootness)",
@@ -194,8 +200,8 @@ export function checkProceduralPosture(summarySpicy, facts) {
 
   if (!hasProceduralKeyword) {
     issues.push({
-      type: "procedural_missing_framing",
-      severity: "medium",
+      type: LAYER_A_ISSUE_TYPES.procedural_missing_framing,
+      severity: ISSUE_TYPE_SEVERITY[LAYER_A_ISSUE_TYPES.procedural_missing_framing],
       fixable: true,
       why: "Procedural case lacks procedural framing keywords",
       fix_directive: "Add procedural framing (dismissed, remanded, vacated, standing, mootness, jurisdiction, cert denied)",
@@ -223,9 +229,10 @@ export function runDeterministicValidators({ summary_spicy, ruling_impact_level,
 }
 
 export function deriveVerdict(issues) {
+  // ADO-310: Use shared constants for type matching
   const highSeverity = issues.some(i =>
     i.severity === 'high' &&
-    ['unsupported_scale', 'procedural_merits_implication'].includes(i.type)
+    [LAYER_A_ISSUE_TYPES.unsupported_scale, LAYER_A_ISSUE_TYPES.procedural_merits_implication].includes(i.type)
   );
   if (highSeverity) return 'REJECT';
   if (issues.length > 0) return 'FLAG';
