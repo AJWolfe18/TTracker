@@ -1,0 +1,49 @@
+name: QA Worker
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      claim_limit:
+        description: "Max items to claim per run"
+        required: false
+        default: "10"
+
+concurrency:
+  group: qa-worker-${{ github.ref_name }}
+  cancel-in-progress: false  # Don't cancel in-progress runs
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    # Only run on test branch (PROD can be added later)
+    if: github.ref == 'refs/heads/test'
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Process QA batch items
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          QA_LAYER_B_MODEL: gpt-4o-mini
+          QA_PROMPT_VERSION: scotus_qa_v1
+          QA_CLAIM_LIMIT: ${{ inputs.claim_limit || '10' }}
+        run: node scripts/qa/process-batch.js
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "QA Worker run complete."
+          echo "Check logs above for detailed results."
