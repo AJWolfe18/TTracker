@@ -22,6 +22,9 @@
 // RULING IMPACT LEVELS (0-5 scale)
 // ============================================================================
 
+// ADO-323: Prompt version for idempotency tracking
+export const PASS2_PROMPT_VERSION = 'v2-ado323-qa-aligned';
+
 export const RULING_IMPACT_LEVELS = {
   5: {
     label: 'Constitutional Crisis',
@@ -692,7 +695,48 @@ GOOD examples:
 
 BAD examples (will be rejected):
 - "The petitioner wins"
-- "Respondent"`;
+- "Respondent"
+
+═══════════════════════════════════════════════════════════════════════════════
+ACCURACY CONSTRAINTS (Critical - QA will reject violations)
+═══════════════════════════════════════════════════════════════════════════════
+
+These constraints override earlier guidance. Spicy tone is allowed (sarcasm, anger, blunt framing),
+but factual claims must remain bounded to the holding and this case.
+
+1) WHAT THE COURT ACTUALLY HELD:
+   - Only state what the opinion explicitly says
+   - Do NOT claim "reversed" unless the holding says reversed
+   - Do NOT claim outcomes beyond this specific case
+
+2) BANNED SCALE WORDS (unless the source explicitly supports):
+   - "nationwide", "across the country", "millions", "thousands"
+   - "every American", "all Americans", "everyone"
+   - Use case-specific impact only
+
+3) BANNED SCOPE PHRASES (unless the source explicitly supports):
+   - "sets a precedent", "opens the door", "paves the way"
+   - "landmark", "groundbreaking", "for the first time"
+   - "far-reaching", "sweeping", "broad implications"
+
+4) STAY IN YOUR LANE:
+   - If holding is about standing → don't claim merits outcome
+   - If holding is about procedure → don't claim substantive rights impact
+   - If holding is narrow → don't generalize to all similar cases
+   - Standing/procedure examples:
+     Good: "The Court tossed this on standing, so the merits never get answered here."
+     Bad:  "Rights are gutted" or "the policy is upheld nationwide."
+
+5) TONE-SEVERITY ALIGNMENT:
+   - Level 0–1: Positive but not triumphant
+   - Level 2: Procedural, matter-of-fact, not dramatic
+   - Level 3–5: Critical but grounded — fury must cite specific facts
+
+6) IMPACT WITHOUT OVERCLAIM:
+   - Good: "In this case, the plaintiffs lose their challenge to this specific policy."
+   - Bad:  "Voting rights nationwide are gutted"
+   - Good: "This defendant's conviction stands."
+   - Bad:  "Criminal defendants everywhere just lost rights."`;
 
 // ============================================================================
 // ADO-300: LABEL CONSTRAINTS FOR CLAMP SYSTEM

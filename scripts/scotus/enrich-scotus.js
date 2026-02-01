@@ -12,6 +12,7 @@
  *   node scripts/scotus/enrich-scotus.js --dry-run    # Preview without DB writes
  *   node scripts/scotus/enrich-scotus.js --prod       # Write to PROD (requires explicit flag)
  *   node scripts/scotus/enrich-scotus.js --skip-consensus  # Skip double Pass 1 (testing only)
+ *   node scripts/scotus/enrich-scotus.js --case-ids=145,161,230  # Enrich specific cases (ADO-323)
  *
  * Requirements:
  *   - SUPABASE_TEST_URL or SUPABASE_URL
@@ -135,7 +136,8 @@ function parseArgs() {
     limit: DEFAULT_BATCH_SIZE,
     dryRun: false,
     allowProd: false,
-    skipConsensus: false
+    skipConsensus: false,
+    caseIds: null  // ADO-323: Targeted case IDs for regression testing
   };
 
   for (const arg of process.argv.slice(2)) {
@@ -147,12 +149,46 @@ function parseArgs() {
       args.allowProd = true;
     } else if (arg === '--skip-consensus') {
       args.skipConsensus = true;
+    } else if (arg.startsWith('--case-ids=')) {
+      // ADO-323: Parse comma-separated case IDs with dedupe + order preserved
+      const raw = arg.split('=')[1] || '';
+      const parsed = raw
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => Number.isFinite(n));
+      const seen = new Set();
+      args.caseIds = parsed.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
     } else if (!isNaN(parseInt(arg, 10))) {
       args.limit = parseInt(arg, 10);
     }
   }
 
   return args;
+}
+
+// ============================================================================
+// ADO-323: TARGETED CASE FETCH BY IDS
+// ============================================================================
+
+/**
+ * Fetch specific cases by ID for targeted regression testing.
+ * Preserves the requested order for deterministic runs.
+ *
+ * @param {number[]} ids - Array of case IDs to fetch
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Object[]>} Cases in requested order
+ */
+async function getCasesToEnrichByIds(ids, supabase) {
+  const { data, error } = await supabase
+    .from('scotus_cases')
+    .select('*')
+    .in('id', ids);
+
+  if (error) throw error;
+
+  // Preserve requested order for determinism
+  const byId = new Map((data || []).map(row => [row.id, row]));
+  return ids.map(id => byId.get(id)).filter(Boolean);
 }
 
 // ============================================================================
@@ -1307,7 +1343,10 @@ async function main() {
 
   let cases;
   try {
-    cases = await getCasesToEnrich(args.limit, supabase);
+    // ADO-323: Use targeted IDs if provided, otherwise use limit-based selection
+    cases = args.caseIds?.length
+      ? await getCasesToEnrichByIds(args.caseIds, supabase)
+      : await getCasesToEnrich(args.limit, supabase);
   } catch (error) {
     console.error(`\n❌ Query failed: ${error.message}`);
     process.exit(1);
