@@ -139,17 +139,20 @@ async function runQA(caseData) {
   const startTime = Date.now();
 
   // Run Layer A (deterministic validators)
-  const layerAResult = runDeterministicValidators(
-    caseData.summary_spicy || '',
-    {
+  const layerAIssues = runDeterministicValidators({
+    summary_spicy: caseData.summary_spicy || '',
+    ruling_impact_level: caseData.ruling_impact_level,
+    facts: {
+      disposition: caseData.disposition,
+      prevailing_party: caseData.prevailing_party,
+    },
+    grounding: {
       holding: caseData.holding,
       practical_effect: caseData.practical_effect,
       evidence_quotes: caseData.evidence_quotes || [],
-      ruling_impact_level: caseData.ruling_impact_level,
-      ruling_label: caseData.ruling_label,
-    }
-  );
-  const layerAVerdict = deriveVerdict(layerAResult.issues);
+    },
+  });
+  const layerAVerdict = deriveVerdict(layerAIssues);
 
   // Build grounding for Layer B
   const grounding = {
@@ -178,7 +181,7 @@ async function runQA(caseData) {
 
   // Merge issues
   const allIssues = [
-    ...layerAResult.issues.map(i => ({ ...i, layer: 'A' })),
+    ...layerAIssues.map(i => ({ ...i, layer: 'A' })),
     ...layerBResult.issues.map(i => ({ ...i, layer: 'B' })),
   ];
 
