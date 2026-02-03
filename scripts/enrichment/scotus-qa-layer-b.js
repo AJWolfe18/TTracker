@@ -290,18 +290,32 @@ export async function callWithTransportRetry(fn) {
 // ============================================================================
 
 /**
- * Normalize whitespace and quotes for robust string matching.
+ * Normalize text for robust string matching.
  * Used to compare affected_sentence against summary_spicy.
  *
+ * ADO-324: Enhanced normalization to handle more Unicode variations
+ * that LLMs commonly produce, reducing false validation failures.
+ *
  * @param {string} str - Input string
- * @returns {string} Normalized string
+ * @returns {string} Normalized string (lowercase)
  */
 export function normalizeForMatch(str) {
-  return (str || '')
-    .replace(/[\u2018\u2019]/g, "'")  // curly single quotes -> straight
-    .replace(/[\u201C\u201D]/g, '"')   // curly double quotes -> straight
-    .replace(/\s+/g, ' ')               // collapse whitespace
-    .trim();
+  if (!str) return '';
+  return String(str)
+    // Handle double prime BEFORE NFKC (NFKC converts ″ to ′′)
+    .replace(/\u2033/g, '"')                      // double prime -> straight double quote
+    .normalize('NFKC')                            // Unicode normalization (compatibility decomposition)
+    // Quotes
+    .replace(/[\u2018\u2019\u201B\u2032]/g, "'")  // curly single quotes, prime -> straight
+    .replace(/[\u201C\u201D\u201E]/g, '"')        // curly double quotes -> straight
+    // Dashes and minus
+    .replace(/[\u2013\u2014\u2212]/g, '-')        // en-dash, em-dash, minus sign -> hyphen
+    // Ellipsis
+    .replace(/\u2026/g, '...')                    // ellipsis -> three dots
+    // Whitespace
+    .replace(/\s+/g, ' ')                         // collapse all whitespace
+    .trim()
+    .toLowerCase();                               // case-insensitive matching
 }
 
 // ============================================================================
@@ -355,14 +369,17 @@ export function normalizeIssueSeverity(issue) {
 
 /**
  * Validate LLM response and extract valid issues.
- * Returns insufficient_qa_output if contract is violated.
+ *
+ * ADO-324: Changed from fail-fast to graceful degradation.
+ * Invalid issues are dropped with metadata, not entire response invalidated.
+ * Only structural failures (missing issues array) cause full invalidation.
  *
  * @param {Object} response - Raw LLM response
  * @param {string} summarySpicy - The summary text for validation
- * @returns {{ valid: boolean, issues: Array, error?: string }}
+ * @returns {{ valid: boolean, issues: Array, droppedIssues: Array, error?: string }}
  */
 export function validateLLMResponse(response, summarySpicy) {
-  // Check response structure
+  // Check response structure - these are hard failures
   if (!response || typeof response !== 'object') {
     return {
       valid: false,
@@ -371,6 +388,7 @@ export function validateLLMResponse(response, summarySpicy) {
         why: 'LLM returned invalid response structure',
         internal: true,
       }],
+      droppedIssues: [],
       error: 'invalid response structure',
     };
   }
@@ -383,66 +401,53 @@ export function validateLLMResponse(response, summarySpicy) {
         why: 'LLM response missing issues array',
         internal: true,
       }],
+      droppedIssues: [],
       error: 'missing issues array',
     };
   }
 
-  // Validate each issue
+  // Validate each issue - drop invalid ones instead of failing entirely
   const validatedIssues = [];
+  const droppedIssues = [];
+
   for (const issue of response.issues) {
-    // Type validation
+    // Type validation - drop unknown types
     if (!ALL_LAYER_B_TYPES.includes(issue.type)) {
-      return {
-        valid: false,
-        issues: [{
-          type: INTERNAL_ISSUE_TYPES.insufficient_qa_output,
-          why: `Invalid issue type: ${issue.type}`,
-          internal: true,
-        }],
-        error: `invalid issue type: ${issue.type}`,
-      };
+      droppedIssues.push({
+        ...issue,
+        dropped_reason: `invalid_issue_type: ${issue.type}`,
+      });
+      continue;
     }
 
-    // High severity requires affected_sentence
+    // High severity requires affected_sentence - drop if missing
     if (issue.severity === 'high' && !issue.affected_sentence) {
-      return {
-        valid: false,
-        issues: [{
-          type: INTERNAL_ISSUE_TYPES.insufficient_qa_output,
-          why: 'High severity issue missing affected_sentence',
-          internal: true,
-        }],
-        error: 'high severity missing affected_sentence',
-      };
+      droppedIssues.push({
+        ...issue,
+        dropped_reason: 'high_severity_missing_affected_sentence',
+      });
+      continue;
     }
 
-    // Validate affected_sentence is exact substring (if present)
+    // Validate affected_sentence is substring (if present) - drop if not found
     if (issue.affected_sentence) {
       const sentenceValidation = validateAffectedSentence(issue, summarySpicy);
       if (!sentenceValidation.valid) {
-        return {
-          valid: false,
-          issues: [{
-            type: INTERNAL_ISSUE_TYPES.insufficient_qa_output,
-            why: `affected_sentence ${sentenceValidation.reason}`,
-            internal: true,
-          }],
-          error: `affected_sentence ${sentenceValidation.reason}`,
-        };
+        droppedIssues.push({
+          ...issue,
+          dropped_reason: `affected_sentence_${sentenceValidation.reason.replace(/\s+/g, '_')}`,
+        });
+        continue;
       }
     }
 
-    // Fixable requires fix_directive
+    // Fixable requires fix_directive - drop if missing (but keep non-fixable)
     if (issue.fixable === true && !issue.fix_directive) {
-      return {
-        valid: false,
-        issues: [{
-          type: INTERNAL_ISSUE_TYPES.insufficient_qa_output,
-          why: 'fixable=true but no fix_directive provided',
-          internal: true,
-        }],
-        error: 'fixable without fix_directive',
-      };
+      droppedIssues.push({
+        ...issue,
+        dropped_reason: 'fixable_without_fix_directive',
+      });
+      continue;
     }
 
     // Truncate long fields
@@ -459,25 +464,23 @@ export function validateLLMResponse(response, summarySpicy) {
     validatedIssues.push(issue);
   }
 
-  // Validate raw_confidence (optional but must be valid if present)
+  // Validate raw_confidence (optional, just warn if invalid)
+  let confidenceWarning = null;
   if (response.raw_confidence !== undefined && response.raw_confidence !== null) {
     if (typeof response.raw_confidence !== 'number' ||
         response.raw_confidence < 0 ||
         response.raw_confidence > 100 ||
         !Number.isInteger(response.raw_confidence)) {
-      return {
-        valid: false,
-        issues: [{
-          type: INTERNAL_ISSUE_TYPES.insufficient_qa_output,
-          why: `Invalid raw_confidence: ${response.raw_confidence} (must be integer 0-100)`,
-          internal: true,
-        }],
-        error: 'invalid raw_confidence value',
-      };
+      confidenceWarning = `Invalid raw_confidence: ${response.raw_confidence} (must be integer 0-100)`;
     }
   }
 
-  return { valid: true, issues: validatedIssues };
+  return {
+    valid: true,
+    issues: validatedIssues,
+    droppedIssues,
+    confidenceWarning,
+  };
 }
 
 /**
@@ -530,19 +533,47 @@ export function capIssues(issues) {
 
 /**
  * Derive Layer B verdict from issues.
- * Returns null for NO_DECISION (when Layer B couldn't run properly).
+ *
+ * ADO-324: Changed from returning null to 'REVIEW' for processing errors.
+ * This ensures fail-closed behavior - errors never silently approve content.
  *
  * @param {Array} issues - Validated issues array
- * @returns {string|null} 'APPROVE' | 'FLAG' | 'REJECT' | null
+ * @param {Object} options - Options for verdict derivation
+ * @param {boolean} options.hadProcessingError - True if LLM call or validation had errors
+ * @param {Array} options.droppedIssues - Issues that were dropped due to validation failures
+ * @returns {string} 'APPROVE' | 'FLAG' | 'REJECT' | 'REVIEW'
  */
-export function deriveLayerBVerdict(issues) {
-  if (!Array.isArray(issues) || issues.length === 0) {
-    return 'APPROVE';
+export function deriveLayerBVerdict(issues, options = {}) {
+  const { hadProcessingError = false, droppedIssues = [] } = options;
+
+  // ADO-324: If there were processing errors, fail-closed to REVIEW
+  // This prevents silent approval when Layer B can't make a proper decision
+  if (hadProcessingError) {
+    return 'REVIEW';
   }
 
-  // Check for NO_DECISION first
+  // ADO-324: If issues were dropped (validation failures), be cautious
+  // High-severity dropped issues should trigger REVIEW
+  const highSeverityDropped = droppedIssues.some(i =>
+    i.severity === 'high' ||
+    ['accuracy_vs_holding', 'hallucination'].includes(i.type)
+  );
+  if (highSeverityDropped) {
+    return 'REVIEW';
+  }
+
+  if (!Array.isArray(issues) || issues.length === 0) {
+    // No issues found AND no dropped issues - this is a clean APPROVE
+    if (droppedIssues.length === 0) {
+      return 'APPROVE';
+    }
+    // Issues were dropped but none high-severity - cautious FLAG
+    return 'FLAG';
+  }
+
+  // Check for insufficient_qa_output (now maps to REVIEW, not null)
   const hasNoDecision = issues.some(i => i.type === INTERNAL_ISSUE_TYPES.insufficient_qa_output);
-  if (hasNoDecision) return null;
+  if (hasNoDecision) return 'REVIEW';
 
   // Check for insufficient grounding (this IS a real FLAG)
   const hasInsufficientGrounding = issues.some(i => i.type === INTERNAL_ISSUE_TYPES.insufficient_grounding);
@@ -561,34 +592,37 @@ export function deriveLayerBVerdict(issues) {
 
 /**
  * Compute final verdict from Layer A and Layer B verdicts.
- * Handles null verdicts gracefully with proper fallback.
+ *
+ * ADO-324: Fail-closed behavior - REVIEW always blocks APPROVE.
+ * Verdict precedence: REJECT > REVIEW > FLAG > APPROVE
  *
  * @param {string|null} layerAVerdict - 'APPROVE' | 'FLAG' | 'REJECT' | null
- * @param {string|null} layerBVerdict - 'APPROVE' | 'FLAG' | 'REJECT' | null
+ * @param {string|null} layerBVerdict - 'APPROVE' | 'FLAG' | 'REJECT' | 'REVIEW' | null
  * @returns {string} Final verdict (never null)
  */
 export function computeFinalVerdict(layerAVerdict, layerBVerdict) {
-  // Both null -> default to APPROVE
-  if (layerAVerdict === null && layerBVerdict === null) {
-    return 'APPROVE';
+  // ADO-324: Verdict ranking - REVIEW is now between REJECT and FLAG
+  // This ensures processing errors never silently approve
+  const VERDICT_RANK = {
+    APPROVE: 0,
+    FLAG: 1,
+    REVIEW: 2,  // ADO-324: Processing errors should block approval
+    REJECT: 3,
+  };
+
+  // ADO-324: Layer A null -> APPROVE (Layer A is deterministic, null is unusual)
+  // Layer B null -> REVIEW (fail-closed: if LLM couldn't decide, don't auto-approve)
+  const aEffective = layerAVerdict ?? 'APPROVE';
+  const bEffective = layerBVerdict === null ? 'REVIEW' : layerBVerdict;
+
+  const aRank = VERDICT_RANK[aEffective] ?? 0;
+  const bRank = VERDICT_RANK[bEffective] ?? 0;
+
+  // Take the most severe verdict
+  if (bRank >= aRank) {
+    return bEffective;
   }
-
-  // Only Layer B null -> defer to Layer A (with APPROVE fallback)
-  if (layerBVerdict === null) {
-    return layerAVerdict ?? 'APPROVE';
-  }
-
-  // Only Layer A null -> defer to Layer B
-  if (layerAVerdict === null) {
-    return layerBVerdict;
-  }
-
-  // Both valid -> take the worst of both
-  const VERDICT_RANK = { APPROVE: 0, FLAG: 1, REJECT: 2 };
-  const aRank = VERDICT_RANK[layerAVerdict] ?? 0;
-  const bRank = VERDICT_RANK[layerBVerdict] ?? 0;
-
-  return bRank >= aRank ? layerBVerdict : layerAVerdict;
+  return aEffective;
 }
 
 /**
@@ -790,7 +824,7 @@ export async function runLLMQAValidation(openai, { summary_spicy, grounding, inp
     response = result.parsed;
     usage = result.usage;
   } catch (err) {
-    // Transport/parse failure -> insufficient_qa_output
+    // Transport/parse failure - ADO-324: return REVIEW verdict (fail-closed)
     return {
       valid: false,
       issues: [{
@@ -798,19 +832,22 @@ export async function runLLMQAValidation(openai, { summary_spicy, grounding, inp
         why: `LLM call failed: ${err.message}`,
         internal: true,
       }],
-      verdict: null,
+      droppedIssues: [],
+      verdict: 'REVIEW',  // ADO-324: fail-closed, not null
       error: err.message,
       latency_ms: Date.now() - startTime,
     };
   }
 
-  // Validate response
+  // Validate response - ADO-324: now returns droppedIssues instead of failing
   const validation = validateLLMResponse(response, summary_spicy);
   if (!validation.valid) {
+    // Structural failure (missing issues array) - return REVIEW verdict
     return {
       valid: false,
       issues: validation.issues,
-      verdict: null,
+      droppedIssues: validation.droppedIssues || [],
+      verdict: 'REVIEW',  // ADO-324: fail-closed, not null
       error: validation.error,
       latency_ms: Date.now() - startTime,
       usage,
@@ -823,8 +860,11 @@ export async function runLLMQAValidation(openai, { summary_spicy, grounding, inp
   // Cap issues
   issues = capIssues(issues);
 
-  // Derive verdict
-  const verdict = deriveLayerBVerdict(issues);
+  // ADO-324: Derive verdict with dropped issues context for fail-closed behavior
+  const verdict = deriveLayerBVerdict(issues, {
+    hadProcessingError: false,
+    droppedIssues: validation.droppedIssues || [],
+  });
 
   // Compute severity score
   const severityScore = computeSeverityScore(issues);
@@ -832,6 +872,7 @@ export async function runLLMQAValidation(openai, { summary_spicy, grounding, inp
   return {
     valid: true,
     issues,
+    droppedIssues: validation.droppedIssues || [],
     verdict,
     confidence: response.raw_confidence,
     severity_score: severityScore,
@@ -839,6 +880,7 @@ export async function runLLMQAValidation(openai, { summary_spicy, grounding, inp
     usage,
     prompt_version: LAYER_B_PROMPT_VERSION,
     model: LAYER_B_MODEL,
+    confidenceWarning: validation.confidenceWarning,
   };
 }
 
@@ -898,6 +940,7 @@ export async function runLayerBQA(openai, { summary_spicy, ruling_impact_level, 
   return {
     verdict: result.verdict,
     issues: capIssues(allIssues),
+    droppedIssues: result.droppedIssues || [],  // ADO-324: track dropped issues
     severity_score: result.severity_score ?? computeSeverityScore(allIssues),
     confidence: result.confidence ?? null,
     error: result.error ?? null,
@@ -906,5 +949,6 @@ export async function runLayerBQA(openai, { summary_spicy, ruling_impact_level, 
     model: result.model ?? LAYER_B_MODEL,
     ran_at: new Date().toISOString(),
     usage: result.usage,
+    confidenceWarning: result.confidenceWarning,  // ADO-324: pass through warnings
   };
 }

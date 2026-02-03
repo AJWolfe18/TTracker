@@ -17,6 +17,7 @@ import {
   isScaleSupported,
   lintHyperbole,
   checkProceduralPosture,
+  checkDissentMismatch,  // ADO-324
   runDeterministicValidators,
   deriveVerdict,
   extractSourceExcerpt,
@@ -344,6 +345,75 @@ describe('runDeterministicValidators', () => {
 });
 
 // ============================================================================
+// checkDissentMismatch (ADO-324)
+// ============================================================================
+
+describe('checkDissentMismatch', () => {
+  test('flags dissent reference when dissent_exists=false (Case 173 pattern)', () => {
+    const summary = 'Dissenters warned about the dangers of tightening amendment standards.';
+    const facts = { dissent_exists: false };
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].type).toBe('ungrounded_dissent_reference');
+    expect(issues[0].severity).toBe('high');
+    expect(issues[0].fixable).toBe(true);
+  });
+
+  test('flags various dissent-related words', () => {
+    const testCases = ['dissent', 'dissenter', 'dissenters', 'dissenting', 'dissented'];
+    const facts = { dissent_exists: false };
+
+    for (const word of testCases) {
+      const summary = `The ${word} opinion raised concerns.`;
+      const issues = checkDissentMismatch(summary, facts);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].type).toBe('ungrounded_dissent_reference');
+    }
+  });
+
+  test('no issue when dissent_exists=true', () => {
+    const summary = 'Dissenters warned about the dangers.';
+    const facts = { dissent_exists: true };
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues).toHaveLength(0);
+  });
+
+  test('no issue when dissent_exists is undefined', () => {
+    const summary = 'Dissenters warned about the dangers.';
+    const facts = {};
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues).toHaveLength(0);
+  });
+
+  test('no issue when no dissent words in summary', () => {
+    const summary = 'The Court reversed the lower court decision.';
+    const facts = { dissent_exists: false };
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues).toHaveLength(0);
+  });
+
+  test('case-insensitive matching', () => {
+    const summary = 'DISSENTERS warned about these changes.';
+    const facts = { dissent_exists: false };
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues).toHaveLength(1);
+  });
+
+  test('extracts affected sentence correctly', () => {
+    const summary = 'The majority ruled. Dissenters raised concerns. The case was decided.';
+    const facts = { dissent_exists: false };
+    const issues = checkDissentMismatch(summary, facts);
+
+    expect(issues[0].affected_sentence).toBe('Dissenters raised concerns.');
+  });
+});
+
+// ============================================================================
 // deriveVerdict
 // ============================================================================
 
@@ -376,6 +446,14 @@ describe('deriveVerdict', () => {
   test('returns REJECT for high severity procedural_merits_implication', () => {
     const issues = [
       { type: 'procedural_merits_implication', severity: 'high' },
+    ];
+    expect(deriveVerdict(issues)).toBe('REJECT');
+  });
+
+  // ADO-324: ungrounded_dissent_reference should cause REJECT
+  test('returns REJECT for high severity ungrounded_dissent_reference (ADO-324)', () => {
+    const issues = [
+      { type: 'ungrounded_dissent_reference', severity: 'high' },
     ];
     expect(deriveVerdict(issues)).toBe('REJECT');
   });

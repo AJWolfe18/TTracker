@@ -211,6 +211,41 @@ export function checkProceduralPosture(summarySpicy, facts) {
   return issues;
 }
 
+/**
+ * ADO-324: Check for dissent mismatch - summary mentions dissenters when none exist.
+ * This is a deterministic grounding check that catches hallucinated dissent claims.
+ *
+ * Example failure: Case 173 claimed "dissenters warned" but dissent_exists=false.
+ *
+ * @param {string} summarySpicy - The summary text to check
+ * @param {Object} facts - Facts from Pass 1, including dissent_exists
+ * @returns {Array} - Array of issues (empty if no mismatch)
+ */
+export function checkDissentMismatch(summarySpicy, facts) {
+  const issues = [];
+  const text = summarySpicy || '';
+
+  // Only check if we know there's no dissent
+  if (facts?.dissent_exists !== false) return issues;
+
+  // Check for dissent-related language
+  const dissentPattern = /\b(dissent|dissenter|dissenters|dissenting|dissented)\b/i;
+  const match = text.match(dissentPattern);
+
+  if (match) {
+    issues.push({
+      type: LAYER_A_ISSUE_TYPES.ungrounded_dissent_reference,
+      severity: 'high',  // This is a factual error - high severity
+      fixable: true,
+      why: 'Summary references a dissent, but case metadata indicates no dissent exists',
+      affected_sentence: extractSentenceContaining(text, match[0]),
+      fix_directive: 'Remove all references to dissenters/dissenting opinions - this case had no dissent',
+    });
+  }
+
+  return issues;
+}
+
 export function runDeterministicValidators({ summary_spicy, ruling_impact_level, facts, grounding }) {
   const issues = [];
 
@@ -225,14 +260,22 @@ export function runDeterministicValidators({ summary_spicy, ruling_impact_level,
 
   issues.push(...checkProceduralPosture(summary_spicy, facts));
 
+  // ADO-324: Check for hallucinated dissent references
+  issues.push(...checkDissentMismatch(summary_spicy, facts));
+
   return issues;
 }
 
 export function deriveVerdict(issues) {
   // ADO-310: Use shared constants for type matching
+  // ADO-324: Added ungrounded_dissent_reference to high severity list
   const highSeverity = issues.some(i =>
     i.severity === 'high' &&
-    [LAYER_A_ISSUE_TYPES.unsupported_scale, LAYER_A_ISSUE_TYPES.procedural_merits_implication].includes(i.type)
+    [
+      LAYER_A_ISSUE_TYPES.unsupported_scale,
+      LAYER_A_ISSUE_TYPES.procedural_merits_implication,
+      LAYER_A_ISSUE_TYPES.ungrounded_dissent_reference,
+    ].includes(i.type)
   );
   if (highSeverity) return 'REJECT';
   if (issues.length > 0) return 'FLAG';

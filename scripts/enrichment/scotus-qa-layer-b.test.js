@@ -72,11 +72,13 @@ function describe(name, fn) {
 // ============================================================================
 
 describe('Response Validator Tests', () => {
-  test('fixable=true but no fix_directive -> insufficient_qa_output', () => {
+  // ADO-324: Changed from fail-fast to graceful degradation
+  // Invalid issues are now dropped, not entire response invalidated
+  test('fixable=true but no fix_directive -> issue dropped (ADO-324)', () => {
     const summary = 'Some summary text with the specific sentence here.';
     const response = {
       issues: [{
-        type: 'scope_overreach',  // medium severity, so won't trigger affected_sentence check
+        type: 'scope_overreach',
         severity: 'medium',
         fixable: true,
         why: 'Summary overclaims scope',
@@ -85,12 +87,13 @@ describe('Response Validator Tests', () => {
       raw_confidence: 80,
     };
     const result = validateLLMResponse(response, summary);
-    assert.equal(result.valid, false);
-    assert.equal(result.issues[0].type, INTERNAL_ISSUE_TYPES.insufficient_qa_output);
-    assert.ok(result.error.includes('fixable'));
+    assert.equal(result.valid, true);  // ADO-324: Now valid, issue is dropped
+    assert.equal(result.issues.length, 0);  // Issue was dropped
+    assert.equal(result.droppedIssues.length, 1);
+    assert.ok(result.droppedIssues[0].dropped_reason.includes('fixable'));
   });
 
-  test('severity=high but no affected_sentence -> insufficient_qa_output', () => {
+  test('severity=high but no affected_sentence -> issue dropped (ADO-324)', () => {
     const response = {
       issues: [{
         type: 'hallucination',
@@ -102,11 +105,13 @@ describe('Response Validator Tests', () => {
       raw_confidence: 80,
     };
     const result = validateLLMResponse(response, 'Some summary text');
-    assert.equal(result.valid, false);
-    assert.equal(result.issues[0].type, INTERNAL_ISSUE_TYPES.insufficient_qa_output);
+    assert.equal(result.valid, true);  // ADO-324: Now valid, issue is dropped
+    assert.equal(result.issues.length, 0);
+    assert.equal(result.droppedIssues.length, 1);
+    assert.ok(result.droppedIssues[0].dropped_reason.includes('affected_sentence'));
   });
 
-  test('affected_sentence not in summary -> insufficient_qa_output', () => {
+  test('affected_sentence not in summary -> issue dropped (ADO-324)', () => {
     const response = {
       issues: [{
         type: 'accuracy_vs_holding',
@@ -118,11 +123,13 @@ describe('Response Validator Tests', () => {
       raw_confidence: 80,
     };
     const result = validateLLMResponse(response, 'The actual summary text here');
-    assert.equal(result.valid, false);
-    assert.ok(result.error.includes('not verbatim'));
+    assert.equal(result.valid, true);  // ADO-324: Now valid, issue is dropped
+    assert.equal(result.issues.length, 0);
+    assert.equal(result.droppedIssues.length, 1);
+    assert.ok(result.droppedIssues[0].dropped_reason.includes('not_verbatim'));
   });
 
-  test('invalid issue type -> insufficient_qa_output', () => {
+  test('invalid issue type -> issue dropped (ADO-324)', () => {
     const response = {
       issues: [{
         type: 'invalid_type_not_in_enum',
@@ -133,18 +140,20 @@ describe('Response Validator Tests', () => {
       raw_confidence: 80,
     };
     const result = validateLLMResponse(response, 'Some summary');
-    assert.equal(result.valid, false);
-    assert.equal(result.issues[0].type, INTERNAL_ISSUE_TYPES.insufficient_qa_output);
+    assert.equal(result.valid, true);  // ADO-324: Now valid, issue is dropped
+    assert.equal(result.issues.length, 0);
+    assert.equal(result.droppedIssues.length, 1);
+    assert.ok(result.droppedIssues[0].dropped_reason.includes('invalid_issue_type'));
   });
 
   test('valid response parses successfully + severity normalized', () => {
-    const summary = 'The Court reversed the decision and remanded.';
+    const summary = 'the court reversed the decision and remanded.';  // lowercase for ADO-324 case-insensitive
     const response = {
       issues: [{
         type: 'accuracy_vs_holding',
         severity: 'medium',  // Will be normalized to 'high'
         fixable: true,
-        affected_sentence: 'The Court reversed the decision',
+        affected_sentence: 'The Court reversed the decision',  // Different case - should match
         why: 'Summary says reversed but holding says affirmed',
         fix_directive: 'Change reversed to affirmed',
       }],
@@ -161,41 +170,86 @@ describe('Response Validator Tests', () => {
     const result = validateLLMResponse(response, 'Any summary');
     assert.equal(result.valid, true);
     assert.equal(result.issues.length, 0);
+    assert.equal(result.droppedIssues.length, 0);
   });
 
-  // ADO-310: raw_confidence validation tests
-  test('invalid raw_confidence (string) -> insufficient_qa_output', () => {
+  // ADO-324: raw_confidence validation now warns instead of failing
+  test('invalid raw_confidence (string) -> warning, not failure (ADO-324)', () => {
     const response = { issues: [], raw_confidence: 'high' };
     const result = validateLLMResponse(response, 'Some summary');
-    assert.equal(result.valid, false);
-    assert.ok(result.error.includes('raw_confidence'));
+    assert.equal(result.valid, true);  // ADO-324: Now valid with warning
+    assert.ok(result.confidenceWarning.includes('raw_confidence'));
   });
 
-  test('invalid raw_confidence (>100) -> insufficient_qa_output', () => {
+  test('invalid raw_confidence (>100) -> warning (ADO-324)', () => {
     const response = { issues: [], raw_confidence: 150 };
     const result = validateLLMResponse(response, 'Some summary');
-    assert.equal(result.valid, false);
-    assert.ok(result.error.includes('raw_confidence'));
+    assert.equal(result.valid, true);
+    assert.ok(result.confidenceWarning.includes('raw_confidence'));
   });
 
-  test('invalid raw_confidence (negative) -> insufficient_qa_output', () => {
+  test('invalid raw_confidence (negative) -> warning (ADO-324)', () => {
     const response = { issues: [], raw_confidence: -10 };
     const result = validateLLMResponse(response, 'Some summary');
-    assert.equal(result.valid, false);
-    assert.ok(result.error.includes('raw_confidence'));
+    assert.equal(result.valid, true);
+    assert.ok(result.confidenceWarning.includes('raw_confidence'));
   });
 
-  test('invalid raw_confidence (float) -> insufficient_qa_output', () => {
+  test('invalid raw_confidence (float) -> warning (ADO-324)', () => {
     const response = { issues: [], raw_confidence: 85.5 };
     const result = validateLLMResponse(response, 'Some summary');
-    assert.equal(result.valid, false);
-    assert.ok(result.error.includes('raw_confidence'));
+    assert.equal(result.valid, true);
+    assert.ok(result.confidenceWarning.includes('raw_confidence'));
   });
 
   test('missing raw_confidence is valid (optional field)', () => {
     const response = { issues: [] };
     const result = validateLLMResponse(response, 'Some summary');
     assert.equal(result.valid, true);
+    assert.ok(result.confidenceWarning === undefined || result.confidenceWarning === null);
+  });
+
+  // ADO-324: Structural failures still cause invalid
+  test('missing issues array -> still invalid (structural failure)', () => {
+    const response = { raw_confidence: 80 };
+    const result = validateLLMResponse(response, 'Some summary');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('issues array'));
+  });
+
+  test('null response -> still invalid (structural failure)', () => {
+    const result = validateLLMResponse(null, 'Some summary');
+    assert.equal(result.valid, false);
+    assert.ok(result.error.includes('response structure'));
+  });
+
+  // ADO-324: Mixed valid and invalid issues
+  test('mix of valid and invalid issues -> valid issues kept, invalid dropped (ADO-324)', () => {
+    const summary = 'the court reversed the decision with strong language.';
+    const response = {
+      issues: [
+        {
+          type: 'accuracy_vs_holding',
+          severity: 'high',
+          fixable: false,
+          affected_sentence: 'The Court reversed the decision',  // Valid - matches after normalization
+          why: 'Contradicts holding',
+        },
+        {
+          type: 'hallucination',
+          severity: 'high',
+          fixable: false,
+          affected_sentence: 'Text not in summary',  // Invalid - not found
+          why: 'Hallucinated claim',
+        },
+      ],
+      raw_confidence: 80,
+    };
+    const result = validateLLMResponse(response, summary);
+    assert.equal(result.valid, true);
+    assert.equal(result.issues.length, 1);  // One valid
+    assert.equal(result.droppedIssues.length, 1);  // One dropped
+    assert.equal(result.issues[0].type, 'accuracy_vs_holding');
   });
 });
 
@@ -204,9 +258,10 @@ describe('Response Validator Tests', () => {
 // ============================================================================
 
 describe('Verdict Computation Tests (deriveLayerBVerdict)', () => {
-  test('deriveLayerBVerdict([insufficient_qa_output]) -> null', () => {
+  // ADO-324: insufficient_qa_output now returns REVIEW, not null
+  test('deriveLayerBVerdict([insufficient_qa_output]) -> REVIEW (ADO-324: fail-closed)', () => {
     const issues = [{ type: INTERNAL_ISSUE_TYPES.insufficient_qa_output }];
-    assert.equal(deriveLayerBVerdict(issues), null);
+    assert.equal(deriveLayerBVerdict(issues), 'REVIEW');
   });
 
   test('deriveLayerBVerdict([insufficient_grounding]) -> FLAG', () => {
@@ -250,6 +305,24 @@ describe('Verdict Computation Tests (deriveLayerBVerdict)', () => {
     ];
     assert.equal(deriveLayerBVerdict(issues), 'APPROVE');
   });
+
+  // ADO-324: New tests for fail-closed behavior
+  test('hadProcessingError=true -> REVIEW (ADO-324)', () => {
+    const issues = [];  // No issues found
+    assert.equal(deriveLayerBVerdict(issues, { hadProcessingError: true }), 'REVIEW');
+  });
+
+  test('high-severity dropped issues -> REVIEW (ADO-324)', () => {
+    const issues = [];  // No valid issues
+    const droppedIssues = [{ type: 'accuracy_vs_holding', severity: 'high', dropped_reason: 'test' }];
+    assert.equal(deriveLayerBVerdict(issues, { droppedIssues }), 'REVIEW');
+  });
+
+  test('low-severity dropped issues -> FLAG (ADO-324)', () => {
+    const issues = [];  // No valid issues
+    const droppedIssues = [{ type: 'scope_overreach', severity: 'medium', dropped_reason: 'test' }];
+    assert.equal(deriveLayerBVerdict(issues, { droppedIssues }), 'FLAG');
+  });
 });
 
 // ============================================================================
@@ -261,12 +334,14 @@ describe('Final Verdict Computation Tests (computeFinalVerdict)', () => {
     assert.equal(computeFinalVerdict('APPROVE', 'REJECT'), 'REJECT');
   });
 
-  test('computeFinalVerdict(APPROVE, null) -> APPROVE (graceful defer)', () => {
-    assert.equal(computeFinalVerdict('APPROVE', null), 'APPROVE');
+  // ADO-324: null from Layer B now becomes REVIEW (fail-closed)
+  test('computeFinalVerdict(APPROVE, null) -> REVIEW (ADO-324: fail-closed)', () => {
+    assert.equal(computeFinalVerdict('APPROVE', null), 'REVIEW');
   });
 
-  test('computeFinalVerdict(FLAG, null) -> FLAG (graceful defer)', () => {
-    assert.equal(computeFinalVerdict('FLAG', null), 'FLAG');
+  // ADO-324: REVIEW is higher than FLAG, so REVIEW wins
+  test('computeFinalVerdict(FLAG, null) -> REVIEW (ADO-324: fail-closed)', () => {
+    assert.equal(computeFinalVerdict('FLAG', null), 'REVIEW');
   });
 
   test('computeFinalVerdict(FLAG, APPROVE) -> FLAG', () => {
@@ -285,9 +360,9 @@ describe('Final Verdict Computation Tests (computeFinalVerdict)', () => {
     assert.equal(computeFinalVerdict('FLAG', 'REJECT'), 'REJECT');
   });
 
-  // ADO-310: Additional null handling tests
-  test('computeFinalVerdict(null, null) -> APPROVE (both null)', () => {
-    assert.equal(computeFinalVerdict(null, null), 'APPROVE');
+  // ADO-324: Both null now means REVIEW (fail-closed)
+  test('computeFinalVerdict(null, null) -> REVIEW (ADO-324: both null)', () => {
+    assert.equal(computeFinalVerdict(null, null), 'REVIEW');
   });
 
   test('computeFinalVerdict(null, FLAG) -> FLAG (Layer A null)', () => {
@@ -296,6 +371,19 @@ describe('Final Verdict Computation Tests (computeFinalVerdict)', () => {
 
   test('computeFinalVerdict(null, REJECT) -> REJECT (Layer A null)', () => {
     assert.equal(computeFinalVerdict(null, 'REJECT'), 'REJECT');
+  });
+
+  // ADO-324: REVIEW verdict tests
+  test('computeFinalVerdict(APPROVE, REVIEW) -> REVIEW (ADO-324)', () => {
+    assert.equal(computeFinalVerdict('APPROVE', 'REVIEW'), 'REVIEW');
+  });
+
+  test('computeFinalVerdict(FLAG, REVIEW) -> REVIEW (ADO-324)', () => {
+    assert.equal(computeFinalVerdict('FLAG', 'REVIEW'), 'REVIEW');
+  });
+
+  test('computeFinalVerdict(REVIEW, REJECT) -> REJECT (ADO-324)', () => {
+    assert.equal(computeFinalVerdict('REVIEW', 'REJECT'), 'REJECT');
   });
 });
 
@@ -675,21 +763,113 @@ describe('Severity Normalization Tests', () => {
 // ============================================================================
 
 describe('Text Normalization Tests', () => {
+  // ADO-324: Enhanced normalization with case-insensitive matching
   test('normalizeForMatch handles curly quotes', () => {
     const input = '\u201CQuoted text\u201D with \u2018single\u2019 quotes';
-    const expected = '"Quoted text" with \'single\' quotes';
+    const expected = '"quoted text" with \'single\' quotes';  // ADO-324: lowercase
     assert.equal(normalizeForMatch(input), expected);
   });
 
   test('normalizeForMatch collapses whitespace', () => {
     const input = 'Multiple   spaces\n\tand\ttabs';
-    const expected = 'Multiple spaces and tabs';
+    const expected = 'multiple spaces and tabs';  // ADO-324: lowercase
     assert.equal(normalizeForMatch(input), expected);
   });
 
   test('normalizeForMatch trims', () => {
     const input = '  padded text  ';
     assert.equal(normalizeForMatch(input), 'padded text');
+  });
+
+  // ADO-324: New normalization features
+  test('normalizeForMatch handles em-dash and en-dash', () => {
+    const input = 'word\u2014word and word\u2013word';  // em-dash and en-dash
+    const expected = 'word-word and word-word';
+    assert.equal(normalizeForMatch(input), expected);
+  });
+
+  test('normalizeForMatch handles ellipsis', () => {
+    const input = 'text\u2026more text';  // Unicode ellipsis
+    const expected = 'text...more text';
+    assert.equal(normalizeForMatch(input), expected);
+  });
+
+  test('normalizeForMatch is case-insensitive (ADO-324)', () => {
+    const input = 'The Court REVERSED the decision';
+    const expected = 'the court reversed the decision';
+    assert.equal(normalizeForMatch(input), expected);
+  });
+
+  test('normalizeForMatch handles minus sign', () => {
+    const input = '100\u2212200';  // Unicode minus sign
+    const expected = '100-200';
+    assert.equal(normalizeForMatch(input), expected);
+  });
+
+  test('normalizeForMatch handles prime quotes', () => {
+    const input = '\u2032prime\u2032 and \u2033double\u2033';  // prime and double prime
+    const expected = '\'prime\' and "double"';
+    assert.equal(normalizeForMatch(input), expected);
+  });
+
+  test('normalizeForMatch handles null/empty', () => {
+    assert.equal(normalizeForMatch(null), '');
+    assert.equal(normalizeForMatch(''), '');
+    assert.equal(normalizeForMatch(undefined), '');
+  });
+});
+
+// ============================================================================
+// 14. ADO-324 FAIL-CLOSED INTEGRATION TESTS
+// ============================================================================
+
+describe('ADO-324 Fail-Closed Integration Tests', () => {
+  // This tests the exact Case 173 failure pattern:
+  // - LLM detects accuracy issue
+  // - affected_sentence doesn't match verbatim
+  // - Old behavior: verdict=null, falls through to Layer A APPROVE
+  // - New behavior: verdict=REVIEW, blocks approval
+
+  test('Case 173 pattern: dropped high-severity issue -> REVIEW (not APPROVE)', () => {
+    // Simulate Layer B response where issue was dropped due to affected_sentence mismatch
+    const issues = [];  // No valid issues after validation
+    const droppedIssues = [{
+      type: 'accuracy_vs_holding',
+      severity: 'high',
+      why: 'Claims dissenters warned when no dissent exists',
+      affected_sentence: 'Dissenters warned about the dangers',  // Not found in summary
+      dropped_reason: 'affected_sentence_not_verbatim_from_summary',
+    }];
+
+    const verdict = deriveLayerBVerdict(issues, { droppedIssues });
+    assert.equal(verdict, 'REVIEW');  // ADO-324: Must not be APPROVE
+  });
+
+  test('Layer B null verdict + Layer A APPROVE -> REVIEW (fail-closed)', () => {
+    // Old behavior would have returned APPROVE
+    // New behavior returns REVIEW because Layer B couldn't decide
+    const finalVerdict = computeFinalVerdict('APPROVE', null);
+    assert.equal(finalVerdict, 'REVIEW');
+  });
+
+  test('Layer B REVIEW + Layer A APPROVE -> REVIEW (REVIEW blocks approval)', () => {
+    const finalVerdict = computeFinalVerdict('APPROVE', 'REVIEW');
+    assert.equal(finalVerdict, 'REVIEW');
+  });
+
+  test('Layer B REVIEW + Layer A FLAG -> REVIEW (REVIEW is more severe)', () => {
+    const finalVerdict = computeFinalVerdict('FLAG', 'REVIEW');
+    assert.equal(finalVerdict, 'REVIEW');
+  });
+
+  test('hallucination type in dropped issues -> REVIEW', () => {
+    const droppedIssues = [{
+      type: 'hallucination',
+      severity: 'high',
+      dropped_reason: 'affected_sentence_not_found',
+    }];
+    const verdict = deriveLayerBVerdict([], { droppedIssues });
+    assert.equal(verdict, 'REVIEW');
   });
 });
 
@@ -698,7 +878,7 @@ describe('Text Normalization Tests', () => {
 // ============================================================================
 
 console.log('\n========================================');
-console.log('SCOTUS QA Layer B Unit Tests (ADO-310)');
+console.log('SCOTUS QA Layer B Unit Tests (ADO-310 + ADO-324)');
 console.log('========================================');
 
 // All tests are defined above and run automatically

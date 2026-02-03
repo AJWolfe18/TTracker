@@ -21,6 +21,7 @@ export const LAYER_A_ISSUE_TYPES = {
   scope_overclaim_phrase: 'scope_overclaim_phrase',
   procedural_merits_implication: 'procedural_merits_implication',
   procedural_missing_framing: 'procedural_missing_framing',
+  ungrounded_dissent_reference: 'ungrounded_dissent_reference',  // ADO-324
 };
 
 // ============================================================================
@@ -64,6 +65,7 @@ export const ISSUE_TYPE_SEVERITY = {
   // Layer A - high severity (REJECT)
   [LAYER_A_ISSUE_TYPES.unsupported_scale]: 'high',
   [LAYER_A_ISSUE_TYPES.procedural_merits_implication]: 'high',
+  [LAYER_A_ISSUE_TYPES.ungrounded_dissent_reference]: 'high',  // ADO-324: factual error
 
   // Layer A - medium severity (FLAG)
   [LAYER_A_ISSUE_TYPES.hyperbole]: 'medium',
