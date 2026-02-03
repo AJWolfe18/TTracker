@@ -3,175 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrumpyTracker Admin</title>
+    <title>Admin Dashboard - TrumpyTracker</title>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-browser-config.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
-            font-family: system-ui, sans-serif;
-            background: linear-gradient(135deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
-            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
             min-height: 100vh;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .card { 
-            background: rgba(45, 55, 72, 0.6);
-            backdrop-filter: blur(10px);
-            border-radius: 12px; 
-            padding: 24px; 
-            margin-bottom: 20px; 
-            border: 1px solid #4a5568;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
+
+        /* Header Styles */
+        .header {
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #334155;
         }
-        .card:hover {
-            background: rgba(45, 55, 72, 0.8);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        .header-prod { background: #1e3a5f; }
+        .header-test { background: #5f4b1e; }
+        .header-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
         }
-        .input { 
-            width: 100%; 
-            padding: 12px; 
-            background: #2d3748; 
-            border: 1px solid #4a5568; 
-            border-radius: 8px; 
-            color: white; 
-            font-size: 14px; 
-            box-sizing: border-box; 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
-        .input:focus { outline: none; border-color: #3182ce; }
-        .btn { 
-            padding: 10px 16px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-weight: 500; 
-            transition: all 0.3s ease; 
+        .budget-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
             font-size: 14px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
-        .btn-primary { 
-            background: linear-gradient(135deg, #3182ce 0%, #2563eb 100%); 
-            color: white; 
+        .budget-ok { color: #4ade80; }
+        .budget-warning { color: #fbbf24; }
+        .budget-danger { color: #f87171; }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            padding: 12px 24px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
         }
-        .btn-primary:hover { 
-            background: linear-gradient(135deg, #2c5aa0 0%, #1d4ed8 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(49, 130, 206, 0.4);
-        }
-        .btn-success { 
-            background: linear-gradient(135deg, #38a169 0%, #22c55e 100%); 
-            color: white; 
-        }
-        .btn-success:hover { 
-            background: linear-gradient(135deg, #2f855a 0%, #16a34a 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(56, 161, 105, 0.4);
-        }
-        .btn-danger { 
-            background: linear-gradient(135deg, #e53e3e 0%, #ef4444 100%); 
-            color: white; 
-        }
-        .btn-danger:hover { 
-            background: linear-gradient(135deg, #c53030 0%, #dc2626 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(229, 62, 62, 0.4);
-        }
-        .btn-secondary { 
-            background: linear-gradient(135deg, #4a5568 0%, #6b7280 100%); 
-            color: white; 
-        }
-        .btn-secondary:hover { 
-            background: linear-gradient(135deg, #2d3748 0%, #4b5563 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(74, 85, 104, 0.4);
-        }
-        .btn-warning { 
-            background: linear-gradient(135deg, #d69e2e 0%, #f59e0b 100%); 
-            color: white; 
-        }
-        .btn-warning:hover { 
-            background: linear-gradient(135deg, #b7791f 0%, #d97706 100%);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(214, 158, 46, 0.4);
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .flex { display: flex; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .gap-4 { gap: 16px; }
-        .gap-2 { gap: 8px; }
-        .mb-4 { margin-bottom: 16px; }
-        .mb-2 { margin-bottom: 8px; }
-        .text-center { text-align: center; }
-        .text-sm { font-size: 14px; }
-        .text-xs { font-size: 12px; }
-        .font-bold { font-weight: 700; }
-        .grid { display: grid; }
-        .grid-2 { grid-template-columns: 1fr 1fr; }
-        .entry { 
-            background: rgba(45, 55, 72, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid #4a5568; 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 12px; 
-            cursor: pointer; 
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        }
-        .entry:hover { 
-            background: rgba(55, 65, 81, 0.8);
-            transform: translateY(-2px); 
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        }
-        .entry.selected { border-color: #3182ce; background: rgba(49, 130, 206, 0.1); }
-        .entry.editing { border-color: #38a169; background: rgba(56, 161, 105, 0.1); cursor: default; }
-        .entry.failed { border-left: 4px solid #e53e3e; }
-        .entry.published { border-left: 4px solid #38a169; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-        .badge-high { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .badge-medium { background: rgba(237, 137, 54, 0.2); color: #feebc8; border: 1px solid #ed8936; }
-        .badge-low { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-archived { background: rgba(128, 90, 213, 0.2); color: #e9d8fd; border: 1px solid #805ad5; }
-        .badge-published { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .badge-failed { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .logo { 
-            width: 40px; 
-            height: 40px; 
-            background: linear-gradient(135deg, #e53e3e 0%, #3182ce 100%); 
-            border-radius: 8px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-weight: bold; 
-        }
-        .message { padding: 12px; border-radius: 8px; margin-bottom: 16px; }
-        .message-success { background: rgba(56, 161, 105, 0.2); color: #c6f6d5; border: 1px solid #38a169; }
-        .message-error { background: rgba(229, 62, 62, 0.2); color: #fed7d7; border: 1px solid #e53e3e; }
-        .message-info { background: rgba(49, 130, 206, 0.2); color: #bee3f8; border: 1px solid #3182ce; }
-        .scrollable { height: calc(100vh - 420px); overflow-y: auto; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .stat-card { 
-            background: rgba(55, 65, 81, 0.6);
-            backdrop-filter: blur(10px);
-            padding: 20px; 
-            border-radius: 12px; 
-            text-align: center;
-            border: 1px solid #4a5568;
+        .tab-btn {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            transition: all 0.2s;
         }
-        .stat-card:hover {
-            background: rgba(55, 65, 81, 0.8);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        .tab-btn:hover { background: #334155; color: #e2e8f0; }
+        .tab-btn.active {
+            background: #3b82f6;
+            color: white;
         }
-        @media (max-width: 768px) {
-            .grid-2 { grid-template-columns: 1fr; }
-            .flex-mobile { flex-direction: column; }
+
+        /* Main Content */
+        .main-content {
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+        }
+
+        /* Cards */
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-body { padding: 20px; }
+
+        /* Status Indicators */
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #334155;
+        }
+        .status-row:last-child { border-bottom: none; }
+        .status-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .status-icon { font-size: 18px; }
+        .status-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-ok { color: #4ade80; }
+        .status-warning { color: #fbbf24; }
+        .status-error { color: #f87171; }
+        .status-muted { color: #64748b; }
+
+        /* Attention Items */
+        .attention-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #0f172a;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .attention-item:hover { background: #1e293b; transform: translateX(4px); }
+        .attention-item:last-child { margin-bottom: 0; }
+        .attention-count {
+            background: #ef4444;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .attention-count.zero {
+            background: #334155;
+            color: #64748b;
+        }
+
+        /* Activity Summary */
+        .activity-stat {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+        }
+        .activity-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .activity-icon.stories { background: rgba(59, 130, 246, 0.2); }
+        .activity-icon.articles { background: rgba(16, 185, 129, 0.2); }
+        .activity-icon.enriched { background: rgba(168, 85, 247, 0.2); }
+        .activity-number {
+            font-size: 24px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+        .activity-label {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .action-btn {
+            padding: 12px 20px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .action-btn:hover {
+            background: #1e293b;
+            border-color: #3b82f6;
+        }
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #334155;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Error State */
+        .error-banner {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: #fca5a5;
+        }
+
+        /* Auto-refresh indicator */
+        .refresh-indicator {
+            font-size: 12px;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 12px; }
+            .quick-actions { flex-direction: column; }
+            .action-btn { width: 100%; justify-content: center; }
         }
     </style>
 </head>
@@ -179,905 +276,518 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
-        function AdminApp() {
-            // === STATE MANAGEMENT ===
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [token, setToken] = useState('');
-            const [entries, setEntries] = useState([]);
-            const [selectedEntries, setSelectedEntries] = useState(new Set());
-            const [searchTerm, setSearchTerm] = useState('');
-            const [isLoading, setIsLoading] = useState(false);
-            const [message, setMessage] = useState(null);
-            const [showArchived, setShowArchived] = useState(false);
-            const [editingEntry, setEditingEntry] = useState(null);
-            const [editForm, setEditForm] = useState({});
-            const [submissionUrl, setSubmissionUrl] = useState('');
-            const [isSubmitting, setIsSubmitting] = useState(false);
-            const [statusFilter, setStatusFilter] = useState('all');
-
-            // === UTILITY FUNCTIONS ===
-            const generateId = () => {
-                return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            };
-
-            const encodeBase64 = (str) => {
-                try {
-                    return btoa(unescape(encodeURIComponent(str)));
-                } catch {
-                    return btoa(str);
-                }
-            };
-
-            const showMessage = useCallback((text, type = 'info') => {
-                setMessage({ text, type });
-                const timeoutId = setTimeout(() => setMessage(null), 5000);
-                return () => clearTimeout(timeoutId);
-            }, []);
-
-            const formatDate = useCallback((dateString) => {
-                try {
-                    return new Date(dateString).toLocaleDateString();
-                } catch {
-                    return 'Invalid Date';
-                }
-            }, []);
-
-            const formatDateTime = useCallback((dateString) => {
-                try {
-                    return new Date(dateString).toLocaleString();
-                } catch {
-                    return 'Invalid Date';
-                }
-            }, []);
-
-            const getSeverityClasses = useCallback((severity) => {
-                switch (severity) {
-                    case 'high': return 'badge badge-high';
-                    case 'medium': return 'badge badge-medium';
-                    case 'low': return 'badge badge-low';
-                    default: return 'badge';
-                }
-            }, []);
-
-            const getStatusClasses = useCallback((status) => {
-                switch (status) {
-                    case 'published': return 'badge badge-published';
-                    case 'failed': return 'badge badge-failed';
-                    default: return 'badge badge-published'; // Default to published for legacy entries
-                }
-            }, []);
-
-            // === AUTHENTICATION ===
-            const authenticate = async () => {
-                if (!token.trim()) {
-                    showMessage('Please enter your GitHub token', 'error');
-                    return;
-                }
-                if (!token.startsWith('github_pat_') && !token.startsWith('ghp_')) {
-                    showMessage('Token must start with github_pat_ or ghp_', 'error');
-                    return;
-                }
-
-                try {
-                    setIsLoading(true);
-                    const response = await fetch('https://api.github.com/user', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error('Invalid GitHub token');
-                    }
-
-                    setIsAuthenticated(true);
-                    sessionStorage.setItem('admin_token', token);
-                    await loadEntries();
-                    showMessage('✅ Login successful', 'success');
-                } catch (error) {
-                    showMessage(`❌ Authentication failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const logout = () => {
-                setIsAuthenticated(false);
-                setToken('');
-                sessionStorage.removeItem('admin_token');
-                setEntries([]);
-                setSelectedEntries(new Set());
-                setMessage(null);
-            };
-
-            // === DATA OPERATIONS ===
-            const loadEntries = async () => {
-                try {
-                    setIsLoading(true);
-                    const response = await fetch('/master-tracker-log.json');
-                    if (!response.ok) throw new Error('Failed to load entries');
-                    const data = await response.json();
-                    
-                    // Add default status to legacy entries that don't have one
-                    const entriesWithStatus = (Array.isArray(data) ? data : []).map(entry => ({
-                        ...entry,
-                        status: entry.status || 'published' // Default legacy entries to published
-                    }));
-                    
-                    setEntries(entriesWithStatus);
-                    showMessage(`📊 Loaded ${entriesWithStatus.length} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Error loading entries: ${error.message}`, 'error');
-                    setEntries([]);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const updateGitHubFile = async (newData, fileName = 'master-tracker-log.json') => {
-                const repo = 'AJWolfe18/TTracker';
-                const path = fileName;
-                
-                try {
-                    const getResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}?ref=main`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    
-                    let fileInfo = null;
-                    if (getResponse.ok) {
-                        fileInfo = await getResponse.json();
-                    }
-                    
-                    const updateResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: `Admin update: ${fileName}`,
-                            content: encodeBase64(JSON.stringify(newData, null, 2)),
-                            sha: fileInfo?.sha
-                        })
-                    });
-                    
-                    if (!updateResponse.ok) {
-                        throw new Error(`GitHub update failed: ${updateResponse.status}`);
-                    }
-                    
-                    // Update public file for master tracker
-                    if (fileName === 'master-tracker-log.json') {
-                        try {
-                            const publicPath = `public/${fileName}`;
-                            const publicGetResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${publicPath}?ref=main`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            
-                            let publicFileInfo = null;
-                            if (publicGetResponse.ok) {
-                                publicFileInfo = await publicGetResponse.json();
-                            }
-                            
-                            await fetch(`https://api.github.com/repos/${repo}/contents/${publicPath}`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    message: `Admin update: public/${fileName}`,
-                                    content: encodeBase64(JSON.stringify(newData, null, 2)),
-                                    sha: publicFileInfo?.sha
-                                })
-                            });
-                        } catch (publicError) {
-                            console.warn('Could not update public file:', publicError);
-                        }
-                    }
-                    
-                    return true;
-                } catch (error) {
-                    console.error('GitHub update error:', error);
-                    throw error;
-                }
-            };
-
-            // === MANUAL ARTICLE SUBMISSION ===
-            const submitManualArticle = async () => {
-                if (!submissionUrl.trim()) return;
-                
-                try {
-                    setIsSubmitting(true);
-                    
-                    // Validate URL
-                    try {
-                        new URL(submissionUrl);
-                    } catch {
-                        throw new Error('Please enter a valid URL');
-                    }
-                    
-                    // Check for duplicates
-                    const duplicates = entries.filter(entry => entry.source_url === submissionUrl);
-                    if (duplicates.length > 0) {
-                        const override = confirm(`⚠️ Duplicate found: "${duplicates[0].title}"\n\nSubmit anyway?`);
-                        if (!override) {
-                            setIsSubmitting(false);
-                            return;
-                        }
-                    }
-                    
-                    showMessage('📝 Processing article...', 'info');
-                    
-                    // Trigger GitHub Actions workflow directly
-                    const workflowResponse = await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            event_type: 'process-manual-article',
-                            client_payload: {
-                                article_url: submissionUrl,
-                                submitted_by: 'admin',
-                                submitted_at: new Date().toISOString()
-                            }
-                        })
-                    });
-                    
-                    if (!workflowResponse.ok) {
-                        throw new Error(`Workflow trigger failed: ${workflowResponse.status}`);
-                    }
-                    
-                    setSubmissionUrl('');
-                    showMessage('✅ Article submitted for processing! Check back in a few minutes.', 'success');
-                    
-                    // Auto-refresh after delay
-                    setTimeout(() => loadEntries(), 30000);
-                    
-                } catch (error) {
-                    showMessage(`❌ Submission failed: ${error.message}`, 'error');
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-
-            // === STATUS OPERATIONS ===
-            const retrySelected = async () => {
-                if (selectedEntries.size === 0) return;
-                
-                const failedEntries = entries.filter(entry => 
-                    selectedEntries.has(entry.id) && entry.status === 'failed'
-                );
-                
-                if (failedEntries.length === 0) {
-                    showMessage('No failed entries selected', 'error');
-                    return;
-                }
-                
-                try {
-                    setIsLoading(true);
-                    
-                    // Trigger workflows for each failed entry
-                    for (const entry of failedEntries) {
-                        await fetch(`https://api.github.com/repos/AJWolfe18/TTracker/dispatches`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                event_type: 'process-manual-article',
-                                client_payload: {
-                                    article_url: entry.source_url,
-                                    submitted_by: entry.submitted_by || 'admin',
-                                    submitted_at: new Date().toISOString(),
-                                    retry: true
-                                }
-                            })
-                        });
-                    }
-                    
-                    setSelectedEntries(new Set());
-                    showMessage(`🔄 Retrying ${failedEntries.length} failed submissions`, 'success');
-                    
-                } catch (error) {
-                    showMessage(`❌ Retry failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const markAsPublished = async () => {
-                if (selectedEntries.size === 0) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updatedEntries = entries.map(entry => 
-                        selectedEntries.has(entry.id) 
-                            ? { ...entry, status: 'published', error_message: undefined }
-                            : entry
-                    );
-                    await updateGitHubFile(updatedEntries);
-                    setEntries(updatedEntries);
-                    setSelectedEntries(new Set());
-                    showMessage(`✅ Marked ${selectedEntries.size} entries as published`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Update failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            // === ENTRY MANAGEMENT ===
-            const archiveSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                if (!confirm(`Archive ${selectedEntries.size} entries?`)) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => 
-                        selectedEntries.has(entry.id) 
-                            ? { ...entry, archived: true, archived_at: new Date().toISOString() }
-                            : entry
-                    );
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗃️ Archived ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Archive failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const restoreSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => {
-                        if (selectedEntries.has(entry.id)) {
-                            const { archived, archived_at, ...restored } = entry;
-                            return restored;
-                        }
-                        return entry;
-                    });
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🔄 Restored ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Restore failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const deleteSelected = async () => {
-                if (selectedEntries.size === 0) return;
-                if (!confirm(`PERMANENTLY delete ${selectedEntries.size} entries?`)) return;
-                
-                try {
-                    setIsLoading(true);
-                    const updated = entries.filter(entry => !selectedEntries.has(entry.id));
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setSelectedEntries(new Set());
-                    showMessage(`🗑️ Deleted ${selectedEntries.size} entries`, 'success');
-                } catch (error) {
-                    showMessage(`❌ Delete failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const startEdit = (entry) => {
-                setEditingEntry(entry.id);
-                setEditForm({
-                    title: entry.title || '',
-                    description: entry.description || '',
-                    actor: entry.actor || '',
-                    category: entry.category || 'other',
-                    severity: entry.severity || 'medium',
-                    source_url: entry.source_url || '',
-                    verified: Boolean(entry.verified),
-                    date: entry.date || new Date().toISOString().split('T')[0],
-                    status: entry.status || 'published'
-                });
-            };
-
-            const saveEdit = async () => {
-                try {
-                    setIsLoading(true);
-                    const updated = entries.map(entry => 
-                        entry.id === editingEntry 
-                            ? { ...entry, ...editForm, modified_at: new Date().toISOString() }
-                            : entry
-                    );
-                    await updateGitHubFile(updated);
-                    setEntries(updated);
-                    setEditingEntry(null);
-                    setEditForm({});
-                    showMessage('✅ Entry updated', 'success');
-                } catch (error) {
-                    showMessage(`❌ Save failed: ${error.message}`, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            const cancelEdit = () => {
-                setEditingEntry(null);
-                setEditForm({});
-            };
-
-            const toggleSelection = (entryId) => {
-                const newSelected = new Set(selectedEntries);
-                if (newSelected.has(entryId)) {
-                    newSelected.delete(entryId);
-                } else {
-                    newSelected.add(entryId);
-                }
-                setSelectedEntries(newSelected);
-            };
-
-            const selectAll = () => {
-                const filtered = getFilteredEntries();
-                if (selectedEntries.size === filtered.length) {
-                    setSelectedEntries(new Set());
-                } else {
-                    setSelectedEntries(new Set(filtered.map(e => e.id)));
-                }
-            };
-
-            const getFilteredEntries = () => {
-                return entries.filter(entry => {
-                    // Archive filter
-                    if (showArchived && !entry.archived) return false;
-                    if (!showArchived && entry.archived) return false;
-                    
-                    // Status filter
-                    if (statusFilter !== 'all' && entry.status !== statusFilter) return false;
-                    
-                    // Search filter
-                    if (!searchTerm) return true;
-                    const searchLower = searchTerm.toLowerCase();
-                    return Object.values(entry).some(val => 
-                        val?.toString().toLowerCase().includes(searchLower)
-                    );
-                });
-            };
-
-            // === EFFECTS ===
-            useEffect(() => {
-                const savedToken = sessionStorage.getItem('admin_token');
-                if (savedToken) setToken(savedToken);
-            }, []);
-
-            // === COMPUTED VALUES ===
-            const filteredEntries = getFilteredEntries();
-            const statusStats = {
-                total: entries.filter(e => !e.archived).length,
-                published: entries.filter(e => !e.archived && (e.status === 'published' || !e.status)).length,
-                failed: entries.filter(e => !e.archived && e.status === 'failed').length
-            };
-
-            // === RENDER ===
-            if (!isAuthenticated) {
-                return (
-                    <div className="container">
-                        <div style={{ maxWidth: '400px', margin: '100px auto' }}>
-                            <div className="card text-center">
-                                <div className="logo" style={{ margin: '0 auto 20px' }}>T2</div>
-                                <h1 style={{ margin: '0 0 20px', background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                    TrumpyTracker Admin
-                                </h1>
-                                
-                                <div style={{ marginBottom: '16px' }}>
-                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
-                                        🔐 GitHub Token:
-                                    </label>
-                                    <input
-                                        type="password"
-                                        value={token}
-                                        onChange={(e) => setToken(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && authenticate()}
-                                        className="input"
-                                        placeholder="github_pat_... or ghp_..."
-                                        disabled={isLoading}
-                                    />
-                                </div>
-                                
-                                <button 
-                                    onClick={authenticate} 
-                                    disabled={isLoading}
-                                    className="btn btn-primary" 
-                                    style={{ width: '100%' }}
-                                >
-                                    {isLoading ? '🔄 Authenticating...' : '🚀 Login'}
-                                </button>
-                                
-                                {message && (
-                                    <div className={`message message-${message.type}`}>
-                                        {message.text}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
+        // Environment detection
+        function getEnvironment() {
+            const url = window.SUPABASE_URL || '';
+            if (url.includes('wnrjrywpcadwutfykflu')) {
+                return { name: 'Test', isProd: false, label: 'Test Admin Dashboard' };
             }
+            if (url.includes('osjbulmltfpcoldydexg')) {
+                return { name: 'PROD', isProd: true, label: 'PROD Admin Dashboard' };
+            }
+            return { name: 'Unknown', isProd: false, label: 'Admin Dashboard' };
+        }
+
+        // Main App Component
+        function AdminDashboard() {
+            const [activeTab, setActiveTab] = useState('home');
+            const [stats, setStats] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [lastRefresh, setLastRefresh] = useState(null);
+            const refreshIntervalRef = useRef(null);
+
+            const env = getEnvironment();
+
+            // Initialize Supabase client - memoize to prevent recreation on every render
+            const supabase = useMemo(() => window.supabase.createClient(
+                window.SUPABASE_URL,
+                window.SUPABASE_ANON_KEY
+            ), []);
+
+            // Fetch admin stats
+            const fetchStats = useCallback(async () => {
+                try {
+                    setError(null);
+
+                    // Call the admin-stats edge function
+                    const { data, error: fnError } = await supabase.functions.invoke('admin-stats');
+
+                    if (fnError) {
+                        throw new Error(fnError.message || 'Failed to fetch stats');
+                    }
+
+                    setStats(data);
+                    setLastRefresh(new Date());
+                } catch (err) {
+                    console.error('Error fetching stats:', err);
+                    setError(err.message);
+
+                    // If edge function fails, try direct queries as fallback
+                    try {
+                        await fetchStatsDirect();
+                    } catch (fallbackErr) {
+                        console.error('Fallback also failed:', fallbackErr);
+                    }
+                } finally {
+                    setLoading(false);
+                }
+            }, [supabase]);
+
+            // Fallback: Direct database queries
+            const fetchStatsDirect = async () => {
+                const now = new Date();
+                const today = now.toISOString().split('T')[0];
+                const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+                const [
+                    storiesActive,
+                    storiesEnrichFailed,
+                    storiesToday,
+                    articlesToday,
+                    articlesTotal,
+                    feedsData,
+                    pardonsData,
+                    scotusData,
+                    eosTotal,
+                    budgetData,
+                    lastFetch
+                ] = await Promise.all([
+                    supabase.from('stories').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+                    supabase.from('stories').select('id', { count: 'exact', head: true }).gt('enrichment_failure_count', 0),
+                    supabase.from('stories').select('id', { count: 'exact', head: true }).gte('first_seen_at', last24h),
+                    supabase.from('articles').select('id', { count: 'exact', head: true }).gte('fetched_at', last24h),
+                    supabase.from('articles').select('id', { count: 'exact', head: true }),
+                    supabase.from('feed_registry').select('id,is_active,failure_count'),
+                    supabase.from('pardons').select('id,is_public,needs_review'),
+                    supabase.from('scotus_cases').select('id,is_public'),
+                    supabase.from('executive_orders').select('id', { count: 'exact', head: true }),
+                    supabase.from('budgets').select('*').eq('day', today).single(),
+                    supabase.from('feed_registry').select('last_fetched_at').not('last_fetched_at', 'is', null).order('last_fetched_at', { ascending: false }).limit(1).single()
+                ]);
+
+                // Process feeds
+                const feeds = feedsData.data || [];
+                const feedsActive = feeds.filter(f => f.is_active && f.failure_count < 5).length;
+                const feedsFailed = feeds.filter(f => f.failure_count >= 5).length;
+
+                // Process pardons
+                const pardons = pardonsData.data || [];
+                const pardonsDraft = pardons.filter(p => !p.is_public).length;
+                const pardonsNeedsReview = pardons.filter(p => p.needs_review).length;
+
+                // Process SCOTUS
+                const scotus = scotusData.data || [];
+                const scotusDraft = scotus.filter(s => !s.is_public).length;
+
+                // Pipeline status
+                let pipelineStatus = 'unknown';
+                let pipelineMessage = 'No recent runs';
+                let minutesSinceLastRun = null;
+
+                if (lastFetch.data?.last_fetched_at) {
+                    const lastRunTime = new Date(lastFetch.data.last_fetched_at);
+                    minutesSinceLastRun = Math.floor((now.getTime() - lastRunTime.getTime()) / 60000);
+
+                    if (minutesSinceLastRun < 150) {
+                        pipelineStatus = 'ok';
+                        pipelineMessage = `${minutesSinceLastRun} min ago`;
+                    } else if (minutesSinceLastRun < 240) {
+                        pipelineStatus = 'warning';
+                        pipelineMessage = `${minutesSinceLastRun} min ago (delayed)`;
+                    } else {
+                        pipelineStatus = 'error';
+                        pipelineMessage = `${minutesSinceLastRun} min ago (stale!)`;
+                    }
+                }
+
+                // Build stats object
+                const budget = budgetData.data;
+                setStats({
+                    stories: {
+                        active_count: storiesActive.count ?? 0,
+                        needs_review: 0, // Column may not exist yet
+                        enrichment_failed: storiesEnrichFailed.count ?? 0,
+                        created_today: storiesToday.count ?? 0
+                    },
+                    articles: {
+                        total_count: articlesTotal.count ?? 0,
+                        today_count: articlesToday.count ?? 0
+                    },
+                    feeds: {
+                        total: feeds.length,
+                        active: feedsActive,
+                        failed: feedsFailed
+                    },
+                    pardons: {
+                        total: pardons.length,
+                        published: pardons.filter(p => p.is_public).length,
+                        draft: pardonsDraft,
+                        needs_review: pardonsNeedsReview
+                    },
+                    scotus: {
+                        total: scotus.length,
+                        published: scotus.filter(s => s.is_public).length,
+                        draft: scotusDraft
+                    },
+                    executive_orders: {
+                        total: eosTotal.count ?? 0
+                    },
+                    budget: budget ? {
+                        day: budget.day,
+                        spent_usd: budget.spent_usd,
+                        cap_usd: budget.cap_usd,
+                        openai_calls: budget.openai_calls,
+                        percent_used: budget.cap_usd > 0 ? Math.round((budget.spent_usd / budget.cap_usd) * 100) : 0
+                    } : {
+                        day: today,
+                        spent_usd: 0,
+                        cap_usd: 5.00,
+                        openai_calls: 0,
+                        percent_used: 0
+                    },
+                    pipeline: {
+                        status: pipelineStatus,
+                        message: pipelineMessage,
+                        minutes_since_last_run: minutesSinceLastRun
+                    },
+                    needs_attention: {
+                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview,
+                        breakdown: {
+                            stories_need_review: 0,
+                            stories_enrichment_failed: storiesEnrichFailed.count ?? 0,
+                            pardons_need_review: pardonsNeedsReview,
+                            pardons_unpublished: pardonsDraft,
+                            scotus_unpublished: scotusDraft,
+                            feeds_failed: feedsFailed
+                        }
+                    },
+                    timestamp: now.toISOString()
+                });
+                setLastRefresh(now);
+            };
+
+            // Initial fetch and auto-refresh
+            useEffect(() => {
+                fetchStats();
+
+                // Auto-refresh every 5 minutes
+                refreshIntervalRef.current = setInterval(fetchStats, 5 * 60 * 1000);
+
+                return () => {
+                    if (refreshIntervalRef.current) {
+                        clearInterval(refreshIntervalRef.current);
+                    }
+                };
+            }, [fetchStats]);
+
+            // Format time since refresh
+            const getTimeSinceRefresh = () => {
+                if (!lastRefresh) return '';
+                const seconds = Math.floor((new Date() - lastRefresh) / 1000);
+                if (seconds < 60) return 'just now';
+                const minutes = Math.floor(seconds / 60);
+                return `${minutes}m ago`;
+            };
+
+            // Budget status
+            const getBudgetStatus = () => {
+                if (!stats?.budget) return { class: 'status-muted', label: 'N/A' };
+                const pct = stats.budget.percent_used;
+                if (pct >= 80) return { class: 'budget-danger', label: `$${stats.budget.spent_usd.toFixed(2)}/$${stats.budget.cap_usd}` };
+                if (pct >= 50) return { class: 'budget-warning', label: `$${stats.budget.spent_usd.toFixed(2)}/$${stats.budget.cap_usd}` };
+                return { class: 'budget-ok', label: `$${stats.budget.spent_usd.toFixed(2)}/$${stats.budget.cap_usd}` };
+            };
+
+            // Pipeline status
+            const getPipelineStatus = () => {
+                if (!stats?.pipeline) return { icon: '?', class: 'status-muted', label: 'Unknown' };
+                const status = stats.pipeline.status;
+                if (status === 'ok') return { icon: '✓', class: 'status-ok', label: stats.pipeline.message };
+                if (status === 'warning') return { icon: '!', class: 'status-warning', label: stats.pipeline.message };
+                if (status === 'error') return { icon: '✗', class: 'status-error', label: stats.pipeline.message };
+                return { icon: '?', class: 'status-muted', label: stats.pipeline.message };
+            };
+
+            // Render tabs
+            const tabs = [
+                { id: 'home', label: 'Home' },
+                { id: 'stories', label: 'Stories', disabled: true },
+                { id: 'pardons', label: 'Pardons', disabled: true },
+                { id: 'scotus', label: 'SCOTUS', disabled: true },
+                { id: 'eos', label: 'Exec Orders', disabled: true },
+                { id: 'feeds', label: 'Feeds', disabled: true }
+            ];
+
+            const budgetStatus = getBudgetStatus();
+            const pipelineStatus = getPipelineStatus();
 
             return (
-                <div className="container">
+                <div>
                     {/* Header */}
-                    <div className="card">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                                <div className="logo">T2</div>
-                                <div>
-                                    <h1 style={{ margin: 0, background: 'linear-gradient(135deg, #60a5fa 0%, #ef4444 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                                        Admin Panel
-                                    </h1>
-                                    <div style={{ fontSize: '14px', color: '#a0aec0' }}>Political Tracker Management</div>
-                                </div>
-                            </div>
-                            <button onClick={logout} className="btn btn-danger">
-                                🚪 Logout
-                            </button>
-                        </div>
-                        
-                        {/* Manual Article Submission */}
-                        <div className="flex gap-4 mb-4 flex-mobile">
-                            <input
-                                type="url"
-                                value={submissionUrl}
-                                onChange={(e) => setSubmissionUrl(e.target.value)}
-                                placeholder="📎 Paste article URL to submit manually..."
-                                className="input"
-                                style={{ flex: 1 }}
-                                disabled={isSubmitting}
-                            />
-                            <button 
-                                onClick={submitManualArticle} 
-                                disabled={!submissionUrl.trim() || isSubmitting || isLoading} 
-                                className="btn btn-success"
-                            >
-                                {isSubmitting ? '🔄 Processing...' : '📰 Submit Article'}
-                            </button>
-                        </div>
-
-                        {/* Entry Status Overview */}
-                        <div className="stats-grid">
-                            <div 
-                                className="stat-card"
-                                onClick={() => setStatusFilter('all')}
-                                style={{ 
-                                    borderColor: statusFilter === 'all' ? '#3182ce' : '#4a5568',
-                                    boxShadow: statusFilter === 'all' ? '0 0 0 2px rgba(49, 130, 206, 0.3)' : undefined
-                                }}
-                            >
-                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#60a5fa', marginBottom: '8px' }}>{statusStats.total}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>📊 Total Active</div>
-                            </div>
-                            <div 
-                                className="stat-card"
-                                onClick={() => setStatusFilter('published')}
-                                style={{ 
-                                    borderColor: statusFilter === 'published' ? '#38a169' : '#4a5568',
-                                    boxShadow: statusFilter === 'published' ? '0 0 0 2px rgba(56, 161, 105, 0.3)' : undefined
-                                }}
-                            >
-                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#4ade80', marginBottom: '8px' }}>{statusStats.published}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>✅ Published</div>
-                            </div>
-                            <div 
-                                className="stat-card"
-                                onClick={() => setStatusFilter('failed')}
-                                style={{ 
-                                    borderColor: statusFilter === 'failed' ? '#e53e3e' : '#4a5568',
-                                    boxShadow: statusFilter === 'failed' ? '0 0 0 2px rgba(229, 62, 62, 0.3)' : undefined
-                                }}
-                            >
-                                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f87171', marginBottom: '8px' }}>{statusStats.failed}</div>
-                                <div style={{ fontSize: '14px', color: '#a0aec0' }}>❌ Failed</div>
-                            </div>
-                        </div>
-
-                        {/* Unified Controls */}
-                        <div className="flex gap-4 mb-4 flex-mobile">
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="🔍 Search entries..."
-                                className="input"
-                                style={{ flex: 1, fontSize: '16px', padding: '14px' }}
-                            />
-                            <button onClick={loadEntries} disabled={isLoading} className="btn btn-primary">
-                                {isLoading ? '🔄' : '📊'} Refresh
-                            </button>
-                        </div>
-                        
-                        <div className="flex gap-3 mb-4 flex-mobile" style={{ flexWrap: 'wrap' }}>
-                            <span className="text-sm" style={{ color: '#a0aec0', alignSelf: 'center' }}>
-                                📋 {filteredEntries.length} entries ({selectedEntries.size} selected)
-                            </span>
-                            
-                            {/* View Controls */}
-                            <div className="flex gap-2">
+                    <header className={`header ${env.isProd ? 'header-prod' : 'header-test'}`}>
+                        <h1 className="header-title">{env.label}</h1>
+                        <div className="header-right">
+                            <div className="refresh-indicator">
+                                <span>Updated {getTimeSinceRefresh()}</span>
                                 <button
-                                    onClick={() => setShowArchived(!showArchived)}
-                                    className="btn btn-secondary"
+                                    onClick={() => { setLoading(true); fetchStats(); }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '14px' }}
+                                    disabled={loading}
                                 >
-                                    {showArchived ? '📂 Active' : '🗃️ Archives'}
-                                </button>
-                                <button onClick={selectAll} className="btn btn-secondary">
-                                    {selectedEntries.size === filteredEntries.length ? '❌ None' : '✅ All'}
+                                    {loading ? '...' : '↻'}
                                 </button>
                             </div>
-                            
-                            {/* Modification Actions */}
-                            <div className="flex gap-2">
-                                <button onClick={markAsPublished} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                    ✅ Publish ({selectedEntries.size})
-                                </button>
-                                {!showArchived ? (
-                                    <button onClick={archiveSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-secondary">
-                                        🗃️ Archive ({selectedEntries.size})
-                                    </button>
-                                ) : (
-                                    <button onClick={restoreSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-success">
-                                        🔄 Restore ({selectedEntries.size})
-                                    </button>
-                                )}
-                                <button onClick={deleteSelected} disabled={selectedEntries.size === 0 || isLoading} className="btn btn-danger">
-                                    🗑️ Delete ({selectedEntries.size})
-                                </button>
+                            <div className={`budget-indicator ${budgetStatus.class}`}>
+                                <span>Budget:</span>
+                                <span style={{ fontWeight: 600 }}>{budgetStatus.label}</span>
                             </div>
-                            
-                            {/* Special Actions */}
-                            {statusStats.failed > 0 && (
-                                <button 
-                                    onClick={() => {
-                                        const failedEntries = entries.filter(e => e.status === 'failed' && !e.archived);
-                                        setSelectedEntries(new Set(failedEntries.map(e => e.id)));
-                                        retrySelected();
-                                    }} 
-                                    className="btn btn-warning"
-                                    disabled={isLoading}
-                                >
-                                    🔄 Retry All Failed ({statusStats.failed})
-                                </button>
-                            )}
                         </div>
-                    </div>
+                    </header>
 
-                    {/* Messages */}
-                    {message && (
-                        <div className={`message message-${message.type}`}>
-                            {message.text}
-                        </div>
-                    )}
+                    {/* Tab Navigation */}
+                    <nav className="tab-nav">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                                onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                                disabled={tab.disabled}
+                                title={tab.disabled ? 'Coming soon' : ''}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </nav>
 
-                    {/* Entries List */}
-                    <div className="card">
-                        <div className="scrollable">
-                            {filteredEntries.length === 0 ? (
-                                <div className="text-center" style={{ padding: '40px' }}>
-                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
-                                    <div style={{ color: '#a0aec0' }}>No entries found</div>
-                                </div>
-                            ) : (
-                                filteredEntries.map(entry => (
-                                    <div
-                                        key={entry.id}
-                                        className={`entry ${selectedEntries.has(entry.id) ? 'selected' : ''} ${editingEntry === entry.id ? 'editing' : ''} ${entry.status || 'published'}`}
-                                        onClick={() => editingEntry !== entry.id && toggleSelection(entry.id)}
-                                    >
-                                        {editingEntry === entry.id ? (
-                                            <div>
-                                                <div className="grid grid-2 gap-4 mb-4">
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Date</label>
-                                                        <input
-                                                            type="date"
-                                                            value={editForm.date}
-                                                            onChange={(e) => setEditForm({...editForm, date: e.target.value})}
-                                                            className="input"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Status</label>
-                                                        <select
-                                                            value={editForm.status}
-                                                            onChange={(e) => setEditForm({...editForm, status: e.target.value})}
-                                                            className="input"
-                                                        >
-                                                            <option value="published">✅ Published</option>
-                                                            <option value="failed">❌ Failed</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="grid grid-2 gap-4 mb-4">
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Severity</label>
-                                                        <select
-                                                            value={editForm.severity}
-                                                            onChange={(e) => setEditForm({...editForm, severity: e.target.value})}
-                                                            className="input"
-                                                        >
-                                                            <option value="low">🟢 Low</option>
-                                                            <option value="medium">🟡 Medium</option>
-                                                            <option value="high">🔴 High</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Actor</label>
-                                                        <input
-                                                            type="text"
-                                                            value={editForm.actor}
-                                                            onChange={(e) => setEditForm({...editForm, actor: e.target.value})}
-                                                            className="input"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Title</label>
-                                                    <input
-                                                        type="text"
-                                                        value={editForm.title}
-                                                        onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Description</label>
-                                                    <textarea
-                                                        value={editForm.description}
-                                                        onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                                                        className="input"
-                                                        rows="3"
-                                                    />
-                                                </div>
-                                                
-                                                <div className="grid grid-2 gap-4 mb-4">
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Category</label>
-                                                        <select
-                                                            value={editForm.category}
-                                                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                                                            className="input"
-                                                        >
-                                                            <option value="corruption_scandals">Corruption & Scandals</option>
-                                                            <option value="democracy_elections">Democracy & Elections</option>
-                                                            <option value="policy_legislation">Policy & Legislation</option>
-                                                            <option value="justice_legal">Justice & Legal</option>
-                                                            <option value="executive_actions">Executive Actions</option>
-                                                            <option value="foreign_policy">Foreign Policy</option>
-                                                            <option value="corporate_financial">Corporate & Financial</option>
-                                                            <option value="civil_liberties">Civil Liberties</option>
-                                                            <option value="media_disinformation">Media & Disinformation</option>
-                                                            <option value="epstein_associates">Epstein & Associates</option>
-                                                            <option value="other">Other</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: '#a0aec0' }}>Source URL</label>
-                                                        <input
-                                                            type="url"
-                                                            value={editForm.source_url}
-                                                            onChange={(e) => setEditForm({...editForm, source_url: e.target.value})}
-                                                            className="input"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="mb-4">
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editForm.verified}
-                                                            onChange={(e) => setEditForm({...editForm, verified: e.target.checked})}
-                                                        />
-                                                        <span style={{ fontSize: '14px' }}>✅ Verified Source</span>
-                                                    </label>
-                                                </div>
-                                                
-                                                <div className="flex gap-2">
-                                                    <button onClick={saveEdit} disabled={isLoading} className="btn btn-success">
-                                                        💾 Save
-                                                    </button>
-                                                    <button onClick={cancelEdit} className="btn btn-secondary">
-                                                        ❌ Cancel
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex justify-between">
-                                                <div style={{ flex: 1 }}>
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <span className="text-sm" style={{ color: '#a0aec0' }}>📅 {formatDate(entry.date)}</span>
-                                                        <span className={getStatusClasses(entry.status)}>
-                                                            {entry.status === 'failed' ? '❌ FAILED' : '✅ PUBLISHED'}
-                                                        </span>
-                                                        <span className={getSeverityClasses(entry.severity)}>
-                                                            {entry.severity === 'high' ? '🚨 HIGH' :
-                                                             entry.severity === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ LOW'}
-                                                        </span>
-                                                        {entry.verified && <span className="text-green-400 text-sm">✅ Verified</span>}
-                                                        {entry.archived && <span className="badge badge-archived">🗃️ Archived</span>}
-                                                        <span className="text-sm" style={{ color: '#60a5fa' }}>{entry.actor}</span>
-                                                    </div>
-                                                    <h3 style={{ margin: '0 0 8px', fontWeight: 600 }}>{entry.title}</h3>
-                                                    <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#d1d5db' }}>{entry.description}</p>
-                                                    {entry.error_message && (
-                                                        <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#f87171' }}>
-                                                            ❌ Error: {entry.error_message}
-                                                        </p>
-                                                    )}
-                                                    <div className="flex items-center gap-4 text-xs" style={{ color: '#a0aec0' }}>
-                                                        <span>📁 {entry.category}</span>
-                                                        {entry.retry_count && <span>🔄 Retry #{entry.retry_count}</span>}
-                                                        {entry.source_url && (
-                                                            <a 
-                                                                href={entry.source_url} 
-                                                                target="_blank" 
-                                                                rel="noopener noreferrer"
-                                                                className="text-blue-400 hover:text-blue-300"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                🔗 Source
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-start gap-2" style={{ marginLeft: '16px' }}>
-                                                    {entry.status === 'failed' && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedEntries(new Set([entry.id]));
-                                                                retrySelected();
-                                                            }}
-                                                            className="btn btn-warning"
-                                                            style={{ padding: '4px 8px', fontSize: '12px' }}
-                                                            disabled={isLoading}
-                                                        >
-                                                            🔄 Retry
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); startEdit(entry); }}
-                                                        className="btn btn-primary"
-                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                    >
-                                                        ✏️ Edit
-                                                    </button>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedEntries.has(entry.id)}
-                                                        onChange={(e) => { e.stopPropagation(); toggleSelection(entry.id); }}
-                                                        style={{ marginTop: '4px' }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
+                    {/* Main Content */}
+                    <main className="main-content">
+                        {error && (
+                            <div className="error-banner">
+                                <strong>Error loading stats:</strong> {error}
+                            </div>
+                        )}
+
+                        {loading && !stats ? (
+                            <div className="loading">
+                                <div className="spinner"></div>
+                                Loading dashboard...
+                            </div>
+                        ) : activeTab === 'home' && stats && (
+                            <div className="dashboard-grid">
+                                {/* System Health */}
+                                <div className="card">
+                                    <div className="card-header">
+                                        <h2 className="card-title">
+                                            <span>System Health</span>
+                                        </h2>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                                    <div className="card-body">
+                                        <div className="status-row">
+                                            <div className="status-label">
+                                                <span className="status-icon">{pipelineStatus.icon === '✓' ? '🟢' : pipelineStatus.icon === '!' ? '🟡' : pipelineStatus.icon === '✗' ? '🔴' : '⚪'}</span>
+                                                <span>RSS Pipeline</span>
+                                            </div>
+                                            <div className={`status-value ${pipelineStatus.class}`}>
+                                                {pipelineStatus.label}
+                                            </div>
+                                        </div>
+                                        <div className="status-row">
+                                            <div className="status-label">
+                                                <span className="status-icon">{stats.feeds.failed === 0 ? '🟢' : stats.feeds.failed < 3 ? '🟡' : '🔴'}</span>
+                                                <span>Active Feeds</span>
+                                            </div>
+                                            <div className={`status-value ${stats.feeds.failed === 0 ? 'status-ok' : stats.feeds.failed < 3 ? 'status-warning' : 'status-error'}`}>
+                                                {stats.feeds.active}/{stats.feeds.total} active
+                                            </div>
+                                        </div>
+                                        <div className="status-row">
+                                            <div className="status-label">
+                                                <span className="status-icon">{stats.budget.percent_used < 50 ? '🟢' : stats.budget.percent_used < 80 ? '🟡' : '🔴'}</span>
+                                                <span>Daily Budget</span>
+                                            </div>
+                                            <div className={`status-value ${stats.budget.percent_used < 50 ? 'status-ok' : stats.budget.percent_used < 80 ? 'status-warning' : 'status-error'}`}>
+                                                {stats.budget.percent_used}% used
+                                            </div>
+                                        </div>
+                                        <div className="status-row">
+                                            <div className="status-label">
+                                                <span className="status-icon">📊</span>
+                                                <span>Active Stories</span>
+                                            </div>
+                                            <div className="status-value status-muted">
+                                                {stats.stories.active_count.toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Needs Attention */}
+                                <div className="card">
+                                    <div className="card-header">
+                                        <h2 className="card-title">
+                                            <span>Needs Attention</span>
+                                            {stats.needs_attention.total > 0 && (
+                                                <span className="attention-count">{stats.needs_attention.total}</span>
+                                            )}
+                                        </h2>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="attention-item" title="Stories flagged for review">
+                                            <span>Stories need review</span>
+                                            <span className={`attention-count ${stats.needs_attention.breakdown.stories_need_review === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention.breakdown.stories_need_review}
+                                            </span>
+                                        </div>
+                                        <div className="attention-item" title="Stories where AI enrichment failed">
+                                            <span>Enrichment failures</span>
+                                            <span className={`attention-count ${stats.needs_attention.breakdown.stories_enrichment_failed === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention.breakdown.stories_enrichment_failed}
+                                            </span>
+                                        </div>
+                                        <div className="attention-item" title="Pardons not yet published">
+                                            <span>Pardons unpublished</span>
+                                            <span className={`attention-count ${stats.needs_attention.breakdown.pardons_unpublished === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention.breakdown.pardons_unpublished}
+                                            </span>
+                                        </div>
+                                        <div className="attention-item" title="SCOTUS cases not yet published">
+                                            <span>SCOTUS unpublished</span>
+                                            <span className={`attention-count ${stats.needs_attention.breakdown.scotus_unpublished === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention.breakdown.scotus_unpublished}
+                                            </span>
+                                        </div>
+                                        <div className="attention-item" title="Feeds with 5+ consecutive failures">
+                                            <span>Feeds failed</span>
+                                            <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention.breakdown.feeds_failed}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Today's Activity */}
+                                <div className="card">
+                                    <div className="card-header">
+                                        <h2 className="card-title">Today's Activity</h2>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="activity-stat">
+                                            <div className="activity-icon articles">📰</div>
+                                            <div>
+                                                <div className="activity-number">{stats.articles.today_count}</div>
+                                                <div className="activity-label">articles ingested</div>
+                                            </div>
+                                        </div>
+                                        <div className="activity-stat">
+                                            <div className="activity-icon stories">📖</div>
+                                            <div>
+                                                <div className="activity-number">{stats.stories.created_today}</div>
+                                                <div className="activity-label">stories created</div>
+                                            </div>
+                                        </div>
+                                        <div className="activity-stat">
+                                            <div className="activity-icon enriched">🤖</div>
+                                            <div>
+                                                <div className="activity-number">{stats.budget.openai_calls || 0}</div>
+                                                <div className="activity-label">OpenAI calls</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="card">
+                                    <div className="card-header">
+                                        <h2 className="card-title">Quick Actions</h2>
+                                    </div>
+                                    <div className="card-body">
+                                        <div className="quick-actions">
+                                            <button
+                                                className="action-btn"
+                                                onClick={() => window.open('https://github.com/AJWolfe18/TTracker/actions/workflows/rss-tracker-test.yml', '_blank')}
+                                            >
+                                                🔄 Trigger Pipeline
+                                            </button>
+                                            <button
+                                                className="action-btn"
+                                                onClick={() => alert('Manual article submission coming in Phase 2')}
+                                                disabled
+                                            >
+                                                📰 Submit Article
+                                            </button>
+                                            <button
+                                                className="action-btn"
+                                                onClick={() => window.open(`${window.SUPABASE_URL.replace('.supabase.co', '.supabase.co/project/default')}/editor`, '_blank')}
+                                            >
+                                                🗄️ Open Supabase
+                                            </button>
+                                            <button
+                                                className="action-btn"
+                                                onClick={() => window.open('https://dev.azure.com/AJWolfe92/TTracker/_backlogs/backlog/TTracker%20Team/Backlog%20items', '_blank')}
+                                            >
+                                                📋 Open ADO
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Content Overview */}
+                                <div className="card" style={{ gridColumn: 'span 2' }}>
+                                    <div className="card-header">
+                                        <h2 className="card-title">Content Overview</h2>
+                                    </div>
+                                    <div className="card-body">
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '24px' }}>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#3b82f6' }}>{stats.stories.active_count.toLocaleString()}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>Active Stories</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#10b981' }}>{stats.articles.total_count.toLocaleString()}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>Total Articles</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#f59e0b' }}>{stats.pardons.total}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>Pardons ({stats.pardons.published} public)</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#8b5cf6' }}>{stats.scotus.total}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>SCOTUS Cases ({stats.scotus.published} public)</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#ec4899' }}>{stats.executive_orders.total}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>Executive Orders</div>
+                                            </div>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '32px', fontWeight: '600', color: '#06b6d4' }}>{stats.feeds.total}</div>
+                                                <div style={{ color: '#94a3b8', fontSize: '13px' }}>RSS Feeds ({stats.feeds.active} active)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab !== 'home' && (
+                            <div className="card">
+                                <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
+                                    <h2 style={{ margin: '0 0 8px', color: '#f8fafc' }}>Coming Soon</h2>
+                                    <p style={{ color: '#94a3b8', margin: 0 }}>
+                                        The {tabs.find(t => t.id === activeTab)?.label} tab is under development.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </main>
                 </div>
             );
         }
 
-        ReactDOM.render(<AdminApp />, document.getElementById('root'));
+        ReactDOM.render(<AdminDashboard />, document.getElementById('root'));
     </script>
 </body>
 </html>
