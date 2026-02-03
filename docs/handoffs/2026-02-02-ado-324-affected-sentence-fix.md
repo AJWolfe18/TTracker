@@ -3,7 +3,7 @@
 **Date:** 2026-02-02
 **ADO:** [324](https://dev.azure.com/AJWolfe92/TTracker/_workitems/edit/324) (Resolved)
 **Branch:** test
-**Commit:** 2f47049
+**Commits:** 2f47049, 341e11e
 
 ## Summary
 
@@ -18,21 +18,36 @@ Fixed the critical fail-open bug where Layer B validation failures caused silent
 | **Enhanced normalization** | Case-insensitive, em-dash, ellipsis, Unicode handling |
 | **Layer A dissent check** | New `ungrounded_dissent_reference` validator catches Case 173 pattern deterministically |
 
-## Test Results
+## Integration Test Results
 
-- 88 unit tests passing (Layer B)
-- Manual validation of Case 173 pattern confirms fix
-- Verdict precedence now: `REJECT > REVIEW > FLAG > APPROVE`
+Ran full QA pipeline on Cases 173, 287, 145:
 
-## Files Changed
+| Case | Layer A | Layer B | Final | Status |
+|------|---------|---------|-------|--------|
+| 173 (BLOM Bank) | REJECT | REJECT | REJECT | ✅ Fixed - was APPROVE before |
+| 287 (Case v. Montana) | REJECT | REJECT | REJECT | ✅ Caught scale issue |
+| 145 (Noem v. Abrego) | APPROVE | REJECT | REJECT | ✅ Layer B caught accuracy |
 
-- `scripts/enrichment/scotus-qa-layer-b.js` - Core fix
-- `scripts/enrichment/scotus-qa-validators.js` - Dissent check
-- `scripts/enrichment/qa-issue-types.js` - New issue type
-- `*test.js` files - Test coverage
+## Key Finding: Layer B 91% Reject Rate
 
-## Next Steps
+Analysis of all 44 enriched cases:
+- Layer A (enforced): 50% APPROVE, 5% FLAG, 2% REJECT
+- Layer B (shadow): **91% REJECT**, 2% APPROVE
 
-1. **Integration test:** Run enrichment batch with `LAYER_B_MODE=enforce` on a few cases
-2. **Verify:** Case 173 should now get `REJECT` (dissent mismatch) or `REVIEW` (if Layer B drops issue)
-3. **Then:** ADO-325 (curate gold set) to calibrate the 95% reject rate
+Layer B flags `accuracy_vs_holding` on 41/44 cases. This suggests:
+1. Content generation has systematic issues, OR
+2. Layer B needs calibration with gold examples
+
+**32 cases are published** that Layer B wanted to reject. Need human review to determine if Layer B is correct.
+
+## PROD Deployment Recommendation
+
+- ✅ Deploy Layer A enforce mode
+- ⚠️ Keep Layer B in shadow mode until ADO-325/326 complete
+- ✅ Deploy ADO-324 fix (fail-closed protects us)
+
+## Next Session: ADO-325 (Gold Set Curation)
+
+1. Review 15-20 cases manually
+2. Mark good editorials as gold standards
+3. Then ADO-326 integrates them into Layer B prompt
