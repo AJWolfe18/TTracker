@@ -1,11 +1,22 @@
 # Admin Dashboard - Technical Specification
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Created:** 2026-02-01
-**Status:** Draft
+**Updated:** 2026-02-02
+**Status:** Reviewed - Ready for Implementation
 **Epic:** TTRC-18 (Admin Dashboard)
 
 **For product requirements, see:** [PRD.md](./PRD.md)
+
+---
+
+## Key Technical Decisions (2026-02-02 Review)
+
+- **Re-enrichment:** Edge function with 30-60 sec execution, spinner feedback on row
+- **History retention:** 90 days, cleanup job needed
+- **Optimistic locking:** Use `last_updated_at` (not `updated_at`) for stories
+- **Schema access:** Use RPC functions (not direct schema.table references)
+- **Environment indicator:** Detect via Supabase URL, render in header
 
 ---
 
@@ -34,35 +45,40 @@
 
 ```
 admin-supabase.html (entry point)
+├── Header
+│   ├── Environment Title ("PROD Admin Dashboard" / "Test Admin Dashboard")
+│   └── BudgetIndicator
+│
 ├── Tab Navigation
 │   ├── Home (Dashboard)
-│   ├── Content Management
-│   │   ├── Stories Tab
-│   │   ├── Articles Tab
-│   │   ├── Pardons Tab
-│   │   ├── Executive Orders Tab (existing, enhance)
-│   │   └── Feeds Tab (new)
+│   │   ├── SystemHealthPanel
+│   │   ├── NeedsAttentionPanel
+│   │   ├── TodayActivityPanel
+│   │   └── QuickActionsPanel
 │   │
-│   └── System Health
-│       ├── Overview Tab
-│       ├── Feed Health Tab
-│       ├── Job Queue Tab
-│       ├── Budget Tab
-│       └── Error Log Tab
+│   ├── Stories Tab
+│   ├── Pardons Tab
+│   ├── SCOTUS Tab
+│   ├── Executive Orders Tab
+│   └── Feeds Tab
 │
 ├── Shared Components
 │   ├── EditModal (generic, field-driven)
-│   ├── ReEnrichButton
+│   ├── ReEnrichButton (with spinner state)
 │   ├── BudgetIndicator
 │   ├── StatusBadge
-│   ├── DataTable (pagination, sort, filter)
-│   └── UndoToast
+│   ├── DataTable (cursor-based pagination, sort, filter)
+│   ├── UndoToast (10-sec countdown)
+│   ├── DraftPublishedTabs (for pardons/SCOTUS)
+│   └── EnvironmentBadge
 │
 └── API Layer
     ├── Supabase REST queries
-    ├── Edge function calls
-    └── Re-enrichment triggers
+    ├── Edge function calls (admin-stats, trigger-enrichment)
+    └── RPC calls (log_content_change, undo_content_change)
 ```
+
+**Note:** Articles are accessed via Story detail view, not as separate tab.
 
 ---
 
@@ -208,6 +224,14 @@ BEGIN
       'draft', (SELECT COUNT(*) FROM pardons WHERE is_public = FALSE),
       'needs_review', (SELECT COUNT(*) FROM pardons WHERE needs_review = TRUE)
     ),
+    'scotus', jsonb_build_object(
+      'total', (SELECT COUNT(*) FROM scotus_cases),
+      'published', (SELECT COUNT(*) FROM scotus_cases WHERE is_public = TRUE),
+      'draft', (SELECT COUNT(*) FROM scotus_cases WHERE is_public = FALSE)
+    ),
+    'executive_orders', jsonb_build_object(
+      'total', (SELECT COUNT(*) FROM executive_orders)
+    ),
     'budget', (
       SELECT jsonb_build_object(
         'day', day,
@@ -301,7 +325,32 @@ END;
 $$;
 ```
 
-### 4.4 Log Content History
+### 4.4 Log Admin Action
+
+```sql
+CREATE OR REPLACE FUNCTION log_admin_action(
+  p_user_id text,
+  p_action text,
+  p_entity_type text,
+  p_entity_id text DEFAULT NULL,
+  p_entity_ids text[] DEFAULT NULL,
+  p_details jsonb DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  INSERT INTO admin.action_log (
+    user_id, action, entity_type, entity_id, entity_ids, details
+  ) VALUES (
+    p_user_id, p_action, p_entity_type, p_entity_id, p_entity_ids, p_details
+  );
+END;
+$$;
+```
+
+### 4.5 Log Content History
 
 ```sql
 CREATE OR REPLACE FUNCTION log_content_change(
@@ -343,7 +392,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_history admin.content_history%ROWTYPE;
-  v_sql text;
+  v_table_name text;
 BEGIN
   -- Get most recent change for this entity
   SELECT * INTO v_history
@@ -357,21 +406,33 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'No history found');
   END IF;
 
-  -- Build and execute UPDATE statement
-  -- Note: This is simplified - production would need table mapping
-  CASE p_entity_type
-    WHEN 'story' THEN
-      EXECUTE format(
-        'UPDATE stories SET %I = $1 WHERE id = $2',
-        v_history.field_name
-      ) USING v_history.old_value, p_entity_id::bigint;
-    WHEN 'pardon' THEN
-      EXECUTE format(
-        'UPDATE pardons SET %I = $1 WHERE id = $2',
-        v_history.field_name
-      ) USING v_history.old_value, p_entity_id::bigint;
-    -- Add other entity types as needed
-  END CASE;
+  -- Map entity type to table name
+  v_table_name := CASE p_entity_type
+    WHEN 'story' THEN 'stories'
+    WHEN 'pardon' THEN 'pardons'
+    WHEN 'scotus' THEN 'scotus_cases'
+    WHEN 'eo' THEN 'executive_orders'
+    WHEN 'feed' THEN 'feed_registry'
+    WHEN 'article' THEN 'articles'
+    ELSE NULL
+  END;
+
+  IF v_table_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Unknown entity type');
+  END IF;
+
+  -- Execute the undo (articles use TEXT id, others use BIGINT)
+  IF p_entity_type = 'article' THEN
+    EXECUTE format(
+      'UPDATE %I SET %I = $1 WHERE id = $2',
+      v_table_name, v_history.field_name
+    ) USING v_history.old_value, p_entity_id;
+  ELSE
+    EXECUTE format(
+      'UPDATE %I SET %I = $1 WHERE id = $2',
+      v_table_name, v_history.field_name
+    ) USING v_history.old_value, p_entity_id::bigint;
+  END IF;
 
   -- Log the undo as a new change
   INSERT INTO admin.content_history (
@@ -450,7 +511,8 @@ import { corsHeaders, validateAdminAuth } from '../_shared/auth.ts'
 const COSTS = {
   story: 0.003,
   pardon: 0.005,
-  eo: 0.015,
+  scotus: 0.01,
+  eo: 0.008,
   article_entities: 0.0003
 }
 
@@ -503,25 +565,33 @@ serve(async (req) => {
       case 'pardon':
         result = await supabase.rpc('trigger_pardon_reenrich', { p_pardon_id: entity_id })
         break
+      case 'scotus':
+        // Clear enrichment to trigger re-enrichment
+        await supabase
+          .from('scotus_cases')
+          .update({ enriched_at: null, prompt_version: null })
+          .eq('id', entity_id)
+        result = { data: { success: true, scotus_id: entity_id } }
+        break
       case 'eo':
         // Bump prompt version for EO
         await supabase
           .from('executive_orders')
-          .update({ prompt_version: 'v2', enriched_at: null })
+          .update({ enriched_at: null })
           .eq('id', entity_id)
-        result = { data: { success: true } }
+        result = { data: { success: true, eo_id: entity_id } }
         break
       default:
         throw new Error(`Unknown entity type: ${entity_type}`)
     }
 
-    // Log the action
-    await supabase.from('admin.action_log').insert({
-      user_id: authResult.user,
-      action: 're-enrich',
-      entity_type,
-      entity_id: String(entity_id),
-      details: { estimated_cost: cost }
+    // Log the action via RPC (can't use schema.table in REST API)
+    await supabase.rpc('log_admin_action', {
+      p_user_id: authResult.user,
+      p_action: 're-enrich',
+      p_entity_type: entity_type,
+      p_entity_id: String(entity_id),
+      p_details: { estimated_cost: cost }
     })
 
     return new Response(JSON.stringify({
@@ -546,19 +616,31 @@ serve(async (req) => {
 ### 6.1 Optimistic Locking
 
 ```javascript
+// Table-specific timestamp column mapping
+const TIMESTAMP_COLUMNS = {
+  stories: 'last_updated_at',
+  pardons: 'updated_at',
+  scotus_cases: 'updated_at',
+  executive_orders: 'updated_at',  // May need to add this column
+  feed_registry: 'last_fetched_at',
+  articles: 'fetched_at'
+};
+
 // Before save, check if record was modified
-async function saveWithOptimisticLock(table, id, updates, originalUpdatedAt) {
+async function saveWithOptimisticLock(table, id, updates, originalTimestamp) {
+  const timestampCol = TIMESTAMP_COLUMNS[table] || 'updated_at';
+
   // First check current state
   const { data: current, error: checkError } = await supabase
     .from(table)
-    .select('updated_at')
+    .select(timestampCol)
     .eq('id', id)
     .single();
 
   if (checkError) throw checkError;
 
   // Compare timestamps
-  if (current.updated_at !== originalUpdatedAt) {
+  if (current[timestampCol] !== originalTimestamp) {
     throw new Error(
       'This record was modified by another process while you were editing. ' +
       'Please refresh and try again.'
@@ -662,7 +744,53 @@ async function bulkReEnrich(items, entityType, costPerItem) {
 }
 ```
 
-### 6.4 Undo Toast Component
+### 6.4 Environment Detection
+
+```javascript
+// Detect environment from Supabase URL
+function getEnvironment() {
+  const url = window.SUPABASE_URL || '';
+
+  // TEST project ref: wnrjrywpcadwutfykflu
+  // PROD project ref: osjbulmltfpcoldydexg
+  if (url.includes('wnrjrywpcadwutfykflu')) {
+    return { name: 'Test', isProd: false };
+  }
+  if (url.includes('osjbulmltfpcoldydexg')) {
+    return { name: 'PROD', isProd: true };
+  }
+
+  // Fallback: check for 'test' in URL
+  return url.toLowerCase().includes('test')
+    ? { name: 'Test', isProd: false }
+    : { name: 'PROD', isProd: true };
+}
+
+// Render header with environment
+function AdminHeader() {
+  const env = getEnvironment();
+  const headerClass = env.isProd ? 'admin-header-prod' : 'admin-header-test';
+
+  return (
+    <header className={headerClass}>
+      <h1>{env.name} Admin Dashboard</h1>
+      <BudgetIndicator />
+    </header>
+  );
+}
+```
+
+**CSS:**
+```css
+.admin-header-prod {
+  background: #1e3a5f;  /* Dark blue */
+}
+.admin-header-test {
+  background: #5f4b1e;  /* Dark orange/brown */
+}
+```
+
+### 6.5 Undo Toast Component
 
 ```javascript
 function UndoToast({ entityType, entityId, fieldName, onUndo, onDismiss }) {
@@ -767,8 +895,16 @@ function UndoToast({ entityType, entityId, fieldName, onUndo, onDismiss }) {
     "draft": 5,
     "needs_review": 2
   },
+  "scotus": {
+    "total": 12,
+    "published": 8,
+    "draft": 4
+  },
+  "executive_orders": {
+    "total": 190
+  },
   "budget": {
-    "day": "2026-02-01",
+    "day": "2026-02-02",
     "spent_usd": 2.47,
     "cap_usd": 5.00,
     "openai_calls": 823
@@ -810,38 +946,69 @@ function UndoToast({ entityType, entityId, fieldName, onUndo, onDismiss }) {
 ## 9. Testing Checklist
 
 ### Unit Tests
-- [ ] Optimistic locking detects conflicts
-- [ ] Content history logs all field changes
-- [ ] Undo restores previous value
-- [ ] Bulk operation caps enforced
+- [ ] Optimistic locking detects conflicts (uses correct timestamp column)
+- [ ] Content history logs all field changes for all entity types
+- [ ] Undo restores previous value for all entity types
+- [ ] Bulk operation caps enforced (50 max, CONFIRM for >20)
 - [ ] Budget check blocks over-limit operations
+- [ ] Environment detection works for both TEST and PROD URLs
 
 ### Integration Tests
-- [ ] Admin stats returns correct counts
-- [ ] Re-enrichment triggers update correct fields
+- [ ] Admin stats returns correct counts for all content types
+- [ ] Re-enrichment triggers update correct fields (stories, pardons, SCOTUS, EOs)
 - [ ] Discord webhook fires on failure
-- [ ] Audit log captures all actions
+- [ ] Audit log captures all actions via RPC
 
 ### Manual QA
-- [ ] Edit story → Undo works
-- [ ] Edit while pipeline runs → Conflict detected
-- [ ] Bulk re-enrich 25 items → Confirmation required
+- [ ] Edit story → Undo toast appears → Undo works within 10 sec
+- [ ] Edit while pipeline runs → Conflict detected on save
+- [ ] Bulk re-enrich 25 items → "CONFIRM" typed confirmation required
 - [ ] Re-enrich when budget exceeded → Blocked with message
+- [ ] Re-enrich → Spinner shows on row → Toast on completion
+- [ ] Test vs Prod header text displays correctly
 
 ---
 
 ## 10. Migration Order
 
+**Phase 1 (Home Dashboard):**
 1. `xxx_admin_schema.sql` - Create admin schema
-2. `xxx_admin_content_history.sql` - Content history table
+
+**Phase 2 (Stories):**
+2. `xxx_admin_content_history.sql` - Content history table (90-day retention)
 3. `xxx_admin_action_log.sql` - Action audit log
-4. `xxx_story_review_flags.sql` - Story quality flags
+4. `xxx_story_review_flags.sql` - Story quality flags (needs_review column)
 5. `xxx_admin_rpc_functions.sql` - All RPC functions
 
-**Deploy Edge Functions:**
-1. `admin-stats`
-2. `trigger-enrichment`
+**Deploy Edge Functions (Phase 2):**
+1. `admin-stats` - Stats endpoint
+2. `trigger-enrichment` - Re-enrichment trigger
+
+**History Cleanup Job (add after Phase 2):**
+```sql
+-- Run weekly to enforce 90-day retention
+DELETE FROM admin.content_history
+WHERE changed_at < NOW() - INTERVAL '90 days';
+
+DELETE FROM admin.action_log
+WHERE created_at < NOW() - INTERVAL '90 days';
+```
 
 ---
 
-**Last Updated:** 2026-02-01
+## 11. Testing Checklist Updates
+
+### Environment Tests
+- [ ] Test environment shows "Test Admin Dashboard" header
+- [ ] Prod environment shows "PROD Admin Dashboard" header
+- [ ] Header styling differs between environments
+
+### SCOTUS Tests
+- [ ] SCOTUS tab loads and paginates
+- [ ] SCOTUS edit modal shows all fields
+- [ ] SCOTUS re-enrichment triggers correctly
+- [ ] SCOTUS draft/published filter works
+
+---
+
+**Last Updated:** 2026-02-02
