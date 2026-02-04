@@ -66,3 +66,25 @@ export function checkAdminAuth(req: Request): boolean {
   // Use timing-safe comparison to prevent timing attacks
   return timingSafeEqual(apiKey, adminKey)
 }
+
+export function checkAdminPassword(req: Request): boolean {
+  const password = req.headers.get('x-admin-password')
+  const expected = Deno.env.get('ADMIN_DASHBOARD_PASSWORD')
+
+  if (!expected || expected.trim().length === 0) {
+    console.warn('ADMIN_DASHBOARD_PASSWORD not set or empty')
+    return false
+  }
+
+  if (!password) {
+    return false
+  }
+
+  // Check byte length to prevent DoS via oversized headers
+  const pwBytes = textEncoder.encode(password)
+  if (pwBytes.length > MAX_API_KEY_LEN) {
+    return false
+  }
+
+  return timingSafeEqual(password, expected)
+}

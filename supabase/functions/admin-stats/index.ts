@@ -4,7 +4,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
-import { checkAdminAuth } from '../_shared/auth.ts'
+import { checkAdminPassword } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -13,17 +13,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authentication check - require admin API key
-    // Note: For Phase 1, we allow unauthenticated access since the dashboard
-    // only shows aggregate stats, not sensitive data. Auth will be added in Phase 2
-    // when editing capabilities are introduced.
-    // TODO: Enable auth when admin features beyond read-only stats are added
-    // if (!checkAdminAuth(req)) {
-    //   return new Response(
-    //     JSON.stringify({ error: 'Unauthorized' }),
-    //     { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    //   )
-    // }
+    // Authentication check - require admin password
+    if (!checkAdminPassword(req)) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
