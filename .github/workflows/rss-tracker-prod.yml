@@ -53,6 +53,10 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          curl -s -H "Content-Type: application/json" \
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Warning: DISCORD_WEBHOOK_URL secret not set - skipping Discord alert"
+            exit 0
+          fi
+          curl -f -H "Content-Type: application/json" \
             -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Branch\",\"value\":\"\`${{ github.ref_name }}\`\",\"inline\":true},{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
-            "$DISCORD_WEBHOOK_URL"
+            "$DISCORD_WEBHOOK_URL" || echo "Discord webhook failed (non-blocking)"
