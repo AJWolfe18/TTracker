@@ -1300,7 +1300,7 @@
                                             </button>
                                             <button
                                                 className="action-btn"
-                                                onClick={() => window.open(`${window.SUPABASE_URL.replace('.supabase.co', '.supabase.co/project/default')}/editor`, '_blank')}
+                                                onClick={() => { const ref = (window.SUPABASE_URL || '').match(/\/\/([^.]+)\./)?.[1] || ''; window.open(`https://supabase.com/dashboard/project/${ref}`, '_blank'); }}
                                             >
                                                 🗄️ Open Supabase
                                             </button>
