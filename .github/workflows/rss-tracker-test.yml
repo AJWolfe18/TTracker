@@ -46,3 +46,12 @@ jobs:
           path: |
             *.log
           retention-days: 7
+
+      - name: Discord alert (on failure)
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Branch\",\"value\":\"\`${{ github.ref_name }}\`\",\"inline\":true},{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "$DISCORD_WEBHOOK_URL"
