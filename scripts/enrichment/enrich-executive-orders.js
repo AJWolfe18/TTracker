@@ -21,7 +21,21 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts.js';
+import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts/executive-orders.js';
+// ADO-273: Updated to use new frame-based style patterns
+import {
+  estimateFrame,
+  getPoolKey,
+  selectVariation,
+  buildVariationInjection,
+  getEOContentId,
+  normalizeAlarmLevel,
+  alarmLevelToLegacySeverity,
+  SECTION_BANS,
+  findBannedStarter,
+  repairBannedStarter,
+  PROMPT_VERSION as EO_PROMPT_VERSION
+} from './eo-style-patterns.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,7 +44,7 @@ dotenv.config();
 // CONFIGURATION
 // ============================================================================
 
-const PROMPT_VERSION = 'v1';
+const PROMPT_VERSION = EO_PROMPT_VERSION;  // ADO-273: v4-ado273 with frame-based variation
 const DAILY_CAP_USD = 5.00;
 const MAX_RETRIES = 3;
 const BACKOFF_MS = [5000, 20000, 60000]; // 5s, 20s, 60s
@@ -44,9 +58,10 @@ const OUTPUT_COST_PER_1K = 0.0006;
 // CLIENTS
 // ============================================================================
 
+// Use TEST env vars when available (Claude Code), fall back to URL (GitHub Actions)
 const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_TEST_URL || process.env.SUPABASE_URL,
+  process.env.SUPABASE_TEST_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const openai = new OpenAI({
@@ -106,6 +121,9 @@ class EOEnrichmentWorker {
     this.rateLimiter = new TokenBucket(10, 10); // 10 req/min
     this.successCount = 0;
     this.failCount = 0;
+    // ADO-273: Track recently used pattern IDs for batch deduplication
+    this.recentPatternIds = [];
+    this.MAX_RECENT_PATTERNS = 10; // Keep last 10 patterns in memory
   }
 
   /**
@@ -127,10 +145,12 @@ class EOEnrichmentWorker {
     }
 
     // 2. Get unenriched EOs
+    // PROD: Only query for truly unenriched EOs (enriched_at IS NULL)
+    // This avoids write-once trigger collision with already-enriched EOs
     const { data: eos, error } = await supabase
       .from('executive_orders')
       .select('*')
-      .or(`enriched_at.is.null,prompt_version.neq.${PROMPT_VERSION}`)
+      .is('enriched_at', null)
       .order('date', { ascending: false })
       .limit(limit);
 
@@ -144,7 +164,7 @@ class EOEnrichmentWorker {
       return;
     }
 
-    console.log(`📋 Found ${eos.length} EOs to enrich\n`);
+    console.log(`📋 Found ${eos.length} EOs to enrich (enriched_at = NULL)\n`);
 
     // 3. Process each with rate limiting
     for (const eo of eos) {
@@ -172,6 +192,34 @@ class EOEnrichmentWorker {
     try {
       console.log(`🤖 Enriching EO ${eo.order_number}: ${eo.title.substring(0, 50)}...`);
 
+      // ADO-273: Frame-based variation system
+      // 1. Estimate frame from title + description + category (pre-GPT)
+      const frame = estimateFrame(eo.title, eo.description, eo.category);
+      console.log(`   Frame: ${frame} (estimated from metadata)`);
+
+      // 2. Get pool key (category + frame)
+      const poolKey = getPoolKey(eo.category, frame);
+
+      // 3. Deterministic selection based on content ID
+      const contentId = getEOContentId(eo);
+      const variation = selectVariation(poolKey, contentId, PROMPT_VERSION, this.recentPatternIds);
+      console.log(`   Pattern: ${variation.id}${variation._meta?.collision ? ' (COLLISION - pool exhausted)' : ''}`);
+
+      // 4. Track pattern ID for batch deduplication
+      this.recentPatternIds.push(variation.id);
+      if (this.recentPatternIds.length > this.MAX_RECENT_PATTERNS) {
+        this.recentPatternIds.shift(); // Remove oldest
+      }
+
+      // 5. Build variation injection with frame guidance
+      const variationInjection = buildVariationInjection(variation, frame);
+
+      // Inject variation into system prompt
+      const systemPromptWithVariation = EO_ENRICHMENT_PROMPT.replace(
+        '{variation_injection}',
+        variationInjection
+      );
+
       // Call OpenAI with timeout
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -180,7 +228,7 @@ class EOEnrichmentWorker {
         {
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: EO_ENRICHMENT_PROMPT },
+            { role: 'system', content: systemPromptWithVariation },
             { role: 'user', content: buildEOPayload(eo) }
           ],
           response_format: { type: 'json_object' },
@@ -196,14 +244,40 @@ class EOEnrichmentWorker {
       const enrichment = JSON.parse(completion.choices[0].message.content);
       this.validateEnrichment(enrichment);
 
-      // Update database
+      // ADO-273: Post-generation validation and repair for banned starters
+      const sectionsToCheck = ['section_what_it_means', 'section_reality_check', 'section_why_it_matters'];
+      for (const section of sectionsToCheck) {
+        if (!enrichment[section] || !SECTION_BANS[section]) continue;
+
+        const banned = findBannedStarter(enrichment[section], SECTION_BANS[section]);
+        if (banned) {
+          console.log(`   ⚠️ Found banned starter in ${section}: "${banned}"`);
+          const repair = repairBannedStarter(section, enrichment[section], banned);
+          if (repair.success) {
+            enrichment[section] = repair.content;
+            console.log(`   ✓ Repaired ${section}`);
+          } else {
+            // Log but don't fail - better to have some output than none
+            console.log(`   ⚠️ Could not repair ${section}, keeping original`);
+          }
+        }
+      }
+
+      // ADO-271: Extract alarm_level and derive legacy severity_rating
+      const alarm_level = normalizeAlarmLevel(enrichment.alarm_level);
+      const severity_rating = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
+
+      // Update database (ADO-273: includes post-validation repaired content)
       const { error: updateError } = await supabase
       .from('executive_orders')
       .update({
+      summary: enrichment.summary,                 // ADO-271: neutral summary from enrichment
       section_what_they_say: enrichment.section_what_they_say,
       section_what_it_means: enrichment.section_what_it_means,
       section_reality_check: enrichment.section_reality_check,
       section_why_it_matters: enrichment.section_why_it_matters,
+      alarm_level,                         // ADO-271: numeric 0-5
+      severity_rating,                     // Legacy: derived from alarm_level, null for 0-1
       category: enrichment.category,
       regions: enrichment.regions || [],
       policy_areas: enrichment.policy_areas || [],
@@ -214,6 +288,14 @@ class EOEnrichmentWorker {
       action_section: enrichment.action_section || null,
       enriched_at: new Date().toISOString(),
       prompt_version: PROMPT_VERSION,
+      enrichment_meta: {
+        prompt_version: PROMPT_VERSION,
+        frame,
+        style_pattern_id: variation.id,
+        collision: variation._meta?.collision || false,
+        model: 'gpt-4o-mini',
+        enriched_at: new Date().toISOString(),
+      },
       })
       .eq('id', eo.id);
 
@@ -248,12 +330,13 @@ class EOEnrichmentWorker {
    * @throws {Error} if validation fails
    */
   validateEnrichment(data) {
-    // Required fields
+    // Required fields (ADO-271: alarm_level replaces severity)
     const required = [
       'section_what_they_say',
       'section_what_it_means',
       'section_reality_check',
       'section_why_it_matters',
+      'alarm_level',
       'category',
       'action_tier',
       'action_confidence',
@@ -300,12 +383,13 @@ class EOEnrichmentWorker {
       throw new Error(`Invalid category: ${data.category}`);
     }
 
-    // Severity validation (SKIPPED - only FE labels matter)
-    // Backend severity can be remapped later if needed
-    // const validSeverities = ['critical', 'severe', 'moderate', 'minor'];
-    // if (!validSeverities.includes(data.severity)) {
-    //   throw new Error(`Invalid severity: ${data.severity}`);
-    // }
+    // ADO-271: alarm_level validation (0-5 numeric)
+    if (typeof data.alarm_level !== 'number' ||
+        data.alarm_level < 0 ||
+        data.alarm_level > 5 ||
+        !Number.isInteger(data.alarm_level)) {
+      throw new Error(`alarm_level must be integer 0-5 (got ${data.alarm_level})`);
+    }
 
     // Action tier validation
     const validTiers = ['direct', 'systemic', 'tracking'];
@@ -514,14 +598,17 @@ export async function enrichExecutiveOrder(eo, skipIdempotencyCheck = false) {
 // ============================================================================
 
 async function main() {
-  // Validate environment variables
-  if (!process.env.SUPABASE_URL) {
-    console.error('❌ Missing SUPABASE_URL environment variable\n');
+  // Validate environment variables (match fallback logic: TEST_* || non-TEST)
+  const resolvedUrl = process.env.SUPABASE_TEST_URL || process.env.SUPABASE_URL;
+  const resolvedKey = process.env.SUPABASE_TEST_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!resolvedUrl) {
+    console.error('❌ Missing SUPABASE_TEST_URL or SUPABASE_URL environment variable\n');
     process.exit(1);
   }
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY environment variable\n');
+  if (!resolvedKey) {
+    console.error('❌ Missing SUPABASE_TEST_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY environment variable\n');
     process.exit(1);
   }
 
@@ -539,8 +626,18 @@ async function main() {
   }
 
   // Create worker and run
+  const runStartedAt = new Date().toISOString();
+  console.log(`RUN_START: ${runStartedAt}\n`);
+
   const worker = new EOEnrichmentWorker();
   await worker.enrichBatch(batchSize);
+
+  // Hard-fail if not all enriched (feedback: enforce exit codes)
+  if (worker.successCount !== batchSize) {
+    console.error(`\n❌ Expected ${batchSize} enriched, got ${worker.successCount} - FAIL`);
+    process.exit(1);
+  }
+  console.log(`\n✅ All ${batchSize} EOs enriched successfully`);
 }
 
 // Only run main if executed directly (not imported)
