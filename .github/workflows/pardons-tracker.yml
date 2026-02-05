@@ -1,0 +1,147 @@
+name: Track Pardons
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: pardons-pipeline-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  track-pardons:
+    if: >-
+      github.event_name != 'schedule' ||
+      (github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true')
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+
+      # scripts expect SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+      SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Create log directory
+        run: mkdir -p logs
+
+      - name: "Phase 1: Ingest DOJ pardons"
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ingest/doj-pardons-scraper.js 2>&1 | tee logs/01-ingest.log
+
+      - name: Budget guard (pre-paid phases)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TODAY="$(date -u +%F)"
+          echo "Budget guard: checking budgets for day=${TODAY}"
+
+          RESP="$(curl -sS \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${SUPABASE_URL}/rest/v1/budgets?day=eq.${TODAY}&select=spent_usd" || true)"
+
+          if [ -z "${RESP}" ]; then
+            echo "::warning::Budget guard: empty response. Blocking paid phases by default."
+            echo "BUDGET_BLOCKED=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if ! echo "$RESP" | jq -e '.' >/dev/null 2>&1; then
+            echo "::warning::Budget guard: invalid JSON response. Blocking paid phases by default."
+            echo "BUDGET_BLOCKED=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          SPENT="$(echo "$RESP" | jq -r '.[0].spent_usd // 0' 2>/dev/null || echo 0)"
+          echo "Daily budget: \$${SPENT} spent / \$5.00 cap"
+
+          # Use awk for floating-point comparison (always available on ubuntu-latest)
+          if awk -v spent="$SPENT" 'BEGIN { exit (spent >= 4.5) ? 0 : 1 }'; then
+            echo "Budget guard: \$${SPENT} >= \$4.50 threshold. Blocking paid phases."
+            echo "BUDGET_BLOCKED=1" >> "$GITHUB_ENV"
+          else
+            echo "BUDGET_BLOCKED=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: "Phase 2: Research (Perplexity)"
+        if: env.BUDGET_BLOCKED != '1'
+        shell: bash
+        env:
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/enrichment/perplexity-research.js --limit=100 2>&1 | tee logs/02-research.log
+
+      - name: "Phase 3: Enrich (GPT)"
+        if: env.BUDGET_BLOCKED != '1'
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/enrichment/enrich-pardons.js --limit=100 2>&1 | tee logs/03-enrich.log
+
+      - name: Budget skip notice
+        if: env.BUDGET_BLOCKED == '1'
+        run: |
+          echo "::warning::Budget guard triggered. Phase 2 (Research) and Phase 3 (Enrich) were skipped."
+
+      - name: Upload logs on failure
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pardons-logs-${{ github.run_id }}
+          path: logs
+          retention-days: 7
+
+      - name: Discord alert on failure
+        if: failure() || cancelled()
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "No DISCORD_WEBHOOK_URL; skipping"
+            exit 0
+          fi
+
+          PAYLOAD="$(jq -n \
+            --arg title "Pipeline Failed: ${{ github.workflow }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg trigger "${{ github.event_name }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              embeds: [{
+                title: $title,
+                color: 15158332,
+                fields: [
+                  {name:"Branch", value:$branch, inline:true},
+                  {name:"Trigger", value:$trigger, inline:true},
+                  {name:"Run", value:("[View Logs](" + $url + ")"), inline:true}
+                ],
+                timestamp: (now | todateiso8601)
+              }]
+            }')"
+
+          curl -fsS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL" \
+            || echo "Discord webhook failed (non-blocking)"
