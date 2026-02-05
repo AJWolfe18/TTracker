@@ -121,6 +121,7 @@ class EOEnrichmentWorker {
     this.rateLimiter = new TokenBucket(10, 10); // 10 req/min
     this.successCount = 0;
     this.failCount = 0;
+    this.foundCount = 0; // Track actual EOs found (vs batch limit)
     // ADO-273: Track recently used pattern IDs for batch deduplication
     this.recentPatternIds = [];
     this.MAX_RECENT_PATTERNS = 10; // Keep last 10 patterns in memory
@@ -164,6 +165,7 @@ class EOEnrichmentWorker {
       return;
     }
 
+    this.foundCount = eos.length; // Track actual count for exit code validation
     console.log(`📋 Found ${eos.length} EOs to enrich (enriched_at = NULL)\n`);
 
     // 3. Process each with rate limiting
@@ -632,12 +634,12 @@ async function main() {
   const worker = new EOEnrichmentWorker();
   await worker.enrichBatch(batchSize);
 
-  // Hard-fail if not all enriched (feedback: enforce exit codes)
-  if (worker.successCount !== batchSize) {
-    console.error(`\n❌ Expected ${batchSize} enriched, got ${worker.successCount} - FAIL`);
+  // Hard-fail if not all found EOs were enriched
+  if (worker.foundCount > 0 && worker.successCount !== worker.foundCount) {
+    console.error(`\n❌ Expected ${worker.foundCount} enriched, got ${worker.successCount} - FAIL`);
     process.exit(1);
   }
-  console.log(`\n✅ All ${batchSize} EOs enriched successfully`);
+  console.log(`\n✅ All ${worker.successCount} EOs enriched successfully`);
 }
 
 // Only run main if executed directly (not imported)
