@@ -1,13 +1,13 @@
 /*
  * Story enrichment for inline RSS pipeline.
- * SYSTEM_PROMPT imported from ./prompts.js (shared with job-queue-worker.js)
+ * SYSTEM_PROMPT imported from ./prompts/stories.js (shared with job-queue-worker.js)
  *
  * ADO-270: Updated to use variation pools and alarm_level (0-5)
  * ADO-274: Frame-based variation system with deterministic selection
  */
 
 import OpenAI from 'openai';
-import { SYSTEM_PROMPT } from './prompts.js';
+import { SYSTEM_PROMPT } from './prompts/stories.js';
 import { normalizeEntities } from '../lib/entity-normalization.js';
 import {
   PROMPT_VERSION,
@@ -125,7 +125,7 @@ const UI_TO_DB_CATEGORIES = {
 
 const toDbCategory = (label) => UI_TO_DB_CATEGORIES[label] || 'other';
 
-// SYSTEM_PROMPT imported from ./prompts.js (single source of truth)
+// SYSTEM_PROMPT imported from ./prompts/stories.js (single source of truth)
 
 // =====================================================================
 // Helper Functions

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './enrichment/prompts.js';
+import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './enrichment/prompts/executive-orders.js';
 
 dotenv.config();
 

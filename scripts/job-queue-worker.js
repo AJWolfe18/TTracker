@@ -9,7 +9,7 @@ import { initializeEnvironment, safeLog } from './utils/security.js';
 import { handlers as clusteringHandlers } from './story-cluster-handler.js';
 import { updateLifecycleStates } from './rss/lifecycle.js';
 // REMOVED: checkAndSplitStory, runMergeDetection - merge/split feature archived (TTRC-376 Phase 4)
-import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts.js';
+import { SYSTEM_PROMPT, buildUserPayload } from './enrichment/prompts/stories.js';
 import { enrichArticlesForSummary } from './enrichment/scraper.js';
 import { normalizeEntities } from './lib/entity-normalization.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';

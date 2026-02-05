@@ -21,7 +21,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts.js';
+import { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts/executive-orders.js';
 // ADO-273: Updated to use new frame-based style patterns
 import {
   estimateFrame,
