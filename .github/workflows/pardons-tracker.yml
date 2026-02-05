@@ -38,7 +38,13 @@ jobs:
       - name: Create log directory
         run: mkdir -p logs
 
-      - name: Budget guard
+      - name: "Phase 1: Ingest DOJ pardons"
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ingest/doj-pardons-scraper.js 2>&1 | tee logs/01-ingest.log
+
+      - name: Budget guard (pre-paid phases)
         shell: bash
         run: |
           set -euo pipefail
@@ -66,18 +72,13 @@ jobs:
           SPENT="$(echo "$RESP" | jq -r '.[0].spent_usd // 0' 2>/dev/null || echo 0)"
           echo "Daily budget: \$${SPENT} spent / \$5.00 cap"
 
-          if echo "$SPENT >= 4.5" | bc -l | grep -q '^1$'; then
+          # Use awk for floating-point comparison (always available on ubuntu-latest)
+          if awk -v spent="$SPENT" 'BEGIN { exit (spent >= 4.5) ? 0 : 1 }'; then
             echo "Budget guard: \$${SPENT} >= \$4.50 threshold. Blocking paid phases."
             echo "BUDGET_BLOCKED=1" >> "$GITHUB_ENV"
           else
             echo "BUDGET_BLOCKED=0" >> "$GITHUB_ENV"
           fi
-
-      - name: "Phase 1: Ingest DOJ pardons"
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/ingest/doj-pardons-scraper.js 2>&1 | tee logs/01-ingest.log
 
       - name: "Phase 2: Research (Perplexity)"
         if: env.BUDGET_BLOCKED != '1'
