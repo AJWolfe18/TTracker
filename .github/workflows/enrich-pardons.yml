@@ -17,8 +17,8 @@ on:
         default: ""
 
 concurrency:
-  group: enrich-pardons-${{ github.ref_name }}
-  cancel-in-progress: true
+  group: pardons-pipeline-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   enrich:
