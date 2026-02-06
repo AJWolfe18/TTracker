@@ -1,6 +1,6 @@
 // Edge Function: trigger-enrichment
-// Triggers AI re-enrichment for stories (and other entity types)
-// ADO: Feature 328, Story 336
+// Triggers AI re-enrichment by dispatching GitHub Actions workflow
+// ADO: Feature 328, Story 336, 337
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
@@ -13,6 +13,50 @@ const COSTS: Record<string, number> = {
   scotus: 0.01,
   eo: 0.008,
   article_entities: 0.0003
+}
+
+// GitHub repo for workflow dispatch
+const GITHUB_OWNER = 'AJWolfe18'
+const GITHUB_REPO = 'TTracker'
+
+// Detect environment from Supabase URL
+function getEnvironment(supabaseUrl: string): 'test' | 'prod' {
+  if (supabaseUrl.includes('wnrjrywpcadwutfykflu')) return 'test'
+  if (supabaseUrl.includes('osjbulmltfpcoldydexg')) return 'prod'
+  return 'test' // Default to test for safety
+}
+
+// Trigger GitHub Actions workflow
+async function triggerWorkflow(
+  workflowFile: string,
+  inputs: Record<string, string>,
+  githubToken: string
+): Promise<{ success: boolean; message: string; run_url?: string }> {
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/dispatches`
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      'Authorization': `Bearer ${githubToken}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'TTracker-Admin'
+    },
+    body: JSON.stringify({
+      ref: inputs.environment === 'prod' ? 'main' : 'test',
+      inputs
+    })
+  })
+
+  if (response.status === 204) {
+    // Success - workflow dispatched
+    const runUrl = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}`
+    return { success: true, message: 'Workflow dispatched', run_url: runUrl }
+  }
+
+  const errorText = await response.text()
+  console.error('GitHub API error:', response.status, errorText)
+  return { success: false, message: `GitHub API error: ${response.status}` }
 }
 
 Deno.serve(async (req) => {
@@ -38,6 +82,15 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Check for GitHub token
+    const githubToken = Deno.env.get('GITHUB_PAT')
+    if (!githubToken) {
+      return new Response(
+        JSON.stringify({ error: 'GITHUB_PAT not configured - cannot trigger enrichment' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Parse request body
     const body = await req.json()
     const { entity_type } = body
@@ -59,7 +112,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate entity_type is one of the allowed types
-    const validTypes = ['story', 'pardon', 'scotus', 'eo', 'article_entities']
+    const validTypes = ['story', 'pardon', 'scotus', 'eo']
     if (!validTypes.includes(entity_type)) {
       return new Response(
         JSON.stringify({ error: `Invalid entity_type. Must be one of: ${validTypes.join(', ')}` }),
@@ -71,6 +124,9 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Detect environment
+    const environment = getEnvironment(supabaseUrl)
+
     // Check budget before proceeding
     const today = new Date().toISOString().split('T')[0]
     const { data: budget, error: budgetError } = await supabase
@@ -81,8 +137,6 @@ Deno.serve(async (req) => {
 
     const cost = COSTS[entity_type] || 0.003
 
-    // Soft budget check - real enforcement happens in the enrichment pipeline
-    // This is a pre-check to give immediate feedback to the user
     if (budget && !budgetError && budget.spent_usd + cost > budget.cap_usd) {
       return new Response(
         JSON.stringify({
@@ -95,112 +149,58 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Trigger re-enrichment based on entity type
-    let result: { data?: unknown; error?: unknown }
-
-    switch (entity_type) {
-      case 'story':
-        // Clear enrichment timestamp to trigger re-enrichment
-        const { data: storyData, error: storyError } = await supabase
-          .from('stories')
-          .update({
-            last_enriched_at: null,
-            enrichment_status: 'pending',
-            enrichment_failure_count: 0
-          })
-          .eq('id', entity_id)
-          .select('id, primary_headline')
-          .single()
-
-        if (storyError) {
-          throw new Error(`Failed to update story: ${storyError.message}`)
-        }
-
-        result = {
-          data: {
-            success: true,
-            story_id: entity_id,
-            headline: storyData?.primary_headline,
-            message: 'Story queued for re-enrichment'
-          }
-        }
-        break
-
-      case 'pardon':
-        // Clear enriched_at to trigger re-enrichment
-        const { error: pardonError } = await supabase
-          .from('pardons')
-          .update({ enriched_at: null })
-          .eq('id', entity_id)
-
-        if (pardonError) {
-          throw new Error(`Failed to update pardon: ${pardonError.message}`)
-        }
-
-        result = {
-          data: {
-            success: true,
-            pardon_id: entity_id,
-            message: 'Pardon queued for re-enrichment'
-          }
-        }
-        break
-
-      case 'scotus':
-        // Clear enrichment to trigger re-enrichment
-        const { error: scotusError } = await supabase
-          .from('scotus_cases')
-          .update({ enriched_at: null, prompt_version: null })
-          .eq('id', entity_id)
-
-        if (scotusError) {
-          throw new Error(`Failed to update SCOTUS case: ${scotusError.message}`)
-        }
-
-        result = {
-          data: {
-            success: true,
-            scotus_id: entity_id,
-            message: 'SCOTUS case queued for re-enrichment'
-          }
-        }
-        break
-
-      case 'eo':
-        // Clear enriched_at to trigger re-enrichment
-        const { error: eoError } = await supabase
-          .from('executive_orders')
-          .update({ enriched_at: null })
-          .eq('id', entity_id)
-
-        if (eoError) {
-          throw new Error(`Failed to update EO: ${eoError.message}`)
-        }
-
-        result = {
-          data: {
-            success: true,
-            eo_id: entity_id,
-            message: 'Executive order queued for re-enrichment'
-          }
-        }
-        break
-
-      default:
-        return new Response(
-          JSON.stringify({ error: `Unknown entity type: ${entity_type}` }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
+    // Map entity type to workflow file
+    const workflowMap: Record<string, string> = {
+      story: 'enrich-story.yml',
+      // Future: pardon, scotus, eo workflows
     }
 
-    // Note: Admin action logging (log_admin_action RPC) will be added in Phase 2
-    // when the admin.action_log table and RPC are created
-    console.log(`admin_action: re-enrich entity_type=${entity_type} entity_id=${entity_id} cost=${cost}`)
+    const workflowFile = workflowMap[entity_type]
+    if (!workflowFile) {
+      return new Response(
+        JSON.stringify({ error: `Re-enrichment not yet supported for ${entity_type}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Mark as pending in database
+    if (entity_type === 'story') {
+      await supabase
+        .from('stories')
+        .update({
+          enrichment_status: 'pending',
+          enrichment_failure_count: 0
+        })
+        .eq('id', entity_id)
+    }
+
+    // Trigger the workflow
+    const result = await triggerWorkflow(
+      workflowFile,
+      {
+        story_id: String(entity_id),
+        environment
+      },
+      githubToken
+    )
+
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ error: result.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(`admin_action: re-enrich entity_type=${entity_type} entity_id=${entity_id} env=${environment}`)
 
     return new Response(
       JSON.stringify({
-        ...result.data,
-        estimated_cost: cost
+        success: true,
+        entity_type,
+        entity_id,
+        message: `Enrichment started (${environment})`,
+        estimated_cost: cost,
+        run_url: result.run_url
       }),
       {
         status: 200,
