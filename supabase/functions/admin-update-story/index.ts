@@ -8,6 +8,7 @@ import { checkAdminPassword } from '../_shared/auth.ts'
 
 // Allowed fields that can be updated (whitelist for security)
 const ALLOWED_FIELDS = [
+  // Metadata fields
   'primary_headline',
   'primary_source',
   'primary_source_url',
@@ -16,7 +17,11 @@ const ALLOWED_FIELDS = [
   'severity',
   'category',
   'lifecycle_state',
-  'confidence_score'
+  'confidence_score',
+  'alarm_level',
+  // Enriched content fields
+  'summary_neutral',
+  'summary_spicy'
 ]
 
 // Valid enum values for validation
@@ -135,6 +140,18 @@ Deno.serve(async (req) => {
         )
       }
       sanitizedUpdates.confidence_score = score
+    }
+
+    // Validate alarm_level if provided (1-5)
+    if ('alarm_level' in sanitizedUpdates && sanitizedUpdates.alarm_level !== null) {
+      const level = parseInt(String(sanitizedUpdates.alarm_level), 10)
+      if (isNaN(level) || level < 1 || level > 5) {
+        return new Response(
+          JSON.stringify({ error: 'alarm_level must be an integer between 1 and 5' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      sanitizedUpdates.alarm_level = level
     }
 
     // Validate URL if provided
