@@ -43,6 +43,10 @@ Deno.serve(async (req) => {
     const search = String(body.search ?? '').trim()
     const status = String(body.status ?? '')
     const enrichment = String(body.enrichment ?? '')
+    const severity = String(body.severity ?? '')
+    const category = String(body.category ?? '')
+    const sortBy = String(body.sortBy ?? 'id') // id, severity, first_seen_at
+    const sortDir = String(body.sortDir ?? 'desc') // asc, desc
     const cursor = String(body.cursor ?? '')
     const limitParam = parseInt(String(body.limit ?? '25'), 10)
     const limit = Math.min(Math.max(limitParam, 1), 100) // Clamp 1-100
@@ -65,8 +69,13 @@ Deno.serve(async (req) => {
         source_count,
         article_story(count)
       `)
-      .order('id', { ascending: false })
       .limit(limit)
+
+    // Sorting - validate allowed columns
+    const allowedSortCols = ['id', 'severity', 'first_seen_at', 'last_updated_at']
+    const sortCol = allowedSortCols.includes(sortBy) ? sortBy : 'id'
+    const ascending = sortDir === 'asc'
+    query = query.order(sortCol, { ascending })
 
     // Cursor-based pagination (descending by id)
     if (cursor) {
@@ -90,6 +99,23 @@ Deno.serve(async (req) => {
     } else if (enrichment === 'pending') {
       query = query.is('last_enriched_at', null)
         .eq('enrichment_failure_count', 0)
+    }
+
+    // Filter: severity
+    const validSeverities = ['critical', 'severe', 'moderate', 'minor']
+    if (validSeverities.includes(severity)) {
+      query = query.eq('severity', severity)
+    }
+
+    // Filter: category
+    const validCategories = [
+      'corruption_scandals', 'democracy_elections', 'policy_legislation',
+      'justice_legal', 'executive_actions', 'foreign_policy',
+      'corporate_financial', 'civil_liberties', 'media_disinformation',
+      'epstein_associates', 'other'
+    ]
+    if (validCategories.includes(category)) {
+      query = query.eq('category', category)
     }
 
     // Filter: search by headline (ilike with escaped wildcards)

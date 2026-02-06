@@ -410,6 +410,10 @@
         .badge-enriched { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
         .badge-failed { background: rgba(248, 113, 113, 0.15); color: #f87171; }
         .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .badge-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .badge-severe { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .badge-moderate { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+        .badge-minor { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
         .load-more-btn {
             display: block;
             width: 100%;
@@ -489,6 +493,10 @@
             const [debouncedSearch, setDebouncedSearch] = useState('');
             const [statusFilter, setStatusFilter] = useState('');
             const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [severityFilter, setSeverityFilter] = useState('');
+            const [categoryFilter, setCategoryFilter] = useState('');
+            const [sortBy, setSortBy] = useState('id');
+            const [sortDir, setSortDir] = useState('desc');
 
             // Detail expansion
             const [expandedId, setExpandedId] = useState(null);
@@ -511,10 +519,12 @@
                 setError(null);
 
                 try {
-                    const reqBody = { limit: 25 };
+                    const reqBody = { limit: 25, sortBy, sortDir };
                     if (debouncedSearch) reqBody.search = debouncedSearch;
                     if (statusFilter) reqBody.status = statusFilter;
                     if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (severityFilter) reqBody.severity = severityFilter;
+                    if (categoryFilter) reqBody.category = categoryFilter;
                     if (pageCursor) reqBody.cursor = pageCursor;
 
                     const { data, error: fnError } = await supabase.functions.invoke(
@@ -542,7 +552,7 @@
                     setLoading(false);
                     setLoadingMore(false);
                 }
-            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter]);
+            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
 
             // Re-fetch when filters change
             useEffect(() => {
@@ -590,6 +600,34 @@
                 return { class: 'badge-closed', label: status || 'Unknown' };
             };
 
+            // Get severity badge
+            const getSeverityBadge = (severity) => {
+                if (severity === 'critical') return { class: 'badge-critical', label: 'Critical' };
+                if (severity === 'severe') return { class: 'badge-severe', label: 'Severe' };
+                if (severity === 'moderate') return { class: 'badge-moderate', label: 'Moderate' };
+                if (severity === 'minor') return { class: 'badge-minor', label: 'Minor' };
+                return { class: 'badge-closed', label: severity || '-' };
+            };
+
+            // Format category for display
+            const formatCategory = (cat) => {
+                if (!cat) return '-';
+                const map = {
+                    corruption_scandals: 'Corruption',
+                    democracy_elections: 'Democracy',
+                    policy_legislation: 'Policy',
+                    justice_legal: 'Justice',
+                    executive_actions: 'Executive',
+                    foreign_policy: 'Foreign Policy',
+                    corporate_financial: 'Corporate',
+                    civil_liberties: 'Civil Liberties',
+                    media_disinformation: 'Media',
+                    epstein_associates: 'Epstein',
+                    other: 'Other'
+                };
+                return map[cat] || cat;
+            };
+
             // Toggle detail expansion
             const toggleDetail = (id) => {
                 setExpandedId(expandedId === id ? null : id);
@@ -626,6 +664,50 @@
                             <option value="failed">Failed</option>
                             <option value="pending">Pending</option>
                         </select>
+                        <select
+                            className="stories-select"
+                            value={severityFilter}
+                            onChange={(e) => setSeverityFilter(e.target.value)}
+                        >
+                            <option value="">All Severity</option>
+                            <option value="critical">Critical</option>
+                            <option value="severe">Severe</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="minor">Minor</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Categories</option>
+                            <option value="corruption_scandals">Corruption & Scandals</option>
+                            <option value="democracy_elections">Democracy & Elections</option>
+                            <option value="policy_legislation">Policy & Legislation</option>
+                            <option value="justice_legal">Justice & Legal</option>
+                            <option value="executive_actions">Executive Actions</option>
+                            <option value="foreign_policy">Foreign Policy</option>
+                            <option value="corporate_financial">Corporate & Financial</option>
+                            <option value="civil_liberties">Civil Liberties</option>
+                            <option value="media_disinformation">Media & Disinformation</option>
+                            <option value="epstein_associates">Epstein & Associates</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const [col, dir] = e.target.value.split('-');
+                                setSortBy(col);
+                                setSortDir(dir);
+                            }}
+                        >
+                            <option value="id-desc">Newest First</option>
+                            <option value="id-asc">Oldest First</option>
+                            <option value="severity-desc">Severity (High→Low)</option>
+                            <option value="severity-asc">Severity (Low→High)</option>
+                            <option value="last_updated_at-desc">Recently Updated</option>
+                        </select>
                     </div>
 
                     {error && (
@@ -654,7 +736,8 @@
                                         <tr>
                                             <th>ID</th>
                                             <th>Headline</th>
-                                            <th>Source</th>
+                                            <th>Severity</th>
+                                            <th>Category</th>
                                             <th>Status</th>
                                             <th>Enrichment</th>
                                             <th>Articles</th>
@@ -664,7 +747,7 @@
                                     <tbody>
                                         {stories.length === 0 && (
                                             <tr>
-                                                <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                                                     No stories found matching your filters.
                                                 </td>
                                             </tr>
@@ -684,8 +767,13 @@
                                                     >
                                                         {story.primary_headline || '(No headline)'}
                                                     </td>
+                                                    <td>
+                                                        <span className={`badge ${getSeverityBadge(story.severity).class}`}>
+                                                            {getSeverityBadge(story.severity).label}
+                                                        </span>
+                                                    </td>
                                                     <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                                                        {story.primary_source || '-'}
+                                                        {formatCategory(story.category)}
                                                     </td>
                                                     <td>
                                                         <span className={`badge ${statusBadge.class}`}>{statusBadge.label}</span>
@@ -702,7 +790,7 @@
                                                 </tr>,
                                                 isExpanded && (
                                                     <tr className="story-detail-row">
-                                                        <td colSpan={7}>
+                                                        <td colSpan={8}>
                                                             <div className="story-detail-content">
                                                                 <div>
                                                                     <dt>Category</dt>
