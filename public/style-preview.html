@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrumpyTracker Style Preview - De-Vibe-Coding Options</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Libre Franklin', -apple-system, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-family: 'Libre Baskerville', Georgia, serif;
+      font-size: 1.75rem;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #9ca3af;
+      margin-bottom: 32px;
+      font-size: 0.9rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 40px 0 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .option {
+      background: #111;
+      border-radius: 8px;
+      padding: 20px;
+      border: 1px solid #333;
+    }
+
+    .option-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+      padding: 6px 12px;
+      background: #333;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .option-label.current { background: #1d4ed8; }
+    .option-label.recommended { background: #dc2626; }
+    .option-label.alt { background: #4b5563; }
+
+    /* =====================
+       ACCENT COLOR OPTIONS
+       ===================== */
+
+    /* Current Blue */
+    .card-current {
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --card-bg: rgba(31, 41, 55, 0.6);
+      --card-border: rgba(75, 85, 99, 0.4);
+      --text-link: #60a5fa;
+      --summary-border: #3b82f6;
+      background: linear-gradient(135deg, #111827 0%, #0f172a 50%, #1e1b4b 100%);
+    }
+
+    /* Red Accent Only */
+    .card-red {
+      --accent: #dc2626;
+      --accent-hover: #b91c1c;
+      --card-bg: #1f2937;
+      --card-border: #374151;
+      --text-link: #9ca3af;
+      --summary-border: #4b5563;
+      background: #111827;
+    }
+
+    /* Black/White + Red */
+    .card-bw {
+      --accent: #ffffff;
+      --accent-hover: #e5e7eb;
+      --card-bg: #18181b;
+      --card-border: #27272a;
+      --text-link: #a1a1aa;
+      --summary-border: #3f3f46;
+      background: #09090b;
+    }
+
+    /* Demo Card */
+    .demo-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .demo-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .demo-category {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: 3px;
+      background: rgba(220, 38, 38, 0.2);
+      color: #fca5a5;
+    }
+
+    .demo-time {
+      font-size: 0.7rem;
+      color: #6b7280;
+    }
+
+    .demo-headline {
+      font-family: 'Libre Baskerville', Georgia, serif;
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+
+    .demo-severity {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.6rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      background: #dc2626;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .demo-summary {
+      background: rgba(0,0,0,0.3);
+      border-left: 3px solid var(--summary-border);
+      padding: 10px 12px;
+      border-radius: 0 4px 4px 0;
+      margin-bottom: 12px;
+    }
+
+    .demo-summary p {
+      font-size: 0.8rem;
+      color: #d1d5db;
+      line-height: 1.5;
+    }
+
+    .demo-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 10px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    .demo-link {
+      font-size: 0.75rem;
+      color: var(--text-link);
+      text-decoration: none;
+    }
+
+    .demo-btn {
+      padding: 6px 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .card-bw .demo-btn {
+      color: #000;
+    }
+
+    /* =====================
+       EFFECT OPTIONS
+       ===================== */
+
+    .effects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .effect-demo {
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    /* Current Effects */
+    .effect-current {
+      background: rgba(31, 41, 55, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(75, 85, 99, 0.4);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .effect-current:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+    }
+
+    .effect-current .demo-severity {
+      box-shadow: 0 1px 4px rgba(220, 38, 38, 0.4);
+    }
+
+    /* Flat - No Effects */
+    .effect-flat {
+      background: #1f2937;
+      border: 1px solid #374151;
+    }
+
+    /* Subtle Shadows Only */
+    .effect-shadows {
+      background: #1f2937;
+      border: 1px solid #374151;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    /* =====================
+       LIGHT MODE PREVIEW
+       ===================== */
+
+    .light-section {
+      background: #f5f5f5;
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 20px;
+    }
+
+    .light-section .section-title {
+      color: #1a1a1a;
+      border-bottom-color: #e5e7eb;
+    }
+
+    .light-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .light-option {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .light-option .option-label {
+      background: #e5e7eb;
+      color: #1a1a1a;
+    }
+
+    .light-option .option-label.current { background: #1d4ed8; color: #fff; }
+    .light-option .option-label.recommended { background: #dc2626; color: #fff; }
+
+    /* Light Current */
+    .light-card-current {
+      --accent: #1d4ed8;
+      --card-bg: #ffffff;
+      --card-border: rgba(0, 0, 0, 0.08);
+      --text-primary: #1a1a1a;
+      --text-secondary: #4b5563;
+      --text-link: #1d4ed8;
+      --summary-bg: #f3f4f6;
+      --summary-border: transparent;
+    }
+
+    /* Light Red Accent */
+    .light-card-red {
+      --accent: #dc2626;
+      --card-bg: #ffffff;
+      --card-border: #e5e7eb;
+      --text-primary: #1a1a1a;
+      --text-secondary: #4b5563;
+      --text-link: #4b5563;
+      --summary-bg: #f9fafb;
+      --summary-border: #d1d5db;
+    }
+
+    /* Light Black/White */
+    .light-card-bw {
+      --accent: #1a1a1a;
+      --card-bg: #ffffff;
+      --card-border: #e5e7eb;
+      --text-primary: #0a0a0a;
+      --text-secondary: #525252;
+      --text-link: #525252;
+      --summary-bg: #fafafa;
+      --summary-border: #d4d4d4;
+    }
+
+    .light-demo-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .light-demo-card .demo-headline {
+      color: var(--text-primary);
+    }
+
+    .light-demo-card .demo-time {
+      color: #9ca3af;
+    }
+
+    .light-demo-card .demo-category {
+      background: #fecaca;
+      color: #991b1b;
+    }
+
+    .light-demo-card .demo-summary {
+      background: var(--summary-bg);
+      border-left-color: var(--summary-border);
+    }
+
+    .light-demo-card .demo-summary p {
+      color: var(--text-secondary);
+    }
+
+    .light-demo-card .demo-footer {
+      border-top-color: var(--card-border);
+    }
+
+    .light-demo-card .demo-link {
+      color: var(--text-link);
+    }
+
+    .light-demo-card .demo-btn {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .light-card-bw .light-demo-card .demo-btn {
+      color: #fff;
+    }
+
+    /* =====================
+       NOTES
+       ===================== */
+
+    .notes {
+      background: #1f2937;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 40px;
+      border-left: 4px solid #f59e0b;
+    }
+
+    .notes h3 {
+      font-size: 1rem;
+      margin-bottom: 12px;
+      color: #f59e0b;
+    }
+
+    .notes ul {
+      list-style: none;
+      font-size: 0.875rem;
+      color: #d1d5db;
+    }
+
+    .notes li {
+      padding: 4px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .notes li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: #6b7280;
+    }
+
+    .recommendation {
+      background: rgba(220, 38, 38, 0.1);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 24px;
+    }
+
+    .recommendation h3 {
+      color: #fca5a5;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+
+    .recommendation p {
+      font-size: 0.85rem;
+      color: #d1d5db;
+    }
+  </style>
+</head>
+<body>
+  <h1>De-Vibe-Coding Style Options</h1>
+  <p class="subtitle">Compare accent colors and effects without changing the live site</p>
+
+  <!-- MAXIMUM RESTRAINT OPTION -->
+  <h2 class="section-title">Maximum Restraint (Your Feedback)</h2>
+  <div class="grid">
+
+    <!-- Neutral everything -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label recommended">Neutral Category + White Button</span>
+      <div class="demo-card" style="background: #1f2937; border: 1px solid #374151;">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #374151; color: #9ca3af;">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #dc2626; color: #fff; margin-bottom: 10px;">Fucking Treason</span>
+        <div class="demo-summary" style="background: rgba(0,0,0,0.3); border-left: 3px solid #4b5563;">
+          <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div class="demo-footer" style="border-top: 1px solid #374151;">
+          <a href="#" style="font-size: 0.75rem; color: #9ca3af; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fff; color: #000; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.75rem; color: #6b7280;">
+        Gray category, white button, red severity only
+      </p>
+    </div>
+
+    <!-- Severity options -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label alt">Severity Badge Variations</span>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #dc2626; color: #fff;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Current (solid red)</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: transparent; border: 1px solid #dc2626; color: #fca5a5;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Outline only (subtle)</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: #fca5a5;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Ghost (very subtle)</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #dc2626; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #fca5a5; transform: rotate(-2deg); letter-spacing: 0.1em;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Stamp style (red)</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #6b7280; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d1d5db; transform: rotate(-2deg); letter-spacing: 0.1em;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Stamp style (NO COLOR)</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #9ca3af; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #e5e7eb; transform: rotate(-1.5deg); letter-spacing: 0.1em;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Stamp lighter angle</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #374151; color: #d1d5db;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">All gray (no stamp)</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Level-based color -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label alt">Color Only for Level 5?</span>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #dc2626; color: #fff;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Level 5 - RED</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #374151; color: #d1d5db;">Criminal Bullshit</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Level 4 - gray</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #374151; color: #d1d5db;">Swamp Shit</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Level 3 - gray</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #374151; color: #9ca3af;">Clown Show</span>
+          <span style="font-size: 0.7rem; color: #6b7280;">Level 2 - gray</span>
+        </div>
+
+      </div>
+      <p style="margin-top: 16px; font-size: 0.75rem; color: #6b7280;">
+        Red = only true emergencies. Everything else is muted.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- DARK MODE ACCENT COLORS -->
+  <h2 class="section-title">Dark Mode - Original Accent Color Options</h2>
+  <div class="grid">
+
+    <!-- Current Blue -->
+    <div class="option card-current">
+      <span class="option-label current">Current (Blue)</span>
+      <div class="demo-card">
+        <div class="demo-header">
+          <span class="demo-category">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span class="demo-severity">Fucking Treason</span>
+        <div class="demo-summary">
+          <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div class="demo-footer">
+          <a href="#" class="demo-link">5 sources</a>
+          <button class="demo-btn">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.75rem; color: #9ca3af;">
+        Blue accent + purple gradient bg + glassmorphism
+      </p>
+    </div>
+
+    <!-- Red Accent Only -->
+    <div class="option card-red">
+      <span class="option-label recommended">Recommended (Red Only)</span>
+      <div class="demo-card">
+        <div class="demo-header">
+          <span class="demo-category">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span class="demo-severity">Fucking Treason</span>
+        <div class="demo-summary">
+          <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div class="demo-footer">
+          <a href="#" class="demo-link">5 sources</a>
+          <button class="demo-btn">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.75rem; color: #9ca3af;">
+        Red accent only + flat dark bg + no blur
+      </p>
+    </div>
+
+    <!-- Black/White + Red -->
+    <div class="option card-bw">
+      <span class="option-label alt">Alternative (B/W + Red)</span>
+      <div class="demo-card">
+        <div class="demo-header">
+          <span class="demo-category">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span class="demo-severity">Fucking Treason</span>
+        <div class="demo-summary">
+          <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div class="demo-footer">
+          <a href="#" class="demo-link">5 sources</a>
+          <button class="demo-btn">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.75rem; color: #9ca3af;">
+        White buttons + pure black bg + maximum contrast
+      </p>
+    </div>
+  </div>
+
+  <!-- EFFECT OPTIONS -->
+  <h2 class="section-title">Dark Mode - Effect Options (Hover to Compare)</h2>
+  <div class="effects-grid">
+
+    <div class="effect-demo effect-current">
+      <span class="option-label current">Current Effects</span>
+      <p style="margin-top: 12px; font-size: 0.8rem; color: #d1d5db;">
+        Glassmorphism blur, hover lift animation, inset glow, badge shadows
+      </p>
+      <span class="demo-severity" style="margin-top: 12px; display: inline-block;">Badge with glow</span>
+    </div>
+
+    <div class="effect-demo effect-flat">
+      <span class="option-label recommended">Flat (No Effects)</span>
+      <p style="margin-top: 12px; font-size: 0.8rem; color: #d1d5db;">
+        Solid backgrounds, no blur, no hover transforms, no glows
+      </p>
+      <span class="demo-severity" style="margin-top: 12px; display: inline-block;">Badge - flat</span>
+    </div>
+
+    <div class="effect-demo effect-shadows">
+      <span class="option-label alt">Subtle Shadows Only</span>
+      <p style="margin-top: 12px; font-size: 0.8rem; color: #d1d5db;">
+        Light box-shadow for depth, no blur, no hover transforms
+      </p>
+      <span class="demo-severity" style="margin-top: 12px; display: inline-block;">Badge - flat</span>
+    </div>
+  </div>
+
+  <!-- FINAL DIRECTION: PURE B/W + ALL STAMPS -->
+  <h2 class="section-title" style="border-bottom-color: #fafafa;">FINAL: Pure B/W + All Severities as Stamps (No Red)</h2>
+  <div class="grid">
+
+    <!-- DARK MODE FINAL -->
+    <div class="option" style="background: #09090b; border: 2px solid #fafafa;">
+      <span class="option-label" style="background: #fafafa; color: #09090b;">DARK MODE - FINAL</span>
+      <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #27272a; color: #a1a1aa;">Corruption</span>
+          <span class="demo-time" style="color: #71717a;">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline" style="color: #fafafa;">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-2deg); letter-spacing: 0.1em; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: #0a0a0a; border-left: 3px solid #3f3f46; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #a1a1aa; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #27272a;">
+          <a href="#" style="font-size: 0.75rem; color: #a1a1aa; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fafafa; color: #09090b; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIGHT MODE FINAL -->
+    <div class="option" style="background: #fafafa; border: 2px solid #171717;">
+      <span class="option-label" style="background: #171717; color: #fafafa;">LIGHT MODE - FINAL</span>
+      <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #f5f5f5; color: #737373;">Corruption</span>
+          <span style="font-size: 0.7rem; color: #a3a3a3;">2 hours ago</span>
+        </div>
+        <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #171717;">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 4px 10px; border: 2px solid #a3a3a3; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #525252; transform: rotate(-2deg); letter-spacing: 0.1em; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: #fafafa; border-left: 3px solid #d4d4d4; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #525252; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e5e5e5;">
+          <a href="#" style="font-size: 0.75rem; color: #737373; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #171717; color: #fafafa; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL SEVERITY STAMPS -->
+    <div class="option" style="background: #09090b;">
+      <span class="option-label" style="background: #fafafa; color: #09090b;">All Severity Stamps (Dark)</span>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-2deg); letter-spacing: 0.1em;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 5</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(1.5deg); letter-spacing: 0.1em;">Criminal Bullshit</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 4</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-1deg); letter-spacing: 0.1em;">Swamp Shit</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 3</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(1deg); letter-spacing: 0.1em;">Clown Show</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 2</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-1.5deg); letter-spacing: 0.1em;">Business as Usual</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 1</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(0.5deg); letter-spacing: 0.1em;">Small Win</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 0</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Multiple cards side by side -->
+  <h2 class="section-title">Final: Multiple Cards Together</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; background: #09090b; padding: 24px; border-radius: 8px; margin-bottom: 40px;">
+
+    <!-- Card 1 -->
+    <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #27272a; color: #a1a1aa;">Corruption</span>
+        <span style="font-size: 0.65rem; color: #71717a;">2h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #fafafa; margin-bottom: 6px;">Trump Official Caught in Bribery Scandal</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #71717a; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-2deg); letter-spacing: 0.08em; margin-bottom: 8px;">Fucking Treason</span>
+      <p style="font-size: 0.75rem; color: #a1a1aa; line-height: 1.4; margin-bottom: 10px;">Another day, another grift exposed...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #27272a;">
+        <span style="font-size: 0.7rem; color: #71717a;">5 sources</span>
+        <button style="padding: 5px 10px; background: #fafafa; color: #09090b; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #27272a; color: #a1a1aa;">Justice</span>
+        <span style="font-size: 0.65rem; color: #71717a;">4h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #fafafa; margin-bottom: 6px;">DOJ Drops Investigation Into Mar-a-Lago</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #71717a; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(1.5deg); letter-spacing: 0.08em; margin-bottom: 8px;">Criminal Bullshit</span>
+      <p style="font-size: 0.75rem; color: #a1a1aa; line-height: 1.4; margin-bottom: 10px;">The fix was in from the start...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #27272a;">
+        <span style="font-size: 0.7rem; color: #71717a;">8 sources</span>
+        <button style="padding: 5px 10px; background: #fafafa; color: #09090b; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 14px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #27272a; color: #a1a1aa;">Policy</span>
+        <span style="font-size: 0.65rem; color: #71717a;">6h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #fafafa; margin-bottom: 6px;">New Executive Order Guts EPA Regulations</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #71717a; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-1deg); letter-spacing: 0.08em; margin-bottom: 8px;">Swamp Shit</span>
+      <p style="font-size: 0.75rem; color: #a1a1aa; line-height: 1.4; margin-bottom: 10px;">Corporate donors get their money's worth...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #27272a;">
+        <span style="font-size: 0.7rem; color: #71717a;">3 sources</span>
+        <button style="padding: 5px 10px; background: #fafafa; color: #09090b; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Light mode grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; background: #f5f5f5; padding: 24px; border-radius: 8px; margin-bottom: 40px;">
+
+    <!-- Card 1 Light -->
+    <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #f5f5f5; color: #737373;">Corruption</span>
+        <span style="font-size: 0.65rem; color: #a3a3a3;">2h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #171717; margin-bottom: 6px;">Trump Official Caught in Bribery Scandal</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #a3a3a3; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #525252; transform: rotate(-2deg); letter-spacing: 0.08em; margin-bottom: 8px;">Fucking Treason</span>
+      <p style="font-size: 0.75rem; color: #525252; line-height: 1.4; margin-bottom: 10px;">Another day, another grift exposed...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #e5e5e5;">
+        <span style="font-size: 0.7rem; color: #737373;">5 sources</span>
+        <button style="padding: 5px 10px; background: #171717; color: #fafafa; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+    <!-- Card 2 Light -->
+    <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #f5f5f5; color: #737373;">Justice</span>
+        <span style="font-size: 0.65rem; color: #a3a3a3;">4h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #171717; margin-bottom: 6px;">DOJ Drops Investigation Into Mar-a-Lago</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #a3a3a3; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #525252; transform: rotate(1.5deg); letter-spacing: 0.08em; margin-bottom: 8px;">Criminal Bullshit</span>
+      <p style="font-size: 0.75rem; color: #525252; line-height: 1.4; margin-bottom: 10px;">The fix was in from the start...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #e5e5e5;">
+        <span style="font-size: 0.7rem; color: #737373;">8 sources</span>
+        <button style="padding: 5px 10px; background: #171717; color: #fafafa; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+    <!-- Card 3 Light -->
+    <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span style="font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: #f5f5f5; color: #737373;">Policy</span>
+        <span style="font-size: 0.65rem; color: #a3a3a3;">6h ago</span>
+      </div>
+      <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 0.9rem; font-weight: 700; line-height: 1.3; color: #171717; margin-bottom: 6px;">New Executive Order Guts EPA Regulations</h3>
+      <span style="display: inline-block; padding: 3px 8px; border: 2px solid #a3a3a3; font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: #525252; transform: rotate(-1deg); letter-spacing: 0.08em; margin-bottom: 8px;">Swamp Shit</span>
+      <p style="font-size: 0.75rem; color: #525252; line-height: 1.4; margin-bottom: 10px;">Corporate donors get their money's worth...</p>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #e5e5e5;">
+        <span style="font-size: 0.7rem; color: #737373;">3 sources</span>
+        <button style="padding: 5px 10px; background: #171717; color: #fafafa; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Details</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- YOUR DIRECTION: B/W + COLORLESS STAMP -->
+  <h2 class="section-title">Your Direction: B/W + Colorless Stamp</h2>
+  <div class="grid">
+
+    <!-- Full B/W with colorless stamp -->
+    <div class="option" style="background: #09090b;">
+      <span class="option-label recommended">B/W + Gray Stamp (Dark)</span>
+      <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #27272a; color: #a1a1aa;">Corruption</span>
+          <span class="demo-time" style="color: #71717a;">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline" style="color: #fafafa;">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-2deg); letter-spacing: 0.1em; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: #0a0a0a; border-left: 3px solid #3f3f46; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #a1a1aa; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #27272a;">
+          <a href="#" style="font-size: 0.75rem; color: #a1a1aa; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fafafa; color: #09090b; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.7rem; color: #52525b;">
+        Pure B/W palette. Zero color. Stamp adds character without AI vibes.
+      </p>
+    </div>
+
+    <!-- Full B/W Light Mode -->
+    <div class="option" style="background: #fafafa; border-color: #e5e5e5;">
+      <span class="option-label recommended" style="background: #18181b;">B/W + Gray Stamp (Light)</span>
+      <div style="background: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #f5f5f5; color: #737373;">Corruption</span>
+          <span style="font-size: 0.7rem; color: #a3a3a3;">2 hours ago</span>
+        </div>
+        <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #171717;">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 4px 10px; border: 2px solid #a3a3a3; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #525252; transform: rotate(-2deg); letter-spacing: 0.1em; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: #fafafa; border-left: 3px solid #d4d4d4; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #525252; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e5e5e5;">
+          <a href="#" style="font-size: 0.75rem; color: #737373; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #171717; color: #fafafa; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.7rem; color: #737373;">
+        Clean newspaper feel. Professional restraint.
+      </p>
+    </div>
+
+    <!-- Comparison: All severity levels as stamps -->
+    <div class="option" style="background: #09090b;">
+      <span class="option-label alt">All Severity Levels (Gray Stamps)</span>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-2deg); letter-spacing: 0.1em;">Fucking Treason</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 5</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-1.5deg); letter-spacing: 0.1em;">Criminal Bullshit</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 4</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(1deg); letter-spacing: 0.1em;">Swamp Shit</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 3</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: inline-block; padding: 4px 10px; border: 2px solid #71717a; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; color: #d4d4d8; transform: rotate(-1deg); letter-spacing: 0.1em;">Clown Show</span>
+          <span style="font-size: 0.7rem; color: #52525b;">Level 2</span>
+        </div>
+      </div>
+      <p style="margin-top: 16px; font-size: 0.7rem; color: #52525b;">
+        Slight rotation variance per level adds organic feel.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- FULL CARDS WITH EFFECTS + RESTRAINED COLORS -->
+  <h2 class="section-title">Full Cards: Restrained Colors + Effect Options</h2>
+  <div class="grid">
+
+    <!-- Flat + Restrained -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label recommended">FLAT + Restrained Colors</span>
+      <div style="background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; margin-top: 12px;">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #374151; color: #9ca3af;">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: #fca5a5; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: rgba(0,0,0,0.2); border-left: 3px solid #4b5563; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #d1d5db; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #374151;">
+          <a href="#" style="font-size: 0.75rem; color: #9ca3af; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fff; color: #000; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+        No shadows, no blur, no hover effects. Pure flat.
+      </p>
+    </div>
+
+    <!-- Subtle Shadow + Restrained -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label alt">SUBTLE SHADOW + Restrained</span>
+      <div style="background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #374151; color: #9ca3af;">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: #fca5a5; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: rgba(0,0,0,0.2); border-left: 3px solid #4b5563; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #d1d5db; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #374151;">
+          <a href="#" style="font-size: 0.75rem; color: #9ca3af; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fff; color: #000; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+        Subtle drop shadow for depth, no blur, no hover.
+      </p>
+    </div>
+
+    <!-- Level 5 Only Red -->
+    <div class="option" style="background: #111827;">
+      <span class="option-label alt">Level 5 Only = Solid Red</span>
+      <div style="background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
+        <div class="demo-header">
+          <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #374151; color: #9ca3af;">Corruption</span>
+          <span class="demo-time">2 hours ago</span>
+        </div>
+        <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+        <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #dc2626; color: #fff; margin-bottom: 10px;">Fucking Treason</span>
+        <div style="background: rgba(0,0,0,0.2); border-left: 3px solid #4b5563; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+          <p style="font-size: 0.8rem; color: #d1d5db; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #374151;">
+          <a href="#" style="font-size: 0.75rem; color: #9ca3af; text-decoration: none;">5 sources</a>
+          <button style="padding: 6px 12px; background: #fff; color: #000; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+        </div>
+      </div>
+      <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+        Only Level 5 gets solid red. Levels 1-4 get ghost style.
+      </p>
+    </div>
+
+  </div>
+
+  <!-- LIGHT MODE -->
+  <div class="light-section">
+    <h2 class="section-title" style="margin-top: 0;">Light Mode - Accent Color Options</h2>
+    <div class="light-grid">
+
+      <!-- Light Current -->
+      <div class="light-option light-card-current">
+        <span class="option-label current">Current (Blue)</span>
+        <div class="light-demo-card">
+          <div class="demo-header">
+            <span class="demo-category">Corruption</span>
+            <span class="demo-time">2 hours ago</span>
+          </div>
+          <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span class="demo-severity">Fucking Treason</span>
+          <div class="demo-summary">
+            <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div class="demo-footer">
+            <a href="#" class="demo-link">5 sources</a>
+            <button class="demo-btn">View Details</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Light Red -->
+      <div class="light-option light-card-red">
+        <span class="option-label recommended">Recommended (Red)</span>
+        <div class="light-demo-card">
+          <div class="demo-header">
+            <span class="demo-category">Corruption</span>
+            <span class="demo-time">2 hours ago</span>
+          </div>
+          <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span class="demo-severity">Fucking Treason</span>
+          <div class="demo-summary">
+            <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div class="demo-footer">
+            <a href="#" class="demo-link">5 sources</a>
+            <button class="demo-btn">View Details</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Light B/W -->
+      <div class="light-option light-card-bw">
+        <span class="option-label alt">Alternative (B/W)</span>
+        <div class="light-demo-card">
+          <div class="demo-header">
+            <span class="demo-category">Corruption</span>
+            <span class="demo-time">2 hours ago</span>
+          </div>
+          <h3 class="demo-headline">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span class="demo-severity">Fucking Treason</span>
+          <div class="demo-summary">
+            <p>Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div class="demo-footer">
+            <a href="#" class="demo-link">5 sources</a>
+            <button class="demo-btn">View Details</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIGHT MODE RESTRAINED -->
+  <div class="light-section">
+    <h2 class="section-title" style="margin-top: 0;">Light Mode - Restrained Options</h2>
+    <div class="light-grid">
+
+      <!-- Light Flat Restrained -->
+      <div class="light-option">
+        <span class="option-label recommended">FLAT + Restrained</span>
+        <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-top: 12px;">
+          <div class="demo-header">
+            <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #f3f4f6; color: #6b7280;">Corruption</span>
+            <span style="font-size: 0.7rem; color: #9ca3af;">2 hours ago</span>
+          </div>
+          <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #1a1a1a;">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.2); color: #dc2626; margin-bottom: 10px;">Fucking Treason</span>
+          <div style="background: #f9fafb; border-left: 3px solid #d1d5db; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+            <p style="font-size: 0.8rem; color: #4b5563; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+            <a href="#" style="font-size: 0.75rem; color: #6b7280; text-decoration: none;">5 sources</a>
+            <button style="padding: 6px 12px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+          </div>
+        </div>
+        <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+          Gray category, black button, ghost severity
+        </p>
+      </div>
+
+      <!-- Light Subtle Shadow -->
+      <div class="light-option">
+        <span class="option-label alt">SUBTLE SHADOW + Restrained</span>
+        <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+          <div class="demo-header">
+            <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #f3f4f6; color: #6b7280;">Corruption</span>
+            <span style="font-size: 0.7rem; color: #9ca3af;">2 hours ago</span>
+          </div>
+          <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #1a1a1a;">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.2); color: #dc2626; margin-bottom: 10px;">Fucking Treason</span>
+          <div style="background: #f9fafb; border-left: 3px solid #d1d5db; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+            <p style="font-size: 0.8rem; color: #4b5563; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+            <a href="#" style="font-size: 0.75rem; color: #6b7280; text-decoration: none;">5 sources</a>
+            <button style="padding: 6px 12px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+          </div>
+        </div>
+        <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+          Subtle shadow for depth, no hover effects
+        </p>
+      </div>
+
+      <!-- Light Level 5 Solid -->
+      <div class="light-option">
+        <span class="option-label alt">Level 5 = Solid Red</span>
+        <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-top: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);">
+          <div class="demo-header">
+            <span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 3px; background: #f3f4f6; color: #6b7280;">Corruption</span>
+            <span style="font-size: 0.7rem; color: #9ca3af;">2 hours ago</span>
+          </div>
+          <h3 style="font-family: 'Libre Baskerville', Georgia, serif; font-size: 1rem; font-weight: 700; line-height: 1.35; margin-bottom: 8px; color: #1a1a1a;">Trump Administration Official Caught in Bribery Scandal</h3>
+          <span style="display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.6rem; font-weight: 800; text-transform: uppercase; background: #dc2626; color: #fff; margin-bottom: 10px;">Fucking Treason</span>
+          <div style="background: #f9fafb; border-left: 3px solid #d1d5db; padding: 10px 12px; border-radius: 0 4px 4px 0; margin-bottom: 12px;">
+            <p style="font-size: 0.8rem; color: #4b5563; line-height: 1.5; margin: 0;">Another day, another grift. The corruption runs so deep at this point that scandals barely register anymore.</p>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+            <a href="#" style="font-size: 0.75rem; color: #6b7280; text-decoration: none;">5 sources</a>
+            <button style="padding: 6px 12px; background: #1a1a1a; color: #fff; border: none; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">View Details</button>
+          </div>
+        </div>
+        <p style="margin-top: 12px; font-size: 0.7rem; color: #6b7280;">
+          Only Level 5 gets solid red badge
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="notes">
+    <h3>What Each Option Changes</h3>
+    <ul>
+      <li><strong>Current (Blue):</strong> Blue links, blue buttons, blue summary borders, purple-tinted dark background, glassmorphism blur everywhere</li>
+      <li><strong>Red Only:</strong> Gray links, red buttons (CTAs only), gray summary borders, flat dark gray background, no blur</li>
+      <li><strong>B/W + Red:</strong> Gray links, white/black buttons, pure black background, maximum contrast - very stark</li>
+    </ul>
+  </div>
+
+  <div class="recommendation" style="border: 2px solid #fafafa;">
+    <h3 style="color: #fafafa;">FINAL DIRECTION CONFIRMED</h3>
+    <p>
+      <strong>Pure B/W + All Stamps:</strong> Black and white only. Zero color anywhere. Gray stamp-style severity badges with slight rotation. Category badges in gray. White buttons on dark, black buttons on light. Subtle shadows for depth. No blue, no red, no gradients, no blur.
+    </p>
+  </div>
+
+  <div class="notes" style="margin-top: 20px; border-left-color: #fafafa;">
+    <h3 style="color: #fafafa;">Implementation Checklist</h3>
+    <ul>
+      <li><strong>Remove ALL color</strong> - no blue, no red, no colored badges</li>
+      <li><strong>Remove ALL gradients</strong> - background, logo, buttons, newsletter</li>
+      <li><strong>Remove glassmorphism</strong> - no backdrop-filter: blur anywhere</li>
+      <li><strong>Remove hover lifts</strong> - no transform: translateY on hover</li>
+      <li><strong>Remove badge glows</strong> - no box-shadow on severity badges</li>
+      <li><strong>Category badges</strong> → gray background (#27272a dark / #f5f5f5 light), gray text</li>
+      <li><strong>Severity badges</strong> → stamp style: 2px border, rotate(-2deg to 2deg), no fill, gray border</li>
+      <li><strong>Buttons</strong> → white bg on dark (#fafafa), black bg on light (#171717)</li>
+      <li><strong>Links</strong> → gray (#a1a1aa dark / #737373 light), not blue</li>
+      <li><strong>Keep subtle shadows</strong> → cards only, for depth</li>
+      <li><strong>Dark mode bg</strong> → #09090b (page), #18181b (cards)</li>
+      <li><strong>Light mode bg</strong> → #f5f5f5 (page), #ffffff (cards)</li>
+    </ul>
+  </div>
+
+</body>
+</html>

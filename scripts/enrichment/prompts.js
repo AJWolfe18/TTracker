@@ -7,5 +7,5 @@ export { SYSTEM_PROMPT, ENHANCED_SYSTEM_PROMPT, buildUserPayload } from './promp
 // Executive Orders prompts (used by enrich-executive-orders.js, test-eo-prompt.js)
 export { EO_ENRICHMENT_PROMPT, buildEOPayload } from './prompts/executive-orders.js';
 
-// Pardons prompts (used by enrich-pardons.js)
-export { PARDONS_ENRICHMENT_PROMPT, buildPardonPayload } from './prompts/pardons.js';
+// NOTE: Pardons uses pardons-gpt-prompt.js directly (not this barrel)
+// Old prompts/pardons.js moved to prompts/archive/ on 2026-02-06
