@@ -1,6 +1,6 @@
 // Edge Function: admin-update-story
 // Updates story fields with admin authentication
-// ADO: Feature 328, Story 336
+// ADO: Feature 328, Story 336, 337 (content history)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body = await req.json()
-    const { story_id, updates } = body
+    const { story_id, updates, original_last_updated_at } = body
 
     // Validate story_id
     if (!story_id) {
@@ -153,6 +153,36 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Fetch current story values BEFORE update (for history logging and optimistic locking)
+    const { data: currentStory, error: fetchError } = await supabase
+      .from('stories')
+      .select([...ALLOWED_FIELDS, 'last_updated_at'].join(','))
+      .eq('id', storyId)
+      .single()
+
+    if (fetchError || !currentStory) {
+      console.error('Fetch error:', fetchError)
+      return new Response(
+        JSON.stringify({ error: 'Story not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Optimistic locking: check if story was modified since user opened the edit modal
+    if (original_last_updated_at) {
+      const currentTimestamp = currentStory.last_updated_at
+      if (currentTimestamp && currentTimestamp !== original_last_updated_at) {
+        return new Response(
+          JSON.stringify({
+            error: 'This record was modified by another process while you were editing. Please refresh and try again.',
+            conflict: true,
+            current_last_updated_at: currentTimestamp
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Update the story
     const { data, error } = await supabase
       .from('stories')
@@ -172,13 +202,43 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to update story: ${error.message}`)
     }
 
+    // Log content changes for undo support
+    const changedFields: Record<string, { old: string | null; new: string | null }> = {}
+    for (const [field, newValue] of Object.entries(sanitizedUpdates)) {
+      const oldValue = currentStory[field]
+      // Only log if the value actually changed
+      if (String(oldValue ?? '') !== String(newValue ?? '')) {
+        changedFields[field] = {
+          old: oldValue != null ? String(oldValue) : null,
+          new: newValue != null ? String(newValue) : null
+        }
+
+        // Log each changed field to content history
+        try {
+          await supabase.rpc('log_content_change', {
+            p_entity_type: 'story',
+            p_entity_id: String(storyId),
+            p_field_name: field,
+            p_old_value: oldValue != null ? String(oldValue) : null,
+            p_new_value: newValue != null ? String(newValue) : null,
+            p_changed_by: 'admin', // Could be enhanced to pass actual user
+            p_change_source: 'admin'
+          })
+        } catch (historyError) {
+          // Log but don't fail the update if history logging fails
+          console.error(`Failed to log history for field ${field}:`, historyError)
+        }
+      }
+    }
+
     // Log the action
     console.log(`admin_action: update_story story_id=${storyId} fields=${Object.keys(sanitizedUpdates).join(',')}`)
 
     return new Response(
       JSON.stringify({
         success: true,
-        story: data
+        story: data,
+        changed_fields: changedFields // Return for undo support
       }),
       {
         status: 200,

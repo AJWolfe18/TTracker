@@ -601,6 +601,48 @@
         }
         .toast-close:hover { color: #94a3b8; }
 
+        /* Undo Toast (special toast with countdown) */
+        .undo-toast {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-left: 3px solid #3b82f6;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 320px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+        .undo-toast-message {
+            flex: 1;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .undo-toast-btn {
+            padding: 6px 14px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .undo-toast-btn:hover { background: #2563eb; }
+        .undo-toast-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .undo-countdown {
+            font-size: 11px;
+            color: #94a3b8;
+            min-width: 24px;
+            text-align: center;
+        }
+
         /* Row Action Buttons */
         .row-actions {
             display: flex;
@@ -706,6 +748,53 @@
             return React.useContext(ToastContext);
         }
 
+        // Undo Toast Component - special toast with 10-second countdown and Undo button
+        function UndoToast({ entityType, entityId, fieldName, oldValue, onUndo, onDismiss }) {
+            const [timeLeft, setTimeLeft] = React.useState(10);
+            const [undoing, setUndoing] = React.useState(false);
+
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    setTimeLeft(t => {
+                        if (t <= 1) {
+                            onDismiss();
+                            return 0;
+                        }
+                        return t - 1;
+                    });
+                }, 1000);
+
+                return () => clearInterval(timer);
+            }, [onDismiss]);
+
+            const handleUndo = async () => {
+                setUndoing(true);
+                try {
+                    await onUndo();
+                } finally {
+                    setUndoing(false);
+                }
+            };
+
+            return React.createElement('div', { className: 'undo-toast' },
+                React.createElement('span', { className: 'undo-toast-message' },
+                    `Updated ${fieldName.replace(/_/g, ' ')}`
+                ),
+                React.createElement('button', {
+                    className: 'undo-toast-btn',
+                    onClick: handleUndo,
+                    disabled: undoing
+                },
+                    undoing ? 'Undoing...' : 'Undo',
+                    React.createElement('span', { className: 'undo-countdown' }, `(${timeLeft}s)`)
+                ),
+                React.createElement('button', {
+                    className: 'toast-close',
+                    onClick: onDismiss
+                }, '×')
+            );
+        }
+
         // Category options for stories
         const STORY_CATEGORIES = [
             { value: 'corruption_scandals', label: 'Corruption & Scandals' },
@@ -741,7 +830,7 @@
         ];
 
         // Edit Story Modal Component
-        function EditStoryModal({ story, onClose, onSave, supabase, password }) {
+        function EditStoryModal({ story, onClose, onSave, onShowUndo, supabase, password }) {
             const [formData, setFormData] = useState({
                 primary_headline: story?.primary_headline || '',
                 primary_source: story?.primary_source || '',
@@ -755,6 +844,9 @@
             });
             const [saving, setSaving] = useState(false);
             const [error, setError] = useState(null);
+
+            // Capture original last_updated_at for optimistic locking
+            const originalLastUpdatedAt = story?.last_updated_at;
 
             const handleChange = (field, value) => {
                 setFormData(prev => ({ ...prev, [field]: value }));
@@ -786,19 +878,37 @@
                         return;
                     }
 
-                    // Update story via authenticated edge function
+                    // Update story via authenticated edge function with optimistic locking
                     const { data, error: updateError } = await supabase.functions.invoke(
                         'admin-update-story',
                         {
                             headers: { 'x-admin-password': password },
-                            body: { story_id: story.id, updates }
+                            body: {
+                                story_id: story.id,
+                                updates,
+                                original_last_updated_at: originalLastUpdatedAt
+                            }
                         }
                     );
 
                     if (updateError) throw new Error(updateError.message || 'Update failed');
+
+                    // Handle optimistic locking conflict
+                    if (data?.conflict) {
+                        throw new Error(data.error || 'Record was modified by another process');
+                    }
                     if (data?.error) throw new Error(data.error);
 
-                    onSave(data.story);
+                    // Get the first changed field for undo toast
+                    const changedFields = data.changed_fields || {};
+                    const firstChangedField = Object.keys(changedFields)[0];
+
+                    onSave(data.story, firstChangedField ? {
+                        entityType: 'story',
+                        entityId: String(story.id),
+                        fieldName: firstChangedField,
+                        oldValue: changedFields[firstChangedField]?.old
+                    } : null);
                 } catch (err) {
                     console.error('Save error:', err);
                     setError(err.message || 'Failed to save changes');
@@ -1116,12 +1226,51 @@
                 setEditingStory(story);
             };
 
+            // State for undo toast
+            const [undoInfo, setUndoInfo] = useState(null);
+
+            // Handle undo action
+            const handleUndo = async () => {
+                if (!undoInfo) return;
+
+                try {
+                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
+                        p_entity_type: undoInfo.entityType,
+                        p_entity_id: undoInfo.entityId,
+                        p_changed_by: 'admin'
+                    });
+
+                    if (rpcError) throw new Error(rpcError.message);
+                    if (!data?.success) throw new Error(data?.error || 'Undo failed');
+
+                    // Refresh the story in the list
+                    const storyId = parseInt(undoInfo.entityId, 10);
+                    setStories(prev => prev.map(s =>
+                        s.id === storyId
+                            ? { ...s, [data.field]: data.restored_value }
+                            : s
+                    ));
+
+                    toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
+                    setUndoInfo(null);
+                } catch (err) {
+                    console.error('Undo error:', err);
+                    toast?.addToast(err.message || 'Failed to undo', 'error');
+                }
+            };
+
             // Handle save from edit modal
-            const handleSaveEdit = (updatedStory) => {
+            const handleSaveEdit = (updatedStory, undoData) => {
                 // Update the story in the list
                 setStories(prev => prev.map(s => s.id === updatedStory.id ? { ...s, ...updatedStory } : s));
                 setEditingStory(null);
-                toast?.addToast('Story updated successfully', 'success');
+
+                // Show undo toast if there's undo data
+                if (undoData) {
+                    setUndoInfo(undoData);
+                } else {
+                    toast?.addToast('Story updated successfully', 'success');
+                }
             };
 
             // Handle re-enrichment
@@ -1404,6 +1553,20 @@
                             supabase={supabase}
                             password={password}
                         />
+                    )}
+
+                    {/* Undo Toast */}
+                    {undoInfo && (
+                        <div className="toast-container">
+                            <UndoToast
+                                entityType={undoInfo.entityType}
+                                entityId={undoInfo.entityId}
+                                fieldName={undoInfo.fieldName}
+                                oldValue={undoInfo.oldValue}
+                                onUndo={handleUndo}
+                                onDismiss={() => setUndoInfo(null)}
+                            />
+                        </div>
                     )}
                 </div>
             );
