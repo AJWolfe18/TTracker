@@ -1,9 +1,16 @@
 # TrumpyTracker Spicy Prompts Update Guide
 ## Restoring Full Anger Mode + Fixing Repetition Issues
 
-**Date:** November 24, 2025  
-**Status:** Ready for Implementation  
-**File to Modify:** `scripts/enrichment/prompts.js`
+**Date:** November 24, 2025
+**Status:** Ready for Implementation
+**Files to Modify:** (see note below)
+
+> **Note (2026-02-05):** `prompts.js` has been split into per-feature files:
+> - Stories: `scripts/enrichment/prompts/stories.js`
+> - Executive Orders: `scripts/enrichment/prompts/executive-orders.js`
+> - Pardons: `scripts/enrichment/prompts/pardons.js`
+>
+> The original `prompts.js` is now a barrel re-export for backwards compatibility.
 
 ---
 
@@ -183,10 +190,13 @@ This isn't defense spending—it's a fucking ATM for the donor class. And every 
 
 ## IMPLEMENTATION ORDER
 
-1. Update `scripts/enrichment/prompts.js` with changes above
-2. Run enrichment on 1 test story
+1. Update the appropriate prompt file:
+   - Stories: `scripts/enrichment/prompts/stories.js`
+   - Executive Orders: `scripts/enrichment/prompts/executive-orders.js`
+   - Pardons: `scripts/enrichment/prompts/pardons.js`
+2. Run enrichment on 1 test item
 3. Review output for tone, variety, action element
-4. Run enrichment on 5 more stories
+4. Run enrichment on 5 more items
 5. Check for repetitive patterns
 6. If good: commit to test branch
 7. Run AI code review
