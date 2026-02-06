@@ -555,11 +555,12 @@
             }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
 
             // Re-fetch when filters change
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             useEffect(() => {
                 setCursor(null);
                 setExpandedId(null);
                 fetchStories(false, null);
-            }, [fetchStories]);
+            }, [debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
 
             // Load more handler
             const handleLoadMore = () => {
@@ -817,7 +818,8 @@
                                     </tbody>
                                 </table>
                             </div>
-                            {hasMore && (
+                            {/* Hide Load More when sorting by severity (cursor pagination incompatible with string fields) */}
+                            {hasMore && sortBy !== 'severity' && (
                                 <div style={{ padding: '0 20px 20px' }}>
                                     <button
                                         className="load-more-btn"
