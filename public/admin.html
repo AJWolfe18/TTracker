@@ -340,6 +340,115 @@
         }
         .signout-btn:hover { border-color: #ef4444; color: #f87171; }
 
+        /* Stories Tab */
+        .stories-toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .stories-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .stories-search:focus { outline: none; border-color: #3b82f6; }
+        .stories-select {
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .stories-select:focus { outline: none; border-color: #3b82f6; }
+        .stories-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .stories-table th {
+            text-align: left;
+            padding: 10px 12px;
+            color: #94a3b8;
+            font-weight: 500;
+            border-bottom: 1px solid #334155;
+            white-space: nowrap;
+        }
+        .stories-table td {
+            padding: 12px;
+            border-bottom: 1px solid #1e293b;
+            vertical-align: top;
+        }
+        .stories-table tr:hover td { background: rgba(59, 130, 246, 0.05); }
+        .stories-table .headline-cell {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            color: #e2e8f0;
+        }
+        .stories-table .headline-cell:hover { color: #3b82f6; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+        .badge-closed { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .badge-archived { background: rgba(100, 116, 139, 0.15); color: #64748b; }
+        .badge-enriched { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .badge-failed { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+        .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .badge-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .badge-severe { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .badge-moderate { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+        .badge-minor { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .load-more-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .load-more-btn:hover { background: #334155; color: #e2e8f0; }
+        .load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .stories-count {
+            font-size: 13px;
+            color: #64748b;
+            padding: 8px 0;
+        }
+        .story-detail-row td {
+            background: #0f172a;
+            padding: 16px 12px;
+        }
+        .story-detail-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            font-size: 13px;
+        }
+        .story-detail-content dt { color: #64748b; }
+        .story-detail-content dd { color: #e2e8f0; margin: 0 0 8px; }
+        .story-detail-content a { color: #3b82f6; text-decoration: none; }
+        .story-detail-content a:hover { text-decoration: underline; }
+
         /* Responsive */
         @media (max-width: 900px) {
             .dashboard-grid { grid-template-columns: 1fr; }
@@ -369,6 +478,363 @@
 
         // Session storage key for admin password
         const AUTH_STORAGE_KEY = 'admin_password';
+
+        // Stories Tab Component
+        function StoriesTab({ password, supabase }) {
+            const [stories, setStories] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [cursor, setCursor] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+
+            // Filters
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [statusFilter, setStatusFilter] = useState('');
+            const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [severityFilter, setSeverityFilter] = useState('');
+            const [categoryFilter, setCategoryFilter] = useState('');
+            const [sortBy, setSortBy] = useState('id');
+            const [sortDir, setSortDir] = useState('desc');
+
+            // Detail expansion
+            const [expandedId, setExpandedId] = useState(null);
+
+            // Debounce search input
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    setDebouncedSearch(search);
+                }, 500);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Fetch stories from edge function
+            const fetchStories = useCallback(async (append = false, pageCursor = null) => {
+                if (append) {
+                    setLoadingMore(true);
+                } else {
+                    setLoading(true);
+                }
+                setError(null);
+
+                try {
+                    const reqBody = { limit: 25, sortBy, sortDir };
+                    if (debouncedSearch) reqBody.search = debouncedSearch;
+                    if (statusFilter) reqBody.status = statusFilter;
+                    if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (severityFilter) reqBody.severity = severityFilter;
+                    if (categoryFilter) reqBody.category = categoryFilter;
+                    if (pageCursor) reqBody.cursor = pageCursor;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-stories',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch stories');
+
+                    if (append) {
+                        setStories(prev => [...prev, ...(data.stories || [])]);
+                    } else {
+                        setStories(data.stories || []);
+                    }
+
+                    setCursor(data.pagination?.next_cursor || null);
+                    setHasMore(data.pagination?.has_more || false);
+                } catch (err) {
+                    console.error('Stories fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                    setLoadingMore(false);
+                }
+            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
+
+            // Re-fetch when filters change
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            useEffect(() => {
+                setCursor(null);
+                setExpandedId(null);
+                fetchStories(false, null);
+            }, [debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
+
+            // Load more handler
+            const handleLoadMore = () => {
+                if (cursor && hasMore) {
+                    fetchStories(true, cursor);
+                }
+            };
+
+            // Format date for display
+            const formatDate = (iso) => {
+                if (!iso) return '-';
+                const d = new Date(iso);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            const formatDateTime = (iso) => {
+                if (!iso) return '-';
+                const d = new Date(iso);
+                return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            };
+
+            // Get enrichment badge
+            const getEnrichmentBadge = (story) => {
+                if (story.enrichment_failure_count > 0) {
+                    return { class: 'badge-failed', label: `Failed (${story.enrichment_failure_count})` };
+                }
+                if (story.last_enriched_at) {
+                    return { class: 'badge-enriched', label: 'Enriched' };
+                }
+                return { class: 'badge-pending', label: 'Pending' };
+            };
+
+            // Get status badge
+            const getStatusBadge = (status) => {
+                if (status === 'active') return { class: 'badge-active', label: 'Active' };
+                if (status === 'closed') return { class: 'badge-closed', label: 'Closed' };
+                if (status === 'archived') return { class: 'badge-archived', label: 'Archived' };
+                return { class: 'badge-closed', label: status || 'Unknown' };
+            };
+
+            // Get severity badge
+            const getSeverityBadge = (severity) => {
+                if (severity === 'critical') return { class: 'badge-critical', label: 'Critical' };
+                if (severity === 'severe') return { class: 'badge-severe', label: 'Severe' };
+                if (severity === 'moderate') return { class: 'badge-moderate', label: 'Moderate' };
+                if (severity === 'minor') return { class: 'badge-minor', label: 'Minor' };
+                return { class: 'badge-closed', label: severity || '-' };
+            };
+
+            // Format category for display
+            const formatCategory = (cat) => {
+                if (!cat) return '-';
+                const map = {
+                    corruption_scandals: 'Corruption',
+                    democracy_elections: 'Democracy',
+                    policy_legislation: 'Policy',
+                    justice_legal: 'Justice',
+                    executive_actions: 'Executive',
+                    foreign_policy: 'Foreign Policy',
+                    corporate_financial: 'Corporate',
+                    civil_liberties: 'Civil Liberties',
+                    media_disinformation: 'Media',
+                    epstein_associates: 'Epstein',
+                    other: 'Other'
+                };
+                return map[cat] || cat;
+            };
+
+            // Toggle detail expansion
+            const toggleDetail = (id) => {
+                setExpandedId(expandedId === id ? null : id);
+            };
+
+            return (
+                <div>
+                    {/* Toolbar: Search + Filters */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search headlines..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={enrichmentFilter}
+                            onChange={(e) => setEnrichmentFilter(e.target.value)}
+                        >
+                            <option value="">All Enrichment</option>
+                            <option value="enriched">Enriched</option>
+                            <option value="failed">Failed</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={severityFilter}
+                            onChange={(e) => setSeverityFilter(e.target.value)}
+                        >
+                            <option value="">All Severity</option>
+                            <option value="critical">Critical</option>
+                            <option value="severe">Severe</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="minor">Minor</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Categories</option>
+                            <option value="corruption_scandals">Corruption & Scandals</option>
+                            <option value="democracy_elections">Democracy & Elections</option>
+                            <option value="policy_legislation">Policy & Legislation</option>
+                            <option value="justice_legal">Justice & Legal</option>
+                            <option value="executive_actions">Executive Actions</option>
+                            <option value="foreign_policy">Foreign Policy</option>
+                            <option value="corporate_financial">Corporate & Financial</option>
+                            <option value="civil_liberties">Civil Liberties</option>
+                            <option value="media_disinformation">Media & Disinformation</option>
+                            <option value="epstein_associates">Epstein & Associates</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const [col, dir] = e.target.value.split('-');
+                                setSortBy(col);
+                                setSortDir(dir);
+                            }}
+                        >
+                            <option value="id-desc">Newest First</option>
+                            <option value="id-asc">Oldest First</option>
+                            <option value="severity-desc">Severity (High→Low)</option>
+                            <option value="severity-asc">Severity (Low→High)</option>
+                            <option value="last_updated_at-desc">Recently Updated</option>
+                        </select>
+                    </div>
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading stories...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">Stories</h2>
+                                <span className="stories-count">
+                                    Showing {stories.length} stories
+                                    {hasMore && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Headline</th>
+                                            <th>Severity</th>
+                                            <th>Category</th>
+                                            <th>Status</th>
+                                            <th>Enrichment</th>
+                                            <th>Articles</th>
+                                            <th>Created</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stories.length === 0 && (
+                                            <tr>
+                                                <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No stories found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {stories.map(story => {
+                                            const statusBadge = getStatusBadge(story.status);
+                                            const enrichBadge = getEnrichmentBadge(story);
+                                            const isExpanded = expandedId === story.id;
+
+                                            return React.createElement(React.Fragment, { key: story.id },
+                                                <tr>
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{story.id}</td>
+                                                    <td
+                                                        className="headline-cell"
+                                                        onClick={() => toggleDetail(story.id)}
+                                                        title={story.primary_headline}
+                                                    >
+                                                        {story.primary_headline || '(No headline)'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${getSeverityBadge(story.severity).class}`}>
+                                                            {getSeverityBadge(story.severity).label}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatCategory(story.category)}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${statusBadge.class}`}>{statusBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${enrichBadge.class}`}>{enrichBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                                        {story.article_count}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(story.first_seen_at)}
+                                                    </td>
+                                                </tr>,
+                                                isExpanded && (
+                                                    <tr className="story-detail-row">
+                                                        <td colSpan={8}>
+                                                            <div className="story-detail-content">
+                                                                <div>
+                                                                    <dt>Category</dt>
+                                                                    <dd>{story.category || '-'}</dd>
+                                                                    <dt>Severity</dt>
+                                                                    <dd>{story.severity || '-'}</dd>
+                                                                    <dt>Source Count</dt>
+                                                                    <dd>{story.source_count ?? '-'}</dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt>Last Updated</dt>
+                                                                    <dd>{formatDateTime(story.last_updated_at)}</dd>
+                                                                    <dt>Last Enriched</dt>
+                                                                    <dd>{formatDateTime(story.last_enriched_at)}</dd>
+                                                                    <dt>Enrichment Failures</dt>
+                                                                    <dd>{story.enrichment_failure_count}</dd>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {/* Hide Load More when sorting by severity (cursor pagination incompatible with string fields) */}
+                            {hasMore && sortBy !== 'severity' && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
         // Main App Component
         function AdminDashboard() {
@@ -691,7 +1157,7 @@
             // Render tabs
             const tabs = [
                 { id: 'home', label: 'Home' },
-                { id: 'stories', label: 'Stories', disabled: true },
+                { id: 'stories', label: 'Stories' },
                 { id: 'pardons', label: 'Pardons', disabled: true },
                 { id: 'scotus', label: 'SCOTUS', disabled: true },
                 { id: 'eos', label: 'Exec Orders', disabled: true },
@@ -924,7 +1390,7 @@
                                             </button>
                                             <button
                                                 className="action-btn"
-                                                onClick={() => window.open(`${window.SUPABASE_URL.replace('.supabase.co', '.supabase.co/project/default')}/editor`, '_blank')}
+                                                onClick={() => { const ref = (window.SUPABASE_URL || '').match(/\/\/([^.]+)\./)?.[1] || ''; window.open(`https://supabase.com/dashboard/project/${ref}`, '_blank'); }}
                                             >
                                                 🗄️ Open Supabase
                                             </button>
@@ -975,7 +1441,11 @@
                             </div>
                         )}
 
-                        {activeTab !== 'home' && (
+                        {activeTab === 'stories' && (
+                            <StoriesTab password={password} supabase={supabase} />
+                        )}
+
+                        {activeTab !== 'home' && activeTab !== 'stories' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
