@@ -3,15 +3,15 @@
 **Date:** 2026-02-05
 **ADO:** #336 (State: Testing)
 **Branch:** test
-**Commit:** eb5466c
+**Commits:** eb5466c, e69bf60, d92a0a1
 
 ## Summary
 
-Implemented Edit modal and Re-enrich button for Stories tab in Admin Dashboard. This completes Phase 2 of the Admin Dashboard epic (ADO-328).
+Implemented Edit modal and Re-enrich button for Stories tab in Admin Dashboard. This completes the edit/re-enrich portion of Phase 2 (ADO-328).
 
 ## What Was Done
 
-1. **trigger-enrichment edge function** - Triggers re-enrichment for stories (and other entity types in the future)
+1. **trigger-enrichment edge function** - Triggers re-enrichment for stories (and other entity types)
 2. **admin-update-story edge function** - Securely updates story fields with field whitelist validation
 3. **Edit modal** - 9 editable fields with form validation
 4. **Re-enrich button** - Shows spinner during request, toast on completion
@@ -25,18 +25,20 @@ Implemented Edit modal and Re-enrich button for Stories tab in Admin Dashboard. 
 
 Dashboard: https://supabase.com/dashboard/project/wnrjrywpcadwutfykflu/functions
 
-## Test Checklist
+## Test Checklist (for Josh)
 
 - [x] Deploy edge functions to TEST
 - [ ] Open admin.html on test site
-- [ ] Edit a story - verify all 9 fields save correctly
-- [ ] Click Re-enrich - verify spinner shows, toast appears on completion
-- [ ] Verify story shows "Pending" enrichment status after re-enrich
-- [ ] Test error handling (invalid URL, budget exceeded simulation)
+- [ ] Edit a story headline → Save → Verify it updated
+- [ ] Click Re-enrich → Verify spinner + toast appears
 
-## Next Steps
+## Next Up: ADO-337
 
-1. Deploy edge functions to TEST
-2. Verify on test site
-3. Move ADO-336 to Ready for Prod
-4. Cherry-pick to main for PROD deployment
+**Content History & Undo Support** - adds undo capability after edits.
+- Plan is complete in tech-spec.md (Sections 3.1, 3.2, 4.5, 6.1, 6.5)
+- State: New (not started)
+
+## After Testing ADO-336
+
+1. If pass → Move ADO-336 to Ready for Prod
+2. Start ADO-337 (Content History & Undo)
