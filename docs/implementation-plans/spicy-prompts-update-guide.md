@@ -1,9 +1,9 @@
 # TrumpyTracker Spicy Prompts Update Guide
 ## Restoring Full Anger Mode + Fixing Repetition Issues
 
-**Date:** November 24, 2025  
-**Status:** Ready for Implementation  
-**File to Modify:** `scripts/enrichment/prompts.js`
+**Date:** November 24, 2025 (Updated: February 2026)
+**Status:** Implemented
+**Files:** `scripts/enrichment/prompts/stories.js`, `scripts/enrichment/prompts/executive-orders.js`
 
 ---
 

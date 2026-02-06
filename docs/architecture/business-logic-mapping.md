@@ -941,7 +941,7 @@ Complete system prompts used for AI enrichment, pulled from production (`main` b
 
 ### Stories System Prompt
 
-**Source:** `scripts/enrichment/prompts.js` (SYSTEM_PROMPT)
+**Source:** `scripts/enrichment/prompts/stories.js` (SYSTEM_PROMPT)
 
 ```
 You are a political analyst. Return ONLY valid JSON (a single JSON object), no prose.
@@ -997,7 +997,7 @@ Output must be valid JSON with keys: summary_neutral, summary_spicy, category, s
 
 ### Executive Orders System Prompt
 
-**Source:** `scripts/enrichment/prompts.js` (EO_ENRICHMENT_PROMPT)
+**Source:** `scripts/enrichment/prompts/executive-orders.js` (EO_ENRICHMENT_PROMPT)
 
 ```
 You are a political analyst. Return ONLY valid JSON.

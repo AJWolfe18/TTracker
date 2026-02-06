@@ -1,9 +1,9 @@
 # TrumpyTracker Spicy Prompts Update Guide
 ## Restoring Full Anger Mode + Fixing Repetition Issues
 
-**Date:** November 24, 2025  
-**Status:** Ready for Implementation  
-**File to Modify:** `scripts/enrichment/prompts.js`
+**Date:** November 24, 2025 (Updated: February 2026)
+**Status:** Implemented
+**Files:** `scripts/enrichment/prompts/stories.js`, `scripts/enrichment/prompts/executive-orders.js`
 
 ---
 
@@ -183,10 +183,15 @@ This isn't defense spending—it's a fucking ATM for the donor class. And every 
 
 ## IMPLEMENTATION ORDER
 
-1. Update `scripts/enrichment/prompts.js` with changes above
-2. Run enrichment on 1 test story
+**Note:** Prompts were split in Feb 2026. Update the appropriate file:
+- Stories: `scripts/enrichment/prompts/stories.js`
+- EOs: `scripts/enrichment/prompts/executive-orders.js`
+- Pardons: `scripts/enrichment/prompts/pardons.js`
+
+1. Update the relevant prompt file with changes above
+2. Run enrichment on 1 test item
 3. Review output for tone, variety, action element
-4. Run enrichment on 5 more stories
+4. Run enrichment on 5 more items
 5. Check for repetitive patterns
 6. If good: commit to test branch
 7. Run AI code review
@@ -195,4 +200,4 @@ This isn't defense spending—it's a fucking ATM for the donor class. And every 
 ---
 
 *Document prepared for TrumpyTracker development team*
-*Last updated: November 24, 2025*
+*Last updated: February 2026*

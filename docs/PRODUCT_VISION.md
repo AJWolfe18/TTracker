@@ -126,8 +126,8 @@ Progressive/liberal audience who:
 ## Related Documents
 
 - `CLAUDE.md` - Technical project instructions
-- `scripts/enrichment/prompts.js` - AI prompt definitions
-- `docs/architecture/ARCHITECTURE.md` - System overview
+- `scripts/enrichment/prompts/` - AI prompt definitions (stories.js, executive-orders.js, pardons.js)
+- `docs/architecture/` - System architecture docs
 
 ---
 
