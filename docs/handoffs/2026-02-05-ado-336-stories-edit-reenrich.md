@@ -19,15 +19,15 @@ Implemented Edit modal and Re-enrich button for Stories tab in Admin Dashboard. 
 
 ## Edge Functions Deployed
 
-**Not yet deployed** - need to run:
-```bash
-supabase functions deploy trigger-enrichment --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy admin-update-story --project-ref wnrjrywpcadwutfykflu
-```
+✅ **Deployed to TEST** (2026-02-05):
+- `trigger-enrichment` - 71.7kB
+- `admin-update-story` - 71.73kB
+
+Dashboard: https://supabase.com/dashboard/project/wnrjrywpcadwutfykflu/functions
 
 ## Test Checklist
 
-- [ ] Deploy edge functions to TEST
+- [x] Deploy edge functions to TEST
 - [ ] Open admin.html on test site
 - [ ] Edit a story - verify all 9 fields save correctly
 - [ ] Click Re-enrich - verify spinner shows, toast appears on completion
