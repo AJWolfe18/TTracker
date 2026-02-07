@@ -771,7 +771,8 @@
                 setUndoing(true);
                 try {
                     await onUndo();
-                } finally {
+                    onDismiss();
+                } catch {
                     setUndoing(false);
                 }
             };
@@ -833,7 +834,7 @@
         ];
 
         // Edit Story Modal Component
-        function EditStoryModal({ story, onClose, onSave, onShowUndo, supabase, password }) {
+        function EditStoryModal({ story, onClose, onSave, onShowUndo, onRefresh, supabase, password }) {
             const [formData, setFormData] = useState({
                 primary_headline: story?.primary_headline || '',
                 primary_source: story?.primary_source || '',
@@ -849,6 +850,7 @@
             });
             const [saving, setSaving] = useState(false);
             const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
 
             // Capture original last_updated_at for optimistic locking
             const originalLastUpdatedAt = story?.last_updated_at;
@@ -901,11 +903,20 @@
                         }
                     );
 
-                    if (updateError) throw new Error(updateError.message || 'Update failed');
+                    if (updateError) {
+                        // Supabase-js wraps non-2xx as FunctionsHttpError — extract body for conflict check
+                        let body = data;
+                        try {
+                            if (!body && updateError.context) body = await updateError.context.json();
+                        } catch (_) {}
 
-                    // Handle optimistic locking conflict
-                    if (data?.conflict) {
-                        throw new Error(data.error || 'Record was modified by another process');
+                        if (body?.conflict) {
+                            setIsConflict(true);
+                            setError(body.error || 'Record was modified by another process. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || updateError.message || 'Update failed');
                     }
                     if (data?.error) throw new Error(data.error);
 
@@ -935,7 +946,15 @@
                     ),
                     React.createElement('form', { onSubmit: handleSubmit },
                         React.createElement('div', { className: 'modal-body' },
-                            error && React.createElement('div', { className: 'error-banner', style: { marginBottom: '16px' } }, error),
+                            error && React.createElement('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && React.createElement('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
 
                             // Primary Headline
                             React.createElement('div', { className: 'form-group' },
@@ -1082,7 +1101,7 @@
                         ),
                         React.createElement('div', { className: 'modal-footer' },
                             React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
-                            React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: saving },
+                            React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict },
                                 saving ? 'Saving...' : 'Save Changes'
                             )
                         )
@@ -1098,6 +1117,7 @@
             const [loadingMore, setLoadingMore] = useState(false);
             const [error, setError] = useState(null);
             const [cursor, setCursor] = useState(null);
+            const [offset, setOffset] = useState(null);
             const [hasMore, setHasMore] = useState(false);
 
             // Filters
@@ -1131,7 +1151,7 @@
             }, [search]);
 
             // Fetch stories from edge function
-            const fetchStories = useCallback(async (append = false, pageCursor = null) => {
+            const fetchStories = useCallback(async (append = false, pageCursor = null, pageOffset = null) => {
                 if (append) {
                     setLoadingMore(true);
                 } else {
@@ -1147,6 +1167,7 @@
                     if (alarmLevelFilter) reqBody.alarmLevel = alarmLevelFilter;
                     if (categoryFilter) reqBody.category = categoryFilter;
                     if (pageCursor) reqBody.cursor = pageCursor;
+                    if (pageOffset != null && pageOffset > 0) reqBody.offset = pageOffset;
 
                     const { data, error: fnError } = await supabase.functions.invoke(
                         'admin-stories',
@@ -1165,6 +1186,7 @@
                     }
 
                     setCursor(data.pagination?.next_cursor || null);
+                    setOffset(data.pagination?.next_offset || null);
                     setHasMore(data.pagination?.has_more || false);
                 } catch (err) {
                     console.error('Stories fetch error:', err);
@@ -1179,14 +1201,58 @@
             // eslint-disable-next-line react-hooks/exhaustive-deps
             useEffect(() => {
                 setCursor(null);
+                setOffset(null);
                 setExpandedId(null);
-                fetchStories(false, null);
+                fetchStories(false, null, null);
             }, [debouncedSearch, statusFilter, enrichmentFilter, alarmLevelFilter, categoryFilter, sortBy, sortDir]);
+
+            // Poll for enrichment completion when any story is pending
+            const hasPendingStories = useMemo(() => stories.some(s => s.enrichment_status === 'pending'), [stories]);
+            const storiesRef = useRef(stories);
+            storiesRef.current = stories;
+
+            useEffect(() => {
+                if (!hasPendingStories) return;
+
+                const interval = setInterval(async () => {
+                    try {
+                        // Snapshot pending IDs from latest state at poll time
+                        const pendingIds = new Set(
+                            storiesRef.current.filter(s => s.enrichment_status === 'pending').map(s => s.id)
+                        );
+                        if (pendingIds.size === 0) return;
+
+                        const { data } = await supabase.functions.invoke('admin-stories', {
+                            headers: { 'x-admin-password': password },
+                            body: { limit: 25, sortBy, sortDir }
+                        });
+
+                        if (data?.stories) {
+                            const freshMap = new Map(data.stories.map(s => [s.id, s]));
+                            // Check for transitions from pending to enriched/failed
+                            for (const id of pendingIds) {
+                                const fresh = freshMap.get(id);
+                                if (fresh && fresh.enrichment_status !== 'pending') {
+                                    const label = fresh.enrichment_status === 'failed'
+                                        ? `Story #${id} enrichment failed`
+                                        : `Story #${id} enrichment complete`;
+                                    toast?.addToast(label, fresh.enrichment_status === 'failed' ? 'error' : 'success');
+                                }
+                            }
+                            setStories(prev => prev.map(s => freshMap.has(s.id) ? { ...s, ...freshMap.get(s.id) } : s));
+                        }
+                    } catch (_) {
+                        // Silently ignore polling errors
+                    }
+                }, 15000);
+
+                return () => clearInterval(interval);
+            }, [hasPendingStories]);
 
             // Load more handler
             const handleLoadMore = () => {
-                if (cursor && hasMore) {
-                    fetchStories(true, cursor);
+                if (hasMore) {
+                    fetchStories(true, cursor, offset);
                 }
             };
 
@@ -1348,7 +1414,7 @@
                     // Update the story in the list to show pending enrichment
                     setStories(prev => prev.map(s =>
                         s.id === story.id
-                            ? { ...s, last_enriched_at: null, enrichment_status: 'pending', enrichment_failure_count: 0 }
+                            ? { ...s, enrichment_status: 'pending', enrichment_failure_count: 0 }
                             : s
                     ));
 
@@ -1530,9 +1596,9 @@
                                                                 ✏️ Edit
                                                             </button>
                                                             <button
-                                                                className={`btn-icon ${enrichingIds.has(story.id) ? 'enriching' : ''}`}
+                                                                className={`btn-icon ${enrichingIds.has(story.id) || story.enrichment_status === 'pending' ? 'enriching' : ''}`}
                                                                 onClick={() => handleReEnrich(story)}
-                                                                disabled={enrichingIds.has(story.id)}
+                                                                disabled={enrichingIds.has(story.id) || story.enrichment_status === 'pending'}
                                                                 title="Re-enrich with AI"
                                                             >
                                                                 {enrichingIds.has(story.id)
@@ -1540,7 +1606,12 @@
                                                                         React.createElement('span', { className: 'spinner-sm' }),
                                                                         'Enriching...'
                                                                       )
-                                                                    : '🤖 Re-enrich'
+                                                                    : story.enrichment_status === 'pending'
+                                                                        ? React.createElement(React.Fragment, null,
+                                                                            React.createElement('span', { className: 'spinner-sm' }),
+                                                                            'Pending...'
+                                                                          )
+                                                                        : '🤖 Re-enrich'
                                                                 }
                                                             </button>
                                                         </div>
@@ -1595,6 +1666,7 @@
                             story={editingStory}
                             onClose={() => setEditingStory(null)}
                             onSave={handleSaveEdit}
+                            onRefresh={() => fetchStories(false, null, null)}
                             supabase={supabase}
                             password={password}
                         />
