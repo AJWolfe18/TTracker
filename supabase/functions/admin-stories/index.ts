@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     if (enrichment === 'enriched') {
       query = query.not('last_enriched_at', 'is', null)
         .eq('enrichment_failure_count', 0)
-        .neq('enrichment_status', 'pending')
+        .or('enrichment_status.is.null,enrichment_status.neq.pending')
     } else if (enrichment === 'failed') {
       query = query.gt('enrichment_failure_count', 0)
     } else if (enrichment === 'pending') {
