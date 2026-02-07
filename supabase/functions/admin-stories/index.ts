@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const enrichment = String(body.enrichment ?? '')
     const alarmLevel = String(body.alarmLevel ?? '')
     const category = String(body.category ?? '')
-    const sortBy = String(body.sortBy ?? 'id') // id, alarm_level, first_seen_at
+    const sortBy = String(body.sortBy ?? 'last_updated_at') // last_updated_at, id, alarm_level, first_seen_at
     const sortDir = String(body.sortDir ?? 'desc') // asc, desc
     const cursor = String(body.cursor ?? '')
     const limitParam = parseInt(String(body.limit ?? '25'), 10)
@@ -94,10 +94,11 @@ Deno.serve(async (req) => {
     if (enrichment === 'enriched') {
       query = query.not('last_enriched_at', 'is', null)
         .eq('enrichment_failure_count', 0)
+        .neq('enrichment_status', 'pending')
     } else if (enrichment === 'failed') {
       query = query.gt('enrichment_failure_count', 0)
     } else if (enrichment === 'pending') {
-      query = query.is('last_enriched_at', null)
+      query = query.or('last_enriched_at.is.null,enrichment_status.eq.pending')
         .eq('enrichment_failure_count', 0)
     }
 
