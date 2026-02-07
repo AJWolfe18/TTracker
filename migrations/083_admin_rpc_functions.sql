@@ -125,6 +125,9 @@ GRANT EXECUTE ON FUNCTION log_content_change TO authenticated;
 GRANT EXECUTE ON FUNCTION undo_content_change TO authenticated;
 GRANT EXECUTE ON FUNCTION log_admin_action TO authenticated;
 
+-- Grant undo to anon role (admin.html uses anon key, admin password check is at edge function level)
+GRANT EXECUTE ON FUNCTION undo_content_change TO anon;
+
 COMMENT ON FUNCTION log_content_change IS 'Logs a field-level change for undo support';
 COMMENT ON FUNCTION undo_content_change IS 'Undoes the most recent change for an entity, returns the restored value';
 COMMENT ON FUNCTION log_admin_action IS 'Logs an admin action for audit trail';

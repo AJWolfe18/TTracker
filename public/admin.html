@@ -1230,6 +1230,9 @@
                 if (story.enrichment_failure_count > 0) {
                     return { class: 'badge-failed', label: `Failed (${story.enrichment_failure_count})` };
                 }
+                if (story.enrichment_status === 'pending') {
+                    return { class: 'badge-pending', label: 'Pending' };
+                }
                 if (story.last_enriched_at) {
                     return { class: 'badge-enriched', label: 'Enriched' };
                 }
@@ -1347,7 +1350,15 @@
                         }
                     );
 
-                    if (fnError) throw new Error(fnError.message || 'Failed to trigger re-enrichment');
+                    if (fnError) {
+                        // Extract real error from response body (supabase-js hides it behind generic message)
+                        let detail = fnError.message;
+                        try {
+                            const body = fnError.context ? await fnError.context.json() : data;
+                            if (body?.error) detail = body.error;
+                        } catch (_) {}
+                        throw new Error(detail || 'Failed to trigger re-enrichment');
+                    }
 
                     // Check for budget error
                     if (data?.error) {

@@ -51,7 +51,7 @@ async function main() {
   // Fetch the story
   const { data: story, error: fetchError } = await supabase
     .from('stories')
-    .select('id, primary_headline, last_enriched_at')
+    .select('id, primary_headline, last_enriched_at, enrichment_failure_count')
     .eq('id', storyId)
     .single();
 
