@@ -43,9 +43,9 @@ Deno.serve(async (req) => {
     const search = String(body.search ?? '').trim()
     const status = String(body.status ?? '')
     const enrichment = String(body.enrichment ?? '')
-    const severity = String(body.severity ?? '')
+    const alarmLevel = String(body.alarmLevel ?? '')
     const category = String(body.category ?? '')
-    const sortBy = String(body.sortBy ?? 'id') // id, severity, first_seen_at
+    const sortBy = String(body.sortBy ?? 'id') // id, alarm_level, first_seen_at
     const sortDir = String(body.sortDir ?? 'desc') // asc, desc
     const cursor = String(body.cursor ?? '')
     const limitParam = parseInt(String(body.limit ?? '25'), 10)
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
         primary_source,
         status,
         category,
-        severity,
+        alarm_level,
         first_seen_at,
         last_updated_at,
         last_enriched_at,
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       .limit(limit)
 
     // Sorting - validate allowed columns
-    const allowedSortCols = ['id', 'severity', 'first_seen_at', 'last_updated_at']
+    const allowedSortCols = ['id', 'alarm_level', 'first_seen_at', 'last_updated_at']
     const sortCol = allowedSortCols.includes(sortBy) ? sortBy : 'id'
     const ascending = sortDir === 'asc'
     query = query.order(sortCol, { ascending })
@@ -101,10 +101,10 @@ Deno.serve(async (req) => {
         .eq('enrichment_failure_count', 0)
     }
 
-    // Filter: severity
-    const validSeverities = ['critical', 'severe', 'moderate', 'minor']
-    if (validSeverities.includes(severity)) {
-      query = query.eq('severity', severity)
+    // Filter: alarm level (0-5)
+    const alarmLevelNum = parseInt(alarmLevel, 10)
+    if (!isNaN(alarmLevelNum) && alarmLevelNum >= 0 && alarmLevelNum <= 5) {
+      query = query.eq('alarm_level', alarmLevelNum)
     }
 
     // Filter: category
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
       primary_source: s.primary_source,
       status: s.status,
       category: s.category,
-      severity: s.severity,
+      alarm_level: s.alarm_level,
       first_seen_at: s.first_seen_at,
       last_updated_at: s.last_updated_at,
       last_enriched_at: s.last_enriched_at,

@@ -810,12 +810,15 @@
             { value: 'other', label: 'Other' }
         ];
 
-        const SEVERITY_OPTIONS = [
-            { value: 'critical', label: 'Critical' },
-            { value: 'severe', label: 'Severe' },
-            { value: 'moderate', label: 'Moderate' },
-            { value: 'minor', label: 'Minor' }
+        const ALARM_LEVEL_OPTIONS = [
+            { value: '5', label: 'Constitutional Dumpster Fire' },
+            { value: '4', label: 'Criminal Bullshit' },
+            { value: '3', label: 'The Deep Swamp' },
+            { value: '2', label: 'The Great Gaslight' },
+            { value: '1', label: 'Accidental Sanity' },
+            { value: '0', label: 'A Broken Clock Moment' }
         ];
+        const ALARM_LEVEL_MAP = Object.fromEntries(ALARM_LEVEL_OPTIONS.map(o => [o.value, o.label]));
 
         const STATUS_OPTIONS = [
             { value: 'active', label: 'Active' },
@@ -846,11 +849,10 @@
                 primary_source_url: story?.primary_source_url || '',
                 primary_actor: story?.primary_actor || '',
                 status: story?.status || 'active',
-                severity: story?.severity || '',
+                alarm_level: story?.alarm_level ?? '',
                 category: story?.category || '',
                 lifecycle_state: story?.lifecycle_state || '',
                 confidence_score: story?.confidence_score ?? '',
-                alarm_level: story?.alarm_level ?? '',
                 summary_neutral: story?.summary_neutral || '',
                 summary_spicy: story?.summary_spicy || ''
             });
@@ -877,17 +879,15 @@
                     if (formData.primary_source_url !== story.primary_source_url) updates.primary_source_url = formData.primary_source_url;
                     if (formData.primary_actor !== story.primary_actor) updates.primary_actor = formData.primary_actor || null;
                     if (formData.status !== story.status) updates.status = formData.status;
-                    if (formData.severity !== story.severity) updates.severity = formData.severity || null;
+                    const newAlarmLevelEdit = formData.alarm_level === '' ? null : parseInt(formData.alarm_level, 10);
+                    const oldAlarmLevelEdit = story.alarm_level ?? null;
+                    if (newAlarmLevelEdit !== oldAlarmLevelEdit) updates.alarm_level = newAlarmLevelEdit;
                     if (formData.category !== story.category) updates.category = formData.category || null;
                     if (formData.lifecycle_state !== story.lifecycle_state) updates.lifecycle_state = formData.lifecycle_state || null;
 
                     const newConfidence = formData.confidence_score === '' ? null : parseFloat(formData.confidence_score);
                     const oldConfidence = story.confidence_score ?? null;
                     if (newConfidence !== oldConfidence) updates.confidence_score = newConfidence;
-
-                    const newAlarmLevel = formData.alarm_level === '' ? null : parseInt(formData.alarm_level, 10);
-                    const oldAlarmLevel = story.alarm_level ?? null;
-                    if (newAlarmLevel !== oldAlarmLevel) updates.alarm_level = newAlarmLevel;
 
                     if (formData.summary_neutral !== (story.summary_neutral || '')) updates.summary_neutral = formData.summary_neutral || null;
                     if (formData.summary_spicy !== (story.summary_spicy || '')) updates.summary_spicy = formData.summary_spicy || null;
@@ -1007,14 +1007,14 @@
                                     )
                                 ),
                                 React.createElement('div', { className: 'form-group' },
-                                    React.createElement('label', { className: 'form-label' }, 'Severity'),
+                                    React.createElement('label', { className: 'form-label' }, 'Alarm Level'),
                                     React.createElement('select', {
                                         className: 'form-select',
-                                        value: formData.severity,
-                                        onChange: (e) => handleChange('severity', e.target.value)
+                                        value: formData.alarm_level,
+                                        onChange: (e) => handleChange('alarm_level', e.target.value)
                                     },
                                         React.createElement('option', { value: '' }, 'Not set'),
-                                        SEVERITY_OPTIONS.map(opt =>
+                                        ALARM_LEVEL_OPTIONS.map(opt =>
                                             React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
                                         )
                                     )
@@ -1036,8 +1036,8 @@
                                 )
                             ),
 
-                            // Lifecycle + Confidence + Alarm Level
-                            React.createElement('div', { className: 'form-row', style: { gridTemplateColumns: '1fr 1fr 1fr' } },
+                            // Lifecycle + Confidence
+                            React.createElement('div', { className: 'form-row' },
                                 React.createElement('div', { className: 'form-group' },
                                     React.createElement('label', { className: 'form-label' }, 'Lifecycle State'),
                                     React.createElement('select', {
@@ -1062,19 +1062,6 @@
                                         max: 100,
                                         step: 0.1
                                     })
-                                ),
-                                React.createElement('div', { className: 'form-group' },
-                                    React.createElement('label', { className: 'form-label' }, 'Alarm Level'),
-                                    React.createElement('select', {
-                                        className: 'form-select',
-                                        value: formData.alarm_level,
-                                        onChange: (e) => handleChange('alarm_level', e.target.value)
-                                    },
-                                        React.createElement('option', { value: '' }, 'Not set'),
-                                        ALARM_LEVEL_OPTIONS.map(opt =>
-                                            React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
-                                        )
-                                    )
                                 )
                             ),
 
@@ -1127,7 +1114,7 @@
             const [debouncedSearch, setDebouncedSearch] = useState('');
             const [statusFilter, setStatusFilter] = useState('');
             const [enrichmentFilter, setEnrichmentFilter] = useState('');
-            const [severityFilter, setSeverityFilter] = useState('');
+            const [alarmLevelFilter, setAlarmLevelFilter] = useState('');
             const [categoryFilter, setCategoryFilter] = useState('');
             const [sortBy, setSortBy] = useState('id');
             const [sortDir, setSortDir] = useState('desc');
@@ -1166,7 +1153,7 @@
                     if (debouncedSearch) reqBody.search = debouncedSearch;
                     if (statusFilter) reqBody.status = statusFilter;
                     if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
-                    if (severityFilter) reqBody.severity = severityFilter;
+                    if (alarmLevelFilter) reqBody.alarmLevel = alarmLevelFilter;
                     if (categoryFilter) reqBody.category = categoryFilter;
                     if (pageCursor) reqBody.cursor = pageCursor;
 
@@ -1195,7 +1182,7 @@
                     setLoading(false);
                     setLoadingMore(false);
                 }
-            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
+            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, alarmLevelFilter, categoryFilter, sortBy, sortDir]);
 
             // Re-fetch when filters change
             // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1203,7 +1190,7 @@
                 setCursor(null);
                 setExpandedId(null);
                 fetchStories(false, null);
-            }, [debouncedSearch, statusFilter, enrichmentFilter, severityFilter, categoryFilter, sortBy, sortDir]);
+            }, [debouncedSearch, statusFilter, enrichmentFilter, alarmLevelFilter, categoryFilter, sortBy, sortDir]);
 
             // Load more handler
             const handleLoadMore = () => {
@@ -1247,13 +1234,15 @@
                 return { class: 'badge-closed', label: status || 'Unknown' };
             };
 
-            // Get severity badge
-            const getSeverityBadge = (severity) => {
-                if (severity === 'critical') return { class: 'badge-critical', label: 'Critical' };
-                if (severity === 'severe') return { class: 'badge-severe', label: 'Severe' };
-                if (severity === 'moderate') return { class: 'badge-moderate', label: 'Moderate' };
-                if (severity === 'minor') return { class: 'badge-minor', label: 'Minor' };
-                return { class: 'badge-closed', label: severity || '-' };
+            // Get alarm level badge
+            const getAlarmBadge = (level) => {
+                if (level === 5) return { class: 'badge-critical', label: 'Dumpster Fire' };
+                if (level === 4) return { class: 'badge-severe', label: 'Criminal BS' };
+                if (level === 3) return { class: 'badge-moderate', label: 'Deep Swamp' };
+                if (level === 2) return { class: 'badge-minor', label: 'Gaslight' };
+                if (level === 1) return { class: 'badge-closed', label: 'Accidental Sanity' };
+                if (level === 0) return { class: 'badge-closed', label: 'Broken Clock' };
+                return { class: 'badge-closed', label: '-' };
             };
 
             // Format category for display
@@ -1419,14 +1408,13 @@
                         </select>
                         <select
                             className="stories-select"
-                            value={severityFilter}
-                            onChange={(e) => setSeverityFilter(e.target.value)}
+                            value={alarmLevelFilter}
+                            onChange={(e) => setAlarmLevelFilter(e.target.value)}
                         >
-                            <option value="">All Severity</option>
-                            <option value="critical">Critical</option>
-                            <option value="severe">Severe</option>
-                            <option value="moderate">Moderate</option>
-                            <option value="minor">Minor</option>
+                            <option value="">All Alarm Levels</option>
+                            {ALARM_LEVEL_OPTIONS.map(opt =>
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            )}
                         </select>
                         <select
                             className="stories-select"
@@ -1457,8 +1445,8 @@
                         >
                             <option value="id-desc">Newest First</option>
                             <option value="id-asc">Oldest First</option>
-                            <option value="severity-desc">Severity (High→Low)</option>
-                            <option value="severity-asc">Severity (Low→High)</option>
+                            <option value="alarm_level-desc">Alarm (High→Low)</option>
+                            <option value="alarm_level-asc">Alarm (Low→High)</option>
                             <option value="last_updated_at-desc">Recently Updated</option>
                         </select>
                     </div>
@@ -1522,8 +1510,8 @@
                                                         {story.primary_headline || '(No headline)'}
                                                     </td>
                                                     <td>
-                                                        <span className={`badge ${getSeverityBadge(story.severity).class}`}>
-                                                            {getSeverityBadge(story.severity).label}
+                                                        <span className={`badge ${getAlarmBadge(story.alarm_level).class}`}>
+                                                            {getAlarmBadge(story.alarm_level).label}
                                                         </span>
                                                     </td>
                                                     <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
@@ -1575,7 +1563,7 @@
                                                                     <dt>Category</dt>
                                                                     <dd>{story.category || '-'}</dd>
                                                                     <dt>Severity</dt>
-                                                                    <dd>{story.severity || '-'}</dd>
+                                                                    <dd>{ALARM_LEVEL_MAP[String(story.alarm_level)] || '-'}</dd>
                                                                     <dt>Source Count</dt>
                                                                     <dd>{story.source_count ?? '-'}</dd>
                                                                 </div>
@@ -1596,8 +1584,7 @@
                                     </tbody>
                                 </table>
                             </div>
-                            {/* Hide Load More when sorting by severity (cursor pagination incompatible with string fields) */}
-                            {hasMore && sortBy !== 'severity' && (
+                            {hasMore && (
                                 <div style={{ padding: '0 20px 20px' }}>
                                     <button
                                         className="load-more-btn"
