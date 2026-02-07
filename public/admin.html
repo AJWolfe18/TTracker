@@ -1123,11 +1123,11 @@
             // Filters
             const [search, setSearch] = useState('');
             const [debouncedSearch, setDebouncedSearch] = useState('');
-            const [statusFilter, setStatusFilter] = useState('');
-            const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [statusFilter, setStatusFilter] = useState('active');
+            const [enrichmentFilter, setEnrichmentFilter] = useState('enriched');
             const [alarmLevelFilter, setAlarmLevelFilter] = useState('');
             const [categoryFilter, setCategoryFilter] = useState('');
-            const [sortBy, setSortBy] = useState('id');
+            const [sortBy, setSortBy] = useState('last_updated_at');
             const [sortDir, setSortDir] = useState('desc');
 
             // Detail expansion
@@ -1534,7 +1534,7 @@
                                         <tr>
                                             <th>ID</th>
                                             <th>Headline</th>
-                                            <th>Severity</th>
+                                            <th>Alarm Level</th>
                                             <th>Category</th>
                                             <th>Status</th>
                                             <th>Enrichment</th>
