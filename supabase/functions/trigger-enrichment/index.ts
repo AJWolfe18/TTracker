@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
           enrichment_failure_count: 0
         })
         .eq('id', entity_id)
-        .neq('enrichment_status', 'pending')
+        .or('enrichment_status.is.null,enrichment_status.neq.pending')
         .select('id')
 
       if (updateErr || !updated || updated.length === 0) {
