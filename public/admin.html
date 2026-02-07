@@ -843,9 +843,6 @@
                 status: story?.status || 'active',
                 alarm_level: story?.alarm_level ?? '',
                 category: story?.category || '',
-                lifecycle_state: story?.lifecycle_state || '',
-                confidence_score: story?.confidence_score ?? '',
-                summary_neutral: story?.summary_neutral || '',
                 summary_spicy: story?.summary_spicy || ''
             });
             const [saving, setSaving] = useState(false);
@@ -876,13 +873,7 @@
                     const oldAlarmLevelEdit = story.alarm_level ?? null;
                     if (newAlarmLevelEdit !== oldAlarmLevelEdit) updates.alarm_level = newAlarmLevelEdit;
                     if (formData.category !== story.category) updates.category = formData.category || null;
-                    if (formData.lifecycle_state !== story.lifecycle_state) updates.lifecycle_state = formData.lifecycle_state || null;
 
-                    const newConfidence = formData.confidence_score === '' ? null : parseFloat(formData.confidence_score);
-                    const oldConfidence = story.confidence_score ?? null;
-                    if (newConfidence !== oldConfidence) updates.confidence_score = newConfidence;
-
-                    if (formData.summary_neutral !== (story.summary_neutral || '')) updates.summary_neutral = formData.summary_neutral || null;
                     if (formData.summary_spicy !== (story.summary_spicy || '')) updates.summary_spicy = formData.summary_spicy || null;
 
                     if (Object.keys(updates).length === 0) {
@@ -1044,47 +1035,6 @@
                                         React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
                                     )
                                 )
-                            ),
-
-                            // Lifecycle + Confidence
-                            React.createElement('div', { className: 'form-row' },
-                                React.createElement('div', { className: 'form-group' },
-                                    React.createElement('label', { className: 'form-label' }, 'Lifecycle State'),
-                                    React.createElement('select', {
-                                        className: 'form-select',
-                                        value: formData.lifecycle_state,
-                                        onChange: (e) => handleChange('lifecycle_state', e.target.value)
-                                    },
-                                        React.createElement('option', { value: '' }, 'Not set'),
-                                        LIFECYCLE_OPTIONS.map(opt =>
-                                            React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
-                                        )
-                                    )
-                                ),
-                                React.createElement('div', { className: 'form-group' },
-                                    React.createElement('label', { className: 'form-label' }, 'Confidence (0-100)'),
-                                    React.createElement('input', {
-                                        type: 'number',
-                                        className: 'form-input',
-                                        value: formData.confidence_score,
-                                        onChange: (e) => handleChange('confidence_score', e.target.value),
-                                        min: 0,
-                                        max: 100,
-                                        step: 0.1
-                                    })
-                                )
-                            ),
-
-                            // Summary Neutral
-                            React.createElement('div', { className: 'form-group' },
-                                React.createElement('label', { className: 'form-label' }, 'Summary (Neutral)'),
-                                React.createElement('textarea', {
-                                    className: 'form-textarea',
-                                    value: formData.summary_neutral,
-                                    onChange: (e) => handleChange('summary_neutral', e.target.value),
-                                    rows: 4,
-                                    placeholder: 'Neutral, factual summary of the story...'
-                                })
                             ),
 
                             // Summary Spicy
