@@ -163,31 +163,24 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Check if already pending (prevent duplicate enrichment triggers)
+    // Atomically check + set pending (prevents race condition between two concurrent requests)
     if (entity_type === 'story') {
-      const { data: existing } = await supabase
-        .from('stories')
-        .select('enrichment_status')
-        .eq('id', entity_id)
-        .single()
-
-      if (existing?.enrichment_status === 'pending') {
-        return new Response(
-          JSON.stringify({ error: 'Enrichment already pending for this story' }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-    }
-
-    // Mark as pending in database
-    if (entity_type === 'story') {
-      await supabase
+      const { data: updated, error: updateErr } = await supabase
         .from('stories')
         .update({
           enrichment_status: 'pending',
           enrichment_failure_count: 0
         })
         .eq('id', entity_id)
+        .neq('enrichment_status', 'pending')
+        .select('id')
+
+      if (updateErr || !updated || updated.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Enrichment already pending for this story' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     // Trigger the workflow

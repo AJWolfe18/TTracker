@@ -1172,23 +1172,41 @@
                         );
                         if (pendingIds.size === 0) return;
 
+                        // Fetch ALL pending stories (not just current view) so we detect completion
+                        // even if user changed filters while enrichment was running
                         const { data } = await supabase.functions.invoke('admin-stories', {
                             headers: { 'x-admin-password': password },
-                            body: { limit: 25, sortBy, sortDir }
+                            body: { limit: 100, enrichment: 'pending', sortBy: 'id', sortDir: 'desc' }
                         });
 
-                        if (data?.stories) {
-                            const freshMap = new Map(data.stories.map(s => [s.id, s]));
-                            // Check for transitions from pending to enriched/failed
-                            for (const id of pendingIds) {
-                                const fresh = freshMap.get(id);
-                                if (fresh && fresh.enrichment_status !== 'pending') {
-                                    const label = fresh.enrichment_status === 'failed'
-                                        ? `Story #${id} enrichment failed`
-                                        : `Story #${id} enrichment complete`;
-                                    toast?.addToast(label, fresh.enrichment_status === 'failed' ? 'error' : 'success');
+                        // Stories still pending according to the server
+                        const stillPendingIds = new Set((data?.stories || []).map(s => s.id));
+
+                        // Any ID we tracked as pending that's NOT in the pending result has transitioned
+                        for (const id of pendingIds) {
+                            if (!stillPendingIds.has(id)) {
+                                // Fetch the individual story to find out what it transitioned to
+                                const { data: detail } = await supabase.functions.invoke('admin-stories', {
+                                    headers: { 'x-admin-password': password },
+                                    body: { search: String(id), limit: 1 }
+                                });
+                                const fresh = detail?.stories?.find(s => s.id === id);
+                                const status = fresh?.enrichment_status || 'enriched';
+                                const label = status === 'failed'
+                                    ? `Story #${id} enrichment failed`
+                                    : `Story #${id} enrichment complete`;
+                                toast?.addToast(label, status === 'failed' ? 'error' : 'success');
+
+                                // Update the story in local state
+                                if (fresh) {
+                                    setStories(prev => prev.map(s => s.id === id ? { ...s, ...fresh } : s));
                                 }
                             }
+                        }
+
+                        // Also update any pending stories still in our list with fresh data
+                        if (data?.stories) {
+                            const freshMap = new Map(data.stories.map(s => [s.id, s]));
                             setStories(prev => prev.map(s => freshMap.has(s.id) ? { ...s, ...freshMap.get(s.id) } : s));
                         }
                     } catch (_) {
@@ -1197,7 +1215,7 @@
                 }, 15000);
 
                 return () => clearInterval(interval);
-            }, [hasPendingStories]);
+            }, [hasPendingStories, supabase, password, toast]);
 
             // Load more handler
             const handleLoadMore = () => {
