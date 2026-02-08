@@ -1657,6 +1657,383 @@
             );
         }
 
+        // Pardons display label maps
+        const CONNECTION_TYPE_LABELS = {
+            mar_a_lago_vip: 'Mar-a-Lago VIP',
+            major_donor: 'Major Donor',
+            family: 'Family',
+            political_ally: 'Political Ally',
+            campaign_staff: 'Campaign Staff',
+            business_associate: 'Business Associate',
+            jan6_defendant: 'Jan 6 Defendant',
+            fake_electors: 'Fake Electors',
+            celebrity: 'Celebrity',
+            no_connection: 'No Connection',
+        };
+
+        const CRIME_CATEGORY_LABELS = {
+            white_collar: 'White Collar',
+            obstruction: 'Obstruction',
+            political_corruption: 'Political Corruption',
+            violent: 'Violent',
+            drug: 'Drug',
+            election: 'Election',
+            jan6: 'Jan 6',
+            other: 'Other',
+        };
+
+        const CORRUPTION_LEVELS = [
+            { value: 5, label: 'Maximum Corruption', color: '#ef4444', badgeClass: 'badge-critical' },
+            { value: 4, label: 'Severe', color: '#f97316', badgeClass: 'badge-severe' },
+            { value: 3, label: 'Moderate', color: '#eab308', badgeClass: 'badge-moderate' },
+            { value: 2, label: 'Low', color: '#3b82f6', badgeClass: 'badge-closed' },
+            { value: 1, label: 'Minimal', color: '#6b7280', badgeClass: 'badge-archived' },
+        ];
+
+        const CORRUPTION_LEVEL_MAP = Object.fromEntries(CORRUPTION_LEVELS.map(l => [l.value, l]));
+
+        // PardonsTab Component
+        function PardonsTab({ password, supabase }) {
+            const [pardons, setPardons] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [cursor, setCursor] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+
+            // Sub-tab: '' = All, 'false' = Drafts, 'true' = Published
+            const [isPublicFilter, setIsPublicFilter] = useState('');
+
+            // Filters
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [crimeCategoryFilter, setCrimeCategoryFilter] = useState('');
+            const [connectionTypeFilter, setConnectionTypeFilter] = useState('');
+            const [corruptionLevelFilter, setCorruptionLevelFilter] = useState('');
+            const [researchStatusFilter, setResearchStatusFilter] = useState('');
+            const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [sortBy, setSortBy] = useState('pardon_date');
+            const [sortDir, setSortDir] = useState('desc');
+
+            // Request token for race control
+            const fetchTokenRef = useRef(0);
+
+            // Toast context
+            const toast = useToast();
+
+            // Debounce search input (300ms)
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    setDebouncedSearch(search);
+                }, 300);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Fetch pardons from edge function
+            const fetchPardons = useCallback(async (loadMore = false, nextCursor = null) => {
+                const token = ++fetchTokenRef.current;
+
+                if (loadMore) {
+                    setLoadingMore(true);
+                } else {
+                    setLoading(true);
+                }
+                setError(null);
+
+                try {
+                    const reqBody = { limit: 25, sortBy, sortDir };
+                    if (debouncedSearch) reqBody.search = debouncedSearch;
+                    if (isPublicFilter !== '') reqBody.isPublic = isPublicFilter;
+                    if (crimeCategoryFilter) reqBody.crimeCategory = crimeCategoryFilter;
+                    if (connectionTypeFilter) reqBody.connectionType = connectionTypeFilter;
+                    if (corruptionLevelFilter) reqBody.corruptionLevel = corruptionLevelFilter;
+                    if (researchStatusFilter) reqBody.researchStatus = researchStatusFilter;
+                    if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (nextCursor) reqBody.cursor = nextCursor;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-pardons',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch pardons');
+
+                    // Stale response check
+                    if (token !== fetchTokenRef.current) return;
+
+                    if (loadMore) {
+                        setPardons(prev => [...prev, ...(data.pardons || [])]);
+                    } else {
+                        setPardons(data.pardons || []);
+                    }
+
+                    setCursor(data.pagination?.next_cursor || null);
+                    setHasMore(data.pagination?.has_more || false);
+                } catch (err) {
+                    if (token !== fetchTokenRef.current) return;
+                    console.error('Pardons fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) {
+                        setLoading(false);
+                        setLoadingMore(false);
+                    }
+                }
+            }, [supabase, password, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+
+            // Re-fetch when filters change
+            useEffect(() => {
+                setCursor(null);
+                fetchPardons(false, null);
+            }, [fetchPardons, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+
+            // Load more handler with guard
+            const handleLoadMore = () => {
+                if (hasMore && !loadingMore) {
+                    fetchPardons(true, cursor);
+                }
+            };
+
+            // Format date for display
+            const formatDate = (d) => {
+                if (!d) return '-';
+                const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            // Get corruption badge
+            const getCorruptionBadge = (level) => {
+                const info = CORRUPTION_LEVEL_MAP[level];
+                if (!info) return { class: 'badge-archived', label: '-' };
+                return { class: info.badgeClass, label: `${level} - ${info.label}` };
+            };
+
+            // Get research status badge
+            const getResearchBadge = (status) => {
+                if (status === 'complete') return { class: 'badge-active', label: 'Complete' };
+                if (status === 'in_progress') return { class: 'badge-pending', label: 'In Progress' };
+                return { class: 'badge-archived', label: 'Pending' };
+            };
+
+            // Get published badge
+            const getPublishedBadge = (isPublic) => {
+                return isPublic
+                    ? { class: 'badge-active', label: 'Published' }
+                    : { class: 'badge-pending', label: 'Draft' };
+            };
+
+            // Get enrichment badge
+            const getEnrichmentBadge = (enrichedAt) => {
+                return enrichedAt
+                    ? { class: 'badge-active', label: 'Enriched' }
+                    : { class: 'badge-archived', label: 'Not Enriched' };
+            };
+
+            const subTabs = [
+                { value: '', label: 'All' },
+                { value: 'false', label: 'Drafts' },
+                { value: 'true', label: 'Published' },
+            ];
+
+            return (
+                <div>
+                    {/* Sub-tabs: All / Drafts / Published */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                        {subTabs.map(tab => (
+                            <button
+                                key={tab.value}
+                                className={`tab-btn ${isPublicFilter === tab.value ? 'active' : ''}`}
+                                onClick={() => setIsPublicFilter(tab.value)}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Toolbar: Search + Filters */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search by name or ID..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={crimeCategoryFilter}
+                            onChange={(e) => setCrimeCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Crime Categories</option>
+                            {Object.entries(CRIME_CATEGORY_LABELS).map(([val, label]) =>
+                                <option key={val} value={val}>{label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={connectionTypeFilter}
+                            onChange={(e) => setConnectionTypeFilter(e.target.value)}
+                        >
+                            <option value="">All Connections</option>
+                            {Object.entries(CONNECTION_TYPE_LABELS).map(([val, label]) =>
+                                <option key={val} value={val}>{label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={corruptionLevelFilter}
+                            onChange={(e) => setCorruptionLevelFilter(e.target.value)}
+                        >
+                            <option value="">All Corruption Levels</option>
+                            {CORRUPTION_LEVELS.map(l =>
+                                <option key={l.value} value={l.value}>{l.value} - {l.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={researchStatusFilter}
+                            onChange={(e) => setResearchStatusFilter(e.target.value)}
+                        >
+                            <option value="">All Research Status</option>
+                            <option value="complete">Complete</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={enrichmentFilter}
+                            onChange={(e) => setEnrichmentFilter(e.target.value)}
+                        >
+                            <option value="">All Enrichment</option>
+                            <option value="enriched">Enriched</option>
+                            <option value="pending">Not Enriched</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const parts = e.target.value.split('-');
+                                setSortBy(parts[0]);
+                                setSortDir(parts[1]);
+                            }}
+                        >
+                            <option value="pardon_date-desc">Date (Newest)</option>
+                            <option value="pardon_date-asc">Date (Oldest)</option>
+                            <option value="corruption_level-desc">Corruption (High-Low)</option>
+                            <option value="corruption_level-asc">Corruption (Low-High)</option>
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="id-desc">ID (Newest)</option>
+                            <option value="id-asc">ID (Oldest)</option>
+                        </select>
+                    </div>
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading pardons...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">Pardons</h2>
+                                <span className="stories-count">
+                                    Showing {pardons.length} pardons
+                                    {hasMore && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Name</th>
+                                            <th>Date</th>
+                                            <th>Clemency</th>
+                                            <th>Corruption</th>
+                                            <th>Connection</th>
+                                            <th>Category</th>
+                                            <th>Published</th>
+                                            <th>Research</th>
+                                            <th>Enriched</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pardons.length === 0 && (
+                                            <tr>
+                                                <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No pardons found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {pardons.map(pardon => {
+                                            const corruptBadge = getCorruptionBadge(pardon.corruption_level);
+                                            const pubBadge = getPublishedBadge(pardon.is_public);
+                                            const resBadge = getResearchBadge(pardon.research_status);
+                                            const enrBadge = getEnrichmentBadge(pardon.enriched_at);
+
+                                            return (
+                                                <tr key={pardon.id}>
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{pardon.id}</td>
+                                                    <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={pardon.recipient_name}>
+                                                        {pardon.recipient_name || '(Unknown)'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(pardon.pardon_date)}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {pardon.clemency_type || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${corruptBadge.class}`}>{corruptBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {CONNECTION_TYPE_LABELS[pardon.primary_connection_type] || pardon.primary_connection_type || '-'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {CRIME_CATEGORY_LABELS[pardon.crime_category] || pardon.crime_category || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${pubBadge.class}`}>{pubBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${resBadge.class}`}>{resBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${enrBadge.class}`}>{enrBadge.label}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {hasMore && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         // Main App Component
         function AdminDashboard() {
             const [activeTab, setActiveTab] = useState('home');
@@ -1979,7 +2356,7 @@
             const tabs = [
                 { id: 'home', label: 'Home' },
                 { id: 'stories', label: 'Stories' },
-                { id: 'pardons', label: 'Pardons', disabled: true },
+                { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS', disabled: true },
                 { id: 'eos', label: 'Exec Orders', disabled: true },
                 { id: 'feeds', label: 'Feeds', disabled: true }
@@ -2266,7 +2643,11 @@
                             <StoriesTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && (
+                        {activeTab === 'pardons' && (
+                            <PardonsTab password={password} supabase={supabase} />
+                        )}
+
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
