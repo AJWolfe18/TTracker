@@ -84,10 +84,11 @@ async function main() {
   } catch (err) {
     console.error(`❌ Enrichment failed:`, err.message);
 
-    // Update failure count
+    // Update failure count and clear pending status
     await supabase
       .from('stories')
       .update({
+        enrichment_status: null,
         enrichment_failure_count: story.enrichment_failure_count + 1,
         last_error_message: err.message?.slice(0, 500)
       })
