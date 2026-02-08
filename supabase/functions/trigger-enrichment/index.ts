@@ -172,10 +172,17 @@ Deno.serve(async (req) => {
           enrichment_failure_count: 0
         })
         .eq('id', entity_id)
-        .or('enrichment_status.is.null,enrichment_status.neq.pending')
+        .is('enrichment_status', null)
         .select('id')
 
-      if (updateErr || !updated || updated.length === 0) {
+      if (updateErr) {
+        console.error('Enrichment status update error:', updateErr)
+        return new Response(
+          JSON.stringify({ error: `Failed to update story: ${updateErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (!updated || updated.length === 0) {
         return new Response(
           JSON.stringify({ error: 'Enrichment already pending for this story' }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
