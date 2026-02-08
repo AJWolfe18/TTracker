@@ -30,8 +30,10 @@ function getEnvironment(supabaseUrl: string): 'test' | 'prod' {
 async function triggerWorkflow(
   workflowFile: string,
   inputs: Record<string, string>,
-  githubToken: string
+  githubToken: string,
+  environment: string = 'test'
 ): Promise<{ success: boolean; message: string; run_url?: string }> {
+  const ref = environment === 'prod' ? 'main' : 'test'
   const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${workflowFile}/dispatches`
 
   const response = await fetch(url, {
@@ -43,7 +45,7 @@ async function triggerWorkflow(
       'User-Agent': 'TTracker-Admin'
     },
     body: JSON.stringify({
-      ref: inputs.environment === 'prod' ? 'main' : 'test',
+      ref,
       inputs
     })
   })
@@ -149,14 +151,23 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Map entity type to workflow file
-    const workflowMap: Record<string, string> = {
-      story: 'enrich-story.yml',
-      // Future: pardon, scotus, eo workflows
+    // Per-entity-type workflow config
+    const WORKFLOW_CONFIG: Record<string, {
+      file: string,
+      buildInputs: (id: number, env: string) => Record<string, string>
+    }> = {
+      story: {
+        file: 'enrich-story.yml',
+        buildInputs: (id, env) => ({ story_id: String(id), environment: env })
+      },
+      pardon: {
+        file: 'enrich-pardons.yml',
+        buildInputs: (id, env) => ({ pardon_id: String(id), limit: '1', force: 'true' })
+      }
     }
 
-    const workflowFile = workflowMap[entity_type]
-    if (!workflowFile) {
+    const config = WORKFLOW_CONFIG[entity_type]
+    if (!config) {
       return new Response(
         JSON.stringify({ error: `Re-enrichment not yet supported for ${entity_type}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -191,13 +202,12 @@ Deno.serve(async (req) => {
     }
 
     // Trigger the workflow
+    const workflowInputs = config.buildInputs(entity_id, environment)
     const result = await triggerWorkflow(
-      workflowFile,
-      {
-        story_id: String(entity_id),
-        environment
-      },
-      githubToken
+      config.file,
+      workflowInputs,
+      githubToken,
+      environment
     )
 
     if (!result.success) {

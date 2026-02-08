@@ -677,6 +677,77 @@
             animation: spin 1s linear infinite;
         }
 
+        /* Collapsible Form Sections */
+        .form-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            margin: 8px 0 12px;
+            border-bottom: 1px solid #334155;
+            cursor: pointer;
+            user-select: none;
+        }
+        .form-section-header:hover { color: #f8fafc; }
+        .form-section-header h4 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+        .form-section-header:hover h4 { color: #e2e8f0; }
+        .form-section-arrow {
+            font-size: 12px;
+            color: #64748b;
+            transition: transform 0.2s;
+        }
+        .form-section-arrow.open { transform: rotate(90deg); }
+
+        /* Checkbox row for multi-select */
+        .form-checkbox-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .form-checkbox:hover { border-color: #3b82f6; color: #e2e8f0; }
+        .form-checkbox.checked {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: #3b82f6;
+            color: #e2e8f0;
+        }
+        .form-checkbox input[type="checkbox"] {
+            accent-color: #3b82f6;
+            cursor: pointer;
+        }
+
+        /* JSON textarea error states */
+        .json-error {
+            border-color: #ef4444 !important;
+        }
+        .json-error:focus {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+        .json-error-msg {
+            color: #fca5a5;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
         /* Responsive */
         @media (max-width: 900px) {
             .dashboard-grid { grid-template-columns: 1fr; }
@@ -1052,6 +1123,426 @@
                         React.createElement('div', { className: 'modal-footer' },
                             React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
                             React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict },
+                                saving ? 'Saving...' : 'Save Changes'
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Edit Pardon Modal Component
+        function EditPardonModal({ pardon, onClose, onSave, onRefresh, supabase, password }) {
+            const h = React.createElement;
+            const [formData, setFormData] = useState(() => ({
+                // Identity
+                recipient_name: pardon?.recipient_name || '',
+                nickname: pardon?.nickname || '',
+                photo_url: pardon?.photo_url || '',
+                recipient_type: pardon?.recipient_type || '',
+                recipient_count: pardon?.recipient_count ?? '',
+                recipient_criteria: pardon?.recipient_criteria || '',
+                // Pardon & Crime
+                pardon_date: pardon?.pardon_date || '',
+                clemency_type: pardon?.clemency_type || '',
+                status: pardon?.status || '',
+                case_number: pardon?.case_number || '',
+                crime_description: pardon?.crime_description || '',
+                crime_category: pardon?.crime_category || '',
+                original_sentence: pardon?.original_sentence || '',
+                conviction_date: pardon?.conviction_date || '',
+                // Trump Connection
+                primary_connection_type: pardon?.primary_connection_type || '',
+                secondary_connection_types: pardon?.secondary_connection_types || [],
+                corruption_level: pardon?.corruption_level ?? '',
+                corruption_reasoning: pardon?.corruption_reasoning || '',
+                trump_connection_detail: pardon?.trump_connection_detail || '',
+                donation_amount_usd: pardon?.donation_amount_usd ?? '',
+                // AI Content
+                summary_neutral: pardon?.summary_neutral || '',
+                summary_spicy: pardon?.summary_spicy || '',
+                why_it_matters: pardon?.why_it_matters || '',
+                pattern_analysis: pardon?.pattern_analysis || '',
+                // Admin & Sources
+                research_status: pardon?.research_status || '',
+                needs_review: pardon?.needs_review ?? false,
+                is_public: pardon?.is_public ?? false,
+                post_pardon_status: pardon?.post_pardon_status || '',
+                post_pardon_notes: pardon?.post_pardon_notes || '',
+                primary_source_url: pardon?.primary_source_url || '',
+                // JSONB
+                source_urls: JSON.stringify(pardon?.source_urls || [], null, 2),
+                receipts_timeline: JSON.stringify(pardon?.receipts_timeline || [], null, 2),
+                pardon_advocates: JSON.stringify(pardon?.pardon_advocates || [], null, 2),
+            }));
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
+            const [jsonErrors, setJsonErrors] = useState({});
+            const [openSections, setOpenSections] = useState({ identity: true, pardon_crime: true, trump_connection: false, ai_content: false, admin_sources: false });
+
+            const originalUpdatedAt = pardon?.updated_at;
+
+            const handleChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const toggleSection = (section) => {
+                setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+            };
+
+            const toggleSecondaryConnection = (type) => {
+                setFormData(prev => {
+                    const current = prev.secondary_connection_types || [];
+                    const next = current.includes(type) ? current.filter(t => t !== type) : [...current, type];
+                    return { ...prev, secondary_connection_types: next };
+                });
+            };
+
+            // JSONB field change with validation
+            const handleJsonChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+                if (value.trim() === '' || value.trim() === '[]') {
+                    setJsonErrors(prev => ({ ...prev, [field]: null }));
+                    return;
+                }
+                try {
+                    const parsed = JSON.parse(value);
+                    if (!Array.isArray(parsed)) {
+                        setJsonErrors(prev => ({ ...prev, [field]: 'Must be a JSON array' }));
+                    } else {
+                        setJsonErrors(prev => ({ ...prev, [field]: null }));
+                    }
+                } catch (e) {
+                    setJsonErrors(prev => ({ ...prev, [field]: 'Invalid JSON: ' + e.message }));
+                }
+            };
+
+            // Auto-format JSON on blur
+            const handleJsonBlur = (field) => {
+                const value = formData[field];
+                if (!value || value.trim() === '') return;
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) {
+                        setFormData(prev => ({ ...prev, [field]: JSON.stringify(parsed, null, 2) }));
+                    }
+                } catch (_) { /* leave as-is if invalid */ }
+            };
+
+            const hasJsonErrors = Object.values(jsonErrors).some(e => e);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (hasJsonErrors) return;
+                setSaving(true);
+                setError(null);
+
+                try {
+                    const updates = {};
+
+                    // Text fields
+                    const textFields = ['recipient_name', 'nickname', 'recipient_criteria', 'case_number', 'crime_description', 'original_sentence', 'corruption_reasoning', 'trump_connection_detail', 'post_pardon_notes', 'summary_neutral', 'summary_spicy', 'why_it_matters', 'pattern_analysis'];
+                    for (const f of textFields) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // URL fields
+                    for (const f of ['photo_url', 'primary_source_url']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Enum fields (string)
+                    for (const f of ['clemency_type', 'status', 'recipient_type', 'crime_category', 'primary_connection_type', 'research_status', 'post_pardon_status']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Date fields
+                    for (const f of ['pardon_date', 'conviction_date']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Boolean fields
+                    for (const f of ['is_public', 'needs_review']) {
+                        if (formData[f] !== (pardon[f] ?? false)) updates[f] = formData[f];
+                    }
+
+                    // Integer: corruption_level
+                    const newCorruption = formData.corruption_level === '' ? null : parseInt(formData.corruption_level, 10);
+                    const oldCorruption = pardon.corruption_level ?? null;
+                    if (newCorruption !== oldCorruption) updates.corruption_level = newCorruption;
+
+                    // Integer: recipient_count
+                    const newCount = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const oldCount = pardon.recipient_count ?? null;
+                    if (newCount !== oldCount) updates.recipient_count = newCount;
+
+                    // Numeric: donation_amount_usd
+                    const newDonation = formData.donation_amount_usd === '' ? null : parseFloat(formData.donation_amount_usd);
+                    const oldDonation = pardon.donation_amount_usd ?? null;
+                    if (newDonation !== oldDonation) updates.donation_amount_usd = newDonation;
+
+                    // text[]: secondary_connection_types (compare sorted)
+                    const newSCT = [...(formData.secondary_connection_types || [])].sort();
+                    const oldSCT = [...(pardon.secondary_connection_types || [])].sort();
+                    if (JSON.stringify(newSCT) !== JSON.stringify(oldSCT)) updates.secondary_connection_types = formData.secondary_connection_types;
+
+                    // JSONB fields
+                    for (const f of ['source_urls', 'receipts_timeline', 'pardon_advocates']) {
+                        const rawText = formData[f];
+                        const newParsed = (!rawText || rawText.trim() === '' || rawText.trim() === '[]') ? [] : JSON.parse(rawText);
+                        const oldVal = pardon[f] || [];
+                        if (JSON.stringify(newParsed) !== JSON.stringify(oldVal)) updates[f] = newParsed;
+                    }
+
+                    // Filter to ALLOWED_FIELDS only
+                    const filteredUpdates = {};
+                    for (const key of Object.keys(updates)) {
+                        if (PARDON_ALLOWED_FIELDS.includes(key)) filteredUpdates[key] = updates[key];
+                    }
+
+                    if (Object.keys(filteredUpdates).length === 0) {
+                        onClose();
+                        return;
+                    }
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-pardon',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                pardon_id: pardon.id,
+                                updates: filteredUpdates,
+                                original_updated_at: originalUpdatedAt
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        if (body?.conflict) {
+                            setIsConflict(true);
+                            setError(body.error || 'Record was modified by another process. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Update failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    const changedFields = data.changed_fields || {};
+                    const firstChangedField = Object.keys(changedFields)[0];
+
+                    onSave(data.pardon, firstChangedField ? {
+                        entityType: 'pardon',
+                        entityId: String(pardon.id),
+                        fieldName: firstChangedField,
+                        oldValue: changedFields[firstChangedField]?.old
+                    } : null);
+                } catch (err) {
+                    console.error('Save error:', err);
+                    setError(err.message || 'Failed to save changes');
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            // Helper: section header
+            const sectionHeader = (key, label) =>
+                h('div', { className: 'form-section-header', onClick: () => toggleSection(key) },
+                    h('h4', null, label),
+                    h('span', { className: 'form-section-arrow' + (openSections[key] ? ' open' : '') }, '\u25B6')
+                );
+
+            // Helper: text input field
+            const textField = (field, label, opts = {}) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('input', {
+                        type: opts.type || 'text',
+                        className: 'form-input',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        placeholder: opts.placeholder || '',
+                        ...opts.inputProps
+                    })
+                );
+
+            // Helper: select field
+            const selectField = (field, label, options) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('select', {
+                        className: 'form-select',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value)
+                    },
+                        h('option', { value: '' }, 'Not set'),
+                        options.map(opt =>
+                            h('option', { key: opt.value, value: opt.value }, opt.label)
+                        )
+                    )
+                );
+
+            // Helper: textarea field
+            const textareaField = (field, label, rows = 3) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('textarea', {
+                        className: 'form-textarea',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        rows
+                    })
+                );
+
+            // Helper: JSONB textarea
+            const jsonField = (field, label, rows = 4) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('textarea', {
+                        className: 'form-textarea' + (jsonErrors[field] ? ' json-error' : ''),
+                        value: formData[field],
+                        onChange: (ev) => handleJsonChange(field, ev.target.value),
+                        onBlur: () => handleJsonBlur(field),
+                        rows
+                    }),
+                    jsonErrors[field] && h('div', { className: 'json-error-msg' }, jsonErrors[field])
+                );
+
+            // Helper: boolean checkbox
+            const boolField = (field, label) =>
+                h('div', { className: 'form-group', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    h('input', {
+                        type: 'checkbox',
+                        checked: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.checked),
+                        style: { accentColor: '#3b82f6', width: '16px', height: '16px' }
+                    }),
+                    h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
+                );
+
+            return h('div', { className: 'modal-overlay', onClick: (ev) => ev.target === ev.currentTarget && onClose() },
+                h('div', { className: 'modal-content' },
+                    h('div', { className: 'modal-header' },
+                        h('h3', { className: 'modal-title' }, 'Edit Pardon #' + pardon.id + (pardon.recipient_name ? ' - ' + pardon.recipient_name : '')),
+                        h('button', { className: 'modal-close', onClick: onClose }, '\u00D7')
+                    ),
+                    h('form', { onSubmit: handleSubmit },
+                        h('div', { className: 'modal-body' },
+                            // Error banner
+                            error && h('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && h('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
+
+                            // Section 1: Identity (open)
+                            sectionHeader('identity', 'Identity'),
+                            openSections.identity && h('div', null,
+                                textField('recipient_name', 'Recipient Name'),
+                                h('div', { className: 'form-row' },
+                                    textField('nickname', 'Nickname'),
+                                    selectField('recipient_type', 'Recipient Type', PARDON_RECIPIENT_TYPES)
+                                ),
+                                h('div', { className: 'form-row' },
+                                    textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 0 } }),
+                                    textField('photo_url', 'Photo URL', { type: 'url' })
+                                ),
+                                textField('recipient_criteria', 'Recipient Criteria')
+                            ),
+
+                            // Section 2: Pardon & Crime (open)
+                            sectionHeader('pardon_crime', 'Pardon & Crime'),
+                            openSections.pardon_crime && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    textField('pardon_date', 'Pardon Date', { type: 'date' }),
+                                    selectField('clemency_type', 'Clemency Type', PARDON_CLEMENCY_TYPES)
+                                ),
+                                h('div', { className: 'form-row' },
+                                    selectField('status', 'Status', PARDON_STATUS_OPTIONS),
+                                    selectField('crime_category', 'Crime Category', Object.entries(CRIME_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })))
+                                ),
+                                textareaField('crime_description', 'Crime Description', 3),
+                                h('div', { className: 'form-row' },
+                                    textField('case_number', 'Case Number'),
+                                    textField('conviction_date', 'Conviction Date', { type: 'date' })
+                                ),
+                                textField('original_sentence', 'Original Sentence')
+                            ),
+
+                            // Section 3: Trump Connection (collapsed)
+                            sectionHeader('trump_connection', 'Trump Connection'),
+                            openSections.trump_connection && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('primary_connection_type', 'Primary Connection', Object.entries(CONNECTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))),
+                                    selectField('corruption_level', 'Corruption Level', CORRUPTION_LEVELS.map(l => ({ value: String(l.value), label: l.value + ' - ' + l.label })))
+                                ),
+                                h('div', { className: 'form-group' },
+                                    h('label', { className: 'form-label' }, 'Secondary Connection Types'),
+                                    h('div', { className: 'form-checkbox-row' },
+                                        CONNECTION_TYPE_KEYS.map(type =>
+                                            h('label', { key: type, className: 'form-checkbox' + (formData.secondary_connection_types.includes(type) ? ' checked' : '') },
+                                                h('input', {
+                                                    type: 'checkbox',
+                                                    checked: formData.secondary_connection_types.includes(type),
+                                                    onChange: () => toggleSecondaryConnection(type)
+                                                }),
+                                                CONNECTION_TYPE_LABELS[type]
+                                            )
+                                        )
+                                    )
+                                ),
+                                textareaField('corruption_reasoning', 'Corruption Reasoning', 3),
+                                textareaField('trump_connection_detail', 'Trump Connection Detail', 3),
+                                textField('donation_amount_usd', 'Donation Amount (USD)', { type: 'number', inputProps: { min: 0, step: '0.01' } })
+                            ),
+
+                            // Section 4: AI Content (collapsed)
+                            sectionHeader('ai_content', 'AI Content'),
+                            openSections.ai_content && h('div', null,
+                                textareaField('summary_neutral', 'Summary (Neutral)', 4),
+                                textareaField('summary_spicy', 'Summary (Spicy)', 4),
+                                textareaField('why_it_matters', 'Why It Matters', 3),
+                                textareaField('pattern_analysis', 'Pattern Analysis', 3)
+                            ),
+
+                            // Section 5: Admin & Sources (collapsed)
+                            sectionHeader('admin_sources', 'Admin & Sources'),
+                            openSections.admin_sources && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('research_status', 'Research Status', PARDON_RESEARCH_STATUS),
+                                    selectField('post_pardon_status', 'Post-Pardon Status', PARDON_POST_STATUS)
+                                ),
+                                h('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px' } },
+                                    boolField('is_public', 'Published'),
+                                    boolField('needs_review', 'Needs Review')
+                                ),
+                                textareaField('post_pardon_notes', 'Post-Pardon Notes', 2),
+                                textField('primary_source_url', 'Primary Source URL', { type: 'url' }),
+                                jsonField('source_urls', 'Source URLs (JSON array of URL strings)', 3),
+                                jsonField('receipts_timeline', 'Receipts Timeline (JSON array of objects)', 5),
+                                jsonField('pardon_advocates', 'Pardon Advocates (JSON array)', 4)
+                            )
+                        ),
+                        h('div', { className: 'modal-footer' },
+                            h('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
+                            h('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict || hasJsonErrors },
                                 saving ? 'Saving...' : 'Save Changes'
                             )
                         )
@@ -1692,6 +2183,43 @@
 
         const CORRUPTION_LEVEL_MAP = Object.fromEntries(CORRUPTION_LEVELS.map(l => [l.value, l]));
 
+        // Pardons-specific enum constants for EditPardonModal
+        const PARDON_CLEMENCY_TYPES = [
+            { value: 'pardon', label: 'Pardon' },
+            { value: 'commutation', label: 'Commutation' },
+            { value: 'pre_emptive', label: 'Pre-emptive' },
+        ];
+        const PARDON_STATUS_OPTIONS = [
+            { value: 'confirmed', label: 'Confirmed' },
+            { value: 'reported', label: 'Reported' },
+        ];
+        const PARDON_RECIPIENT_TYPES = [
+            { value: 'person', label: 'Person' },
+            { value: 'group', label: 'Group' },
+        ];
+        const PARDON_POST_STATUS = [
+            { value: 'quiet', label: 'Quiet' },
+            { value: 'under_investigation', label: 'Under Investigation' },
+            { value: 're_offended', label: 'Re-offended' },
+        ];
+        const PARDON_RESEARCH_STATUS = [
+            { value: 'complete', label: 'Complete' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'pending', label: 'Pending' },
+        ];
+        // Connection type keys for checkbox multi-select (reuses CONNECTION_TYPE_LABELS for display)
+        const CONNECTION_TYPE_KEYS = Object.keys(CONNECTION_TYPE_LABELS);
+
+        // Fields allowed by admin-update-pardon (used for payload filtering)
+        const PARDON_ALLOWED_FIELDS = [
+            'recipient_name', 'nickname', 'photo_url', 'recipient_type', 'recipient_count', 'recipient_criteria',
+            'pardon_date', 'clemency_type', 'status', 'case_number', 'crime_description', 'crime_category', 'original_sentence', 'conviction_date',
+            'primary_connection_type', 'secondary_connection_types', 'corruption_level', 'corruption_reasoning', 'trump_connection_detail', 'donation_amount_usd',
+            'summary_neutral', 'summary_spicy', 'why_it_matters', 'pattern_analysis',
+            'receipts_timeline', 'pardon_advocates',
+            'research_status', 'post_pardon_status', 'post_pardon_notes', 'is_public', 'needs_review', 'primary_source_url', 'source_urls'
+        ];
+
         // PardonsTab Component
         function PardonsTab({ password, supabase }) {
             const [pardons, setPardons] = useState([]);
@@ -1714,6 +2242,11 @@
             const [enrichmentFilter, setEnrichmentFilter] = useState('');
             const [sortBy, setSortBy] = useState('pardon_date');
             const [sortDir, setSortDir] = useState('desc');
+
+            // Edit / Enrich / Undo state
+            const [editingPardon, setEditingPardon] = useState(null);
+            const [enrichingIds, setEnrichingIds] = useState(new Set());
+            const [undoInfo, setUndoInfo] = useState(null);
 
             // Request token for race control
             const fetchTokenRef = useRef(0);
@@ -1830,6 +2363,125 @@
                 return enrichedAt
                     ? { class: 'badge-active', label: 'Enriched' }
                     : { class: 'badge-archived', label: 'Not Enriched' };
+            };
+
+            // Handle edit button click
+            const handleEdit = (pardon) => {
+                setEditingPardon(pardon);
+            };
+
+            // Handle save from edit modal
+            const handleSaveEdit = (updatedPardon, undoData) => {
+                setPardons(prev => prev.map(p => p.id === updatedPardon.id ? { ...p, ...updatedPardon } : p));
+                setEditingPardon(null);
+                if (undoData) {
+                    setUndoInfo(undoData);
+                } else {
+                    toast?.addToast('Pardon updated successfully', 'success');
+                }
+            };
+
+            // Handle undo action
+            const handleUndo = async () => {
+                if (!undoInfo) return;
+                try {
+                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
+                        p_entity_type: undoInfo.entityType,
+                        p_entity_id: undoInfo.entityId,
+                        p_changed_by: 'admin'
+                    });
+                    if (rpcError) throw new Error(rpcError.message);
+                    if (!data?.success) throw new Error(data?.error || 'Undo failed');
+                    toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
+                    setUndoInfo(null);
+                    // Refresh list to get correct updated_at for continued locking
+                    fetchPardons(false, null);
+                } catch (err) {
+                    console.error('Undo error:', err);
+                    toast?.addToast(err.message || 'Failed to undo', 'error');
+                }
+            };
+
+            // Handle re-enrichment
+            const handleReEnrich = async (pardon) => {
+                if (enrichingIds.has(pardon.id)) return;
+                setEnrichingIds(prev => new Set([...prev, pardon.id]));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'trigger-enrichment',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { entity_type: 'pardon', entity_id: pardon.id }
+                        }
+                    );
+                    if (fnError) {
+                        let detail = fnError.message;
+                        try {
+                            const body = fnError.context ? await fnError.context.json() : data;
+                            if (body?.error) detail = body.error;
+                        } catch (_) {}
+                        throw new Error(detail || 'Failed to trigger re-enrichment');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    toast?.addToast(`Pardon queued for re-enrichment (~$${(data?.estimated_cost || 0.005).toFixed(3)})`, 'success');
+                } catch (err) {
+                    console.error('Re-enrichment error:', err);
+                    toast?.addToast(err.message || 'Failed to trigger re-enrichment', 'error');
+                } finally {
+                    setEnrichingIds(prev => {
+                        const s = new Set(prev);
+                        s.delete(pardon.id);
+                        return s;
+                    });
+                }
+            };
+
+            // Handle publish toggle
+            const handleTogglePublish = async (pardon) => {
+                const newIsPublic = !pardon.is_public;
+                // Optimistic update
+                setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: newIsPublic } : p));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-pardon',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                pardon_id: pardon.id,
+                                updates: { is_public: newIsPublic },
+                                original_updated_at: pardon.updated_at
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Toggle failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    // Update local row with server-returned updated_at for continued locking
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, ...data.pardon } : p));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'pardon',
+                            entityId: String(pardon.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast(newIsPublic ? 'Published' : 'Unpublished', 'success');
+                    }
+                } catch (err) {
+                    console.error('Toggle publish error:', err);
+                    // Revert optimistic update
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: pardon.is_public } : p));
+                    toast?.addToast(err.message || 'Failed to toggle publish', 'error');
+                }
             };
 
             const subTabs = [
@@ -1965,12 +2617,13 @@
                                             <th>Published</th>
                                             <th>Research</th>
                                             <th>Enriched</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {pardons.length === 0 && (
                                             <tr>
-                                                <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                                                     No pardons found matching your filters.
                                                 </td>
                                             </tr>
@@ -2011,6 +2664,27 @@
                                                     <td>
                                                         <span className={`badge ${enrBadge.class}`}>{enrBadge.label}</span>
                                                     </td>
+                                                    <td>
+                                                        <div className="row-actions">
+                                                            <button className="btn-icon" onClick={() => handleEdit(pardon)} title="Edit">
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <button
+                                                                className={`btn-icon${enrichingIds.has(pardon.id) ? ' enriching' : ''}`}
+                                                                onClick={() => handleReEnrich(pardon)}
+                                                                disabled={enrichingIds.has(pardon.id)}
+                                                                title="Re-enrich"
+                                                            >
+                                                                {enrichingIds.has(pardon.id)
+                                                                    ? <><span className="spinner-sm"></span> Enriching</>
+                                                                    : '🤖 Enrich'
+                                                                }
+                                                            </button>
+                                                            <button className="btn-icon" onClick={() => handleTogglePublish(pardon)} title={pardon.is_public ? 'Unpublish' : 'Publish'}>
+                                                                {pardon.is_public ? '📤 Unpublish' : '📥 Publish'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
@@ -2028,6 +2702,32 @@
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Edit Pardon Modal */}
+                    {editingPardon && (
+                        <EditPardonModal
+                            pardon={editingPardon}
+                            onClose={() => setEditingPardon(null)}
+                            onSave={handleSaveEdit}
+                            onRefresh={() => fetchPardons(false, null)}
+                            supabase={supabase}
+                            password={password}
+                        />
+                    )}
+
+                    {/* Undo Toast */}
+                    {undoInfo && (
+                        <div className="toast-container">
+                            <UndoToast
+                                entityType={undoInfo.entityType}
+                                entityId={undoInfo.entityId}
+                                fieldName={undoInfo.fieldName}
+                                oldValue={undoInfo.oldValue}
+                                onUndo={handleUndo}
+                                onDismiss={() => setUndoInfo(null)}
+                            />
                         </div>
                     )}
                 </div>
