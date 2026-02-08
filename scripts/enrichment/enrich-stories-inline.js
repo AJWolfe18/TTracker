@@ -375,6 +375,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
       top_entities,          // TTRC-235: text[] of canonical IDs
       entity_counter,        // TTRC-235: jsonb {id: count}
       last_enriched_at: new Date().toISOString(),
+      enrichment_status: null,
       enrichment_meta: {
         prompt_version: PROMPT_VERSION,
         frame,

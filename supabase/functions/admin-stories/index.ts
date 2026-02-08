@@ -48,6 +48,8 @@ Deno.serve(async (req) => {
     const sortBy = String(body.sortBy ?? 'last_updated_at') // last_updated_at, id, alarm_level, first_seen_at
     const sortDir = String(body.sortDir ?? 'desc') // asc, desc
     const cursor = String(body.cursor ?? '')
+    const offsetParam = parseInt(String(body.offset ?? '0'), 10)
+    const offset = Math.max(isNaN(offsetParam) ? 0 : offsetParam, 0)
     const limitParam = parseInt(String(body.limit ?? '25'), 10)
     const limit = Math.min(Math.max(limitParam, 1), 100) // Clamp 1-100
 
@@ -58,6 +60,12 @@ Deno.serve(async (req) => {
         id,
         primary_headline,
         primary_source,
+        primary_source_url,
+        summary_neutral,
+        summary_spicy,
+        primary_actor,
+        lifecycle_state,
+        confidence_score,
         status,
         category,
         alarm_level,
@@ -69,7 +77,6 @@ Deno.serve(async (req) => {
         source_count,
         article_story(count)
       `)
-      .limit(limit)
 
     // Sorting - validate allowed columns
     const allowedSortCols = ['id', 'alarm_level', 'first_seen_at', 'last_updated_at']
@@ -77,12 +84,28 @@ Deno.serve(async (req) => {
     const ascending = sortDir === 'asc'
     query = query.order(sortCol, { ascending })
 
-    // Cursor-based pagination (descending by id)
-    if (cursor) {
-      const cursorId = parseInt(cursor, 10)
-      if (!isNaN(cursorId) && cursorId > 0) {
-        query = query.lt('id', cursorId)
+    // Add secondary sort by id for stable ordering (when not already sorting by id)
+    if (sortCol !== 'id') {
+      query = query.order('id', { ascending: false })
+    }
+
+    // Pagination strategy depends on sort column
+    if (sortCol === 'id') {
+      // Cursor-based pagination for ID sort (efficient)
+      query = query.limit(limit)
+      if (cursor) {
+        const cursorId = parseInt(cursor, 10)
+        if (!isNaN(cursorId) && cursorId > 0) {
+          if (ascending) {
+            query = query.gt('id', cursorId)
+          } else {
+            query = query.lt('id', cursorId)
+          }
+        }
       }
+    } else {
+      // Offset-based pagination for non-ID sorts (correct ordering)
+      query = query.range(offset, offset + limit - 1)
     }
 
     // Filter: status
@@ -119,11 +142,18 @@ Deno.serve(async (req) => {
       query = query.eq('category', category)
     }
 
-    // Filter: search by headline (ilike with escaped wildcards)
+    // Filter: search by headline or ID
     if (search.length > 0) {
-      // Escape ILIKE special chars to prevent wildcard injection
-      const escaped = search.replace(/[%_\\]/g, '\\$&')
-      query = query.ilike('primary_headline', `%${escaped}%`)
+      const searchAsId = parseInt(search, 10)
+      if (!isNaN(searchAsId) && String(searchAsId) === search) {
+        // Pure number — match by ID or headline containing that number
+        const escaped = search.replace(/[%_\\]/g, '\\$&')
+        query = query.or(`id.eq.${searchAsId},primary_headline.ilike.%${escaped}%`)
+      } else {
+        // Text — headline search only
+        const escaped = search.replace(/[%_\\]/g, '\\$&')
+        query = query.ilike('primary_headline', `%${escaped}%`)
+      }
     }
 
     const { data, error } = await query
@@ -141,6 +171,12 @@ Deno.serve(async (req) => {
       id: s.id,
       primary_headline: s.primary_headline,
       primary_source: s.primary_source,
+      primary_source_url: s.primary_source_url,
+      summary_neutral: s.summary_neutral,
+      summary_spicy: s.summary_spicy,
+      primary_actor: s.primary_actor,
+      lifecycle_state: s.lifecycle_state,
+      confidence_score: s.confidence_score,
       status: s.status,
       category: s.category,
       alarm_level: s.alarm_level,
@@ -153,17 +189,26 @@ Deno.serve(async (req) => {
       article_count: s.article_story?.[0]?.count ?? 0
     }))
 
-    // Determine next cursor
-    const nextCursor = stories.length === limit
-      ? String(stories[stories.length - 1].id)
-      : null
+    // Determine pagination tokens
+    const hasMore = stories.length === limit
+    let nextCursor = null
+    let nextOffset = null
+
+    if (hasMore) {
+      if (sortCol === 'id') {
+        nextCursor = String(stories[stories.length - 1].id)
+      } else {
+        nextOffset = offset + stories.length
+      }
+    }
 
     return new Response(
       JSON.stringify({
         stories,
         pagination: {
           next_cursor: nextCursor,
-          has_more: stories.length === limit,
+          next_offset: nextOffset,
+          has_more: hasMore,
           count: stories.length
         }
       }),

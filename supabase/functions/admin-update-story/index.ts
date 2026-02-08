@@ -14,7 +14,6 @@ const ALLOWED_FIELDS = [
   'primary_source_url',
   'primary_actor',
   'status',
-  'severity',
   'category',
   'lifecycle_state',
   'confidence_score',
@@ -26,7 +25,6 @@ const ALLOWED_FIELDS = [
 
 // Valid enum values for validation
 const VALID_STATUS = ['active', 'closed', 'archived']
-const VALID_SEVERITY = ['critical', 'severe', 'moderate', 'minor', null]
 const VALID_CATEGORY = [
   'corruption_scandals', 'democracy_elections', 'policy_legislation',
   'justice_legal', 'executive_actions', 'foreign_policy',
@@ -109,13 +107,6 @@ Deno.serve(async (req) => {
       )
     }
 
-    if ('severity' in sanitizedUpdates && sanitizedUpdates.severity !== null && !VALID_SEVERITY.includes(sanitizedUpdates.severity as string)) {
-      return new Response(
-        JSON.stringify({ error: `Invalid severity. Must be one of: ${VALID_SEVERITY.filter(v => v !== null).join(', ')}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     if ('category' in sanitizedUpdates && sanitizedUpdates.category !== null && !VALID_CATEGORY.includes(sanitizedUpdates.category as string)) {
       return new Response(
         JSON.stringify({ error: 'Invalid category' }),
@@ -142,12 +133,12 @@ Deno.serve(async (req) => {
       sanitizedUpdates.confidence_score = score
     }
 
-    // Validate alarm_level if provided (1-5)
+    // Validate alarm_level if provided (0-5)
     if ('alarm_level' in sanitizedUpdates && sanitizedUpdates.alarm_level !== null) {
       const level = parseInt(String(sanitizedUpdates.alarm_level), 10)
-      if (isNaN(level) || level < 1 || level > 5) {
+      if (isNaN(level) || level < 0 || level > 5) {
         return new Response(
-          JSON.stringify({ error: 'alarm_level must be an integer between 1 and 5' }),
+          JSON.stringify({ error: 'alarm_level must be an integer between 0 and 5' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
