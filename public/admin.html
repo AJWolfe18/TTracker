@@ -1365,10 +1365,14 @@
                     h('span', { className: 'form-section-arrow' + (openSections[key] ? ' open' : '') }, '\u25B6')
                 );
 
+            // Helper: label with optional red asterisk (indicates field is displayed on public site)
+            const fieldLabel = (label, used) =>
+                used ? h('label', { className: 'form-label' }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*')) : h('label', { className: 'form-label' }, label);
+
             // Helper: text input field
             const textField = (field, label, opts = {}) =>
                 h('div', { className: 'form-group' },
-                    h('label', { className: 'form-label' }, label),
+                    fieldLabel(label, opts.used),
                     h('input', {
                         type: opts.type || 'text',
                         className: 'form-input',
@@ -1380,9 +1384,9 @@
                 );
 
             // Helper: select field
-            const selectField = (field, label, options) =>
+            const selectField = (field, label, options, used) =>
                 h('div', { className: 'form-group' },
-                    h('label', { className: 'form-label' }, label),
+                    fieldLabel(label, used),
                     h('select', {
                         className: 'form-select',
                         value: formData[field],
@@ -1396,9 +1400,9 @@
                 );
 
             // Helper: textarea field
-            const textareaField = (field, label, rows = 3) =>
+            const textareaField = (field, label, rows = 3, used = false) =>
                 h('div', { className: 'form-group' },
-                    h('label', { className: 'form-label' }, label),
+                    fieldLabel(label, used),
                     h('textarea', {
                         className: 'form-textarea',
                         value: formData[field],
@@ -1408,9 +1412,9 @@
                 );
 
             // Helper: JSONB textarea
-            const jsonField = (field, label, rows = 4) =>
+            const jsonField = (field, label, rows = 4, used = false) =>
                 h('div', { className: 'form-group' },
-                    h('label', { className: 'form-label' }, label),
+                    fieldLabel(label, used),
                     h('textarea', {
                         className: 'form-textarea' + (jsonErrors[field] ? ' json-error' : ''),
                         value: formData[field],
@@ -1422,7 +1426,7 @@
                 );
 
             // Helper: boolean checkbox
-            const boolField = (field, label) =>
+            const boolField = (field, label, used = false) =>
                 h('div', { className: 'form-group', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
                     h('input', {
                         type: 'checkbox',
@@ -1430,7 +1434,9 @@
                         onChange: (ev) => handleChange(field, ev.target.checked),
                         style: { accentColor: '#3b82f6', width: '16px', height: '16px' }
                     }),
-                    h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
+                    used
+                        ? h('label', { className: 'form-label', style: { marginBottom: 0 } }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*'))
+                        : h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
                 );
 
             return h('div', { className: 'modal-overlay', onClick: (ev) => ev.target === ev.currentTarget && onClose() },
@@ -1455,43 +1461,43 @@
                             // Section 1: Identity (open)
                             sectionHeader('identity', 'Identity'),
                             openSections.identity && h('div', null,
-                                textField('recipient_name', 'Recipient Name'),
+                                textField('recipient_name', 'Recipient Name', { used: true }),
                                 h('div', { className: 'form-row' },
-                                    textField('nickname', 'Nickname'),
-                                    selectField('recipient_type', 'Recipient Type', PARDON_RECIPIENT_TYPES)
+                                    textField('nickname', 'Nickname', { used: true }),
+                                    selectField('recipient_type', 'Recipient Type', PARDON_RECIPIENT_TYPES, true)
                                 ),
                                 h('div', { className: 'form-row' },
-                                    textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 0 } }),
+                                    textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 0 }, used: true }),
                                     textField('photo_url', 'Photo URL', { type: 'url' })
                                 ),
-                                textField('recipient_criteria', 'Recipient Criteria')
+                                textField('recipient_criteria', 'Recipient Criteria', { used: true })
                             ),
 
                             // Section 2: Pardon & Crime (open)
                             sectionHeader('pardon_crime', 'Pardon & Crime'),
                             openSections.pardon_crime && h('div', null,
                                 h('div', { className: 'form-row' },
-                                    textField('pardon_date', 'Pardon Date', { type: 'date' }),
-                                    selectField('clemency_type', 'Clemency Type', PARDON_CLEMENCY_TYPES)
+                                    textField('pardon_date', 'Pardon Date', { type: 'date', used: true }),
+                                    selectField('clemency_type', 'Clemency Type', PARDON_CLEMENCY_TYPES, true)
                                 ),
                                 h('div', { className: 'form-row' },
-                                    selectField('status', 'Status', PARDON_STATUS_OPTIONS),
-                                    selectField('crime_category', 'Crime Category', Object.entries(CRIME_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })))
+                                    selectField('status', 'Status', PARDON_STATUS_OPTIONS, true),
+                                    selectField('crime_category', 'Crime Category', Object.entries(CRIME_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })), true)
                                 ),
-                                textareaField('crime_description', 'Crime Description', 3),
+                                textareaField('crime_description', 'Crime Description', 3, true),
                                 h('div', { className: 'form-row' },
                                     textField('case_number', 'Case Number'),
                                     textField('conviction_date', 'Conviction Date', { type: 'date' })
                                 ),
-                                textField('original_sentence', 'Original Sentence')
+                                textField('original_sentence', 'Original Sentence', { used: true })
                             ),
 
                             // Section 3: Trump Connection (collapsed)
                             sectionHeader('trump_connection', 'Trump Connection'),
                             openSections.trump_connection && h('div', null,
                                 h('div', { className: 'form-row' },
-                                    selectField('primary_connection_type', 'Primary Connection', Object.entries(CONNECTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))),
-                                    selectField('corruption_level', 'Corruption Level', CORRUPTION_LEVELS.map(l => ({ value: String(l.value), label: l.value + ' - ' + l.label })))
+                                    selectField('primary_connection_type', 'Primary Connection', Object.entries(CONNECTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l })), true),
+                                    selectField('corruption_level', 'Corruption Level', CORRUPTION_LEVELS.map(l => ({ value: String(l.value), label: l.value + ' - ' + l.label })), true)
                                 ),
                                 h('div', { className: 'form-group' },
                                     h('label', { className: 'form-label' }, 'Secondary Connection Types'),
@@ -1509,34 +1515,34 @@
                                     )
                                 ),
                                 textareaField('corruption_reasoning', 'Corruption Reasoning', 3),
-                                textareaField('trump_connection_detail', 'Trump Connection Detail', 3),
-                                textField('donation_amount_usd', 'Donation Amount (USD)', { type: 'number', inputProps: { min: 0, step: '0.01' } })
+                                textareaField('trump_connection_detail', 'Trump Connection Detail', 3, true),
+                                textField('donation_amount_usd', 'Donation Amount (USD)', { type: 'number', inputProps: { min: 0, step: '0.01' }, used: true })
                             ),
 
                             // Section 4: AI Content (collapsed)
                             sectionHeader('ai_content', 'AI Content'),
                             openSections.ai_content && h('div', null,
                                 textareaField('summary_neutral', 'Summary (Neutral)', 4),
-                                textareaField('summary_spicy', 'Summary (Spicy)', 4),
-                                textareaField('why_it_matters', 'Why It Matters', 3),
-                                textareaField('pattern_analysis', 'Pattern Analysis', 3)
+                                textareaField('summary_spicy', 'Summary (Spicy)', 4, true),
+                                textareaField('why_it_matters', 'Why It Matters', 3, true),
+                                textareaField('pattern_analysis', 'Pattern Analysis', 3, true)
                             ),
 
                             // Section 5: Admin & Sources (collapsed)
                             sectionHeader('admin_sources', 'Admin & Sources'),
                             openSections.admin_sources && h('div', null,
                                 h('div', { className: 'form-row' },
-                                    selectField('research_status', 'Research Status', PARDON_RESEARCH_STATUS),
+                                    selectField('research_status', 'Research Status', PARDON_RESEARCH_STATUS, true),
                                     selectField('post_pardon_status', 'Post-Pardon Status', PARDON_POST_STATUS)
                                 ),
                                 h('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px' } },
-                                    boolField('is_public', 'Published'),
-                                    boolField('needs_review', 'Needs Review')
+                                    boolField('is_public', 'Published', true),
+                                    boolField('needs_review', 'Needs Review', true)
                                 ),
-                                textareaField('post_pardon_notes', 'Post-Pardon Notes', 2),
-                                textField('primary_source_url', 'Primary Source URL', { type: 'url' }),
+                                textareaField('post_pardon_notes', 'Post-Pardon Notes', 2, true),
+                                textField('primary_source_url', 'Primary Source URL', { type: 'url', used: true }),
                                 jsonField('source_urls', 'Source URLs (JSON array of URL strings)', 3),
-                                jsonField('receipts_timeline', 'Receipts Timeline (JSON array of objects)', 5),
+                                jsonField('receipts_timeline', 'Receipts Timeline (JSON array of objects)', 5, true),
                                 jsonField('pardon_advocates', 'Pardon Advocates (JSON array)', 4)
                             )
                         ),
