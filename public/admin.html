@@ -1891,6 +1891,54 @@
                 }
             };
 
+            // Handle archive/unarchive toggle
+            const handleToggleArchive = async (story) => {
+                const newStatus = story.status === 'archived' ? 'active' : 'archived';
+                // Optimistic update
+                setStories(prev => prev.map(s => s.id === story.id ? { ...s, status: newStatus } : s));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-story',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                story_id: story.id,
+                                updates: { status: newStatus },
+                                original_last_updated_at: story.last_updated_at
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Toggle failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    // Update local row with server response for continued locking
+                    setStories(prev => prev.map(s => s.id === story.id ? { ...s, ...data.story } : s));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'story',
+                            entityId: String(story.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast(newStatus === 'archived' ? 'Archived' : 'Unarchived', 'success');
+                    }
+                } catch (err) {
+                    console.error('Toggle archive error:', err);
+                    // Revert optimistic update
+                    setStories(prev => prev.map(s => s.id === story.id ? { ...s, status: story.status } : s));
+                    toast?.addToast(err.message || 'Failed to toggle archive', 'error');
+                }
+            };
+
             return (
                 <div>
                     {/* Toolbar: Search + Filters */}
@@ -2072,6 +2120,13 @@
                                                                           )
                                                                         : '🤖 Re-enrich'
                                                                 }
+                                                            </button>
+                                                            <button
+                                                                className="btn-icon"
+                                                                onClick={() => handleToggleArchive(story)}
+                                                                title={story.status === 'archived' ? 'Unarchive' : 'Archive'}
+                                                            >
+                                                                {story.status === 'archived' ? '📥 Unarchive' : '📤 Archive'}
                                                             </button>
                                                         </div>
                                                     </td>
