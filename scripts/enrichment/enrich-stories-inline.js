@@ -1,20 +1,112 @@
 /*
  * Story enrichment for inline RSS pipeline.
- * SYSTEM_PROMPT imported from ./prompts.js (shared with job-queue-worker.js)
+ * SYSTEM_PROMPT imported from ./prompts/stories.js (shared with job-queue-worker.js)
  *
- * TODO TTRC-267: Consider full shared enrichment module if worker
- * is kept for article.enrich operations.
+ * ADO-270: Updated to use variation pools and alarm_level (0-5)
+ * ADO-274: Frame-based variation system with deterministic selection
  */
 
 import OpenAI from 'openai';
-import { SYSTEM_PROMPT } from './prompts.js';
+import { SYSTEM_PROMPT } from './prompts/stories.js';
 import { normalizeEntities } from '../lib/entity-normalization.js';
+import {
+  PROMPT_VERSION,
+  estimateStoryFrame,
+  getStoryPoolKey,
+  getStoryContentId,
+  selectVariation,
+  buildVariationInjection,
+  normalizeAlarmLevel,
+  alarmLevelToLegacySeverity,
+  findBannedStarter,
+  repairBannedStarter,
+  SECTION_BANS
+} from './stories-style-patterns.js';
 
 // =====================================================================
 // Constants
 // =====================================================================
 
 const ENRICHMENT_COOLDOWN_HOURS = 12; // Match worker cooldown
+
+// =====================================================================
+// Feed Registry Cache (ADO-274: avoid N+1 queries)
+// =====================================================================
+
+let feedRegistryCache = null;          // Map<string, {topics: string[], tier: number}>
+let feedRegistryLoadPromise = null;
+
+/**
+ * Reset feed registry cache (call between batches if script stays alive)
+ */
+export function resetFeedRegistryCache() {
+  feedRegistryCache = null;
+  feedRegistryLoadPromise = null;
+}
+
+/**
+ * Load feed registry into memory (topics and tier only)
+ * Call once per batch to avoid N+1 queries
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<Map<string, {topics: string[], tier: number}>>}
+ */
+export async function loadFeedRegistry(supabase) {
+  if (feedRegistryCache) return feedRegistryCache;
+  if (feedRegistryLoadPromise) return feedRegistryLoadPromise;
+
+  feedRegistryLoadPromise = (async () => {
+    const { data, error } = await supabase
+      .from('feed_registry')
+      .select('id, topics, tier')
+      .eq('is_active', true);
+
+    // Always set cache so we don't spam queries on repeated failures
+    const cache = new Map();
+
+    if (error) {
+      console.warn('Failed to load feed registry:', error.message);
+      feedRegistryCache = cache;
+      return feedRegistryCache;
+    }
+
+    for (const feed of data || []) {
+      const key = String(feed.id);
+      const tierRaw = Number(feed.tier);
+      // Tier must be 1-3; default to 2 if invalid
+      const tier = Number.isFinite(tierRaw) && tierRaw >= 1 && tierRaw <= 3 ? tierRaw : 2;
+      cache.set(key, {
+        topics: Array.isArray(feed.topics) ? feed.topics : [],
+        tier
+      });
+    }
+
+    feedRegistryCache = cache;
+    return feedRegistryCache;
+  })();
+
+  try {
+    return await feedRegistryLoadPromise;
+  } finally {
+    feedRegistryLoadPromise = null;
+  }
+}
+
+/**
+ * Get feed metadata by ID (uses cache if available)
+ * @param {number|string} feedId - Feed ID
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<{topics: string[], tier: number}>}
+ */
+async function getFeedMeta(feedId, supabase) {
+  const key = String(feedId);
+
+  if (feedRegistryCache?.has(key)) {
+    return feedRegistryCache.get(key);
+  }
+
+  const registry = await loadFeedRegistry(supabase);
+  return registry.get(key) || { topics: [], tier: 2 };
+}
 
 // Category mapping: UI labels → DB enum values
 const UI_TO_DB_CATEGORIES = {
@@ -33,7 +125,7 @@ const UI_TO_DB_CATEGORIES = {
 
 const toDbCategory = (label) => UI_TO_DB_CATEGORIES[label] || 'other';
 
-// SYSTEM_PROMPT imported from ./prompts.js (single source of truth)
+// SYSTEM_PROMPT imported from ./prompts/stories.js (single source of truth)
 
 // =====================================================================
 // Helper Functions
@@ -104,11 +196,12 @@ export function shouldEnrichStory(story) {
 
 /**
  * Fetch up to 6 articles for a story, ordered by relevance
+ * ADO-274: Now includes feed_id for frame estimation
  */
 async function fetchStoryArticles(story_id, supabase) {
   const { data, error } = await supabase
     .from('article_story')
-    .select('is_primary_source, similarity_score, matched_at, articles(title, source_name, content, excerpt)')
+    .select('is_primary_source, similarity_score, matched_at, articles(title, source_name, content, excerpt, feed_id)')
     .eq('story_id', story_id)
     .order('is_primary_source', { ascending: false })
     .order('similarity_score', { ascending: false })
@@ -162,21 +255,51 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   });
 
   // ========================================
-  // 2. OPENAI CALL (JSON MODE)
+  // 2. BUILD VARIATION INJECTION (ADO-274)
+  // ========================================
+  // Use frame-based variation system with deterministic selection
+  // Frame estimated from headline + feed tier (pre-enrichment signals only)
+
+  // Get feed metadata from primary article (first in list, ordered by is_primary_source)
+  const primaryFeedId = links[0]?.articles?.feed_id;
+  const feedMeta = primaryFeedId
+    ? await getFeedMeta(primaryFeedId, supabase)
+    : { topics: [], tier: 2 };
+
+  // Estimate frame from headline and feed tier
+  const frame = estimateStoryFrame(primary_headline, feedMeta.tier);
+  const poolKey = getStoryPoolKey(feedMeta.topics, frame);
+  const contentId = getStoryContentId(story);
+
+  // Deterministic variation selection
+  const variation = selectVariation(poolKey, contentId, PROMPT_VERSION, []);
+  const variationInjection = buildVariationInjection(variation, frame);
+
+  // Debug logging for variation system (ADO-274)
+  console.log(`[ADO-274] Story ${story_id}: frame=${frame}, pool=${poolKey}, pattern=${variation.id}`);
+
+  // Inject variation into system prompt
+  const systemPromptWithVariation = SYSTEM_PROMPT.replace(
+    '{variation_injection}',
+    variationInjection
+  );
+
+  // ========================================
+  // 3. OPENAI CALL (JSON MODE)
   // ========================================
   const completion = await openaiClient.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: systemPromptWithVariation },
       { role: 'user', content: userPayload }
     ],
     response_format: { type: 'json_object' },
-    max_tokens: 500,
+    max_tokens: 600, // Slightly higher for alarm_level calibration
     temperature: 0.7
   });
 
   // ========================================
-  // 3. PARSE & VALIDATE JSON
+  // 4. PARSE & VALIDATE JSON
   // ========================================
   const text = completion.choices?.[0]?.message?.content || '{}';
   let obj;
@@ -189,12 +312,42 @@ export async function enrichStory(story, { supabase, openaiClient }) {
 
   // Extract and validate fields
   const summary_neutral = obj.summary_neutral?.trim();
-  const summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
+  let summary_spicy = (obj.summary_spicy || summary_neutral || '').trim();
   const category_db = obj.category ? toDbCategory(obj.category) : null;
-  const severity = ['critical', 'severe', 'moderate', 'minor'].includes(obj.severity)
-    ? obj.severity
-    : 'moderate';
   const primary_actor = (obj.primary_actor || '').trim() || null;
+
+  // ADO-270: Extract alarm_level (0-5) and derive legacy severity
+  const alarm_level = normalizeAlarmLevel(obj.alarm_level);
+  const severity = alarmLevelToLegacySeverity(alarm_level); // null for levels 0-1
+
+  // ADO-274: Post-gen validation for banned starters
+  const bannedPhrases = SECTION_BANS.summary_spicy || [];
+  const bannedStarter = findBannedStarter(summary_spicy, bannedPhrases);
+
+  if (bannedStarter) {
+    const storyIdForLog = (typeof story_id !== 'undefined' && story_id != null)
+      ? story_id
+      : (story?.id ?? 'unknown');
+
+    const patternIdForLog = variation?.id ?? 'unknown';
+
+    console.warn(
+      `[ADO-274] Banned starter in summary_spicy: "${bannedStarter}" (story=${storyIdForLog}, pattern=${patternIdForLog})`
+    );
+
+    const repair = repairBannedStarter('summary_spicy', summary_spicy, bannedStarter);
+
+    if (repair.success) {
+      console.log(
+        `[ADO-274] Repaired banned starter (story=${storyIdForLog}, pattern=${patternIdForLog})`
+      );
+      summary_spicy = repair.content;
+    } else {
+      console.warn(
+        `[ADO-274] Repair failed - keeping original (story=${storyIdForLog}, pattern=${patternIdForLog}, reason=${repair.reason || 'unknown'})`
+      );
+    }
+  }
 
   // TTRC-235: Extract entities and format correctly
   // TTRC-236: Normalize entity IDs for consistent merge detection
@@ -208,7 +361,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   }
 
   // ========================================
-  // 4. UPDATE STORY
+  // 5. UPDATE STORY
   // ========================================
   const { error: uErr } = await supabase
     .from('stories')
@@ -216,18 +369,28 @@ export async function enrichStory(story, { supabase, openaiClient }) {
       summary_neutral,
       summary_spicy,
       category: category_db,
-      severity,
+      alarm_level,           // ADO-270: numeric 0-5
+      severity,              // Legacy: derived from alarm_level, null for 0-1
       primary_actor,
-      top_entities,        // TTRC-235: text[] of canonical IDs
-      entity_counter,      // TTRC-235: jsonb {id: count}
-      last_enriched_at: new Date().toISOString()
+      top_entities,          // TTRC-235: text[] of canonical IDs
+      entity_counter,        // TTRC-235: jsonb {id: count}
+      last_enriched_at: new Date().toISOString(),
+      enrichment_status: null,
+      enrichment_meta: {
+        prompt_version: PROMPT_VERSION,
+        frame,
+        style_pattern_id: variation.id,
+        collision: variation._meta?.collision || false,
+        model: 'gpt-4o-mini',
+        enriched_at: new Date().toISOString(),
+      },
     })
     .eq('id', story_id);
 
   if (uErr) throw new Error(`Failed to update story: ${uErr.message}`);
 
   // ========================================
-  // 5. COST TRACKING
+  // 6. COST TRACKING
   // ========================================
   const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0 };
   const costInput = (usage.prompt_tokens / 1000) * 0.00015;  // GPT-4o-mini input
@@ -241,6 +404,7 @@ export async function enrichStory(story, { supabase, openaiClient }) {
     summary_neutral,
     summary_spicy,
     category: category_db,
+    alarm_level,
     severity,
     primary_actor
   };
