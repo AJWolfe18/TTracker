@@ -376,14 +376,14 @@
         }
         .stories-table th {
             text-align: left;
-            padding: 10px 12px;
+            padding: 10px 8px;
             color: #94a3b8;
             font-weight: 500;
             border-bottom: 1px solid #334155;
             white-space: nowrap;
         }
         .stories-table td {
-            padding: 12px;
+            padding: 10px 8px;
             border-bottom: 1px solid #1e293b;
             vertical-align: top;
         }
@@ -923,6 +923,13 @@
             // Capture original last_updated_at for optimistic locking
             const originalLastUpdatedAt = story?.last_updated_at;
 
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
+
             const handleChange = (field, value) => {
                 setFormData(prev => ({ ...prev, [field]: value }));
             };
@@ -1182,6 +1189,13 @@
             const [openSections, setOpenSections] = useState({ identity: true, pardon_crime: true, trump_connection: false, ai_content: false, admin_sources: false });
 
             const originalUpdatedAt = pardon?.updated_at;
+
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
 
             const handleChange = (field, value) => {
                 if (field === 'recipient_type' && value === 'person') {
@@ -2330,6 +2344,7 @@
             // Edit / Enrich / Undo state
             const [editingPardon, setEditingPardon] = useState(null);
             const [enrichingIds, setEnrichingIds] = useState(new Set());
+            const enrichSnapshotsRef = useRef({}); // { pardonId: originalEnrichedAt }
             const [undoInfo, setUndoInfo] = useState(null);
 
             // Request token for race control
@@ -2345,6 +2360,38 @@
                 }, 300);
                 return () => clearTimeout(timer);
             }, [search]);
+
+            // Poll enriching pardons until enriched_at changes (or 2 min timeout)
+            const hasEnriching = enrichingIds.size > 0;
+            useEffect(() => {
+                if (!hasEnriching) return;
+                const interval = setInterval(async () => {
+                    try {
+                        const ids = [...enrichingIds];
+                        for (const id of ids) {
+                            const { data } = await supabase.functions.invoke('admin-pardons', {
+                                headers: { 'x-admin-password': password },
+                                body: { search: String(id), limit: 1 }
+                            });
+                            const fresh = data?.pardons?.find(p => p.id === id);
+                            if (!fresh) continue;
+                            const oldEnrichedAt = enrichSnapshotsRef.current[id];
+                            if (fresh.enriched_at && fresh.enriched_at !== oldEnrichedAt) {
+                                toast?.addToast(`Pardon #${id} enrichment complete`, 'success');
+                                delete enrichSnapshotsRef.current[id];
+                                setEnrichingIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+                                setPardons(prev => prev.map(p => p.id === id ? { ...p, ...fresh } : p));
+                            }
+                        }
+                    } catch (_) { /* silently ignore polling errors */ }
+                }, 15000);
+                // 2 min timeout: clear all enriching states
+                const timeout = setTimeout(() => {
+                    enrichSnapshotsRef.current = {};
+                    setEnrichingIds(new Set());
+                }, 120000);
+                return () => { clearInterval(interval); clearTimeout(timeout); };
+            }, [hasEnriching]);
 
             // Fetch pardons from edge function
             const fetchPardons = useCallback(async (loadMore = false, nextCursor = null) => {
@@ -2489,6 +2536,7 @@
             // Handle re-enrichment
             const handleReEnrich = async (pardon) => {
                 if (enrichingIds.has(pardon.id)) return;
+                enrichSnapshotsRef.current[pardon.id] = pardon.enriched_at || null;
                 setEnrichingIds(prev => new Set([...prev, pardon.id]));
                 try {
                     const { data, error: fnError } = await supabase.functions.invoke(
@@ -2508,10 +2556,12 @@
                     }
                     if (data?.error) throw new Error(data.error);
                     toast?.addToast(`Pardon queued for re-enrichment (~$${(data?.estimated_cost || 0.005).toFixed(3)})`, 'success');
+                    // Keep enrichingIds — polling will clear it when enriched_at changes
                 } catch (err) {
                     console.error('Re-enrichment error:', err);
                     toast?.addToast(err.message || 'Failed to trigger re-enrichment', 'error');
-                } finally {
+                    // Only clear on error
+                    delete enrichSnapshotsRef.current[pardon.id];
                     setEnrichingIds(prev => {
                         const s = new Set(prev);
                         s.delete(pardon.id);
@@ -2721,7 +2771,7 @@
                                             return (
                                                 <tr key={pardon.id}>
                                                     <td style={{ color: '#64748b', fontSize: '13px' }}>{pardon.id}</td>
-                                                    <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={pardon.recipient_name}>
+                                                    <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={pardon.recipient_name}>
                                                         {pardon.recipient_name || '(Unknown)'}
                                                     </td>
                                                     <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
