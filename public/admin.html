@@ -1266,7 +1266,7 @@
                 } else if (rt === 'person') {
                     const count = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
                     const criteria = (formData.recipient_criteria || '').trim();
-                    if (count != null || criteria) {
+                    if (count !== null || criteria) {
                         setError('Person pardons cannot have Recipient Count or Recipient Criteria. Clear those fields first.');
                         return;
                     }
@@ -2363,11 +2363,13 @@
 
             // Poll enriching pardons until enriched_at changes (or 2 min timeout)
             const hasEnriching = enrichingIds.size > 0;
+            const enrichingIdsRef = useRef(enrichingIds);
+            enrichingIdsRef.current = enrichingIds;
             useEffect(() => {
                 if (!hasEnriching) return;
                 const interval = setInterval(async () => {
                     try {
-                        const ids = [...enrichingIds];
+                        const ids = [...enrichingIdsRef.current];
                         for (const id of ids) {
                             const { data } = await supabase.functions.invoke('admin-pardons', {
                                 headers: { 'x-admin-password': password },
