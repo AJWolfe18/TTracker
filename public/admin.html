@@ -1000,7 +1000,7 @@
                 }
             };
 
-            return React.createElement('div', { className: 'modal-overlay', onClick: (e) => e.target === e.currentTarget && onClose() },
+            return React.createElement('div', { className: 'modal-overlay' },
                 React.createElement('div', { className: 'modal-content' },
                     React.createElement('div', { className: 'modal-header' },
                         React.createElement('h3', { className: 'modal-title' }, 'Edit Story #' + story.id),
@@ -1184,7 +1184,11 @@
             const originalUpdatedAt = pardon?.updated_at;
 
             const handleChange = (field, value) => {
-                setFormData(prev => ({ ...prev, [field]: value }));
+                if (field === 'recipient_type' && value === 'person') {
+                    setFormData(prev => ({ ...prev, [field]: value, recipient_count: '', recipient_criteria: '' }));
+                } else {
+                    setFormData(prev => ({ ...prev, [field]: value }));
+                }
             };
 
             const toggleSection = (section) => {
@@ -1235,6 +1239,25 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (hasJsonErrors) return;
+
+                // Validate pardons_group_fields_chk constraint
+                const rt = formData.recipient_type;
+                if (rt === 'group') {
+                    const count = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const criteria = (formData.recipient_criteria || '').trim();
+                    if (!count || count <= 0 || !criteria) {
+                        setError('Group pardons require both Recipient Count (>0) and Recipient Criteria.');
+                        return;
+                    }
+                } else if (rt === 'person') {
+                    const count = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const criteria = (formData.recipient_criteria || '').trim();
+                    if (count != null || criteria) {
+                        setError('Person pardons cannot have Recipient Count or Recipient Criteria. Clear those fields first.');
+                        return;
+                    }
+                }
+
                 setSaving(true);
                 setError(null);
 
@@ -1439,7 +1462,7 @@
                         : h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
                 );
 
-            return h('div', { className: 'modal-overlay', onClick: (ev) => ev.target === ev.currentTarget && onClose() },
+            return h('div', { className: 'modal-overlay' },
                 h('div', { className: 'modal-content' },
                     h('div', { className: 'modal-header' },
                         h('h3', { className: 'modal-title' }, 'Edit Pardon #' + pardon.id + (pardon.recipient_name ? ' - ' + pardon.recipient_name : '')),
@@ -1467,10 +1490,10 @@
                                     selectField('recipient_type', 'Recipient Type', PARDON_RECIPIENT_TYPES, true)
                                 ),
                                 h('div', { className: 'form-row' },
-                                    textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 0 }, used: true }),
+                                    formData.recipient_type === 'group' && textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 1 }, used: true }),
                                     textField('photo_url', 'Photo URL', { type: 'url' })
                                 ),
-                                textField('recipient_criteria', 'Recipient Criteria', { used: true })
+                                formData.recipient_type === 'group' && textField('recipient_criteria', 'Recipient Criteria', { used: true })
                             ),
 
                             // Section 2: Pardon & Crime (open)
