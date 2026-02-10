@@ -1,0 +1,129 @@
+name: SCOTUS Tracker (PROD scheduled)
+
+on:
+  schedule:
+    # 18:00 UTC = 12:00 CT (standard time) / 13:00 ET (standard time). DST will shift.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "How many cases to enrich (default 10)"
+        required: false
+        default: "10"
+        type: string
+      skip_fetch:
+        description: "Skip fetch phase"
+        required: false
+        type: boolean
+        default: false
+      skip_enrich:
+        description: "Skip enrich phase"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: scotus-pipeline-main
+  cancel-in-progress: false
+
+jobs:
+  scotus_pipeline:
+    name: SCOTUS pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Kill switch + branch lock
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true'
+    env:
+      NODE_ENV: production
+      # workflow_dispatch inputs land here as strings; schedule has none
+      LIMIT: ${{ github.event.inputs.limit || '10' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Create logs dir
+        run: mkdir -p logs
+
+      - name: Set day (UTC)
+        id: day
+        run: echo "day=$(date -u +%F)" >> $GITHUB_OUTPUT
+
+      # --------------------------
+      # Phase 1: Fetch (CourtListener)
+      # --------------------------
+      - name: Fetch cases (CourtListener → Supabase PROD via TEST-named env vars)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_fetch != 'true' }}
+        env:
+          COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
+          # IMPORTANT: fetch-cases.js is hardcoded to SUPABASE_TEST_* names.
+          # We map PROD secrets into those names ONLY for this step.
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_TEST_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/scotus/fetch-cases.js --resume 2>&1 | tee logs/fetch.log
+
+      # --------------------------
+      # Budget guard between phases
+      # --------------------------
+      - name: Budget guard (block if spent_usd >= 4.50)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_enrich != 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DAY: ${{ steps.day.outputs.day }}
+        run: |
+          set -euo pipefail
+          url="${SUPABASE_URL}/rest/v1/budgets?day=eq.${DAY}&select=spent_usd"
+          echo "Checking budget: ${url}" | tee -a logs/budget.log
+          resp="$(curl -sS --fail-with-body "${url}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Accept: application/json")" || {
+            echo "Budget API call failed" | tee -a logs/budget.log
+            exit 1
+          }
+          echo "${resp}" | tee -a logs/budget.log
+          if ! echo "${resp}" | jq -e 'type == "array"' > /dev/null 2>&1; then
+            echo "Budget API returned unexpected response" | tee -a logs/budget.log
+            exit 1
+          fi
+          spent="$(echo "${resp}" | jq -r '.[0].spent_usd // 0')"
+          echo "spent_usd=${spent}" | tee -a logs/budget.log
+          ok="$(awk -v s="${spent}" 'BEGIN { if (s+0 < 4.50) print "true"; else print "false"; }')"
+          if [ "${ok}" != "true" ]; then
+            echo "Budget guard tripped: spent_usd=${spent} >= 4.50" | tee -a logs/budget.log
+            exit 1
+          fi
+
+      # --------------------------
+      # Phase 2: Enrich
+      # --------------------------
+      - name: Enrich cases (PROD)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.skip_enrich != 'true' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          # IMPORTANT: Do NOT set SUPABASE_TEST_* in this step.
+          node scripts/scotus/enrich-scotus.js --limit="${LIMIT}" --prod 2>&1 | tee logs/enrich.log
+
+      - name: Upload logs on failure/cancel
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scotus-tracker-logs
+          path: logs
