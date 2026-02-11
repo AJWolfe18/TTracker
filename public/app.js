@@ -1001,7 +1001,13 @@
             )
           ),
 
-          // Summary (spicy) - ADO-302: moved to top
+          // Why It Matters (top of content sections)
+          scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
+          ),
+
+          // Summary
           scotusCase.summary_spicy && React.createElement('div', { className: 'tt-scotus-section' },
             React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Summary'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.summary_spicy)
@@ -1017,12 +1023,6 @@
           scotusCase.who_loses && React.createElement('div', { className: 'tt-scotus-section' },
             React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Who Loses'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.who_loses)
-          ),
-
-          // Why It Matters
-          scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
           // Dissent Block (ADO-82)
