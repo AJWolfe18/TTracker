@@ -793,6 +793,21 @@
   }
 
   // ===========================================
+  // SCOTUS HELPERS (ADO-82)
+  // ===========================================
+
+  function getVoteFractureType(voteSplit) {
+    const v = String(voteSplit || '').trim();
+    const m = v.match(/(\d+)\s*[-\u2013]\s*(\d+)/);
+    if (!m) return '';
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    if ((a >= 8 && b === 0) || (b >= 8 && a === 0)) return 'unanimous';
+    if ((a === 5 && (b === 4 || b === 3)) || (b === 5 && (a === 4 || a === 3))) return 'tight';
+    return '';
+  }
+
+  // ===========================================
   // SCOTUS CARD COMPONENT
   // ===========================================
 
@@ -885,10 +900,15 @@
       ? scotusCase.dissent_authors.join(', ')
       : scotusCase?.dissent_authors || '';
 
-    // Check for "null" string in dissent highlights
-    const dissentHighlights = scotusCase?.dissent_highlights && scotusCase.dissent_highlights !== 'null'
-      ? scotusCase.dissent_highlights
-      : null;
+    // Check for "null" string in dissent highlights (robust: trim + case-insensitive)
+    const dissentHighlightsRaw = scotusCase?.dissent_highlights;
+    const dissentHighlights =
+      dissentHighlightsRaw && String(dissentHighlightsRaw).trim().toLowerCase() !== 'null'
+        ? String(dissentHighlightsRaw).trim()
+        : '';
+
+    // Vote fracture type (computed once, used in badge rendering)
+    const voteFractureType = getVoteFractureType(scotusCase?.vote_split);
 
     return React.createElement('div', {
       className: 'tt-modal-overlay tt-detail-modal-overlay',
@@ -974,7 +994,10 @@
             ),
             scotusCase.vote_split && React.createElement('div', { className: 'tt-scotus-meta-item' },
               React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Vote'),
-              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.vote_split)
+              React.createElement('span', Object.assign(
+                { className: 'tt-vote-fracture' },
+                voteFractureType ? { 'data-fracture': voteFractureType } : {}
+              ), scotusCase.vote_split)
             )
           ),
 
@@ -1002,10 +1025,30 @@
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
-          // Dissent Highlights
-          dissentHighlights && React.createElement('div', { className: 'tt-scotus-section tt-scotus-dissent' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Dissent Highlights'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, dissentHighlights)
+          // Media Spin Panel (ADO-82)
+          (scotusCase.media_says || scotusCase.actually_means) && React.createElement('div', { className: 'tt-media-spin-panel' },
+            React.createElement('div', { className: 'tt-media-spin-title' }, 'Media Spin'),
+            React.createElement('div', { className: 'tt-media-spin-grid' },
+              scotusCase.media_says && React.createElement('div', { className: 'tt-media-spin-col tt-media-spin-col-left' },
+                React.createElement('span', { className: 'tt-media-spin-label' }, 'Media Says'),
+                React.createElement('p', null, scotusCase.media_says)
+              ),
+              scotusCase.actually_means && React.createElement('div', { className: 'tt-media-spin-col tt-media-spin-col-right' },
+                React.createElement('span', { className: 'tt-media-spin-label' }, 'Actually Means'),
+                React.createElement('p', null, scotusCase.actually_means)
+              )
+            )
+          ),
+
+          // Dissent Block (ADO-82)
+          (dissentAuthors || dissentHighlights) && React.createElement('div', { className: 'tt-dissent-block' },
+            React.createElement('div', { className: 'tt-dissent-block-header' },
+              React.createElement('span', { className: 'tt-dissent-block-title' }, 'Dissent'),
+              dissentAuthors && React.createElement('span', { className: 'tt-dissent-block-authors' }, dissentAuthors)
+            ),
+            dissentHighlights && React.createElement('div', { className: 'tt-dissent-block-body' },
+              React.createElement('p', null, dissentHighlights)
+            )
           ),
 
           // Sources (CourtListener + PDF)
@@ -1079,7 +1122,7 @@
         setLoading(true);
         // Fetch public SCOTUS cases, ordered by decided_at desc
         const data = await supabaseRequest(
-          'scotus_cases?is_public=eq.true&select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,disposition,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,source_url,pdf_url&order=decided_at.desc&limit=100'
+          'scotus_cases?is_public=eq.true&select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,disposition,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,source_url,pdf_url,media_says,actually_means&order=decided_at.desc&limit=100'
         );
         setCases(data || []);
         setError(null);

@@ -197,6 +197,8 @@ Do NOT start with "The Court" - we know it's the Court, get to the point.
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone for that level.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null (not 'None' or 'N/A').",
+  "media_says": "1-2 sentences. How mainstream headlines frame this ruling. If not politically significant, use null.",
+  "actually_means": "1-2 sentences. What the ruling actually does — concrete impact the headlines miss. If not applicable, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }`;
 
@@ -443,6 +445,30 @@ export function validateEnrichmentResponse(response) {
     }
   }
 
+  // Optional: media_says (can be null — only for politically significant rulings)
+  {
+    const mediaSays = response.media_says;
+    if (mediaSays !== null && mediaSays !== undefined) {
+      if (typeof mediaSays !== 'string') {
+        errors.push('media_says must be string or null');
+      } else if (mediaSays.trim().length > 500) {
+        errors.push('media_says too long (max 500 chars)');
+      }
+    }
+  }
+
+  // Optional: actually_means (can be null — only for politically significant rulings)
+  {
+    const actuallyMeans = response.actually_means;
+    if (actuallyMeans !== null && actuallyMeans !== undefined) {
+      if (typeof actuallyMeans !== 'string') {
+        errors.push('actually_means must be string or null');
+      } else if (actuallyMeans.trim().length > 500) {
+        errors.push('actually_means too long (max 500 chars)');
+      }
+    }
+  }
+
   // Required: evidence_anchors (array of strings)
   if (!response.evidence_anchors || !Array.isArray(response.evidence_anchors)) {
     errors.push('Missing or invalid evidence_anchors array');
@@ -675,6 +701,8 @@ We know it's the Court - get to the point.
   "summary_spicy": "3-4 sentences. Jump straight into impact - NO 'The Court' openers. MUST include disposition word.",
   "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
+  "media_says": "1-2 sentences. How mainstream headlines frame this ruling. If not politically significant, use null.",
+  "actually_means": "1-2 sentences. What the ruling actually does — concrete impact the headlines miss. If not applicable, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }
 

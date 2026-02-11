@@ -2962,9 +2962,152 @@
   font-weight: 500;
 }
 
-/* SCOTUS Dissent section special styling */
-.tt-scotus-dissent {
-  border-left-color: var(--severity-severe-bg);
+/* ===========================
+   ADO-82: SCOTUS Components
+   Vote Fracture / Dissent Block / Media Spin Panel
+   =========================== */
+
+/* Vote fracture badge */
+.tt-vote-fracture {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(110, 130, 160, 0.14);
+  color: rgba(20, 30, 45, 0.90);
+  white-space: nowrap;
+}
+
+/* Variant tints via data attribute */
+.tt-vote-fracture[data-fracture="unanimous"] {
+  background: rgba(40, 160, 90, 0.14);
+  border-color: rgba(40, 160, 90, 0.22);
+}
+
+.tt-vote-fracture[data-fracture="tight"] {
+  background: rgba(220, 150, 40, 0.16);
+  border-color: rgba(220, 150, 40, 0.26);
+}
+
+/* Dissent callout block */
+.tt-dissent-block {
+  border: 1px solid rgba(0,0,0,0.10);
+  border-left: 4px solid rgba(234, 120, 30, 0.95);
+  border-radius: 12px;
+  background: rgba(220, 40, 40, 0.08);
+  padding: 12px 14px;
+}
+
+.tt-dissent-block-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tt-dissent-block-title {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.tt-dissent-block-authors {
+  font-style: italic;
+  opacity: 0.85;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tt-dissent-block-body {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Media spin panel */
+.tt-media-spin-panel {
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.tt-media-spin-title {
+  font-weight: 800;
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.04);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.tt-media-spin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.tt-media-spin-col {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tt-media-spin-col-left {
+  background: rgba(120, 130, 140, 0.12);
+  border-right: 1px solid var(--card-border);
+}
+
+.tt-media-spin-col-right {
+  background: rgba(40, 160, 90, 0.12);
+}
+
+.tt-media-spin-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .tt-vote-fracture {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(120, 150, 190, 0.18);
+  color: rgba(245, 248, 252, 0.92);
+}
+
+[data-theme="dark"] .tt-vote-fracture[data-fracture="unanimous"] {
+  background: rgba(50, 200, 120, 0.18);
+  border-color: rgba(50, 200, 120, 0.22);
+}
+
+[data-theme="dark"] .tt-vote-fracture[data-fracture="tight"] {
+  background: rgba(245, 180, 70, 0.20);
+  border-color: rgba(245, 180, 70, 0.24);
+}
+
+[data-theme="dark"] .tt-dissent-block {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(235, 80, 80, 0.10);
+}
+
+[data-theme="dark"] .tt-media-spin-panel {
+  border-color: rgba(255,255,255,0.12);
+}
+
+[data-theme="dark"] .tt-media-spin-title {
+  background: rgba(255,255,255,0.06);
+  border-bottom-color: rgba(255,255,255,0.10);
+}
+
+[data-theme="dark"] .tt-media-spin-col-left {
+  background: rgba(160, 170, 180, 0.16);
+}
+
+[data-theme="dark"] .tt-media-spin-col-right {
+  background: rgba(50, 200, 120, 0.14);
 }
 
 /* Mobile responsive SCOTUS styles */
@@ -2986,6 +3129,15 @@
   .tt-scotus-link {
     width: 100%;
     justify-content: center;
+  }
+
+  .tt-media-spin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tt-media-spin-col-left {
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
   }
 }
 
