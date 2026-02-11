@@ -1025,18 +1025,6 @@
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
-          // Media Says (ADO-82)
-          scotusCase.media_says && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title tt-spin-label-says' }, 'Media Says'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.media_says)
-          ),
-
-          // Actually Means (ADO-82)
-          scotusCase.actually_means && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title tt-spin-label-means' }, 'Actually Means'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.actually_means)
-          ),
-
           // Dissent Block (ADO-82)
           (dissentAuthors || dissentHighlights) && React.createElement('div', { className: 'tt-dissent-block' },
             React.createElement('div', { className: 'tt-dissent-block-header' },
@@ -1119,7 +1107,7 @@
         setLoading(true);
         // Fetch public SCOTUS cases, ordered by decided_at desc
         const data = await supabaseRequest(
-          'scotus_cases?is_public=eq.true&select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,disposition,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,source_url,pdf_url,media_says,actually_means&order=decided_at.desc&limit=100'
+          'scotus_cases?is_public=eq.true&select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,disposition,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,source_url,pdf_url&order=decided_at.desc&limit=100'
         );
         setCases(data || []);
         setError(null);

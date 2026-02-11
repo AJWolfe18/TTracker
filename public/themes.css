@@ -3032,28 +3032,6 @@
   line-height: 1.45;
 }
 
-/* Media spin section accent dots — amber for spin, green for reality */
-.tt-spin-label-says::before,
-.tt-spin-label-means::before {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
-  position: relative;
-  top: -1px;
-}
-
-.tt-spin-label-says::before {
-  background: rgba(220, 150, 40, 0.7);
-}
-
-.tt-spin-label-means::before {
-  background: rgba(40, 160, 90, 0.7);
-}
-
 /* Dark mode overrides */
 [data-theme="dark"] .tt-vote-fracture {
   border-color: rgba(255,255,255,0.12);
@@ -3076,13 +3054,6 @@
   background: rgba(235, 80, 80, 0.10);
 }
 
-[data-theme="dark"] .tt-spin-label-says::before {
-  background: rgba(245, 180, 70, 0.85);
-}
-
-[data-theme="dark"] .tt-spin-label-means::before {
-  background: rgba(50, 200, 120, 0.85);
-}
 
 /* Mobile responsive SCOTUS styles */
 @media (max-width: 640px) {
