@@ -1025,19 +1025,16 @@
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
-          // Media Spin Panel (ADO-82)
-          (scotusCase.media_says || scotusCase.actually_means) && React.createElement('div', { className: 'tt-media-spin-panel' },
-            React.createElement('div', { className: 'tt-media-spin-title' }, 'Media Spin'),
-            React.createElement('div', { className: 'tt-media-spin-grid' },
-              scotusCase.media_says && React.createElement('div', { className: 'tt-media-spin-col tt-media-spin-col-left' },
-                React.createElement('span', { className: 'tt-media-spin-label' }, 'Media Says'),
-                React.createElement('p', null, scotusCase.media_says)
-              ),
-              scotusCase.actually_means && React.createElement('div', { className: 'tt-media-spin-col tt-media-spin-col-right' },
-                React.createElement('span', { className: 'tt-media-spin-label' }, 'Actually Means'),
-                React.createElement('p', null, scotusCase.actually_means)
-              )
-            )
+          // Media Says (ADO-82)
+          scotusCase.media_says && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title tt-spin-label-says' }, 'Media Says'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.media_says)
+          ),
+
+          // Actually Means (ADO-82)
+          scotusCase.actually_means && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title tt-spin-label-means' }, 'Actually Means'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.actually_means)
           ),
 
           // Dissent Block (ADO-82)

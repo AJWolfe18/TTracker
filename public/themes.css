@@ -3032,57 +3032,26 @@
   line-height: 1.45;
 }
 
-/* Media spin panel */
-.tt-media-spin-panel {
-  border: 1px solid rgba(0,0,0,0.10);
-  border-radius: 14px;
-  overflow: hidden;
-  margin-top: 8px;
-  margin-bottom: 24px;
-  padding-bottom: 0;
+/* Media spin section accent dots — amber for spin, green for reality */
+.tt-spin-label-says::before,
+.tt-spin-label-means::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
 }
 
-/* Separator before media spin / dissent when preceded by scotus sections */
-.tt-scotus-section + .tt-media-spin-panel,
-.tt-scotus-section + .tt-dissent-block {
-  border-top: none;
-  padding-top: 0;
+.tt-spin-label-says::before {
+  background: rgba(220, 150, 40, 0.7);
 }
 
-.tt-media-spin-title {
-  font-weight: 800;
-  padding: 12px 14px;
-  background: rgba(0,0,0,0.04);
-  border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-
-.tt-media-spin-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-.tt-media-spin-col {
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.tt-media-spin-col-left {
-  background: rgba(120, 130, 140, 0.12);
-  border-right: 1px solid var(--card-border);
-}
-
-.tt-media-spin-col-right {
-  background: rgba(40, 160, 90, 0.12);
-}
-
-.tt-media-spin-label {
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.85;
-  margin-bottom: 6px;
+.tt-spin-label-means::before {
+  background: rgba(40, 160, 90, 0.7);
 }
 
 /* Dark mode overrides */
@@ -3107,21 +3076,12 @@
   background: rgba(235, 80, 80, 0.10);
 }
 
-[data-theme="dark"] .tt-media-spin-panel {
-  border-color: rgba(255,255,255,0.12);
+[data-theme="dark"] .tt-spin-label-says::before {
+  background: rgba(245, 180, 70, 0.85);
 }
 
-[data-theme="dark"] .tt-media-spin-title {
-  background: rgba(255,255,255,0.06);
-  border-bottom-color: rgba(255,255,255,0.10);
-}
-
-[data-theme="dark"] .tt-media-spin-col-left {
-  background: rgba(160, 170, 180, 0.16);
-}
-
-[data-theme="dark"] .tt-media-spin-col-right {
-  background: rgba(50, 200, 120, 0.14);
+[data-theme="dark"] .tt-spin-label-means::before {
+  background: rgba(50, 200, 120, 0.85);
 }
 
 /* Mobile responsive SCOTUS styles */
@@ -3145,13 +3105,5 @@
     justify-content: center;
   }
 
-  .tt-media-spin-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tt-media-spin-col-left {
-    border-right: none;
-    border-bottom: 1px solid var(--card-border);
-  }
 }
 
