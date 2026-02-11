@@ -163,6 +163,10 @@ Deno.serve(async (req) => {
       pardon: {
         file: 'enrich-pardons.yml',
         buildInputs: (id, env) => ({ pardon_id: String(id), limit: '1', force: 'true' })
+      },
+      scotus: {
+        file: 'enrich-scotus.yml',
+        buildInputs: (id, env) => ({ case_id: String(id), environment: env })
       }
     }
 
