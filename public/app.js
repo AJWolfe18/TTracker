@@ -975,11 +975,7 @@
               React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Disposition'),
               React.createElement('span', { className: 'tt-scotus-meta-value' }, titleCase(scotusCase.disposition))
             ),
-            // Case Type
-            scotusCase.case_type && React.createElement('div', { className: 'tt-scotus-meta-item' },
-              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Case Type'),
-              React.createElement('span', { className: 'tt-scotus-meta-value' }, titleCase(scotusCase.case_type))
-            )
+            // Case Type removed (ADO-354: not user-facing)
           ),
 
           // Majority Author
@@ -1001,16 +997,16 @@
             )
           ),
 
-          // Why It Matters (top of content sections)
-          scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
-            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
-            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
-          ),
-
-          // Summary
+          // Summary (top of content sections)
           scotusCase.summary_spicy && React.createElement('div', { className: 'tt-scotus-section' },
             React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Summary'),
             React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.summary_spicy)
+          ),
+
+          // Why It Matters
+          scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
           ),
 
           // Who Wins

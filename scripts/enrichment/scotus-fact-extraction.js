@@ -1183,8 +1183,7 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     summary_spicy: data.summary_spicy,
     why_it_matters: data.why_it_matters,
     dissent_highlights: data.dissent_highlights,
-    media_says: data.media_says || null,
-    actually_means: data.actually_means || null,
+    // ADO-354: media_says and actually_means dropped from enrichment (columns remain nullable in DB)
     evidence_anchors: data.evidence_anchors || [],
 
     // Drift detection

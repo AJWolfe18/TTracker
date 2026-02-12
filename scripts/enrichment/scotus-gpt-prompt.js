@@ -23,7 +23,7 @@
 // ============================================================================
 
 // ADO-323: Prompt version for idempotency tracking
-export const PASS2_PROMPT_VERSION = 'v2-ado323-qa-aligned';
+export const PASS2_PROMPT_VERSION = 'v3-ado354-concrete-facts';
 
 export const RULING_IMPACT_LEVELS = {
   5: {
@@ -89,6 +89,38 @@ export const ISSUE_AREA_LABELS = {
   gun_rights: 'Second Amendment, gun regulations',
   other: 'Other constitutional or statutory interpretation'
 };
+
+// ============================================================================
+// ADO-354: SOURCE TEXT SANITIZER FOR PASS 2
+// ============================================================================
+
+const PASS2_SOURCE_TEXT_CAP = 5000;
+
+function sanitizeSourceText(text) {
+  text = String(text || '');
+  if (!text) return '';
+  let cleaned = text;
+  // Strip zero-width chars and prompt-ish artifacts
+  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, '');
+  // Only strip header-ish docket patterns near the top (first 500 chars)
+  const top = cleaned.slice(0, 500);
+  const rest = cleaned.slice(500);
+  cleaned = top
+    .replace(/SUPREME COURT OF THE UNITED STATES/gi, '')
+    .replace(/No\.\s+\d+[-–]\d+/g, '')
+    + rest;
+  // Global cleanup
+  cleaned = cleaned
+    .replace(/<[^>]+>/g, '')           // HTML tags
+    .replace(/<<<.*?>>>/g, '')         // Strip our own delimiters (prevent injection)
+    .replace(/\n{3,}/g, '\n\n')        // collapse 3+ newlines
+    .replace(/[ \t]{2,}/g, ' ')        // collapse whitespace
+    .trim();
+  if (cleaned.length > PASS2_SOURCE_TEXT_CAP) {
+    cleaned = cleaned.slice(0, PASS2_SOURCE_TEXT_CAP) + '\n\n[TRUNCATED]';
+  }
+  return cleaned;
+}
 
 // ============================================================================
 // SYSTEM PROMPT
@@ -195,10 +227,8 @@ Do NOT start with "The Court" - we know it's the Court, get to the point.
   "who_wins": "1-2 sentences. Who benefits from this ruling and HOW it specifically helps them.",
   "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone for that level.",
-  "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
+  "why_it_matters": "2-3 sentences. The FIRST sentence MUST contain at least one concrete fact from the opinion: a party name, statute or citation (e.g. '18 U.S.C. §924(c)', 'Chapter 64'), a legal standard, a dollar amount, or a specific timeline/date. Do NOT restate the holding — assume the reader saw it. Use the fact as the hook, then go straight to real-world consequences. Example: 'Escolastica Harrison spent 15 years seeking DNA testing under Texas Chapter 64, and this ruling slams that door shut. Any Texas prisoner claiming innocence now faces a higher bar that most can't clear without a lawyer they can't afford.' If you fail to lead with a concrete fact, you will be asked to rewrite.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null (not 'None' or 'N/A').",
-  "media_says": "1-2 sentences. How mainstream headlines frame this ruling. If not politically significant, use null.",
-  "actually_means": "1-2 sentences. What the ruling actually does — concrete impact the headlines miss. If not applicable, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }`;
 
@@ -369,11 +399,133 @@ export function lintGenericParties(editorial) {
 }
 
 /**
+ * ADO-354: Check if first sentence contains a concrete fact marker
+ * (name, statute, date, amount, or timeline)
+ *
+ * @param {string} text - why_it_matters text
+ * @param {string} caseName - Case name for party-name extraction
+ * @returns {{ passed: boolean, reason: string|null }}
+ */
+export function hasConcreteFactMarker(text, caseName = '') {
+  if (!text || typeof text !== 'string') return { passed: false, reason: 'empty' };
+
+  // Safe first-sentence extraction (no lookbehind)
+  const m = text.match(/^.*?[.!?](?:\s|$)/);
+  const firstSentence = (m ? m[0] : text).trim();
+
+  // Digits (dates, dollar amounts, timelines, statute numbers)
+  if (/\d/.test(firstSentence)) return { passed: true, reason: null };
+
+  // Statute/citation markers
+  if (/\bU\.?\s?S\.?\s?C\.?|\b§\b|\bChapter\s+\w+|\bRule\s+\d+|\bAmendment\b/i.test(firstSentence)) {
+    return { passed: true, reason: null };
+  }
+
+  // Time references (require adjacent digit: "15 years", "60 days", not bare "years")
+  if (/\d+\s*(year|years|months?|days?|decades?|centur(?:y|ies))\b/i.test(firstSentence)) {
+    return { passed: true, reason: null };
+  }
+
+  // Party names from case_name
+  if (caseName) {
+    const parties = caseName
+      .replace(/,?\s*et\s+al\.?/gi, '')
+      .split(/\s+v\.?\s+/i)
+      .map(p => p.trim())
+      .filter(Boolean);
+    for (const party of parties) {
+      const words = party.split(/\s+/).filter(w =>
+        w.length > 2 && !/^(the|and|for|inc|llc|corp|of)$/i.test(w)
+      );
+      const normalFirst = firstSentence.toLowerCase();
+      if (words.some(w => normalFirst.includes(w.toLowerCase()))) {
+        return { passed: true, reason: null };
+      }
+    }
+  }
+
+  return { passed: false, reason: 'First sentence lacks concrete fact (name, statute, date, amount, or timeline)' };
+}
+
+/**
+ * ADO-354: Check for abstract openers (Option B — allows opener if fact marker present)
+ *
+ * @param {string} text - why_it_matters text
+ * @param {string} caseName - Case name for party-name extraction
+ * @returns {{ passed: boolean, reason: string|null }}
+ */
+const ABSTRACT_OPENERS = [
+  /^this ruling\b/i,
+  /^the court\b/i,
+  /^the decision\b/i,
+  /^this case\b/i,
+  /^this decision\b/i,
+  /^the ruling\b/i,
+];
+
+export function checkNoAbstractOpener(text, caseName = '') {
+  if (!text || typeof text !== 'string') return { passed: true, reason: null };
+  const trimmed = text.trimStart();
+  for (const pattern of ABSTRACT_OPENERS) {
+    if (pattern.test(trimmed)) {
+      const factCheck = hasConcreteFactMarker(text, caseName);
+      if (factCheck.passed) return { passed: true, reason: null };
+      return { passed: false, reason: `why_it_matters starts with abstract opener: "${trimmed.slice(0, 30)}..."` };
+    }
+  }
+  return { passed: true, reason: null };
+}
+
+/**
+ * ADO-354: Validate that citations in why_it_matters are grounded in source text
+ * Separate from validateEnrichmentResponse — needs sourceText which is only available in Pass 2
+ *
+ * @param {string} whyItMatters - why_it_matters text
+ * @param {string} sourceText - Sanitized source text injected into Pass 2 prompt
+ * @param {Object} facts - Pass 1 facts (holding, practical_effect)
+ * @returns {{ passed: boolean, suspicious: string[] }}
+ */
+export function validateFactGrounding(whyItMatters, sourceText = '', facts = {}) {
+  if (!whyItMatters) return { passed: true, suspicious: [] };
+
+  // Skip grounding if source text is too short to be meaningful
+  if ((sourceText || '').length < 200) return { passed: true, suspicious: [] };
+
+  const normalize = (s) => (s || '').toLowerCase().replace(/[^\w§.]/g, ' ').replace(/\s+/g, ' ');
+  const reference = normalize([
+    sourceText,
+    facts.holding || '',
+    facts.practical_effect || '',
+  ].join(' '));
+
+  const suspicious = [];
+
+  // Extract statute-like patterns (U.S.C., §, Chapter, Rule)
+  const cites = whyItMatters.match(
+    /\d+\s*U\.?\s?S\.?\s?C\.?\s*§?\s*\d+|\b§\s*\d+[\w.()]*|\bChapter\s+\d+|\bRule\s+\d+/gi
+  ) || [];
+
+  for (const cite of cites) {
+    const normalCite = normalize(cite).trim();
+    if (!reference.includes(normalCite)) {
+      suspicious.push(cite);
+    }
+  }
+
+  return { passed: suspicious.length === 0, suspicious };
+}
+
+/**
  * Validate GPT response structure
+ * ADO-354: Updated signature to accept opts for caseName-based concrete fact checks
+ *
  * @param {Object} response - Parsed JSON response
+ * @param {Object} [opts] - Options: { caseName: string }
  * @returns {{valid: boolean, errors: string[]}}
  */
-export function validateEnrichmentResponse(response) {
+export function validateEnrichmentResponse(response, opts) {
+  opts = (opts && typeof opts === 'object') ? opts : {};
+  const caseName = typeof opts.caseName === 'string' ? opts.caseName : '';
   const errors = [];
 
   // Required: ruling_impact_level
@@ -416,13 +568,25 @@ export function validateEnrichmentResponse(response) {
     errors.push('summary_spicy too long (max 1500 chars)');
   }
 
-  // Required: why_it_matters
+  // Required: why_it_matters (ADO-354: updated bounds 80-800)
   if (!response.why_it_matters || typeof response.why_it_matters !== 'string') {
     errors.push('Missing or invalid why_it_matters');
-  } else if (response.why_it_matters.length < 50) {
-    errors.push('why_it_matters too short (min 50 chars)');
-  } else if (response.why_it_matters.length > 600) {
-    errors.push('why_it_matters too long (max 600 chars)');
+  } else if (response.why_it_matters.length < 80) {
+    errors.push('why_it_matters too short (min 80 chars)');
+  } else if (response.why_it_matters.length > 800) {
+    errors.push('why_it_matters too long (max 800 chars)');
+  }
+
+  // ADO-354: Concrete fact + no abstract opener checks
+  if (response.why_it_matters && typeof response.why_it_matters === 'string') {
+    const factMarker = hasConcreteFactMarker(response.why_it_matters, caseName);
+    if (!factMarker.passed) {
+      errors.push(`why_it_matters: ${factMarker.reason}`);
+    }
+    const openerCheck = checkNoAbstractOpener(response.why_it_matters, caseName);
+    if (!openerCheck.passed) {
+      errors.push(openerCheck.reason);
+    }
   }
 
   // Optional: dissent_highlights (can be null for unanimous/no-dissent rulings)
@@ -441,30 +605,6 @@ export function validateEnrichmentResponse(response) {
           errors.push('dissent_highlights too long (max 500 chars)');
         }
         // Anything < 30 chars is treated as null-equivalent (placeholder text)
-      }
-    }
-  }
-
-  // Optional: media_says (can be null — only for politically significant rulings)
-  {
-    const mediaSays = response.media_says;
-    if (mediaSays !== null && mediaSays !== undefined) {
-      if (typeof mediaSays !== 'string') {
-        errors.push('media_says must be string or null');
-      } else if (mediaSays.trim().length > 500) {
-        errors.push('media_says too long (max 500 chars)');
-      }
-    }
-  }
-
-  // Optional: actually_means (can be null — only for politically significant rulings)
-  {
-    const actuallyMeans = response.actually_means;
-    if (actuallyMeans !== null && actuallyMeans !== undefined) {
-      if (typeof actuallyMeans !== 'string') {
-        errors.push('actually_means must be string or null');
-      } else if (actuallyMeans.trim().length > 500) {
-        errors.push('actually_means too long (max 500 chars)');
       }
     }
   }
@@ -699,10 +839,8 @@ We know it's the Court - get to the point.
   "who_wins": "1-2 sentences. Who benefits from this ruling and HOW it specifically helps them.",
   "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Jump straight into impact - NO 'The Court' openers. MUST include disposition word.",
-  "why_it_matters": "1-2 sentences. Systemic implication, pattern, or precedent impact.",
+  "why_it_matters": "2-3 sentences. The FIRST sentence MUST contain at least one concrete fact from the opinion: a party name, statute or citation (e.g. '18 U.S.C. §924(c)', 'Chapter 64'), a legal standard, a dollar amount, or a specific timeline/date. Do NOT restate the holding — assume the reader saw it. Use the fact as the hook, then go straight to real-world consequences. Example: 'Escolastica Harrison spent 15 years seeking DNA testing under Texas Chapter 64, and this ruling slams that door shut. Any Texas prisoner claiming innocence now faces a higher bar that most can't clear without a lawyer they can't afford.' If you fail to lead with a concrete fact, you will be asked to rewrite.",
   "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
-  "media_says": "1-2 sentences. How mainstream headlines frame this ruling. If not politically significant, use null.",
-  "actually_means": "1-2 sentences. What the ruling actually does — concrete impact the headlines miss. If not applicable, use null.",
   "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
 }
 
@@ -874,6 +1012,11 @@ The disposition is "${facts.disposition}". This word MUST appear in summary_spic
     ? `Dissenting: ${scotusCase.dissent_authors.join(', ')}`
     : 'No dissent (unanimous)';
 
+  // ADO-354: Inject sanitized source text so Pass 2 can pull concrete facts
+  const sourceText = sanitizeSourceText(
+    scotusCase.syllabus || scotusCase.opinion_excerpt || ''
+  );
+
   const prompt = `${constraints}
 
 PASS 1 FACTS (LOCKED - your editorial must align with these):
@@ -892,12 +1035,12 @@ Vote: ${scotusCase.vote_split || 'Unknown'}
 Majority: ${scotusCase.majority_author || 'Unknown'}
 ${dissentInfo}
 
-${variationInjection ? `${variationInjection}\n` : ''}
-Generate the editorial JSON. Remember:
+${variationInjection ? `${variationInjection}\n` : ''}${sourceText ? `SOURCE TEXT (reference only — use for concrete facts in why_it_matters, do NOT override Pass 1 facts):\n<<<SOURCE_TEXT>>>\n${sourceText}\n<<<END_SOURCE_TEXT>>>\n\n` : ''}Generate the editorial JSON. Remember:
 - Your who_wins/who_loses MUST align with the prevailing_party and case_type above
 - The disposition word "${facts.disposition || 'unknown'}" MUST appear in summary_spicy
 - Use the appropriate tone for the ruling_impact_level you assign
-- Do NOT contradict the Pass 1 facts`;
+- Do NOT contradict the Pass 1 facts
+- why_it_matters MUST lead with a concrete fact from the source text`;
 
   return prompt;
 }

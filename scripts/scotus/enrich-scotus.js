@@ -47,6 +47,7 @@ import {
 
 import {
   validateEnrichmentResponse,
+  validateFactGrounding,
   buildPass2Messages,
   lintGenericParties
 } from '../enrichment/scotus-gpt-prompt.js';
@@ -799,12 +800,27 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     return { success: false, error: 'Empty Pass 2 response', cost: totalCost };
   }
 
-  // Validate editorial response structure
-  const { valid, errors } = validateEnrichmentResponse(editorial);
+  // Validate editorial response structure (ADO-354: pass caseName for concrete fact checks)
+  const { valid, errors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name });
   if (!valid) {
     console.error(`   ❌ Pass 2 validation failed: ${errors.join(', ')}`);
     await markFailed(scotusCase.id, `Pass 2 validation: ${errors.join(', ')}`, supabase);
     return { success: false, error: errors.join(', '), cost: totalCost };
+  }
+
+  // ADO-354: Grounding check — best-effort logging (retry wiring is follow-up)
+  {
+    const groundingCheck = validateFactGrounding(
+      editorial.why_it_matters,
+      sourceText,
+      { holding: clampedFacts.holding, practical_effect: clampedFacts.practical_effect }
+    );
+    if (!groundingCheck.passed) {
+      const suspicious = groundingCheck.suspicious.length > 3
+        ? [...groundingCheck.suspicious.slice(0, 3), `(+${groundingCheck.suspicious.length - 3} more)`]
+        : groundingCheck.suspicious;
+      console.warn(`   ⚠️ ADO-354 grounding: suspicious citations not in source: ${suspicious.join(', ')}`);
+    }
   }
 
   // =========================================================================
@@ -883,7 +899,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         return { success: false, error: 'Empty Pass 2 retry response', cost: totalCost };
       }
 
-      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial);
+      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name });
       if (!retryValid) {
         console.error(`   ❌ Pass 2 retry validation failed: ${retryErrors.join(', ')}`);
         await markFailed(scotusCase.id, `Pass 2 retry validation: ${retryErrors.join(', ')}`, supabase);
@@ -989,6 +1005,12 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
                clampedFacts.publish_override === true;
     needsReview = clampedFacts.fact_extraction_confidence === 'medium' &&
                   !clampedFacts.publish_override;
+
+    // ADO-354: Non-merits cases (procedural, cert_stage, unclear) should not be public
+    if (clampedFacts.case_type && clampedFacts.case_type !== 'merits') {
+      isPublic = false;
+      console.log(`   📋 Non-merits case_type (${clampedFacts.case_type}) → is_public=false`);
+    }
 
     // ADO-303: Gate failures → quarantine
     if (!gateResult.valid && !clampedFacts.publish_override) {
