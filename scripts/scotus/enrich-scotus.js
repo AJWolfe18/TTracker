@@ -182,13 +182,30 @@ function parseArgs() {
 async function getCasesToEnrichByIds(ids, supabase) {
   const { data, error } = await supabase
     .from('scotus_cases')
-    .select('*')
+    .select(`
+      *,
+      scotus_opinions!left(opinion_full_text)
+    `)
     .in('id', ids);
 
   if (error) throw error;
 
+  // Flatten the LEFT JOIN result (same as getCasesToEnrich)
+  const flattened = (data || []).map(row => {
+    const joined = row.scotus_opinions;
+    const opinion_full_text = Array.isArray(joined)
+      ? joined[0]?.opinion_full_text
+      : joined?.opinion_full_text;
+
+    return {
+      ...row,
+      opinion_full_text: opinion_full_text || null,
+      scotus_opinions: undefined
+    };
+  });
+
   // Preserve requested order for determinism
-  const byId = new Map((data || []).map(row => [row.id, row]));
+  const byId = new Map(flattened.map(row => [row.id, row]));
   return ids.map(id => byId.get(id)).filter(Boolean);
 }
 

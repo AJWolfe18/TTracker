@@ -395,8 +395,13 @@ RULES:
  * Build Pass 1 messages for GPT
  */
 export function buildPass1Messages(scotusCase) {
-  // Use getSourceText which handles windowing for long opinions
-  const sourceText = getSourceText(scotusCase);
+  // Pass 1 extracts classification facts (disposition, case_type, holding).
+  // Syllabus is structured and ideal for this — full opinion text (100K+)
+  // overwhelms GPT-4o-mini and causes misclassification (e.g. case_type: unclear).
+  // Fall back to full text only if no syllabus/excerpt exists.
+  const sourceText = scotusCase.syllabus
+    || scotusCase.opinion_excerpt
+    || getSourceText(scotusCase);
 
   const userPrompt = `CASE: ${scotusCase.case_name}
 DOCKET: ${scotusCase.docket_number || 'N/A'}

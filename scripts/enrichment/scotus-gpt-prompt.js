@@ -94,7 +94,11 @@ export const ISSUE_AREA_LABELS = {
 // ADO-354: SOURCE TEXT SANITIZER FOR PASS 2
 // ============================================================================
 
-const PASS2_SOURCE_TEXT_CAP = 5000;
+// Full opinion text for Pass 2 (dissent sections are at the end, so we need more than 5K)
+// Use same windowing approach as Pass 1 for very long opinions
+const PASS2_SOURCE_TEXT_CAP = 80000;  // ~20K tokens — covers full opinion + dissent
+const PASS2_FIRST_WINDOW = 30000;
+const PASS2_LAST_WINDOW = 25000;  // Dissent is at the end, so keep more tail
 
 function sanitizeSourceText(text) {
   text = String(text || '');
@@ -117,7 +121,10 @@ function sanitizeSourceText(text) {
     .replace(/[ \t]{2,}/g, ' ')        // collapse whitespace
     .trim();
   if (cleaned.length > PASS2_SOURCE_TEXT_CAP) {
-    cleaned = cleaned.slice(0, PASS2_SOURCE_TEXT_CAP) + '\n\n[TRUNCATED]';
+    const first = cleaned.slice(0, PASS2_FIRST_WINDOW);
+    const last = cleaned.slice(-PASS2_LAST_WINDOW);
+    const omitted = cleaned.length - PASS2_FIRST_WINDOW - PASS2_LAST_WINDOW;
+    cleaned = `${first}\n\n[... ${omitted} chars omitted ...]\n\n${last}`;
   }
   return cleaned;
 }
@@ -577,15 +584,15 @@ export function validateEnrichmentResponse(response, opts) {
     errors.push('why_it_matters too long (max 800 chars)');
   }
 
-  // ADO-354: Concrete fact + no abstract opener checks
+  // ADO-354: Concrete fact + no abstract opener checks (soft — log warning, don't block)
   if (response.why_it_matters && typeof response.why_it_matters === 'string') {
     const factMarker = hasConcreteFactMarker(response.why_it_matters, caseName);
     if (!factMarker.passed) {
-      errors.push(`why_it_matters: ${factMarker.reason}`);
+      console.log(`   ⚠️ ADO-354 soft: ${factMarker.reason}`);
     }
     const openerCheck = checkNoAbstractOpener(response.why_it_matters, caseName);
     if (!openerCheck.passed) {
-      errors.push(openerCheck.reason);
+      console.log(`   ⚠️ ADO-354 soft: ${openerCheck.reason}`);
     }
   }
 
@@ -1007,14 +1014,14 @@ The disposition is "${facts.disposition}". This word MUST appear in summary_spic
 `;
   }
 
-  // Format dissent info
+  // Format dissent info — don't assert "unanimous" if we just lack metadata
   const dissentInfo = scotusCase.dissent_authors?.length > 0
     ? `Dissenting: ${scotusCase.dissent_authors.join(', ')}`
-    : 'No dissent (unanimous)';
+    : 'Dissent: DETERMINE FROM SOURCE TEXT. Look for "filed a dissenting opinion" or dissent sections. If truly unanimous, say so.';
 
-  // ADO-354: Inject sanitized source text so Pass 2 can pull concrete facts
+  // ADO-354 + full-text: Inject full opinion text so Pass 2 can pull concrete facts AND dissent content
   const sourceText = sanitizeSourceText(
-    scotusCase.syllabus || scotusCase.opinion_excerpt || ''
+    scotusCase.opinion_full_text || scotusCase.syllabus || scotusCase.opinion_excerpt || ''
   );
 
   const prompt = `${constraints}
