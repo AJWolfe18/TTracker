@@ -18,7 +18,8 @@ concurrency:
 jobs:
   process:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/test' || github.ref == 'refs/heads/main'
+    # test: always run; main: only on manual dispatch or when schedules enabled
+    if: github.ref == 'refs/heads/test' || (github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true'))
     timeout-minutes: 10
 
     steps:
@@ -56,7 +57,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QA_LAYER_B_MODEL: gpt-4o-mini
           QA_PROMPT_VERSION: scotus_qa_v1
-          QA_CLAIM_LIMIT: ${{ inputs.claim_limit || '10' }}
+          QA_CLAIM_LIMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.claim_limit || '10' }}
         run: node scripts/qa/process-batch.js
 
       - name: Report status
