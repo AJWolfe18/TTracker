@@ -18,8 +18,8 @@ concurrency:
 jobs:
   process:
     runs-on: ubuntu-latest
-    # test: always run; main: only on manual dispatch or when schedules enabled
-    if: github.ref == 'refs/heads/test' || (github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true'))
+    # test: always run; main: manual dispatch always, schedule only when ENABLE_PROD_SCHEDULES=true
+    if: github.ref == 'refs/heads/test' || (github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && vars.ENABLE_PROD_SCHEDULES == 'true')))
     timeout-minutes: 10
 
     steps:
