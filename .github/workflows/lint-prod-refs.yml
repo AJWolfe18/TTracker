@@ -37,8 +37,9 @@ jobs:
           # - data-health-monitor.js: PROD monitoring script (intentional)
           # - batch/: Windows batch files (legacy)
           # - lint-prod-refs.yml: This workflow (contains PROD_REF constant for checking)
-          # - public/admin.html: Environment detection (PROD vs Test label, not connecting)
-          ALLOWLIST_REGEX='(^|/)(lib/env-validation\.js|public/supabase-browser-config\.js|public/admin\.html|legacy/|.*-backup.*|dashboard-.*\.js|data-health-monitor\.js|batch/|lint-prod-refs\.yml)'
+          # - scotus/enrich-scotus.js: PROD detection for safety prompts (not connecting, just detecting)
+          # - public/admin.html: Environment detection for UI label (PROD vs Test dashboard)
+          ALLOWLIST_REGEX='(^|/)(lib/env-validation\.js|public/supabase-browser-config\.js|public/admin\.html|legacy/|.*-backup.*|dashboard-.*\.js|data-health-monitor\.js|batch/|lint-prod-refs\.yml|scotus/enrich-scotus\.js)'
 
           matches="$(grep -RIn --exclude-dir=node_modules --exclude-dir=.git \
             -e "${PROD_REF}" -e "${PROD_HOST}" "${SCAN_DIRS[@]}" || true)"

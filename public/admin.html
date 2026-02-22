@@ -340,6 +340,414 @@
         }
         .signout-btn:hover { border-color: #ef4444; color: #f87171; }
 
+        /* Stories Tab */
+        .stories-toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .stories-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .stories-search:focus { outline: none; border-color: #3b82f6; }
+        .stories-select {
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .stories-select:focus { outline: none; border-color: #3b82f6; }
+        .stories-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .stories-table th {
+            text-align: left;
+            padding: 10px 8px;
+            color: #94a3b8;
+            font-weight: 500;
+            border-bottom: 1px solid #334155;
+            white-space: nowrap;
+        }
+        .stories-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #1e293b;
+            vertical-align: top;
+        }
+        .stories-table tr:hover td { background: rgba(59, 130, 246, 0.05); }
+        .stories-table .headline-cell {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            color: #e2e8f0;
+        }
+        .stories-table .headline-cell:hover { color: #3b82f6; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+        .badge-closed { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .badge-archived { background: rgba(100, 116, 139, 0.15); color: #64748b; }
+        .badge-enriched { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .badge-failed { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+        .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .badge-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .badge-severe { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+        .badge-moderate { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+        .badge-minor { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .load-more-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .load-more-btn:hover { background: #334155; color: #e2e8f0; }
+        .load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .stories-count {
+            font-size: 13px;
+            color: #64748b;
+            padding: 8px 0;
+        }
+        .story-detail-row td {
+            background: #0f172a;
+            padding: 16px 12px;
+        }
+        .story-detail-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            font-size: 13px;
+        }
+        .story-detail-content dt { color: #64748b; }
+        .story-detail-content dd { color: #e2e8f0; margin: 0 0 8px; }
+        .story-detail-content a { color: #3b82f6; text-decoration: none; }
+        .story-detail-content a:hover { text-decoration: underline; }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            color: #f8fafc;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #f8fafc; }
+        .modal-body { padding: 20px; }
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #334155;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .btn-primary {
+            padding: 10px 20px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary {
+            padding: 10px 20px;
+            background: #334155;
+            border: none;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover { background: #475569; }
+
+        /* Toast Styles */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .toast {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .toast-success { border-left: 3px solid #4ade80; }
+        .toast-error { border-left: 3px solid #f87171; }
+        .toast-info { border-left: 3px solid #3b82f6; }
+        .toast-message { flex: 1; color: #e2e8f0; font-size: 14px; }
+        .toast-close {
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0;
+            line-height: 1;
+        }
+        .toast-close:hover { color: #94a3b8; }
+
+        /* Undo Toast (special toast with countdown) */
+        .undo-toast {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-left: 3px solid #3b82f6;
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 320px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+        .undo-toast-message {
+            flex: 1;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .undo-toast-btn {
+            padding: 6px 14px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .undo-toast-btn:hover { background: #2563eb; }
+        .undo-toast-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .undo-countdown {
+            font-size: 11px;
+            color: #94a3b8;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        /* Row Action Buttons */
+        .row-actions {
+            display: flex;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-icon {
+            padding: 6px 10px;
+            background: #334155;
+            border: none;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-icon:hover { background: #475569; }
+        .btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-icon.enriching {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-icon .spinner-sm {
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Collapsible Form Sections */
+        .form-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            margin: 8px 0 12px;
+            border-bottom: 1px solid #334155;
+            cursor: pointer;
+            user-select: none;
+        }
+        .form-section-header:hover { color: #f8fafc; }
+        .form-section-header h4 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+        }
+        .form-section-header:hover h4 { color: #e2e8f0; }
+        .form-section-arrow {
+            font-size: 12px;
+            color: #64748b;
+            transition: transform 0.2s;
+        }
+        .form-section-arrow.open { transform: rotate(90deg); }
+
+        /* Checkbox row for multi-select */
+        .form-checkbox-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .form-checkbox:hover { border-color: #3b82f6; color: #e2e8f0; }
+        .form-checkbox.checked {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: #3b82f6;
+            color: #e2e8f0;
+        }
+        .form-checkbox input[type="checkbox"] {
+            accent-color: #3b82f6;
+            cursor: pointer;
+        }
+
+        /* JSON textarea error states */
+        .json-error {
+            border-color: #ef4444 !important;
+        }
+        .json-error:focus {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+        .json-error-msg {
+            color: #fca5a5;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
         /* Responsive */
         @media (max-width: 900px) {
             .dashboard-grid { grid-template-columns: 1fr; }
@@ -369,6 +777,2098 @@
 
         // Session storage key for admin password
         const AUTH_STORAGE_KEY = 'admin_password';
+
+        // Toast notification context and component
+        const ToastContext = React.createContext();
+
+        function ToastProvider({ children }) {
+            const [toasts, setToasts] = useState([]);
+
+            const addToast = useCallback((message, type = 'info', duration = 5000) => {
+                const id = Date.now();
+                setToasts(prev => [...prev, { id, message, type }]);
+                if (duration > 0) {
+                    setTimeout(() => {
+                        setToasts(prev => prev.filter(t => t.id !== id));
+                    }, duration);
+                }
+                return id;
+            }, []);
+
+            const removeToast = useCallback((id) => {
+                setToasts(prev => prev.filter(t => t.id !== id));
+            }, []);
+
+            return React.createElement(ToastContext.Provider, { value: { addToast, removeToast } },
+                children,
+                React.createElement('div', { className: 'toast-container' },
+                    toasts.map(toast =>
+                        React.createElement('div', { key: toast.id, className: `toast toast-${toast.type}` },
+                            React.createElement('span', { className: 'toast-message' }, toast.message),
+                            React.createElement('button', {
+                                className: 'toast-close',
+                                onClick: () => removeToast(toast.id)
+                            }, '×')
+                        )
+                    )
+                )
+            );
+        }
+
+        function useToast() {
+            return React.useContext(ToastContext);
+        }
+
+        // Undo Toast Component - special toast with 10-second countdown and Undo button
+        function UndoToast({ entityType, entityId, fieldName, oldValue, onUndo, onDismiss }) {
+            const [timeLeft, setTimeLeft] = React.useState(10);
+            const [undoing, setUndoing] = React.useState(false);
+
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    setTimeLeft(t => {
+                        if (t <= 1) {
+                            onDismiss();
+                            return 0;
+                        }
+                        return t - 1;
+                    });
+                }, 1000);
+
+                return () => clearInterval(timer);
+            }, [onDismiss]);
+
+            const handleUndo = async () => {
+                setUndoing(true);
+                try {
+                    await onUndo();
+                    onDismiss();
+                } catch {
+                    setUndoing(false);
+                }
+            };
+
+            return React.createElement('div', { className: 'undo-toast' },
+                React.createElement('span', { className: 'undo-toast-message' },
+                    `Updated ${fieldName.replace(/_/g, ' ')}`
+                ),
+                React.createElement('button', {
+                    className: 'undo-toast-btn',
+                    onClick: handleUndo,
+                    disabled: undoing
+                },
+                    undoing ? 'Undoing...' : 'Undo',
+                    React.createElement('span', { className: 'undo-countdown' }, `(${timeLeft}s)`)
+                ),
+                React.createElement('button', {
+                    className: 'toast-close',
+                    onClick: onDismiss
+                }, '×')
+            );
+        }
+
+        // Category options for stories
+        const STORY_CATEGORIES = [
+            { value: 'corruption_scandals', label: 'Corruption & Scandals' },
+            { value: 'democracy_elections', label: 'Democracy & Elections' },
+            { value: 'policy_legislation', label: 'Policy & Legislation' },
+            { value: 'justice_legal', label: 'Justice & Legal' },
+            { value: 'executive_actions', label: 'Executive Actions' },
+            { value: 'foreign_policy', label: 'Foreign Policy' },
+            { value: 'corporate_financial', label: 'Corporate & Financial' },
+            { value: 'civil_liberties', label: 'Civil Liberties' },
+            { value: 'media_disinformation', label: 'Media & Disinformation' },
+            { value: 'epstein_associates', label: 'Epstein & Associates' },
+            { value: 'other', label: 'Other' }
+        ];
+
+        const ALARM_LEVEL_OPTIONS = [
+            { value: '5', label: 'Constitutional Dumpster Fire' },
+            { value: '4', label: 'Criminal Bullshit' },
+            { value: '3', label: 'The Deep Swamp' },
+            { value: '2', label: 'The Great Gaslight' },
+            { value: '1', label: 'Accidental Sanity' },
+            { value: '0', label: 'A Broken Clock Moment' }
+        ];
+        const ALARM_LEVEL_MAP = Object.fromEntries(ALARM_LEVEL_OPTIONS.map(o => [o.value, o.label]));
+
+        const STATUS_OPTIONS = [
+            { value: 'active', label: 'Active' },
+            { value: 'closed', label: 'Closed' },
+            { value: 'archived', label: 'Archived' }
+        ];
+
+        const LIFECYCLE_OPTIONS = [
+            { value: 'emerging', label: 'Emerging' },
+            { value: 'developing', label: 'Developing' },
+            { value: 'mature', label: 'Mature' }
+        ];
+
+        // Edit Story Modal Component
+        function EditStoryModal({ story, onClose, onSave, onShowUndo, onRefresh, supabase, password }) {
+            const [formData, setFormData] = useState({
+                primary_headline: story?.primary_headline || '',
+                primary_source: story?.primary_source || '',
+                primary_source_url: story?.primary_source_url || '',
+                primary_actor: story?.primary_actor || '',
+                status: story?.status || 'active',
+                alarm_level: story?.alarm_level ?? '',
+                category: story?.category || '',
+                summary_spicy: story?.summary_spicy || ''
+            });
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
+
+            // Capture original last_updated_at for optimistic locking
+            const originalLastUpdatedAt = story?.last_updated_at;
+
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
+
+            const handleChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSaving(true);
+                setError(null);
+
+                try {
+                    // Prepare update payload - only include changed fields
+                    const updates = {};
+                    if (formData.primary_headline !== story.primary_headline) updates.primary_headline = formData.primary_headline;
+                    if (formData.primary_source !== story.primary_source) updates.primary_source = formData.primary_source;
+                    if (formData.primary_source_url !== story.primary_source_url) updates.primary_source_url = formData.primary_source_url;
+                    if (formData.primary_actor !== story.primary_actor) updates.primary_actor = formData.primary_actor || null;
+                    if (formData.status !== story.status) updates.status = formData.status;
+                    const newAlarmLevelEdit = formData.alarm_level === '' ? null : parseInt(formData.alarm_level, 10);
+                    const oldAlarmLevelEdit = story.alarm_level ?? null;
+                    if (newAlarmLevelEdit !== oldAlarmLevelEdit) updates.alarm_level = newAlarmLevelEdit;
+                    if (formData.category !== story.category) updates.category = formData.category || null;
+
+                    if (formData.summary_spicy !== (story.summary_spicy || '')) updates.summary_spicy = formData.summary_spicy || null;
+
+                    if (Object.keys(updates).length === 0) {
+                        onClose();
+                        return;
+                    }
+
+                    // Update story via authenticated edge function with optimistic locking
+                    const { data, error: updateError } = await supabase.functions.invoke(
+                        'admin-update-story',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                story_id: story.id,
+                                updates,
+                                original_last_updated_at: originalLastUpdatedAt
+                            }
+                        }
+                    );
+
+                    if (updateError) {
+                        // Supabase-js wraps non-2xx as FunctionsHttpError — extract body for conflict check
+                        let body = data;
+                        try {
+                            if (!body && updateError.context) body = await updateError.context.json();
+                        } catch (_) {}
+
+                        if (body?.conflict) {
+                            setIsConflict(true);
+                            setError(body.error || 'Record was modified by another process. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || updateError.message || 'Update failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    // Get the first changed field for undo toast
+                    const changedFields = data.changed_fields || {};
+                    const firstChangedField = Object.keys(changedFields)[0];
+
+                    onSave(data.story, firstChangedField ? {
+                        entityType: 'story',
+                        entityId: String(story.id),
+                        fieldName: firstChangedField,
+                        oldValue: changedFields[firstChangedField]?.old
+                    } : null);
+                } catch (err) {
+                    console.error('Save error:', err);
+                    setError(err.message || 'Failed to save changes');
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            return React.createElement('div', { className: 'modal-overlay' },
+                React.createElement('div', { className: 'modal-content' },
+                    React.createElement('div', { className: 'modal-header' },
+                        React.createElement('h3', { className: 'modal-title' }, 'Edit Story #' + story.id),
+                        React.createElement('button', { className: 'modal-close', onClick: onClose }, '×')
+                    ),
+                    React.createElement('form', { onSubmit: handleSubmit },
+                        React.createElement('div', { className: 'modal-body' },
+                            error && React.createElement('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && React.createElement('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
+
+                            // Primary Headline
+                            React.createElement('div', { className: 'form-group' },
+                                React.createElement('label', { className: 'form-label' }, 'Primary Headline'),
+                                React.createElement('input', {
+                                    type: 'text',
+                                    className: 'form-input',
+                                    value: formData.primary_headline,
+                                    onChange: (e) => handleChange('primary_headline', e.target.value),
+                                    required: true
+                                })
+                            ),
+
+                            // Source + Source URL
+                            React.createElement('div', { className: 'form-row' },
+                                React.createElement('div', { className: 'form-group' },
+                                    React.createElement('label', { className: 'form-label' }, 'Primary Source'),
+                                    React.createElement('input', {
+                                        type: 'text',
+                                        className: 'form-input',
+                                        value: formData.primary_source,
+                                        onChange: (e) => handleChange('primary_source', e.target.value)
+                                    })
+                                ),
+                                React.createElement('div', { className: 'form-group' },
+                                    React.createElement('label', { className: 'form-label' }, 'Primary Actor'),
+                                    React.createElement('input', {
+                                        type: 'text',
+                                        className: 'form-input',
+                                        value: formData.primary_actor,
+                                        onChange: (e) => handleChange('primary_actor', e.target.value),
+                                        placeholder: 'Person or organization'
+                                    })
+                                )
+                            ),
+
+                            // Source URL
+                            React.createElement('div', { className: 'form-group' },
+                                React.createElement('label', { className: 'form-label' }, 'Primary Source URL'),
+                                React.createElement('input', {
+                                    type: 'url',
+                                    className: 'form-input',
+                                    value: formData.primary_source_url,
+                                    onChange: (e) => handleChange('primary_source_url', e.target.value)
+                                })
+                            ),
+
+                            // Status + Severity
+                            React.createElement('div', { className: 'form-row' },
+                                React.createElement('div', { className: 'form-group' },
+                                    React.createElement('label', { className: 'form-label' }, 'Status'),
+                                    React.createElement('select', {
+                                        className: 'form-select',
+                                        value: formData.status,
+                                        onChange: (e) => handleChange('status', e.target.value)
+                                    },
+                                        STATUS_OPTIONS.map(opt =>
+                                            React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
+                                        )
+                                    )
+                                ),
+                                React.createElement('div', { className: 'form-group' },
+                                    React.createElement('label', { className: 'form-label' }, 'Alarm Level'),
+                                    React.createElement('select', {
+                                        className: 'form-select',
+                                        value: formData.alarm_level,
+                                        onChange: (e) => handleChange('alarm_level', e.target.value)
+                                    },
+                                        React.createElement('option', { value: '' }, 'Not set'),
+                                        ALARM_LEVEL_OPTIONS.map(opt =>
+                                            React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Category
+                            React.createElement('div', { className: 'form-group' },
+                                React.createElement('label', { className: 'form-label' }, 'Category'),
+                                React.createElement('select', {
+                                    className: 'form-select',
+                                    value: formData.category,
+                                    onChange: (e) => handleChange('category', e.target.value)
+                                },
+                                    React.createElement('option', { value: '' }, 'Not set'),
+                                    STORY_CATEGORIES.map(opt =>
+                                        React.createElement('option', { key: opt.value, value: opt.value }, opt.label)
+                                    )
+                                )
+                            ),
+
+                            // Summary Spicy
+                            React.createElement('div', { className: 'form-group' },
+                                React.createElement('label', { className: 'form-label' }, 'Summary (Spicy)'),
+                                React.createElement('textarea', {
+                                    className: 'form-textarea',
+                                    value: formData.summary_spicy,
+                                    onChange: (e) => handleChange('summary_spicy', e.target.value),
+                                    rows: 4,
+                                    placeholder: 'Editorial, opinionated take on the story...'
+                                })
+                            )
+                        ),
+                        React.createElement('div', { className: 'modal-footer' },
+                            React.createElement('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
+                            React.createElement('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict },
+                                saving ? 'Saving...' : 'Save Changes'
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Edit Pardon Modal Component
+        function EditPardonModal({ pardon, onClose, onSave, onRefresh, supabase, password }) {
+            const h = React.createElement;
+            const [formData, setFormData] = useState(() => ({
+                // Identity
+                recipient_name: pardon?.recipient_name || '',
+                nickname: pardon?.nickname || '',
+                photo_url: pardon?.photo_url || '',
+                recipient_type: pardon?.recipient_type || '',
+                recipient_count: pardon?.recipient_count ?? '',
+                recipient_criteria: pardon?.recipient_criteria || '',
+                // Pardon & Crime
+                pardon_date: pardon?.pardon_date || '',
+                clemency_type: pardon?.clemency_type || '',
+                status: pardon?.status || '',
+                case_number: pardon?.case_number || '',
+                crime_description: pardon?.crime_description || '',
+                crime_category: pardon?.crime_category || '',
+                original_sentence: pardon?.original_sentence || '',
+                conviction_date: pardon?.conviction_date || '',
+                // Trump Connection
+                primary_connection_type: pardon?.primary_connection_type || '',
+                secondary_connection_types: pardon?.secondary_connection_types || [],
+                corruption_level: pardon?.corruption_level ?? '',
+                corruption_reasoning: pardon?.corruption_reasoning || '',
+                trump_connection_detail: pardon?.trump_connection_detail || '',
+                donation_amount_usd: pardon?.donation_amount_usd ?? '',
+                // AI Content
+                summary_neutral: pardon?.summary_neutral || '',
+                summary_spicy: pardon?.summary_spicy || '',
+                why_it_matters: pardon?.why_it_matters || '',
+                pattern_analysis: pardon?.pattern_analysis || '',
+                // Admin & Sources
+                research_status: pardon?.research_status || '',
+                needs_review: pardon?.needs_review ?? false,
+                is_public: pardon?.is_public ?? false,
+                post_pardon_status: pardon?.post_pardon_status || '',
+                post_pardon_notes: pardon?.post_pardon_notes || '',
+                primary_source_url: pardon?.primary_source_url || '',
+                // JSONB
+                source_urls: JSON.stringify(pardon?.source_urls || [], null, 2),
+                receipts_timeline: JSON.stringify(pardon?.receipts_timeline || [], null, 2),
+                pardon_advocates: JSON.stringify(pardon?.pardon_advocates || [], null, 2),
+            }));
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
+            const [jsonErrors, setJsonErrors] = useState({});
+            const [openSections, setOpenSections] = useState({ identity: true, pardon_crime: true, trump_connection: false, ai_content: false, admin_sources: false });
+
+            const originalUpdatedAt = pardon?.updated_at;
+
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
+
+            const handleChange = (field, value) => {
+                if (field === 'recipient_type' && value === 'person') {
+                    setFormData(prev => ({ ...prev, [field]: value, recipient_count: '', recipient_criteria: '' }));
+                } else {
+                    setFormData(prev => ({ ...prev, [field]: value }));
+                }
+            };
+
+            const toggleSection = (section) => {
+                setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+            };
+
+            const toggleSecondaryConnection = (type) => {
+                setFormData(prev => {
+                    const current = prev.secondary_connection_types || [];
+                    const next = current.includes(type) ? current.filter(t => t !== type) : [...current, type];
+                    return { ...prev, secondary_connection_types: next };
+                });
+            };
+
+            // JSONB field change with validation
+            const handleJsonChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+                if (value.trim() === '' || value.trim() === '[]') {
+                    setJsonErrors(prev => ({ ...prev, [field]: null }));
+                    return;
+                }
+                try {
+                    const parsed = JSON.parse(value);
+                    if (!Array.isArray(parsed)) {
+                        setJsonErrors(prev => ({ ...prev, [field]: 'Must be a JSON array' }));
+                    } else {
+                        setJsonErrors(prev => ({ ...prev, [field]: null }));
+                    }
+                } catch (e) {
+                    setJsonErrors(prev => ({ ...prev, [field]: 'Invalid JSON: ' + e.message }));
+                }
+            };
+
+            // Auto-format JSON on blur
+            const handleJsonBlur = (field) => {
+                const value = formData[field];
+                if (!value || value.trim() === '') return;
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) {
+                        setFormData(prev => ({ ...prev, [field]: JSON.stringify(parsed, null, 2) }));
+                    }
+                } catch (_) { /* leave as-is if invalid */ }
+            };
+
+            const hasJsonErrors = Object.values(jsonErrors).some(e => e);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (hasJsonErrors) return;
+
+                // Validate pardons_group_fields_chk constraint
+                const rt = formData.recipient_type;
+                if (rt === 'group') {
+                    const count = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const criteria = (formData.recipient_criteria || '').trim();
+                    if (!count || count <= 0 || !criteria) {
+                        setError('Group pardons require both Recipient Count (>0) and Recipient Criteria.');
+                        return;
+                    }
+                } else if (rt === 'person') {
+                    const count = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const criteria = (formData.recipient_criteria || '').trim();
+                    if (count !== null || criteria) {
+                        setError('Person pardons cannot have Recipient Count or Recipient Criteria. Clear those fields first.');
+                        return;
+                    }
+                }
+
+                setSaving(true);
+                setError(null);
+
+                try {
+                    const updates = {};
+
+                    // Text fields
+                    const textFields = ['recipient_name', 'nickname', 'recipient_criteria', 'case_number', 'crime_description', 'original_sentence', 'corruption_reasoning', 'trump_connection_detail', 'post_pardon_notes', 'summary_neutral', 'summary_spicy', 'why_it_matters', 'pattern_analysis'];
+                    for (const f of textFields) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // URL fields
+                    for (const f of ['photo_url', 'primary_source_url']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Enum fields (string)
+                    for (const f of ['clemency_type', 'status', 'recipient_type', 'crime_category', 'primary_connection_type', 'research_status', 'post_pardon_status']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Date fields
+                    for (const f of ['pardon_date', 'conviction_date']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = pardon[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Boolean fields
+                    for (const f of ['is_public', 'needs_review']) {
+                        if (formData[f] !== (pardon[f] ?? false)) updates[f] = formData[f];
+                    }
+
+                    // Integer: corruption_level
+                    const newCorruption = formData.corruption_level === '' ? null : parseInt(formData.corruption_level, 10);
+                    const oldCorruption = pardon.corruption_level ?? null;
+                    if (newCorruption !== oldCorruption) updates.corruption_level = newCorruption;
+
+                    // Integer: recipient_count
+                    const newCount = formData.recipient_count === '' ? null : parseInt(formData.recipient_count, 10);
+                    const oldCount = pardon.recipient_count ?? null;
+                    if (newCount !== oldCount) updates.recipient_count = newCount;
+
+                    // Numeric: donation_amount_usd
+                    const newDonation = formData.donation_amount_usd === '' ? null : parseFloat(formData.donation_amount_usd);
+                    const oldDonation = pardon.donation_amount_usd ?? null;
+                    if (newDonation !== oldDonation) updates.donation_amount_usd = newDonation;
+
+                    // text[]: secondary_connection_types (compare sorted)
+                    const newSCT = [...(formData.secondary_connection_types || [])].sort();
+                    const oldSCT = [...(pardon.secondary_connection_types || [])].sort();
+                    if (JSON.stringify(newSCT) !== JSON.stringify(oldSCT)) updates.secondary_connection_types = formData.secondary_connection_types;
+
+                    // JSONB fields
+                    for (const f of ['source_urls', 'receipts_timeline', 'pardon_advocates']) {
+                        const rawText = formData[f];
+                        const newParsed = (!rawText || rawText.trim() === '' || rawText.trim() === '[]') ? [] : JSON.parse(rawText);
+                        const oldVal = pardon[f] || [];
+                        if (JSON.stringify(newParsed) !== JSON.stringify(oldVal)) updates[f] = newParsed;
+                    }
+
+                    // Filter to ALLOWED_FIELDS only
+                    const filteredUpdates = {};
+                    for (const key of Object.keys(updates)) {
+                        if (PARDON_ALLOWED_FIELDS.includes(key)) filteredUpdates[key] = updates[key];
+                    }
+
+                    if (Object.keys(filteredUpdates).length === 0) {
+                        onClose();
+                        return;
+                    }
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-pardon',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                pardon_id: pardon.id,
+                                updates: filteredUpdates,
+                                original_updated_at: originalUpdatedAt
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        if (body?.conflict) {
+                            setIsConflict(true);
+                            setError(body.error || 'Record was modified by another process. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Update failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    const changedFields = data.changed_fields || {};
+                    const firstChangedField = Object.keys(changedFields)[0];
+
+                    onSave(data.pardon, firstChangedField ? {
+                        entityType: 'pardon',
+                        entityId: String(pardon.id),
+                        fieldName: firstChangedField,
+                        oldValue: changedFields[firstChangedField]?.old
+                    } : null);
+                } catch (err) {
+                    console.error('Save error:', err);
+                    setError(err.message || 'Failed to save changes');
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            // Helper: section header
+            const sectionHeader = (key, label) =>
+                h('div', { className: 'form-section-header', onClick: () => toggleSection(key) },
+                    h('h4', null, label),
+                    h('span', { className: 'form-section-arrow' + (openSections[key] ? ' open' : '') }, '\u25B6')
+                );
+
+            // Helper: label with optional red asterisk (indicates field is displayed on public site)
+            const fieldLabel = (label, used) =>
+                used ? h('label', { className: 'form-label' }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*')) : h('label', { className: 'form-label' }, label);
+
+            // Helper: text input field
+            const textField = (field, label, opts = {}) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, opts.used),
+                    h('input', {
+                        type: opts.type || 'text',
+                        className: 'form-input',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        placeholder: opts.placeholder || '',
+                        ...opts.inputProps
+                    })
+                );
+
+            // Helper: select field
+            const selectField = (field, label, options, used) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('select', {
+                        className: 'form-select',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value)
+                    },
+                        h('option', { value: '' }, 'Not set'),
+                        options.map(opt =>
+                            h('option', { key: opt.value, value: opt.value }, opt.label)
+                        )
+                    )
+                );
+
+            // Helper: textarea field
+            const textareaField = (field, label, rows = 3, used = false) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('textarea', {
+                        className: 'form-textarea',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        rows
+                    })
+                );
+
+            // Helper: JSONB textarea
+            const jsonField = (field, label, rows = 4, used = false) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('textarea', {
+                        className: 'form-textarea' + (jsonErrors[field] ? ' json-error' : ''),
+                        value: formData[field],
+                        onChange: (ev) => handleJsonChange(field, ev.target.value),
+                        onBlur: () => handleJsonBlur(field),
+                        rows
+                    }),
+                    jsonErrors[field] && h('div', { className: 'json-error-msg' }, jsonErrors[field])
+                );
+
+            // Helper: boolean checkbox
+            const boolField = (field, label, used = false) =>
+                h('div', { className: 'form-group', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    h('input', {
+                        type: 'checkbox',
+                        checked: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.checked),
+                        style: { accentColor: '#3b82f6', width: '16px', height: '16px' }
+                    }),
+                    used
+                        ? h('label', { className: 'form-label', style: { marginBottom: 0 } }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*'))
+                        : h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
+                );
+
+            return h('div', { className: 'modal-overlay' },
+                h('div', { className: 'modal-content' },
+                    h('div', { className: 'modal-header' },
+                        h('h3', { className: 'modal-title' }, 'Edit Pardon #' + pardon.id + (pardon.recipient_name ? ' - ' + pardon.recipient_name : '')),
+                        h('button', { className: 'modal-close', onClick: onClose }, '\u00D7')
+                    ),
+                    h('form', { onSubmit: handleSubmit },
+                        h('div', { className: 'modal-body' },
+                            // Error banner
+                            error && h('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && h('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
+
+                            // Section 1: Identity (open)
+                            sectionHeader('identity', 'Identity'),
+                            openSections.identity && h('div', null,
+                                textField('recipient_name', 'Recipient Name', { used: true }),
+                                h('div', { className: 'form-row' },
+                                    textField('nickname', 'Nickname', { used: true }),
+                                    selectField('recipient_type', 'Recipient Type', PARDON_RECIPIENT_TYPES, true)
+                                ),
+                                h('div', { className: 'form-row' },
+                                    formData.recipient_type === 'group' && textField('recipient_count', 'Recipient Count', { type: 'number', inputProps: { min: 1 }, used: true }),
+                                    textField('photo_url', 'Photo URL', { type: 'url' })
+                                ),
+                                formData.recipient_type === 'group' && textField('recipient_criteria', 'Recipient Criteria', { used: true })
+                            ),
+
+                            // Section 2: Pardon & Crime (open)
+                            sectionHeader('pardon_crime', 'Pardon & Crime'),
+                            openSections.pardon_crime && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    textField('pardon_date', 'Pardon Date', { type: 'date', used: true }),
+                                    selectField('clemency_type', 'Clemency Type', PARDON_CLEMENCY_TYPES, true)
+                                ),
+                                h('div', { className: 'form-row' },
+                                    selectField('status', 'Status', PARDON_STATUS_OPTIONS, true),
+                                    selectField('crime_category', 'Crime Category', Object.entries(CRIME_CATEGORY_LABELS).map(([v, l]) => ({ value: v, label: l })), true)
+                                ),
+                                textareaField('crime_description', 'Crime Description', 3, true),
+                                h('div', { className: 'form-row' },
+                                    textField('case_number', 'Case Number'),
+                                    textField('conviction_date', 'Conviction Date', { type: 'date' })
+                                ),
+                                textField('original_sentence', 'Original Sentence', { used: true })
+                            ),
+
+                            // Section 3: Trump Connection (collapsed)
+                            sectionHeader('trump_connection', 'Trump Connection'),
+                            openSections.trump_connection && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('primary_connection_type', 'Primary Connection', Object.entries(CONNECTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l })), true),
+                                    selectField('corruption_level', 'Corruption Level', CORRUPTION_LEVELS.map(l => ({ value: String(l.value), label: l.value + ' - ' + l.label })), true)
+                                ),
+                                h('div', { className: 'form-group' },
+                                    h('label', { className: 'form-label' }, 'Secondary Connection Types'),
+                                    h('div', { className: 'form-checkbox-row' },
+                                        CONNECTION_TYPE_KEYS.map(type =>
+                                            h('label', { key: type, className: 'form-checkbox' + (formData.secondary_connection_types.includes(type) ? ' checked' : '') },
+                                                h('input', {
+                                                    type: 'checkbox',
+                                                    checked: formData.secondary_connection_types.includes(type),
+                                                    onChange: () => toggleSecondaryConnection(type)
+                                                }),
+                                                CONNECTION_TYPE_LABELS[type]
+                                            )
+                                        )
+                                    )
+                                ),
+                                textareaField('corruption_reasoning', 'Corruption Reasoning', 3),
+                                textareaField('trump_connection_detail', 'Trump Connection Detail', 3, true),
+                                textField('donation_amount_usd', 'Donation Amount (USD)', { type: 'number', inputProps: { min: 0, step: '0.01' }, used: true })
+                            ),
+
+                            // Section 4: AI Content (collapsed)
+                            sectionHeader('ai_content', 'AI Content'),
+                            openSections.ai_content && h('div', null,
+                                textareaField('summary_neutral', 'Summary (Neutral)', 4),
+                                textareaField('summary_spicy', 'Summary (Spicy)', 4, true),
+                                textareaField('why_it_matters', 'Why It Matters', 3, true),
+                                textareaField('pattern_analysis', 'Pattern Analysis', 3, true)
+                            ),
+
+                            // Section 5: Admin & Sources (collapsed)
+                            sectionHeader('admin_sources', 'Admin & Sources'),
+                            openSections.admin_sources && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('research_status', 'Research Status', PARDON_RESEARCH_STATUS, true),
+                                    selectField('post_pardon_status', 'Post-Pardon Status', PARDON_POST_STATUS)
+                                ),
+                                h('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px' } },
+                                    boolField('is_public', 'Published', true),
+                                    boolField('needs_review', 'Needs Review', true)
+                                ),
+                                textareaField('post_pardon_notes', 'Post-Pardon Notes', 2, true),
+                                textField('primary_source_url', 'Primary Source URL', { type: 'url', used: true }),
+                                jsonField('source_urls', 'Source URLs (JSON array of URL strings)', 3),
+                                jsonField('receipts_timeline', 'Receipts Timeline (JSON array of objects)', 5, true),
+                                jsonField('pardon_advocates', 'Pardon Advocates (JSON array)', 4)
+                            )
+                        ),
+                        h('div', { className: 'modal-footer' },
+                            h('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
+                            h('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict || hasJsonErrors },
+                                saving ? 'Saving...' : 'Save Changes'
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Stories Tab Component
+        function StoriesTab({ password, supabase }) {
+            const [stories, setStories] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [cursor, setCursor] = useState(null);
+            const [offset, setOffset] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+
+            // Filters
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [statusFilter, setStatusFilter] = useState('active');
+            const [enrichmentFilter, setEnrichmentFilter] = useState('enriched');
+            const [alarmLevelFilter, setAlarmLevelFilter] = useState('');
+            const [categoryFilter, setCategoryFilter] = useState('');
+            const [sortBy, setSortBy] = useState('last_updated_at');
+            const [sortDir, setSortDir] = useState('desc');
+
+            // Detail expansion
+            const [expandedId, setExpandedId] = useState(null);
+
+            // Edit modal state
+            const [editingStory, setEditingStory] = useState(null);
+
+            // Re-enrichment state (track which stories are currently enriching)
+            const [enrichingIds, setEnrichingIds] = useState(new Set());
+
+            // Toast context
+            const toast = useToast();
+
+            // Debounce search input
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    setDebouncedSearch(search);
+                }, 500);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Fetch stories from edge function
+            const fetchStories = useCallback(async (append = false, pageCursor = null, pageOffset = null) => {
+                if (append) {
+                    setLoadingMore(true);
+                } else {
+                    setLoading(true);
+                }
+                setError(null);
+
+                try {
+                    const reqBody = { limit: 25, sortBy, sortDir };
+                    if (debouncedSearch) reqBody.search = debouncedSearch;
+                    if (statusFilter) reqBody.status = statusFilter;
+                    if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (alarmLevelFilter) reqBody.alarmLevel = alarmLevelFilter;
+                    if (categoryFilter) reqBody.category = categoryFilter;
+                    if (pageCursor) reqBody.cursor = pageCursor;
+                    if (pageOffset != null && pageOffset > 0) reqBody.offset = pageOffset;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-stories',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch stories');
+
+                    if (append) {
+                        setStories(prev => [...prev, ...(data.stories || [])]);
+                    } else {
+                        setStories(data.stories || []);
+                    }
+
+                    setCursor(data.pagination?.next_cursor || null);
+                    setOffset(data.pagination?.next_offset || null);
+                    setHasMore(data.pagination?.has_more || false);
+                } catch (err) {
+                    console.error('Stories fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                    setLoadingMore(false);
+                }
+            }, [supabase, password, debouncedSearch, statusFilter, enrichmentFilter, alarmLevelFilter, categoryFilter, sortBy, sortDir]);
+
+            // Re-fetch when filters change
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            useEffect(() => {
+                setCursor(null);
+                setOffset(null);
+                setExpandedId(null);
+                fetchStories(false, null, null);
+            }, [debouncedSearch, statusFilter, enrichmentFilter, alarmLevelFilter, categoryFilter, sortBy, sortDir]);
+
+            // Poll for enrichment completion when any story is pending
+            const hasPendingStories = useMemo(() => stories.some(s => s.enrichment_status === 'pending'), [stories]);
+            const storiesRef = useRef(stories);
+            storiesRef.current = stories;
+
+            useEffect(() => {
+                if (!hasPendingStories) return;
+
+                const interval = setInterval(async () => {
+                    try {
+                        // Snapshot pending IDs from latest state at poll time
+                        const pendingIds = new Set(
+                            storiesRef.current.filter(s => s.enrichment_status === 'pending').map(s => s.id)
+                        );
+                        if (pendingIds.size === 0) return;
+
+                        // Fetch ALL pending stories (not just current view) so we detect completion
+                        // even if user changed filters while enrichment was running
+                        const { data } = await supabase.functions.invoke('admin-stories', {
+                            headers: { 'x-admin-password': password },
+                            body: { limit: 100, enrichment: 'pending', sortBy: 'id', sortDir: 'desc' }
+                        });
+
+                        // Stories still pending according to the server
+                        const stillPendingIds = new Set((data?.stories || []).map(s => s.id));
+
+                        // Any ID we tracked as pending that's NOT in the pending result has transitioned
+                        for (const id of pendingIds) {
+                            if (!stillPendingIds.has(id)) {
+                                // Fetch the individual story to find out what it transitioned to
+                                const { data: detail } = await supabase.functions.invoke('admin-stories', {
+                                    headers: { 'x-admin-password': password },
+                                    body: { search: String(id), limit: 1 }
+                                });
+                                const fresh = detail?.stories?.find(s => s.id === id);
+                                const status = fresh?.enrichment_status || 'enriched';
+                                const label = status === 'failed'
+                                    ? `Story #${id} enrichment failed`
+                                    : `Story #${id} enrichment complete`;
+                                toast?.addToast(label, status === 'failed' ? 'error' : 'success');
+
+                                // Update the story in local state
+                                if (fresh) {
+                                    setStories(prev => prev.map(s => s.id === id ? { ...s, ...fresh } : s));
+                                }
+                            }
+                        }
+
+                        // Also update any pending stories still in our list with fresh data
+                        if (data?.stories) {
+                            const freshMap = new Map(data.stories.map(s => [s.id, s]));
+                            setStories(prev => prev.map(s => freshMap.has(s.id) ? { ...s, ...freshMap.get(s.id) } : s));
+                        }
+                    } catch (_) {
+                        // Silently ignore polling errors
+                    }
+                }, 15000);
+
+                return () => clearInterval(interval);
+            }, [hasPendingStories, supabase, password, toast]);
+
+            // Load more handler
+            const handleLoadMore = () => {
+                if (hasMore) {
+                    fetchStories(true, cursor, offset);
+                }
+            };
+
+            // Format date for display
+            const formatDate = (iso) => {
+                if (!iso) return '-';
+                const d = new Date(iso);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            const formatDateTime = (iso) => {
+                if (!iso) return '-';
+                const d = new Date(iso);
+                return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            };
+
+            // Get enrichment badge
+            const getEnrichmentBadge = (story) => {
+                if (story.enrichment_failure_count > 0) {
+                    return { class: 'badge-failed', label: `Failed (${story.enrichment_failure_count})` };
+                }
+                if (story.enrichment_status === 'pending') {
+                    return { class: 'badge-pending', label: 'Pending' };
+                }
+                if (story.last_enriched_at) {
+                    return { class: 'badge-enriched', label: 'Enriched' };
+                }
+                return { class: 'badge-pending', label: 'Pending' };
+            };
+
+            // Get status badge
+            const getStatusBadge = (status) => {
+                if (status === 'active') return { class: 'badge-active', label: 'Active' };
+                if (status === 'closed') return { class: 'badge-closed', label: 'Closed' };
+                if (status === 'archived') return { class: 'badge-archived', label: 'Archived' };
+                return { class: 'badge-closed', label: status || 'Unknown' };
+            };
+
+            // Get alarm level badge
+            const getAlarmBadge = (level) => {
+                if (level === 5) return { class: 'badge-critical', label: 'Dumpster Fire' };
+                if (level === 4) return { class: 'badge-severe', label: 'Criminal BS' };
+                if (level === 3) return { class: 'badge-moderate', label: 'Deep Swamp' };
+                if (level === 2) return { class: 'badge-minor', label: 'Gaslight' };
+                if (level === 1) return { class: 'badge-closed', label: 'Accidental Sanity' };
+                if (level === 0) return { class: 'badge-closed', label: 'Broken Clock' };
+                return { class: 'badge-closed', label: '-' };
+            };
+
+            // Format category for display
+            const formatCategory = (cat) => {
+                if (!cat) return '-';
+                const map = {
+                    corruption_scandals: 'Corruption',
+                    democracy_elections: 'Democracy',
+                    policy_legislation: 'Policy',
+                    justice_legal: 'Justice',
+                    executive_actions: 'Executive',
+                    foreign_policy: 'Foreign Policy',
+                    corporate_financial: 'Corporate',
+                    civil_liberties: 'Civil Liberties',
+                    media_disinformation: 'Media',
+                    epstein_associates: 'Epstein',
+                    other: 'Other'
+                };
+                return map[cat] || cat;
+            };
+
+            // Toggle detail expansion
+            const toggleDetail = (id) => {
+                setExpandedId(expandedId === id ? null : id);
+            };
+
+            // Handle edit button click
+            const handleEdit = (story) => {
+                setEditingStory(story);
+            };
+
+            // State for undo toast
+            const [undoInfo, setUndoInfo] = useState(null);
+
+            // Handle undo action
+            const handleUndo = async () => {
+                if (!undoInfo) return;
+
+                try {
+                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
+                        p_entity_type: undoInfo.entityType,
+                        p_entity_id: undoInfo.entityId,
+                        p_changed_by: 'admin'
+                    });
+
+                    if (rpcError) throw new Error(rpcError.message);
+                    if (!data?.success) throw new Error(data?.error || 'Undo failed');
+
+                    // Refresh the story in the list
+                    const storyId = parseInt(undoInfo.entityId, 10);
+                    setStories(prev => prev.map(s =>
+                        s.id === storyId
+                            ? { ...s, [data.field]: data.restored_value }
+                            : s
+                    ));
+
+                    toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
+                    setUndoInfo(null);
+                } catch (err) {
+                    console.error('Undo error:', err);
+                    toast?.addToast(err.message || 'Failed to undo', 'error');
+                }
+            };
+
+            // Handle save from edit modal
+            const handleSaveEdit = (updatedStory, undoData) => {
+                // Update the story in the list
+                setStories(prev => prev.map(s => s.id === updatedStory.id ? { ...s, ...updatedStory } : s));
+                setEditingStory(null);
+
+                // Show undo toast if there's undo data
+                if (undoData) {
+                    setUndoInfo(undoData);
+                } else {
+                    toast?.addToast('Story updated successfully', 'success');
+                }
+            };
+
+            // Handle re-enrichment
+            const handleReEnrich = async (story) => {
+                // Check if already enriching
+                if (enrichingIds.has(story.id)) return;
+
+                // Add to enriching set
+                setEnrichingIds(prev => new Set([...prev, story.id]));
+
+                try {
+                    // Call trigger-enrichment edge function
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'trigger-enrichment',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { entity_type: 'story', entity_id: story.id }
+                        }
+                    );
+
+                    if (fnError) {
+                        // Extract real error from response body (supabase-js hides it behind generic message)
+                        let detail = fnError.message;
+                        try {
+                            const body = fnError.context ? await fnError.context.json() : data;
+                            if (body?.error) detail = body.error;
+                        } catch (_) {}
+                        throw new Error(detail || 'Failed to trigger re-enrichment');
+                    }
+
+                    // Check for budget error
+                    if (data?.error) {
+                        throw new Error(data.error);
+                    }
+
+                    // Update the story in the list to show pending enrichment
+                    setStories(prev => prev.map(s =>
+                        s.id === story.id
+                            ? { ...s, enrichment_status: 'pending', enrichment_failure_count: 0 }
+                            : s
+                    ));
+
+                    toast?.addToast(`Story queued for re-enrichment (~$${(data?.estimated_cost || 0.003).toFixed(3)})`, 'success');
+                } catch (err) {
+                    console.error('Re-enrichment error:', err);
+                    toast?.addToast(err.message || 'Failed to trigger re-enrichment', 'error');
+                } finally {
+                    // Remove from enriching set
+                    setEnrichingIds(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(story.id);
+                        return newSet;
+                    });
+                }
+            };
+
+            // Handle archive/unarchive toggle
+            const handleToggleArchive = async (story) => {
+                const newStatus = story.status === 'archived' ? 'active' : 'archived';
+                // Optimistic update
+                setStories(prev => prev.map(s => s.id === story.id ? { ...s, status: newStatus } : s));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-story',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                story_id: story.id,
+                                updates: { status: newStatus },
+                                original_last_updated_at: story.last_updated_at
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Toggle failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    // Update local row with server response for continued locking
+                    setStories(prev => prev.map(s => s.id === story.id ? { ...s, ...data.story } : s));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'story',
+                            entityId: String(story.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast(newStatus === 'archived' ? 'Archived' : 'Unarchived', 'success');
+                    }
+                } catch (err) {
+                    console.error('Toggle archive error:', err);
+                    // Revert optimistic update
+                    setStories(prev => prev.map(s => s.id === story.id ? { ...s, status: story.status } : s));
+                    toast?.addToast(err.message || 'Failed to toggle archive', 'error');
+                }
+            };
+
+            return (
+                <div>
+                    {/* Toolbar: Search + Filters */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search headlines..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="closed">Closed</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={enrichmentFilter}
+                            onChange={(e) => setEnrichmentFilter(e.target.value)}
+                        >
+                            <option value="">All Enrichment</option>
+                            <option value="enriched">Enriched</option>
+                            <option value="failed">Failed</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={alarmLevelFilter}
+                            onChange={(e) => setAlarmLevelFilter(e.target.value)}
+                        >
+                            <option value="">All Alarm Levels</option>
+                            {ALARM_LEVEL_OPTIONS.map(opt =>
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Categories</option>
+                            <option value="corruption_scandals">Corruption & Scandals</option>
+                            <option value="democracy_elections">Democracy & Elections</option>
+                            <option value="policy_legislation">Policy & Legislation</option>
+                            <option value="justice_legal">Justice & Legal</option>
+                            <option value="executive_actions">Executive Actions</option>
+                            <option value="foreign_policy">Foreign Policy</option>
+                            <option value="corporate_financial">Corporate & Financial</option>
+                            <option value="civil_liberties">Civil Liberties</option>
+                            <option value="media_disinformation">Media & Disinformation</option>
+                            <option value="epstein_associates">Epstein & Associates</option>
+                            <option value="other">Other</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const [col, dir] = e.target.value.split('-');
+                                setSortBy(col);
+                                setSortDir(dir);
+                            }}
+                        >
+                            <option value="id-desc">Newest First</option>
+                            <option value="id-asc">Oldest First</option>
+                            <option value="alarm_level-desc">Alarm (High→Low)</option>
+                            <option value="alarm_level-asc">Alarm (Low→High)</option>
+                            <option value="last_updated_at-desc">Recently Updated</option>
+                        </select>
+                    </div>
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading stories...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">Stories</h2>
+                                <span className="stories-count">
+                                    Showing {stories.length} stories
+                                    {hasMore && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Headline</th>
+                                            <th>Alarm Level</th>
+                                            <th>Category</th>
+                                            <th>Status</th>
+                                            <th>Enrichment</th>
+                                            <th>Articles</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stories.length === 0 && (
+                                            <tr>
+                                                <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No stories found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {stories.map(story => {
+                                            const statusBadge = getStatusBadge(story.status);
+                                            const enrichBadge = getEnrichmentBadge(story);
+                                            const isExpanded = expandedId === story.id;
+
+                                            return React.createElement(React.Fragment, { key: story.id },
+                                                <tr>
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{story.id}</td>
+                                                    <td
+                                                        className="headline-cell"
+                                                        onClick={() => toggleDetail(story.id)}
+                                                        title={story.primary_headline}
+                                                    >
+                                                        {story.primary_headline || '(No headline)'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${getAlarmBadge(story.alarm_level).class}`}>
+                                                            {getAlarmBadge(story.alarm_level).label}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatCategory(story.category)}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${statusBadge.class}`}>{statusBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${enrichBadge.class}`}>{enrichBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center', color: '#94a3b8' }}>
+                                                        {story.article_count}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(story.first_seen_at)}
+                                                    </td>
+                                                    <td>
+                                                        <div className="row-actions">
+                                                            <button
+                                                                className="btn-icon"
+                                                                onClick={() => handleEdit(story)}
+                                                                title="Edit story"
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <button
+                                                                className={`btn-icon ${enrichingIds.has(story.id) || story.enrichment_status === 'pending' ? 'enriching' : ''}`}
+                                                                onClick={() => handleReEnrich(story)}
+                                                                disabled={enrichingIds.has(story.id) || story.enrichment_status === 'pending'}
+                                                                title="Re-enrich with AI"
+                                                            >
+                                                                {enrichingIds.has(story.id)
+                                                                    ? React.createElement(React.Fragment, null,
+                                                                        React.createElement('span', { className: 'spinner-sm' }),
+                                                                        'Enriching...'
+                                                                      )
+                                                                    : story.enrichment_status === 'pending'
+                                                                        ? React.createElement(React.Fragment, null,
+                                                                            React.createElement('span', { className: 'spinner-sm' }),
+                                                                            'Pending...'
+                                                                          )
+                                                                        : '🤖 Re-enrich'
+                                                                }
+                                                            </button>
+                                                            <button
+                                                                className="btn-icon"
+                                                                onClick={() => handleToggleArchive(story)}
+                                                                title={story.status === 'archived' ? 'Unarchive' : 'Archive'}
+                                                            >
+                                                                {story.status === 'archived' ? '📥 Unarchive' : '📤 Archive'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>,
+                                                isExpanded && (
+                                                    <tr className="story-detail-row">
+                                                        <td colSpan={9}>
+                                                            <div className="story-detail-content">
+                                                                <div>
+                                                                    <dt>Category</dt>
+                                                                    <dd>{story.category || '-'}</dd>
+                                                                    <dt>Severity</dt>
+                                                                    <dd>{ALARM_LEVEL_MAP[String(story.alarm_level)] || '-'}</dd>
+                                                                    <dt>Source Count</dt>
+                                                                    <dd>{story.source_count ?? '-'}</dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt>Last Updated</dt>
+                                                                    <dd>{formatDateTime(story.last_updated_at)}</dd>
+                                                                    <dt>Last Enriched</dt>
+                                                                    <dd>{formatDateTime(story.last_enriched_at)}</dd>
+                                                                    <dt>Enrichment Failures</dt>
+                                                                    <dd>{story.enrichment_failure_count}</dd>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {hasMore && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Edit Story Modal */}
+                    {editingStory && (
+                        <EditStoryModal
+                            story={editingStory}
+                            onClose={() => setEditingStory(null)}
+                            onSave={handleSaveEdit}
+                            onRefresh={() => fetchStories(false, null, null)}
+                            supabase={supabase}
+                            password={password}
+                        />
+                    )}
+
+                    {/* Undo Toast */}
+                    {undoInfo && (
+                        <div className="toast-container">
+                            <UndoToast
+                                entityType={undoInfo.entityType}
+                                entityId={undoInfo.entityId}
+                                fieldName={undoInfo.fieldName}
+                                oldValue={undoInfo.oldValue}
+                                onUndo={handleUndo}
+                                onDismiss={() => setUndoInfo(null)}
+                            />
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Pardons display label maps
+        const CONNECTION_TYPE_LABELS = {
+            mar_a_lago_vip: 'Mar-a-Lago VIP',
+            major_donor: 'Major Donor',
+            family: 'Family',
+            political_ally: 'Political Ally',
+            campaign_staff: 'Campaign Staff',
+            business_associate: 'Business Associate',
+            jan6_defendant: 'Jan 6 Defendant',
+            fake_electors: 'Fake Electors',
+            celebrity: 'Celebrity',
+            no_connection: 'No Connection',
+        };
+
+        const CRIME_CATEGORY_LABELS = {
+            white_collar: 'White Collar',
+            obstruction: 'Obstruction',
+            political_corruption: 'Political Corruption',
+            violent: 'Violent',
+            drug: 'Drug',
+            election: 'Election',
+            jan6: 'Jan 6',
+            other: 'Other',
+        };
+
+        const CORRUPTION_LEVELS = [
+            { value: 5, label: 'Pay 2 Win', color: '#dc2626', badgeClass: 'badge-critical' },
+            { value: 4, label: 'Cronies-in-Chief', color: '#ea580c', badgeClass: 'badge-severe' },
+            { value: 3, label: 'The Party Favor', color: '#ca8a04', badgeClass: 'badge-moderate' },
+            { value: 2, label: 'The PR Stunt', color: '#3b82f6', badgeClass: 'badge-closed' },
+            { value: 1, label: 'The Ego Discount', color: '#06b6d4', badgeClass: 'badge-archived' },
+        ];
+
+        const CORRUPTION_LEVEL_MAP = Object.fromEntries(CORRUPTION_LEVELS.map(l => [l.value, l]));
+
+        // Pardons-specific enum constants for EditPardonModal
+        const PARDON_CLEMENCY_TYPES = [
+            { value: 'pardon', label: 'Pardon' },
+            { value: 'commutation', label: 'Commutation' },
+            { value: 'pre_emptive', label: 'Pre-emptive' },
+        ];
+        const PARDON_STATUS_OPTIONS = [
+            { value: 'confirmed', label: 'Confirmed' },
+            { value: 'reported', label: 'Reported' },
+        ];
+        const PARDON_RECIPIENT_TYPES = [
+            { value: 'person', label: 'Person' },
+            { value: 'group', label: 'Group' },
+        ];
+        const PARDON_POST_STATUS = [
+            { value: 'quiet', label: 'Quiet' },
+            { value: 'under_investigation', label: 'Under Investigation' },
+            { value: 're_offended', label: 'Re-offended' },
+        ];
+        const PARDON_RESEARCH_STATUS = [
+            { value: 'complete', label: 'Complete' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'pending', label: 'Pending' },
+        ];
+        // Connection type keys for checkbox multi-select (reuses CONNECTION_TYPE_LABELS for display)
+        const CONNECTION_TYPE_KEYS = Object.keys(CONNECTION_TYPE_LABELS);
+
+        // Fields allowed by admin-update-pardon (used for payload filtering)
+        const PARDON_ALLOWED_FIELDS = [
+            'recipient_name', 'nickname', 'photo_url', 'recipient_type', 'recipient_count', 'recipient_criteria',
+            'pardon_date', 'clemency_type', 'status', 'case_number', 'crime_description', 'crime_category', 'original_sentence', 'conviction_date',
+            'primary_connection_type', 'secondary_connection_types', 'corruption_level', 'corruption_reasoning', 'trump_connection_detail', 'donation_amount_usd',
+            'summary_neutral', 'summary_spicy', 'why_it_matters', 'pattern_analysis',
+            'receipts_timeline', 'pardon_advocates',
+            'research_status', 'post_pardon_status', 'post_pardon_notes', 'is_public', 'needs_review', 'primary_source_url', 'source_urls'
+        ];
+
+        // PardonsTab Component
+        function PardonsTab({ password, supabase }) {
+            const [pardons, setPardons] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [cursor, setCursor] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+
+            // Sub-tab: '' = All, 'false' = Drafts, 'true' = Published
+            const [isPublicFilter, setIsPublicFilter] = useState('');
+
+            // Filters
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [crimeCategoryFilter, setCrimeCategoryFilter] = useState('');
+            const [connectionTypeFilter, setConnectionTypeFilter] = useState('');
+            const [corruptionLevelFilter, setCorruptionLevelFilter] = useState('');
+            const [researchStatusFilter, setResearchStatusFilter] = useState('');
+            const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [sortBy, setSortBy] = useState('pardon_date');
+            const [sortDir, setSortDir] = useState('desc');
+
+            // Edit / Enrich / Undo state
+            const [editingPardon, setEditingPardon] = useState(null);
+            const [enrichingIds, setEnrichingIds] = useState(new Set());
+            const enrichSnapshotsRef = useRef({}); // { pardonId: originalEnrichedAt }
+            const [undoInfo, setUndoInfo] = useState(null);
+
+            // Request token for race control
+            const fetchTokenRef = useRef(0);
+
+            // Toast context
+            const toast = useToast();
+
+            // Debounce search input (300ms)
+            useEffect(() => {
+                const timer = setTimeout(() => {
+                    setDebouncedSearch(search);
+                }, 300);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Poll enriching pardons until enriched_at changes (or 2 min timeout)
+            const hasEnriching = enrichingIds.size > 0;
+            const enrichingIdsRef = useRef(enrichingIds);
+            enrichingIdsRef.current = enrichingIds;
+            useEffect(() => {
+                if (!hasEnriching) return;
+                const interval = setInterval(async () => {
+                    try {
+                        const ids = [...enrichingIdsRef.current];
+                        for (const id of ids) {
+                            const { data } = await supabase.functions.invoke('admin-pardons', {
+                                headers: { 'x-admin-password': password },
+                                body: { search: String(id), limit: 1 }
+                            });
+                            const fresh = data?.pardons?.find(p => p.id === id);
+                            if (!fresh) continue;
+                            const oldEnrichedAt = enrichSnapshotsRef.current[id];
+                            if (fresh.enriched_at && fresh.enriched_at !== oldEnrichedAt) {
+                                toast?.addToast(`Pardon #${id} enrichment complete`, 'success');
+                                delete enrichSnapshotsRef.current[id];
+                                setEnrichingIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+                                setPardons(prev => prev.map(p => p.id === id ? { ...p, ...fresh } : p));
+                            }
+                        }
+                    } catch (_) { /* silently ignore polling errors */ }
+                }, 15000);
+                // 2 min timeout: clear all enriching states
+                const timeout = setTimeout(() => {
+                    enrichSnapshotsRef.current = {};
+                    setEnrichingIds(new Set());
+                }, 120000);
+                return () => { clearInterval(interval); clearTimeout(timeout); };
+            }, [hasEnriching]);
+
+            // Fetch pardons from edge function
+            const fetchPardons = useCallback(async (loadMore = false, nextCursor = null) => {
+                const token = ++fetchTokenRef.current;
+
+                if (loadMore) {
+                    setLoadingMore(true);
+                } else {
+                    setLoading(true);
+                }
+                setError(null);
+
+                try {
+                    const reqBody = { limit: 25, sortBy, sortDir };
+                    if (debouncedSearch) reqBody.search = debouncedSearch;
+                    if (isPublicFilter !== '') reqBody.isPublic = isPublicFilter;
+                    if (crimeCategoryFilter) reqBody.crimeCategory = crimeCategoryFilter;
+                    if (connectionTypeFilter) reqBody.connectionType = connectionTypeFilter;
+                    if (corruptionLevelFilter) reqBody.corruptionLevel = corruptionLevelFilter;
+                    if (researchStatusFilter) reqBody.researchStatus = researchStatusFilter;
+                    if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (nextCursor) reqBody.cursor = nextCursor;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-pardons',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch pardons');
+
+                    // Stale response check
+                    if (token !== fetchTokenRef.current) return;
+
+                    if (loadMore) {
+                        setPardons(prev => [...prev, ...(data.pardons || [])]);
+                    } else {
+                        setPardons(data.pardons || []);
+                    }
+
+                    setCursor(data.pagination?.next_cursor || null);
+                    setHasMore(data.pagination?.has_more || false);
+                } catch (err) {
+                    if (token !== fetchTokenRef.current) return;
+                    console.error('Pardons fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) {
+                        setLoading(false);
+                        setLoadingMore(false);
+                    }
+                }
+            }, [supabase, password, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+
+            // Re-fetch when filters change
+            useEffect(() => {
+                setCursor(null);
+                fetchPardons(false, null);
+            }, [fetchPardons, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+
+            // Load more handler with guard
+            const handleLoadMore = () => {
+                if (hasMore && !loadingMore) {
+                    fetchPardons(true, cursor);
+                }
+            };
+
+            // Format date for display
+            const formatDate = (d) => {
+                if (!d) return '-';
+                const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            // Get corruption badge
+            const getCorruptionBadge = (level) => {
+                const info = CORRUPTION_LEVEL_MAP[level];
+                if (!info) return { class: 'badge-archived', label: '-' };
+                return { class: info.badgeClass, label: `${level} - ${info.label}` };
+            };
+
+            // Get research status badge
+            const getResearchBadge = (status) => {
+                if (status === 'complete') return { class: 'badge-active', label: 'Complete' };
+                if (status === 'in_progress') return { class: 'badge-pending', label: 'In Progress' };
+                return { class: 'badge-archived', label: 'Pending' };
+            };
+
+            // Get published badge
+            const getPublishedBadge = (isPublic) => {
+                return isPublic
+                    ? { class: 'badge-active', label: 'Published' }
+                    : { class: 'badge-pending', label: 'Draft' };
+            };
+
+            // Get enrichment badge
+            const getEnrichmentBadge = (enrichedAt) => {
+                return enrichedAt
+                    ? { class: 'badge-active', label: 'Enriched' }
+                    : { class: 'badge-archived', label: 'Not Enriched' };
+            };
+
+            // Handle edit button click
+            const handleEdit = (pardon) => {
+                setEditingPardon(pardon);
+            };
+
+            // Handle save from edit modal
+            const handleSaveEdit = (updatedPardon, undoData) => {
+                setPardons(prev => prev.map(p => p.id === updatedPardon.id ? { ...p, ...updatedPardon } : p));
+                setEditingPardon(null);
+                if (undoData) {
+                    setUndoInfo(undoData);
+                } else {
+                    toast?.addToast('Pardon updated successfully', 'success');
+                }
+            };
+
+            // Handle undo action
+            const handleUndo = async () => {
+                if (!undoInfo) return;
+                try {
+                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
+                        p_entity_type: undoInfo.entityType,
+                        p_entity_id: undoInfo.entityId,
+                        p_changed_by: 'admin'
+                    });
+                    if (rpcError) throw new Error(rpcError.message);
+                    if (!data?.success) throw new Error(data?.error || 'Undo failed');
+                    toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
+                    setUndoInfo(null);
+                    // Refresh list to get correct updated_at for continued locking
+                    fetchPardons(false, null);
+                } catch (err) {
+                    console.error('Undo error:', err);
+                    toast?.addToast(err.message || 'Failed to undo', 'error');
+                }
+            };
+
+            // Handle re-enrichment
+            const handleReEnrich = async (pardon) => {
+                if (enrichingIds.has(pardon.id)) return;
+                enrichSnapshotsRef.current[pardon.id] = pardon.enriched_at || null;
+                setEnrichingIds(prev => new Set([...prev, pardon.id]));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'trigger-enrichment',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { entity_type: 'pardon', entity_id: pardon.id }
+                        }
+                    );
+                    if (fnError) {
+                        let detail = fnError.message;
+                        try {
+                            const body = fnError.context ? await fnError.context.json() : data;
+                            if (body?.error) detail = body.error;
+                        } catch (_) {}
+                        throw new Error(detail || 'Failed to trigger re-enrichment');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    toast?.addToast(`Pardon queued for re-enrichment (~$${(data?.estimated_cost || 0.005).toFixed(3)})`, 'success');
+                    // Keep enrichingIds — polling will clear it when enriched_at changes
+                } catch (err) {
+                    console.error('Re-enrichment error:', err);
+                    toast?.addToast(err.message || 'Failed to trigger re-enrichment', 'error');
+                    // Only clear on error
+                    delete enrichSnapshotsRef.current[pardon.id];
+                    setEnrichingIds(prev => {
+                        const s = new Set(prev);
+                        s.delete(pardon.id);
+                        return s;
+                    });
+                }
+            };
+
+            // Handle publish toggle
+            const handleTogglePublish = async (pardon) => {
+                const newIsPublic = !pardon.is_public;
+                // Optimistic update
+                setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: newIsPublic } : p));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-pardon',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                pardon_id: pardon.id,
+                                updates: { is_public: newIsPublic },
+                                original_updated_at: pardon.updated_at
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Toggle failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    // Update local row with server-returned updated_at for continued locking
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, ...data.pardon } : p));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'pardon',
+                            entityId: String(pardon.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast(newIsPublic ? 'Published' : 'Unpublished', 'success');
+                    }
+                } catch (err) {
+                    console.error('Toggle publish error:', err);
+                    // Revert optimistic update
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: pardon.is_public } : p));
+                    toast?.addToast(err.message || 'Failed to toggle publish', 'error');
+                }
+            };
+
+            const subTabs = [
+                { value: '', label: 'All' },
+                { value: 'false', label: 'Drafts' },
+                { value: 'true', label: 'Published' },
+            ];
+
+            return (
+                <div>
+                    {/* Sub-tabs: All / Drafts / Published */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                        {subTabs.map(tab => (
+                            <button
+                                key={tab.value}
+                                className={`tab-btn ${isPublicFilter === tab.value ? 'active' : ''}`}
+                                onClick={() => setIsPublicFilter(tab.value)}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Toolbar: Search + Filters */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search by name or ID..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={crimeCategoryFilter}
+                            onChange={(e) => setCrimeCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Crime Categories</option>
+                            {Object.entries(CRIME_CATEGORY_LABELS).map(([val, label]) =>
+                                <option key={val} value={val}>{label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={connectionTypeFilter}
+                            onChange={(e) => setConnectionTypeFilter(e.target.value)}
+                        >
+                            <option value="">All Connections</option>
+                            {Object.entries(CONNECTION_TYPE_LABELS).map(([val, label]) =>
+                                <option key={val} value={val}>{label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={corruptionLevelFilter}
+                            onChange={(e) => setCorruptionLevelFilter(e.target.value)}
+                        >
+                            <option value="">All Corruption Levels</option>
+                            {CORRUPTION_LEVELS.map(l =>
+                                <option key={l.value} value={l.value}>{l.value} - {l.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={researchStatusFilter}
+                            onChange={(e) => setResearchStatusFilter(e.target.value)}
+                        >
+                            <option value="">All Research Status</option>
+                            <option value="complete">Complete</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={enrichmentFilter}
+                            onChange={(e) => setEnrichmentFilter(e.target.value)}
+                        >
+                            <option value="">All Enrichment</option>
+                            <option value="enriched">Enriched</option>
+                            <option value="pending">Not Enriched</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const parts = e.target.value.split('-');
+                                setSortBy(parts[0]);
+                                setSortDir(parts[1]);
+                            }}
+                        >
+                            <option value="pardon_date-desc">Date (Newest)</option>
+                            <option value="pardon_date-asc">Date (Oldest)</option>
+                            <option value="corruption_level-desc">Corruption (High-Low)</option>
+                            <option value="corruption_level-asc">Corruption (Low-High)</option>
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="id-desc">ID (Newest)</option>
+                            <option value="id-asc">ID (Oldest)</option>
+                        </select>
+                    </div>
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading pardons...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">Pardons</h2>
+                                <span className="stories-count">
+                                    Showing {pardons.length} pardons
+                                    {hasMore && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Name</th>
+                                            <th>Date</th>
+                                            <th>Clemency</th>
+                                            <th>Corruption</th>
+                                            <th>Connection</th>
+                                            <th>Category</th>
+                                            <th>Published</th>
+                                            <th>Research</th>
+                                            <th>Enriched</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pardons.length === 0 && (
+                                            <tr>
+                                                <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No pardons found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {pardons.map(pardon => {
+                                            const corruptBadge = getCorruptionBadge(pardon.corruption_level);
+                                            const pubBadge = getPublishedBadge(pardon.is_public);
+                                            const resBadge = getResearchBadge(pardon.research_status);
+                                            const enrBadge = getEnrichmentBadge(pardon.enriched_at);
+
+                                            return (
+                                                <tr key={pardon.id}>
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{pardon.id}</td>
+                                                    <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={pardon.recipient_name}>
+                                                        {pardon.recipient_name || '(Unknown)'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(pardon.pardon_date)}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {pardon.clemency_type || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${corruptBadge.class}`}>{corruptBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {CONNECTION_TYPE_LABELS[pardon.primary_connection_type] || pardon.primary_connection_type || '-'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {CRIME_CATEGORY_LABELS[pardon.crime_category] || pardon.crime_category || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${pubBadge.class}`}>{pubBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${resBadge.class}`}>{resBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${enrBadge.class}`}>{enrBadge.label}</span>
+                                                    </td>
+                                                    <td>
+                                                        <div className="row-actions">
+                                                            <button className="btn-icon" onClick={() => handleEdit(pardon)} title="Edit">
+                                                                ✏️ Edit
+                                                            </button>
+                                                            <button
+                                                                className={`btn-icon${enrichingIds.has(pardon.id) ? ' enriching' : ''}`}
+                                                                onClick={() => handleReEnrich(pardon)}
+                                                                disabled={enrichingIds.has(pardon.id)}
+                                                                title="Re-enrich"
+                                                            >
+                                                                {enrichingIds.has(pardon.id)
+                                                                    ? <><span className="spinner-sm"></span> Enriching</>
+                                                                    : '🤖 Enrich'
+                                                                }
+                                                            </button>
+                                                            <button className="btn-icon" onClick={() => handleTogglePublish(pardon)} title={pardon.is_public ? 'Unpublish' : 'Publish'}>
+                                                                {pardon.is_public ? '📤 Unpublish' : '📥 Publish'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {hasMore && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Edit Pardon Modal */}
+                    {editingPardon && (
+                        <EditPardonModal
+                            pardon={editingPardon}
+                            onClose={() => setEditingPardon(null)}
+                            onSave={handleSaveEdit}
+                            onRefresh={() => fetchPardons(false, null)}
+                            supabase={supabase}
+                            password={password}
+                        />
+                    )}
+
+                    {/* Undo Toast */}
+                    {undoInfo && (
+                        <div className="toast-container">
+                            <UndoToast
+                                entityType={undoInfo.entityType}
+                                entityId={undoInfo.entityId}
+                                fieldName={undoInfo.fieldName}
+                                oldValue={undoInfo.oldValue}
+                                onUndo={handleUndo}
+                                onDismiss={() => setUndoInfo(null)}
+                            />
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
         // Main App Component
         function AdminDashboard() {
@@ -691,8 +3191,8 @@
             // Render tabs
             const tabs = [
                 { id: 'home', label: 'Home' },
-                { id: 'stories', label: 'Stories', disabled: true },
-                { id: 'pardons', label: 'Pardons', disabled: true },
+                { id: 'stories', label: 'Stories' },
+                { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS', disabled: true },
                 { id: 'eos', label: 'Exec Orders', disabled: true },
                 { id: 'feeds', label: 'Feeds', disabled: true }
@@ -924,7 +3424,7 @@
                                             </button>
                                             <button
                                                 className="action-btn"
-                                                onClick={() => window.open(`${window.SUPABASE_URL.replace('.supabase.co', '.supabase.co/project/default')}/editor`, '_blank')}
+                                                onClick={() => { const ref = (window.SUPABASE_URL || '').match(/\/\/([^.]+)\./)?.[1] || ''; window.open(`https://supabase.com/dashboard/project/${ref}`, '_blank'); }}
                                             >
                                                 🗄️ Open Supabase
                                             </button>
@@ -975,7 +3475,15 @@
                             </div>
                         )}
 
-                        {activeTab !== 'home' && (
+                        {activeTab === 'stories' && (
+                            <StoriesTab password={password} supabase={supabase} />
+                        )}
+
+                        {activeTab === 'pardons' && (
+                            <PardonsTab password={password} supabase={supabase} />
+                        )}
+
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
@@ -991,7 +3499,12 @@
             );
         }
 
-        ReactDOM.render(<AdminDashboard />, document.getElementById('root'));
+        ReactDOM.render(
+            <ToastProvider>
+                <AdminDashboard />
+            </ToastProvider>,
+            document.getElementById('root')
+        );
     </script>
 </body>
 </html>

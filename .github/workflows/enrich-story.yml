@@ -1,0 +1,51 @@
+name: Enrich Single Story
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: 'Story ID to enrich'
+        required: true
+        type: number
+      environment:
+        description: 'Environment (test or prod)'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - prod
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Enrich story (TEST)
+        if: ${{ github.event.inputs.environment == 'test' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/enrichment/enrich-single-story.js --story-id=${{ github.event.inputs.story_id }}
+
+      - name: Enrich story (PROD)
+        if: ${{ github.event.inputs.environment == 'prod' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/enrichment/enrich-single-story.js --story-id=${{ github.event.inputs.story_id }}
