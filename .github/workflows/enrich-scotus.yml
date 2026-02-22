@@ -34,6 +34,28 @@ jobs:
       - name: Create logs dir
         run: mkdir -p logs
 
+      - name: Validate required secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_SERVICE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+        run: |
+          fail=""
+          [ -z "$OPENAI_API_KEY" ] && fail="$fail OPENAI_API_KEY"
+          if [ "${{ inputs.environment }}" = "prod" ]; then
+            [ -z "$SUPABASE_URL" ] && fail="$fail SUPABASE_URL"
+            [ -z "$SUPABASE_SERVICE_KEY" ] && fail="$fail SUPABASE_SERVICE_KEY"
+          else
+            [ -z "$SUPABASE_TEST_URL" ] && fail="$fail SUPABASE_TEST_URL"
+            [ -z "$SUPABASE_TEST_SERVICE_KEY" ] && fail="$fail SUPABASE_TEST_SERVICE_KEY"
+          fi
+          if [ -n "$fail" ]; then
+            echo "::error::Secret validation failed:$fail"
+            exit 1
+          fi
+
       - name: Validate case_id
         env:
           INPUT_CASE_ID: ${{ inputs.case_id }}

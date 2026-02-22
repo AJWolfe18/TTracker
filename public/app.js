@@ -30,13 +30,83 @@
     other: 'Other'
   };
 
-  // Severity labels (the spicy ones!)
-  const SEVERITY_LABELS = {
-    critical: 'Fucking Treason',
-    severe: 'Criminal Bullshit',
-    moderate: 'Swamp Shit',
-    minor: 'Clown Show'
+  // ADO-270: Alarm level labels - populated from tone-system.json
+  // Fallback values in case fetch fails
+  let ALARM_LABELS = {
+    5: { spicy: 'Constitutional Dumpster Fire', neutral: 'Constitutional Crisis' },
+    4: { spicy: 'Criminal Bullshit', neutral: 'Criminal Activity' },
+    3: { spicy: 'The Deep Swamp', neutral: 'Institutional Corruption' },
+    2: { spicy: 'The Great Gaslight', neutral: 'Misleading/Spin' },
+    1: { spicy: 'Accidental Sanity', neutral: 'Mixed Outcome' },
+    0: { spicy: 'A Broken Clock Moment', neutral: 'Positive Outcome' }
   };
+
+  let ALARM_COLORS = {
+    5: { bg: '#fee2e2', text: '#7f1d1d', border: '#dc2626' },
+    4: { bg: '#fed7aa', text: '#7c2d12', border: '#ea580c' },
+    3: { bg: '#fef3c7', text: '#713f12', border: '#f59e0b' },
+    2: { bg: '#dbeafe', text: '#1e3a8a', border: '#3b82f6' },
+    1: { bg: '#cffafe', text: '#155e75', border: '#06b6d4' },
+    0: { bg: '#d1fae5', text: '#064e3b', border: '#10b981' }
+  };
+
+  // Legacy severity → alarm_level mapping (for backward compatibility)
+  const LEGACY_SEVERITY_MAP = { critical: 5, severe: 4, moderate: 3, minor: 2 };
+
+  // Load tone system from shared JSON (single source of truth)
+  fetch('/shared/tone-system.json')
+    .then(res => res.json())
+    .then(toneSystem => {
+      const storiesLabels = toneSystem.labels?.stories || {};
+      const colors = toneSystem.colors || {};
+
+      // Update ALARM_LABELS from JSON
+      for (let level = 0; level <= 5; level++) {
+        const levelStr = String(level);
+        if (storiesLabels[levelStr]) {
+          ALARM_LABELS[level] = {
+            spicy: storiesLabels[levelStr].spicy || ALARM_LABELS[level].spicy,
+            neutral: storiesLabels[levelStr].neutral || ALARM_LABELS[level].neutral
+          };
+        }
+        if (colors[levelStr]) {
+          ALARM_COLORS[level] = {
+            bg: colors[levelStr].bg || ALARM_COLORS[level].bg,
+            text: colors[levelStr].text || ALARM_COLORS[level].text,
+            border: colors[levelStr].border || ALARM_COLORS[level].border
+          };
+        }
+      }
+      console.log('[Stories] Loaded labels from tone-system.json');
+    })
+    .catch(err => {
+      console.warn('[Stories] Failed to load tone-system.json, using fallback labels:', err.message);
+    });
+
+  // Helper: Get alarm level from story (alarm_level field or mapped from legacy severity)
+  function getAlarmLevel(story) {
+    if (story?.alarm_level != null) return story.alarm_level;
+    if (story?.severity) return LEGACY_SEVERITY_MAP[story.severity.toLowerCase()] ?? 3;
+    return null;
+  }
+
+  // Helper: Get display label for alarm level (spicy mode)
+  function getAlarmLabel(level) {
+    if (level == null) return '';
+    return ALARM_LABELS[level]?.spicy || '';
+  }
+
+  // Helper: Map alarm level to CSS data attribute (for styling)
+  // Uses legacy severity names for CSS compatibility
+  function getAlarmLevelCssClass(level) {
+    if (level === 5) return 'critical';
+    if (level === 4) return 'severe';
+    if (level === 3) return 'moderate';
+    if (level === 2) return 'minor';
+    if (level === 1) return 'low';
+    if (level === 0) return 'positive';
+    return 'moderate';
+  }
 
   // ===========================================
   // UTILITIES
@@ -212,8 +282,9 @@
     newest: 'Newest created'
   };
 
-  // Severity filter options
-  const SEVERITY_FILTERS = ['all', 'critical', 'severe', 'moderate', 'minor'];
+  // Alarm level filter options (0-5 scale + all)
+  // Using numeric keys for filtering, labels come from ALARM_LABELS
+  const ALARM_FILTERS = ['all', 5, 4, 3, 2, 1, 0];
 
   function FiltersSection({
     searchTerm,
@@ -273,15 +344,15 @@
         )
       ),
 
-      // Severity pills row
+      // Alarm level pills row (ADO-270)
       React.createElement('div', { className: 'tt-severity-filters' },
-        React.createElement('span', { className: 'tt-filter-label' }, 'Severity:'),
-        SEVERITY_FILTERS.map(sev =>
+        React.createElement('span', { className: 'tt-filter-label' }, 'Alarm:'),
+        ALARM_FILTERS.map(level =>
           React.createElement('button', {
-            key: sev,
-            className: `tt-severity-pill ${selectedSeverity === sev ? 'active' : ''}`,
-            onClick: () => onSeverityChange(sev)
-          }, sev === 'all' ? 'All' : SEVERITY_LABELS[sev] || sev)
+            key: level,
+            className: `tt-severity-pill ${selectedSeverity === level ? 'active' : ''}`,
+            onClick: () => onSeverityChange(level)
+          }, level === 'all' ? 'All' : getAlarmLabel(level) || `Level ${level}`)
         )
       ),
 
@@ -305,13 +376,13 @@
             }, '×')
           ),
 
-          // Severity chip
+          // Alarm level chip (ADO-270)
           selectedSeverity !== 'all' && React.createElement('span', { className: 'tt-filter-chip' },
-            `Severity: ${SEVERITY_LABELS[selectedSeverity] || selectedSeverity}`,
+            `Alarm: ${getAlarmLabel(selectedSeverity) || `Level ${selectedSeverity}`}`,
             React.createElement('button', {
               className: 'tt-chip-remove',
               onClick: () => onSeverityChange('all'),
-              'aria-label': 'Remove severity filter'
+              'aria-label': 'Remove alarm filter'
             }, '×')
           ),
 
@@ -342,9 +413,11 @@
   function StoryCard({ story, onViewSources, onViewDetails }) {
     const [expanded, setExpanded] = useState(false);
 
-    // Get display values
+    // Get display values (ADO-270: use alarm_level with legacy fallback)
     const categoryLabel = CATEGORIES[story.category] || 'Uncategorized';
-    const severityLabel = SEVERITY_LABELS[story.severity?.toLowerCase()] || '';
+    const alarmLevel = getAlarmLevel(story);
+    const alarmLabel = getAlarmLabel(alarmLevel);
+    const alarmCssClass = getAlarmLevelCssClass(alarmLevel);
     const summary = story.summary_spicy || story.summary_neutral || story.primary_headline || '';
     const hasLongSummary = summary.length > 200;
 
@@ -363,17 +436,17 @@
       // Headline
       React.createElement('h2', { className: 'tt-headline' }, story.primary_headline),
 
-      // Actor + Severity
+      // Actor + Alarm Level (ADO-270)
       React.createElement('div', { className: 'tt-actor-row' },
         story.primary_actor && React.createElement('span', { className: 'tt-actor' },
           React.createElement('span', { className: 'tt-actor-icon' }, '👤'),
           'Main actor: ',
           window.TTShared?.formatActorName(story.primary_actor) || story.primary_actor
         ),
-        severityLabel && React.createElement('span', {
+        alarmLabel && React.createElement('span', {
           className: 'tt-severity',
-          'data-severity': story.severity?.toLowerCase()
-        }, severityLabel)
+          'data-severity': alarmCssClass
+        }, alarmLabel)
       ),
 
       // Summary
@@ -523,9 +596,11 @@
       return () => document.removeEventListener('keydown', handleEsc);
     }, [onClose]);
 
-    // Get display values
+    // Get display values (ADO-270: use alarm_level with legacy fallback)
     const categoryLabel = CATEGORIES[story?.category] || 'Uncategorized';
-    const severityLabel = SEVERITY_LABELS[story?.severity?.toLowerCase()] || '';
+    const alarmLevel = getAlarmLevel(story);
+    const alarmLabel = getAlarmLabel(alarmLevel);
+    const alarmCssClass = getAlarmLevelCssClass(alarmLevel);
     const summary = story?.summary_spicy || story?.summary_neutral || '';
 
     // Check if article is primary source
@@ -602,17 +677,17 @@
               className: 'tt-detail-headline'
             }, story.primary_headline),
 
-            // Actor + Severity row
+            // Actor + Alarm Level row (ADO-270)
             React.createElement('div', { className: 'tt-detail-actor-row' },
               story.primary_actor && React.createElement('span', { className: 'tt-actor' },
                 React.createElement('span', { className: 'tt-actor-icon' }, '👤'),
                 'Main actor: ',
                 window.TTShared?.formatActorName(story.primary_actor) || story.primary_actor
               ),
-              severityLabel && React.createElement('span', {
+              alarmLabel && React.createElement('span', {
                 className: 'tt-severity',
-                'data-severity': story.severity?.toLowerCase()
-              }, severityLabel)
+                'data-severity': alarmCssClass
+              }, alarmLabel)
             ),
 
             // Full summary
@@ -684,6 +759,518 @@
           )
         )
       )
+    );
+  }
+
+  // ===========================================
+  // SCOTUS CONFIGURATION (ADO-83)
+  // ===========================================
+
+  // Ruling impact scale labels (0-5)
+  const SCOTUS_IMPACT_LABELS = {
+    5: 'Constitutional Crisis',
+    4: 'Rubber-stamping Tyranny',
+    3: 'Institutional Sabotage',
+    2: 'Judicial Sidestepping',
+    1: 'Crumbs from the Bench',
+    0: 'Democracy Wins'
+  };
+
+  // Reverse lookup: label → level (ensures consistent colors regardless of DB data)
+  const SCOTUS_LABEL_TO_LEVEL = {
+    'Constitutional Crisis': 5,
+    'Rubber-stamping Tyranny': 4,
+    'Institutional Sabotage': 3,
+    'Judicial Sidestepping': 2,
+    'Crumbs from the Bench': 1,
+    'Democracy Wins': 0
+  };
+
+  // Title case helper for DB fields like "affirmed" → "Affirmed"
+  function titleCase(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  }
+
+  // ===========================================
+  // SCOTUS HELPERS (ADO-82)
+  // ===========================================
+
+  function getVoteFractureType(voteSplit) {
+    const v = String(voteSplit || '').trim();
+    const m = v.match(/(\d+)\s*[-\u2013]\s*(\d+)/);
+    if (!m) return '';
+    const a = parseInt(m[1], 10);
+    const b = parseInt(m[2], 10);
+    if ((a >= 8 && b === 0) || (b >= 8 && a === 0)) return 'unanimous';
+    if ((a === 5 && (b === 4 || b === 3)) || (b === 5 && (a === 4 || a === 3))) return 'tight';
+    return '';
+  }
+
+  // ===========================================
+  // SCOTUS CARD COMPONENT
+  // ===========================================
+
+  function ScotusCard({ scotusCase, onViewDetails }) {
+    // Get display values - use full case_name, not short version
+    const displayName = scotusCase.case_name || scotusCase.case_name_short || 'Unknown Case';
+    // Get label first, then derive level from label for consistent coloring
+    const impactLabel = scotusCase.ruling_label || SCOTUS_IMPACT_LABELS[scotusCase.ruling_impact_level] || '';
+    // Use label→level lookup to ensure same label = same color (fixes DB inconsistency)
+    const impactLevel = SCOTUS_LABEL_TO_LEVEL[impactLabel] ?? scotusCase.ruling_impact_level ?? 3;
+    // Show summary_spicy on card (like Stories), with who_wins as fallback
+    const summary = scotusCase.summary_spicy || scotusCase.who_wins || '';
+    const hasLongSummary = summary.length > 180;
+    // Disposition for prominent header badge
+    const disposition = scotusCase.disposition || '';
+    const dispositionDisplay = titleCase(disposition) || '';
+
+    return React.createElement('article', { className: 'tt-card' },
+      // Header: Date on right (disposition removed from card, stays in modal)
+      React.createElement('div', { className: 'tt-card-header' },
+        React.createElement('span', { className: 'tt-timestamp tt-timestamp-right' },
+          formatDate(scotusCase.decided_at)
+        )
+      ),
+
+      // Case name (headline)
+      React.createElement('h2', { className: 'tt-headline' }, displayName),
+
+      // Meta row: Author + Impact Badge (like Stories' Actor + Alarm)
+      React.createElement('div', { className: 'tt-scotus-meta-row' },
+        scotusCase.majority_author && React.createElement('span', { className: 'tt-scotus-author' },
+          scotusCase.majority_author
+        ),
+        impactLabel && React.createElement('span', {
+          className: 'tt-scotus-impact',
+          'data-impact': impactLevel
+        }, impactLabel)
+      ),
+
+      // Summary preview (like Stories tab)
+      summary && React.createElement('div', { className: 'tt-summary' },
+        React.createElement('p', { className: 'tt-summary-text' },
+          hasLongSummary ? summary.substring(0, 180) + '...' : summary
+        )
+      ),
+
+      // Footer: Term (muted) + View Details
+      React.createElement('div', { className: 'tt-card-footer' },
+        scotusCase.term && React.createElement('span', { className: 'tt-scotus-term-muted' },
+          `Term ${scotusCase.term}`
+        ),
+        React.createElement('button', {
+          className: 'tt-read-more',
+          onClick: () => onViewDetails(scotusCase)
+        }, 'View details')
+      )
+    );
+  }
+
+  // ===========================================
+  // SCOTUS DETAIL MODAL COMPONENT
+  // ===========================================
+
+  function ScotusDetailModal({ scotusCase, onClose }) {
+    const modalHeadlineId = `scotus-detail-headline-${scotusCase?.id || 'unknown'}`;
+
+    // Close on escape key
+    useEffect(() => {
+      const handleEsc = (e) => {
+        if (e.key === 'Escape') onClose();
+      };
+      document.addEventListener('keydown', handleEsc);
+      return () => document.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
+
+    // Lock scroll when modal opens
+    useEffect(() => {
+      if (window.TTShared) window.TTShared.lockScroll();
+      return () => {
+        if (window.TTShared) window.TTShared.unlockScroll();
+      };
+    }, []);
+
+    // Get display values - derive level from label for consistent coloring
+    const impactLabel = scotusCase?.ruling_label || SCOTUS_IMPACT_LABELS[scotusCase?.ruling_impact_level] || '';
+    const impactLevel = SCOTUS_LABEL_TO_LEVEL[impactLabel] ?? scotusCase?.ruling_impact_level ?? 3;
+
+    // Parse dissent authors
+    const dissentAuthors = Array.isArray(scotusCase?.dissent_authors)
+      ? scotusCase.dissent_authors.join(', ')
+      : scotusCase?.dissent_authors || '';
+
+    // Check for "null" string in dissent highlights (robust: trim + case-insensitive)
+    const dissentHighlightsRaw = scotusCase?.dissent_highlights;
+    const dissentHighlights =
+      dissentHighlightsRaw && String(dissentHighlightsRaw).trim().toLowerCase() !== 'null'
+        ? String(dissentHighlightsRaw).trim()
+        : '';
+
+    // Vote fracture type (computed once, used in badge rendering)
+    const voteFractureType = getVoteFractureType(scotusCase?.vote_split);
+
+    return React.createElement('div', {
+      className: 'tt-modal-overlay tt-detail-modal-overlay',
+      onClick: (e) => e.target === e.currentTarget && onClose()
+    },
+      React.createElement('div', {
+        className: 'tt-modal tt-detail-modal tt-scotus-modal',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-labelledby': modalHeadlineId
+      },
+        // Header
+        React.createElement('div', { className: 'tt-detail-modal-header' },
+          React.createElement('button', {
+            className: 'tt-modal-close',
+            onClick: onClose,
+            'aria-label': 'Close modal'
+          }, '×')
+        ),
+
+        // Body
+        React.createElement('div', { className: 'tt-detail-modal-body' },
+          // Impact badge + Term
+          React.createElement('div', { className: 'tt-scotus-detail-header' },
+            impactLabel && React.createElement('span', {
+              className: 'tt-scotus-impact tt-scotus-impact-large',
+              'data-impact': impactLevel
+            }, impactLabel),
+            scotusCase.term && React.createElement('span', { className: 'tt-scotus-term' },
+              `Term ${scotusCase.term}`
+            )
+          ),
+
+          // Case name
+          React.createElement('h2', {
+            id: modalHeadlineId,
+            className: 'tt-detail-headline'
+          }, scotusCase.case_name),
+
+          // Meta grid
+          React.createElement('div', { className: 'tt-scotus-meta-grid' },
+            // Citation
+            scotusCase.citation && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Citation'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.citation)
+            ),
+            // Docket
+            scotusCase.docket_number && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Docket'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.docket_number)
+            ),
+            // Decided
+            scotusCase.decided_at && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Decided'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, formatDate(scotusCase.decided_at))
+            ),
+            // Argued
+            scotusCase.argued_at && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Argued'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, formatDate(scotusCase.argued_at))
+            ),
+            // Disposition
+            scotusCase.disposition && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Disposition'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, titleCase(scotusCase.disposition))
+            ),
+            // Case Type removed (ADO-354: not user-facing)
+          ),
+
+          // Majority Author
+          React.createElement('div', { className: 'tt-scotus-meta-grid' },
+            scotusCase.majority_author && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Majority Opinion'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, scotusCase.majority_author)
+            ),
+            dissentAuthors && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Dissenting'),
+              React.createElement('span', { className: 'tt-scotus-meta-value' }, dissentAuthors)
+            ),
+            scotusCase.vote_split && React.createElement('div', { className: 'tt-scotus-meta-item' },
+              React.createElement('span', { className: 'tt-scotus-meta-label' }, 'Vote'),
+              React.createElement('span', Object.assign(
+                { className: 'tt-vote-fracture' },
+                voteFractureType ? { 'data-fracture': voteFractureType } : {}
+              ), scotusCase.vote_split)
+            )
+          ),
+
+          // Summary (top of content sections)
+          scotusCase.summary_spicy && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Summary'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.summary_spicy)
+          ),
+
+          // Why It Matters
+          scotusCase.why_it_matters && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Why It Matters'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.why_it_matters)
+          ),
+
+          // Who Wins
+          scotusCase.who_wins && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Who Wins'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.who_wins)
+          ),
+
+          // Who Loses
+          scotusCase.who_loses && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Who Loses'),
+            React.createElement('p', { className: 'tt-scotus-section-content' }, scotusCase.who_loses)
+          ),
+
+          // Dissent Block (ADO-82)
+          (dissentAuthors || dissentHighlights) && React.createElement('div', { className: 'tt-dissent-block' },
+            React.createElement('div', { className: 'tt-dissent-block-header' },
+              React.createElement('span', { className: 'tt-dissent-block-title' }, 'Dissent'),
+              dissentAuthors && React.createElement('span', { className: 'tt-dissent-block-authors' }, dissentAuthors)
+            ),
+            dissentHighlights && React.createElement('div', { className: 'tt-dissent-block-body' },
+              React.createElement('p', null, dissentHighlights)
+            )
+          ),
+
+          // Sources (CourtListener + PDF)
+          (scotusCase.source_url || scotusCase.pdf_url) && React.createElement('div', { className: 'tt-scotus-section' },
+            React.createElement('h3', { className: 'tt-scotus-section-title' }, 'Sources'),
+            React.createElement('div', { className: 'tt-scotus-links' },
+            scotusCase.source_url && React.createElement('a', {
+              href: scotusCase.source_url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'tt-scotus-link',
+              onClick: () => {
+                if (window.TTShared?.trackOutboundClick) {
+                  window.TTShared.trackOutboundClick({
+                    targetType: 'scotus_source',
+                    sourceDomain: 'courtlistener.com',
+                    contentType: 'scotus',
+                    contentId: String(scotusCase.id)
+                  });
+                }
+              }
+            },
+              'View on CourtListener'
+            ),
+            scotusCase.pdf_url && React.createElement('a', {
+              href: scotusCase.pdf_url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'tt-scotus-link',
+              onClick: () => {
+                if (window.TTShared?.trackOutboundClick) {
+                  window.TTShared.trackOutboundClick({
+                    targetType: 'scotus_pdf',
+                    sourceDomain: 'supremecourt.gov',
+                    contentType: 'scotus',
+                    contentId: String(scotusCase.id)
+                  });
+                }
+              }
+            },
+              'Download PDF'
+            )
+          )
+          )
+        )
+      )
+    );
+  }
+
+  // ===========================================
+  // SCOTUS FEED COMPONENT
+  // ===========================================
+
+  function ScotusFeed() {
+    const [cases, setCases] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [selectedCase, setSelectedCase] = useState(null);
+
+    // Filters
+    const [selectedImpact, setSelectedImpact] = useState('all');
+    const [selectedTerm, setSelectedTerm] = useState('all');
+
+    // Load cases
+    useEffect(() => {
+      loadCases();
+    }, []);
+
+    async function loadCases() {
+      try {
+        setLoading(true);
+        // Fetch public SCOTUS cases, ordered by decided_at desc
+        const data = await supabaseRequest(
+          'scotus_cases?is_public=eq.true&select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,disposition,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,source_url,pdf_url&order=decided_at.desc&limit=100'
+        );
+        setCases(data || []);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to load SCOTUS cases:', err);
+        setError('Failed to load Supreme Court cases. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Filter cases
+    const filteredCases = useMemo(() => {
+      let result = [...cases];
+
+      // Impact filter (use Number() to handle string/number type mismatch from DB)
+      if (selectedImpact !== 'all') {
+        result = result.filter(c => Number(c.ruling_impact_level) === Number(selectedImpact));
+      }
+
+      // Term filter
+      if (selectedTerm !== 'all') {
+        result = result.filter(c => c.term === selectedTerm);
+      }
+
+      return result;
+    }, [cases, selectedImpact, selectedTerm]);
+
+    // Get unique terms for filter
+    const terms = useMemo(() => {
+      const termSet = new Set(cases.map(c => c.term).filter(Boolean));
+      return Array.from(termSet).sort().reverse(); // Most recent first
+    }, [cases]);
+
+    // Handle view details
+    const handleViewDetails = useCallback((scotusCase) => {
+      setSelectedCase(scotusCase);
+
+      // Track analytics
+      if (window.TTShared?.trackDetailOpen) {
+        window.TTShared.trackDetailOpen({
+          objectType: 'scotus',
+          contentType: 'scotus',
+          contentId: String(scotusCase.id),
+          source: 'card_click'
+        });
+      }
+    }, []);
+
+    // Close modal
+    const closeModal = useCallback(() => {
+      if (window.TTShared?.trackDetailClose && selectedCase) {
+        window.TTShared.trackDetailClose({
+          objectType: 'scotus',
+          contentType: 'scotus',
+          contentId: String(selectedCase.id)
+        });
+      }
+      setSelectedCase(null);
+    }, [selectedCase]);
+
+    // Handle filter changes
+    const handleImpactChange = useCallback((level) => {
+      setSelectedImpact(level);
+      trackEvent('filter_scotus_impact', { impact_level: level });
+    }, []);
+
+    const handleTermChange = useCallback((term) => {
+      setSelectedTerm(term);
+      trackEvent('filter_scotus_term', { term });
+    }, []);
+
+    // Loading state
+    if (loading) {
+      return React.createElement('div', { className: 'tt-loading' },
+        React.createElement('div', { className: 'tt-spinner' }),
+        React.createElement('p', null, 'Loading Supreme Court cases...')
+      );
+    }
+
+    // Error state
+    if (error) {
+      return React.createElement('div', { className: 'tt-empty' },
+        React.createElement('h3', null, 'Error Loading Cases'),
+        React.createElement('p', null, error),
+        React.createElement('button', {
+          onClick: loadCases,
+          className: 'tt-retry-btn',
+          style: { marginTop: '16px' }
+        }, 'Retry')
+      );
+    }
+
+    return React.createElement(React.Fragment, null,
+      // Filters section
+      React.createElement('div', { className: 'tt-filters' },
+        // Impact filter pills
+        React.createElement('div', { className: 'tt-severity-filters' },
+          React.createElement('span', { className: 'tt-filter-label' }, 'Impact:'),
+          React.createElement('button', {
+            className: `tt-severity-pill ${selectedImpact === 'all' ? 'active' : ''}`,
+            onClick: () => handleImpactChange('all')
+          }, 'All'),
+          [5, 4, 3, 2, 1, 0].map(level =>
+            React.createElement('button', {
+              key: level,
+              className: `tt-severity-pill ${selectedImpact === level ? 'active' : ''}`,
+              onClick: () => handleImpactChange(level)
+            }, SCOTUS_IMPACT_LABELS[level])
+          )
+        ),
+
+        // Term dropdown + results count
+        React.createElement('div', { className: 'tt-filters-status' },
+          terms.length > 0 && React.createElement('select', {
+            className: 'tt-dropdown',
+            value: selectedTerm,
+            onChange: (e) => handleTermChange(e.target.value),
+            'aria-label': 'Filter by term'
+          },
+            React.createElement('option', { value: 'all' }, 'All Terms'),
+            terms.map(term =>
+              React.createElement('option', { key: term, value: term }, `Term ${term}`)
+            )
+          ),
+          React.createElement('span', { className: 'tt-results-count' },
+            `${filteredCases.length} ${filteredCases.length === 1 ? 'case' : 'cases'}`,
+            filteredCases.length !== cases.length && ` (of ${cases.length})`
+          )
+        )
+      ),
+
+      // Feed
+      React.createElement('div', { className: 'tt-feed' },
+        // Empty state
+        filteredCases.length === 0 && React.createElement('div', { className: 'tt-empty' },
+          React.createElement('h3', null, 'No Cases Found'),
+          React.createElement('p', null,
+            cases.length === 0
+              ? 'No Supreme Court cases are available yet. Check back soon!'
+              : `0 cases match your filters (of ${cases.length} total).`
+          ),
+          (selectedImpact !== 'all' || selectedTerm !== 'all') &&
+            React.createElement('button', {
+              className: 'tt-retry-btn',
+              onClick: () => { setSelectedImpact('all'); setSelectedTerm('all'); },
+              style: { marginTop: '16px' }
+            }, 'Clear filters')
+        ),
+
+        // Cases grid
+        filteredCases.length > 0 && React.createElement('div', { className: 'tt-grid' },
+          filteredCases.map(scotusCase =>
+            React.createElement(ScotusCard, {
+              key: scotusCase.id,
+              scotusCase,
+              onViewDetails: handleViewDetails
+            })
+          )
+        )
+      ),
+
+      // Detail modal
+      selectedCase && React.createElement(ScotusDetailModal, {
+        scotusCase: selectedCase,
+        onClose: closeModal
+      })
     );
   }
 
@@ -792,7 +1379,7 @@
         setLoading(true);
         // Match production filters: active status + enriched stories only (TTRC-119)
         const data = await supabaseRequest(
-          'stories?status=eq.active&summary_neutral=not.is.null&select=id,primary_headline,summary_spicy,summary_neutral,severity,category,source_count,primary_actor,status,last_updated_at,first_seen_at&order=last_updated_at.desc,id.desc&limit=500'
+          'stories?status=eq.active&summary_neutral=not.is.null&select=id,primary_headline,summary_spicy,summary_neutral,alarm_level,severity,category,source_count,primary_actor,status,last_updated_at,first_seen_at&order=last_updated_at.desc,id.desc&limit=500'
         );
         setAllStories(data || []);
         setError(null);
@@ -825,10 +1412,10 @@
         result = result.filter(story => story.category === selectedCategory);
       }
 
-      // Severity filter
+      // Alarm level filter (ADO-270: uses numeric levels with legacy fallback)
       if (selectedSeverity !== 'all') {
         result = result.filter(story =>
-          story.severity?.toLowerCase() === selectedSeverity
+          getAlarmLevel(story) === selectedSeverity
         );
       }
 
@@ -914,7 +1501,7 @@
     const handleSeverityChange = useCallback((sev) => {
       setSelectedSeverity(sev);
       setPage(1);
-      trackEvent('filter_severity', { severity: sev });
+      trackEvent('filter_alarm_level', { alarm_level: sev });
     }, []);
 
     // Handle sort change
@@ -1112,7 +1699,7 @@
             (async () => {
               try {
                 const data = await supabaseRequest(
-                  `stories?id=eq.${storyId}&select=id,primary_headline,summary_spicy,summary_neutral,severity,category,source_count,primary_actor,status,last_updated_at,first_seen_at`
+                  `stories?id=eq.${storyId}&select=id,primary_headline,summary_spicy,summary_neutral,alarm_level,severity,category,source_count,primary_actor,status,last_updated_at,first_seen_at`
                 );
                 if (data && data.length > 0) {
                   handleViewDetails(data[0], true);
@@ -1556,20 +2143,28 @@
       }
     }, []);
 
-    // Determine what content to show
-    const showComingSoon = activeTab === 'scotus' || activeTab === 'merch';
+    // Determine what content to show based on active tab
+    const renderContent = () => {
+      if (activeTab === 'scotus') {
+        return React.createElement(React.Fragment, null,
+          React.createElement(ScotusFeed),
+          React.createElement(InlineNewsletterCTA, { signupPage: 'scotus' })
+        );
+      }
+      if (activeTab === 'merch') {
+        return React.createElement(ComingSoon, { tabId: 'merch', onBack: handleBack });
+      }
+      // Default: stories
+      return React.createElement(React.Fragment, null,
+        React.createElement(StoryFeed),
+        React.createElement(InlineNewsletterCTA, { signupPage: 'stories' })
+      );
+    };
 
     return React.createElement('div', { className: 'tt-preview-root', style: { display: 'flex', flexDirection: 'column', minHeight: '100vh' } },
       React.createElement(Header, { theme, toggleTheme }),
       React.createElement(TabNavigation, { activeTab }),
-      React.createElement('div', { style: { flex: 1 } },
-        showComingSoon
-          ? React.createElement(ComingSoon, { tabId: activeTab, onBack: handleBack })
-          : React.createElement(React.Fragment, null,
-              React.createElement(StoryFeed),
-              React.createElement(InlineNewsletterCTA, { signupPage: 'stories' })
-            )
-      ),
+      React.createElement('div', { style: { flex: 1 } }, renderContent()),
       React.createElement(NewsletterFooter)
     );
   }

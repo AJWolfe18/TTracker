@@ -52,6 +52,25 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      - name: Validate required secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          COURTLISTENER_API_TOKEN: ${{ secrets.COURTLISTENER_API_TOKEN }}
+        run: |
+          fail=""
+          [ -z "$OPENAI_API_KEY" ] && fail="$fail OPENAI_API_KEY"
+          [ -z "$SUPABASE_URL" ] && fail="$fail SUPABASE_URL"
+          [ -z "$SUPABASE_SERVICE_KEY" ] && fail="$fail SUPABASE_SERVICE_KEY"
+          [ -z "$COURTLISTENER_API_TOKEN" ] && fail="$fail COURTLISTENER_API_TOKEN"
+          echo "$SUPABASE_URL" | grep -q "supabase.co" || fail="$fail SUPABASE_URL(invalid)"
+          [ ${#SUPABASE_SERVICE_KEY} -lt 20 ] && fail="$fail SERVICE_KEY(too_short)"
+          if [ -n "$fail" ]; then
+            echo "::error::Secret validation failed:$fail"
+            exit 1
+          fi
+
       - name: Create logs dir
         run: mkdir -p logs
 
@@ -116,6 +135,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           set -euo pipefail
           # IMPORTANT: Do NOT set SUPABASE_TEST_* in this step.
