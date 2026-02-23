@@ -1,0 +1,9 @@
+{
+  "_comment": "Feature flags for TEST environment - safe to enable experimental features",
+  "_updated": "2026-01-24",
+
+  "scotus": true,
+  "pardons": true,
+  "executive_orders": true,
+  "tone_v2": true
+}

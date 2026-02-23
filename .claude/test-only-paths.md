@@ -14,6 +14,9 @@ Check this file before creating deployment PRs.
 ## Data Files (never commit these)
 - `scripts/*.json` - Migration data exports (large, temporary)
 
+## Test-Only Frontend Tools
+- `public/style-preview.html` - Style preview tool (test only)
+
 ## What DOES go to prod
 - `.claude/skills/` - All skills work in both environments
 - `.claude/commands/` - All commands work in both environments
