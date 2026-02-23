@@ -15,6 +15,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 ## One-Time Migration Helpers (delete after use)
 - `scripts/apply-057-migration.js` - Migration check helper (ADO-253)
 
+## Test-Only Frontend Tools
+- `public/style-preview.html` - Style preview tool (test only)
+
 ## What DOES go to prod
 - `.claude/skills/` - All skills work in both environments
 - `.claude/commands/` - All commands work in both environments
