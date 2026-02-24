@@ -1659,7 +1659,7 @@
                     setEnrichingIds(new Set());
                 }, 120000);
                 return () => { clearInterval(interval); clearTimeout(timeout); };
-            }, [hasEnriching]);
+            }, [enrichingIds.size]);
 
             // Debounce search input
             useEffect(() => {
@@ -2432,7 +2432,7 @@
                     setEnrichingIds(new Set());
                 }, 120000);
                 return () => { clearInterval(interval); clearTimeout(timeout); };
-            }, [hasEnriching]);
+            }, [enrichingIds.size]);
 
             // Fetch pardons from edge function
             const fetchPardons = useCallback(async (loadMore = false, nextCursor = null) => {
