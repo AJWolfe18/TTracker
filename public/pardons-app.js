@@ -348,7 +348,7 @@
   // RECEIPTS TIMELINE COMPONENT
   // ===========================================
 
-  function ReceiptsTimeline({ events }) {
+  function ReceiptsTimeline({ events, pardonId }) {
     // Memoize sorted events to avoid re-sorting on every render
     const sortedEvents = React.useMemo(() => {
       if (!events || events.length === 0) return [];
@@ -408,7 +408,7 @@
                       targetType: 'timeline_source',
                       sourceDomain: domain,
                       contentType: 'pardon',
-                      contentId: String(pardon?.id)
+                      contentId: String(pardonId || 'unknown')
                     });
                   } catch (e) { /* ignore URL parse errors */ }
                 }
@@ -686,7 +686,7 @@
             // Section: The Receipts (timeline)
             p.receipts_timeline && p.receipts_timeline.length > 0 && React.createElement('div', { className: 'tt-pardon-section' },
               React.createElement('h3', { className: 'tt-section-title' }, 'The Receipts'),
-              React.createElement(ReceiptsTimeline, { events: p.receipts_timeline })
+              React.createElement(ReceiptsTimeline, { events: p.receipts_timeline, pardonId: p.id })
             ),
 
             // What Happened Next (only show if noteworthy - not "quiet", or has notes)
