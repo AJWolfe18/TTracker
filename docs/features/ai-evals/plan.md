@@ -110,12 +110,47 @@ TEST DB: 20 public cases.
 5. **Tone undifferentiated** — most cases get same concerned/critical tone regardless of level
 6. **D6 contradiction rate high** — partly real (fabricated dissents), partly LLM judge strictness on framing
 
+## Session 2 Results (2026-02-24, Phase 2)
+
+Prompt fixes applied + 10 gold cases re-enriched. 17 public cases in TEST.
+
+| Metric | Baseline | Phase 2 | Change |
+|--------|----------|---------|--------|
+| Severity level 4-5 | 70% | **65%** | -5pp |
+| issue_area null | 100% | **59%** | -41pp |
+| Generic evidence anchors | 95% | **59%** | -36pp |
+| String "null" fields | 20% | **0%** | FIXED |
+| Phantom dissent | 80% | **76%** | -4pp |
+| Generic parties | 0% | **0%** | same |
+| Similar opener pairs | 29 | **10** | -19 |
+| **Contradiction rate** | 100% | **71%** | -29pp |
+| Blocking error rate | 100% | **88%** | -12pp |
+| Gold cases passing | 0/10 | **2/7** | +29% |
+
+### What worked:
+1. **String null fixed entirely** — normalizeDissent() at write layer + prompt instruction
+2. **issue_area populated** — 7/7 re-enriched gold cases have valid issue_area
+3. **Evidence anchors now real quotes** — GPT generating verbatim quotes instead of section labels
+4. **Severity improvement** — Soto correctly at level 1, Connelly at 3
+
+### What's still broken:
+1. **D6 contradiction rate still 71%** — GPT confusing disposition direction in editorial (says "reversed" when "affirmed", etc). LLM judge also overly strict on framing.
+2. **D8 anchor grounding 71%** — GPT generates real quotes but exact-match fails (normalization gap in checkQuoteGrounding)
+3. **Severity still high** — Barrett 9-0 people-win still at level 3 despite base-rate guidance
+4. **D9 phantom dissent** — CourtListener metadata lacks dissent_authors for some cases with real dissents (Jackson, Gorsuch)
+
+### Phase 3 candidates:
+- D8 fix: fuzzy matching in checkQuoteGrounding (3-gram overlap instead of exact substring)
+- D6 fix: tighten Pass 1→Pass 2 alignment (inject disposition into editorial template)
+- Severity: stronger per-vote-count constraints in prompt
+- Phantom dissent: backfill dissent_authors from opinion text headers
+
 ## Roadmap
 
 | Session | Focus | Status |
 |---------|-------|--------|
 | 1 | Eval harness + gold set + baseline | **Done** |
-| 2 | Prompt fixes + hard-fact gate + re-eval gold set | Planned |
+| 2 | Prompt fixes + hard-fact gate + re-eval gold set | **Done** |
 | 3 | Shadow Layer B + bulk re-enrich 20 TEST cases | Planned |
 | 4 | Drift monitoring (optional) | Future |
 | 5 | Generalize to pardons/stories/EOs | Future |
@@ -124,7 +159,7 @@ TEST DB: 20 public cases.
 
 | Content Type | Eval File | Gold Set | Status |
 |-------------|-----------|----------|--------|
-| SCOTUS | `scotus-eval.js` | `gold-set.json` (10 cases) | Session 1 done |
+| SCOTUS | `scotus-eval.js` | `gold-set.json` (10 cases) | Session 2 done |
 | Pardons | `pardons-eval.js` | TBD | Not started |
 | Stories | `stories-eval.js` | TBD | Not started |
 | EOs | `eos-eval.js` | TBD | Not started |

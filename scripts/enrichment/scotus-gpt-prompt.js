@@ -23,7 +23,7 @@
 // ============================================================================
 
 // ADO-323: Prompt version for idempotency tracking
-export const PASS2_PROMPT_VERSION = 'v3-ado354-concrete-facts';
+export const PASS2_PROMPT_VERSION = 'v4-quality-eval';
 
 export const RULING_IMPACT_LEVELS = {
   5: {
@@ -186,6 +186,14 @@ Tone: Suspicious celebration. Genuine disbelief the system worked. Don't get use
 Profanity: NO.
 Focus: Why this actually protects people. Why it's hard to walk back.
 
+═══════════════════════════════════════════════════════════════════════════════
+SEVERITY BASE-RATE GUIDANCE (most cases are NOT level 4-5)
+═══════════════════════════════════════════════════════════════════════════════
+
+Expected distribution: ~30% level 0-1, ~15% level 2, ~35% level 3, ~15% level 4, ~5% level 5.
+UNANIMOUS (9-0, 8-0): Almost NEVER level 4-5 unless stripping existing rights.
+If assigning 4-5, verify: (1) is there a real dissent? (2) does it CHANGE existing rights? (3) would a con-law professor call this "major"?
+
 # TONE & STYLE RULES
 
 1. **FOLLOW THE MONEY**: If a ruling benefits Federalist Society donors (Leonard Leo, Koch network, Harlan Crow), dark money groups, or billionaire-funded plaintiffs, CALL IT OUT by name in Levels 4-5.
@@ -202,11 +210,10 @@ Focus: Why this actually protects people. Why it's hard to walk back.
 
 5. **PROFANITY**: Use for maximum impact in Levels 4-5 ONLY. Make it land, don't spray it.
 
-6. **EVIDENCE ANCHORED**: Every claim must reference the opinion. Use these tags:
-   - [syllabus] for official summary
-   - [majority §II.A] for majority opinion sections
-   - [dissent, Sotomayor J.] for dissent quotes
-   - [concurrence, Kagan J.] for concurrences
+6. **EVIDENCE ANCHORED**: Every claim must be backed by a SHORT VERBATIM QUOTE (5-15 words) from the source text.
+   - Good: "The judgment of the Court of Appeals is reversed", "cannot yield two convictions under §924(c)"
+   - Bad: "syllabus", "majority §III", "dissent, Jackson J." (these are section labels, NOT evidence)
+   - Each anchor = a real phrase from the opinion that a reader could search for
 
 # BANNED OPENINGS (Never use these - they're boring and formulaic)
 - "The Court..." or "The Supreme Court..." (NEVER start with this)
@@ -235,8 +242,8 @@ Do NOT start with "The Court" - we know it's the Court, get to the point.
   "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Editorial spin using the designated tone for that level.",
   "why_it_matters": "2-3 sentences. The FIRST sentence MUST contain at least one concrete fact from the opinion: a party name, statute or citation (e.g. '18 U.S.C. §924(c)', 'Chapter 64'), a legal standard, a dollar amount, or a specific timeline/date. Do NOT restate the holding — assume the reader saw it. Use the fact as the hook, then go straight to real-world consequences. Example: 'Escolastica Harrison spent 15 years seeking DNA testing under Texas Chapter 64, and this ruling slams that door shut. Any Texas prisoner claiming innocence now faces a higher bar that most can't clear without a lawyer they can't afford.' If you fail to lead with a concrete fact, you will be asked to rewrite.",
-  "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null (not 'None' or 'N/A').",
-  "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
+  "dissent_highlights": "1-2 sentences. Key dissent warning. If NO dissent exists, output the JSON literal null — NOT the string 'null', 'None', 'N/A', or empty string. DETERMINE dissent from the source text: look for 'dissenting opinion' or 'filed a dissent' sections.",
+  "evidence_anchors": ["short verbatim quote from opinion, 5-15 words", "another real quote from the text"]
 }`;
 
 // ============================================================================
@@ -309,7 +316,7 @@ ${variationInjection ? `\n${variationInjection}\n` : ''}
 Analyze this ruling and generate the editorial JSON. Remember:
 - Identify WHO WINS and WHO LOSES explicitly
 - Use the appropriate tone for the ruling_impact_level you assign
-- Anchor claims to [syllabus], [majority], or [dissent]
+- evidence_anchors must be SHORT VERBATIM QUOTES from the text (not section labels)
 - No both-sides framing`;
 
   return prompt;
@@ -725,6 +732,29 @@ Tone: Suspicious celebration. Genuine disbelief the system worked.
 Profanity: NO.
 
 ═══════════════════════════════════════════════════════════════════════════════
+SEVERITY BASE-RATE GUIDANCE (Critical — most cases are NOT level 4-5)
+═══════════════════════════════════════════════════════════════════════════════
+
+Expected distribution across a full SCOTUS term:
+- Level 0-1: ~30% of cases (unanimous people-win, narrow individual wins)
+- Level 2: ~15% (procedural, standing, jurisdiction)
+- Level 3: ~35% (majority of substantive rulings — technical harm, tilted procedure)
+- Level 4: ~15% (clear expansion of coercive state power, major rollback)
+- Level 5: ~5% (precedent overturned, system-level democratic threat)
+
+UNANIMOUS DECISIONS (9-0, 8-0, 8-1): Almost NEVER level 4-5 unless they strip
+existing rights from regular people. A unanimous Court agreeing on something
+technical is NOT a crisis. Use these guidelines:
+- 9-0 where individual wins → Level 0-1
+- 9-0 on technical interpretation → Level 2-3
+- 9-0 expanding state power over people → Level 3-4 (rarely 5)
+
+If you find yourself assigning level 4 or 5, STOP and verify:
+1. Is there an actual dissent? (unanimous = usually not 4-5)
+2. Does this ruling CHANGE existing rights? (interpreting an unclear statute ≠ crisis)
+3. Would a constitutional lawyer call this a "major ruling"? (most cases are not)
+
+═══════════════════════════════════════════════════════════════════════════════
 LABEL-TO-OUTCOME ALIGNMENT (Critical - ADO-305)
 ═══════════════════════════════════════════════════════════════════════════════
 
@@ -847,9 +877,15 @@ We know it's the Court - get to the point.
   "who_loses": "1-2 sentences. Who is harmed by this ruling and WHAT they lose because of it.",
   "summary_spicy": "3-4 sentences. Jump straight into impact - NO 'The Court' openers. MUST include disposition word.",
   "why_it_matters": "2-3 sentences. The FIRST sentence MUST contain at least one concrete fact from the opinion: a party name, statute or citation (e.g. '18 U.S.C. §924(c)', 'Chapter 64'), a legal standard, a dollar amount, or a specific timeline/date. Do NOT restate the holding — assume the reader saw it. Use the fact as the hook, then go straight to real-world consequences. Example: 'Escolastica Harrison spent 15 years seeking DNA testing under Texas Chapter 64, and this ruling slams that door shut. Any Texas prisoner claiming innocence now faces a higher bar that most can't clear without a lawyer they can't afford.' If you fail to lead with a concrete fact, you will be asked to rewrite.",
-  "dissent_highlights": "1-2 sentences. Key dissent warning. If no dissent, use null.",
-  "evidence_anchors": ["syllabus", "majority §III", "dissent, Jackson J."]
+  "dissent_highlights": "1-2 sentences. Key dissent warning. If NO dissent exists, output the JSON literal null — NOT the string 'null', 'None', 'N/A', or empty string. DETERMINE dissent from the source text.",
+  "evidence_anchors": ["short verbatim quote from opinion, 5-15 words", "another real quote from the text"]
 }
+
+# EVIDENCE_ANCHORS RULES (Critical — eval will reject section labels)
+Each anchor MUST be a SHORT VERBATIM QUOTE (5-15 words) from the source text.
+- Good: ["The judgment of the Court of Appeals is reversed", "sovereign immunity bars the trustee's claims"]
+- Bad: ["syllabus", "majority §III", "dissent, Jackson J."] (section labels are NOT evidence)
+- Each quote should be findable in the source text via search
 
 # WHO_WINS / WHO_LOSES RULES (STRICT - ADO-303)
 BANNED standalone labels (will fail validation):

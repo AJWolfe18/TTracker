@@ -22,6 +22,8 @@ import {
   normalizeDispositionText,
 } from '../scotus/opinion-utils.js';
 
+import { PASS2_PROMPT_VERSION } from './scotus-gpt-prompt.js';
+
 // ============================================================================
 // CONSTANTS (SINGLE SOURCE OF TRUTH)
 // ============================================================================
@@ -37,6 +39,7 @@ export const FACT_FIELDS = [
   'prevailing_party',
   'practical_effect',
   'evidence_quotes',
+  'issue_area',
 ];
 
 /**
@@ -341,10 +344,27 @@ OUTPUT SCHEMA:
   "holding": "1-2 sentences, neutral. What did the Court decide? If unclear, null.",
   "prevailing_party": "petitioner|respondent|partial|unclear|null",
   "practical_effect": "1 sentence. What changes? If unclear, null.",
+  "issue_area": "voting_rights|agency_power|executive_power|criminal_procedure|civil_rights|first_amendment|corporate_liability|labor_rights|environmental|healthcare|immigration|gun_rights|other",
   "evidence_quotes": ["anchor snippet 1", "anchor snippet 2"],
   "fact_extraction_confidence": "high|medium|low",
   "low_confidence_reason": "if not high, explain why"
 }
+
+ISSUE_AREA RULES:
+- Classify the PRIMARY legal issue into exactly one of the enum values above
+- voting_rights: Election law, gerrymandering, voter access
+- agency_power: Chevron deference, agency authority, regulations
+- executive_power: Presidential power, immunity, executive privilege
+- criminal_procedure: Fourth Amendment, police power, sentencing, incarceration
+- civil_rights: Discrimination, equal protection, civil liberties, attorney's fees (§1983)
+- first_amendment: Speech, religion, press, assembly
+- corporate_liability: Business regulation, liability, consumer protection, bankruptcy, tax
+- labor_rights: Workers, unions, employment law
+- environmental: EPA, climate, environmental regulation
+- healthcare: ACA, reproductive rights, medical decisions
+- immigration: Border, asylum, deportation
+- gun_rights: Second Amendment, gun regulations
+- other: Anything that doesn't fit above
 
 EVIDENCE_QUOTES RULES (STRICT - ADO-303):
 - Max 2 quotes total
@@ -619,6 +639,17 @@ const CONSENSUS_FIELDS = ['disposition', 'merits_reached', 'prevailing_party'];
  *
  * DB constraint allows: affirmed, reversed, vacated, remanded, dismissed, granted, denied, other
  */
+/**
+ * Normalize dissent_highlights: convert sentinel strings ("null", "None", "N/A") to actual null.
+ * GPT sometimes returns these despite prompt instructions.
+ */
+function normalizeDissent(val) {
+  if (val === null || val === undefined) return null;
+  const trimmed = String(val).trim();
+  if (/^(null|none|n\/?a|undefined)$/i.test(trimmed) || trimmed === '') return null;
+  return trimmed;
+}
+
 export function normalizeDisposition(val) {
   if (!val || typeof val !== 'string') return val;
   const lower = val.toLowerCase().trim();
@@ -1166,6 +1197,9 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     prevailing_party: data.prevailing_party,
     practical_effect: data.practical_effect,
     evidence_quotes: data.evidence_quotes || [],
+    // GPT-sourced issue_area always wins (no manual edits exist yet).
+    // If manual corrections become a thing, apply DB precedence like vote_split.
+    issue_area: data.issue_area || null,
 
     // DB PRECEDENCE: vote_split from DB wins if non-null
     vote_split: scotusCase.vote_split || null,
@@ -1187,7 +1221,7 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     who_loses: data.who_loses,
     summary_spicy: data.summary_spicy,
     why_it_matters: data.why_it_matters,
-    dissent_highlights: data.dissent_highlights,
+    dissent_highlights: normalizeDissent(data.dissent_highlights),
     // ADO-354: media_says and actually_means dropped from enrichment (columns remain nullable in DB)
     evidence_anchors: data.evidence_anchors || [],
 
@@ -1249,7 +1283,7 @@ export async function writeEnrichment(caseId, scotusCase, data, supabase) {
     }),
 
     // Versioning
-    prompt_version: 'v2-ado308',
+    prompt_version: PASS2_PROMPT_VERSION,
     updated_at: new Date().toISOString(),
   };
 
