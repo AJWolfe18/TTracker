@@ -69,7 +69,6 @@ docs/features/
 - [ ] Create brief handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
   - 1 paragraph max: ADO ticket, state change, what to do next
   - Example: "ADO-123 moved to Testing. SCOTUS frontend complete. Next: verify on test site, then Ready for Prod."
-- [ ] Report token usage
 
 **Skip plan for:** Simple bugs, 1-2 file changes, well-understood patterns
 **Create feature folder for:** New features, architecture changes, cost analysis needed
@@ -202,9 +201,7 @@ docs/features/
 
 10. **AI code review only runs on PRs** - Direct pushes to test don't trigger review. When creating PRs for PROD, check review status with `gh pr view` or `bash scripts/check-code-review.sh`
 
-11. **Report token usage** - End every response with usage stats
-
-12. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
+11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB
    - **MCP queries:** Always use `select=id,field1,field2` not `select=*`
    - **Always use `limit`:** Default to `limit=10` for exploration
@@ -212,7 +209,7 @@ docs/features/
    - **Re-cluster/backfill scripts are EXPENSIVE:** Fetching 1800 articles with embeddings = ~5-7GB egress
    - **Before running bulk scripts:** Warn about egress cost, consider if necessary
 
-13. **🚩 FEATURE FLAGS: Use for new features deploying to PROD**
+12. **🚩 FEATURE FLAGS: Use for new features deploying to PROD**
    - New features deploy with flag OFF in `public/shared/flags-prod.json`
    - Test on PROD with URL override: `?ff_featurename=true`
    - Flip flag ON only after verification

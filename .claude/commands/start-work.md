@@ -41,6 +41,7 @@ Create a TodoList with full workflow:
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit changes
 - [ ] Update ADO (move to Active/Testing as appropriate)
+- [ ] **AC verification before closing**: Fetch the ADO story's acceptance criteria via `/ado`. Run `Task(feature-dev:code-reviewer)` with the full AC text and ask it to verify EVERY bullet as MET/NOT MET against the actual code. Do NOT close any story with unmet AC — either fix the gap or document it on the card.
 - [ ] Create handoff doc
 
 ### 5. Update ADO
