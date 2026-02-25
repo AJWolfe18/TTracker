@@ -630,6 +630,53 @@ export function validateEnrichmentResponse(response, opts) {
     errors.push('evidence_anchors cannot be empty - must cite sources');
   }
 
+  // ---- SESSION 2A: HARD GATE VALIDATORS (ADO-394) ----
+
+  // GATE 1: Dissent integrity — dissent_highlights must obey dissent_exists + dissent_authors
+  const scotusCase = opts.scotusCase || {};
+  const dissentExists = scotusCase.dissent_exists === true;
+  const dissentAuthors = Array.isArray(scotusCase.dissent_authors) ? scotusCase.dissent_authors : [];
+  const dissentText = response.dissent_highlights;
+
+  if (dissentText && typeof dissentText === 'string' && dissentText.trim().length > 10) {
+    if (!dissentExists && dissentAuthors.length === 0) {
+      errors.push('dissent_highlights present but dissent_exists=false and dissent_authors=[]. Must be null.');
+    }
+    // Check for names not in dissent_authors (last-name match)
+    if (dissentAuthors.length > 0) {
+      const authorLastNames = dissentAuthors.map(a => {
+        const parts = a.trim().split(/\s+/);
+        return parts[parts.length - 1].toLowerCase();
+      });
+      // Extract justice names from highlights (pattern: "Justice X" or "X J.")
+      const mentionedNames = [];
+      const justicePattern = /(?:Justice|J\.|Judge)\s+([A-Z][a-z]+)/g;
+      let match;
+      while ((match = justicePattern.exec(dissentText)) !== null) {
+        mentionedNames.push(match[1].toLowerCase());
+      }
+      for (const name of mentionedNames) {
+        if (!authorLastNames.includes(name)) {
+          errors.push(`dissent_highlights mentions "${name}" but not in dissent_authors [${dissentAuthors.join(', ')}]`);
+        }
+      }
+    }
+  }
+
+  // GATE 2: who_wins/who_loses internal consistency
+  if (response.who_wins && typeof response.who_wins === 'string') {
+    // who_wins must NOT contain losing language
+    if (/\b(lose|loses|lost|denied|limits?\s+(his|her|their|the)\s+ability|cannot|unable)\b/i.test(response.who_wins)) {
+      errors.push(`who_wins contains losing language: "${response.who_wins.slice(0, 80)}..."`);
+    }
+  }
+  if (response.who_loses && typeof response.who_loses === 'string') {
+    // who_loses must NOT contain winning language
+    if (/^[^.]*\b(wins|gains|benefits|prevails|succeeds)\b/i.test(response.who_loses)) {
+      errors.push(`who_loses contains winning language: "${response.who_loses.slice(0, 80)}..."`);
+    }
+  }
+
   return { valid: errors.length === 0, errors };
 }
 
@@ -945,7 +992,29 @@ but factual claims must remain bounded to the holding and this case.
    - Good: "In this case, the plaintiffs lose their challenge to this specific policy."
    - Bad:  "Voting rights nationwide are gutted"
    - Good: "This defendant's conviction stands."
-   - Bad:  "Criminal defendants everywhere just lost rights."`;
+   - Bad:  "Criminal defendants everywhere just lost rights."
+
+7) DISSENT CONSTRAINT (HARD GATE — violations will be rejected):
+   - If dissent_exists is FALSE or dissent_authors is empty → dissent_highlights MUST be null
+   - If dissent_exists is TRUE → dissent_highlights may ONLY mention justices listed in dissent_authors
+   - Do NOT name justices from lower courts (state supreme court, circuit court, district court)
+   - Do NOT fabricate or paraphrase quotes — if you cannot find the exact words in the source text, summarize without quotation marks
+   - If no dissent text is provided in the source, summarize the dissent position briefly without direct quotes
+
+8) WHO_WINS / WHO_LOSES CONSTRAINT (HARD GATE — violations will be rejected):
+   - Each field must start with a proper noun party name (person, agency, entity) or "The [specific entity]"
+   - who_wins describes WHO BENEFITS and HOW — must be unambiguously positive for that party
+   - who_loses describes WHO IS HARMED and WHAT THEY LOSE — must be unambiguously negative for that party
+   - MUTUAL EXCLUSIVITY: the same party cannot appear as both winner AND loser
+   - INTERNAL CONSISTENCY: who_wins must NOT contain words like "lose", "denied", "limits ability", "cannot"
+   - INTERNAL CONSISTENCY: who_loses must NOT contain words like "wins", "gains", "benefits"
+   - Bad: "Miller gains a ruling that limits his ability to claw back" (contradictory — gains + limits)
+   - Good: "The federal government retains sovereign immunity, shielding it from fraudulent transfer claims."
+
+9) QUOTE ATTRIBUTION CONSTRAINT:
+   - Do NOT place quotation marks around text unless the exact phrase appears in the source text provided
+   - Do NOT attribute quotes to dissenting justices unless dissent text is present in the source
+   - If source text is not provided for a section (e.g., dissent), summarize without quotes`;
 
 // ============================================================================
 // ADO-300: LABEL CONSTRAINTS FOR CLAMP SYSTEM

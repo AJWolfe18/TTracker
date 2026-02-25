@@ -818,7 +818,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // Validate editorial response structure (ADO-354: pass caseName for concrete fact checks)
-  const { valid, errors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name });
+  const { valid, errors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name, scotusCase });
   if (!valid) {
     console.error(`   ❌ Pass 2 validation failed: ${errors.join(', ')}`);
     await markFailed(scotusCase.id, `Pass 2 validation: ${errors.join(', ')}`, supabase);
@@ -916,7 +916,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         return { success: false, error: 'Empty Pass 2 retry response', cost: totalCost };
       }
 
-      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name });
+      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name, scotusCase });
       if (!retryValid) {
         console.error(`   ❌ Pass 2 retry validation failed: ${retryErrors.join(', ')}`);
         await markFailed(scotusCase.id, `Pass 2 retry validation: ${retryErrors.join(', ')}`, supabase);
