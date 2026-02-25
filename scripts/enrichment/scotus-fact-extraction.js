@@ -1307,7 +1307,7 @@ export async function getCasesToEnrich(limit, supabase) {
     .select(`
       id, case_name, syllabus, opinion_excerpt, term, decided_at,
       vote_split, majority_author, dissent_authors, issue_area, docket_number,
-      source_data_version,
+      source_data_version, is_gold_set,
       scotus_opinions!left(opinion_full_text)
     `)
     .in('enrichment_status', ['pending', 'failed'])

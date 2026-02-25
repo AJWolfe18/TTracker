@@ -104,6 +104,44 @@ export async function fetchOpinionTexts(supabase, caseIds) {
 }
 
 // ============================================================================
+// ADO-394: GOLD CASE SNAPSHOT FOR DEBUGGING
+// ============================================================================
+
+/**
+ * Fetch raw enrichment data for all gold cases (saved alongside eval results).
+ * This preserves the exact data that was evaluated, for later debugging.
+ */
+export async function fetchGoldCaseSnapshots(supabase) {
+  const goldCases = loadGoldSet();
+  const goldIds = goldCases.map(g => g.case_id);
+
+  const SNAPSHOT_FIELDS = [
+    'id', 'case_name', 'decided_at', 'majority_author', 'vote_split',
+    'dissent_exists', 'dissent_authors', 'enrichment_status',
+    'ruling_impact_level', 'ruling_label', 'issue_area',
+    'who_wins', 'who_loses', 'summary_spicy', 'why_it_matters',
+    'dissent_highlights', 'evidence_anchors', 'evidence_quotes',
+    'prompt_version', 'disposition', 'holding', 'prevailing_party',
+    'practical_effect', 'case_type', 'merits_reached',
+    'is_public', 'needs_manual_review', 'clamp_reason', 'is_gold_set',
+  ].join(',');
+
+  const { data, error } = await supabase
+    .from('scotus_cases')
+    .select(SNAPSHOT_FIELDS)
+    .in('id', goldIds)
+    .order('id');
+
+  if (error) throw new Error(`Failed to fetch gold snapshots: ${error.message}`);
+
+  return data.map(c => ({
+    ...c,
+    gold_expectations: goldCases.find(g => g.case_id === c.id),
+    snapshot_timestamp: new Date().toISOString(),
+  }));
+}
+
+// ============================================================================
 // D1: SEVERITY CONGRUENCE (LLM Judge)
 // ============================================================================
 

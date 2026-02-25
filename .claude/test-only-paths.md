@@ -14,6 +14,7 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 
 ## One-Time Migration Helpers (delete after use)
 - `scripts/apply-057-migration.js` - Migration check helper (ADO-253)
+- `scripts/scotus/backfill-dissent-authors.js` - Dissent metadata backfill (ADO-394, one-time)
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)

@@ -253,6 +253,18 @@ async function main() {
   // Write output files
   writeResults(config.type, runId, goldResults, aggregateResults, aggregateStats);
 
+  // ADO-394: Save raw gold case snapshot alongside eval results
+  if (goldResults.length > 0 && evalModule.fetchGoldCaseSnapshots) {
+    try {
+      const snapshots = await evalModule.fetchGoldCaseSnapshots(supabase);
+      const snapshotPath = join(LOGS_DIR, `${config.type}-${runId}-gold-snapshot.json`);
+      writeFileSync(snapshotPath, JSON.stringify(snapshots, null, 2), 'utf-8');
+      console.log(`Gold snapshot written: ${snapshotPath}`);
+    } catch (err) {
+      console.log(`Warning: Could not save gold snapshot: ${err.message}`);
+    }
+  }
+
   // Print summary
   printSummary(goldResults, aggregateStats);
 

@@ -13,6 +13,7 @@
  *   node scripts/scotus/enrich-scotus.js --prod       # Write to PROD (requires explicit flag)
  *   node scripts/scotus/enrich-scotus.js --skip-consensus  # Skip double Pass 1 (testing only)
  *   node scripts/scotus/enrich-scotus.js --case-ids=145,161,230  # Enrich specific cases (ADO-323)
+ *   node scripts/scotus/enrich-scotus.js --force-gold          # Allow re-enriching gold set cases (ADO-394)
  *
  * Requirements:
  *   - SUPABASE_TEST_URL or SUPABASE_URL
@@ -138,7 +139,8 @@ function parseArgs() {
     dryRun: false,
     allowProd: false,
     skipConsensus: false,
-    caseIds: null  // ADO-323: Targeted case IDs for regression testing
+    caseIds: null,  // ADO-323: Targeted case IDs for regression testing
+    forceGold: false  // ADO-394: Allow re-enriching gold set cases
   };
 
   for (const arg of process.argv.slice(2)) {
@@ -150,6 +152,8 @@ function parseArgs() {
       args.allowProd = true;
     } else if (arg === '--skip-consensus') {
       args.skipConsensus = true;
+    } else if (arg === '--force-gold') {
+      args.forceGold = true;
     } else if (arg.startsWith('--case-ids=')) {
       // ADO-323: Parse comma-separated case IDs with dedupe + order preserved
       const raw = arg.split('=')[1] || '';
@@ -1322,6 +1326,7 @@ async function main() {
   console.log(`Dry run: ${args.dryRun}`);
   console.log(`Allow PROD: ${args.allowProd}`);
   console.log(`Skip consensus: ${args.skipConsensus}`);
+  console.log(`Force gold: ${args.forceGold}`);
   console.log(`Prompt version: ${PROMPT_VERSION}`);
   console.log(`Layer B mode: ${LAYER_B_MODE} (retry: ${LAYER_B_RETRY})\n`);
 
@@ -1395,6 +1400,25 @@ async function main() {
     console.log('\n✅ No cases to enrich.');
     console.log('   (Cases need enrichment_status=pending/failed AND syllabus/excerpt)\n');
     return;
+  }
+
+  // ADO-394: Gold set protection — skip is_gold_set cases unless --force-gold
+  if (!args.forceGold) {
+    const beforeCount = cases.length;
+    cases = cases.filter(c => !c.is_gold_set);
+    const skippedGold = beforeCount - cases.length;
+    if (skippedGold > 0) {
+      console.log(`\n🛡️ Gold set protection: skipped ${skippedGold} gold case(s). Use --force-gold to override.`);
+    }
+    if (cases.length === 0) {
+      console.log('\n✅ No non-gold cases to enrich.');
+      return;
+    }
+  } else {
+    const goldCount = cases.filter(c => c.is_gold_set).length;
+    if (goldCount > 0) {
+      console.log(`\n⚠️ --force-gold: including ${goldCount} gold set case(s)`);
+    }
   }
 
   console.log(`\n📋 Found ${cases.length} case(s) to enrich\n`);
