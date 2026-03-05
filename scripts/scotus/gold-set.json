@@ -1,5 +1,5 @@
 {
-  "_comment": "SCOTUS Eval Gold Set — 10 hand-verified cases spanning all severity levels. Source: DB + CourtListener + SCOTUS opinion text verification. Created Session 1 (2026-02-24).",
+  "_comment": "SCOTUS Eval Gold Set — 10 hand-verified cases spanning all severity levels. Source: DB + CourtListener + SCOTUS opinion text + SCOTUSblog cross-reference. Created Session 1 (2026-02-24). Updated 2026-03-04 after full SCOTUSblog review.",
   "cases": [
     {
       "case_id": 286,
@@ -37,11 +37,11 @@
       "tone_should_contain": ["veteran", "CRSC", "compensation"],
       "tone_should_not_contain": ["tyranny", "arsonist", "crisis"],
       "dissent_expected": false,
-      "expected_vote_split": null,
+      "expected_vote_split": "9-0",
       "expected_winner": "veterans like Simon Soto seeking combat-related compensation",
       "expected_loser": "federal government seeking to limit retroactive benefit payments",
       "source_data_verified": true,
-      "notes": "Thomas authored. Veterans get CRSC without Barring Act cap. Enrichment cites 'Judge Reyna' (Federal Circuit judge, not SCOTUS justice) in dissent_highlights — factual error."
+      "notes": "9-0 unanimous (Thomas authored). Veterans get CRSC without Barring Act cap. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 4,
@@ -79,11 +79,11 @@
       "tone_should_contain": ["veteran", "VA", "disability", "claims"],
       "tone_should_not_contain": ["arsonist", "crisis"],
       "dissent_expected": true,
-      "expected_vote_split": null,
+      "expected_vote_split": "7-2",
       "expected_winner": "Department of Veterans Affairs retaining discretion over claims",
       "expected_loser": "veterans like Joshua Bufkin seeking disability benefits",
       "source_data_verified": true,
-      "notes": "Thomas authored. VA disability claims harder to challenge. Jackson + Gorsuch dissented. Genuine institutional harm to veterans. Level 3-4 appropriate."
+      "notes": "7-2 (Thomas authored). VA disability claims harder to challenge. Jackson + Gorsuch dissented. Genuine institutional harm to veterans. Level 3-4 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 133,
@@ -93,11 +93,11 @@
       "tone_should_contain": ["sovereign immunity", "bankruptcy", "trustees"],
       "tone_should_not_contain": ["arsonist", "crisis"],
       "dissent_expected": true,
-      "expected_vote_split": null,
+      "expected_vote_split": "8-1",
       "expected_winner": "federal government shielded by sovereign immunity",
       "expected_loser": "bankruptcy trustees / creditors seeking to reclaim misappropriated funds",
       "source_data_verified": true,
-      "notes": "Jackson authored. Sovereign immunity blocks bankruptcy trustees from using state-law claims against federal government. Gorsuch dissented. Level 3-4 appropriate."
+      "notes": "8-1 (Jackson authored). Sovereign immunity blocks bankruptcy trustees from using state-law claims against federal government. Gorsuch dissented. Level 3-4 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 68,
@@ -106,12 +106,12 @@
       "expected_issue_area": "first_amendment",
       "tone_should_contain": ["TikTok", "First Amendment", "ban", "national security"],
       "tone_should_not_contain": ["crumbs", "democracy wins"],
-      "dissent_expected": true,
-      "expected_vote_split": null,
+      "dissent_expected": false,
+      "expected_vote_split": "per curiam (unanimous on outcome)",
       "expected_winner": "federal government / national security apparatus",
       "expected_loser": "TikTok users / free speech advocates / 170 million users",
       "source_data_verified": true,
-      "notes": "Per curiam. TikTok ban upheld under national security rationale. Sotomayor dissented in part. Genuine First Amendment restriction. Level 4-5 appropriate."
+      "notes": "Per curiam (unsigned). TikTok ban upheld as constitutional under intermediate scrutiny. No formal dissent — Sotomayor concurred in part, Gorsuch concurred in judgment. Genuine First Amendment restriction. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 63,
@@ -121,25 +121,25 @@
       "tone_should_contain": ["14th Amendment", "Section 3", "disqualification", "insurrection"],
       "tone_should_not_contain": ["crumbs", "democracy wins"],
       "dissent_expected": false,
-      "expected_vote_split": null,
+      "expected_vote_split": "9-0 on outcome (divided on reasoning)",
       "expected_winner": "Trump / future candidates facing state-level disqualification",
       "expected_loser": "Colorado voters / states seeking to enforce Section 3",
       "source_data_verified": true,
-      "notes": "Per curiam. States cannot enforce 14th Amendment Section 3 against federal candidates. Separate concurrences from liberal justices. Level 4-5 appropriate."
+      "notes": "Per curiam. 9-0 on outcome but divided on reasoning. States cannot enforce 14th Amendment Section 3 against federal candidates — only Congress can. Barrett concurred separately; Sotomayor/Kagan/Jackson concurred in judgment only. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 109,
       "case_name": "Lackey v. Stinnie",
-      "expected_level_range": [3, 4],
+      "expected_level_range": [2, 3],
       "expected_issue_area": "civil_rights",
       "tone_should_contain": ["attorney", "fees", "preliminary injunction", "prevailing party"],
       "tone_should_not_contain": ["arsonist", "constitutional crisis"],
       "dissent_expected": true,
-      "expected_vote_split": null,
+      "expected_vote_split": "7-2",
       "expected_winner": "state officials shielded from fee-shifting accountability",
       "expected_loser": "civil rights plaintiffs who won preliminary injunctions but cannot recover fees",
       "source_data_verified": true,
-      "notes": "Roberts authored. Preliminary injunctions don't confer prevailing-party status for attorney's fees. Bad for access to justice but NOT a constitutional crisis. Currently over-rated at level 5."
+      "notes": "7-2 (Roberts authored). Preliminary injunctions don't confer prevailing-party status for attorney's fees. Minor case — bad for access to justice but procedural, not a major rights ruling. Jackson + Sotomayor dissented. Verified via SCOTUSblog 2026-03-04."
     }
   ]
 }
