@@ -7,13 +7,13 @@
       "expected_level_range": [0, 1],
       "expected_issue_area": "criminal_procedure",
       "tone_should_contain": ["unanimous", "reversed", "conviction"],
-      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "devastating", "dystopian"],
+      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "devastating", "dystopian", "sabotage", "power grab"],
       "dissent_expected": false,
       "expected_vote_split": "9-0",
       "expected_winner": "Dwayne Barrett / criminal defendants facing double convictions",
       "expected_loser": "federal prosecutors seeking multiple convictions for single acts",
       "source_data_verified": true,
-      "notes": "9-0 unanimous (Jackson authored). One act cannot yield two convictions under §924(c)(1)(A)(i) and §924(j). Clear people-win. Currently over-rated at level 3."
+      "notes": "9-0 unanimous (Jackson authored). One act cannot yield two convictions under §924(c)(1)(A)(i) and §924(j). Clear people-win. Narrow statutory interpretation — tone should be measured, not dramatic. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 51,
@@ -21,13 +21,13 @@
       "expected_level_range": [0, 1],
       "expected_issue_area": "civil_rights",
       "tone_should_contain": ["consumer", "FCRA", "sue"],
-      "tone_should_not_contain": ["tyranny", "arsonist", "crisis"],
+      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "sabotage", "devastating", "power grab", "dystopian", "reckoning"],
       "dissent_expected": false,
       "expected_vote_split": "9-0",
       "expected_winner": "Reginald Kirtz / consumers with inaccurate credit reports",
       "expected_loser": "federal agencies that report false credit information",
       "source_data_verified": true,
-      "notes": "9-0 unanimous (Gorsuch authored). Consumers can sue federal agencies under FCRA. Enrichment fabricates 'dissent, Jackson J.' in evidence_anchors — there was no dissent."
+      "notes": "9-0 unanimous (Gorsuch authored). Consumers can sue federal agencies under FCRA. This is a PEOPLE-WIN case — tone should reflect a positive outcome for consumers, not doom. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 192,
@@ -35,13 +35,13 @@
       "expected_level_range": [0, 1],
       "expected_issue_area": "other",
       "tone_should_contain": ["veteran", "CRSC", "compensation"],
-      "tone_should_not_contain": ["tyranny", "arsonist", "crisis"],
+      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "sabotage", "devastating", "power grab", "dystopian"],
       "dissent_expected": false,
       "expected_vote_split": "9-0",
       "expected_winner": "veterans like Simon Soto seeking combat-related compensation",
       "expected_loser": "federal government seeking to limit retroactive benefit payments",
       "source_data_verified": true,
-      "notes": "9-0 unanimous (Thomas authored). Veterans get CRSC without Barring Act cap. Verified via SCOTUSblog 2026-03-04."
+      "notes": "9-0 unanimous (Thomas authored). Veterans get CRSC without Barring Act cap. People-win case — tone should be measured and positive. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 4,
@@ -49,13 +49,13 @@
       "expected_level_range": [2, 3],
       "expected_issue_area": "corporate_liability",
       "tone_should_contain": ["tax", "estate", "shares", "redeem"],
-      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "authoritarian"],
+      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "authoritarian", "sabotage", "exploit", "devastating", "power grab", "dystopian"],
       "dissent_expected": false,
       "expected_vote_split": "9-0",
       "expected_winner": "IRS / federal government on estate tax valuation",
       "expected_loser": "Connelly estate / closely-held business owners on tax planning",
       "source_data_verified": true,
-      "notes": "9-0 unanimous (Thomas authored). Technical estate tax ruling about share redemption valuation. No rights at stake, no power grab. Currently over-rated at level 4."
+      "notes": "9-0 unanimous (Thomas authored). IRS WON this case — corporation owes more taxes. GPT previously flipped winner/loser (said corp won, IRS lost). Technical estate tax ruling. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 64,
@@ -63,13 +63,13 @@
       "expected_level_range": [1, 2],
       "expected_issue_area": "corporate_liability",
       "tone_should_contain": ["jurisdiction", "remand", "state court"],
-      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "devastating"],
+      "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "devastating", "sabotage", "seek justice", "power grab", "dystopian", "scrutiny"],
       "dissent_expected": false,
-      "expected_vote_split": null,
+      "expected_vote_split": "9-0",
       "expected_winner": "Anastasia Wullschleger / consumers challenging deceptive marketing",
       "expected_loser": "Royal Canin USA / corporations trying to keep cases in federal court",
       "source_data_verified": true,
-      "notes": "Kagan authored. Technical jurisdiction ruling — case remanded to state court after federal claims dropped. Currently over-rated at level 4."
+      "notes": "9-0 unanimous (Kagan authored). Pure jurisdiction/procedure — federal court loses supplemental jurisdiction when federal claims are dropped, case goes to state court. Dry procedural ruling, tone should be matter-of-fact. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 120,
@@ -77,13 +77,13 @@
       "expected_level_range": [3, 4],
       "expected_issue_area": "civil_rights",
       "tone_should_contain": ["veteran", "VA", "disability", "claims"],
-      "tone_should_not_contain": ["arsonist", "crisis"],
+      "tone_should_not_contain": ["arsonist", "crisis", "dystopian", "healthcare"],
       "dissent_expected": true,
       "expected_vote_split": "7-2",
       "expected_winner": "Department of Veterans Affairs retaining discretion over claims",
       "expected_loser": "veterans like Joshua Bufkin seeking disability benefits",
       "source_data_verified": true,
-      "notes": "7-2 (Thomas authored). VA disability claims harder to challenge. Jackson + Gorsuch dissented. Genuine institutional harm to veterans. Level 3-4 appropriate. Verified via SCOTUSblog 2026-03-04."
+      "notes": "7-2 (Thomas authored). VA disability claims reviewed under deferential 'clear error' standard. Jackson + Gorsuch dissented. Issue is civil_rights (judicial review standard for veterans), NOT healthcare. GPT previously mislabeled issue_area as healthcare. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 133,
@@ -91,13 +91,13 @@
       "expected_level_range": [3, 4],
       "expected_issue_area": "corporate_liability",
       "tone_should_contain": ["sovereign immunity", "bankruptcy", "trustees"],
-      "tone_should_not_contain": ["arsonist", "crisis"],
+      "tone_should_not_contain": ["arsonist", "crisis", "dystopian", "tightens the grip"],
       "dissent_expected": true,
       "expected_vote_split": "8-1",
       "expected_winner": "federal government shielded by sovereign immunity",
       "expected_loser": "bankruptcy trustees / creditors seeking to reclaim misappropriated funds",
       "source_data_verified": true,
-      "notes": "8-1 (Jackson authored). Sovereign immunity blocks bankruptcy trustees from using state-law claims against federal government. Gorsuch dissented. Level 3-4 appropriate. Verified via SCOTUSblog 2026-03-04."
+      "notes": "8-1 (Jackson authored). Sovereign immunity waived for federal bankruptcy claims but NOT for state-law claims nested within them. Gorsuch dissented. Tone should be firm but not alarmist — GPT previously used 'tightens the grip of governmental power' which is overblown. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 68,
@@ -105,13 +105,14 @@
       "expected_level_range": [4, 5],
       "expected_issue_area": "first_amendment",
       "tone_should_contain": ["TikTok", "First Amendment", "ban", "national security"],
-      "tone_should_not_contain": ["crumbs", "democracy wins"],
+      "tone_should_contain": ["TikTok", "First Amendment", "national security", "divestiture"],
+      "tone_should_not_contain": ["crumbs", "democracy wins", "minor", "procedural"],
       "dissent_expected": false,
       "expected_vote_split": "per curiam (unanimous on outcome)",
       "expected_winner": "federal government / national security apparatus",
       "expected_loser": "TikTok users / free speech advocates / 170 million users",
       "source_data_verified": true,
-      "notes": "Per curiam (unsigned). TikTok ban upheld as constitutional under intermediate scrutiny. No formal dissent — Sotomayor concurred in part, Gorsuch concurred in judgment. Genuine First Amendment restriction. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
+      "notes": "Per curiam (unsigned). TikTok divestiture law upheld as constitutional under intermediate scrutiny — content-neutral, targets foreign adversary control. No formal dissent — Sotomayor concurred in part, Gorsuch concurred in judgment. Major First Amendment ruling affecting 170M users. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 63,
@@ -119,13 +120,14 @@
       "expected_level_range": [4, 5],
       "expected_issue_area": "executive_power",
       "tone_should_contain": ["14th Amendment", "Section 3", "disqualification", "insurrection"],
-      "tone_should_not_contain": ["crumbs", "democracy wins"],
+      "tone_should_contain": ["14th Amendment", "Section 3", "insurrection", "ballot"],
+      "tone_should_not_contain": ["crumbs", "democracy wins", "minor", "procedural"],
       "dissent_expected": false,
       "expected_vote_split": "9-0 on outcome (divided on reasoning)",
       "expected_winner": "Trump / future candidates facing state-level disqualification",
       "expected_loser": "Colorado voters / states seeking to enforce Section 3",
       "source_data_verified": true,
-      "notes": "Per curiam. 9-0 on outcome but divided on reasoning. States cannot enforce 14th Amendment Section 3 against federal candidates — only Congress can. Barrett concurred separately; Sotomayor/Kagan/Jackson concurred in judgment only. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
+      "notes": "Per curiam. 9-0 on outcome but deeply divided on reasoning. Only Congress (not states) can enforce Section 3 against federal candidates. Barrett concurred separately; Sotomayor/Kagan/Jackson concurred in judgment only — objected to majority reaching beyond what was necessary. NO dissent — GPT previously fabricated dissent_highlights for this case. Level 4-5 appropriate. Verified via SCOTUSblog 2026-03-04."
     },
     {
       "case_id": 109,
@@ -133,13 +135,13 @@
       "expected_level_range": [2, 3],
       "expected_issue_area": "civil_rights",
       "tone_should_contain": ["attorney", "fees", "preliminary injunction", "prevailing party"],
-      "tone_should_not_contain": ["arsonist", "constitutional crisis"],
+      "tone_should_not_contain": ["arsonist", "constitutional crisis", "dystopian", "sabotage", "devastating"],
       "dissent_expected": true,
       "expected_vote_split": "7-2",
       "expected_winner": "state officials shielded from fee-shifting accountability",
       "expected_loser": "civil rights plaintiffs who won preliminary injunctions but cannot recover fees",
       "source_data_verified": true,
-      "notes": "7-2 (Roberts authored). Preliminary injunctions don't confer prevailing-party status for attorney's fees. Minor case — bad for access to justice but procedural, not a major rights ruling. Jackson + Sotomayor dissented. Verified via SCOTUSblog 2026-03-04."
+      "notes": "7-2 (Roberts authored). Preliminary injunctions don't make you a 'prevailing party' for attorney's fees. Minor procedural ruling — impacts fee-shifting but not fundamental rights. Jackson + Sotomayor dissented. Tone should reflect this is a procedural setback, not a crisis. Verified via SCOTUSblog 2026-03-04."
     }
   ]
 }
