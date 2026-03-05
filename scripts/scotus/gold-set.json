@@ -61,7 +61,7 @@
       "case_id": 64,
       "case_name": "Royal Canin U. S. A. v. Wullschleger",
       "expected_level_range": [1, 2],
-      "expected_issue_area": "corporate_liability",
+      "expected_issue_area": "other",
       "tone_should_contain": ["jurisdiction", "remand", "state court"],
       "tone_should_not_contain": ["tyranny", "arsonist", "crisis", "devastating", "sabotage", "seek justice", "power grab", "dystopian", "scrutiny"],
       "dissent_expected": false,
