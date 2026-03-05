@@ -509,8 +509,31 @@ export function lintQuotes(quotes) {
 function extractAnchorQuoteFromSource(scotusCase, sourceText) {
   const result = extractDispositionEvidence(scotusCase, sourceText);
 
-  // Always return telemetry for tracking (even on failure)
+  // ADO-428: Per curiam fallback — if section-aware extraction fails,
+  // search the full source text directly. Per curiam opinions may lack
+  // canonical section markers (=== MAJORITY OPINION ===).
   if (!result.disposition || result.telemetry.disposition_source === 'unknown') {
+    const isPerCuriam = !scotusCase.majority_author
+      || /per\s*curiam/i.test(scotusCase.majority_author);
+    if (isPerCuriam && sourceText) {
+      // Search full text for anchor patterns
+      for (const pattern of ANCHOR_PATTERNS) {
+        const match = sourceText.match(pattern);
+        if (match) {
+          const raw = match[0].replace(/\s+/g, ' ').trim();
+          const quote = safeTruncate(raw, 150);
+          return {
+            quote: quote || null,
+            telemetry: {
+              disposition_source: 'full_text_per_curiam',
+              disposition_window: 'full',
+              disposition_pattern: 'per_curiam_fallback',
+              disposition_raw: raw,
+            },
+          };
+        }
+      }
+    }
     return {
       quote: null,
       telemetry: result.telemetry,
@@ -1066,6 +1089,16 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
       // NOTE: ruling_impact_level derived from label in enrich-scotus.js (ADO-302)
       console.log(`   [CLAMP] Drift + procedural → Sidestepping`);
       return out;
+    }
+  }
+
+  // ADO-428: Phantom dissent null-coercion — safety net
+  // If DB says no dissent, force dissent_highlights to null regardless of GPT output
+  // Note: dissent_exists is always derived from dissent_authors.length in enrich-scotus.js
+  if (facts?.dissent_exists === false) {
+    if (out.dissent_highlights && typeof out.dissent_highlights === 'string' && out.dissent_highlights.trim().length > 0) {
+      console.log(`   [CLAMP] Phantom dissent nullified — dissent_exists=${facts?.dissent_exists}, dissent_authors=[]`);
+      out.dissent_highlights = null;
     }
   }
 

@@ -751,6 +751,10 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   const sourceText = getSourceText(scotusCase);
   const clampedFacts = clampAndLabel(facts, { sourceText });
 
+  // ADO-428: Inject dissent metadata from DB for phantom dissent null-coercion
+  clampedFacts.dissent_exists = (scotusCase.dissent_authors?.length || 0) > 0;
+  clampedFacts.dissent_authors = scotusCase.dissent_authors || [];
+
   console.log(`   Clamp: ${clampedFacts.clamp_reason || 'none'} | Sidestepping forbidden: ${clampedFacts._sidestepping_forbidden}`);
   if (clampedFacts.clamp_reason) {
     console.log(`   📋 Clamped case will get Sidestepping label`);

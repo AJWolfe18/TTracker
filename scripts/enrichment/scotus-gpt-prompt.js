@@ -23,7 +23,7 @@
 // ============================================================================
 
 // ADO-323: Prompt version for idempotency tracking
-export const PASS2_PROMPT_VERSION = 'v4-quality-eval';
+export const PASS2_PROMPT_VERSION = 'v5-ado428-calibration';
 
 export const RULING_IMPACT_LEVELS = {
   5: {
@@ -282,10 +282,10 @@ export function buildUserPrompt(scotusCase, variationInjection = '') {
   // Use syllabus if available, otherwise fall back to opinion excerpt
   const textToAnalyze = syllabusText || excerptText || 'No syllabus available - use opinion text provided';
 
-  // Format dissenting justices
+  // Format dissenting justices — ADO-428: explicit no-dissent context
   const dissentText = dissent_authors?.length > 0
     ? `Dissenting: ${dissent_authors.join(', ')}`
-    : 'No dissent (unanimous or per curiam)';
+    : 'Dissent: None (unanimous or per curiam)';
 
   // Issue area label
   const issueLabel = ISSUE_AREA_LABELS[issue_area] || issue_area || 'General';
@@ -304,7 +304,7 @@ ${partyContext}
 
 VOTE:
 Split: ${vote_split || 'Unknown'}
-Majority Author: ${majority_author || 'Unknown'}
+Majority Author: ${majority_author || 'Per Curiam'}
 ${dissentText}
 
 ISSUE AREA: ${issueLabel}
@@ -988,20 +988,30 @@ but factual claims must remain bounded to the holding and this case.
    - Level 2: Procedural, matter-of-fact, not dramatic
    - Level 3–5: Critical but grounded — fury must cite specific facts
 
-6) IMPACT WITHOUT OVERCLAIM:
+6) SEVERITY CALIBRATION (ADO-428 — violations will be re-scored):
+   - 9-0 UNANIMOUS rulings on narrow procedural/statutory interpretation: CAP at level 0-1
+     * Example: Barrett v. US (double convictions), Kirtz (FCRA standing), Soto (veteran CRSC) = level 0-1
+   - PROCEDURAL / JURISDICTIONAL rulings (standing, remand, fee-shifting): CAP at level 2-3
+     * Example: Royal Canin (jurisdiction remand), Lackey (prevailing party fees) = level 1-2
+   - Only assign level 4-5 when: constitutional rights at stake AND real-world impact on millions of people
+     * Example: TikTok ban (170M users, First Amendment), Trump ballot disqualification = level 4-5
+   - Technical estate tax, bankruptcy, statutory interpretation = level 0-2 unless they change substantive rights
+   - If unanimous AND narrow AND no dissent: the maximum level is 2 unless precedent is explicitly overruled
+
+7) IMPACT WITHOUT OVERCLAIM:
    - Good: "In this case, the plaintiffs lose their challenge to this specific policy."
    - Bad:  "Voting rights nationwide are gutted"
    - Good: "This defendant's conviction stands."
    - Bad:  "Criminal defendants everywhere just lost rights."
 
-7) DISSENT CONSTRAINT (HARD GATE — violations will be rejected):
+8) DISSENT CONSTRAINT (HARD GATE — violations will be rejected):
    - If dissent_exists is FALSE or dissent_authors is empty → dissent_highlights MUST be null
    - If dissent_exists is TRUE → dissent_highlights may ONLY mention justices listed in dissent_authors
    - Do NOT name justices from lower courts (state supreme court, circuit court, district court)
    - Do NOT fabricate or paraphrase quotes — if you cannot find the exact words in the source text, summarize without quotation marks
    - If no dissent text is provided in the source, summarize the dissent position briefly without direct quotes
 
-8) WHO_WINS / WHO_LOSES CONSTRAINT (HARD GATE — violations will be rejected):
+9) WHO_WINS / WHO_LOSES CONSTRAINT (HARD GATE — violations will be rejected):
    - Each field must start with a proper noun party name (person, agency, entity) or "The [specific entity]"
    - who_wins describes WHO BENEFITS and HOW — must be unambiguously positive for that party
    - who_loses describes WHO IS HARMED and WHAT THEY LOSE — must be unambiguously negative for that party
@@ -1011,7 +1021,7 @@ but factual claims must remain bounded to the holding and this case.
    - Bad: "Miller gains a ruling that limits his ability to claw back" (contradictory — gains + limits)
    - Good: "The federal government retains sovereign immunity, shielding it from fraudulent transfer claims."
 
-9) QUOTE ATTRIBUTION CONSTRAINT:
+10) QUOTE ATTRIBUTION CONSTRAINT:
    - Do NOT place quotation marks around text unless the exact phrase appears in the source text provided
    - Do NOT attribute quotes to dissenting justices unless dissent text is present in the source
    - If source text is not provided for a section (e.g., dissent), summarize without quotes`;
@@ -1119,10 +1129,10 @@ The disposition is "${facts.disposition}". This word MUST appear in summary_spic
 `;
   }
 
-  // Format dissent info — don't assert "unanimous" if we just lack metadata
+  // Format dissent info — ADO-428: explicit no-dissent when metadata confirms it
   const dissentInfo = scotusCase.dissent_authors?.length > 0
     ? `Dissenting: ${scotusCase.dissent_authors.join(', ')}`
-    : 'Dissent: DETERMINE FROM SOURCE TEXT. Look for "filed a dissenting opinion" or dissent sections. If truly unanimous, say so.';
+    : 'Dissent: NONE — dissent_authors is empty. dissent_highlights MUST be JSON null. Do NOT fabricate or infer dissent from concurrences.';
 
   // ADO-354 + full-text: Inject full opinion text so Pass 2 can pull concrete facts AND dissent content
   const sourceText = sanitizeSourceText(
@@ -1144,7 +1154,7 @@ Case: ${scotusCase.case_name}
 Term: ${scotusCase.term || 'Unknown'}
 Decided: ${scotusCase.decided_at || 'Pending'}
 Vote: ${scotusCase.vote_split || 'Unknown'}
-Majority: ${scotusCase.majority_author || 'Unknown'}
+Majority: ${scotusCase.majority_author || 'Per Curiam'}
 ${dissentInfo}
 
 ${variationInjection ? `${variationInjection}\n` : ''}${sourceText ? `SOURCE TEXT (reference only — use for concrete facts in why_it_matters, do NOT override Pass 1 facts):\n<<<SOURCE_TEXT>>>\n${sourceText}\n<<<END_SOURCE_TEXT>>>\n\n` : ''}Generate the editorial JSON. Remember:

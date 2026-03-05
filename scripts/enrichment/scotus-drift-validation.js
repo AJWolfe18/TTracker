@@ -95,7 +95,7 @@ Case: ${scotusCase.case_name}
 Term: ${scotusCase.term || 'Unknown'}
 Decided: ${scotusCase.decided_at || 'Pending'}
 Vote: ${scotusCase.vote_split || 'Unknown'}
-Majority: ${scotusCase.majority_author || 'Unknown'}
+Majority: ${scotusCase.majority_author || 'Per Curiam'}
 Dissent: ${scotusCase.dissent_authors?.join(', ') || 'None'}
 
 Generate the editorial JSON. Your summary_spicy and why_it_matters must be CONSISTENT with the Pass 1 facts above.
