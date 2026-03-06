@@ -75,6 +75,13 @@ import {
   buildQAFixDirectives,
 } from '../enrichment/scotus-qa-validators.js';
 
+// ADO-429: SCOTUSblog grounding agent
+import {
+  getScotusContext,
+  formatContextForPrompt,
+  validateAgainstContext,
+} from './scotusblog-scraper.js';
+
 // ADO-310: Layer B LLM QA for nuanced quality checks
 import {
   runLayerBQA,
@@ -114,9 +121,13 @@ const DEFAULT_BATCH_SIZE = 10;
 const MAX_SAFE_LIMIT = 100;
 const DEFAULT_DAILY_CAP_USD = 5.00;
 
-// OpenAI pricing (gpt-4o-mini as of 2025-01-01)
-const INPUT_COST_PER_1K = 0.00015;
-const OUTPUT_COST_PER_1K = 0.0006;
+// OpenAI pricing per 1K tokens
+const MODEL_PRICING = {
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'gpt-4o':      { input: 0.0025,  output: 0.01 },
+};
+const INPUT_COST_PER_1K = 0.00015;   // default fallback (mini)
+const OUTPUT_COST_PER_1K = 0.0006;   // default fallback (mini)
 
 // ADO-303: Model config (Phase 0 - gpt-4o-mini only)
 // Rationale: gpt-5-mini produced quote-heavy output causing 5/6 low-confidence failures
@@ -125,6 +136,10 @@ const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
+
+// ADO-429: Pass 2 model — GPT-4o for better reasoning with SCOTUSblog grounding
+// Falls back to gpt-4o-mini if SCOTUS_PASS2_MODEL env var is set
+const PASS2_MODEL = process.env.SCOTUS_PASS2_MODEL || 'gpt-4o';
 
 // ADO-303: Max retries for empty responses (same model, smaller context)
 const MAX_EMPTY_RETRIES = 2;
@@ -140,7 +155,8 @@ function parseArgs() {
     allowProd: false,
     skipConsensus: false,
     caseIds: null,  // ADO-323: Targeted case IDs for regression testing
-    forceGold: false  // ADO-394: Allow re-enriching gold set cases
+    forceGold: false,  // ADO-394: Allow re-enriching gold set cases
+    noScotusblog: false,  // ADO-429: Disable SCOTUSblog grounding
   };
 
   for (const arg of process.argv.slice(2)) {
@@ -154,6 +170,8 @@ function parseArgs() {
       args.skipConsensus = true;
     } else if (arg === '--force-gold') {
       args.forceGold = true;
+    } else if (arg === '--no-scotusblog') {
+      args.noScotusblog = true;
     } else if (arg.startsWith('--case-ids=')) {
       // ADO-323: Parse comma-separated case IDs with dedupe + order preserved
       const raw = arg.split('=')[1] || '';
@@ -440,11 +458,12 @@ function safeCaseName(scotusCase) {
   return raw.length > 0 ? raw : `[Unnamed case ID=${scotusCase?.id || 'unknown'}]`;
 }
 
-function calculateCost(usage) {
+function calculateCost(usage, model = 'gpt-4o-mini') {
   const promptTokens = usage?.prompt_tokens ?? 0;
   const completionTokens = usage?.completion_tokens ?? 0;
-  const inputCost = (promptTokens / 1000) * INPUT_COST_PER_1K;
-  const outputCost = (completionTokens / 1000) * OUTPUT_COST_PER_1K;
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING['gpt-4o-mini'];
+  const inputCost = (promptTokens / 1000) * pricing.input;
+  const outputCost = (completionTokens / 1000) * pricing.output;
   return inputCost + outputCost;
 }
 
@@ -761,6 +780,43 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   }
 
   // =========================================================================
+  // ADO-429: SCOTUSBLOG GROUNDING (between Pass 1 and Pass 2)
+  // Fetch context from SCOTUSblog for fact-grounded editorial writing.
+  // =========================================================================
+  let scotusblogContext = '';
+  let scotusblogResult = null;
+
+  if (!args.noScotusblog) {
+    console.log(`   📋 SCOTUSblog: Searching for grounding context...`);
+    try {
+      scotusblogResult = await getScotusContext({
+        caseName: scotusCase.case_name,
+        docketNumber: scotusCase.docket_number,
+        term: scotusCase.term,
+      });
+
+      if (scotusblogResult.found) {
+        scotusblogContext = formatContextForPrompt(scotusblogResult);
+        const contextLen = scotusblogContext.length;
+        const strategy = scotusblogResult.searchStrategy;
+        const hasAnalysis = !!scotusblogResult.analysisText;
+        console.log(`   ✓ SCOTUSblog: Found (${strategy}, ${contextLen} chars, analysis: ${hasAnalysis})`);
+      } else {
+        console.log(`   ⚠️ SCOTUSblog: Not found for "${scotusCase.case_name}"`);
+        if (scotusblogResult.errors.length > 0) {
+          console.log(`      Errors: ${scotusblogResult.errors.join('; ')}`);
+        }
+      }
+    } catch (err) {
+      console.log(`   ⚠️ SCOTUSblog fetch failed (non-blocking): ${err.message}`);
+    }
+  }
+
+  // ADO-429: Select Pass 2 model — GPT-4o when grounding available, else mini
+  const pass2Model = scotusblogContext ? PASS2_MODEL : 'gpt-4o-mini';
+  console.log(`   Pass 2 model: ${pass2Model}${scotusblogContext ? ' (grounded)' : ' (ungrounded fallback)'}`);
+
+  // =========================================================================
   // PASS 2: Editorial Framing (ADO-275: New Variation System)
   // ADO-309: Now includes QA retry loop (max 1 retry for fixable issues)
   // =========================================================================
@@ -784,16 +840,17 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   console.log(`     Frame: ${frame} (${frameSource}) | Pool: ${poolKey} | Pattern: ${patternId}`);
 
   // ADO-309: Helper to run Pass 2 with optional QA fix directives
+  // ADO-429: Now passes SCOTUSblog context and uses selected model
   async function executePass2(qaFixDirectives = '') {
     const fullVariationInjection = qaFixDirectives
       ? `${baseVariationInjection}\n${qaFixDirectives}`
       : baseVariationInjection;
 
-    const messages = buildPass2Messages(scotusCase, clampedFacts, fullVariationInjection);
+    const messages = buildPass2Messages(scotusCase, clampedFacts, fullVariationInjection, scotusblogContext);
     const { parsed: pass2Result, usage: pass2Usage } = await callGPTWithRetry(
       openai,
       messages,
-      { temperature: 0.7, maxRetries: 1 }
+      { temperature: 0.7, maxRetries: 1, model: pass2Model }
     );
 
     return { editorial: pass2Result, usage: pass2Usage };
@@ -808,10 +865,10 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     const { editorial: pass2Result, usage: pass2Usage } = await executePass2();
 
     editorial = pass2Result;
-    totalCost += calculateCost(pass2Usage);
+    totalCost += calculateCost(pass2Usage, pass2Model);
     totalTokens += pass2Usage?.total_tokens || 0;
 
-    console.log(`   ✓ Pass 2: ${pass2Usage?.total_tokens || 0} tokens`);
+    console.log(`   ✓ Pass 2: ${pass2Usage?.total_tokens || 0} tokens (${pass2Model})`);
   } catch (err) {
     console.error(`   ❌ Pass 2 failed: ${err.message}`);
     await markFailed(scotusCase.id, `Pass 2 error: ${err.message}`, supabase);
@@ -845,6 +902,24 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         ? [...groundingCheck.suspicious.slice(0, 3), `(+${groundingCheck.suspicious.length - 3} more)`]
         : groundingCheck.suspicious;
       console.warn(`   ⚠️ ADO-354 grounding: suspicious citations not in source: ${suspicious.join(', ')}`);
+    }
+  }
+
+  // =========================================================================
+  // ADO-429: SCOTUSBLOG POST-ENRICHMENT VALIDATION
+  // Compare enrichment output against SCOTUSblog data for factual consistency.
+  // =========================================================================
+  if (scotusblogResult && scotusblogResult.found) {
+    const sbValidation = validateAgainstContext(editorial, scotusblogResult);
+    const checkSummary = sbValidation.checks
+      .filter(c => c.status !== 'skip')
+      .map(c => `${c.field}:${c.status}`)
+      .join(', ');
+    console.log(`   📋 SCOTUSblog validation: ${sbValidation.passed ? 'PASS' : 'WARN'} (${checkSummary})`);
+    if (sbValidation.hasWarnings) {
+      for (const c of sbValidation.checks.filter(c => c.status === 'warn')) {
+        console.log(`      ⚠️ ${c.field}: ${c.detail}`);
+      }
     }
   }
 
@@ -906,10 +981,10 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         const { editorial: retryResult, usage: retryUsage } = await executePass2(qaFixDirectivesUsed);
 
         editorial = retryResult;
-        totalCost += calculateCost(retryUsage);
+        totalCost += calculateCost(retryUsage, pass2Model);
         totalTokens += retryUsage?.total_tokens || 0;
 
-        console.log(`   ✓ Pass 2 retry: ${retryUsage?.total_tokens || 0} tokens`);
+        console.log(`   ✓ Pass 2 retry: ${retryUsage?.total_tokens || 0} tokens (${pass2Model})`);
       } catch (err) {
         // ADO-309: On retry failure, mark as failed and return early (don't process invalid editorial)
         console.error(`   ❌ Pass 2 retry failed: ${err.message}`);
@@ -1293,10 +1368,13 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // Track cost
   await incrementBudgetAtomic(supabase, totalCost);
 
-  console.log(`   ✅ Enriched! (${totalTokens} tokens, $${totalCost.toFixed(4)}, model: ${usedModel})`);
+  console.log(`   ✅ Enriched! (${totalTokens} tokens, $${totalCost.toFixed(4)}, pass2: ${pass2Model})`);
   console.log(`   Level: ${constrainedEditorial.ruling_impact_level} (${constrainedEditorial.ruling_label})`);
   console.log(`   Public: ${isPublic} | Review: ${needsReview} | Clamp: ${clampedFacts.clamp_reason || 'none'}`);
   console.log(`   Who wins: ${(constrainedEditorial.who_wins || '').substring(0, 50)}...`);
+  if (scotusblogResult?.found) {
+    console.log(`   SCOTUSblog: grounded (${scotusblogResult.searchStrategy})`);
+  }
 
   return {
     success: true,
@@ -1312,6 +1390,8 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     cost: totalCost,
     isPublic,
     needsReview,
+    pass2Model,  // ADO-429: Track which model was used for Pass 2
+    scotusblogGrounded: scotusblogResult?.found || false,  // ADO-429
     // For anti-repetition: track summary_spicy for signature detection
     summaryOpening: (constrainedEditorial.summary_spicy || '').substring(0, 150)
   };
@@ -1331,6 +1411,8 @@ async function main() {
   console.log(`Allow PROD: ${args.allowProd}`);
   console.log(`Skip consensus: ${args.skipConsensus}`);
   console.log(`Force gold: ${args.forceGold}`);
+  console.log(`SCOTUSblog grounding: ${args.noScotusblog ? 'DISABLED' : 'ENABLED'}`);
+  console.log(`Pass 2 model: ${PASS2_MODEL}`);
   console.log(`Prompt version: ${PROMPT_VERSION}`);
   console.log(`Layer B mode: ${LAYER_B_MODE} (retry: ${LAYER_B_RETRY})\n`);
 
@@ -1440,7 +1522,8 @@ async function main() {
     medium: 0,
     low: 0,
     public: 0,
-    review: 0
+    review: 0,
+    scotusblogGrounded: 0,  // ADO-429
   };
 
   for (const scotusCase of cases) {
@@ -1466,6 +1549,7 @@ async function main() {
 
         if (result.isPublic) results.public++;
         if (result.needsReview) results.review++;
+        if (result.scotusblogGrounded) results.scotusblogGrounded++;
       } else if (result.skipped) {
         skipCount++;
         results.low++;
@@ -1492,6 +1576,7 @@ async function main() {
   console.log(`   Failed (errors): ${failCount}`);
   console.log(`   Auto-published: ${results.public}`);
   console.log(`   Needs review: ${results.review}`);
+  console.log(`   SCOTUSblog grounded: ${results.scotusblogGrounded}/${successCount}`);
   if (!args.dryRun && totalCost > 0) {
     console.log(`   Total cost: $${totalCost.toFixed(4)}`);
   }

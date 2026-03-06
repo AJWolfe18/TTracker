@@ -23,7 +23,7 @@
 // ============================================================================
 
 // ADO-323: Prompt version for idempotency tracking
-export const PASS2_PROMPT_VERSION = 'v5-ado428-calibration';
+export const PASS2_PROMPT_VERSION = 'v6-ado429-scotusblog-grounding';
 
 export const RULING_IMPACT_LEVELS = {
   5: {
@@ -666,7 +666,7 @@ export function validateEnrichmentResponse(response, opts) {
   // GATE 2: who_wins/who_loses internal consistency
   if (response.who_wins && typeof response.who_wins === 'string') {
     // who_wins must NOT contain losing language
-    if (/\b(lose|loses|lost|denied|limits?\s+(his|her|their|the)\s+ability|cannot|unable)\b/i.test(response.who_wins)) {
+    if (/\b(lose|loses|lost|denied|cannot|unable)\b|\blimits?\s+(his|her|their|the)\s+ability\b/i.test(response.who_wins)) {
       errors.push(`who_wins contains losing language: "${response.who_wins.slice(0, 80)}..."`);
     }
   }
@@ -1079,7 +1079,7 @@ This is a ${clamp_reason.replace(/_/g, ' ')} case.
  * @param {string} variationInjection - Creative direction from variation pools
  * @returns {string} User prompt for Pass 2
  */
-export function buildPass2UserPrompt(scotusCase, facts, variationInjection = '') {
+export function buildPass2UserPrompt(scotusCase, facts, variationInjection = '', scotusblogContext = '') {
   // ADO-300: Build and inject label constraints from clampAndLabel()
   const labelConstraints = buildLabelConstraintsBlock(facts);
   let constraints = labelConstraints ? `${labelConstraints}\n\n` : '';
@@ -1157,12 +1157,12 @@ Vote: ${scotusCase.vote_split || 'Unknown'}
 Majority: ${scotusCase.majority_author || 'Per Curiam'}
 ${dissentInfo}
 
-${variationInjection ? `${variationInjection}\n` : ''}${sourceText ? `SOURCE TEXT (reference only — use for concrete facts in why_it_matters, do NOT override Pass 1 facts):\n<<<SOURCE_TEXT>>>\n${sourceText}\n<<<END_SOURCE_TEXT>>>\n\n` : ''}Generate the editorial JSON. Remember:
+${variationInjection ? `${variationInjection}\n` : ''}${scotusblogContext ? `${scotusblogContext}\n\n` : ''}${sourceText ? `SOURCE TEXT (reference only — use for concrete facts in why_it_matters, do NOT override Pass 1 facts):\n<<<SOURCE_TEXT>>>\n${sourceText}\n<<<END_SOURCE_TEXT>>>\n\n` : ''}Generate the editorial JSON. Remember:
 - Your who_wins/who_loses MUST align with the prevailing_party and case_type above
 - The disposition word "${facts.disposition || 'unknown'}" MUST appear in summary_spicy
 - Use the appropriate tone for the ruling_impact_level you assign
 - Do NOT contradict the Pass 1 facts
-- why_it_matters MUST lead with a concrete fact from the source text`;
+- why_it_matters MUST lead with a concrete fact from the source text${scotusblogContext ? '\n- Use SCOTUSblog reference above to ground who_wins/who_loses and severity. SCOTUSblog is an authoritative source — prefer its factual claims over inferences from opinion text.' : ''}`;
 
   return prompt;
 }
@@ -1170,9 +1170,9 @@ ${variationInjection ? `${variationInjection}\n` : ''}${sourceText ? `SOURCE TEX
 /**
  * Build messages array for Pass 2 GPT call
  */
-export function buildPass2Messages(scotusCase, facts, variationInjection = '') {
+export function buildPass2Messages(scotusCase, facts, variationInjection = '', scotusblogContext = '') {
   return [
     { role: 'system', content: PASS2_SYSTEM_PROMPT },
-    { role: 'user', content: buildPass2UserPrompt(scotusCase, facts, variationInjection) }
+    { role: 'user', content: buildPass2UserPrompt(scotusCase, facts, variationInjection, scotusblogContext) }
   ];
 }
