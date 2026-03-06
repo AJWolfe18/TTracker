@@ -138,7 +138,7 @@ const FACTS_MODEL_FALLBACKS = (process.env.SCOTUS_FACTS_MODEL_FALLBACKS || 'gpt-
   .filter(Boolean);
 
 // ADO-429: Pass 2 model — GPT-4o for better reasoning with SCOTUSblog grounding
-// Falls back to gpt-4o-mini if SCOTUS_PASS2_MODEL env var is set
+// Override via SCOTUS_PASS2_MODEL env var (defaults to gpt-4o)
 const PASS2_MODEL = process.env.SCOTUS_PASS2_MODEL || 'gpt-4o';
 
 // ADO-303: Max retries for empty responses (same model, smaller context)

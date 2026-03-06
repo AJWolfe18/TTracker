@@ -136,7 +136,6 @@ async function fetchCaseFilePage(url) {
 
   const html = await response.text();
   const dom = new JSDOM(html, { url });
-  const doc = dom.window.document;
 
   const result = {
     url,
@@ -150,69 +149,74 @@ async function fetchCaseFilePage(url) {
     analysis_links: [],
   };
 
-  // Extract metadata from table (SCOTUSblog uses header row + data row layout)
-  // Headers: Docket No. | Op. Below | Argument | Opinion | Vote | Author | Term
-  // Values in the corresponding data row
-  const tables = doc.querySelectorAll('table');
-  for (const table of tables) {
-    const rows = table.querySelectorAll('tr');
-    if (rows.length < 2) continue;
+  try {
+    const doc = dom.window.document;
 
-    // Build header-to-column index mapping from first row
-    const headerCells = rows[0].querySelectorAll('td, th');
-    const headers = [...headerCells].map(c => (c.textContent || '').trim().toLowerCase());
+    // Extract metadata from table (SCOTUSblog uses header row + data row layout)
+    // Headers: Docket No. | Op. Below | Argument | Opinion | Vote | Author | Term
+    // Values in the corresponding data row
+    const tables = doc.querySelectorAll('table');
+    for (const table of tables) {
+      const rows = table.querySelectorAll('tr');
+      if (rows.length < 2) continue;
 
-    // Map headers to column indices
-    const colMap = {};
-    headers.forEach((h, i) => {
-      if (h.includes('docket')) colMap.docket = i;
-      else if (h === 'term') colMap.term = i;
-      else if (h === 'vote') colMap.vote = i;
-      else if (h === 'author') colMap.author = i;
-      else if (h === 'opinion' || h === 'decided') colMap.decided = i;
-    });
+      // Build header-to-column index mapping from first row
+      const headerCells = rows[0].querySelectorAll('td, th');
+      const headers = [...headerCells].map(c => (c.textContent || '').trim().toLowerCase());
 
-    // Extract values from data rows
-    for (let r = 1; r < rows.length; r++) {
-      const dataCells = rows[r].querySelectorAll('td, th');
-      const vals = [...dataCells].map(c => (c.textContent || '').trim());
+      // Map headers to column indices
+      const colMap = {};
+      headers.forEach((h, i) => {
+        if (h.includes('docket')) colMap.docket = i;
+        else if (h === 'term') colMap.term = i;
+        else if (h === 'vote') colMap.vote = i;
+        else if (h === 'author') colMap.author = i;
+        else if (h === 'opinion' || h === 'decided') colMap.decided = i;
+      });
 
-      if (colMap.docket !== undefined && vals[colMap.docket]) {
-        const m = vals[colMap.docket].match(/(\d{2}-\d+)/);
-        if (m) result.docket_number = m[1];
-      }
-      if (colMap.term !== undefined && vals[colMap.term]) {
-        const m = vals[colMap.term].match(/(OT\s+\d{4})/i);
-        if (m) result.term = m[1];
-      }
-      if (colMap.decided !== undefined && vals[colMap.decided]) {
-        const m = vals[colMap.decided].match(/([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4})/);
-        if (m) result.decided_at = m[1];
-      }
-      if (colMap.vote !== undefined && vals[colMap.vote]) {
-        result.vote_split = vals[colMap.vote].replace(/\s+/g, ' ');
-      }
-      if (colMap.author !== undefined && vals[colMap.author]) {
-        result.majority_author = vals[colMap.author];
+      // Extract values from data rows
+      for (let r = 1; r < rows.length; r++) {
+        const dataCells = rows[r].querySelectorAll('td, th');
+        const vals = [...dataCells].map(c => (c.textContent || '').trim());
+
+        if (colMap.docket !== undefined && vals[colMap.docket]) {
+          const m = vals[colMap.docket].match(/(\d{2}-\d+)/);
+          if (m) result.docket_number = m[1];
+        }
+        if (colMap.term !== undefined && vals[colMap.term]) {
+          const m = vals[colMap.term].match(/(OT\s+\d{4})/i);
+          if (m) result.term = m[1];
+        }
+        if (colMap.decided !== undefined && vals[colMap.decided]) {
+          const m = vals[colMap.decided].match(/([A-Z][a-z]{2,8}\s+\d{1,2},?\s+\d{4})/);
+          if (m) result.decided_at = m[1];
+        }
+        if (colMap.vote !== undefined && vals[colMap.vote]) {
+          result.vote_split = vals[colMap.vote].replace(/\s+/g, ' ');
+        }
+        if (colMap.author !== undefined && vals[colMap.author]) {
+          result.majority_author = vals[colMap.author];
+        }
       }
     }
+
+    // Extract issue/holding from text content (often in paragraphs, not tables)
+    const content = doc.querySelector('.entry-content, .case-content, article, .main-content');
+    if (content) {
+      const text = content.textContent || '';
+
+      // Holding
+      const holdingMatch = text.match(/(?:Held|Holding)[:\s]+(.{20,500}?)(?:\n|\r|$)/i);
+      if (holdingMatch) result.holding = holdingMatch[1].trim();
+
+      // Issue/question presented
+      const issueMatch = text.match(/(?:Issue|Question\s+Presented)[:\s]+(.{20,500}?)(?:\n|\r|$)/i);
+      if (issueMatch) result.issue = issueMatch[1].trim();
+    }
+  } finally {
+    dom.window.close();
   }
 
-  // Extract issue/holding from text content (often in paragraphs, not tables)
-  const content = doc.querySelector('.entry-content, .case-content, article, .main-content');
-  if (content) {
-    const text = content.textContent || '';
-
-    // Holding
-    const holdingMatch = text.match(/(?:Held|Holding)[:\s]+(.{20,500}?)(?:\n|\r|$)/i);
-    if (holdingMatch) result.holding = holdingMatch[1].trim();
-
-    // Issue/question presented
-    const issueMatch = text.match(/(?:Issue|Question\s+Presented)[:\s]+(.{20,500}?)(?:\n|\r|$)/i);
-    if (issueMatch) result.issue = issueMatch[1].trim();
-  }
-
-  dom.window.close();
   return result;
 }
 
@@ -242,28 +246,30 @@ async function fetchAnalysisPost(url) {
   let title = '';
   let text = '';
 
-  // Try Readability first
   try {
-    const reader = new Readability(dom.window.document.cloneNode(true));
-    const article = reader.parse();
-    if (article && article.textContent && article.textContent.length > 200) {
-      title = article.title || '';
-      text = article.textContent.trim();
+    // Try Readability first
+    try {
+      const reader = new Readability(dom.window.document.cloneNode(true));
+      const article = reader.parse();
+      if (article && article.textContent && article.textContent.length > 200) {
+        title = article.title || '';
+        text = article.textContent.trim();
+      }
+    } catch {
+      // Readability failed, fall through
     }
-  } catch {
-    // Readability failed, fall through
-  }
 
-  // Fallback: extract from article/entry-content
-  if (!text || text.length < 200) {
-    const content = dom.window.document.querySelector('.entry-content, article, .post-content');
-    if (content) {
-      title = dom.window.document.querySelector('h1, .entry-title')?.textContent?.trim() || '';
-      text = content.textContent.trim();
+    // Fallback: extract from article/entry-content
+    if (!text || text.length < 200) {
+      const content = dom.window.document.querySelector('.entry-content, article, .post-content');
+      if (content) {
+        title = dom.window.document.querySelector('h1, .entry-title')?.textContent?.trim() || '';
+        text = content.textContent.trim();
+      }
     }
+  } finally {
+    dom.window.close();
   }
-
-  dom.window.close();
 
   // Cap text length
   if (text.length > MAX_ANALYSIS_TEXT_CHARS) {
