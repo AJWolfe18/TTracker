@@ -157,8 +157,21 @@ export function validateNoDrift(facts, editorial) {
   // These are suspicious but not explicit contradictions
 
   // 4. Disposition word missing (SOFT) - editorial should mention the disposition
-  if (facts.disposition && !summaryLower.includes(facts.disposition.toLowerCase())) {
-    softIssues.push(`Disposition missing: "${facts.disposition}" not in summary`);
+  // ADO-429: Use synonym matching — spicy summaries often say "struck down" instead of "reversed"
+  if (facts.disposition) {
+    const dispositionSynonyms = {
+      reversed:  ['reversed', 'overturned', 'struck down', 'vacated', 'thrown out', 'tossed out'],
+      affirmed:  ['affirmed', 'upheld', 'sustained', 'backed', 'left intact', 'left standing', 'stands'],
+      remanded:  ['remanded', 'sent back', 'returned to'],
+      vacated:   ['vacated', 'wiped out', 'thrown out', 'invalidated', 'nullified', 'overturned'],
+      dismissed: ['dismissed', 'tossed', 'thrown out', 'rejected'],
+    };
+    const dispo = facts.disposition.toLowerCase();
+    const synonyms = dispositionSynonyms[dispo] || [dispo];
+    const found = synonyms.some(syn => summaryLower.includes(syn));
+    if (!found) {
+      softIssues.push(`Disposition missing: "${facts.disposition}" (or synonym) not in summary`);
+    }
   }
 
   // 5. Meaning inversion (SOFT) - opposite words used
