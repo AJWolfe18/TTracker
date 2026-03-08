@@ -108,6 +108,10 @@ export const DB_COLUMNS = new Set([
   'qa_layer_b_verdict', 'qa_layer_b_issues', 'qa_layer_b_confidence', 'qa_layer_b_severity_score',
   'qa_layer_b_prompt_version', 'qa_layer_b_model', 'qa_layer_b_ran_at', 'qa_layer_b_error',
   'qa_layer_b_latency_ms', 'layer_b_retry_count',
+  // ADO-438: Invariant check columns
+  'invariant_passed', 'invariant_failures',
+  // ADO-438: SCOTUSblog vote_split columns
+  'scotusblog_vote_split', 'vote_split_source',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
@@ -988,6 +992,18 @@ function computeSeverityBounds(facts, scotusCase, { isCert, isProcedural, explic
   const hasDissent = dissent.length > 0;
   const caseName = scotusCase?.case_name || '';
 
+  // ADO-438: Parse vote_split for deterministic severity when available
+  // Sources: scotusblog_vote_split (stored in DB), or vote_split from case record
+  const voteSplitRaw = scotusCase?.scotusblog_vote_split || scotusCase?.vote_split || '';
+  const voteMatch = voteSplitRaw.match(/(\d+)\s*[-–]\s*(\d+)/);
+  let majorityVotes = null;
+  let minorityVotes = null;
+  if (voteMatch) {
+    majorityVotes = parseInt(voteMatch[1], 10);
+    minorityVotes = parseInt(voteMatch[2], 10);
+    reasons.push(`vote_split:${majorityVotes}-${minorityVotes}`);
+  }
+
   // Landmark detection uses multiple signals because issue_area is non-deterministic
   // (Pass 1 GPT gives different values across runs, and DB gets overwritten each time).
   const issueAreaDB = scotusCase?.issue_area || '';
@@ -1045,6 +1061,28 @@ function computeSeverityBounds(facts, scotusCase, { isCert, isProcedural, explic
   if (hasDissent) {
     min = Math.max(min, 2);
     reasons.push('has_dissent_min2');
+  }
+
+  // Rule 7 (ADO-438): Vote split severity adjustments when vote_split is available
+  if (majorityVotes !== null && minorityVotes !== null) {
+    // Diagnostic: warn if vote_split and dissent_authors diverge
+    if (minorityVotes > 0 && !hasDissent) {
+      console.warn(`[computeSeverityBounds] Data divergence: vote_split=${voteSplitRaw} but dissent_authors is empty`);
+    }
+    if (minorityVotes === 0 && hasDissent) {
+      console.warn(`[computeSeverityBounds] Data divergence: vote_split=${voteSplitRaw} but dissent_authors=${dissent.join(',')}`);
+    }
+
+    // 9-0 unanimous: max 3 (unless landmark)
+    if (minorityVotes === 0 && !isLandmarkIssue) {
+      max = Math.min(max, 3);
+      reasons.push('unanimous_vote_max3');
+    }
+    // 5-4 or 5-3: floor at 3 (closely divided = significant)
+    if (majorityVotes <= 5 && minorityVotes >= 3) {
+      min = Math.max(min, 3);
+      reasons.push('close_vote_min3');
+    }
   }
 
   // Safety: if rules produced an impossible range, trust the floor

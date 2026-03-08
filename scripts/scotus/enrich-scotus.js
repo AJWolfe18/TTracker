@@ -113,6 +113,20 @@ const LAYER_B_MODE = process.env.LAYER_B_MODE || 'off';
 const LAYER_B_RETRY = process.env.LAYER_B_RETRY === 'true';
 
 // ============================================================================
+// ADO-438: SIMPLIFIED PIPELINE BYPASS FLAGS
+// ============================================================================
+// Bypass old QA/validation layers. Set to 'false' to re-enable for rollback.
+// After v9 stable, bypassed code will be deleted in a cleanup session.
+
+const SCOTUS_SKIP_CONSENSUS = process.env.SCOTUS_SKIP_CONSENSUS !== 'false';      // default: true (single Pass 1)
+const SCOTUS_SKIP_DRIFT = process.env.SCOTUS_SKIP_DRIFT !== 'false';              // default: true (skip drift validation)
+const SCOTUS_SKIP_QA_VALIDATORS = process.env.SCOTUS_SKIP_QA_VALIDATORS !== 'false'; // default: true (skip Layer A)
+const SCOTUS_SKIP_LAYER_B = process.env.SCOTUS_SKIP_LAYER_B !== 'false';          // default: true (skip Layer B)
+// Note: QA retry loop removed structurally (not bypassed). The retry loop depended on
+// all validators + Layer B running, and had 0% trigger rate. Setting the above flags
+// to false re-enables validators/drift/Layer B but without the retry wrapper.
+
+// ============================================================================
 // CONFIGURATION
 // ============================================================================
 
@@ -383,6 +397,98 @@ function rewriteInAOpener(summary) {
   const rewritten = first !== originalFirst;
   const text = rest ? `${first} ${rest}` : first;
   return { text, rewritten };
+}
+
+// ============================================================================
+// ADO-438: INVARIANT CHECKER (replaces ~1,700 lines of QA validators)
+// ============================================================================
+
+/**
+ * One-way disposition synonym map: editorial synonyms → canonical disposition.
+ * "struck down" normalizes TO "reversed", etc.
+ * One-way prevents accidental passes from fuzzy matching.
+ */
+const DISPOSITION_SYNONYM_MAP = {
+  'overturned': 'reversed', 'struck down': 'reversed', 'tossed out': 'reversed',
+  'upheld': 'affirmed', 'left intact': 'affirmed', 'left standing': 'affirmed',
+    'backed': 'affirmed', 'sustained': 'affirmed', 'stands': 'affirmed',
+  'set aside': 'vacated', 'invalidated': 'vacated', 'nullified': 'vacated',
+    'wiped out': 'vacated', 'thrown out': 'vacated',
+  'sent back': 'remanded', 'returned to': 'remanded',
+  'rejected': 'dismissed', 'tossed': 'dismissed',
+};
+
+/**
+ * Run 7 invariant checks on enrichment output.
+ * Returns array of failure objects: { code, detail }.
+ * Non-blocking — failures log as warnings, set enrichment_status='flagged'.
+ *
+ * @param {Object} facts - Clamped Pass 1 output
+ * @param {Object} editorial - Post-processed Pass 2 output
+ * @param {Object} LEVEL_TO_LABEL - Level→label mapping
+ * @returns {{ passed: boolean, failures: Array<{code: string, detail: string}> }}
+ */
+function runInvariantChecks(facts, editorial, LEVEL_TO_LABEL) {
+  const failures = [];
+
+  // 1. who_wins !== who_loses
+  if (editorial.who_wins && editorial.who_loses &&
+      editorial.who_wins.trim().toLowerCase() === editorial.who_loses.trim().toLowerCase()) {
+    failures.push({ code: 'invariant_winner_loser', detail: `who_wins === who_loses: "${editorial.who_wins}"` });
+  }
+
+  // 2. Disposition term in summary (normalized synonym matching)
+  if (facts.disposition && editorial.summary_spicy && facts.case_type === 'merits') {
+    const summaryLower = editorial.summary_spicy.toLowerCase();
+    const canonicalDisp = facts.disposition.toLowerCase();
+
+    // Check if canonical disposition or any synonym mapping TO it appears in summary
+    const synonymsForCanonical = Object.entries(DISPOSITION_SYNONYM_MAP)
+      .filter(([, canonical]) => canonical === canonicalDisp)
+      .map(([synonym]) => synonym);
+    const termsToCheck = [canonicalDisp, ...synonymsForCanonical];
+    const found = termsToCheck.some(term => summaryLower.includes(term));
+
+    if (!found) {
+      failures.push({ code: 'invariant_disposition', detail: `Disposition "${facts.disposition}" (or synonym) not in summary` });
+    }
+  }
+
+  // 3. No merits claim on procedural/cert case
+  if (facts.case_type && facts.case_type !== 'merits') {
+    const meritsLanguage = /\b(held that|found that|ruled that|struck down|upheld|invalidated|overturned|established|prevailed)\b/i;
+    if (meritsLanguage.test(editorial.summary_spicy || '')) {
+      failures.push({ code: 'invariant_procedural', detail: `Merits language in ${facts.case_type} case` });
+    }
+  }
+
+  // 4. Dissent highlights null when no dissent
+  if (facts.dissent_exists === false && editorial.dissent_highlights) {
+    failures.push({ code: 'invariant_dissent_null', detail: 'dissent_highlights non-null but no dissent exists' });
+  }
+
+  // 5. Evidence anchors array is non-empty
+  if (!Array.isArray(editorial.evidence_anchors) || editorial.evidence_anchors.length === 0) {
+    failures.push({ code: 'invariant_anchors', detail: 'evidence_anchors is empty or not an array' });
+  }
+
+  // 6. Required editorial fields non-empty
+  const requiredFields = ['summary_spicy', 'who_wins', 'who_loses', 'why_it_matters'];
+  for (const field of requiredFields) {
+    if (!editorial[field] || (typeof editorial[field] === 'string' && editorial[field].trim().length === 0)) {
+      failures.push({ code: 'invariant_fields_empty', detail: `Required field "${field}" is empty` });
+    }
+  }
+
+  // 7. Severity label matches numeric level
+  if (typeof editorial.ruling_impact_level === 'number' && LEVEL_TO_LABEL[editorial.ruling_impact_level]) {
+    const expectedLabel = LEVEL_TO_LABEL[editorial.ruling_impact_level];
+    if (editorial.ruling_label !== expectedLabel) {
+      failures.push({ code: 'invariant_level_label', detail: `Level ${editorial.ruling_impact_level} → expected "${expectedLabel}" but got "${editorial.ruling_label}"` });
+    }
+  }
+
+  return { passed: failures.length === 0, failures };
 }
 
 // ============================================================================
@@ -679,7 +785,9 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // =========================================================================
   // PASS 1: Fact Extraction (ADO-303: single model with empty retry)
   // =========================================================================
-  console.log(`   📋 Pass 1: Extracting facts${args.skipConsensus ? ' (consensus disabled)' : ''}...`);
+  // ADO-438: Force consensus skip when bypass flag is set
+  const effectiveSkipConsensus = args.skipConsensus || SCOTUS_SKIP_CONSENSUS;
+  console.log(`   📋 Pass 1: Extracting facts${effectiveSkipConsensus ? ' (consensus disabled)' : ''}...`);
 
   if (args.dryRun) {
     console.log(`   [DRY RUN] Would call GPT for fact extraction`);
@@ -706,7 +814,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         openai,
         scotusCase,
         { ...pass0Metadata, facts_model_override: model },
-        args.skipConsensus
+        effectiveSkipConsensus
       );
 
       totalCost += calculateCost(pass1Usage);
@@ -803,6 +911,32 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
         const strategy = scotusblogResult.searchStrategy;
         const hasAnalysis = !!scotusblogResult.analysisText;
         console.log(`   ✓ SCOTUSblog: Found (${strategy}, ${contextLen} chars, analysis: ${hasAnalysis})`);
+
+        // ADO-438: Store vote_split from SCOTUSblog to DB (if available and not already set)
+        const sbVoteSplit = scotusblogResult.caseData?.vote_split;
+        if (sbVoteSplit && !args.dryRun) {
+          const updatePayload = {
+            scotusblog_vote_split: sbVoteSplit,
+            vote_split_source: 'scotusblog',
+          };
+          // Also populate vote_split if it's currently empty
+          if (!scotusCase.vote_split) {
+            updatePayload.vote_split = sbVoteSplit;
+          }
+          const { error: vsError } = await supabase
+            .from('scotus_cases')
+            .update(updatePayload)
+            .eq('id', scotusCase.id);
+          if (vsError) {
+            console.log(`   ⚠️ Vote split DB update failed: ${vsError.message}`);
+          } else {
+            console.log(`   ✓ Stored vote_split: ${sbVoteSplit} (source: scotusblog)`);
+            // Update in-memory case for downstream severity bounds
+            scotusCase.scotusblog_vote_split = sbVoteSplit;
+            scotusCase.vote_split_source = 'scotusblog';
+            if (!scotusCase.vote_split) scotusCase.vote_split = sbVoteSplit;
+          }
+        }
       } else {
         console.log(`   ⚠️ SCOTUSblog: Not found for "${scotusCase.case_name}"`);
         if (scotusblogResult.errors.length > 0) {
@@ -952,13 +1086,13 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     5: 'Constitutional Crisis'
   };
 
-  // Variables that persist across retry iterations
+  // Variables for post-processing
   let constrainedEditorial;
   let driftCheck;
   let gateResult;
-  let qaIssues;       // Layer A issues
-  let qaVerdict;      // Layer A verdict
-  let qaStatus;
+  let qaIssues = [];       // Layer A issues
+  let qaVerdict = 'APPROVE';      // Layer A verdict
+  let qaStatus = 'approved';
   let isPublic;
   let needsReview;
   let qaFixDirectivesUsed = '';  // Track what fix directives we injected
@@ -970,48 +1104,20 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   let finalVerdict = null;      // Combined Layer A + B verdict
   let layerBRetryCount = 0;     // Separate counter for Layer B retries
 
-  // ADO-309: QA retry loop (max 1 retry for fixable REJECT issues)
-  QA_RETRY_LOOP:
-  for (let qaAttempt = 0; qaAttempt <= MAX_QA_RETRIES; qaAttempt++) {
-    const isRetry = qaAttempt > 0;
+  // ADO-438: Invariant check results
+  let invariantResult = null;
 
-    if (isRetry) {
-      console.log(`   🔄 QA Retry ${qaAttempt}/${MAX_QA_RETRIES}: Regenerating Pass 2 with fix directives...`);
-      qaRetryCount = qaAttempt;
+  // =========================================================================
+  // ADO-438: SIMPLIFIED POST-GEN PROCESSING (no retry loop)
+  // When bypass flags are set, skip QA validators/drift/Layer B/retry.
+  // Invariant checks replace the old validation stack.
+  // When bypass flags are OFF, fall through to legacy path for rollback.
+  // =========================================================================
 
-      // Re-execute Pass 2 with QA fix directives
-      try {
-        const { editorial: retryResult, usage: retryUsage } = await executePass2(qaFixDirectivesUsed);
-
-        editorial = retryResult;
-        totalCost += calculateCost(retryUsage, pass2Model);
-        totalTokens += retryUsage?.total_tokens || 0;
-
-        console.log(`   ✓ Pass 2 retry: ${retryUsage?.total_tokens || 0} tokens (${pass2Model})`);
-      } catch (err) {
-        // ADO-309: On retry failure, mark as failed and return early (don't process invalid editorial)
-        console.error(`   ❌ Pass 2 retry failed: ${err.message}`);
-        await markFailed(scotusCase.id, `Pass 2 retry error: ${err.message}`, supabase);
-        return { success: false, error: `Pass 2 retry: ${err.message}`, cost: totalCost };
-      }
-
-      // Re-validate editorial response structure
-      if (!editorial || typeof editorial !== 'object') {
-        console.error(`   ❌ Pass 2 retry returned empty/invalid response`);
-        await markFailed(scotusCase.id, `Pass 2 retry empty response`, supabase);
-        return { success: false, error: 'Empty Pass 2 retry response', cost: totalCost };
-      }
-
-      const { valid: retryValid, errors: retryErrors } = validateEnrichmentResponse(editorial, { caseName: scotusCase.case_name, scotusCase });
-      if (!retryValid) {
-        console.error(`   ❌ Pass 2 retry validation failed: ${retryErrors.join(', ')}`);
-        await markFailed(scotusCase.id, `Pass 2 retry validation: ${retryErrors.join(', ')}`, supabase);
-        return { success: false, error: `Pass 2 retry: ${retryErrors.join(', ')}`, cost: totalCost };
-      }
-    }
-
+  {
     // =========================================================================
     // ADO-275: POST-GEN VALIDATION (banned starters + duplicate detection)
+    // (Always runs — this is a cheap deterministic repair, not QA)
     // =========================================================================
     console.log(`   📋 Checking for banned starters/duplicates...`);
     const { valid: spicyValid, reason: spicyReason, matchedPattern, isDuplicate } =
@@ -1041,9 +1147,15 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 
     // =========================================================================
     // DRIFT VALIDATION + ADO-300: ENFORCE CONSTRAINTS
+    // ADO-438: Bypass drift validation when SCOTUS_SKIP_DRIFT=true
     // =========================================================================
-    console.log(`   📋 Checking for drift...`);
-    driftCheck = validateNoDrift(clampedFacts, editorial);
+    if (SCOTUS_SKIP_DRIFT) {
+      console.log(`   📋 Drift validation: BYPASSED (ADO-438)`);
+      driftCheck = { severity: 'none', hasDrift: false, reason: null, hardIssues: [], softIssues: [] };
+    } else {
+      console.log(`   📋 Checking for drift...`);
+      driftCheck = validateNoDrift(clampedFacts, editorial);
+    }
 
     // ADO-300: Apply enforceEditorialConstraints (may override editorial based on clamp/drift)
     constrainedEditorial = enforceEditorialConstraints(clampedFacts, editorial, driftCheck);
@@ -1083,8 +1195,8 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
       constrainedEditorial.ruling_label = LEVEL_TO_LABEL[constrainedEditorial.ruling_impact_level];
     }
 
-    // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking
-    if (driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
+    // ADO-300/438: For clamped cases, drift is handled by constraint enforcement, not blocking
+    if (!SCOTUS_SKIP_DRIFT && driftCheck.severity === 'hard' && !clampedFacts.clamp_reason) {
       // Only block on hard drift if NOT a clamped case (clamped cases are rescued by constraints)
       console.log(`   ❌ HARD drift detected: ${driftCheck.reason}`);
       await flagAndSkip(scotusCase.id, {
@@ -1143,104 +1255,60 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
       }
     }
 
-    if (driftCheck.severity === 'soft') {
-      console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
-      if (!clampedFacts.publish_override) {
-        isPublic = false;
-        needsReview = true;
-      }
-      clampedFacts.drift_detected = true;
-      clampedFacts.drift_reason = `Soft drift: ${driftCheck.reason}`;
-    } else if (driftCheck.severity === 'hard' && clampedFacts.clamp_reason) {
-      // Clamped case with hard drift - rescued by constraints
-      console.log(`   ⚠️ Hard drift rescued by clamp: ${driftCheck.reason}`);
-      clampedFacts.drift_detected = true;
-      clampedFacts.drift_reason = `Hard drift (clamped): ${driftCheck.reason}`;
-    } else {
-      console.log(`   ✓ No drift detected`);
-    }
-
-    // =========================================================================
-    // ADO-308/309: QA VALIDATORS (deterministic checks)
-    // =========================================================================
-    console.log(`   📋 Running QA validators...`);
-
-    // Run deterministic validators
-    qaIssues = runDeterministicValidators({
-      summary_spicy: constrainedEditorial.summary_spicy,
-      ruling_impact_level: constrainedEditorial.ruling_impact_level,
-      facts: clampedFacts,
-      grounding,
-    });
-
-    qaVerdict = deriveVerdict(qaIssues);
-
-    // ADO-309: TEST-ONLY - Force REJECT on first attempt to validate retry loop E2E
-    if (FORCE_QA_REJECT_TEST && qaAttempt === 0) {
-      console.log(`   🧪 [FORCE_QA_REJECT_TEST] Injecting fake REJECT to test retry loop`);
-      qaVerdict = 'REJECT';
-      qaIssues = [{
-        type: 'procedural_merits_implication',
-        severity: 'high',
-        fixable: true,
-        why: '[FORCED TEST] Simulated merits language in procedural case',
-        fix_directive: 'Remove merits framing and add explicit procedural posture (dismissed, remanded, vacated)',
-      }];
-    }
-
-    // Determine QA status based on verdict
-    qaStatus = 'pending_qa';
-    if (qaVerdict === 'APPROVE') {
-      qaStatus = 'approved';
-    } else if (qaVerdict === 'FLAG') {
-      qaStatus = 'flagged';
-    } else if (qaVerdict === 'REJECT') {
-      qaStatus = 'rejected';
-    }
-
-    console.log(`   QA Verdict: ${qaVerdict} (${qaIssues.length} issues)`);
-    if (qaIssues.length > 0) {
-      console.log(`   QA Issues: ${qaIssues.map(i => i.type).join(', ')}`);
-    }
-
-    // =========================================================================
-    // ADO-309: LAYER A RETRY DECISION
-    // =========================================================================
-    if (ENABLE_QA_GATE && qaVerdict === 'REJECT') {
-      // Check if we have fixable issues and haven't exhausted retries
-      const canRetry = qaAttempt < MAX_QA_RETRIES && hasFixableIssues(qaIssues);
-
-      if (canRetry) {
-        // Build fix directives for retry
-        qaFixDirectivesUsed = buildQAFixDirectives(qaIssues);
-        console.log(`   🔄 Layer A REJECT with fixable issues - will retry Pass 2`);
-        console.log(`   Fix directives: ${qaIssues.filter(i => i.fixable).map(i => i.type).join(', ')}`);
-        continue QA_RETRY_LOOP;  // Retry Pass 2
-      }
-
-      // No retry possible - either no fixable issues or retries exhausted
-      // Skip Layer B (save cost) and flag for manual review
-      if (qaAttempt >= MAX_QA_RETRIES) {
-        console.log(`   ❌ Layer A REJECT: Retry exhausted (${qaAttempt}/${MAX_QA_RETRIES}) - flagging for manual review`);
+    if (!SCOTUS_SKIP_DRIFT) {
+      if (driftCheck.severity === 'soft') {
+        console.log(`   ⚠️ Soft drift detected: ${driftCheck.reason}`);
+        if (!clampedFacts.publish_override) {
+          isPublic = false;
+          needsReview = true;
+        }
+        clampedFacts.drift_detected = true;
+        clampedFacts.drift_reason = `Soft drift: ${driftCheck.reason}`;
+      } else if (driftCheck.severity === 'hard' && clampedFacts.clamp_reason) {
+        console.log(`   ⚠️ Hard drift rescued by clamp: ${driftCheck.reason}`);
+        clampedFacts.drift_detected = true;
+        clampedFacts.drift_reason = `Hard drift (clamped): ${driftCheck.reason}`;
       } else {
-        console.log(`   ❌ Layer A REJECT: No fixable issues - flagging for manual review`);
+        console.log(`   ✓ No drift detected`);
       }
-      console.log(`   ⏭️ Skipping Layer B (Layer A hard REJECT)`);
-      qaStatus = 'flagged';  // Override to flagged for human review
-      isPublic = false;
-      needsReview = true;
-      clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
-        (clampedFacts.low_confidence_reason ? '; ' : '') +
-        `Layer A REJECT: ${qaIssues.map(i => i.type).join(', ')}`;
-      break QA_RETRY_LOOP;  // Exit loop, continue to write (flagged)
     }
 
     // =========================================================================
-    // ADO-310: LAYER B LLM QA (if enabled)
+    // ADO-438: QA VALIDATORS — BYPASS OR RUN LEGACY
     // =========================================================================
-    if (LAYER_B_MODE !== 'off') {
-      console.log(`   📋 Running Layer B QA (mode: ${LAYER_B_MODE})...`);
+    if (SCOTUS_SKIP_QA_VALIDATORS) {
+      console.log(`   📋 QA validators: BYPASSED (ADO-438)`);
+      qaVerdict = 'APPROVE';
+      qaStatus = 'approved';
+      qaIssues = [];
+    } else {
+      console.log(`   📋 Running QA validators...`);
+      qaIssues = runDeterministicValidators({
+        summary_spicy: constrainedEditorial.summary_spicy,
+        ruling_impact_level: constrainedEditorial.ruling_impact_level,
+        facts: clampedFacts,
+        grounding,
+      });
+      qaVerdict = deriveVerdict(qaIssues);
+      qaStatus = qaVerdict === 'APPROVE' ? 'approved' : qaVerdict === 'FLAG' ? 'flagged' : 'rejected';
+      console.log(`   QA Verdict: ${qaVerdict} (${qaIssues.length} issues)`);
+      if (qaIssues.length > 0) {
+        console.log(`   QA Issues: ${qaIssues.map(i => i.type).join(', ')}`);
+      }
+    }
 
+    // =========================================================================
+    // ADO-438: LAYER B — BYPASS OR RUN LEGACY
+    // =========================================================================
+    if (SCOTUS_SKIP_LAYER_B || LAYER_B_MODE === 'off') {
+      if (SCOTUS_SKIP_LAYER_B) {
+        console.log(`   📋 Layer B: BYPASSED (ADO-438)`);
+      } else {
+        console.log(`   [Layer B disabled] Using Layer A verdict only`);
+      }
+      finalVerdict = qaVerdict;
+    } else {
+      console.log(`   📋 Running Layer B QA (mode: ${LAYER_B_MODE})...`);
       try {
         layerBResult = await runLayerBQA(openai, {
           summary_spicy: constrainedEditorial.summary_spicy,
@@ -1249,101 +1317,45 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
           grounding,
           facts: clampedFacts,
         });
-
         layerBVerdict = layerBResult.verdict;
         layerBIssues = layerBResult.issues || [];
         totalCost += calculateCost(layerBResult.usage);
-
-        console.log(`   Layer B Verdict: ${layerBVerdict ?? 'null (NO_DECISION)'} (${layerBIssues.length} issues, ${layerBResult.latency_ms}ms)`);
-        if (layerBIssues.length > 0 && !layerBIssues.every(i => i.internal)) {
-          console.log(`   Layer B Issues: ${layerBIssues.filter(i => !i.internal).map(i => i.type).join(', ')}`);
-        }
-        if (layerBResult.error) {
-          console.log(`   Layer B Error: ${layerBResult.error}`);
-        }
-
-        // Compute final verdict using Layer A + B
         finalVerdict = computeFinalVerdict(qaVerdict, layerBVerdict);
         console.log(`   Final Verdict: ${finalVerdict} (Layer A: ${qaVerdict}, Layer B: ${layerBVerdict ?? 'null'})`);
-
-        // =========================================================================
-        // ADO-310: LAYER B RETRY DECISION (only in enforce mode with LAYER_B_RETRY)
-        // =========================================================================
-        if (LAYER_B_MODE === 'enforce' && LAYER_B_RETRY && layerBVerdict === 'REJECT') {
-          const layerBFixable = layerBIssues.some(i => i.fixable === true && i.fix_directive);
-
-          if (layerBFixable && layerBRetryCount < 1) {
-            // Build combined fix directives from both layers
-            qaFixDirectivesUsed = buildCombinedFixDirectives(qaIssues, layerBIssues);
-            layerBRetryCount++;
-            console.log(`   🔄 Layer B REJECT with fixable issues - will retry Pass 2 (Layer B retry ${layerBRetryCount}/1)`);
-            console.log(`   Combined fix directives: ${[...qaIssues, ...layerBIssues].filter(i => i.fixable).map(i => i.type).join(', ')}`);
-            continue QA_RETRY_LOOP;  // Retry Pass 2 with combined directives
-          }
-        }
-
-        // Update qa_status based on final verdict (only in enforce mode)
-        if (LAYER_B_MODE === 'enforce') {
-          if (finalVerdict === 'APPROVE') {
-            qaStatus = 'approved';
-          } else if (finalVerdict === 'FLAG') {
-            qaStatus = 'flagged';
-          } else if (finalVerdict === 'REJECT') {
-            // Layer B REJECT (not retried or retry exhausted) - flag for manual review
-            console.log(`   ❌ Final REJECT (Layer B) - flagging for manual review`);
-            qaStatus = 'flagged';
-            isPublic = false;
-            needsReview = true;
-            clampedFacts.low_confidence_reason = (clampedFacts.low_confidence_reason || '') +
-              (clampedFacts.low_confidence_reason ? '; ' : '') +
-              `Layer B REJECT: ${layerBIssues.filter(i => !i.internal).map(i => i.type).join(', ')}`;
-          }
-        } else {
-          // Shadow mode: log but don't affect qa_status
-          console.log(`   [shadow mode] Layer B verdict logged but not enforced`);
-        }
-
       } catch (err) {
-        // Layer B failure - log but don't block enrichment
         console.error(`   ⚠️ Layer B failed: ${err.message}`);
-        layerBResult = {
-          verdict: null,
-          issues: [{
-            type: 'insufficient_qa_output',
-            why: `Layer B error: ${err.message}`,
-            internal: true,
-          }],
-          error: err.message,
-          latency_ms: 0,
-          ran_at: new Date().toISOString(),
-        };
-        layerBVerdict = null;
-        layerBIssues = layerBResult.issues;
-        finalVerdict = qaVerdict;  // Defer to Layer A
+        finalVerdict = qaVerdict;
       }
+    }
+
+    // =========================================================================
+    // ADO-438: INVARIANT CHECKS (replaces QA stack)
+    // =========================================================================
+    console.log(`   📋 Running invariant checks (ADO-438)...`);
+    invariantResult = runInvariantChecks(clampedFacts, constrainedEditorial, LEVEL_TO_LABEL);
+
+    if (invariantResult.passed) {
+      console.log(`   ✓ All 7 invariants passed`);
     } else {
-      // Layer B disabled - final verdict is Layer A verdict
-      finalVerdict = qaVerdict;
-      console.log(`   [Layer B disabled] Using Layer A verdict only`);
+      console.log(`   ⚠️ Invariant failures (${invariantResult.failures.length}):`);
+      for (const f of invariantResult.failures) {
+        console.log(`      ${f.code}: ${f.detail}`);
+      }
+      // Invariant failures → flag for review (non-blocking)
+      qaStatus = 'flagged';
+      if (!clampedFacts.publish_override) {
+        needsReview = true;
+      }
     }
 
-    // QA passed (or FLAG) - exit loop
-    break QA_RETRY_LOOP;
-  }
-
-  // ADO-308: Apply QA gate if enabled (not shadow mode) - post-loop handling
-  // Note: Layer B verdict handling is done inside the loop (in enforce mode)
-  if (ENABLE_QA_GATE) {
-    // Use finalVerdict which considers both Layer A and Layer B (if run)
-    const effectiveVerdict = finalVerdict ?? qaVerdict;
-    if (effectiveVerdict === 'FLAG' && !clampedFacts.publish_override) {
-      console.log(`   ⚠️ Final FLAG: Setting is_public=false (ENABLE_QA_GATE=true)`);
-      isPublic = false;
-      needsReview = true;
+    // Apply QA gate if enabled (legacy path, only when bypass flags are off)
+    if (!SCOTUS_SKIP_QA_VALIDATORS && ENABLE_QA_GATE) {
+      const effectiveVerdict = finalVerdict ?? qaVerdict;
+      if (effectiveVerdict === 'FLAG' && !clampedFacts.publish_override) {
+        isPublic = false;
+        needsReview = true;
+      }
     }
-  } else {
-    // Shadow mode: log QA results but don't affect behavior
-    console.log(`   [shadow mode] QA gate disabled, verdict logged but not enforced`);
   }
 
   // =========================================================================
@@ -1364,8 +1376,13 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     qa_verdict: qaVerdict,
     qa_issues: qaIssues,
     qa_retry_count: qaRetryCount,
+    // ADO-438: Invariant check results
+    ...(invariantResult ? {
+      invariant_passed: invariantResult.passed,
+      invariant_failures: invariantResult.failures.length > 0 ? invariantResult.failures : null,
+    } : {}),
     // ADO-310: Layer B QA columns (written when LAYER_B_MODE != 'off', includes error states)
-    ...(LAYER_B_MODE !== 'off' && layerBResult ? {
+    ...(LAYER_B_MODE !== 'off' && !SCOTUS_SKIP_LAYER_B && layerBResult ? {
       qa_layer_b_verdict: layerBVerdict,
       qa_layer_b_issues: layerBIssues,
       qa_layer_b_confidence: layerBResult.confidence ?? null,
@@ -1418,17 +1435,23 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
 async function main() {
   const args = parseArgs();
 
-  console.log(`\n🔍 SCOTUS Enrichment Script (ADO-275: Tone Variation + ADO-300: Clamp/Retry + ADO-310: Layer B)`);
+  console.log(`\n🔍 SCOTUS Enrichment Script (v9-ado438: Simplified Pipeline)`);
   console.log(`================================================`);
   console.log(`Batch size: ${args.limit}`);
   console.log(`Dry run: ${args.dryRun}`);
   console.log(`Allow PROD: ${args.allowProd}`);
-  console.log(`Skip consensus: ${args.skipConsensus}`);
+  console.log(`Skip consensus: ${args.skipConsensus || SCOTUS_SKIP_CONSENSUS}`);
   console.log(`Force gold: ${args.forceGold}`);
   console.log(`SCOTUSblog grounding: ${args.noScotusblog ? 'DISABLED' : 'ENABLED'}`);
   console.log(`Pass 2 model: ${PASS2_MODEL}`);
   console.log(`Prompt version: ${PROMPT_VERSION}`);
-  console.log(`Layer B mode: ${LAYER_B_MODE} (retry: ${LAYER_B_RETRY})\n`);
+  console.log(`Layer B mode: ${SCOTUS_SKIP_LAYER_B ? 'BYPASSED' : LAYER_B_MODE}`);
+  console.log(`--- ADO-438 Bypass Flags ---`);
+  console.log(`  Consensus:      ${SCOTUS_SKIP_CONSENSUS ? 'SKIP (single Pass 1)' : 'enabled'}`);
+  console.log(`  Drift:          ${SCOTUS_SKIP_DRIFT ? 'SKIP' : 'enabled'}`);
+  console.log(`  QA Validators:  ${SCOTUS_SKIP_QA_VALIDATORS ? 'SKIP' : 'enabled'}`);
+  console.log(`  Layer B:        ${SCOTUS_SKIP_LAYER_B ? 'SKIP' : 'enabled'}`);
+  console.log(``);
 
   // Validate OpenAI key
   if (!process.env.OPENAI_API_KEY) {

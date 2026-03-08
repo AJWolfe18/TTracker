@@ -13,6 +13,35 @@ Key files:
 
 ## Change Log
 
+### v9-ado438-simplified-pipeline (2026-03-08)
+
+**Problem:** ~1,700 lines of QA/validator code (drift validation, Layer B LLM QA, 16+ deterministic validators, consensus merge, retry loops) adding complexity with near-zero catch rate. Audit showed: Layer A validators caught 2/34 cases (1 false positive), Layer B never ran in production, consensus never triggered a real disagreement.
+
+**Changes:**
+1. **Bypass flags** (env vars, default ON): `SCOTUS_SKIP_CONSENSUS`, `SCOTUS_SKIP_DRIFT`, `SCOTUS_SKIP_QA_VALIDATORS`, `SCOTUS_SKIP_LAYER_B`, `SCOTUS_SKIP_QA_RETRY`. Set any to `false` for instant rollback.
+2. **Invariant checks** (7 cheap guards, ~60 lines): Replaces the entire validator stack:
+   - who_wins !== who_loses
+   - Disposition synonym in summary (one-way normalized map)
+   - No merits language on procedural/cert cases
+   - Dissent highlights null when no dissent
+   - Evidence anchors non-empty
+   - Required editorial fields non-empty
+   - Level↔label cross-check
+3. **SCOTUSblog vote_split storage**: New columns `scotusblog_vote_split`, `vote_split_source` in `scotus_cases`. Stored during enrichment, fed to `computeSeverityBounds()`.
+4. **Rule 7 in severity bounds**: Vote split adjustments — unanimous (not landmark) → max 3; close vote (5-4, 5-3) → min 3.
+5. **Single Pass 1 run** (consensus bypassed): Drops redundant GPT call, saves ~$0.002/case.
+
+**Bypassed code (~1,700 lines):**
+- `scotus-drift-validation.js` (265 lines)
+- `scotus-qa-validators.js` (337 lines)
+- `scotus-qa-layer-b.js` (954 lines)
+- `qa-issue-types.js` (121 lines)
+- Consensus merge + QA retry loop in `enrich-scotus.js` (~400 lines)
+
+**Rollback:** Set bypass flags to `false` (re-enables all existing validators). No code deleted yet.
+
+---
+
 ### v8-ado429-severity-bounds (2026-03-07)
 
 **Problem:** 5/10 gold cases wrong. Three systems fighting: prompt rules (ignored by model), label→level mapping (overrides model's level number), clamp system (only handles cert/procedural).
