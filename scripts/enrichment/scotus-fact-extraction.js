@@ -120,6 +120,8 @@ const RUNTIME_ONLY_FIELDS = new Set([
   'disposition_source', 'disposition_window', 'disposition_pattern', 'disposition_raw',
   // ADO-300: Clamp ephemeral fields (used for Pass 2 prompt, never persisted)
   'label_policy', '_evidence_text', '_sidestepping_forbidden', '_is_vr', '_is_gvr',
+  // ADO-429: Severity bounds (ephemeral, used for level clamping)
+  'severity_bounds',
 ]);
 
 export function sanitizeForDB(payload) {
@@ -961,6 +963,128 @@ function fallbackMeritsLabel(facts) {
 }
 
 /**
+ * ADO-429: Compute severity bounds based on case characteristics.
+ * Returns {min, max, reason} that will be applied post-GPT to constrain ruling_impact_level.
+ *
+ * See docs/features/scotus-enrichment/severity-changelog.md for rationale.
+ */
+function computeSeverityBounds(facts, scotusCase, { isCert, isProcedural, explicitOverrule } = {}) {
+  let min = 0;
+  let max = 5;
+  const reasons = [];
+
+  // Cert/procedural: force level 2
+  if (isCert || isProcedural) {
+    return { min: 2, max: 2, reason: 'cert_or_procedural' };
+  }
+
+  // Explicit overrule: floor at 5
+  if (explicitOverrule) {
+    return { min: 5, max: 5, reason: 'explicit_overrule' };
+  }
+
+  // --- Gather signals ---
+  const dissent = scotusCase?.dissent_authors || [];
+  const hasDissent = dissent.length > 0;
+  const caseName = scotusCase?.case_name || '';
+
+  // Landmark detection uses multiple signals because issue_area is non-deterministic
+  // (Pass 1 GPT gives different values across runs, and DB gets overwritten each time).
+  const issueAreaDB = scotusCase?.issue_area || '';
+  const issueAreaP1 = facts?.issue_area || '';
+  const landmarkAreas = ['executive_power', 'first_amendment', 'voting_rights'];
+  const isLandmarkByArea = landmarkAreas.includes(issueAreaDB) || landmarkAreas.includes(issueAreaP1);
+
+  // Also detect landmark via constitutional amendment references in holding/source text
+  const holdingText = (facts?.holding || '') + ' ' + (facts?.practical_effect || '');
+  const constitutionalPattern = /\b(First\s+Amendment|Second\s+Amendment|Fourth\s+Amendment|Fourteenth\s+Amendment|14th\s+Amendment|Section\s+3|ballot\s+disqualif|presidential\s+eligib|free\s+speech|freedom\s+of\s+(speech|press|religion))\b/i;
+  const isLandmarkByContent = constitutionalPattern.test(holdingText);
+
+  const isLandmarkIssue = isLandmarkByArea || isLandmarkByContent;
+
+  // Detect if winning party is an individual (not government/corporation)
+  // Uses case_name parsing since petitioner_type/respondent_type are often NULL
+  const prevailing = (facts?.prevailing_party || '').toLowerCase();
+  const isPeopleWin = detectPeopleWin(prevailing, caseName);
+
+  // --- Apply rules ---
+
+  // Rule 1: No dissent + people-win + not landmark → max 1
+  // Rationale: 9-0 case where individual defeats government/corporation is routine good news
+  if (!hasDissent && isPeopleWin && !isLandmarkIssue) {
+    max = Math.min(max, 1);
+    reasons.push('unanimous_people_win');
+  }
+
+  // Rule 2: No dissent + not landmark → max 3
+  // Rationale: consensus rulings without dissent are not crisis-level
+  if (!hasDissent && !isLandmarkIssue) {
+    max = Math.min(max, 3);
+    reasons.push('unanimous_no_landmark');
+  }
+
+  // Rule 3: Non-landmark issues → max 4 (level 5 reserved for constitutional crises)
+  if (!isLandmarkIssue && !explicitOverrule) {
+    max = Math.min(max, 4);
+    reasons.push('non_landmark_max4');
+  }
+
+  // Rule 4: Landmark issue + no dissent → floor at 4 (unanimous landmark = significant)
+  if (isLandmarkIssue && !hasDissent) {
+    min = Math.max(min, 4);
+    reasons.push('landmark_unanimous');
+  }
+
+  // Rule 5: Landmark issue + has dissent → floor at 3
+  if (isLandmarkIssue && hasDissent) {
+    min = Math.max(min, 3);
+    reasons.push('landmark_with_dissent');
+  }
+
+  // Rule 6: Has dissent → floor at 2 (split vote = too significant for level 0-1)
+  if (hasDissent) {
+    min = Math.max(min, 2);
+    reasons.push('has_dissent_min2');
+  }
+
+  // Safety: if rules produced an impossible range, trust the floor
+  if (min > max) {
+    console.warn(`[computeSeverityBounds] Impossible bounds min=${min} > max=${max} (${reasons.join(', ')}) — clamping max to min`);
+    max = min;
+  }
+
+  return { min, max, reason: reasons.join(', ') || 'none' };
+}
+
+/**
+ * ADO-429: Detect if the winning party is a "people-side" individual (not government/corporation).
+ * Uses case_name parsing since petitioner_type/respondent_type are often NULL in the DB.
+ */
+function detectPeopleWin(prevailing, caseName) {
+  if (!prevailing || prevailing === 'unknown' || prevailing === 'unclear') return false;
+
+  // Split case name: "Petitioner v. Respondent"
+  const parts = caseName.split(/\s+v\.?\s+/i);
+  if (parts.length < 2) return false;
+
+  const petitioner = parts[0].trim();
+  const respondent = parts.slice(1).join(' v. ').trim();
+
+  // Government/institutional patterns
+  const govPattern = /\b(United States|Department of|State of|Commonwealth|Secretary of|Commissioner|Director of|Attorney General|County of|City of|Bureau|Agency|Administration|Commission\b|IRS|EPA|FCC|SEC|FBI|CIA|Federal|National)\b/i;
+  const corpPattern = /\b(Inc\.|Corp\.|LLC|Ltd\.|Co\.|Corporation|Company|Association|Board of|Bank|Insurance|Fund|University)\b/i;
+
+  const isInstitutional = (name) => govPattern.test(name) || corpPattern.test(name);
+
+  if (prevailing === 'petitioner') {
+    return !isInstitutional(petitioner);
+  } else if (prevailing === 'respondent') {
+    return !isInstitutional(respondent);
+  }
+  return false;
+}
+
+/**
  * Post-processing: Clamp and route facts to publishable output
  * Runs AFTER Pass 1 facts extraction, BEFORE Pass 2 editorial
  *
@@ -973,7 +1097,7 @@ function fallbackMeritsLabel(facts) {
  * @param {Object} opts - Options: { sourceText } for reliable pattern detection
  * @returns {Object} Clamped facts with label_policy for Pass 2
  */
-export function clampAndLabel(facts, { sourceText } = {}) {
+export function clampAndLabel(facts, { sourceText, scotusCase } = {}) {
   // ADO-300: Use raw source text first, fall back to joined quotes
   // For long opinions: check first 12K + last 12K to catch procedural patterns at end
   let evidenceText = '';
@@ -1002,8 +1126,13 @@ export function clampAndLabel(facts, { sourceText } = {}) {
     publish_override = true;
   }
 
-  // Check for explicit precedent overrule
-  const explicitOverrule = /\boverrule(d|s)?\b|\bwe overrule\b/i.test(evidenceText);
+  // Check for explicit precedent overrule — must be the Court actually overruling,
+  // not just mentioning the concept (e.g., "decline to overrule", "asks us to overrule")
+  const overrulePattern = /\b(we\s+(\w+\s+){0,3}overrule|(?:is|are|must\s+be)\s+(hereby\s+|expressly\s+|explicitly\s+)?overruled)\b/i;
+  const declinePattern = /\b(decline[sd]?\s+to\s+overrule|not\s+overrul|need\s+not\s+overrule|without\s+overrul)\b/i;
+  const hasOverruleLanguage = overrulePattern.test(evidenceText);
+  const declinesOverrule = declinePattern.test(evidenceText);
+  const explicitOverrule = hasOverruleLanguage && !declinesOverrule;
 
   // V&R subtype detection
   const isVR = disp.includes('vacat') || disp.includes('remand');
@@ -1042,6 +1171,11 @@ export function clampAndLabel(facts, { sourceText } = {}) {
     ];
   }
 
+  // ADO-429: Compute severity bounds based on case characteristics
+  const severity_bounds = computeSeverityBounds(facts, scotusCase, {
+    isCert, isProcedural, explicitOverrule
+  });
+
   return {
     ...facts,
     _evidence_text: evidenceText, // ephemeral, not persisted
@@ -1050,7 +1184,8 @@ export function clampAndLabel(facts, { sourceText } = {}) {
     _sidestepping_forbidden: sidesteppingForbidden,
     _is_vr: isVR,
     _is_gvr: gvrish,
-    label_policy
+    label_policy,
+    severity_bounds
   };
 }
 
@@ -1072,8 +1207,8 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
     out.who_wins = 'Procedural ruling - no merits decision';
     out.who_loses = 'Case resolved without a merits ruling';
     out.ruling_label = 'Judicial Sidestepping';
-    // NOTE: ruling_impact_level derived from label in enrich-scotus.js (ADO-302)
-    console.log(`   [CLAMP] Applied ${clamp_reason} → Sidestepping`);
+    out.ruling_impact_level = 2; // ADO-429: Set level directly (level is source of truth)
+    console.log(`   [CLAMP] Applied ${clamp_reason} → Sidestepping (level 2)`);
     return out;
   }
 
@@ -1086,7 +1221,7 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
       out.who_wins = 'Procedural ruling - no merits decision';
       out.who_loses = 'Case resolved without a merits ruling';
       out.ruling_label = 'Judicial Sidestepping';
-      // NOTE: ruling_impact_level derived from label in enrich-scotus.js (ADO-302)
+      out.ruling_impact_level = 2; // ADO-429: Set level directly
       console.log(`   [CLAMP] Drift + procedural → Sidestepping`);
       return out;
     }
@@ -1102,18 +1237,14 @@ export function enforceEditorialConstraints(facts, editorial, driftResult = {}) 
     }
   }
 
-  // Enforce label policy constraints
+  // ADO-429: Label policy enforcement is now a secondary safety net.
+  // Level is source of truth and label is re-derived from level in enrich-scotus.js.
+  // This block only fires if GPT's label is nonsensical (e.g., Sidestepping for a merits case).
   const label = out.ruling_label || '';
   const forbid = facts?.label_policy?.forbid || [];
-  const allow = facts?.label_policy?.allow || [];
 
-  const violatesForbid = forbid.includes(label);
-  const violatesAllow = allow.length > 0 && !allow.includes(label);
-
-  if (violatesForbid || violatesAllow) {
-    const newLabel = fallbackMeritsLabel(facts);
-    console.log(`   [CLAMP] Label violation: ${label} → ${newLabel}`);
-    out.ruling_label = newLabel;
+  if (forbid.includes(label)) {
+    console.log(`   [CLAMP] Label violation: ${label} forbidden (will be overridden by level→label derivation)`);
   }
 
   return out;

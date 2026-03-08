@@ -768,13 +768,15 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // =========================================================================
   // Get source text for reliable pattern detection
   const sourceText = getSourceText(scotusCase);
-  const clampedFacts = clampAndLabel(facts, { sourceText });
+  const clampedFacts = clampAndLabel(facts, { sourceText, scotusCase });
 
   // ADO-428: Inject dissent metadata from DB for phantom dissent null-coercion
   clampedFacts.dissent_exists = (scotusCase.dissent_authors?.length || 0) > 0;
   clampedFacts.dissent_authors = scotusCase.dissent_authors || [];
 
   console.log(`   Clamp: ${clampedFacts.clamp_reason || 'none'} | Sidestepping forbidden: ${clampedFacts._sidestepping_forbidden}`);
+  console.log(`   Severity bounds: min=${clampedFacts.severity_bounds?.min}, max=${clampedFacts.severity_bounds?.max} (${clampedFacts.severity_bounds?.reason || 'none'})`);
+  console.log(`   Issue area: ${clampedFacts.issue_area || 'null'} | Dissent: ${(scotusCase.dissent_authors || []).join(', ') || 'none'}`);
   if (clampedFacts.clamp_reason) {
     console.log(`   📋 Clamped case will get Sidestepping label`);
   }
@@ -939,14 +941,15 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   // Pre-compute recent signatures for banned starter check
   const recentSignatures = recentOpenings.map(o => extractSignatureSentence(o));
 
-  // ADO-302: Label to level mapping
-  const LABEL_TO_LEVEL = {
-    'Constitutional Crisis': 5,
-    'Rubber-stamping Tyranny': 4,
-    'Institutional Sabotage': 3,
-    'Judicial Sidestepping': 2,
-    'Crumbs from the Bench': 1,
-    'Democracy Wins': 0
+  // ADO-429: Level→label mapping (level is source of truth, label derived from it)
+  // See docs/features/scotus-enrichment/severity-changelog.md for rationale
+  const LEVEL_TO_LABEL = {
+    0: 'Democracy Wins',
+    1: 'Crumbs from the Bench',
+    2: 'Judicial Sidestepping',
+    3: 'Institutional Sabotage',
+    4: 'Rubber-stamping Tyranny',
+    5: 'Constitutional Crisis'
   };
 
   // Variables that persist across retry iterations
@@ -1064,9 +1067,20 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
       }
     }
 
-    // ADO-302: Derive ruling_impact_level from ruling_label (label is source of truth)
-    if (constrainedEditorial.ruling_label && LABEL_TO_LEVEL[constrainedEditorial.ruling_label] !== undefined) {
-      constrainedEditorial.ruling_impact_level = LABEL_TO_LEVEL[constrainedEditorial.ruling_label];
+    // ADO-429: Apply severity bounds from clampAndLabel (caps/floors based on case characteristics)
+    const rawLevel = constrainedEditorial.ruling_impact_level;
+    const bounds = clampedFacts.severity_bounds || { min: 0, max: 5 };
+    if (typeof rawLevel === 'number' && rawLevel >= 0 && rawLevel <= 5) {
+      const boundedLevel = Math.max(bounds.min, Math.min(bounds.max, rawLevel));
+      if (boundedLevel !== rawLevel) {
+        console.log(`   [SEVERITY] Bounded ${rawLevel} → ${boundedLevel} (${bounds.reason || 'bounds'})`);
+      }
+      constrainedEditorial.ruling_impact_level = boundedLevel;
+    }
+
+    // ADO-429: Derive ruling_label from level (level is source of truth)
+    if (typeof constrainedEditorial.ruling_impact_level === 'number' && LEVEL_TO_LABEL[constrainedEditorial.ruling_impact_level]) {
+      constrainedEditorial.ruling_label = LEVEL_TO_LABEL[constrainedEditorial.ruling_impact_level];
     }
 
     // ADO-300: For clamped cases, drift is handled by constraint enforcement, not blocking

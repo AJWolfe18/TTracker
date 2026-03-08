@@ -23,7 +23,7 @@
 // ============================================================================
 
 // ADO-323: Prompt version for idempotency tracking
-export const PASS2_PROMPT_VERSION = 'v6-ado429-scotusblog-grounding';
+export const PASS2_PROMPT_VERSION = 'v8-ado429-severity-bounds';
 
 export const RULING_IMPACT_LEVELS = {
   5: {
@@ -666,7 +666,8 @@ export function validateEnrichmentResponse(response, opts) {
   // GATE 2: who_wins/who_loses internal consistency
   if (response.who_wins && typeof response.who_wins === 'string') {
     // who_wins must NOT contain losing language
-    if (/\b(lose|loses|lost|denied|cannot|unable)\b|\blimits?\s+(his|her|their|the)\s+ability\b/i.test(response.who_wins)) {
+    // Note: "cannot" removed — too context-dependent (e.g., "cannot be convicted twice" is a WIN)
+    if (/\b(lose|loses|lost|denied|unable)\b|\blimits?\s+(his|her|their|the)\s+ability\b/i.test(response.who_wins)) {
       errors.push(`who_wins contains losing language: "${response.who_wins.slice(0, 80)}..."`);
     }
   }
@@ -988,15 +989,20 @@ but factual claims must remain bounded to the holding and this case.
    - Level 2: Procedural, matter-of-fact, not dramatic
    - Level 3–5: Critical but grounded — fury must cite specific facts
 
-6) SEVERITY CALIBRATION (ADO-428 — violations will be re-scored):
-   - 9-0 UNANIMOUS rulings on narrow procedural/statutory interpretation: CAP at level 0-1
-     * Example: Barrett v. US (double convictions), Kirtz (FCRA standing), Soto (veteran CRSC) = level 0-1
-   - PROCEDURAL / JURISDICTIONAL rulings (standing, remand, fee-shifting): CAP at level 2-3
-     * Example: Royal Canin (jurisdiction remand), Lackey (prevailing party fees) = level 1-2
-   - Only assign level 4-5 when: constitutional rights at stake AND real-world impact on millions of people
-     * Example: TikTok ban (170M users, First Amendment), Trump ballot disqualification = level 4-5
-   - Technical estate tax, bankruptcy, statutory interpretation = level 0-2 unless they change substantive rights
-   - If unanimous AND narrow AND no dissent: the maximum level is 2 unless precedent is explicitly overruled
+6) SEVERITY CALIBRATION (CRITICAL — ruling_impact_level is the source of truth, ruling_label is derived from it):
+   YOUR ruling_impact_level NUMBER is what matters. The label will be auto-assigned from the number. Focus on getting the NUMBER right.
+   - UNANIMOUS (9-0, 8-0, per curiam) where individual/consumer WINS against government/corporation:
+     * These are ROUTINE wins. Level 0-1. NOT a crisis.
+     * Example: Barrett v. US (double convictions) = 0-1, Kirtz (FCRA) = 0-1, Soto (veteran CRSC) = 0-1
+   - PROCEDURAL / JURISDICTIONAL / FEE-SHIFTING rulings: Level 1-2 max
+     * Example: Royal Canin (jurisdiction remand) = 1-2, Lackey (attorney's fees) = 2-3
+   - TECHNICAL rulings (estate tax, bankruptcy, statutory interpretation): Level 0-2 unless they change substantive rights
+   - ONLY assign level 4-5 when BOTH conditions are met:
+     (a) Constitutional rights are directly at stake (First Amendment, 14th Amendment, ballot access, etc.)
+     (b) Real-world impact on millions of people or fundamental democratic processes
+     * Example: TikTok ban (170M users, First Amendment) = 4-5, Trump ballot disqualification (14th Amendment) = 4-5
+     * These cases are level 4-5 EVEN IF UNANIMOUS — constitutional significance overrides vote count
+   - If unanimous AND narrow/technical AND no dissent AND no major constitutional question: max level 2
 
 7) IMPACT WITHOUT OVERCLAIM:
    - Good: "In this case, the plaintiffs lose their challenge to this specific policy."
@@ -1027,26 +1033,27 @@ but factual claims must remain bounded to the holding and this case.
    - If source text is not provided for a section (e.g., dissent), summarize without quotes`;
 
 // ============================================================================
-// ADO-300: LABEL CONSTRAINTS FOR CLAMP SYSTEM
+// ADO-429: SEVERITY CONSTRAINTS FOR CLAMP SYSTEM
 // ============================================================================
 
 /**
- * Build label constraints block for Pass 2 prompt
- * Tells GPT which labels are allowed/forbidden based on clamp rules
+ * Build severity constraints block for Pass 2 prompt.
+ * Tells GPT the allowed ruling_impact_level range based on case characteristics.
+ * Replaces the old label constraints (ADO-300) — level is now source of truth.
  *
- * @param {Object} facts - Clamped facts with label_policy from clampAndLabel()
+ * @param {Object} facts - Clamped facts with severity_bounds from clampAndLabel()
  * @returns {string} Constraint block to inject into Pass 2 prompt
  */
-export function buildLabelConstraintsBlock(facts) {
-  const allow = facts?.label_policy?.allow || [];
-  const forbid = facts?.label_policy?.forbid || [];
+export function buildSeverityConstraintsBlock(facts) {
   const clamp_reason = facts?.clamp_reason || null;
+  const bounds = facts?.severity_bounds || { min: 0, max: 5 };
 
-  // If clamped, be very explicit
+  // If clamped (cert/procedural), be very explicit
   if (clamp_reason) {
     return `
-LABEL CONSTRAINT (MANDATORY):
+SEVERITY CONSTRAINT (MANDATORY):
 This is a ${clamp_reason.replace(/_/g, ' ')} case.
+- ruling_impact_level MUST be 2
 - ruling_label MUST be "Judicial Sidestepping"
 - who_wins MUST be "Procedural ruling - no merits decision"
 - who_loses MUST be "Case resolved without a merits ruling"
@@ -1054,18 +1061,31 @@ This is a ${clamp_reason.replace(/_/g, ' ')} case.
 `.trim();
   }
 
-  // Normal case: provide allowed/forbidden lists
-  let block = 'LABEL CONSTRAINTS:\n';
-
-  if (allow.length > 0) {
-    block += `- Allowed labels: ${allow.join(', ')}\n`;
-  }
-  if (forbid.length > 0) {
-    block += `- FORBIDDEN labels (do NOT use): ${forbid.join(', ')}\n`;
+  // Normal case: provide severity range
+  if (bounds.min === 0 && bounds.max === 5) {
+    // No constraints — don't clutter the prompt
+    return '';
   }
 
-  if (forbid.includes('Judicial Sidestepping')) {
-    block += `- This case has a clear merits disposition and prevailing party. "Judicial Sidestepping" is NOT appropriate.\n`;
+  let block = 'SEVERITY CONSTRAINT (MANDATORY — your level will be bounded to this range):\n';
+  block += `- ruling_impact_level MUST be between ${bounds.min} and ${bounds.max}\n`;
+
+  if (bounds.reason) {
+    const reasons = bounds.reason.split(', ');
+    for (const r of reasons) {
+      if (r === 'unanimous_people_win') {
+        block += `- This is a unanimous people-win case — severity should be LOW (0-1)\n`;
+      } else if (r === 'unanimous_no_landmark') {
+        block += `- Unanimous/consensus ruling without dissent — not crisis-level\n`;
+      } else if (r.startsWith('landmark')) {
+        block += `- Landmark constitutional issue — severity should be HIGH (${bounds.min}+)\n`;
+      }
+    }
+  }
+
+  // Sidestepping guidance for non-clamped merits cases
+  if (facts?._sidestepping_forbidden) {
+    block += `- This case has a clear merits disposition and prevailing party. Do NOT use "Judicial Sidestepping" as the label.\n`;
   }
 
   return block.trim();
@@ -1080,9 +1100,9 @@ This is a ${clamp_reason.replace(/_/g, ' ')} case.
  * @returns {string} User prompt for Pass 2
  */
 export function buildPass2UserPrompt(scotusCase, facts, variationInjection = '', scotusblogContext = '') {
-  // ADO-300: Build and inject label constraints from clampAndLabel()
-  const labelConstraints = buildLabelConstraintsBlock(facts);
-  let constraints = labelConstraints ? `${labelConstraints}\n\n` : '';
+  // ADO-429: Build and inject severity constraints from clampAndLabel()
+  const severityConstraints = buildSeverityConstraintsBlock(facts);
+  let constraints = severityConstraints ? `${severityConstraints}\n\n` : '';
 
   // PROCEDURAL CASES: Lock who_wins/who_loses
   if (facts.merits_reached === false || facts.case_type === 'procedural') {
