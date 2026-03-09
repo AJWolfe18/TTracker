@@ -20,6 +20,9 @@ import {
   extractDispositionEvidence,
   safeTruncate,
   normalizeDispositionText,
+  getSyllabusText,
+  extractMajoritySection,
+  DISPOSITION_PATTERNS,
 } from '../scotus/opinion-utils.js';
 
 import { PASS2_PROMPT_VERSION } from './scotus-gpt-prompt.js';
@@ -338,6 +341,13 @@ EXTRACTION PRIORITY:
 4. For DISSENT highlights: look at === DISSENT sections specifically
 5. For vote split: look for "X-X" pattern near case header
 
+DISPOSITION RULES:
+- Disposition is SCOTUS's action on the decision IMMEDIATELY BELOW (the appellate court).
+- If SCOTUS agrees with the appellate court, disposition is "affirmed" — even if that court reversed the trial court.
+- If SCOTUS vacates the lower court judgment, disposition is "vacated" — not "reversed."
+- "Reversed" means SCOTUS disagrees with the court below and flips its judgment.
+- Look for the formal language: "The judgment of the [Court of Appeals / District Court] is [affirmed/reversed/vacated]."
+
 IMPORTANT:
 - Dissents are EXPLICITLY marked with === DISSENT headers - use them
 - If no dissent section exists, dissent_exists = false
@@ -648,6 +658,57 @@ export function validatePass1(facts, pass0Metadata, scotusCase = null, sourceTex
     facts.fact_extraction_confidence = 'medium';
     facts.low_confidence_reason = (facts.low_confidence_reason || '') +
       (facts.low_confidence_reason ? '; ' : '') + 'Capped to medium (no anchor terms in source)';
+  }
+
+  // ADO-438: Cross-check GPT disposition against formal SCOTUS conclusion language.
+  // Searches full text for unambiguous patterns: judgment_* (formal), citation_* (SCOTUS
+  // citation format), compound (affirmed_and_remanded etc.), and first-person "we affirm/reverse/vacate".
+  // These patterns are specific to SCOTUS's own action — not lower court narrative.
+  if (facts.disposition && sourceText && scotusCase) {
+    const FORMAL_PATTERN_IDS = new Set([
+      'affirmed_in_part_reversed_in_part', 'reversed_in_part_affirmed_in_part',
+      'reversed_and_remanded', 'vacated_and_remanded', 'affirmed_and_remanded',
+      'judgment_affirmed', 'judgment_reversed', 'judgment_vacated', 'judgment_remanded',
+      'citation_reversed', 'citation_affirmed', 'citation_vacated',
+    ]);
+    const FORMAL_PATTERNS = DISPOSITION_PATTERNS.filter(p => FORMAL_PATTERN_IDS.has(p.id));
+
+    // First-person SCOTUS verbs (unambiguous — only the Court says "we")
+    const WE_VERB_PATTERNS = [
+      { id: 'we_affirm', re: /\bwe\s+affirm\b/i, enum: 'affirmed' },
+      { id: 'we_reverse', re: /\bwe\s+reverse\b/i, enum: 'reversed' },
+      { id: 'we_vacate', re: /\bwe\s+vacate\b/i, enum: 'vacated' },
+      { id: 'we_remand', re: /\bwe\s+remand\b/i, enum: 'remanded' },
+    ];
+
+    // Search full text for formal patterns first (most specific), then first-person verbs
+    let crossCheckResult = null;
+    for (const pattern of [...FORMAL_PATTERNS, ...WE_VERB_PATTERNS]) {
+      const match = sourceText.match(pattern.re);
+      if (match) {
+        crossCheckResult = {
+          disposition: pattern.enum,
+          patternId: pattern.id,
+          raw: match[0].toLowerCase().replace(/\s+/g, ' ').trim(),
+        };
+        break;
+      }
+    }
+
+    if (crossCheckResult) {
+      const gptDisp = normalizeDisposition(facts.disposition);
+      const regexDisp = crossCheckResult.disposition;
+
+      if (gptDisp !== regexDisp) {
+        console.log(`   [DISPOSITION OVERRIDE] GPT="${gptDisp}" → Regex="${regexDisp}" `
+          + `(pattern: ${crossCheckResult.patternId})`);
+        facts.disposition = regexDisp;
+        facts.disposition_override_source = 'regex_formal';
+        facts.disposition_gpt_original = gptDisp;
+      }
+
+      facts.disposition_source_phrase = crossCheckResult.raw;
+    }
   }
 
   return facts;

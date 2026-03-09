@@ -672,8 +672,13 @@ export function validateEnrichmentResponse(response, opts) {
     }
   }
   if (response.who_loses && typeof response.who_loses === 'string') {
-    // who_loses must NOT contain winning language
-    if (/^[^.]*\b(wins|gains|benefits|prevails|succeeds)\b/i.test(response.who_loses)) {
+    const firstSentence = response.who_loses.split('.')[0];
+    // Unambiguous winner verbs — always flag
+    const hasWinnerVerb = /\b(wins|prevails|succeeds)\b/i.test(firstSentence);
+    // Ambiguous words — only flag verb constructions ("benefits from", "gains from/a/the")
+    const hasAmbiguousWin = /\b(benefits|gains)\s+(from|under|by|through)\b/i.test(firstSentence);
+
+    if (hasWinnerVerb || hasAmbiguousWin) {
       errors.push(`who_loses contains winning language: "${response.who_loses.slice(0, 80)}..."`);
     }
   }
