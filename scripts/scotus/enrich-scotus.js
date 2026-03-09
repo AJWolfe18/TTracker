@@ -122,6 +122,7 @@ const SCOTUS_SKIP_CONSENSUS = process.env.SCOTUS_SKIP_CONSENSUS !== 'false';    
 const SCOTUS_SKIP_DRIFT = process.env.SCOTUS_SKIP_DRIFT !== 'false';              // default: true (skip drift validation)
 const SCOTUS_SKIP_QA_VALIDATORS = process.env.SCOTUS_SKIP_QA_VALIDATORS !== 'false'; // default: true (skip Layer A)
 const SCOTUS_SKIP_LAYER_B = process.env.SCOTUS_SKIP_LAYER_B !== 'false';          // default: true (skip Layer B)
+const PASS2_TEMPERATURE = parseFloat(process.env.SCOTUS_PASS2_TEMPERATURE ?? '0.7');
 // Note: QA retry loop removed structurally (not bypassed). The retry loop depended on
 // all validators + Layer B running, and had 0% trigger rate. Setting the above flags
 // to false re-enables validators/drift/Layer B but without the retry wrapper.
@@ -986,7 +987,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     const { parsed: pass2Result, usage: pass2Usage } = await callGPTWithRetry(
       openai,
       messages,
-      { temperature: 0.7, maxRetries: 1, model: pass2Model }
+      { temperature: PASS2_TEMPERATURE, maxRetries: 1, model: pass2Model }
     );
 
     return { editorial: pass2Result, usage: pass2Usage };
@@ -1451,6 +1452,7 @@ async function main() {
   console.log(`  Drift:          ${SCOTUS_SKIP_DRIFT ? 'SKIP' : 'enabled'}`);
   console.log(`  QA Validators:  ${SCOTUS_SKIP_QA_VALIDATORS ? 'SKIP' : 'enabled'}`);
   console.log(`  Layer B:        ${SCOTUS_SKIP_LAYER_B ? 'SKIP' : 'enabled'}`);
+  console.log(`Pass 2 temperature: ${PASS2_TEMPERATURE}`);
   console.log(``);
 
   // Validate OpenAI key

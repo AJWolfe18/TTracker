@@ -1,0 +1,29 @@
+{
+  "validation_run": "ADO-439",
+  "timestamp": "2026-03-08T12:00:00Z",
+  "git_sha": "112bf0fd37f8f7c428839b52a6effbf8c8c9b7af",
+  "git_branch": "test",
+  "determinism_controls": {
+    "pass1_model": "gpt-4o-mini",
+    "pass1_temperature": 0,
+    "pass2_model": "gpt-4o (grounded via SCOTUSblog) / gpt-4o-mini (ungrounded fallback)",
+    "pass2_temperature": 0,
+    "pass2_temperature_source": "env: SCOTUS_PASS2_TEMPERATURE=0",
+    "style_prompt_version": "v4-ado275",
+    "pass2_prompt_version": "v8-ado429-severity-bounds",
+    "bypass_consensus": true,
+    "bypass_drift": true,
+    "bypass_qa_validators": true,
+    "bypass_layer_b": true,
+    "retry_behavior": "1 max retry per GPT call",
+    "scotusblog_grounding": "enabled (default)"
+  },
+  "cli_command": "SCOTUS_PASS2_TEMPERATURE=0 node scripts/scotus/enrich-scotus.js --case-ids=286,51,192,4,64,120,133,68,63,109,287,285,224,215,175,173,131,118,60,9,247,280,174,217,137 --force-gold",
+  "case_ids": [286, 51, 192, 4, 64, 120, 133, 68, 63, 109, 287, 285, 224, 215, 175, 173, 131, 118, 60, 9, 247, 280, 174, 217, 137],
+  "case_count": 25,
+  "categories": {
+    "gold": [286, 51, 192, 4, 64, 120, 133, 68, 63, 109],
+    "non_gold": [287, 285, 224, 215, 175, 173, 131, 118, 60, 9],
+    "edge": [247, 280, 174, 217, 137]
+  }
+}
