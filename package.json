@@ -18,7 +18,8 @@
     "research:pardons": "node scripts/enrichment/perplexity-research.js",
     "research:pardons:dry-run": "node scripts/enrichment/perplexity-research.js --dry-run",
     "enrich:pardons": "node scripts/enrichment/enrich-pardons.js",
-    "enrich:pardons:dry-run": "node scripts/enrichment/enrich-pardons.js --dry-run"
+    "enrich:pardons:dry-run": "node scripts/enrichment/enrich-pardons.js --dry-run",
+    "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

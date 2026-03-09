@@ -1,0 +1,255 @@
+{
+  "_comment": "SCOTUS enrichment ground truth — 25 cases fact-checked against SCOTUSblog/Wikipedia/Oyez. Created 2026-03-08 for ADO-438 validation.",
+  "_schema_version": 1,
+  "gold_cases": [
+    {
+      "id": 286,
+      "label": "Barrett",
+      "disposition": "reversed",
+      "who_wins_contains": ["Barrett"],
+      "majority_author_last": "Jackson",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 51,
+      "label": "Kirtz",
+      "disposition": "affirmed",
+      "who_wins_contains": ["Consumers", "consumer", "Kirtz"],
+      "majority_author_last": "Gorsuch",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 192,
+      "label": "Soto",
+      "disposition": "reversed",
+      "who_wins_contains": ["Veterans", "veteran", "Soto"],
+      "majority_author_last": "Thomas",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 4,
+      "label": "Connelly",
+      "disposition": "affirmed",
+      "who_wins_contains": ["government", "IRS", "United States"],
+      "majority_author_last": "Thomas",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 64,
+      "label": "Wullschleger",
+      "disposition": "affirmed",
+      "who_wins_contains": ["Wullschleger"],
+      "majority_author_last": "Kagan",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 120,
+      "label": "Bufkin",
+      "disposition": "affirmed",
+      "who_wins_contains": ["VA", "Veterans Affairs", "government"],
+      "majority_author_last": "Thomas",
+      "dissent_authors_last": ["Jackson", "Gorsuch"],
+      "vote_split": "7-2",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 133,
+      "label": "Miller",
+      "disposition": "reversed",
+      "who_wins_contains": ["government", "federal", "sovereign"],
+      "majority_author_last": "Jackson",
+      "dissent_authors_last": ["Gorsuch"],
+      "vote_split": "8-1",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 68,
+      "label": "TikTok",
+      "disposition": "affirmed",
+      "who_wins_contains": ["government", "federal"],
+      "majority_author_last": null,
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 63,
+      "label": "Trump",
+      "disposition": "reversed",
+      "who_wins_contains": ["Trump"],
+      "majority_author_last": null,
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    },
+    {
+      "id": 109,
+      "label": "Lackey",
+      "disposition": "reversed",
+      "who_wins_contains": ["government", "federal", "state agencies"],
+      "majority_author_last": "Roberts",
+      "dissent_authors_last": ["Jackson", "Sotomayor"],
+      "vote_split": "7-2",
+      "case_type": "merits",
+      "enrichment_status": "enriched"
+    }
+  ],
+  "non_gold_cases": [
+    {
+      "id": 287,
+      "label": "Case",
+      "disposition": "affirmed",
+      "majority_author_last": "Kagan",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits"
+    },
+    {
+      "id": 285,
+      "label": "Bowe",
+      "disposition": "vacated",
+      "majority_author_last": "Sotomayor",
+      "dissent_authors_last": ["Gorsuch"],
+      "vote_split": "5-4",
+      "case_type": "merits"
+    },
+    {
+      "id": 224,
+      "label": "Riley",
+      "disposition": "vacated",
+      "majority_author_last": "Alito",
+      "dissent_authors_last": ["Sotomayor", "Jackson", "Gorsuch", "Kagan"],
+      "vote_split": "5-4",
+      "case_type": "merits"
+    },
+    {
+      "id": 215,
+      "label": "Diamond",
+      "disposition": "reversed",
+      "majority_author_last": "Kavanaugh",
+      "dissent_authors_last": ["Sotomayor", "Jackson"],
+      "vote_split": "7-2",
+      "case_type": "merits"
+    },
+    {
+      "id": 175,
+      "label": "Catholic Charities",
+      "disposition": "reversed",
+      "majority_author_last": "Sotomayor",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits"
+    },
+    {
+      "id": 173,
+      "label": "Honickman",
+      "disposition": "reversed",
+      "majority_author_last": "Thomas",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits"
+    },
+    {
+      "id": 131,
+      "label": "Bondi",
+      "disposition": "vacated",
+      "majority_author_last": "Gorsuch",
+      "dissent_authors_last": ["Thomas", "Alito"],
+      "vote_split": "7-2",
+      "case_type": "merits"
+    },
+    {
+      "id": 118,
+      "label": "SF v EPA",
+      "disposition": "reversed",
+      "majority_author_last": "Alito",
+      "dissent_authors_last": ["Barrett", "Jackson", "Sotomayor", "Kagan"],
+      "vote_split": "5-4",
+      "case_type": "merits"
+    },
+    {
+      "id": 60,
+      "label": "Great Lakes",
+      "disposition": "reversed",
+      "majority_author_last": "Kavanaugh",
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits"
+    },
+    {
+      "id": 9,
+      "label": "Becerra",
+      "disposition": "affirmed",
+      "majority_author_last": "Roberts",
+      "dissent_authors_last": ["Kavanaugh"],
+      "vote_split": "5-4",
+      "case_type": "merits"
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": 247,
+      "label": "Goldey",
+      "disposition": "reversed",
+      "majority_author_last": null,
+      "dissent_authors_last": [],
+      "vote_split": "9-0",
+      "case_type": "merits"
+    },
+    {
+      "id": 280,
+      "label": "Abbott",
+      "disposition": "granted",
+      "majority_author_last": null,
+      "dissent_authors_last": ["Kagan", "Sotomayor", "Jackson"],
+      "vote_split": "6-3",
+      "case_type": "cert_stage"
+    },
+    {
+      "id": 174,
+      "label": "Davis",
+      "disposition": "dismissed",
+      "majority_author_last": null,
+      "dissent_authors_last": ["Kavanaugh"],
+      "vote_split": "8-1",
+      "case_type": "procedural"
+    },
+    {
+      "id": 217,
+      "label": "Esteras",
+      "disposition": "vacated",
+      "majority_author_last": "Barrett",
+      "dissent_authors_last": ["Alito", "Gorsuch"],
+      "vote_split": "7-2",
+      "case_type": "unclear"
+    },
+    {
+      "id": 137,
+      "label": "Horn",
+      "disposition": "affirmed",
+      "majority_author_last": "Barrett",
+      "dissent_authors_last": ["Thomas", "Kavanaugh", "Roberts", "Alito"],
+      "vote_split": "5-4",
+      "case_type": "merits"
+    }
+  ]
+}
