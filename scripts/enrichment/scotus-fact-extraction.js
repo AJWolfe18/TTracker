@@ -699,7 +699,10 @@ export function validatePass1(facts, pass0Metadata, scotusCase = null, sourceTex
       const gptDisp = normalizeDisposition(facts.disposition);
       const regexDisp = crossCheckResult.disposition;
 
-      if (gptDisp !== regexDisp) {
+      // Don't override a specific GPT disposition with 'other' from a compound pattern
+      if (regexDisp === 'other' && gptDisp !== 'other') {
+        console.log(`   [DISPOSITION SKIP] Regex matched compound pattern but GPT gave specific disposition="${gptDisp}". Keeping GPT value.`);
+      } else if (gptDisp !== regexDisp) {
         console.log(`   [DISPOSITION OVERRIDE] GPT="${gptDisp}" → Regex="${regexDisp}" `
           + `(pattern: ${crossCheckResult.patternId})`);
         facts.disposition = regexDisp;
