@@ -1,0 +1,17 @@
+{
+  "_description": "Audit log for gold set changes. Gold sets are ground truth — every change must be justified and traceable.",
+  "changes": [
+    {
+      "date": "2026-03-09",
+      "case_id": 131,
+      "case_name": "Bondi v. Vanderstok",
+      "field": "disposition",
+      "previous": "vacated",
+      "corrected": "reversed",
+      "source": "Justia (full opinion text: 'Judgment REVERSED and case REMANDED')",
+      "verified_by": "Josh",
+      "reason": "Original gold set value was incorrect. Justia opinion text confirms disposition is 'reversed', not 'vacated'. SCOTUSblog summary may have used 'vacated' loosely.",
+      "impact": "Validation score: 131/145 → 132/145 (one fewer false failure)"
+    }
+  ]
+}
