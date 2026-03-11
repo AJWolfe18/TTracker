@@ -17,25 +17,24 @@ the scraper previously accepted wrong-docket data silently.
 | `vote_split` | SCOTUSblog > DB > GPT | Structured table data from external source |
 | `dissent_authors` | DB backfill > GPT | DB parses full opinion text; GPT uses windowed text |
 | `case_type` | SCOTUSblog-guided override (bounded) | Only `unclear -> merits` under strict conditions |
-| `disposition` | GPT (Pass 1) — NEVER auto-corrected | SCOTUSblog holding is a summary, not precise legal disposition |
+| `disposition` | SCOTUSblog > GPT (when unambiguous) | SCOTUSblog curated by legal experts; GPT confuses lower court action with SCOTUS action |
 | `majority_author` | Out of scope | Not a pilot bug |
 
 ---
 
-## Hard No-Mutate Rule
+## Mutable Fields
 
-Reconciliation may ONLY auto-correct these fields:
-- `vote_split`
-- `dissent_authors` (+ `dissent_exists`)
+Reconciliation may auto-correct these fields:
+- `vote_split` — SCOTUSblog preferred
+- `dissent_authors` (+ `dissent_exists`) — DB backfill preferred
 - `case_type` (only `unclear -> merits`, never any other transition)
+- `disposition` — SCOTUSblog preferred when unambiguous signal (affirmed/reversed/vacated)
 
 Reconciliation must NEVER auto-correct:
-- `disposition`, `holding`, `who_wins` / `who_loses`
+- `holding`, `who_wins` / `who_loses`
 - `summary_spicy` / `why_it_matters`
 - `majority_author` reasoning text
 - `ruling_impact_level`
-
-This boundary is enforced in code — the function only mutates the 3 mutable fields.
 
 ---
 
@@ -65,8 +64,10 @@ ALL conditions must be met for `unclear -> merits`:
 If < 2 signals → FLAG, do not auto-correct.
 
 ### Disposition
-NEVER auto-corrected. If GPT and SCOTUSblog actively disagree (e.g., affirmed vs reversed),
-log `flagged_disposition_disagree`. Vacate+remand are treated as compatible.
+Auto-corrected when SCOTUSblog holding has an unambiguous disposition signal
+(affirmed/reversed/vacated/remanded/dismissed) and GPT disagrees.
+Vacate+remand are treated as compatible (no correction needed).
+Maps SCOTUSblog signal to canonical form: affirm→"affirmed", reverse→"reversed", etc.
 
 ---
 
@@ -85,7 +86,7 @@ A single case can have multiple outcomes (e.g., auto-corrected dissent + flagged
 | `auto_corrected_case_type` | case_type overridden unclear -> merits |
 | `flagged_dissent` | Split vote but no source has dissenter names |
 | `flagged_case_type` | Possible merits but insufficient signals |
-| `flagged_disposition_disagree` | GPT and SCOTUSblog disagree on disposition |
+| `auto_corrected_disposition` | disposition updated from SCOTUSblog holding |
 | `rejected_docket_mismatch` | SCOTUSblog data rejected (wrong docket) |
 
 ---

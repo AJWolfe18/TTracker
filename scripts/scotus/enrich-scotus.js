@@ -818,26 +818,36 @@ function reconcileWithScotusblog(clampedFacts, scotusCase, scotusblogResult) {
     corrections.push({ field: 'dissent_authors', outcome: 'no_change', reason: 'Dissent data already present' });
   }
 
-  // --- Disposition cross-check (FLAG only, never auto-correct) ---
+  // --- Disposition cross-check (auto-correct from SCOTUSblog when unambiguous) ---
+  // SCOTUSblog holding text is curated and more reliable than GPT extraction
+  // from windowed opinion text. Auto-correct when signals are clear.
   const gptDisp = (clampedFacts.disposition || '').toLowerCase();
   const sbHolding = (sbData.holding || '').toLowerCase();
+  // Also check analysis text for stronger signal
+  const sbFullText = (sbHolding + ' ' + (scotusblogResult.analysisText || '').toLowerCase());
   if (gptDisp && sbHolding) {
-    // Check for gross disagreement (GPT says affirmed, SCOTUSblog says reversed, etc.)
     const dispSignals = { affirm: /affirm/i, reverse: /revers/i, vacate: /vacat/i, remand: /remand/i, dismiss: /dismiss/i };
     const gptSignal = Object.entries(dispSignals).find(([, rx]) => rx.test(gptDisp))?.[0] || null;
     const sbSignal = Object.entries(dispSignals).find(([, rx]) => rx.test(sbHolding))?.[0] || null;
 
     if (gptSignal && sbSignal && gptSignal !== sbSignal) {
-      // Only flag if they actively disagree (both present, different)
       // Exception: vacate+remand are compatible
       const compatible = (gptSignal === 'vacate' && sbSignal === 'remand') ||
                          (gptSignal === 'remand' && sbSignal === 'vacate');
       if (!compatible) {
+        // Map SCOTUSblog signal back to canonical disposition string
+        const sbDispMap = { affirm: 'affirmed', reverse: 'reversed', vacate: 'vacated', remand: 'remanded', dismiss: 'dismissed' };
+        const correctedDisp = sbDispMap[sbSignal] || sbSignal;
+        const oldVal = clampedFacts.disposition;
+        clampedFacts.disposition = correctedDisp;
         corrections.push({
-          field: 'disposition', outcome: 'flagged_disposition_disagree',
-          reason: `GPT: "${gptDisp}" vs SCOTUSblog holding: "${sbHolding.slice(0, 100)}"`
+          field: 'disposition', outcome: 'auto_corrected_disposition',
+          reason: `SCOTUSblog holding "${sbHolding.slice(0, 80)}" vs GPT "${gptDisp}"`,
+          old: oldVal, new: correctedDisp
         });
       }
+    } else if (gptSignal && sbSignal && gptSignal === sbSignal) {
+      corrections.push({ field: 'disposition', outcome: 'no_change', reason: 'GPT and SCOTUSblog agree on disposition' });
     }
   }
 
