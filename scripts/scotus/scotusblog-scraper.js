@@ -355,6 +355,14 @@ export async function getScotusContext({ caseName, docketNumber, term, topicTerm
               break;
             }
           }
+          // ADO-446 Fix 1: After trying alternatives, reject if docket still wrong or unknown
+          // Must also reject when docket_number is null (unparseable) — can't confirm match
+          if (!result.caseData.docket_number || result.caseData.docket_number !== docketNumber) {
+            console.log(`[SCOTUSblog] Rejecting data: docket mismatch persists (got ${result.caseData.docket_number ?? 'null'}, want ${docketNumber})`);
+            result.found = false;
+            result.caseData = null;
+            result.searchStrategy = 'rejected_docket_mismatch';
+          }
         }
       } catch (err) {
         result.errors.push(`Case file page failed: ${err.message}`);

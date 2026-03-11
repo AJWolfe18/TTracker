@@ -40,6 +40,7 @@ import {
   clampAndLabel,           // ADO-300
   enforceEditorialConstraints,  // ADO-300
   lintQuotes,              // ADO-303
+  computeSeverityBounds,   // ADO-446: Re-run after reconciliation
 } from '../enrichment/scotus-fact-extraction.js';
 
 import {
@@ -729,6 +730,156 @@ function runPublishGate(facts, editorial) {
   };
 }
 
+// ============================================================================
+// ADO-446: RECONCILIATION — Cross-check Pass 1 (GPT) vs SCOTUSblog grounding
+// ============================================================================
+
+/**
+ * Cross-check Pass 1 facts against SCOTUSblog grounding data.
+ * May auto-correct: vote_split, dissent_authors (+dissent_exists), case_type.
+ * NEVER auto-corrects: disposition, holding, who_wins/who_loses, summary, severity.
+ *
+ * @param {Object} clampedFacts - Facts from clampAndLabel()
+ * @param {Object} scotusCase - DB case record (has dissent_authors from backfill)
+ * @param {Object|null} scotusblogResult - Result from getScotusContext()
+ * @returns {{ corrections: Array<{field, outcome, reason, old?, new?}>, mutatedFacts: Object }}
+ */
+function reconcileWithScotusblog(clampedFacts, scotusCase, scotusblogResult) {
+  const corrections = [];
+
+  // No SCOTUSblog data → nothing to cross-check
+  if (!scotusblogResult || !scotusblogResult.found || !scotusblogResult.caseData) {
+    corrections.push({ field: 'all', outcome: 'no_scotusblog', reason: 'SCOTUSblog data unavailable' });
+    return { corrections, mutatedFacts: clampedFacts };
+  }
+
+  const sbData = scotusblogResult.caseData;
+
+  // --- Vote split cross-check ---
+  const sbVote = (sbData.vote_split || '').replace(/\s+/g, '');
+  const gptVote = (clampedFacts.vote_split || '').replace(/\s+/g, '');
+
+  if (sbVote && gptVote) {
+    const sbNorm = sbVote.replace(/[^0-9-]/g, '');
+    const gptNorm = gptVote.replace(/[^0-9-]/g, '');
+    if (sbNorm === gptNorm) {
+      corrections.push({ field: 'vote_split', outcome: 'no_change', reason: 'GPT and SCOTUSblog agree' });
+    } else {
+      const oldVal = clampedFacts.vote_split;
+      clampedFacts.vote_split = sbData.vote_split;
+      corrections.push({
+        field: 'vote_split', outcome: 'auto_corrected_vote_split',
+        reason: `SCOTUSblog preferred over GPT`, old: oldVal, new: sbData.vote_split
+      });
+    }
+  } else if (sbVote && !gptVote) {
+    clampedFacts.vote_split = sbData.vote_split;
+    corrections.push({
+      field: 'vote_split', outcome: 'auto_corrected_vote_split',
+      reason: 'GPT had no vote_split, using SCOTUSblog', old: null, new: sbData.vote_split
+    });
+  }
+
+  // --- Dissent cross-check (Bug 1) ---
+  // Parse minority count from effective vote_split
+  // Only auto-correct dissent when vote_split is verified by SCOTUSblog (not GPT-only)
+  const voteVerifiedByScotusblog = sbVote !== '';
+  const effectiveVote = clampedFacts.vote_split || '';
+  const voteMatch = effectiveVote.match(/(\d+)\s*[-–]\s*(\d+)/);
+  const minorityCount = voteMatch ? parseInt(voteMatch[2], 10) : 0;
+  const gptDissent = clampedFacts.dissent_authors || [];
+  const dbDissent = scotusCase.dissent_authors || [];
+
+  if (voteVerifiedByScotusblog && minorityCount > 0 && gptDissent.length === 0) {
+    // Split vote but GPT missed dissenters
+    if (dbDissent.length > 0) {
+      // DB backfill has names → auto-correct
+      const oldVal = [...gptDissent];
+      clampedFacts.dissent_authors = [...dbDissent];
+      clampedFacts.dissent_exists = true;
+      corrections.push({
+        field: 'dissent_authors', outcome: 'auto_corrected_dissent',
+        reason: `Vote ${effectiveVote} implies ${minorityCount} dissenters; filled from DB backfill`,
+        old: oldVal, new: [...dbDissent]
+      });
+    } else {
+      // No source has names → flag for manual review
+      corrections.push({
+        field: 'dissent_authors', outcome: 'flagged_dissent',
+        reason: `Vote ${effectiveVote} implies ${minorityCount} dissenters but no source has names`
+      });
+    }
+  } else if (!voteVerifiedByScotusblog && minorityCount > 0 && gptDissent.length === 0) {
+    // Vote split not verified by SCOTUSblog — can't trust minority count for auto-correct
+    corrections.push({ field: 'dissent_authors', outcome: 'no_change', reason: 'Vote split unverified (GPT-only) — skipping dissent cross-check' });
+  } else if (minorityCount === 0 && gptDissent.length === 0) {
+    corrections.push({ field: 'dissent_authors', outcome: 'no_change', reason: 'Unanimous or no minority — consistent' });
+  } else {
+    corrections.push({ field: 'dissent_authors', outcome: 'no_change', reason: 'Dissent data already present' });
+  }
+
+  // --- Disposition cross-check (FLAG only, never auto-correct) ---
+  const gptDisp = (clampedFacts.disposition || '').toLowerCase();
+  const sbHolding = (sbData.holding || '').toLowerCase();
+  if (gptDisp && sbHolding) {
+    // Check for gross disagreement (GPT says affirmed, SCOTUSblog says reversed, etc.)
+    const dispSignals = { affirm: /affirm/i, reverse: /revers/i, vacate: /vacat/i, remand: /remand/i, dismiss: /dismiss/i };
+    const gptSignal = Object.entries(dispSignals).find(([, rx]) => rx.test(gptDisp))?.[0] || null;
+    const sbSignal = Object.entries(dispSignals).find(([, rx]) => rx.test(sbHolding))?.[0] || null;
+
+    if (gptSignal && sbSignal && gptSignal !== sbSignal) {
+      // Only flag if they actively disagree (both present, different)
+      // Exception: vacate+remand are compatible
+      const compatible = (gptSignal === 'vacate' && sbSignal === 'remand') ||
+                         (gptSignal === 'remand' && sbSignal === 'vacate');
+      if (!compatible) {
+        corrections.push({
+          field: 'disposition', outcome: 'flagged_disposition_disagree',
+          reason: `GPT: "${gptDisp}" vs SCOTUSblog holding: "${sbHolding.slice(0, 100)}"`
+        });
+      }
+    }
+  }
+
+  // --- Case-type cross-check (Bug 2) ---
+  if (clampedFacts.case_type === 'unclear') {
+    const disp = (clampedFacts.disposition || '').toLowerCase();
+    const isVacatedOrRemanded = /vacat|remand/i.test(disp);
+    const isPurelyProcedural = /\b(dismiss|moot)\b/i.test(disp);
+
+    if (isVacatedOrRemanded && !isPurelyProcedural) {
+      // Check for compound merits signals in SCOTUSblog text
+      const sbText = ((sbData.holding || '') + ' ' + (scotusblogResult.analysisText || '')).toLowerCase();
+      const meritsKeywords = ['held', 'ruled', 'struck down', 'upheld', 'invalidated', 'overruled'];
+      const meritsHits = meritsKeywords.filter(kw => sbText.includes(kw));
+
+      if (meritsHits.length >= 2) {
+        // Strong merits signals → auto-correct
+        const oldVal = clampedFacts.case_type;
+        clampedFacts.case_type = 'merits';
+        corrections.push({
+          field: 'case_type', outcome: 'auto_corrected_case_type',
+          reason: `V&R with ${meritsHits.length} merits signals: [${meritsHits.join(', ')}]`,
+          old: oldVal, new: 'merits'
+        });
+      } else {
+        // Insufficient signals → flag
+        corrections.push({
+          field: 'case_type', outcome: 'flagged_case_type',
+          reason: `V&R case_type=unclear, only ${meritsHits.length} merits signal(s): [${meritsHits.join(', ')}]`
+        });
+      }
+    }
+  }
+
+  // If no corrections were logged for case_type, mark as no_change
+  if (!corrections.some(c => c.field === 'case_type')) {
+    corrections.push({ field: 'case_type', outcome: 'no_change', reason: 'case_type consistent or not unclear' });
+  }
+
+  return { corrections, mutatedFacts: clampedFacts };
+}
+
 /**
  * Enrich a single SCOTUS case using two-pass architecture
  */
@@ -947,6 +1098,51 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     } catch (err) {
       console.log(`   ⚠️ SCOTUSblog fetch failed (non-blocking): ${err.message}`);
     }
+  }
+
+  // =========================================================================
+  // ADO-446: RECONCILIATION — Cross-check Pass 1 vs SCOTUSblog
+  // Insert corrections for vote_split, dissent_authors, case_type.
+  // Must happen BEFORE Pass 2 so editorial sees corrected facts.
+  // =========================================================================
+  const { corrections: reconciliationCorrections } =
+    reconcileWithScotusblog(clampedFacts, scotusCase, scotusblogResult);
+
+  // Log reconciliation outcomes
+  const autoCorrections = reconciliationCorrections.filter(c =>
+    c.outcome.startsWith('auto_corrected') || c.outcome.startsWith('flagged'));
+  if (autoCorrections.length > 0) {
+    console.log(`   🔄 Reconciliation: ${autoCorrections.length} correction(s)`);
+    for (const c of autoCorrections) {
+      console.log(`      ${c.field}: ${c.outcome} — ${c.reason}`);
+    }
+
+    // If dissent_authors or case_type changed, re-run severity bounds
+    const dissentChanged = reconciliationCorrections.some(c =>
+      c.field === 'dissent_authors' && c.outcome === 'auto_corrected_dissent');
+    const caseTypeChanged = reconciliationCorrections.some(c =>
+      c.field === 'case_type' && c.outcome === 'auto_corrected_case_type');
+
+    if (dissentChanged || caseTypeChanged) {
+      // Update scotusCase in-memory for severity recomputation + downstream validation
+      if (dissentChanged) {
+        scotusCase.dissent_authors = clampedFacts.dissent_authors;
+        scotusCase.dissent_exists = true;
+      }
+      const isCert = clampedFacts.clamp_reason === 'cert_no_merits';
+      const isProcedural = clampedFacts.clamp_reason === 'procedural_no_merits';
+      const evidenceText = clampedFacts._evidence_text || '';
+      const overrulePattern = /\b(we\s+(\w+\s+){0,3}overrule|(?:is|are|must\s+be)\s+(hereby\s+|expressly\s+|explicitly\s+)?overruled)\b/i;
+      const declinePattern = /\b(decline[sd]?\s+to\s+overrule|not\s+overrul|need\s+not\s+overrule|without\s+overrul)\b/i;
+      const explicitOverrule = overrulePattern.test(evidenceText) && !declinePattern.test(evidenceText);
+
+      clampedFacts.severity_bounds = computeSeverityBounds(
+        clampedFacts, scotusCase, { isCert, isProcedural, explicitOverrule }
+      );
+      console.log(`   🔄 Severity bounds recomputed: min=${clampedFacts.severity_bounds?.min}, max=${clampedFacts.severity_bounds?.max}`);
+    }
+  } else {
+    console.log(`   ✓ Reconciliation: no corrections needed`);
   }
 
   // ADO-429: Select Pass 2 model — GPT-4o when grounding available, else mini
@@ -1359,6 +1555,13 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     }
   }
 
+  // ADO-446: Reconciliation flags → needs_manual_review
+  const hasFlaggedCorrections = reconciliationCorrections.some(c => c.outcome.startsWith('flagged_'));
+  if (hasFlaggedCorrections) {
+    needsReview = true;
+    console.log(`   ⚠️ Reconciliation flagged items → needs_manual_review=true`);
+  }
+
   // =========================================================================
   // WRITE TO DATABASE
   // =========================================================================
@@ -1370,6 +1573,8 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     facts_model_used: usedModel,
     retry_reason: retry_reason,
     needs_manual_review: needsReview,
+    // ADO-446: Reconciliation corrections log
+    reconciliation_corrections: reconciliationCorrections,
     is_public: isPublic,
     // ADO-308: QA columns (Layer A, always written)
     // ADO-309: Added qa_retry_count to track retry attempts
@@ -1407,6 +1612,14 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
   if (scotusblogResult?.found) {
     console.log(`   SCOTUSblog: grounded (${scotusblogResult.searchStrategy})`);
   }
+  // ADO-446: Log reconciliation summary
+  const rcSummary = reconciliationCorrections
+    .filter(c => c.outcome !== 'no_change' && c.outcome !== 'no_scotusblog')
+    .map(c => `${c.field}:${c.outcome}`)
+    .join(', ');
+  if (rcSummary) {
+    console.log(`   Reconciliation: ${rcSummary}`);
+  }
 
   return {
     success: true,
@@ -1424,6 +1637,7 @@ async function enrichCase(supabase, openai, scotusCase, recentPatternIds, recent
     needsReview,
     pass2Model,  // ADO-429: Track which model was used for Pass 2
     scotusblogGrounded: scotusblogResult?.found || false,  // ADO-429
+    reconciliationCorrections,  // ADO-446: Cross-check outcomes
     // For anti-repetition: track summary_spicy for signature detection
     summaryOpening: (constrainedEditorial.summary_spicy || '').substring(0, 150)
   };

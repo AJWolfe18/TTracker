@@ -649,11 +649,15 @@ export function validateEnrichmentResponse(response, opts) {
         return parts[parts.length - 1].toLowerCase();
       });
       // Extract justice names from highlights (pattern: "Justice X" or "X J.")
+      // ADO-446 Fix 2: Capture all capitalized words after "Justice" and use last word (last name)
+      // Before: "Justice Ketanji Brown Jackson" captured only "Ketanji" → false mismatch
       const mentionedNames = [];
-      const justicePattern = /(?:Justice|J\.|Judge)\s+([A-Z][a-z]+)/g;
+      const justicePattern = /(?:Justice|J\.|Judge)\s+((?:[A-Z][a-zA-Z'-]+\s*)+)/g;
       let match;
       while ((match = justicePattern.exec(dissentText)) !== null) {
-        mentionedNames.push(match[1].toLowerCase());
+        const words = match[1].trim().split(/\s+/);
+        const lastName = words[words.length - 1].toLowerCase();
+        mentionedNames.push(lastName);
       }
       for (const name of mentionedNames) {
         if (!authorLastNames.includes(name)) {

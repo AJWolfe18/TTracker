@@ -115,6 +115,8 @@ export const DB_COLUMNS = new Set([
   'invariant_passed', 'invariant_failures',
   // ADO-438: SCOTUSblog vote_split columns
   'scotusblog_vote_split', 'vote_split_source',
+  // ADO-446: Reconciliation corrections log
+  'reconciliation_corrections',
   // NOTE: opinion_full_text is in scotus_opinions table, not here
 ]);
 
@@ -1036,7 +1038,7 @@ function fallbackMeritsLabel(facts) {
  *
  * See docs/features/scotus-enrichment/severity-changelog.md for rationale.
  */
-function computeSeverityBounds(facts, scotusCase, { isCert, isProcedural, explicitOverrule } = {}) {
+export function computeSeverityBounds(facts, scotusCase, { isCert, isProcedural, explicitOverrule } = {}) {
   let min = 0;
   let max = 5;
   const reasons = [];
