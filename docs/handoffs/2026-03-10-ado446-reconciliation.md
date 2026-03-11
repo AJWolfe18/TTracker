@@ -23,6 +23,39 @@ ADO-446 moved to Testing. All 4 original fixes + disposition auto-correct implem
 
 5. **Option D (Claude Code reviewer)**: After bulk run, Josh triggers manual review of flagged cases. Pattern: "review flagged SCOTUS cases" → I query DB, read source text, fix errors directly.
 
+## Enrichment Quality Strategy — Discuss Tomorrow
+
+The eval exposed a systemic problem: GPT-4o-mini gets disposition wrong ~15-20% of the time
+(says "reversed" when Court actually "affirmed"). Reconciliation fixes this for cases where
+SCOTUSblog data exists (~80%), but we discussed a broader strategy.
+
+### Option B: SCOTUSblog as automated ground truth (IMPLEMENTED)
+- Already built into the pipeline — runs on every enrichment automatically
+- Auto-corrects disposition, vote_split, dissent, case_type from SCOTUSblog
+- Zero extra cost (SCOTUSblog is scraped, not an API)
+- Covers ~80% of cases. Remaining ~20% where SCOTUSblog not found get GPT as-is
+- **Status: Code complete, needs eval verification**
+
+### Option D: Claude Code as on-demand reviewer ($0 extra)
+- After bulk/daily runs, Josh says "review flagged SCOTUS cases"
+- Claude reads full opinion text (no windowing), SCOTUSblog data, enrichment output
+- Corrects errors directly in DB via MCP, Josh sees every change
+- Handles the ~20% where SCOTUSblog isn't found
+- Also handles nuanced errors no regex/model catches
+- **Status: No code needed — just a workflow pattern. Discuss when to use.**
+
+### Scaling pattern: external ground truth > GPT extraction
+- Same reconciliation framework works for any content type (EOs, pardons, stories)
+- When a reliable structured external source exists, plug it in as the "winner"
+- SCOTUSblog for SCOTUS is the first instance of this pattern
+- **Discuss: what other content types have reliable external sources?**
+
+### Gold set expansion (separate session)
+- Current: 10 gold cases — too thin for meaningful eval
+- Need: 25-30 cases across disposition types (affirmed, reversed, vacated, unanimous, split)
+- Josh and Claude review cases together, confirm correct answers
+- Makes future evals actually useful as a quality gate
+
 ## Key Files
 - `docs/features/scotus-enrichment/reconciliation-rules.md` — full reference
 - `scripts/scotus/enrich-scotus.js` — `reconcileWithScotusblog()` at ~line 733
