@@ -26,6 +26,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { PerplexityClient, sanitizeForPrompt, sanitizeErrorBody } from './perplexity-client.js';
 dotenv.config();
 
 // ============================================================
@@ -37,9 +38,6 @@ const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
 const RUNTIME_LIMIT_MS = 4 * 60 * 1000;  // 4 minutes (workflow timeout is 10)
-const MAX_RETRIES = 3;  // For rate limit (429) handling
-const RETRY_BASE_DELAY_MS = 5000;  // 5 second base for exponential backoff
-const MAX_RETRY_DELAY_MS = 15000;  // Clamp retry sleep to 15s max
 
 // Connection types enum (must match DB CHECK constraint)
 const CONNECTION_TYPES = [
@@ -64,49 +62,7 @@ const URL_REGEX = /^https?:\/\/[^\s]+\.[^\s]+/;
 const MAX_TIMELINE_LENGTH = 30;
 const MAX_SOURCES_LENGTH = 20;
 
-// ============================================================
-// Security Helpers
-// ============================================================
-
-/**
- * Sanitize text for prompt injection protection
- * Removes control characters, limits length, escapes special patterns
- */
-function sanitizeForPrompt(text, maxLength = 500) {
-  if (text == null) return '';
-  return String(text)
-    .replace(/[\x00-\x1f\x7f]/g, '')  // Remove ASCII control chars
-    .replace(/[\u202A-\u202E\u2066-\u2069]/g, '')  // Remove Unicode bidi controls
-    .replace(/```/g, '')  // Prevent markdown code block injection
-    .replace(/\s+/g, ' ')  // Collapse excessive whitespace
-    .trim()
-    .slice(0, maxLength);
-}
-
-/**
- * Sanitize error response body to prevent API key/secret exposure
- * Removes anything that looks like an API key or secret
- */
-function sanitizeErrorBody(body, maxLength = 500) {
-  if (!body) return null;
-  return String(body)
-    // Redact Authorization credentials (Bearer/Basic), including JSON-like fields
-    .replace(/["']?\s*authorization\s*["']?\s*[:=]\s*["']?Bearer\s+[^\s'"]+/gi, 'Authorization: Bearer [REDACTED]')
-    .replace(/["']?\s*authorization\s*["']?\s*[:=]\s*["']?Basic\s+[^\s'"]+/gi, 'Authorization: Basic [REDACTED]')
-    .replace(/Bearer\s+[^\s'"]+/gi, 'Bearer [REDACTED]')
-    // Redact explicit api key fields
-    .replace(/api[_-]?key["\s:=]+[A-Za-z0-9._-]{20,}/gi, 'api_key: [REDACTED]')
-    // Redact x-api-key header fields
-    .replace(/["']?\s*x[-_]?api[-_]?key["']?\s*[:=]\s*["']?[^"'\s]+/gi, 'x-api-key: [REDACTED]')
-    // Redact access_token and refresh_token fields
-    .replace(/\b(access|refresh)_token["\s:=]+[A-Za-z0-9._-]{20,}/gi, '$1_token: [REDACTED]')
-    // Redact common secret prefixes (e.g., sk-..., pplx-...)
-    .replace(/\bsk-[A-Za-z0-9._-]{20,}\b/gi, '[REDACTED_KEY]')
-    .replace(/\bpplx-[A-Za-z0-9._-]{20,}\b/gi, '[REDACTED_KEY]')
-    // Redact long token-like strings (incl. dots)
-    .replace(/[A-Za-z0-9._-]{32,}/g, '[LONG_STRING_REDACTED]')
-    .slice(0, maxLength);
-}
+// Security helpers imported from ./perplexity-client.js
 
 // ============================================================
 // Perplexity Prompt
@@ -329,74 +285,7 @@ function validateResearchResponse(json) {
   return { valid: errors.length === 0, errors };
 }
 
-// ============================================================
-// Perplexity Client
-// ============================================================
-
-class PerplexityClient {
-  constructor(apiKey) {
-    this.apiKey = apiKey;
-    this.baseUrl = 'https://api.perplexity.ai';
-  }
-
-  async research(query, retryCount = 0) {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: PERPLEXITY_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a political research assistant. Return ONLY valid JSON. Do not include markdown formatting or code blocks.'
-          },
-          {
-            role: 'user',
-            content: query
-          }
-        ],
-        temperature: 0.3,  // Lower temp for factual research
-        max_tokens: 1500
-      })
-    });
-
-    // Handle rate limiting (429) with exponential backoff
-    if (response.status === 429 && retryCount < MAX_RETRIES) {
-      const retryAfterSec = parseInt(response.headers.get('retry-after') || '0', 10);
-      const baseDelay = retryAfterSec ? retryAfterSec * 1000 : RETRY_BASE_DELAY_MS * Math.pow(2, retryCount);
-      const delay = Math.min(baseDelay, MAX_RETRY_DELAY_MS);  // Cap at 15s to stay within runtime budget
-      console.log(`   ⏳ Rate limited (429). Retry ${retryCount + 1}/${MAX_RETRIES} after ${delay}ms`);
-      await new Promise(r => setTimeout(r, delay));
-      return this.research(query, retryCount + 1);
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      const error = new Error(`Perplexity API error: ${response.status}`);
-      error.status = response.status;
-      // Sanitize error body before storing (prevent API key exposure)
-      error.body = sanitizeErrorBody(errorText, 1000);
-      throw error;
-    }
-
-    const data = await response.json();
-    return {
-      content: data.choices[0]?.message?.content || '',
-      usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
-    };
-  }
-
-  calculateCost(usage) {
-    // Perplexity Sonar pricing (approximate)
-    // $5 per 1M input tokens, $15 per 1M output tokens
-    const inputCost = (usage.prompt_tokens / 1_000_000) * 5;
-    const outputCost = (usage.completion_tokens / 1_000_000) * 15;
-    return inputCost + outputCost;
-  }
-}
+// PerplexityClient imported from ./perplexity-client.js
 
 // ============================================================
 // Pardon Research Worker
