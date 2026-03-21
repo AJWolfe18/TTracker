@@ -271,6 +271,33 @@ All well within the $5/day budget cap.
 - Gold truth JSON structure stays compatible
 - No new database migrations needed for Story 1 (metadata fields can be added in Story 2 migration)
 
+## Progress Tracker
+
+### Story 1: Scout Dry Run — CODE COMPLETE, NEEDS EXECUTION
+
+**Code built:**
+- [x] Refactor `PerplexityClient` into shared `perplexity-client.js`
+- [x] Build `scout-prompt.js` (prompt builder)
+- [x] Build `scout-parser.js` (JSON parse + normalization)
+- [x] Build `scout-validator.js` (deterministic validation)
+- [x] Build `scotus-scout.js` (CLI entry point with dry-run)
+
+**Validation runs (not yet executed):**
+- [ ] Run against 6 known-bad cases → 100% correct disposition
+- [ ] Run against full 25-case gold set → >=95% parse success, 0 invalid enums
+- [ ] Verify `perplexity-research.js` still works after client refactor
+- [ ] Confirm 100% source capture on every response
+- [ ] Confirm dry-run cost < $0.15
+
+### Story 2: Scout Live + Comparison — NOT STARTED
+
+- [ ] Run Scout `--dry-run --all` to produce field-level comparison report (145 cases)
+- [ ] Add DB metadata columns (`fact_extractor_version`, `fact_sources`, `fact_extracted_at`, `fact_confidence`, `fact_review_status`) — migration needed
+- [ ] Enable live write mode, verify Scout-owned fields only written
+- [ ] Verify rollback data in output for every changed field
+- [ ] Verify uncertain cases surfaced in report, never silently written
+- [ ] Verify Pass 2 Writer fields untouched
+
 ---
 
 **Last Updated:** 2026-03-21
