@@ -137,7 +137,7 @@ export function validateScoutResult(scout) {
   const hasTier1Or2 = actualTiers.includes(1) || actualTiers.includes(2);
   const onlyTier3 = actualTiers.length > 0 && !hasTier1Or2;
 
-  if (scout.source_urls.length === 0) {
+  if (!scout.source_urls || scout.source_urls.length === 0) {
     issues.push('No source URLs provided');
   }
   if (onlyTier3) {

@@ -28,6 +28,18 @@ const DISPOSITION_ALIASES = {
   'GVR': 'GVR',
   'granted, vacated, and remanded': 'GVR',
   'granted vacated and remanded': 'GVR',
+  // Compound dispositions — map to primary action
+  'affirmed in part': 'affirmed',
+  'affirmed in part, reversed in part': 'reversed',
+  'affirmed in part, vacated in part': 'vacated',
+  'affirmed in part and reversed in part': 'reversed',
+  'affirmed in part and vacated in part': 'vacated',
+  'reversed in part': 'reversed',
+  'reversed in part, affirmed in part': 'reversed',
+  'reversed in part and remanded': 'reversed_and_remanded',
+  'vacated in part': 'vacated',
+  'vacated in part, affirmed in part': 'vacated',
+  'vacated in part and remanded': 'vacated_and_remanded',
 };
 
 export const VALID_DISPOSITIONS = [
@@ -96,6 +108,24 @@ function normalizeJusticeName(name) {
 // Parse
 // ============================================================
 
+function extractJson(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{')) return trimmed;
+
+  // Extract from markdown code block (handles preamble text before ```)
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) return codeBlockMatch[1].trim();
+
+  // Fallback: find first { to last }
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  return trimmed;
+}
+
 /**
  * Parse raw Perplexity response content into Scout result
  * @param {string} rawContent - Raw text from Perplexity
@@ -107,11 +137,8 @@ export function parseScoutResponse(rawContent, citations = []) {
     return { parsed: null, parseError: 'Empty or non-string response' };
   }
 
-  // Strip markdown code blocks if present
-  let jsonStr = rawContent.trim();
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-  }
+  // Extract JSON from response (handles preamble text, code blocks, etc.)
+  let jsonStr = extractJson(rawContent);
 
   let raw;
   try {
@@ -138,6 +165,10 @@ function normalizeScoutOutput(raw, citations) {
   const rawDisp = String(raw.formal_disposition || '').trim().toLowerCase();
   out.formal_disposition = DISPOSITION_ALIASES[rawDisp] || raw.formal_disposition || null;
   out.formal_disposition_detail = raw.formal_disposition_detail || null;
+  // Auto-populate detail for compound dispositions (e.g. "affirmed in part, reversed in part")
+  if (!out.formal_disposition_detail && rawDisp.includes(' in part')) {
+    out.formal_disposition_detail = raw.formal_disposition;
+  }
 
   // Opinion type
   out.opinion_type = VALID_OPINION_TYPES.includes(raw.opinion_type) ? raw.opinion_type : null;
@@ -181,11 +212,11 @@ function normalizeScoutOutput(raw, citations) {
 function normalizeVoteSplit(raw) {
   if (!raw) return null;
   const str = String(raw).trim();
-  // Match N-N pattern (e.g. "7-2", "9-0")
-  const match = str.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
+  // Match leading N-N pattern, ignore trailing text like "(per curiam)"
+  const match = str.match(/^(\d+)\s*[-–—]\s*(\d+)/);
   if (match) return `${match[1]}-${match[2]}`;
   // Try to extract from text like "7 to 2" or "7:2"
-  const altMatch = str.match(/^(\d+)\s*(?:to|:)\s*(\d+)$/i);
+  const altMatch = str.match(/^(\d+)\s*(?:to|:)\s*(\d+)/i);
   if (altMatch) return `${altMatch[1]}-${altMatch[2]}`;
   return null;
 }

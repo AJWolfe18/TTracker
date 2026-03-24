@@ -93,12 +93,16 @@ export class PerplexityClient {
       })
     });
 
-    // Handle rate limiting (429) with exponential backoff
-    if (response.status === 429 && retryCount < this.maxRetries) {
-      const retryAfterSec = parseInt(response.headers.get('retry-after') || '0', 10);
+    // Handle retryable errors (429 rate limit, 502/503 transient) with exponential backoff
+    const retryableStatuses = [429, 502, 503];
+    if (retryableStatuses.includes(response.status) && retryCount < this.maxRetries) {
+      const retryAfterSec = response.status === 429
+        ? parseInt(response.headers.get('retry-after') || '0', 10)
+        : 0;
       const baseDelay = retryAfterSec ? retryAfterSec * 1000 : this.retryBaseDelayMs * Math.pow(2, retryCount);
-      const delay = Math.min(baseDelay, this.maxRetryDelayMs);
-      console.log(`   ⏳ Rate limited (429). Retry ${retryCount + 1}/${this.maxRetries} after ${delay}ms`);
+      // Trust server's retry-after; only cap our own computed backoff
+      const delay = retryAfterSec ? baseDelay : Math.min(baseDelay, this.maxRetryDelayMs);
+      console.log(`   ⏳ ${response.status} error. Retry ${retryCount + 1}/${this.maxRetries} after ${delay}ms`);
       await new Promise(r => setTimeout(r, delay));
       return this.research(query, options, retryCount + 1);
     }

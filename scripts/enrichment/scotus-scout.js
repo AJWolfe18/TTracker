@@ -90,7 +90,6 @@ function parseArgs() {
     all: args.includes('--all'),
     showSources: args.includes('--show-sources'),
     failOnUncertain: args.includes('--fail-on-uncertain'),
-    onlyIfBetter: args.includes('--only-if-better'),
     ids: null,
     limit: null,
     writeFields: null,
@@ -109,6 +108,27 @@ function parseArgs() {
     }
     if (arg.startsWith('--output-json=')) {
       opts.outputJson = arg.split('=')[1];
+    }
+  }
+
+  // Validate --ids
+  if (opts.ids && opts.ids.length === 0) {
+    console.error('Error: --ids provided but no valid numeric IDs found');
+    process.exit(1);
+  }
+
+  // Validate --write-fields
+  if (opts.writeFields) {
+    const validWriteFields = [
+      'disposition', 'vote_split', 'majority_author', 'dissent_authors',
+      'prevailing_party', 'practical_effect', 'holding', 'issue_area',
+      'case_type', 'merits_reached',
+    ];
+    const invalid = opts.writeFields.filter(f => !validWriteFields.includes(f));
+    if (invalid.length > 0) {
+      console.error(`Error: Unknown --write-fields: ${invalid.join(', ')}`);
+      console.error(`  Valid fields: ${validWriteFields.join(', ')}`);
+      process.exit(1);
     }
   }
 
