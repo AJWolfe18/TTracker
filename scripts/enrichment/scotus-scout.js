@@ -10,7 +10,7 @@
  *   node scripts/enrichment/scotus-scout.js --dry-run --gold-set
  *   node scripts/enrichment/scotus-scout.js --dry-run --limit=20
  *   node scripts/enrichment/scotus-scout.js --dry-run --all
- *   node scripts/enrichment/scotus-scout.js --ids=51 --write-fields=formal_disposition,vote_split
+ *   node scripts/enrichment/scotus-scout.js --ids=51 --write-fields=disposition,vote_split
  *   node scripts/enrichment/scotus-scout.js --dry-run --output-json=results.json
  *   node scripts/enrichment/scotus-scout.js --dry-run --fail-on-uncertain
  *   node scripts/enrichment/scotus-scout.js --dry-run --show-sources
@@ -149,7 +149,7 @@ async function fetchCases(supabase, opts) {
   } else if (opts.all) {
     // No filter
   } else if (opts.goldSet) {
-    const goldIds = loadGoldSet().map(c => c.id);
+    const goldIds = getGoldSet().map(c => c.id);
     query = query.in('id', goldIds);
   }
 
@@ -168,8 +168,14 @@ async function fetchCases(supabase, opts) {
 // Gold set comparison
 // ============================================================
 
+let _goldSetCache = null;
+function getGoldSet() {
+  if (!_goldSetCache) _goldSetCache = loadGoldSet();
+  return _goldSetCache;
+}
+
 function compareToGoldSet(scoutResult, caseId) {
-  const goldCases = loadGoldSet();
+  const goldCases = getGoldSet();
   const gold = goldCases.find(g => g.id === caseId);
   if (!gold) return null;
 
@@ -343,6 +349,21 @@ async function main() {
   const supabase = createClient(supabaseUrl, supabaseKey);
   const perplexity = new PerplexityClient(perplexityKey);
 
+  // Budget guard — halt if daily spend already near limit
+  if (!opts.dryRun) {
+    const { data: budget } = await supabase
+      .from('budgets')
+      .select('spent_usd')
+      .eq('day', new Date().toISOString().slice(0, 10))
+      .maybeSingle();
+    const spent = budget?.spent_usd || 0;
+    if (spent > 4.50) {
+      console.error(`Budget guard: $${spent.toFixed(2)} already spent today (limit $5). Halting.`);
+      process.exit(1);
+    }
+    console.log(`Budget check: $${spent.toFixed(2)} spent today`);
+  }
+
   // Header
   console.log('='.repeat(60));
   console.log('SCOTUS Scout — Perplexity Fact Extraction');
@@ -361,6 +382,15 @@ async function main() {
   if (cases.length === 0) {
     console.log('No cases to process. Exiting.');
     return;
+  }
+
+  // Cost warning for large runs (dry-run still makes real API calls)
+  if (opts.all && cases.length > 20) {
+    const estCost = (cases.length * 0.005).toFixed(2);
+    console.log(`\n⚠️  --all will process ${cases.length} cases, estimated cost: $${estCost}`);
+    if (opts.dryRun) console.log('   Note: --dry-run still makes real Perplexity API calls (skips DB writes only)');
+    console.log('   Add --limit=N to cap. Proceeding in 5 seconds...\n');
+    await new Promise(r => setTimeout(r, 5000));
   }
 
   // Process each case
@@ -488,6 +518,30 @@ async function main() {
     // Delay between calls
     if (i < cases.length - 1) {
       await new Promise(r => setTimeout(r, DELAY_BETWEEN_CALLS_MS));
+    }
+  }
+
+  // Record cost in budgets table
+  if (!opts.dryRun && stats.totalCost > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { error: budgetErr } = await supabase.rpc('increment_budget', {
+      p_day: today,
+      p_cost: stats.totalCost,
+      p_calls: stats.ok + stats.uncertain + stats.failed + stats.parseError,
+    });
+    if (budgetErr) {
+      // Fallback: try upsert if RPC doesn't exist
+      const { data: existing } = await supabase
+        .from('budgets')
+        .select('spent_usd,openai_calls')
+        .eq('day', today)
+        .maybeSingle();
+      const { error: upsertErr } = await supabase.from('budgets').upsert({
+        day: today,
+        spent_usd: (existing?.spent_usd || 0) + stats.totalCost,
+        openai_calls: (existing?.openai_calls || 0) + stats.ok + stats.uncertain + stats.failed + stats.parseError,
+      }, { onConflict: 'day' });
+      if (upsertErr) console.warn(`Budget fallback upsert failed: ${upsertErr.message}`);
     }
   }
 

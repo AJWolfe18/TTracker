@@ -34,7 +34,7 @@ dotenv.config();
 // ============================================================
 
 const PROMPT_VERSION = '1.5';  // v1.4 + ADO-269 fixes: 0-5 scale, partial dates, secondary_connection_types, money validation, string coercion
-const PERPLEXITY_MODEL = 'sonar';  // Cheapest model (~$0.005/query)
+const PERPLEXITY_MODEL = 'sonar';  // Used for cost tracking + logging (client default matches)
 const DEFAULT_LIMIT = 20;
 const DELAY_BETWEEN_CALLS_MS = 2000;  // 2 second delay between API calls
 const RUNTIME_LIMIT_MS = 4 * 60 * 1000;  // 4 minutes (workflow timeout is 10)
