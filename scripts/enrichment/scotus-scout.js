@@ -26,6 +26,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import OpenAI from 'openai';
 import { PerplexityClient } from './perplexity-client.js';
 import { buildScoutPrompt, SCOUT_PROMPT_VERSION, SCOUT_SYSTEM_PROMPT } from '../scotus/scout-prompt.js';
 import { parseScoutResponse } from '../scotus/scout-parser.js';
@@ -64,6 +65,84 @@ const SCOUT_META_FIELDS = [
 ];
 
 // ============================================================
+// GPT cross-check for dissent authors from opinion text
+// ============================================================
+
+async function crossCheckDissentersFromOpinion(supabase, caseId, openaiKey) {
+  if (!openaiKey) return null;
+
+  const { data } = await supabase
+    .from('scotus_opinions')
+    .select('opinion_full_text')
+    .eq('case_id', caseId)
+    .maybeSingle();
+
+  if (!data?.opinion_full_text) return null;
+
+  // Extract opinion header: find the justice lineup block (usually near top of opinion)
+  // Grab lines around any mention of deliver/dissent/concur/joined/JUSTICE
+  const lines = data.opinion_full_text.split('\n').slice(0, 300);
+  const headerLines = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.match(/deliver|dissent|concurr|joined|filed an opinion|JUSTICE\s+\w+/i) && l.trim().length > 5) {
+      // Include surrounding context (1 line before, 2 after) for multi-line headers
+      for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j++) {
+        const ctx = lines[j].trim();
+        if (ctx.length > 3 && !headerLines.includes(ctx)) {
+          headerLines.push(ctx);
+        }
+      }
+    }
+  }
+  if (headerLines.length === 0) return null;
+
+  // Cap at ~2000 chars to stay within GPT token budget
+  const header = headerLines.join('\n').slice(0, 2000);
+
+  const openai = new OpenAI({ apiKey: openaiKey });
+  const resp = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    temperature: 0,
+    max_tokens: 300,
+    messages: [
+      {
+        role: 'system',
+        content: 'Extract factual details from a SCOTUS opinion header. Return JSON only, no markdown, no code blocks.'
+      },
+      {
+        role: 'user',
+        content: `From this SCOTUS opinion header, extract:
+1. ALL justices who dissented or joined a dissenting opinion (NOT concurrences)
+2. The vote split (count majority + concurrence-in-judgment vs dissenters)
+
+Return JSON: {"dissent_authors": ["Last1", "Last2"], "vote_split": "N-N"}
+If no dissenters, return {"dissent_authors": [], "vote_split": "9-0"}
+
+${header}`
+      }
+    ]
+  });
+
+  const raw = resp.choices[0].message.content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
+  const parsed = JSON.parse(raw);
+
+  const result = { dissenters: null, vote_split: null };
+
+  if (parsed.dissent_authors && Array.isArray(parsed.dissent_authors)) {
+    result.dissenters = parsed.dissent_authors.map(n => {
+      const name = n.replace(/^JUSTICE\s+/i, '').trim();
+      return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+    });
+  }
+  if (parsed.vote_split && /^\d+-\d+$/.test(parsed.vote_split)) {
+    result.vote_split = parsed.vote_split;
+  }
+
+  return result;
+}
+
+// ============================================================
 // Gold set loader
 // ============================================================
 
@@ -94,6 +173,7 @@ function parseArgs() {
     limit: null,
     writeFields: null,
     outputJson: null,
+    model: null,
   };
 
   for (const arg of args) {
@@ -108,6 +188,9 @@ function parseArgs() {
     }
     if (arg.startsWith('--output-json=')) {
       opts.outputJson = arg.split('=')[1];
+    }
+    if (arg.startsWith('--model=')) {
+      opts.model = arg.split('=')[1];
     }
   }
 
@@ -347,7 +430,9 @@ async function main() {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
-  const perplexity = new PerplexityClient(perplexityKey);
+  const perplexity = new PerplexityClient(perplexityKey, {
+    model: opts.model || 'sonar',
+  });
 
   // Budget guard — halt if daily spend already near limit
   if (!opts.dryRun) {
@@ -430,7 +515,7 @@ async function main() {
       continue;
     }
 
-    const cost = perplexity.calculateCost(usage);
+    let cost = perplexity.calculateCost(usage);
     stats.totalCost += cost;
 
     // Parse
@@ -440,6 +525,39 @@ async function main() {
       results.push({ caseId: c.id, label: c.case_name_short, status: 'failed', error: parseError, rawContent });
       stats.parseError++;
       continue;
+    }
+
+    // ---- GPT CROSS-CHECK: only when Scout dissenters look wrong ----
+    // Trigger conditions: (a) split vote but empty dissenters, (b) dissenter count doesn't match vote
+    const SCOTUS_JUSTICES = new Set([
+      'Roberts', 'Thomas', 'Alito', 'Sotomayor', 'Kagan', 'Gorsuch', 'Kavanaugh', 'Barrett', 'Jackson',
+    ]);
+    if (process.env.OPENAI_API_KEY) {
+      const scoutDissenters = parsed.dissent_authors || [];
+      const voteParts = parsed.vote_split ? parsed.vote_split.split('-').map(Number) : [];
+      const minorityCount = voteParts.length === 2 ? Math.min(voteParts[0], voteParts[1]) : -1;
+      const needsCrossCheck =
+        (minorityCount > 0 && scoutDissenters.length !== minorityCount) ||  // count mismatch
+        (minorityCount > 0 && scoutDissenters.length === 0) ||               // empty on split vote
+        (!parsed.vote_split && scoutDissenters.length === 0) ||              // no vote + no dissenters
+        (!parsed.vote_split);                                                 // missing vote (uncertain)
+
+      if (needsCrossCheck) {
+        try {
+          const gptResult = await crossCheckDissentersFromOpinion(supabase, c.id, process.env.OPENAI_API_KEY);
+          if (gptResult && gptResult.dissenters && gptResult.dissenters.length > 0) {
+            // Filter to actual SCOTUS justices only
+            const validDissenters = gptResult.dissenters.filter(n => SCOTUS_JUSTICES.has(n));
+            if (validDissenters.length > 0) {
+              console.log(`  GPT cross-check: Scout=[${scoutDissenters.join(',')}] → GPT=[${validDissenters.join(',')}] (using GPT)`);
+              parsed.dissent_authors = validDissenters;
+            }
+            // Do NOT override vote_split — GPT is unreliable on vote counts from opinion headers
+          }
+        } catch (gptErr) {
+          console.log(`  GPT cross-check failed: ${gptErr.message}`);
+        }
+      }
     }
 
     // Validate

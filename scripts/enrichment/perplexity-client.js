@@ -89,7 +89,8 @@ export class PerplexityClient {
           { role: 'user', content: query }
         ],
         temperature,
-        max_tokens: maxTokens
+        max_tokens: maxTokens,
+        ...(options.searchDomainFilter ? { search_domain_filter: options.searchDomainFilter } : {})
       })
     });
 

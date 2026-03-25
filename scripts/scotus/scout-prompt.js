@@ -8,7 +8,7 @@
 import { sanitizeForPrompt } from '../enrichment/perplexity-client.js';
 
 // Version tracks prompt changes for reproducibility
-export const SCOUT_PROMPT_VERSION = 'scout-v1';
+export const SCOUT_PROMPT_VERSION = 'scout-v1.1';
 
 // System prompt for Perplexity
 export const SCOUT_SYSTEM_PROMPT =
@@ -44,6 +44,9 @@ IMPORTANT RULES:
 4. For unsigned or per curiam opinions, set majority_author to null and opinion_type to "per_curiam" or "unsigned_per_curiam".
 5. Do NOT guess or infer fields you are uncertain about. Return null and set confidence to "low".
 6. Prefer sourcing from: (a) the official SCOTUS opinion / slip opinion, (b) SCOTUSblog case page, (c) Oyez. Use Wikipedia only as supplementary.
+7. "dissent_authors" must include ALL justices who dissented or joined a dissenting opinion — not just the justice who wrote the dissent. For example, if Thomas filed a dissent joined by Alito and Gorsuch, list all three: ["Thomas", "Alito", "Gorsuch"]. Also include justices who concurred in part and dissented in part.
+8. Do NOT confuse "concurring in the judgment" or "concurring in part" with dissenting. A justice who concurs agrees with the RESULT. A justice who dissents disagrees with the result. If 2 justices concurred in part and 2 dissented, only list the 2 who dissented.
+9. In a split decision (e.g. 5-4, 6-3), the number of dissenters MUST match the minority count. If the vote is 5-4, there must be exactly 4 dissent_authors. If dissent_authors is empty but vote_split shows a minority, something is wrong — check your sources again.
 
 Return JSON with EXACTLY these fields:
 {
@@ -53,7 +56,7 @@ Return JSON with EXACTLY these fields:
   "opinion_type": "majority | plurality | per_curiam | unsigned_per_curiam | DIG",
   "vote_split": "N-N format (e.g. 7-2)",
   "majority_author": "Last name of opinion author, or null for per curiam/unsigned",
-  "dissent_authors": ["Last1", "Last2"] or [],
+  "dissent_authors": ["Last1", "Last2"] or [] (list ALL justices who dissented or joined ANY dissenting opinion, not just the author),
   "substantive_winner": "Who actually benefits from this ruling (1-2 sentences)",
   "practical_effect": "What changes in the real world as a result (1 sentence)",
   "holding": "What the Court held (1-2 sentences)",
