@@ -40,8 +40,8 @@ Create a TodoList with full workflow:
 - [ ] Run code review: `Task(feature-dev:code-reviewer)`
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit changes
-- [ ] Update ADO (move to Active/Testing as appropriate)
-- [ ] **AC verification before closing**: Fetch the ADO story's acceptance criteria via `/ado`. Run `Task(feature-dev:code-reviewer)` with the full AC text and ask it to verify EVERY bullet as MET/NOT MET against the actual code. Do NOT close any story with unmet AC — either fix the gap or document it on the card.
+- [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via `/ado`. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.
+- [ ] Update ADO (move to appropriate state only after AC verification passes)
 - [ ] Create handoff doc
 
 ### 5. Update ADO

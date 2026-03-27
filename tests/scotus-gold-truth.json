@@ -216,15 +216,6 @@
       "case_type": "merits"
     },
     {
-      "id": 280,
-      "label": "Abbott",
-      "disposition": "granted",
-      "majority_author_last": null,
-      "dissent_authors_last": ["Kagan", "Sotomayor", "Jackson"],
-      "vote_split": "6-3",
-      "case_type": "cert_stage"
-    },
-    {
       "id": 174,
       "label": "Davis",
       "disposition": "dismissed",

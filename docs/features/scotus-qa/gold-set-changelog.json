@@ -12,6 +12,27 @@
       "verified_by": "Josh",
       "reason": "Original gold set value was incorrect. Justia opinion text confirms disposition is 'reversed', not 'vacated'. SCOTUSblog summary may have used 'vacated' loosely.",
       "impact": "Validation score: 131/145 → 132/145 (one fewer false failure)"
+    },
+    {
+      "date": "2026-03-08",
+      "case_id": 131,
+      "case_name": "Bondi v. Vanderstok",
+      "field": "disposition",
+      "previous": "reversed",
+      "corrected": "reversed_and_remanded",
+      "source": "SCOTUS opinion syllabus: '86 F. 4th 179, reversed and remanded.'",
+      "verified_by": "Josh + Claude",
+      "reason": "Gold set had 'reversed' but official opinion syllabus judgment line clearly states 'reversed and remanded'. This was one of three remaining Scout dry-run mismatches at 84% match rate.",
+      "impact": "Corrects gold truth for disposition comparison"
+    },
+    {
+      "date": "2026-03-26",
+      "action": "removed",
+      "case_id": 280,
+      "case_name": "Abbott v. LULAC",
+      "reason": "Shadow docket stay order, case_type='cert_stage'. Disposition 'granted'/'stayed' does not map to the merits disposition enum. Does not meet gold merits set inclusion criteria.",
+      "impact": "Gold set reduced from 25 to 24 cases",
+      "inclusion_rule": "Gold merits set inclusion requires ALL of: (1) case_type='merits', (2) decided_at is not null, (3) disposition maps to merits enum (affirmed|reversed|vacated|remanded|reversed_and_remanded|vacated_and_remanded|dismissed|GVR), (4) at least one opinion exists in scotus_opinions."
     }
   ]
 }
