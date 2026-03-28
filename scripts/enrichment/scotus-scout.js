@@ -134,7 +134,14 @@ ${header}`
   });
 
   const raw = resp.choices[0].message.content.replace(/```json?\s*/g, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    console.warn(`  GPT cross-check: malformed JSON response — ${parseErr.message}`);
+    console.warn(`  Raw response: ${raw.slice(0, 200)}`);
+    return null;
+  }
 
   const result = { dissenters: null, vote_split: null, _headerText: header };
 
@@ -644,8 +651,8 @@ async function main() {
             console.log(`  Syllabus: Scout="${parsed.formal_disposition}" → Syllabus="${syllResult.disposition}" (overriding)`);
             parsed.formal_disposition = syllResult.disposition;
             overrides.disposition_from_syllabus++;
+            crossCheckStats.syllabus.override_applied++;
           }
-          crossCheckStats.syllabus.override_applied++;
         } else if (syllResult.confidence !== 'syllabus_deterministic' && syllResult.disposition === null) {
           // Log guardrail blocks by type
           const blockKey = `syllabus_${syllResult.confidence}`;
@@ -675,8 +682,7 @@ async function main() {
       const needsCrossCheck =
         (minorityCount > 0 && scoutDissenters.length !== minorityCount) ||
         (minorityCount > 0 && scoutDissenters.length === 0) ||
-        (!parsed.vote_split && scoutDissenters.length === 0) ||
-        (!parsed.vote_split);
+        (!parsed.vote_split && scoutDissenters.length === 0);
 
       if (needsCrossCheck) {
         crossCheckStats.gpt.triggered++;

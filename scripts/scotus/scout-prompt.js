@@ -84,7 +84,7 @@ STATUS RULES:
 - "failed": You could not find reliable information about this case
 
 DISPOSITION ENUM (use exactly one):
-"affirmed" | "reversed" | "vacated" | "remanded" | "reversed_and_remanded" | "vacated_and_remanded" | "dismissed" | "GVR"
+"affirmed" | "reversed" | "vacated" | "remanded" | "reversed_and_remanded" | "vacated_and_remanded" | "affirmed_and_remanded" | "dismissed" | "GVR"
 
 If the disposition is mixed (e.g. "affirmed in part, reversed in part"), pick the PRIMARY action for formal_disposition and put the full description in formal_disposition_detail.`;
 }

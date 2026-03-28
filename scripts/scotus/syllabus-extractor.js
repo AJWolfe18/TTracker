@@ -15,6 +15,7 @@
 const DISPOSITION_MAP = new Map([
   ['reversed in part and remanded', 'reversed_and_remanded'],  // standard legal variant
   ['reversed and remanded', 'reversed_and_remanded'],
+  ['affirmed and remanded', 'affirmed_and_remanded'],
   ['vacated and remanded', 'vacated_and_remanded'],
   ['reversed', 'reversed'],
   ['vacated', 'vacated'],
@@ -27,6 +28,7 @@ const DISPOSITION_MAP = new Map([
 const DISPOSITION_PATTERNS = [
   'reversed in part and remanded',   // variant of reversed_and_remanded
   'reversed and remanded',
+  'affirmed and remanded',
   'vacated and remanded',
   'reversed',
   'vacated',

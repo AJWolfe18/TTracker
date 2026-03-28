@@ -45,6 +45,7 @@ const DISPOSITION_ALIASES = {
 export const VALID_DISPOSITIONS = [
   'affirmed', 'reversed', 'vacated', 'remanded',
   'reversed_and_remanded', 'vacated_and_remanded',
+  'affirmed_and_remanded',
   'dismissed', 'GVR',
 ];
 

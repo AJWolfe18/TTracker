@@ -180,7 +180,7 @@
     {
       "id": 118,
       "label": "SF v EPA",
-      "disposition": "reversed",
+      "disposition": "reversed_and_remanded",
       "majority_author_last": "Alito",
       "dissent_authors_last": ["Barrett", "Jackson", "Sotomayor", "Kagan"],
       "vote_split": "5-4",
@@ -236,7 +236,7 @@
     {
       "id": 137,
       "label": "Horn",
-      "disposition": "affirmed",
+      "disposition": "affirmed_and_remanded",
       "majority_author_last": "Barrett",
       "dissent_authors_last": ["Thomas", "Kavanaugh", "Roberts", "Alito"],
       "vote_split": "5-4",
