@@ -10,10 +10,15 @@
  *   node scripts/enrichment/scotus-scout.js --dry-run --gold-set
  *   node scripts/enrichment/scotus-scout.js --dry-run --limit=20
  *   node scripts/enrichment/scotus-scout.js --dry-run --all
- *   node scripts/enrichment/scotus-scout.js --ids=51 --write-fields=disposition,vote_split
  *   node scripts/enrichment/scotus-scout.js --dry-run --output-json=results.json
  *   node scripts/enrichment/scotus-scout.js --dry-run --fail-on-uncertain
  *   node scripts/enrichment/scotus-scout.js --dry-run --show-sources
+ *
+ * Live writes (require --confirm + --output-json):
+ *   node scripts/enrichment/scotus-scout.js --ids=51 --confirm --output-json=single.json
+ *   node scripts/enrichment/scotus-scout.js --limit=10 --confirm --output-json=batch.json
+ *   node scripts/enrichment/scotus-scout.js --all --confirm --output-json=live-run.json
+ *   node scripts/enrichment/scotus-scout.js --ids=51 --confirm --output-json=r.json --write-fields=disposition,vote_split
  *
  * Environment:
  *   SUPABASE_URL / SUPABASE_TEST_URL
@@ -44,6 +49,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const DELAY_BETWEEN_CALLS_MS = 2000;
 const RUNTIME_LIMIT_MS = 8 * 60 * 1000; // 8 minutes
+const SCOUT_RUN_BUDGET_CAP_USD = 1.50;
 
 // Scout-owned DB fields (only these get written in live mode)
 const SCOUT_DB_FIELDS = [
@@ -51,7 +57,7 @@ const SCOUT_DB_FIELDS = [
   'vote_split',
   'majority_author',
   'dissent_authors',
-  'prevailing_party',   // ← substantive_winner
+  'substantive_winner', // free-text "who benefits" (NOT prevailing_party enum)
   'practical_effect',
   'holding',
   'issue_area',
@@ -64,7 +70,17 @@ const SCOUT_META_FIELDS = [
   'fact_extraction_confidence',
   'low_confidence_reason',
   'prompt_version',
+  'fact_extracted_at',
+  'fact_sources',
+  'fact_review_status',
 ];
+
+// Explicit normalization for fact_review_status (fail-closed: unknown → 'failed')
+const REVIEW_STATUS_MAP = {
+  'ok': 'ok',
+  'uncertain': 'needs_review',
+  'failed': 'failed',
+};
 
 // ============================================================
 // GPT cross-check for dissent authors from opinion text
@@ -245,6 +261,7 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
     dryRun: args.includes('--dry-run'),
+    confirm: args.includes('--confirm'),
     goldSet: args.includes('--gold-set'),
     all: args.includes('--all'),
     showSources: args.includes('--show-sources'),
@@ -283,11 +300,7 @@ function parseArgs() {
 
   // Validate --write-fields
   if (opts.writeFields) {
-    const validWriteFields = [
-      'disposition', 'vote_split', 'majority_author', 'dissent_authors',
-      'prevailing_party', 'practical_effect', 'holding', 'issue_area',
-      'case_type', 'merits_reached',
-    ];
+    const validWriteFields = [...SCOUT_DB_FIELDS];
     const invalid = opts.writeFields.filter(f => !validWriteFields.includes(f));
     if (invalid.length > 0) {
       console.error(`Error: Unknown --write-fields: ${invalid.join(', ')}`);
@@ -304,7 +317,7 @@ function parseArgs() {
 // ============================================================
 
 async function fetchCases(supabase, opts) {
-  const select = 'id,case_name,case_name_short,case_name_full,docket_number,term,decided_at,disposition,vote_split,majority_author,dissent_authors,prevailing_party,holding,issue_area,case_type,enrichment_status';
+  const select = 'id,case_name,case_name_short,case_name_full,docket_number,term,decided_at,disposition,vote_split,majority_author,dissent_authors,prevailing_party,substantive_winner,holding,issue_area,case_type,merits_reached,practical_effect,enrichment_status,fact_extraction_confidence,low_confidence_reason,prompt_version,fact_extracted_at,fact_sources,fact_review_status';
 
   let query = supabase.from('scotus_cases').select(select);
 
@@ -347,13 +360,8 @@ function compareToGoldSet(scoutResult, caseId) {
 
   // Disposition — map Scout formal_disposition to gold's disposition field
   if (gold.disposition && scoutResult.formal_disposition) {
-    // Gold uses simple names; Scout uses underscored names
-    const scoutDisp = scoutResult.formal_disposition.replace(/_/g, ' ');
     const goldDisp = gold.disposition;
-    // Special case: gold may say "vacated" where scout says "vacated_and_remanded"
-    const match = scoutDisp === goldDisp ||
-      scoutResult.formal_disposition === goldDisp ||
-      (goldDisp === 'vacated' && scoutResult.formal_disposition.startsWith('vacated'));
+    const match = scoutResult.formal_disposition === goldDisp;
     if (!match) {
       diffs.push({ field: 'disposition', gold: goldDisp, scout: scoutResult.formal_disposition });
     }
@@ -402,7 +410,7 @@ function compareToDb(scoutResult, dbCase) {
     ['vote_split', 'vote_split'],
     ['majority_author', 'majority_author'],
     ['dissent_authors', 'dissent_authors'],
-    ['substantive_winner', 'prevailing_party'],
+    ['substantive_winner', 'substantive_winner'],
     ['holding', 'holding'],
     ['issue_area', 'issue_area'],
   ];
@@ -441,7 +449,7 @@ function buildDbPayload(scoutResult, writeFields) {
     'vote_split': scoutResult.vote_split,
     'majority_author': scoutResult.majority_author,
     'dissent_authors': scoutResult.dissent_authors || [],
-    'prevailing_party': scoutResult.substantive_winner,
+    'substantive_winner': (scoutResult.substantive_winner || '').trim() || null,
     'practical_effect': scoutResult.practical_effect,
     'holding': scoutResult.holding,
     'issue_area': scoutResult.issue_area,
@@ -464,6 +472,9 @@ function buildDbPayload(scoutResult, writeFields) {
     'fact_extraction_confidence': computeOverallConfidence(scoutResult.fact_confidence),
     'low_confidence_reason': scoutResult.review_reason,
     'prompt_version': SCOUT_PROMPT_VERSION,
+    'fact_extracted_at': new Date().toISOString(),
+    'fact_sources': (scoutResult.source_urls || []).slice(0, 20),
+    'fact_review_status': REVIEW_STATUS_MAP[scoutResult.status] || 'failed',
   };
 
   // Apply write filter if specified
@@ -487,6 +498,29 @@ function computeOverallConfidence(conf) {
   if (vals.includes('low')) return 'low';
   if (vals.includes('medium')) return 'medium';
   return 'high';
+}
+
+// ============================================================
+// Report helpers
+// ============================================================
+
+function buildReportSummaries(results) {
+  const rawDiffs = {};
+  const actualWrites = {};
+
+  for (const r of results) {
+    if (r.dbDiffs) {
+      for (const d of r.dbDiffs) {
+        rawDiffs[d.field] = (rawDiffs[d.field] || 0) + 1;
+      }
+    }
+    if (r.written && r.rollback) {
+      for (const field of Object.keys(r.rollback.attemptedPayload)) {
+        actualWrites[field] = (actualWrites[field] || 0) + 1;
+      }
+    }
+  }
+  return { rawDiffs, actualWrites };
 }
 
 // ============================================================
@@ -515,24 +549,57 @@ async function main() {
     model: opts.model || 'sonar',
   });
 
-  // Budget guard — halt if daily spend already near limit
+  // Run-level identifier for rollback/audit
+  const runId = `scout-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+
+  // Detect environment from URL
+  const envLabel = supabaseUrl.includes('wnrjrywpcadwutfykflu') ? 'TEST'
+    : supabaseUrl.includes('osjbulmltfpcoldydexg') ? 'PROD'
+    : 'UNKNOWN';
+  const maskedUrl = supabaseUrl.replace(/https:\/\/([a-z]{4})[a-z]+/, 'https://$1***');
+
+  // === Safety guardrails for live writes ===
   if (!opts.dryRun) {
-    const { data: budget } = await supabase
-      .from('budgets')
-      .select('spent_usd')
-      .eq('day', new Date().toISOString().slice(0, 10))
-      .maybeSingle();
-    const spent = budget?.spent_usd || 0;
-    if (spent > 4.50) {
-      console.error(`Budget guard: $${spent.toFixed(2)} already spent today (limit $5). Halting.`);
+    // Require --confirm for ALL live writes
+    if (!opts.confirm) {
+      console.error('Error: Live writes require --confirm flag.');
+      console.error('  Run with: --confirm --output-json=results.json');
       process.exit(1);
     }
-    console.log(`Budget check: $${spent.toFixed(2)} spent today`);
+    // Require --output-json for live writes (rollback data must be persisted)
+    if (!opts.outputJson) {
+      console.error('Error: Live writes require --output-json for rollback data.');
+      console.error('  Run with: --confirm --output-json=results.json');
+      process.exit(1);
+    }
+  }
+
+  // Budget preflight — verify table reachable + check daily limit
+  let budgetPreflightSpend = 0;
+  if (!opts.dryRun) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: budgetRow, error: budgetErr } = await supabase
+      .from('budgets')
+      .select('spent_usd')
+      .eq('day', today)
+      .maybeSingle();
+    if (budgetErr) {
+      console.error(`FATAL: Cannot reach budgets table — aborting live run (${budgetErr.message})`);
+      process.exit(1);
+    }
+    budgetPreflightSpend = budgetRow?.spent_usd || 0;
+    if (budgetPreflightSpend > 4.50) {
+      console.error(`Budget guard: $${budgetPreflightSpend.toFixed(2)} already spent today (daily limit $5). Halting.`);
+      process.exit(1);
+    }
+    console.log(`Budget preflight: $${budgetPreflightSpend.toFixed(2)} spent today`);
   }
 
   // Header
   console.log('='.repeat(60));
   console.log('SCOTUS Scout — Perplexity Fact Extraction');
+  console.log(`  Run ID: ${runId}`);
+  console.log(`  Environment: ${envLabel} (${maskedUrl})`);
   console.log(`  Prompt: ${SCOUT_PROMPT_VERSION}`);
   console.log(`  Mode: ${opts.dryRun ? 'DRY RUN (no DB writes)' : 'LIVE'}`);
   if (opts.writeFields) console.log(`  Write fields: ${opts.writeFields.join(', ')}`);
@@ -551,6 +618,16 @@ async function main() {
     return;
   }
 
+  // Cost estimation + Scout run budget cap enforcement (reuses preflight data)
+  const estimatedRunCost = cases.length * 0.01;
+  if (!opts.dryRun) {
+    if (budgetPreflightSpend + estimatedRunCost > SCOUT_RUN_BUDGET_CAP_USD) {
+      console.error(`FATAL: Estimated run cost ($${estimatedRunCost.toFixed(2)}) + today's spend ($${budgetPreflightSpend.toFixed(2)}) exceeds Scout run cap ($${SCOUT_RUN_BUDGET_CAP_USD})`);
+      process.exit(1);
+    }
+    console.log(`Budget cap check: $${budgetPreflightSpend.toFixed(2)} + ~$${estimatedRunCost.toFixed(2)} estimated < $${SCOUT_RUN_BUDGET_CAP_USD} cap`);
+  }
+
   // Cost warning for large runs (dry-run still makes real API calls)
   if (opts.all && cases.length > 20) {
     const estCost = (cases.length * 0.005).toFixed(2);
@@ -563,7 +640,7 @@ async function main() {
   // Process each case
   const startTime = Date.now();
   const results = [];
-  const stats = { ok: 0, uncertain: 0, failed: 0, parseError: 0, totalCost: 0, written: 0 };
+  const stats = { ok: 0, uncertain: 0, failed: 0, parseError: 0, totalCost: 0, written: 0, writeAttempts: 0, writeFailed: 0 };
   const crossCheckStats = {
     syllabus: { extracted: 0, no_syllabus: 0, ambiguous: 0, no_match: 0, override_applied: 0 },
     gpt: { triggered: 0, dissenters_replaced: 0, skipped_no_key: 0, error: 0 },
@@ -871,18 +948,36 @@ async function main() {
       }
     }
 
-    // Live write
+    // Live write with rollback capture
+    let writeError = null;
+    let rollbackData = null;
     if (!opts.dryRun && validated.status === 'ok') {
       const payload = buildDbPayload(validated, opts.writeFields);
+
+      // Build rollback snapshot from current DB values
+      rollbackData = {
+        caseId: c.id,
+        runId,
+        timestamp: new Date().toISOString(),
+        previousValues: {},
+        attemptedPayload: { ...payload },
+      };
+      for (const field of Object.keys(payload)) {
+        rollbackData.previousValues[field] = c[field] !== undefined ? c[field] : null;
+      }
+
+      stats.writeAttempts++;
       const { error } = await supabase
         .from('scotus_cases')
         .update(payload)
         .eq('id', c.id);
 
       if (error) {
+        writeError = error;
+        stats.writeFailed++;
         console.log(`  DB write error: ${error.message}`);
       } else {
-        console.log(`  Written ${Object.keys(payload).length} fields to DB`);
+        console.log(`  Written ${Object.keys(payload).length} fields to DB [${stats.written + 1}/${cases.length} cases]`);
         stats.written++;
       }
     }
@@ -897,6 +992,8 @@ async function main() {
       dbDiffs,
       issues,
       cost,
+      written: !opts.dryRun && validated.status === 'ok' && !writeError,
+      rollback: rollbackData,
     });
 
     // Delay between calls
@@ -932,12 +1029,20 @@ async function main() {
   // Summary
   console.log('\n' + '='.repeat(60));
   console.log('SCOTUS Scout Summary');
+  console.log(`  Run ID: ${runId}`);
+  console.log(`  Environment: ${envLabel}`);
   console.log(`  OK: ${stats.ok}`);
   console.log(`  Uncertain: ${stats.uncertain}`);
   console.log(`  Failed: ${stats.failed}`);
   console.log(`  Parse errors: ${stats.parseError}`);
   console.log(`  Total cost: $${stats.totalCost.toFixed(4)}`);
-  if (!opts.dryRun) console.log(`  Written: ${stats.written}`);
+  if (!opts.dryRun) {
+    console.log(`  Eligible for write: ${results.filter(r => r.status === 'ok').length}`);
+    console.log(`  Write attempts: ${stats.writeAttempts}`);
+    console.log(`  Writes succeeded: ${stats.written}`);
+    console.log(`  Writes failed: ${stats.writeFailed}`);
+    console.log(`  Rollback entries: ${results.filter(r => r.rollback && r.written).length}`);
+  }
   console.log(`  Duration: ${Math.round((Date.now() - startTime) / 1000)}s`);
 
   // Cross-check stats
@@ -992,10 +1097,28 @@ async function main() {
 
   console.log('='.repeat(60));
 
-  // Output JSON
+  // Output JSON with structured report
   if (opts.outputJson) {
+    const { rawDiffs, actualWrites } = buildReportSummaries(results);
+    const report = {
+      runId,
+      generated_at: new Date().toISOString(),
+      mode: opts.dryRun ? 'dry-run' : 'live',
+      environment: envLabel,
+      total_cases: cases.length,
+      eligible_for_write: results.filter(r => r.status === 'ok').length,
+      write_attempts: stats.writeAttempts,
+      writes_succeeded: stats.written,
+      writes_failed: stats.writeFailed,
+      writes_skipped_uncertain: stats.uncertain,
+      writes_skipped_failed: stats.failed + stats.parseError,
+      total_cost_usd: stats.totalCost,
+      rollback_entries: results.filter(r => r.rollback && r.written).length,
+      field_diffs_detected: rawDiffs,
+      field_writes_performed: actualWrites,
+    };
     const outPath = resolve(process.cwd(), opts.outputJson);
-    writeFileSync(outPath, JSON.stringify({ stats, crossCheckStats, overrides, guardrail_blocks, disagreements, results }, null, 2));
+    writeFileSync(outPath, JSON.stringify({ report, stats, crossCheckStats, overrides, guardrail_blocks, disagreements, results }, null, 2));
     console.log(`\nResults written to ${outPath}`);
   }
 
