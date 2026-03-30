@@ -4,16 +4,41 @@
 
 Scout v1 achieves 76-86% accuracy enriching SCOTUS cases via single-pass Perplexity queries. The remaining failures fall into two categories:
 
-1. **Non-merits cases** (cert denials, stay orders, shadow docket) — these lack vote splits, authors, and formal dispositions because SCOTUS never ruled on the substance. They shouldn't be enriched.
+1. **Non-merits cases** (cert denials, stay orders, shadow docket) — these lack vote splits, authors, and formal dispositions because SCOTUS never ruled on the substance. They shouldn't go through the merits enrichment pipeline.
 2. **Merits cases with fixable errors** — missing fields, invalid enums, contradictions. Manual trial showed that a single targeted follow-up question to Perplexity fixes these (Connelly author, Trump v US sources).
 
 ## Design
 
-### Change 1: Triage (skip non-merits)
+### Change 1: Triage (classify merits vs non-merits)
 
-**Where:** Early in the per-case loop in `scotus-scout.js`, before the main enrichment query.
+**Problem:** Non-merits cases (cert denials, stay orders) pollute the enrichment pipeline. Scout tries to extract vote splits and dispositions that don't exist, producing failures that aren't real failures.
 
-**How:** After fetching a case from DB, ask Perplexity a short triage question:
+**Triage is a correctness-critical gate.** A false "non-merits" classification suppresses the case entirely. This is worse than a normal enrichment miss. The design must minimize false non-merits classifications.
+
+#### Step 1: Deterministic triage (no API call)
+
+Check signals already in the database before calling any API:
+
+```javascript
+const DETERMINISTIC_NON_MERITS = [
+  // Docket prefix "A" = application (stay, emergency)
+  (c) => /^\d+A\d+/.test(c.docket_number),
+  // No syllabus text AND no opinion text = likely cert denial
+  (c) => !c.syllabus && !hasOpinionText(c.id),
+];
+
+const DETERMINISTIC_MERITS = [
+  // Has syllabus = definitely a merits decision
+  (c) => c.syllabus && c.syllabus.length > 200,
+  // Already enriched successfully = merits
+  (c) => c.fact_review_status === 'ok',
+];
+```
+
+If deterministic signals are conclusive → classify without API call.
+If inconclusive → proceed to Step 2.
+
+#### Step 2: Perplexity triage (only for ambiguous cases)
 
 ```
 Is [case_name] ([docket_number]) a Supreme Court merits decision
@@ -22,112 +47,176 @@ non-merits action (certiorari denied, stay order, GVR, shadow
 docket)? Answer ONLY: "merits" or "non-merits".
 ```
 
-**On "non-merits" response:**
-- Set `fact_review_status = 'non_merits'` in DB (add to CHECK constraint)
-- Skip enrichment for this case
-- Log it in the report
-- Cost: ~$0.005 per triage call
+Cost: ~$0.005 per triage call. Only invoked for cases that can't be classified deterministically.
 
-**On "merits" response:**
-- Proceed to normal Scout enrichment
+#### Classification storage
 
-**Optimization:** Only triage cases that don't already have a `case_type` or other indicator. Cases that already passed enrichment successfully don't need triage on reruns.
+**Separate field from processing status.** `fact_review_status` (ok/needs_review/failed) tracks processing outcomes. Case classification is a different dimension.
+
+New column: `is_merits_decision BOOLEAN DEFAULT NULL`
+- `NULL` = not yet classified
+- `true` = merits decision, eligible for enrichment
+- `false` = non-merits, skip enrichment
+
+`fact_review_status` is untouched for non-merits cases (stays NULL). No semantic overloading.
+
+#### On non-merits classification:
+- Set `is_merits_decision = false`
+- Skip enrichment
+- Log in report with classification reason (deterministic signal or Perplexity response)
+- **Non-merits cases are not deleted or hidden** — they remain in the database for potential future handling (shadow docket tracking is a separate future feature)
+
+#### Safety: triage verification
+- Report includes a "triage decisions" section listing every case classified as non-merits and the reason
+- Any case triaged as non-merits via Perplexity (not deterministic) is flagged for human spot-check
+- Triage accuracy is measured explicitly in verification (see Verification Plan)
 
 ### Change 2: Targeted Retry (fix validation failures)
 
 **Where:** After the validator runs in `scotus-scout.js`, before marking a case as uncertain/failed.
 
-**How:** Map validation errors to targeted follow-up prompts:
+#### Structured error codes (not string matching)
+
+The validator currently returns human-readable issue strings. Keying retry logic on those strings is brittle — if wording changes, retries break silently.
+
+**Fix:** Add structured error codes to the validator alongside messages:
+
+```javascript
+// In scout-validator.js, issues become objects:
+{ code: 'MISSING_VOTE_SPLIT', field: 'vote_split', message: 'Missing required field: vote_split' }
+{ code: 'INVALID_DISPOSITION_ENUM', field: 'disposition', value: 'stayed', message: 'Invalid formal_disposition enum: "stayed"' }
+{ code: 'UNANIMOUS_WITH_DISSENTERS', message: 'Unanimous vote (9-0) but dissent_authors is non-empty' }
+```
+
+Retry logic keys on `code`, not `message`. Existing code that reads `.message` is unaffected (backwards compatible).
+
+#### Retry prompt map (keyed on codes)
 
 ```javascript
 const RETRY_PROMPTS = {
-  'Missing required field: vote_split':
-    'What was the vote split in {case_name} ({docket})? Format: N-N (e.g. 5-4, 9-0).',
-
-  'Missing required field: formal_disposition':
-    'What was the formal SCOTUS disposition in {case_name} ({docket})? ' +
-    'Use one of: affirmed, reversed, vacated, remanded, reversed_and_remanded, ' +
-    'vacated_and_remanded, affirmed_and_remanded, dismissed.',
-
-  'Missing required field: majority_author':
-    'Who delivered the opinion of the Court in {case_name} ({docket})? Last name only.',
-
-  'Invalid formal_disposition enum':
-    'The disposition "{value}" is not standard. For {case_name} ({docket}), ' +
-    'what was the formal SCOTUS disposition? Must be one of: affirmed, reversed, ' +
-    'vacated, remanded, reversed_and_remanded, vacated_and_remanded, ' +
-    'affirmed_and_remanded, dismissed.',
-
-  'Unanimous vote but dissent_authors is non-empty':
-    'For {case_name} ({docket}), sources conflict: vote is listed as {vote_split} ' +
-    'but {dissent_authors} listed as dissenters. Was this a merits decision? ' +
-    'What was the actual vote split and who dissented?',
-
-  'Missing required field: substantive_winner':
-    'In {case_name} ({docket}), who benefits from the ruling and why? One sentence.'
+  MISSING_VOTE_SPLIT: { ... },
+  MISSING_DISPOSITION: { ... },
+  MISSING_MAJORITY_AUTHOR: { ... },
+  INVALID_DISPOSITION_ENUM: { ... },
+  UNANIMOUS_WITH_DISSENTERS: { ... },
+  MISSING_SUBSTANTIVE_WINNER: { ... },
 };
 ```
 
-**Flow:**
+Each entry defines the follow-up question template with `{case_name}`, `{docket}`, and field-specific placeholders.
+
+#### Retry response parsing (single extraction path)
+
+**Problem:** A separate mini-parser for retry responses creates a second extraction standard alongside the main Scout parser. That's a maintenance smell.
+
+**Fix:** Retry prompts ask Perplexity to return JSON in the same schema Scout uses:
+
+```
+For {case_name} ({docket}), what was the vote split?
+Answer as JSON: {"vote_split": "N-N"}
+```
+
+The response goes through the **existing** `parseScoutResponse()` function (with the retry fields merged into the original result), then through the **existing** `validateScoutResult()`. One parser, one validator, no second extraction path.
+
+#### Retry scope: field-local vs case-posture issues
+
+Some validation failures aren't isolated missing values — they stem from upstream misunderstanding of case posture (e.g., "stayed" as disposition because the case is a stay order, not a merits decision). A field-local patch would make the record look cleaner without being truer.
+
+**Guard:** If retry detects a case-posture issue (e.g., Perplexity's retry response says "this was not a merits decision" or "certiorari was denied"), the retry should reclassify the case as non-merits rather than patching the field. Specifically:
+
+- If retry response contains signals like "certiorari denied", "stay order", "not a merits decision" → set `is_merits_decision = false`, skip remaining enrichment
+- This is a safety valve, not a primary triage path
+
+#### Flow:
 1. Scout first pass runs as normal
-2. Validator returns issues array
-3. If status is uncertain or failed AND issues match a retry prompt:
+2. Validator returns issues array (with structured codes)
+3. If status is uncertain or failed AND issues have matching retry codes:
    - Construct targeted question from template + case data
-   - Call Perplexity with the targeted question (~$0.005-0.01)
-   - Parse the response: extract the specific field value from Perplexity's text answer (regex for vote_split pattern N-N, disposition enum match, last-name extraction for author, free text for substantive_winner)
-   - Patch the specific failing field(s) into the original result
-   - Re-run validator on the patched result
-4. If still fails after 1 retry: mark as `needs_review` (give up gracefully)
+   - Call Perplexity (~$0.005-0.01)
+   - Merge retry JSON response into original Scout result
+   - Re-run through existing parser + validator (same path, no second parser)
+   - If retry reveals non-merits posture → reclassify, don't patch
+4. If still fails after 1 retry: mark as `needs_review`
 5. Max 1 retry per case
 
 **What retry does NOT do:**
 - Does not re-run the entire Scout prompt
-- Does not retry on parse errors (those are structural, not data issues)
+- Does not retry on parse errors (structural, not data issues)
 - Does not retry more than once
 - Does not change the cost for cases that pass first time
 
-### Change 3: Migration (add 'non_merits' to CHECK constraint)
+### Change 3: Migration
 
 ```sql
+-- New column for case classification (separate from processing status)
 ALTER TABLE scotus_cases
-DROP CONSTRAINT scotus_cases_fact_review_status_check;
+ADD COLUMN IF NOT EXISTS is_merits_decision BOOLEAN DEFAULT NULL;
 
-ALTER TABLE scotus_cases
-ADD CONSTRAINT scotus_cases_fact_review_status_check
-CHECK (fact_review_status IS NULL OR fact_review_status IN
-  ('ok', 'needs_review', 'failed', 'non_merits'));
+COMMENT ON COLUMN scotus_cases.is_merits_decision IS
+'Case classification: true=merits (eligible for enrichment), false=non-merits (cert denied, stay, GVR). NULL=not yet classified.';
 ```
+
+No changes to `fact_review_status` CHECK constraint. Classification and processing status stay separate.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `scripts/enrichment/scotus-scout.js` | Add triage step, retry logic after validation |
-| `migrations/089_scotus_non_merits_status.sql` | Add 'non_merits' to CHECK constraint |
+| `scripts/enrichment/scotus-scout.js` | Add triage step before enrichment, retry logic after validation |
+| `scripts/scotus/scout-validator.js` | Add structured error codes alongside existing messages |
+| `migrations/089_scotus_merits_classification.sql` | Add `is_merits_decision` boolean column |
 
 ### No changes to
 
 - Safety guardrails, rollback capture, budget enforcement (all unchanged)
-- `scout-parser.js`, `scout-validator.js`, `scout-prompt.js` (unchanged)
+- `scout-parser.js`, `scout-prompt.js` (unchanged)
 - `syllabus-extractor.js`, `oyez-client.js` (unchanged)
-- Gold truth, unit tests (add new tests for retry/triage only)
 
 ## Cost Impact
 
-| Scenario | v1 Cost | v2 Cost |
-|----------|---------|---------|
-| Case passes first try (76-86%) | $0.01 | $0.01 (unchanged) |
-| Case needs retry (10-20%) | $0.01 (wasted) | $0.02 (first pass + retry) |
-| Non-merits case (5-10%) | $0.01 (wasted) | $0.005 (triage only) |
-| **Full run (~145 cases)** | **~$1.50** | **~$1.60-1.80** |
+Cost depends on case mix and triage hit rate. Not a clean linear model — branching logic means per-case cost varies.
+
+| Scenario | v1 Cost | v2 Cost | Notes |
+|----------|---------|---------|-------|
+| Case passes first try | $0.01 | $0.01 | Unchanged — deterministic triage skips API call |
+| Case needs retry | $0.01 (wasted) | $0.015-0.02 | First pass + targeted follow-up |
+| Non-merits, deterministic triage | $0.01 (wasted) | $0.00 | No API call needed |
+| Non-merits, Perplexity triage | $0.01 (wasted) | $0.005 | Triage call only |
+| False non-merits (triage error) | N/A | $0.005 (cost) + missed case (risk) | Mitigated by spot-check |
+| **Full run (~145 cases)** | **~$1.50** | **~$1.40-1.80** | Range reflects uncertainty in triage/retry mix |
 
 ## Verification Plan
 
-1. Run Scout v2 on the 6 problem cases from the trial (IDs: 40, 55, 56, 57, 63, 73)
-   - Tyndall, Pinehurst, Coalition for TJ: should be triaged as non-merits
-   - McHenry, Bowe: should be triaged as non-merits
-   - Trump: should pass after retry (if it fails first pass again)
-2. Run on Connelly (ID: 4) — should get author=Thomas after retry
-3. Run on 25-case batch — compare ok rate vs v1 baseline (was 76%)
-4. Gold set comparison — should meet or exceed v1's 86%
-5. Full run — target: >90% ok rate on merits cases
+### 1. Triage accuracy (new, critical)
+
+Run triage on ALL ~145 cases. Measure:
+- How many classified as non-merits (deterministic vs Perplexity)
+- **False non-merits rate:** Manually verify every Perplexity-triaged non-merits case against the actual docket. Target: 0 false non-merits.
+- **False merits rate:** Less critical (case just gets enriched normally and may fail), but track it.
+- Report must list every non-merits classification with the reason.
+
+### 2. Retry effectiveness (on known problem cases)
+
+Run Scout v2 on the 6 problem cases from the trial (IDs: 40, 55, 56, 57, 63, 73):
+- Tyndall (40), Pinehurst (56), Coalition for TJ (55), McHenry (73), Bowe (57): should be triaged as non-merits
+- Trump (63): should pass first-pass or after retry
+
+Run on Connelly (ID: 4): should get author=Thomas after retry
+
+### 3. Batch comparison (v1 vs v2)
+
+Run 25-case batch. Compare:
+- ok rate on merits cases vs v1 baseline (v1 was 76% overall, but included non-merits cases in denominator)
+- v2 ok rate should be measured on merits cases only
+- Gold set comparison: meet or exceed v1's 86% on gold cases
+
+### 4. Full run
+
+Run all ~145 cases. Report must include:
+- Triage decisions (merits count, non-merits count, classification reasons)
+- ok/uncertain/failed/needs_review distribution (on merits cases only)
+- Retry stats: how many retries triggered, how many resolved the issue
+- Gold set accuracy
+- Cost breakdown (triage calls + first-pass + retries)
+
+**No pre-set ok-rate target.** The v1 baseline (76% on all cases) included non-merits in the denominator. v2 changes the denominator. Report the numbers and evaluate based on actual distribution, not a pre-committed threshold.
