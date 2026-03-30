@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
 **Budget**: <$50/month HARD LIMIT
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
-**Workflow**: Code → Code Review → QA → Commit → Update ADO → Push test → Handoff
+**Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
 **Source of Truth**: ADO for status, plans for implementation details only
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (global + project)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -18,9 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 📁 Quick Reference
 
 **First 3 commands every session:**
-1. `git branch --show-current` → Must be `test`
-2. Read `/docs/handoffs/[latest].md`
-3. Check if handoff references a plan → EXECUTE it (don't re-plan)
+1. Read from `memory-global` + `memory-project` MCP servers → understand context
+2. `git branch --show-current` → Must be `test`
+3. Check if memory or ADO references an active plan → EXECUTE it (don't re-plan)
 
 **Key docs:**
 - `/docs/features/[feature]/` - PRD, plans, notes for active features
@@ -45,12 +45,12 @@ docs/features/
 ## 🔄 Session Workflow Checklist
 
 ### ✅ Start Every Session (5 min)
-- [ ] Read latest handoff: `/docs/handoffs/[latest-date].md`
+- [ ] Read from `memory-global` + `memory-project` MCP servers FIRST
 - [ ] Verify on `test` branch: `git branch --show-current`
 - [ ] Query ADO via `/ado` command (if ticket-based work)
 - [ ] Review existing plan in `/docs/features/[feature]/` OR create if complex
 - [ ] Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
-- [ ] Create TodoList with FULL workflow (code → validate → QA → commit → ADO → handoff)
+- [ ] Create TodoList with FULL workflow (code → validate → QA → `/end-work`)
 
 ### 🔨 During Work
 - [ ] Follow plan/todos linearly (don't jump around)
@@ -60,15 +60,9 @@ docs/features/
   - Skip only for: typo fixes, single-line changes, config tweaks
   - Run for: logic changes, new functions, bug fixes, refactoring
 
-### ✅ End Every Session (10 min)
-- [ ] Run code review: `Task(feature-dev:code-reviewer)` - unless trivial change
-- [ ] Run QA tests: `npm run qa:smoke` or relevant suite
-- [ ] Commit & push to test branch → Auto-deploys to test site
-- [ ] **Update ADO** via `/ado` command - move to appropriate state (Active → Testing if done)
+### ✅ End Every Session
+- [ ] Run `/end-work` — this handles: memory save, handoff doc, code review, QA, commit, push, ADO update
 - [ ] If schema/architecture/patterns changed → Update relevant doc in `/docs/`
-- [ ] Create brief handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
-  - 1 paragraph max: ADO ticket, state change, what to do next
-  - Example: "ADO-123 moved to Testing. SCOTUS frontend complete. Next: verify on test site, then Ready for Prod."
 
 **Skip plan for:** Simple bugs, 1-2 file changes, well-understood patterns
 **Create feature folder for:** New features, architecture changes, cost analysis needed
@@ -84,7 +78,7 @@ docs/features/
 | **Status** | ADO ticket | Current state, blockers, progress |
 | **Implementation details** | Plan doc | Technical steps, code patterns |
 | **Issues/blockers** | ADO comments | Problems encountered |
-| **What happened** | Handoff (brief) | Context for next session |
+| **Session state** | Memory MCP | Context for next session (auto-saved via `/end-work`) |
 
 **Plans are ephemeral** - they hold implementation details during active development.
 **ADO is persistent** - it tracks status across sessions.
@@ -103,12 +97,12 @@ docs/features/
 2. Check ADO ticket for current status
 3. Execute tasks from plan sequentially
 4. Update ADO when milestones complete
-5. Create brief handoff at session end
+5. Run `/end-work` to save state and wrap up
 
 ### DON'T DO THIS:
 - ❌ Track STATUS in plan docs (use ADO)
 - ❌ Create new plan when one already exists
-- ❌ Write detailed handoffs (1 paragraph max)
+- ❌ Skip `/end-work` — it saves session state to memory
 - ❌ Duplicate ADO info in multiple places
 
 ---
@@ -189,7 +183,7 @@ docs/features/
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
 
-6. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
+6. **Session state to Memory MCP + Handoff** - Use `/end-work` to save memory snapshots AND create a handoff doc in `/docs/handoffs/` for every non-trivial session
 
 7. **State cost implications** - Always mention $ impact for new features
 
@@ -538,6 +532,23 @@ VALUES (
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
 
+**Memory MCP (Knowledge Graph):** Point-in-time state snapshots for fast session startup
+- **`memory-global`** — User profile, preferences, feedback, cross-project context. Shared across ALL projects.
+- **`memory-project`** — Project-specific: where we left off, active tickets, key decisions. Isolated to this project.
+- **Session start:** ALWAYS read both memory servers before doing anything
+- **Session end:** Save state via `/end-work` command (auto-saves to memory)
+- **Mid-session:** Save when user says "remember" or when a non-obvious decision is made
+- **What to save:** Quick-hit facts — ticket state, blockers, decisions (and WHY), what's next
+- **What NOT to save:** Things in git log, code, CLAUDE.md, ADO, or handoff docs
+- **Built-in auto-memory is DISABLED** — use ONLY the MCP knowledge graph servers
+- Storage: `C:\Users\Josh\.claude-memory\global\` and `C:\Users\Josh\.claude-memory\ttracker\`
+
+**Handoff Docs (`/docs/handoffs/`):** Full narrative context for session continuity
+- **ALWAYS create a handoff doc** at end of every non-trivial session via `/end-work`
+- **Purpose:** Complete story — what was done, why, what was reviewed, gotchas, verification steps
+- **Memory vs Handoff:** Memory = "migration 089 not applied yet" (fast recall). Handoff = "here's the full v2 implementation, both code reviews, and exactly how to verify it" (onboarding).
+- **Naming:** `YYYY-MM-DD-ado-NNN-short-description.md`
+
 ## Tech Stack
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
@@ -668,6 +679,6 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ---
 
-**Last Updated:** 2026-01-20
+**Last Updated:** 2026-03-28
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
