@@ -15,30 +15,26 @@ Scout v1 achieves 76-86% accuracy enriching SCOTUS cases via single-pass Perplex
 
 **Triage is a correctness-critical gate.** A false "non-merits" classification suppresses the case entirely. This is worse than a normal enrichment miss. The design must minimize false non-merits classifications.
 
-#### Step 1: Deterministic triage (no API call)
+#### Step 1: Deterministic merits classification (no API call, safe direction only)
 
-Check signals already in the database before calling any API:
+Some signals can confirm a case IS merits without risk of false suppression:
 
 ```javascript
-const DETERMINISTIC_NON_MERITS = [
-  // Docket prefix "A" = application (stay, emergency)
-  (c) => /^\d+A\d+/.test(c.docket_number),
-  // No syllabus text AND no opinion text = likely cert denial
-  (c) => !c.syllabus && !hasOpinionText(c.id),
-];
-
 const DETERMINISTIC_MERITS = [
-  // Has syllabus = definitely a merits decision
+  // Has substantial syllabus text = definitely argued and decided
   (c) => c.syllabus && c.syllabus.length > 200,
-  // Already enriched successfully = merits
+  // Already enriched successfully in a prior run
   (c) => c.fact_review_status === 'ok',
 ];
 ```
 
-If deterministic signals are conclusive → classify without API call.
-If inconclusive → proceed to Step 2.
+If any merits signal matches → skip triage, proceed to enrichment. No API call needed.
 
-#### Step 2: Perplexity triage (only for ambiguous cases)
+**There are no deterministic non-merits gates.** Heuristics like docket prefix patterns (`^\d+A\d+`) and missing syllabus/opinion text are suggestive but not proven against our dataset. Promoting them to hard suppression gates risks false non-merits classifications. All non-merits classification goes through Perplexity triage (Step 2).
+
+The heuristics can be used as **soft signals** passed to the Perplexity triage prompt for context (e.g., "this case has docket prefix 'A' suggesting it may be an application"), but they do not independently suppress cases.
+
+#### Step 2: Perplexity triage (all non-deterministic-merits cases)
 
 ```
 Is [case_name] ([docket_number]) a Supreme Court merits decision
@@ -90,6 +86,8 @@ The validator currently returns human-readable issue strings. Keying retry logic
 
 Retry logic keys on `code`, not `message`. Existing code that reads `.message` is unaffected (backwards compatible).
 
+**Codes are stable contracts.** Once defined, codes should not be renamed or removed without updating the retry map. Add a comment block in `scout-validator.js` listing all codes as the authoritative reference. New codes can be added freely; existing codes are frozen.
+
 #### Retry prompt map (keyed on codes)
 
 ```javascript
@@ -126,6 +124,15 @@ Some validation failures aren't isolated missing values — they stem from upstr
 
 - If retry response contains signals like "certiorari denied", "stay order", "not a merits decision" → set `is_merits_decision = false`, skip remaining enrichment
 - This is a safety valve, not a primary triage path
+
+**Reporting: distinct outcome buckets.** "Pre-enrichment triage non-merits" and "retry-discovered non-merits" are tracked as separate categories everywhere — in the JSON output, the console report, and the summary stats. This prevents analysis from blurring whether the triage classifier or the enrichment pass found the posture issue. Specifically:
+
+```javascript
+stats.triage_non_merits    // classified before enrichment (Step 1/2)
+stats.retry_non_merits     // discovered during retry (safety valve)
+stats.retry_field_fixed    // retry resolved a field-level issue
+stats.retry_still_failed   // retry attempted but case still needs_review
+```
 
 #### Flow:
 1. Scout first pass runs as normal
