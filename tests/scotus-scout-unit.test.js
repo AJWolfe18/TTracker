@@ -197,7 +197,7 @@ section('Validator: missing disposition → uncertain');
   };
   const { result, issues } = validateScoutResult(scout);
   assert(result.status === 'uncertain', 'Missing disposition → uncertain');
-  assert(issues.some(i => i.includes('formal_disposition')), 'Issue mentions disposition');
+  assert(issues.some(i => i.message.includes('formal_disposition')), 'Issue mentions disposition');
 }
 
 section('Validator: invalid enum → uncertain');
@@ -232,7 +232,7 @@ section('Validator: unanimous with dissenters → uncertain');
   };
   const { result, issues } = validateScoutResult(scout);
   assert(result.status === 'uncertain', 'Unanimous + dissenters → uncertain');
-  assert(issues.some(i => i.includes('Unanimous')), 'Issue mentions unanimous');
+  assert(issues.some(i => i.message.includes('Unanimous')), 'Issue mentions unanimous');
 }
 
 section('Validator: per curiam with author → uncertain');
@@ -250,7 +250,7 @@ section('Validator: per curiam with author → uncertain');
   };
   const { result, issues } = validateScoutResult(scout);
   assert(result.status === 'uncertain', 'Per curiam + author → uncertain');
-  assert(issues.some(i => i.includes('should be null')), 'Issue mentions should be null');
+  assert(issues.some(i => i.message.includes('should be null')), 'Issue mentions should be null');
 }
 
 section('Validator: only tier 3 sources → uncertain');
@@ -268,7 +268,7 @@ section('Validator: only tier 3 sources → uncertain');
   };
   const { result, issues } = validateScoutResult(scout);
   assert(result.status === 'uncertain', 'Only Wikipedia → uncertain');
-  assert(issues.some(i => i.includes('Tier 3')), 'Issue mentions Tier 3');
+  assert(issues.some(i => i.message.includes('Tier 3')), 'Issue mentions Tier 3');
 }
 
 section('Validator: vote split > 9 → uncertain');
@@ -285,7 +285,7 @@ section('Validator: vote split > 9 → uncertain');
     source_tiers_used: [2],
   };
   const { result, issues } = validateScoutResult(scout);
-  assert(issues.some(i => i.includes('sums to 12')), 'Flags vote > 9');
+  assert(issues.some(i => i.message.includes('sums to 12')), 'Flags vote > 9');
 }
 
 section('Validator: no sources → uncertain');

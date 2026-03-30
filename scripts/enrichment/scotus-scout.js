@@ -83,6 +83,91 @@ const REVIEW_STATUS_MAP = {
 };
 
 // ============================================================
+// v2: Triage — deterministic merits signals
+// ============================================================
+
+const DETERMINISTIC_MERITS_SIGNALS = [
+  (c) => c.syllabus && c.syllabus.length > 200,
+  (c) => c.fact_review_status === 'ok',
+];
+
+function isDeterministicMerits(caseData) {
+  return DETERMINISTIC_MERITS_SIGNALS.some(fn => fn(caseData));
+}
+
+const TRIAGE_SYSTEM_PROMPT = 'You are a SCOTUS case classification assistant. Answer ONLY "merits" or "non-merits". No other text.';
+
+function buildTriagePrompt(caseData) {
+  const name = caseData.case_name || caseData.case_name_short || 'Unknown';
+  const docket = caseData.docket_number || '';
+  return `Is ${name} (${docket}) a Supreme Court merits decision (full briefing, oral argument, written opinion)? Or is it a non-merits action (certiorari denied, stay order, GVR, shadow docket)? Answer ONLY: "merits" or "non-merits".`;
+}
+
+function parseTriageResponse(rawContent) {
+  if (!rawContent) return true; // Safe direction: default to merits on empty/null response
+  const lower = rawContent.trim().toLowerCase();
+  if (lower === 'non-merits' || lower.startsWith('non-merits') || lower.includes('non-merits')) return false;
+  if (lower === 'merits' || lower.startsWith('merits')) return true;
+  // Ambiguous — default to merits (safe direction: never suppress without confidence)
+  return true;
+}
+
+// ============================================================
+// v2: Targeted retry — prompt map keyed on SCOUT_ERROR_CODES
+// ============================================================
+
+const RETRY_PROMPTS = {
+  MISSING_VOTE_SPLIT: {
+    field: 'vote_split',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}, decided ${c.decided_at?.split('T')[0] || 'unknown'}), what was the vote split? Answer as JSON: {"vote_split": "N-N"}`,
+  },
+  MISSING_DISPOSITION: {
+    field: 'formal_disposition',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}, decided ${c.decided_at?.split('T')[0] || 'unknown'}), what was the formal disposition (affirmed, reversed, vacated, remanded, reversed_and_remanded, vacated_and_remanded, dismissed, GVR)? Answer as JSON: {"formal_disposition": "..."}`,
+  },
+  MISSING_MAJORITY_AUTHOR: {
+    field: 'majority_author',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}, decided ${c.decided_at?.split('T')[0] || 'unknown'}), who wrote the majority opinion? Answer as JSON: {"majority_author": "LastName"}`,
+  },
+  MISSING_SUBSTANTIVE_WINNER: {
+    field: 'substantive_winner',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}, decided ${c.decided_at?.split('T')[0] || 'unknown'}), who benefited from the ruling and why? Answer as JSON: {"substantive_winner": "..."}`,
+  },
+  INVALID_DISPOSITION_ENUM: {
+    field: 'formal_disposition',
+    prompt: (c, issue) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}), the disposition "${issue.value}" is not a standard enum. What was the formal disposition? Use exactly one of: affirmed, reversed, vacated, remanded, reversed_and_remanded, vacated_and_remanded, dismissed, GVR. Answer as JSON: {"formal_disposition": "..."}`,
+  },
+  INVALID_VOTE_SPLIT_FORMAT: {
+    field: 'vote_split',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}), what was the vote split in N-N format (e.g., 7-2, 9-0)? The total justices cannot exceed 9. Answer as JSON: {"vote_split": "N-N"}`,
+  },
+  VOTE_SPLIT_SUM_EXCEEDS_9: {
+    field: 'vote_split',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}), what was the exact vote split? The total justices cannot exceed 9. Answer as JSON: {"vote_split": "N-N"}`,
+  },
+  UNANIMOUS_WITH_DISSENTERS: {
+    field: 'dissent_authors',
+    compound: true, // may return both vote_split and dissent_authors
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}), there is a conflict: the vote appears unanimous but dissenters are listed. Was this actually a unanimous decision or a split decision? Who dissented, if anyone? Answer as JSON: {"vote_split": "N-N", "dissent_authors": ["Last1"] or []}`,
+  },
+  SPLIT_VOTE_NO_DISSENTERS: {
+    field: 'dissent_authors',
+    prompt: (c) => `For the U.S. Supreme Court case ${c.case_name} (${c.docket_number}), the vote was split but no dissenters were listed. Who dissented? List ALL justices who dissented or joined a dissent. Answer as JSON: {"dissent_authors": ["Last1", "Last2"]}`,
+  },
+};
+
+// Non-merits signals in retry responses — fallback heuristic, not high-confidence truth.
+// If detected, case is reclassified as non-merits rather than patching the field.
+const NON_MERITS_PATTERNS = [
+  /certiorari\s+denied/i,
+  /cert\.?\s+denied/i,
+  /stay\s+order/i,
+  /not\s+a\s+merits\s+decision/i,
+  /shadow\s+docket/i,
+  /application\s+(?:for|to)\s+(?:stay|vacate)/i,
+];
+
+// ============================================================
 // GPT cross-check for dissent authors from opinion text
 // ============================================================
 
@@ -317,7 +402,7 @@ function parseArgs() {
 // ============================================================
 
 async function fetchCases(supabase, opts) {
-  const select = 'id,case_name,case_name_short,case_name_full,docket_number,term,decided_at,disposition,vote_split,majority_author,dissent_authors,prevailing_party,substantive_winner,holding,issue_area,case_type,merits_reached,practical_effect,enrichment_status,fact_extraction_confidence,low_confidence_reason,prompt_version,fact_extracted_at,fact_sources,fact_review_status';
+  const select = 'id,case_name,case_name_short,case_name_full,docket_number,term,decided_at,disposition,vote_split,majority_author,dissent_authors,prevailing_party,substantive_winner,holding,issue_area,case_type,merits_reached,practical_effect,enrichment_status,fact_extraction_confidence,low_confidence_reason,prompt_version,fact_extracted_at,fact_sources,fact_review_status,syllabus,is_merits_decision';
 
   let query = supabase.from('scotus_cases').select(select);
 
@@ -524,6 +609,106 @@ function buildReportSummaries(results) {
 }
 
 // ============================================================
+// v2: Targeted retry — single follow-up for validation failures
+// ============================================================
+
+/**
+ * Attempt a targeted retry for a case with validation issues.
+ * Picks the first retryable issue, sends a focused Perplexity question,
+ * merges the result, and re-validates through existing pipeline.
+ *
+ * @param {object} originalParsed - The original parsed Scout result (NOT mutated — clone used internally)
+ * @param {Array<{code, field, message}>} issues - Validation issues with codes
+ * @param {object} caseData - DB case row (for prompt context)
+ * @param {PerplexityClient} perplexity - API client
+ * @returns {{ retryResult, retryIssues, retryCost, isNonMerits, retryCode, mergedFields, isValid, error? }}
+ */
+async function attemptRetry(originalParsed, issues, caseData, perplexity) {
+  const retryableIssue = issues.find(i => RETRY_PROMPTS[i.code]);
+  if (!retryableIssue) {
+    return { retryResult: null, retryIssues: issues, retryCost: 0, isNonMerits: false, retryCode: null };
+  }
+
+  const template = RETRY_PROMPTS[retryableIssue.code];
+  const prompt = template.prompt(caseData, retryableIssue);
+
+  let rawContent, usage, citations;
+  try {
+    const resp = await perplexity.research(prompt, {
+      systemPrompt: 'You are a SCOTUS fact assistant. Return ONLY valid JSON. No markdown.',
+      temperature: 0.1,
+      maxTokens: 500,
+    });
+    rawContent = resp.content;
+    usage = resp.usage;
+    citations = resp.citations || [];
+  } catch (err) {
+    return { retryResult: null, retryIssues: issues, retryCost: 0, isNonMerits: false, retryCode: retryableIssue.code, error: err.message };
+  }
+
+  const retryCost = perplexity.calculateCost(usage);
+
+  // Check for non-merits signals — fallback heuristic, not high-confidence truth
+  const isNonMerits = NON_MERITS_PATTERNS.some(p => p.test(rawContent));
+  if (isNonMerits) {
+    return { retryResult: null, retryIssues: issues, retryCost, isNonMerits: true, retryCode: retryableIssue.code };
+  }
+
+  // Parse through existing parser (same path, no second parser)
+  const { parsed: retryParsed, parseError } = parseScoutResponse(rawContent, citations);
+  if (parseError || !retryParsed) {
+    return { retryResult: null, retryIssues: issues, retryCost, isNonMerits: false, retryCode: retryableIssue.code };
+  }
+
+  // Clone before merging — do not mutate caller's parsed object
+  const merged = {
+    ...originalParsed,
+    dissent_authors: originalParsed.dissent_authors ? [...originalParsed.dissent_authors] : [],
+    source_urls: originalParsed.source_urls ? [...originalParsed.source_urls] : [],
+  };
+
+  // Merge: only overwrite the targeted field(s)
+  const mergedFields = [];
+
+  // For compound retries (UNANIMOUS_WITH_DISSENTERS), handle multiple fields
+  if (template.compound) {
+    if (retryParsed.vote_split) { merged.vote_split = retryParsed.vote_split; mergedFields.push('vote_split'); }
+    if (retryParsed.dissent_authors) { merged.dissent_authors = retryParsed.dissent_authors; mergedFields.push('dissent_authors'); }
+  } else {
+    // Single-field merge based on template.field
+    const f = template.field;
+    if (f === 'vote_split' && retryParsed.vote_split) {
+      merged.vote_split = retryParsed.vote_split; mergedFields.push('vote_split');
+    } else if (f === 'formal_disposition' && retryParsed.formal_disposition) {
+      merged.formal_disposition = retryParsed.formal_disposition; mergedFields.push('formal_disposition');
+    } else if (f === 'majority_author' && retryParsed.majority_author) {
+      merged.majority_author = retryParsed.majority_author; mergedFields.push('majority_author');
+    } else if (f === 'substantive_winner' && retryParsed.substantive_winner) {
+      merged.substantive_winner = retryParsed.substantive_winner; mergedFields.push('substantive_winner');
+    } else if (f === 'dissent_authors' && retryParsed.dissent_authors) {
+      merged.dissent_authors = retryParsed.dissent_authors; mergedFields.push('dissent_authors');
+    }
+  }
+
+  if (mergedFields.length === 0) {
+    return { retryResult: null, retryIssues: issues, retryCost, isNonMerits: false, retryCode: retryableIssue.code, mergedFields: [] };
+  }
+
+  // Re-validate merged result through existing validator
+  const { result: revalidated, issues: newIssues, isValid } = validateScoutResult(merged);
+
+  return {
+    retryResult: revalidated,
+    retryIssues: newIssues,
+    retryCost,
+    isNonMerits: false,
+    retryCode: retryableIssue.code,
+    mergedFields,
+    isValid,
+  };
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -619,7 +804,9 @@ async function main() {
   }
 
   // Cost estimation + Scout run budget cap enforcement (reuses preflight data)
-  const estimatedRunCost = cases.length * 0.01;
+  // Planning estimate — actual cost varies by triage/retry branch mix.
+  // Some cases only need triage ($0.005), others need enrichment + retry ($0.02).
+  const estimatedRunCost = cases.length * 0.015;
   if (!opts.dryRun) {
     if (budgetPreflightSpend + estimatedRunCost > SCOUT_RUN_BUDGET_CAP_USD) {
       console.error(`FATAL: Estimated run cost ($${estimatedRunCost.toFixed(2)}) + today's spend ($${budgetPreflightSpend.toFixed(2)}) exceeds Scout run cap ($${SCOUT_RUN_BUDGET_CAP_USD})`);
@@ -640,7 +827,13 @@ async function main() {
   // Process each case
   const startTime = Date.now();
   const results = [];
-  const stats = { ok: 0, uncertain: 0, failed: 0, parseError: 0, totalCost: 0, written: 0, writeAttempts: 0, writeFailed: 0 };
+  const stats = {
+    ok: 0, uncertain: 0, failed: 0, parseError: 0, totalCost: 0,
+    written: 0, writeAttempts: 0, writeFailed: 0,
+    // v2: triage + retry
+    triage_non_merits: 0, triage_non_merits_cached: 0, triage_non_merits_api: 0,
+    retry_attempted: 0, retry_field_fixed: 0, retry_non_merits: 0, retry_still_failed: 0,
+  };
   const crossCheckStats = {
     syllabus: { extracted: 0, no_syllabus: 0, ambiguous: 0, no_match: 0, override_applied: 0 },
     gpt: { triggered: 0, dissenters_replaced: 0, skipped_no_key: 0, error: 0 },
@@ -674,6 +867,75 @@ async function main() {
 
     console.log(`[${i + 1}/${cases.length}] ${c.case_name_short || c.case_name} (ID: ${c.id})`);
 
+    let cost = 0; // Track all API costs for this case (triage + enrichment + retry)
+
+    // ---- TRIAGE (v2): classify merits vs non-merits before enrichment ----
+    if (c.is_merits_decision === false) {
+      // Already classified as non-merits in a prior run — skip (no API call)
+      console.log(`  Triage: already classified as non-merits — skipping`);
+      stats.triage_non_merits++;
+      stats.triage_non_merits_cached++;
+      results.push({
+        caseId: c.id, label: c.case_name_short || c.case_name,
+        status: 'non_merits', triageSource: 'cached',
+      });
+      continue;
+    }
+
+    let isMerits = c.is_merits_decision; // may be true or null
+
+    if (isMerits === null || isMerits === undefined) {
+      // Step 1: Deterministic merits check (no API call)
+      if (isDeterministicMerits(c)) {
+        isMerits = true;
+        const reason = c.syllabus?.length > 200 ? 'syllabus > 200 chars' : 'fact_review_status=ok';
+        console.log(`  Triage: deterministic merits (${reason})`);
+        // Write classification to DB for future runs
+        if (!opts.dryRun) {
+          await supabase.from('scotus_cases').update({ is_merits_decision: true }).eq('id', c.id);
+        }
+      } else {
+        // Step 2: Perplexity triage — correctness-critical gate
+        try {
+          const triageResp = await perplexity.research(buildTriagePrompt(c), {
+            systemPrompt: TRIAGE_SYSTEM_PROMPT,
+            temperature: 0.1,
+            maxTokens: 50,
+          });
+          const triageCost = perplexity.calculateCost(triageResp.usage);
+          cost += triageCost;
+          stats.totalCost += triageCost;
+
+          isMerits = parseTriageResponse(triageResp.content);
+          console.log(`  Triage: Perplexity says "${triageResp.content.trim()}" → ${isMerits ? 'merits' : 'non-merits'}`);
+        } catch (triageErr) {
+          // Triage API failed — default to merits (safe direction: never suppress without confidence)
+          isMerits = true;
+          console.log(`  Triage: API error (${triageErr.message}) — defaulting to merits`);
+        }
+
+        // Write classification to DB for future runs
+        if (!opts.dryRun) {
+          await supabase.from('scotus_cases').update({ is_merits_decision: isMerits }).eq('id', c.id);
+        }
+      }
+    }
+
+    if (!isMerits) {
+      stats.triage_non_merits++;
+      stats.triage_non_merits_api++;
+      console.log(`  Triage: non-merits — skipping enrichment`);
+      results.push({
+        caseId: c.id, label: c.case_name_short || c.case_name,
+        status: 'non_merits', triageSource: 'perplexity',
+        triage_needs_spot_check: true, // Perplexity-triaged: flag for human review
+        cost,
+      });
+      if (i < cases.length - 1) await new Promise(r => setTimeout(r, DELAY_BETWEEN_CALLS_MS));
+      continue;
+    }
+    // ---- END TRIAGE ----
+
     // Build prompt
     const prompt = buildScoutPrompt(c);
 
@@ -695,8 +957,9 @@ async function main() {
       continue;
     }
 
-    let cost = perplexity.calculateCost(usage);
-    stats.totalCost += cost;
+    const enrichCost = perplexity.calculateCost(usage);
+    cost += enrichCost;
+    stats.totalCost += enrichCost;
 
     // Parse
     const { parsed, parseError } = parseScoutResponse(rawContent, citations);
@@ -906,21 +1169,72 @@ async function main() {
     // Validate
     const { result: validated, issues, isValid } = validateScoutResult(parsed);
 
+    // ---- TARGETED RETRY (v2): fix validation failures with single follow-up ----
+    // Only retries "uncertain" (validator-downgraded), not "failed" (parser/API errors).
+    // Parser failures are structural (malformed JSON, API timeout) — a targeted field
+    // question won't fix them. The spec mentions "uncertain or failed" but failed cases
+    // never have retryable error codes (those come from the validator, not parser).
+    let finalValidated = validated;
+    let finalIssues = issues;
+    let retryInfo = null;
+
+    if (validated.status === 'uncertain') {
+      const hasRetryable = issues.some(i => RETRY_PROMPTS[i.code]);
+      if (hasRetryable) {
+        stats.retry_attempted++;
+        const targetCode = issues.find(i => RETRY_PROMPTS[i.code]).code;
+        console.log(`  Retry: attempting targeted fix for ${targetCode}`);
+
+        const retry = await attemptRetry(parsed, issues, c, perplexity);
+        retryInfo = retry;
+        cost += retry.retryCost;
+        stats.totalCost += retry.retryCost;
+
+        if (retry.isNonMerits) {
+          // Retry discovered this is non-merits — reclassify (fallback heuristic)
+          stats.retry_non_merits++;
+          console.log(`  Retry: non-merits heuristic triggered — reclassifying (code: ${retry.retryCode})`);
+
+          if (!opts.dryRun) {
+            await supabase.from('scotus_cases').update({ is_merits_decision: false }).eq('id', c.id);
+          }
+
+          results.push({
+            caseId: c.id, label: c.case_name_short || c.case_name,
+            status: 'non_merits', triageSource: 'retry_heuristic',
+            triage_needs_spot_check: true,
+            retryCode: retry.retryCode, cost,
+          });
+          if (i < cases.length - 1) await new Promise(r => setTimeout(r, DELAY_BETWEEN_CALLS_MS));
+          continue;
+        } else if (retry.retryResult && retry.isValid) {
+          stats.retry_field_fixed++;
+          finalValidated = retry.retryResult;
+          finalIssues = retry.retryIssues;
+          console.log(`  Retry: FIXED — merged [${retry.mergedFields?.join(',')}], now status=${finalValidated.status}`);
+        } else {
+          stats.retry_still_failed++;
+          console.log(`  Retry: still ${validated.status} after retry`);
+        }
+      }
+    }
+    // ---- END TARGETED RETRY ----
+
     // Stats
-    stats[validated.status]++;
+    stats[finalValidated.status]++;
 
     // Gold set comparison
-    const goldComp = compareToGoldSet(validated, c.id);
+    const goldComp = compareToGoldSet(finalValidated, c.id);
 
     // DB comparison
-    const dbDiffs = compareToDb(validated, c);
+    const dbDiffs = compareToDb(finalValidated, c);
 
     // Print summary
-    const statusIcon = validated.status === 'ok' ? '+' : validated.status === 'uncertain' ? '?' : 'X';
-    console.log(`  [${statusIcon}] status=${validated.status}, disposition=${validated.formal_disposition}, vote=${validated.vote_split}, author=${validated.majority_author}, cost=$${cost.toFixed(4)}`);
+    const statusIcon = finalValidated.status === 'ok' ? '+' : finalValidated.status === 'uncertain' ? '?' : 'X';
+    console.log(`  [${statusIcon}] status=${finalValidated.status}, disposition=${finalValidated.formal_disposition}, vote=${finalValidated.vote_split}, author=${finalValidated.majority_author}, cost=$${cost.toFixed(4)}`);
 
-    if (issues.length > 0) {
-      console.log(`  Issues: ${issues.join('; ')}`);
+    if (finalIssues.length > 0) {
+      console.log(`  Issues: ${finalIssues.map(i => i.message).join('; ')}`);
     }
 
     if (goldComp) {
@@ -941,9 +1255,9 @@ async function main() {
       }
     }
 
-    if (opts.showSources && validated.source_urls.length > 0) {
-      console.log(`  Sources (${validated._actual_source_tiers.map(t => `T${t}`).join(',')}):`);
-      for (const url of validated.source_urls) {
+    if (opts.showSources && finalValidated.source_urls.length > 0) {
+      console.log(`  Sources (${finalValidated._actual_source_tiers.map(t => `T${t}`).join(',')}):`);
+      for (const url of finalValidated.source_urls) {
         console.log(`    ${url}`);
       }
     }
@@ -951,8 +1265,8 @@ async function main() {
     // Live write with rollback capture
     let writeError = null;
     let rollbackData = null;
-    if (!opts.dryRun && validated.status === 'ok') {
-      const payload = buildDbPayload(validated, opts.writeFields);
+    if (!opts.dryRun && finalValidated.status === 'ok') {
+      const payload = buildDbPayload(finalValidated, opts.writeFields);
 
       // Build rollback snapshot from current DB values
       rollbackData = {
@@ -986,13 +1300,14 @@ async function main() {
     results.push({
       caseId: c.id,
       label: c.case_name_short || c.case_name,
-      status: validated.status,
-      scoutResult: validated,
+      status: finalValidated.status,
+      scoutResult: finalValidated,
       goldComparison: goldComp,
       dbDiffs,
-      issues,
+      issues: finalIssues,
+      retryInfo: retryInfo ? { code: retryInfo.retryCode, fixed: retryInfo.isValid, mergedFields: retryInfo.mergedFields, cost: retryInfo.retryCost } : null,
       cost,
-      written: !opts.dryRun && validated.status === 'ok' && !writeError,
+      written: !opts.dryRun && finalValidated.status === 'ok' && !writeError,
       rollback: rollbackData,
     });
 
@@ -1008,7 +1323,8 @@ async function main() {
     const { error: budgetErr } = await supabase.rpc('increment_budget', {
       p_day: today,
       p_cost: stats.totalCost,
-      p_calls: stats.ok + stats.uncertain + stats.failed + stats.parseError,
+      // Include all Perplexity API calls: enrichment + triage (API-called only, not cached) + retries
+      p_calls: stats.ok + stats.uncertain + stats.failed + stats.parseError + stats.triage_non_merits_api + stats.retry_attempted,
     });
     if (budgetErr) {
       // Fallback: try upsert if RPC doesn't exist
@@ -1017,20 +1333,28 @@ async function main() {
         .select('spent_usd,openai_calls')
         .eq('day', today)
         .maybeSingle();
+      const totalCalls = stats.ok + stats.uncertain + stats.failed + stats.parseError + stats.triage_non_merits_api + stats.retry_attempted;
       const { error: upsertErr } = await supabase.from('budgets').upsert({
         day: today,
         spent_usd: (existing?.spent_usd || 0) + stats.totalCost,
-        openai_calls: (existing?.openai_calls || 0) + stats.ok + stats.uncertain + stats.failed + stats.parseError,
+        openai_calls: (existing?.openai_calls || 0) + totalCalls,
       }, { onConflict: 'day' });
       if (upsertErr) console.warn(`Budget fallback upsert failed: ${upsertErr.message}`);
     }
   }
 
   // Summary
+  const meritsResults = results.filter(r => r.status !== 'non_merits');
+  const nonMeritsResults = results.filter(r => r.status === 'non_merits');
+
   console.log('\n' + '='.repeat(60));
-  console.log('SCOTUS Scout Summary');
+  console.log('SCOTUS Scout v2 Summary');
   console.log(`  Run ID: ${runId}`);
   console.log(`  Environment: ${envLabel}`);
+  console.log(`  Total cases: ${cases.length}`);
+  console.log(`  Non-merits (triage): ${stats.triage_non_merits}`);
+  console.log(`  Non-merits (retry heuristic): ${stats.retry_non_merits}`);
+  console.log(`  Merits processed: ${meritsResults.length}`);
   console.log(`  OK: ${stats.ok}`);
   console.log(`  Uncertain: ${stats.uncertain}`);
   console.log(`  Failed: ${stats.failed}`);
@@ -1044,6 +1368,24 @@ async function main() {
     console.log(`  Rollback entries: ${results.filter(r => r.rollback && r.written).length}`);
   }
   console.log(`  Duration: ${Math.round((Date.now() - startTime) / 1000)}s`);
+
+  // Triage decisions (correctness-critical — print every non-merits for spot-check)
+  if (nonMeritsResults.length > 0) {
+    console.log(`\n  Triage decisions (${nonMeritsResults.length} non-merits):`);
+    for (const t of nonMeritsResults) {
+      const spotCheck = t.triage_needs_spot_check ? ' [SPOT-CHECK]' : '';
+      console.log(`    ID=${t.caseId} (${t.label}) — source: ${t.triageSource}${spotCheck}`);
+    }
+  }
+
+  // Retry stats
+  if (stats.retry_attempted > 0) {
+    console.log(`\n  Retry stats:`);
+    console.log(`    Attempted: ${stats.retry_attempted}`);
+    console.log(`    Field fixed: ${stats.retry_field_fixed}`);
+    console.log(`    Non-merits discovered: ${stats.retry_non_merits}`);
+    console.log(`    Still failed: ${stats.retry_still_failed}`);
+  }
 
   // Cross-check stats
   console.log('\n  Cross-check stats:');
@@ -1079,12 +1421,17 @@ async function main() {
     }
   }
 
-  // Gold set summary
+  // Gold set summary — report both denominators for honest comparison
   const goldResults = results.filter(r => r.goldComparison);
+  const goldMeritsResults = goldResults.filter(r => r.status !== 'non_merits');
   if (goldResults.length > 0) {
-    const perfect = goldResults.filter(r => r.goldComparison.perfect).length;
-    console.log(`  Gold set: ${perfect}/${goldResults.length} perfect match`);
-    const mismatches = goldResults.filter(r => !r.goldComparison.perfect);
+    const perfect = goldResults.filter(r => r.goldComparison?.perfect).length;
+    const perfectMerits = goldMeritsResults.filter(r => r.goldComparison?.perfect).length;
+    console.log(`  Gold set (v1 denominator): ${perfect}/${goldResults.length} perfect match`);
+    if (goldMeritsResults.length !== goldResults.length) {
+      console.log(`  Gold set (v2 merits only): ${perfectMerits}/${goldMeritsResults.length} perfect match`);
+    }
+    const mismatches = goldResults.filter(r => r.goldComparison && !r.goldComparison.perfect);
     if (mismatches.length > 0) {
       console.log('  Gold mismatches:');
       for (const m of mismatches) {
@@ -1105,7 +1452,9 @@ async function main() {
       generated_at: new Date().toISOString(),
       mode: opts.dryRun ? 'dry-run' : 'live',
       environment: envLabel,
+      scout_version: 'v2',
       total_cases: cases.length,
+      merits_processed: meritsResults.length,
       eligible_for_write: results.filter(r => r.status === 'ok').length,
       write_attempts: stats.writeAttempts,
       writes_succeeded: stats.written,
@@ -1116,6 +1465,16 @@ async function main() {
       rollback_entries: results.filter(r => r.rollback && r.written).length,
       field_diffs_detected: rawDiffs,
       field_writes_performed: actualWrites,
+      // v2: triage + retry
+      triage_non_merits: stats.triage_non_merits,
+      retry_non_merits: stats.retry_non_merits,
+      retry_attempted: stats.retry_attempted,
+      retry_field_fixed: stats.retry_field_fixed,
+      retry_still_failed: stats.retry_still_failed,
+      triage_decisions: nonMeritsResults.map(r => ({
+        caseId: r.caseId, label: r.label, source: r.triageSource,
+        needs_spot_check: r.triage_needs_spot_check || false,
+      })),
     };
     const outPath = resolve(process.cwd(), opts.outputJson);
     writeFileSync(outPath, JSON.stringify({ report, stats, crossCheckStats, overrides, guardrail_blocks, disagreements, results }, null, 2));
