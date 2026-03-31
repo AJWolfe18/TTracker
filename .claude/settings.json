@@ -1,0 +1,21 @@
+{
+  "enabledPlugins": {
+    "autofix-bot@claude-plugins-official": true
+  },
+  "autoMemoryEnabled": false,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'MEMORY REMINDER: A commit was just made. Save current session state to memory-project now — what was done, decisions made, and what the next session should pick up.'",
+            "if": "Bash(git commit*)",
+            "statusMessage": "Checking post-commit memory save..."
+          }
+        ]
+      }
+    ]
+  }
+}

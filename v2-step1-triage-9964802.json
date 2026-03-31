@@ -1,0 +1,435 @@
+{
+  "report": {
+    "runId": "scout-2026-03-30T03-34-14-257Z",
+    "generated_at": "2026-03-30T03:34:54.747Z",
+    "mode": "dry-run",
+    "environment": "TEST",
+    "scout_version": "v2",
+    "total_cases": 7,
+    "merits_processed": 3,
+    "eligible_for_write": 2,
+    "write_attempts": 0,
+    "writes_succeeded": 0,
+    "writes_failed": 0,
+    "writes_skipped_uncertain": 1,
+    "writes_skipped_failed": 0,
+    "total_cost_usd": 0.035535000000000004,
+    "rollback_entries": 0,
+    "field_diffs_detected": {
+      "majority_author": 2,
+      "substantive_winner": 3,
+      "holding": 3,
+      "disposition": 1,
+      "vote_split": 1,
+      "issue_area": 2
+    },
+    "field_writes_performed": {},
+    "triage_non_merits": 4,
+    "retry_non_merits": 0,
+    "retry_attempted": 1,
+    "retry_field_fixed": 1,
+    "retry_still_failed": 0,
+    "triage_decisions": [
+      {
+        "caseId": 40,
+        "label": "Tyndall",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 55,
+        "label": "Coalition for TJ v. Fairfax County School Board",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 56,
+        "label": "74 Pinehurst LLC v. New York",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 73,
+        "label": "McHenry",
+        "source": "perplexity",
+        "needs_spot_check": true
+      }
+    ]
+  },
+  "stats": {
+    "ok": 2,
+    "uncertain": 1,
+    "failed": 0,
+    "parseError": 0,
+    "totalCost": 0.035535000000000004,
+    "written": 0,
+    "writeAttempts": 0,
+    "writeFailed": 0,
+    "triage_non_merits": 4,
+    "triage_non_merits_cached": 0,
+    "triage_non_merits_api": 4,
+    "retry_attempted": 1,
+    "retry_field_fixed": 1,
+    "retry_non_merits": 0,
+    "retry_still_failed": 0
+  },
+  "crossCheckStats": {
+    "syllabus": {
+      "extracted": 1,
+      "no_syllabus": 2,
+      "ambiguous": 0,
+      "no_match": 0,
+      "override_applied": 0
+    },
+    "gpt": {
+      "triggered": 1,
+      "dissenters_replaced": 0,
+      "skipped_no_key": 0,
+      "error": 0
+    },
+    "regex_postcheck": {
+      "augmented": 0,
+      "no_additional": 3
+    },
+    "oyez": {
+      "hit": 0,
+      "miss": 3,
+      "error": 0,
+      "skipped": 0
+    }
+  },
+  "overrides": {
+    "disposition_from_syllabus": 0,
+    "dissenters_from_gpt": 0,
+    "dissenters_augmented_regex": 0,
+    "dissenters_merged_oyez": 0,
+    "vote_split_filled_oyez": 0,
+    "author_filled_oyez": 0
+  },
+  "guardrail_blocks": {
+    "syllabus_no_syllabus": [
+      {
+        "caseId": 57,
+        "reason": "no Syllabus header found"
+      },
+      {
+        "caseId": 63,
+        "reason": "no Syllabus header found"
+      }
+    ],
+    "syllabus_no_end": [],
+    "syllabus_boundary_ambiguous": [],
+    "syllabus_no_match": [],
+    "syllabus_multiple_dispositions": [],
+    "syllabus_in_quotes": [],
+    "syllabus_unmapped": [],
+    "gpt_names_invalid": [],
+    "gpt_count_inconsistent": [],
+    "oyez_decisions_null": [
+      {
+        "caseId": 4,
+        "term": "2024",
+        "docket": "23-146"
+      },
+      {
+        "caseId": 57,
+        "term": "2024",
+        "docket": "22-7871"
+      },
+      {
+        "caseId": 63,
+        "term": "2024",
+        "docket": "23-719"
+      }
+    ],
+    "oyez_multiple_decisions": [],
+    "oyez_author_ambiguous": [],
+    "oyez_vote_sum_invalid": []
+  },
+  "disagreements": {
+    "disposition_scout_vs_syllabus": [],
+    "dissenters_scout_vs_gpt": [],
+    "dissenters_scout_vs_oyez": []
+  },
+  "results": [
+    {
+      "caseId": 4,
+      "label": "Connelly",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Thomas",
+        "dissent_authors": [],
+        "substantive_winner": "The United States (IRS) benefits, as the ruling upholds the higher valuation of the decedent's shares for estate tax purposes, denying the estate's requested refund.",
+        "practical_effect": "Closely held corporations' redemption obligations funded by life insurance will not offset corporate value in estate tax valuations, potentially increasing estate tax liabilities.",
+        "holding": "A corporation’s contractual obligation to redeem shares at fair market value is not necessarily a liability that reduces the corporation’s value when calculating the fair market value of the decedent’s shares for federal estate tax purposes.",
+        "issue_area": "taxation",
+        "case_citation": "602 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2,
+          3
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-146_i42j.pdf",
+          "https://www.oyez.org/cases/2023/23-146",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-connelly-v-united-states",
+          "https://www.epgdlaw.com/an-overview-of-connelly/",
+          "https://perkinscoie.com/insights/update/supreme-court-clarifies-estate-tax-consequences-closely-held-company",
+          "https://www.law.cornell.edu/supremecourt/text/23-146",
+          "https://lifeinsurancetrustco.com/high-court-ruling-connelly-v-united-states-implications-for-estate-planning/",
+          "https://en.wikipedia.org/wiki/Connelly_v._United_States"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 4,
+        "label": "Connelly",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "majority_author",
+          "db": null,
+          "scout": "Thomas"
+        },
+        {
+          "field": "substantive_winner",
+          "db": "The Connelly estate and taxpayers challenging IRS valuation methods. The ruling limits the IRS's ability to inflate the taxable value of closely held corporation shares by refusing to offset redemption obligations against life insurance proceeds used to fund those redemptions.",
+          "scout": "The United States (IRS) benefits, as the ruling upholds the higher valuation of the decedent's shares for estate tax purposes, denying the estate's requested refund."
+        },
+        {
+          "field": "holding",
+          "db": "A corporation's contractual obligation to redeem shares at fair market value does not reduce the value of those shares for federal estate tax purposes, because a fair-market-value redemption does not affect any shareholder's economic interest. Life insurance proceeds acquired to fund such a redemption must be included in the corporation's valuation.",
+          "scout": "A corporation’s contractual obligation to redeem shares at fair market value is not necessarily a liability that reduces the corporation’s value when calculating the fair market value of the decedent’s shares for federal estate tax purposes."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011134999999999999,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 40,
+      "label": "Tyndall",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.00054
+    },
+    {
+      "caseId": 55,
+      "label": "Coalition for TJ v. Fairfax County School Board",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005449999999999999
+    },
+    {
+      "caseId": 56,
+      "label": "74 Pinehurst LLC v. New York",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005499999999999999
+    },
+    {
+      "caseId": 57,
+      "label": "In re Bowe",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "dismissed",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "5-4",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "Michael Bowe did not receive habeas relief, as the Court denied his original petition.",
+        "practical_effect": "The denial maintains the Eleventh Circuit's rejection of Bowe's successive §2255 motion without granting him relief.",
+        "holding": "The Court denied Bowe's original petition for writ of habeas corpus under §2241(a), as he did not demonstrate that adequate relief was unavailable elsewhere or that exceptional circumstances warranted the exercise of the Court's discretionary jurisdiction.",
+        "issue_area": "criminal_procedure",
+        "case_citation": "601 U.S. ____ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "low",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-7871_c9dh.pdf",
+          "https://www.law.cornell.edu/supremecourt/text/22-7871",
+          "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F22-7871.html",
+          "https://www.commerciallitigationupdate.com/divided-court-clarifies-limits-on-federal-habeas-appeals-scotus-today",
+          "https://publicdefenders.us/blogs/bowe-v-u-s-federal-prisoners-not-barred-from-raising-prior-claims-in-successive-or-second-habeas-petitions/",
+          "https://www.scotusblog.com/2026/01/bare-court-majority-sides-with-federal-inmate-on-questions-of-habeas-procedure/",
+          "https://lisa-legalinfo.com/2024/02/23/supreme-court-denies-a-habeas-corpus-but-with-an-interesting-twist-update-for-february-23-2024/",
+          "https://www.sixthcircuitappellateblog.com/news-and-analysis/justice-sotomayor-references-rarely-used-procedure-circuit-certification-to-u-s-supreme-court/",
+          "https://www.nacdl.org/brief/Bowe-v-United-States",
+          "https://verdict.justia.com/2025/10/14/will-scotus-decide-what-its-essential-functions-are"
+        ],
+        "needs_review": false,
+        "review_reason": "Split vote (5-4) but no dissent_authors listed",
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "disposition",
+          "db": null,
+          "scout": "dismissed"
+        },
+        {
+          "field": "vote_split",
+          "db": null,
+          "scout": "5-4"
+        },
+        {
+          "field": "majority_author",
+          "db": "Sonia Sotomayor",
+          "scout": null
+        },
+        {
+          "field": "substantive_winner",
+          "db": null,
+          "scout": "Michael Bowe did not receive habeas relief, as the Court denied his original petition."
+        },
+        {
+          "field": "holding",
+          "db": null,
+          "scout": "The Court denied Bowe's original petition for writ of habeas corpus under §2241(a), as he did not demonstrate that adequate relief was unavailable elsewhere or that exceptional circumstances warranted the exercise of the Court's discretionary jurisdiction."
+        },
+        {
+          "field": "issue_area",
+          "db": null,
+          "scout": "criminal_procedure"
+        }
+      ],
+      "issues": [
+        {
+          "code": "SPLIT_VOTE_NO_DISSENTERS",
+          "field": "dissent_authors",
+          "message": "Split vote (5-4) but no dissent_authors listed"
+        }
+      ],
+      "retryInfo": {
+        "code": "MISSING_VOTE_SPLIT",
+        "fixed": true,
+        "mergedFields": [
+          "vote_split"
+        ],
+        "cost": 0.00045
+      },
+      "cost": 0.010600000000000002,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 63,
+      "label": "Trump",
+      "status": "uncertain",
+      "scoutResult": {
+        "status": "uncertain",
+        "formal_disposition": "reversed",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "Former President Trump. The Supreme Court reversed the Colorado Supreme Court's decision to remove him from the ballot, holding that states lack independent authority to enforce Section 3 of the Fourteenth Amendment against federal candidates.",
+        "practical_effect": "Trump was restored to Colorado's 2024 presidential primary ballot, and states cannot unilaterally remove federal candidates from ballots based on Section 3 of the Fourteenth Amendment without congressional enforcement legislation.",
+        "holding": "The Constitution vests in Congress, not individual states, the power to enforce Section 3 of the Fourteenth Amendment against federal officeholders and candidates. States therefore cannot unilaterally remove a candidate from a federal ballot based on Section 3 without congressional action.",
+        "issue_area": "constitutional_rights",
+        "case_citation": "601 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1
+        ],
+        "source_urls": [
+          "https://www.democracydocket.com/wp-content/uploads/2023/12/2024-03-04-Opinion.pdf",
+          "https://supremetoday.ai/doc/judgement/USSCOTUS00000000103"
+        ],
+        "needs_review": true,
+        "review_reason": "Only Tier 3 (Wikipedia/other) sources — no Tier 1 or Tier 2 corroboration",
+        "_actual_source_tiers": [
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 63,
+        "label": "Trump",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": null,
+          "scout": "Former President Trump. The Supreme Court reversed the Colorado Supreme Court's decision to remove him from the ballot, holding that states lack independent authority to enforce Section 3 of the Fourteenth Amendment against federal candidates."
+        },
+        {
+          "field": "holding",
+          "db": "The Court held that states do not have the power to enforce Section 3 of the Fourteenth Amendment against federal officeholders, including the President.",
+          "scout": "The Constitution vests in Congress, not individual states, the power to enforce Section 3 of the Fourteenth Amendment against federal officeholders and candidates. States therefore cannot unilaterally remove a candidate from a federal ballot based on Section 3 without congressional action."
+        },
+        {
+          "field": "issue_area",
+          "db": "voting_rights",
+          "scout": "constitutional_rights"
+        }
+      ],
+      "issues": [
+        {
+          "code": "ONLY_TIER_3_SOURCES",
+          "field": "source_urls",
+          "message": "Only Tier 3 (Wikipedia/other) sources — no Tier 1 or Tier 2 corroboration"
+        }
+      ],
+      "retryInfo": null,
+      "cost": 0.011609999999999999,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 73,
+      "label": "McHenry",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005549999999999999
+    }
+  ]
+}

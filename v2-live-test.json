@@ -1,0 +1,468 @@
+{
+  "report": {
+    "runId": "scout-2026-03-31T02-18-15-572Z",
+    "generated_at": "2026-03-31T02:18:35.428Z",
+    "mode": "live",
+    "environment": "TEST",
+    "scout_version": "v2",
+    "total_cases": 3,
+    "merits_processed": 3,
+    "eligible_for_write": 2,
+    "write_attempts": 2,
+    "writes_succeeded": 2,
+    "writes_failed": 0,
+    "writes_skipped_uncertain": 1,
+    "writes_skipped_failed": 0,
+    "total_cost_usd": 0.034175,
+    "rollback_entries": 2,
+    "field_diffs_detected": {
+      "substantive_winner": 3,
+      "holding": 3
+    },
+    "field_writes_performed": {
+      "disposition": 2,
+      "vote_split": 2,
+      "majority_author": 2,
+      "dissent_authors": 2,
+      "fact_extraction_confidence": 2,
+      "low_confidence_reason": 2,
+      "prompt_version": 2,
+      "fact_extracted_at": 2,
+      "fact_sources": 2,
+      "fact_review_status": 2
+    },
+    "triage_non_merits": 0,
+    "retry_non_merits": 0,
+    "retry_attempted": 0,
+    "retry_field_fixed": 0,
+    "retry_still_failed": 0,
+    "triage_decisions": []
+  },
+  "stats": {
+    "ok": 2,
+    "uncertain": 1,
+    "failed": 0,
+    "parseError": 0,
+    "totalCost": 0.034175,
+    "written": 2,
+    "writeAttempts": 2,
+    "writeFailed": 0,
+    "triage_non_merits": 0,
+    "triage_non_merits_cached": 0,
+    "triage_non_merits_api": 0,
+    "retry_attempted": 0,
+    "retry_field_fixed": 0,
+    "retry_non_merits": 0,
+    "retry_still_failed": 0
+  },
+  "crossCheckStats": {
+    "syllabus": {
+      "extracted": 2,
+      "no_syllabus": 0,
+      "ambiguous": 0,
+      "no_match": 1,
+      "override_applied": 0
+    },
+    "gpt": {
+      "triggered": 0,
+      "dissenters_replaced": 0,
+      "skipped_no_key": 0,
+      "error": 0
+    },
+    "regex_postcheck": {
+      "augmented": 0,
+      "no_additional": 3
+    },
+    "oyez": {
+      "hit": 0,
+      "miss": 3,
+      "error": 0,
+      "skipped": 0
+    }
+  },
+  "overrides": {
+    "disposition_from_syllabus": 0,
+    "dissenters_from_gpt": 0,
+    "dissenters_augmented_regex": 0,
+    "dissenters_merged_oyez": 0,
+    "vote_split_filled_oyez": 0,
+    "author_filled_oyez": 0
+  },
+  "guardrail_blocks": {
+    "syllabus_no_syllabus": [],
+    "syllabus_no_end": [],
+    "syllabus_boundary_ambiguous": [],
+    "syllabus_no_match": [
+      {
+        "caseId": 51,
+        "syllabusLineCount": 143
+      }
+    ],
+    "syllabus_multiple_dispositions": [],
+    "syllabus_in_quotes": [],
+    "syllabus_unmapped": [],
+    "gpt_names_invalid": [],
+    "gpt_count_inconsistent": [],
+    "oyez_decisions_null": [
+      {
+        "caseId": 4,
+        "term": "2024",
+        "docket": "23-146"
+      },
+      {
+        "caseId": 9,
+        "term": "2024",
+        "docket": "23-250"
+      },
+      {
+        "caseId": 51,
+        "term": "2024",
+        "docket": "22-846"
+      }
+    ],
+    "oyez_multiple_decisions": [],
+    "oyez_author_ambiguous": [],
+    "oyez_vote_sum_invalid": []
+  },
+  "disagreements": {
+    "disposition_scout_vs_syllabus": [],
+    "dissenters_scout_vs_gpt": [],
+    "dissenters_scout_vs_oyez": []
+  },
+  "results": [
+    {
+      "caseId": 4,
+      "label": "Connelly",
+      "status": "uncertain",
+      "scoutResult": {
+        "status": "uncertain",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "Thomas Connelly and the estate of Michael Connelly. The ruling allows the estate to value the deceased shareholder's shares without offsetting the life insurance proceeds against the redemption obligation, resulting in lower estate tax liability.",
+        "practical_effect": "Corporations with buy-sell agreements funded by life insurance will have those proceeds included in corporate valuation for federal estate tax purposes, increasing the taxable value of deceased shareholders' estates.",
+        "holding": "A corporation's contractual obligation to redeem shares at fair market value does not reduce the fair market value of those shares for federal estate tax purposes, because a fair-market-value redemption does not affect any shareholder's economic interest. Life insurance proceeds acquired to fund such a redemption are corporate assets that must be included in the corporation's valuation.",
+        "issue_area": "taxation",
+        "case_citation": "602 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "medium",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2,
+          3
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-146_i42j.pdf",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-connelly-v-united-states",
+          "https://calawyers.org/trusts-and-estates/connelly-v-united-states/",
+          "https://www.epgdlaw.com/an-overview-of-connelly/",
+          "https://www.law.cornell.edu/supct/cert/23-146",
+          "https://perkinscoie.com/insights/update/supreme-court-clarifies-estate-tax-consequences-closely-held-company",
+          "https://www.underbergkessler.com/post/connelly-v-united-states-business-owners-beware/",
+          "https://www.oyez.org/cases/2023/23-146"
+        ],
+        "needs_review": true,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 4,
+        "label": "Connelly",
+        "diffs": [
+          {
+            "field": "majority_author",
+            "gold": "Thomas",
+            "scout": null
+          }
+        ],
+        "perfect": false
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The Connelly estate and taxpayers challenging IRS valuation methods. The ruling limits the IRS's ability to inflate the taxable value of closely held corporation shares by refusing to offset redemption obligations against life insurance proceeds used to fund those redemptions.",
+          "scout": "Thomas Connelly and the estate of Michael Connelly. The ruling allows the estate to value the deceased shareholder's shares without offsetting the life insurance proceeds against the redemption obligation, resulting in lower estate tax liability."
+        },
+        {
+          "field": "holding",
+          "db": "A corporation's contractual obligation to redeem shares at fair market value does not reduce the value of those shares for federal estate tax purposes, because a fair-market-value redemption does not affect any shareholder's economic interest. Life insurance proceeds acquired to fund such a redemption must be included in the corporation's valuation.",
+          "scout": "A corporation's contractual obligation to redeem shares at fair market value does not reduce the fair market value of those shares for federal estate tax purposes, because a fair-market-value redemption does not affect any shareholder's economic interest. Life insurance proceeds acquired to fund such a redemption are corporate assets that must be included in the corporation's valuation."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.012155,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 9,
+      "label": "Becerra",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "5-4",
+        "majority_author": "Roberts",
+        "dissent_authors": [
+          "Kavanaugh",
+          "Thomas",
+          "Alito",
+          "Barrett"
+        ],
+        "substantive_winner": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse them for contract support costs incurred when spending third-party revenue on healthcare programs.",
+        "practical_effect": "Indian Health Service must now reimburse tribes for administrative costs associated with collecting and spending Medicare, Medicaid, and private insurance revenue under self-determination contracts.",
+        "holding": "The Indian Self-Determination and Education Assistance Act requires the Indian Health Service to pay contract support costs that tribes incur in collecting and spending program income from third-party payers, as these costs are directly attributable to the self-determination contracts.",
+        "issue_area": "federal_regulation",
+        "case_citation": "602 U.S. 222 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2,
+          3
+        ],
+        "source_urls": [
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-becerra-v-san-carlos-apache-tribe",
+          "https://www.supremecourt.gov/opinions/23pdf/23-250_2dp3.pdf",
+          "https://www.law.cornell.edu/supremecourt/text/23-250",
+          "https://en.wikipedia.org/wiki/Becerra_v._San_Carlos_Apache_Tribe",
+          "https://fedsoc.org/case/becerra-v-san-carlos-apache-tribe",
+          "https://www.scotusblog.com/cases/case-files/becerra-v-san-carlos-apache-tribe/",
+          "https://ncuih.org/2024/06/21/supreme-court-agrees-with-tribes-that-indian-self-determination-act-requires-reimbursement-of-contract-support-costs-for-third-party-expenses/",
+          "https://www.oyez.org/cases/2023/23-250",
+          "https://sct.narf.org/caseindexes/becerra_v_sancarlos_23-250.html",
+          "https://www.supremecourt.gov/docket/docketfiles/html/public/23-250.html"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 9,
+        "label": "Becerra",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse contract support costs for third-party revenue-funded healthcare activities.",
+          "scout": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse them for contract support costs incurred when spending third-party revenue on healthcare programs."
+        },
+        {
+          "field": "holding",
+          "db": "The Indian Self-Determination and Education Assistance Act requires the Indian Health Service to pay contract support costs incurred by tribes when they collect and spend program income from third-party payers to further contracted healthcare functions.",
+          "scout": "The Indian Self-Determination and Education Assistance Act requires the Indian Health Service to pay contract support costs that tribes incur in collecting and spending program income from third-party payers, as these costs are directly attributable to the self-determination contracts."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01065,
+      "written": true,
+      "rollback": {
+        "caseId": 9,
+        "runId": "scout-2026-03-31T02-18-15-572Z",
+        "timestamp": "2026-03-31T02:18:28.883Z",
+        "previousValues": {
+          "disposition": "affirmed",
+          "vote_split": "5-4",
+          "majority_author": "Roberts",
+          "dissent_authors": [
+            "Kavanaugh",
+            "Thomas",
+            "Alito",
+            "Barrett"
+          ],
+          "fact_extraction_confidence": "high",
+          "low_confidence_reason": null,
+          "prompt_version": "scout-v1.1",
+          "fact_extracted_at": "2026-03-30T00:05:42.798+00:00",
+          "fact_sources": [
+            "https://www.supremecourt.gov/opinions/23pdf/23-250_2dp3.pdf",
+            "https://www.oyez.org/cases/2023/23-250",
+            "https://www.scotusblog.com/cases/case-files/becerra-v-san-carlos-apache-tribe/",
+            "https://www.wilmerhale.com/en/insights/client-alerts/20240611-in-narrow-victory-for-tribal-nations-us-supreme-court-requires-federal-government-to-reimburse-tribal-nations-for-healthcare-administration-costs",
+            "https://sct.narf.org/caseindexes/becerra_v_sancarlos_23-250.html",
+            "https://www.law.cornell.edu/supremecourt/text/23-250",
+            "https://ncuih.org/2024/06/21/supreme-court-agrees-with-tribes-that-indian-self-determination-act-requires-reimbursement-of-contract-support-costs-for-third-party-expenses/",
+            "https://legacy.nihb.org/the-washington-report/United-States-Supreme-Court-Skeptical-of-Federal-Governments-Argument-in-Contract-Support-Costs-Cases.php",
+            "https://en.wikipedia.org/wiki/Becerra_v._San_Carlos_Apache_Tribe",
+            "https://www.justice.gov/d9/2024-06/23-250rbunitedstates.pdf"
+          ],
+          "fact_review_status": "ok"
+        },
+        "attemptedPayload": {
+          "disposition": "affirmed",
+          "vote_split": "5-4",
+          "majority_author": "Roberts",
+          "dissent_authors": [
+            "Kavanaugh",
+            "Thomas",
+            "Alito",
+            "Barrett"
+          ],
+          "fact_extraction_confidence": "high",
+          "low_confidence_reason": null,
+          "prompt_version": "scout-v1.1",
+          "fact_extracted_at": "2026-03-31T02:18:28.883Z",
+          "fact_sources": [
+            "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-becerra-v-san-carlos-apache-tribe",
+            "https://www.supremecourt.gov/opinions/23pdf/23-250_2dp3.pdf",
+            "https://www.law.cornell.edu/supremecourt/text/23-250",
+            "https://en.wikipedia.org/wiki/Becerra_v._San_Carlos_Apache_Tribe",
+            "https://fedsoc.org/case/becerra-v-san-carlos-apache-tribe",
+            "https://www.scotusblog.com/cases/case-files/becerra-v-san-carlos-apache-tribe/",
+            "https://ncuih.org/2024/06/21/supreme-court-agrees-with-tribes-that-indian-self-determination-act-requires-reimbursement-of-contract-support-costs-for-third-party-expenses/",
+            "https://www.oyez.org/cases/2023/23-250",
+            "https://sct.narf.org/caseindexes/becerra_v_sancarlos_23-250.html",
+            "https://www.supremecourt.gov/docket/docketfiles/html/public/23-250.html"
+          ],
+          "fact_review_status": "ok"
+        }
+      }
+    },
+    {
+      "caseId": 51,
+      "label": "Kirtz",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Gorsuch",
+        "dissent_authors": [],
+        "substantive_winner": "Reginald Kirtz and consumers benefit, as the ruling allows suits against federal agencies under the FCRA for willful or negligent violations.",
+        "practical_effect": "Federal agencies can now be sued for money damages under the FCRA when they fail to correct false credit reporting information.",
+        "holding": "The Fair Credit Reporting Act waives sovereign immunity for federal agencies by authorizing suits for damages against 'any person,' explicitly defined to include government agencies, under 15 U.S.C. §§1681n and 1681o.",
+        "issue_area": "federal_regulation",
+        "case_citation": "601 U.S. 42 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.faegredrinker.com/en/insights/publications/2024/2/supreme-court-decides-department-of-agriculture-rural-development-rural-housing-service-v-kirtz",
+          "https://www.supremecourt.gov/opinions/23pdf/22-846_2co3.pdf",
+          "https://www.law.cornell.edu/supremecourt/text/22-846",
+          "https://en.wikipedia.org/wiki/Department_of_Agriculture_Rural_Development_Rural_Housing_Service_v._Kirtz",
+          "https://law.yale.edu/yls-today/news/housing-clinic-files-scotus-brief-behalf-consumers-usda-v-kirtz",
+          "https://www.scotusblog.com/cases/case-files/department-of-agriculture-rural-development-rural-housing-service-v-kirtz/",
+          "https://www.consumerfinancialserviceslawmonitor.com/2024/05/the-kirtz-decision-fcra-and-government-liability-unpacked/",
+          "https://constitution.congress.gov/browse/essay/intro.9-2-24/ALDE_00000092/",
+          "https://www.oyez.org/cases/2023/22-846"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 51,
+        "label": "Kirtz",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Kirtz benefits, as the Court held that the FCRA waives sovereign immunity, allowing his suit against the USDA for damages to proceed.",
+          "scout": "Reginald Kirtz and consumers benefit, as the ruling allows suits against federal agencies under the FCRA for willful or negligent violations."
+        },
+        {
+          "field": "holding",
+          "db": "The Fair Credit Reporting Act unequivocally waives the federal government's sovereign immunity by authorizing suits for damages against 'any person,' expressly defined to include government agencies, who willfully or negligently fail to comply with its requirements.",
+          "scout": "The Fair Credit Reporting Act waives sovereign immunity for federal agencies by authorizing suits for damages against 'any person,' explicitly defined to include government agencies, under 15 U.S.C. §§1681n and 1681o."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011369999999999998,
+      "written": true,
+      "rollback": {
+        "caseId": 51,
+        "runId": "scout-2026-03-31T02-18-15-572Z",
+        "timestamp": "2026-03-31T02:18:35.248Z",
+        "previousValues": {
+          "disposition": "affirmed",
+          "vote_split": "9-0",
+          "majority_author": "Gorsuch",
+          "dissent_authors": [],
+          "fact_extraction_confidence": "high",
+          "low_confidence_reason": null,
+          "prompt_version": "scout-v1.1",
+          "fact_extracted_at": "2026-03-30T00:06:41.674+00:00",
+          "fact_sources": [
+            "https://www.supremecourt.gov/opinions/23pdf/22-846_2co3.pdf",
+            "https://www.oyez.org/cases/2023/22-846",
+            "https://www.scotusblog.com/cases/case-files/department-of-agriculture-rural-development-rural-housing-service-v-kirtz/",
+            "https://www.faegredrinker.com/en/insights/publications/2024/2/supreme-court-decides-department-of-agriculture-rural-development-rural-housing-service-v-kirtz",
+            "https://www.law.cornell.edu/supremecourt/text/22-846",
+            "https://constitution.congress.gov/browse/essay/intro.9-2-24/ALDE_00000092/",
+            "https://www.supremecourt.gov/qp/22-00846qp.pdf",
+            "https://www.consumerfinancialserviceslawmonitor.com/2024/05/the-kirtz-decision-fcra-and-government-liability-unpacked/",
+            "https://en.wikipedia.org/wiki/Department_of_Agriculture_Rural_Development_Rural_Housing_Service_v._Kirtz"
+          ],
+          "fact_review_status": "ok"
+        },
+        "attemptedPayload": {
+          "disposition": "affirmed",
+          "vote_split": "9-0",
+          "majority_author": "Gorsuch",
+          "dissent_authors": [],
+          "fact_extraction_confidence": "high",
+          "low_confidence_reason": null,
+          "prompt_version": "scout-v1.1",
+          "fact_extracted_at": "2026-03-31T02:18:35.248Z",
+          "fact_sources": [
+            "https://www.faegredrinker.com/en/insights/publications/2024/2/supreme-court-decides-department-of-agriculture-rural-development-rural-housing-service-v-kirtz",
+            "https://www.supremecourt.gov/opinions/23pdf/22-846_2co3.pdf",
+            "https://www.law.cornell.edu/supremecourt/text/22-846",
+            "https://en.wikipedia.org/wiki/Department_of_Agriculture_Rural_Development_Rural_Housing_Service_v._Kirtz",
+            "https://law.yale.edu/yls-today/news/housing-clinic-files-scotus-brief-behalf-consumers-usda-v-kirtz",
+            "https://www.scotusblog.com/cases/case-files/department-of-agriculture-rural-development-rural-housing-service-v-kirtz/",
+            "https://www.consumerfinancialserviceslawmonitor.com/2024/05/the-kirtz-decision-fcra-and-government-liability-unpacked/",
+            "https://constitution.congress.gov/browse/essay/intro.9-2-24/ALDE_00000092/",
+            "https://www.oyez.org/cases/2023/22-846"
+          ],
+          "fact_review_status": "ok"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,1715 @@
+{
+  "report": {
+    "runId": "scout-2026-03-30T03-39-30-156Z",
+    "generated_at": "2026-03-30T03:42:04.732Z",
+    "mode": "dry-run",
+    "environment": "TEST",
+    "scout_version": "v2",
+    "total_cases": 25,
+    "merits_processed": 20,
+    "eligible_for_write": 19,
+    "write_attempts": 0,
+    "writes_succeeded": 0,
+    "writes_failed": 0,
+    "writes_skipped_uncertain": 1,
+    "writes_skipped_failed": 0,
+    "total_cost_usd": 0.23146499999999992,
+    "rollback_entries": 0,
+    "field_diffs_detected": {
+      "dissent_authors": 1,
+      "substantive_winner": 20,
+      "holding": 19,
+      "majority_author": 1,
+      "disposition": 1,
+      "issue_area": 3
+    },
+    "field_writes_performed": {},
+    "triage_non_merits": 5,
+    "retry_non_merits": 0,
+    "retry_attempted": 0,
+    "retry_field_fixed": 0,
+    "retry_still_failed": 0,
+    "triage_decisions": [
+      {
+        "caseId": 40,
+        "label": "Tyndall",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 55,
+        "label": "Coalition for TJ v. Fairfax County School Board",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 56,
+        "label": "74 Pinehurst LLC v. New York",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 57,
+        "label": "In re Bowe",
+        "source": "perplexity",
+        "needs_spot_check": true
+      },
+      {
+        "caseId": 73,
+        "label": "McHenry",
+        "source": "perplexity",
+        "needs_spot_check": true
+      }
+    ]
+  },
+  "stats": {
+    "ok": 19,
+    "uncertain": 1,
+    "failed": 0,
+    "parseError": 0,
+    "totalCost": 0.23146499999999992,
+    "written": 0,
+    "writeAttempts": 0,
+    "writeFailed": 0,
+    "triage_non_merits": 5,
+    "triage_non_merits_cached": 0,
+    "triage_non_merits_api": 5,
+    "retry_attempted": 0,
+    "retry_field_fixed": 0,
+    "retry_non_merits": 0,
+    "retry_still_failed": 0
+  },
+  "crossCheckStats": {
+    "syllabus": {
+      "extracted": 8,
+      "no_syllabus": 7,
+      "ambiguous": 0,
+      "no_match": 5,
+      "override_applied": 0
+    },
+    "gpt": {
+      "triggered": 1,
+      "dissenters_replaced": 0,
+      "skipped_no_key": 0,
+      "error": 0
+    },
+    "regex_postcheck": {
+      "augmented": 0,
+      "no_additional": 18
+    },
+    "oyez": {
+      "hit": 1,
+      "miss": 19,
+      "error": 0,
+      "skipped": 0
+    }
+  },
+  "overrides": {
+    "disposition_from_syllabus": 0,
+    "dissenters_from_gpt": 0,
+    "dissenters_augmented_regex": 0,
+    "dissenters_merged_oyez": 0,
+    "vote_split_filled_oyez": 0,
+    "author_filled_oyez": 0
+  },
+  "guardrail_blocks": {
+    "syllabus_no_syllabus": [
+      {
+        "caseId": 49,
+        "reason": "no Syllabus header found"
+      },
+      {
+        "caseId": 54,
+        "reason": "no Syllabus header found"
+      },
+      {
+        "caseId": 63,
+        "reason": "no Syllabus header found"
+      }
+    ],
+    "syllabus_no_end": [],
+    "syllabus_boundary_ambiguous": [],
+    "syllabus_no_match": [
+      {
+        "caseId": 27,
+        "syllabusLineCount": 123
+      },
+      {
+        "caseId": 51,
+        "syllabusLineCount": 143
+      },
+      {
+        "caseId": 59,
+        "syllabusLineCount": 90
+      },
+      {
+        "caseId": 64,
+        "syllabusLineCount": 136
+      },
+      {
+        "caseId": 71,
+        "syllabusLineCount": 45
+      }
+    ],
+    "syllabus_multiple_dispositions": [],
+    "syllabus_in_quotes": [],
+    "syllabus_unmapped": [],
+    "gpt_names_invalid": [],
+    "gpt_count_inconsistent": [],
+    "oyez_decisions_null": [
+      {
+        "caseId": 1,
+        "term": "2020",
+        "docket": "19-631"
+      },
+      {
+        "caseId": 4,
+        "term": "2024",
+        "docket": "23-146"
+      },
+      {
+        "caseId": 9,
+        "term": "2024",
+        "docket": "23-250"
+      },
+      {
+        "caseId": 10,
+        "term": "2024",
+        "docket": "22-1079"
+      },
+      {
+        "caseId": 11,
+        "term": "2024",
+        "docket": "23-235"
+      },
+      {
+        "caseId": 12,
+        "term": "2024",
+        "docket": "23-367"
+      },
+      {
+        "caseId": 23,
+        "term": "2024",
+        "docket": "22-704"
+      },
+      {
+        "caseId": 27,
+        "term": "2024",
+        "docket": "22-674"
+      },
+      {
+        "caseId": 49,
+        "term": "2024",
+        "docket": "23A688"
+      },
+      {
+        "caseId": 50,
+        "term": "2024",
+        "docket": "22-660"
+      },
+      {
+        "caseId": 51,
+        "term": "2024",
+        "docket": "22-846"
+      },
+      {
+        "caseId": 54,
+        "term": "2024",
+        "docket": "23-203"
+      },
+      {
+        "caseId": 59,
+        "term": "2024",
+        "docket": "22-721"
+      },
+      {
+        "caseId": 60,
+        "term": "2024",
+        "docket": "22-500"
+      },
+      {
+        "caseId": 63,
+        "term": "2024",
+        "docket": "23-719"
+      },
+      {
+        "caseId": 64,
+        "term": "2025",
+        "docket": "23-677"
+      },
+      {
+        "caseId": 65,
+        "term": "2025",
+        "docket": "23-217"
+      },
+      {
+        "caseId": 68,
+        "term": "2025",
+        "docket": "24-656"
+      },
+      {
+        "caseId": 71,
+        "term": "2025",
+        "docket": "23-6573"
+      }
+    ],
+    "oyez_multiple_decisions": [],
+    "oyez_author_ambiguous": [],
+    "oyez_vote_sum_invalid": []
+  },
+  "disagreements": {
+    "disposition_scout_vs_syllabus": [],
+    "dissenters_scout_vs_gpt": [],
+    "dissenters_scout_vs_oyez": []
+  },
+  "results": [
+    {
+      "caseId": 1,
+      "label": "Barr v. Am. Ass'n of Political Consultants, Inc.",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "plurality",
+        "vote_split": "6-3",
+        "majority_author": "Kavanaugh",
+        "dissent_authors": [
+          "Thomas",
+          "Gorsuch"
+        ],
+        "substantive_winner": "The American Association of Political Consultants and political consultants challenging the robocall restriction. The government-debt exception to the TCPA robocall ban was struck down as unconstitutional, though the broader robocall restriction remained intact.",
+        "practical_effect": "The government-debt exception allowing robocalls for collecting government-owed debt was invalidated and severed from the TCPA, eliminating that carve-out while preserving the general robocall prohibition.",
+        "holding": "The government-debt exception to the TCPA's automated-call restriction violates the First Amendment as an unjustifiable content-based restriction on speech that cannot survive strict scrutiny. The exception is severable from the remainder of the statute, which remains valid.",
+        "issue_area": "first_amendment",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "medium",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/19pdf/19-631_2d93.pdf",
+          "https://www.oyez.org/cases/2019/19-631",
+          "https://www.scotusblog.com/cases/case-files/barr-v-american-association-of-political-consultants-inc/",
+          "https://epic.org/documents/barr-v-american-association-of-political-consultants/",
+          "https://fedsoc.org/case/barr-v-american-association-of-political-consultants",
+          "https://globalfreedomofexpression.columbia.edu/cases/barr-v-american-assoc-of-political-consultants/",
+          "https://wlo.willamette.edu/scotus/2020/07/barr-v.-am.-assn-of-political-consultants,-inc..html",
+          "https://www.duanemorris.com/alerts/supreme_court_upholds_robocalling_restrictions_leaves_future_regulatory_exemptions_0720.html",
+          "https://www.rila.org/retail-litigation-center/appellate-division-briefs/barr-v-american-association-of-political-consultan",
+          "https://firstamendment.mtsu.edu/article/barr-v-american-association-of-political-consultants/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "dissent_authors",
+          "db": [
+            "Breyer",
+            "Ginsburg",
+            "Kagan"
+          ],
+          "scout": [
+            "Thomas",
+            "Gorsuch"
+          ]
+        },
+        {
+          "field": "substantive_winner",
+          "db": "The American Association of Political Consultants and other challengers benefit because the government-debt exception is invalidated, though the general robocall ban remains intact.",
+          "scout": "The American Association of Political Consultants and political consultants challenging the robocall restriction. The government-debt exception to the TCPA robocall ban was struck down as unconstitutional, though the broader robocall restriction remained intact."
+        },
+        {
+          "field": "holding",
+          "db": "The 2015 government-debt exception to the Telephone Consumer Protection Act's robocall restriction is an unconstitutional content-based speech restriction that fails strict scrutiny. The Court severed the exception from the remainder of the statute, leaving the general robocall ban in place.",
+          "scout": "The government-debt exception to the TCPA's automated-call restriction violates the First Amendment as an unjustifiable content-based restriction on speech that cannot survive strict scrutiny. The exception is severable from the remainder of the statute, which remains valid."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011555,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 2,
+      "label": "Rutledge",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "8-0",
+        "majority_author": "Sotomayor",
+        "dissent_authors": [],
+        "substantive_winner": "Arkansas (Rutledge) benefits, as the Court held its law regulating PBMs is not preempted by ERISA, allowing state regulation to proceed.",
+        "practical_effect": "States gain authority to regulate pharmacy benefit managers' reimbursement rates to pharmacies without ERISA preemption.",
+        "holding": "Arkansas Act 900, which regulates pharmacy benefit managers' drug reimbursement rates, is not preempted by ERISA because it does not act on ERISA plans directly or refer to them, nor is it connected with ERISA plans.",
+        "issue_area": "federal_regulation",
+        "case_citation": "592 U.S. ____ (2020)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/20pdf/18-540_m64o.pdf",
+          "https://www.oyez.org/cases/2020/18-540",
+          "https://www.scotusblog.com/cases/case-files/rutledge-v-pharmaceutical-care-management-association/",
+          "https://www.healthaffairs.org/do/10.1377/forefront.20201216.909942/",
+          "https://www.law.cornell.edu/supct/cert/18-540",
+          "https://www.pcmanet.org/press-releases/pcma-statement-on-u-s-supreme-court-decision-in-rutledge-v-pharmaceutical-care-management-association-pcma/12/10/2020/",
+          "https://www.groom.com/resources/the-supreme-court-narrows-erisa-preemption-in-rutledge-v-pcma/",
+          "https://searchlf.ama-assn.org/case/documentDownload?uri=%2Funstructured%2Fbinary%2Fcase%2FRutledge_v__Pharmaceutical_Care_Management_Assoc.pdf",
+          "https://insurance.maryland.gov/Consumer/Appeals%20and%20Grievances%20Reports/Report-of-the-MIA-on-Rutledge-vs-Pharmaceutical-Care-Mgt-Assn-and-its-impact-on-Title-15-MSAR-13329.pdf",
+          "https://www.uslaw.org/pdf-resources/the-scotus-rutledge-opinion-pharmacy-benefit-managers-cannot-duck-pro-patient-state-reform-laws-using-erisa-preemption-arguments/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Arkansas (Leslie Rutledge) benefits as the Court upheld the state's authority to regulate pharmacy benefit managers' reimbursement rates to pharmacies.",
+          "scout": "Arkansas (Rutledge) benefits, as the Court held its law regulating PBMs is not preempted by ERISA, allowing state regulation to proceed."
+        },
+        {
+          "field": "holding",
+          "db": "Arkansas Act 900, which requires pharmacy benefit managers to reimburse pharmacies at or above their acquisition costs and provide an appeals process, is not preempted by ERISA because it regulates only PBMs as third parties, not ERISA plans themselves, and does not force ERISA plans to adopt any particular scheme of substance or operation.",
+          "scout": "Arkansas Act 900, which regulates pharmacy benefit managers' drug reimbursement rates, is not preempted by ERISA because it does not act on ERISA plans directly or refer to them, nor is it connected with ERISA plans."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.010355,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 4,
+      "label": "Connelly",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Thomas",
+        "dissent_authors": [],
+        "substantive_winner": "The United States (IRS) benefits, as the ruling upholds the higher valuation of the decedent's shares in the closely held corporation for federal estate tax purposes.",
+        "practical_effect": "Estates of decedents holding shares in closely held corporations with fair market value redemption obligations funded by life insurance will face higher estate tax valuations without offset for the redemption liability.",
+        "holding": "A corporation’s contractual obligation to redeem shares at fair market value is not necessarily a liability that reduces the corporation’s value when calculating the fair market value of the decedent’s shares for federal estate tax purposes.",
+        "issue_area": "taxation",
+        "case_citation": "602 U.S. ____ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-146_i42j.pdf",
+          "https://www.oyez.org/cases/2023/23-146",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-connelly-v-united-states",
+          "https://www.underbergkessler.com/post/connelly-v-united-states-business-owners-beware/",
+          "https://calawyers.org/trusts-and-estates/connelly-v-united-states/",
+          "https://www.naepcjournal.org/issue/44/connelly-v-united-states/",
+          "https://www.law.cornell.edu/supremecourt/text/23-146",
+          "https://perkinscoie.com/insights/update/supreme-court-clarifies-estate-tax-consequences-closely-held-company"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 4,
+        "label": "Connelly",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "majority_author",
+          "db": null,
+          "scout": "Thomas"
+        },
+        {
+          "field": "substantive_winner",
+          "db": "The Connelly estate and taxpayers challenging IRS valuation methods. The ruling limits the IRS's ability to inflate the taxable value of closely held corporation shares by refusing to offset redemption obligations against life insurance proceeds used to fund those redemptions.",
+          "scout": "The United States (IRS) benefits, as the ruling upholds the higher valuation of the decedent's shares in the closely held corporation for federal estate tax purposes."
+        },
+        {
+          "field": "holding",
+          "db": "A corporation's contractual obligation to redeem shares at fair market value does not reduce the value of those shares for federal estate tax purposes, because a fair-market-value redemption does not affect any shareholder's economic interest. Life insurance proceeds acquired to fund such a redemption must be included in the corporation's valuation.",
+          "scout": "A corporation’s contractual obligation to redeem shares at fair market value is not necessarily a liability that reduces the corporation’s value when calculating the fair market value of the decedent’s shares for federal estate tax purposes."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01094,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 9,
+      "label": "Becerra",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "5-4",
+        "majority_author": "Roberts",
+        "dissent_authors": [
+          "Kavanaugh",
+          "Thomas",
+          "Alito",
+          "Barrett"
+        ],
+        "substantive_winner": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse contract support costs for third-party revenue expenditures.",
+        "practical_effect": "Indian Health Service must now pay tribes billions in additional reimbursements for administrative costs tied to Medicare, Medicaid, and private insurance revenue used in tribal healthcare programs.",
+        "holding": "The Indian Self-Determination and Education Assistance Act requires IHS to pay contract support costs that tribes incur when spending program income (from third-party payers like Medicare and Medicaid) on healthcare programs assumed from IHS, as these costs are directly attributable to the self-determination contracts.",
+        "issue_area": "federal_regulation",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-250_2dp3.pdf",
+          "https://www.oyez.org/cases/2023/23-250",
+          "https://www.scotusblog.com/cases/case-files/becerra-v-san-carlos-apache-tribe/",
+          "https://www.wilmerhale.com/en/insights/client-alerts/20240611-in-narrow-victory-for-tribal-nations-us-supreme-court-requires-federal-government-to-reimburse-tribal-nations-for-healthcare-administration-costs",
+          "https://sct.narf.org/caseindexes/becerra_v_sancarlos_23-250.html",
+          "https://ncuih.org/2024/06/21/supreme-court-agrees-with-tribes-that-indian-self-determination-act-requires-reimbursement-of-contract-support-costs-for-third-party-expenses/",
+          "https://www.law.cornell.edu/supremecourt/text/23-250",
+          "https://fedsoc.org/case/becerra-v-san-carlos-apache-tribe",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-becerra-v-san-carlos-apache-tribe",
+          "https://legacy.nihb.org/the-washington-report/United-States-Supreme-Court-Skeptical-of-Federal-Governments-Argument-in-Contract-Support-Costs-Cases.php"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 9,
+        "label": "Becerra",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse contract support costs for third-party revenue-funded healthcare activities.",
+          "scout": "The San Carlos Apache Tribe and Northern Arapaho Tribe benefit, as the ruling requires IHS to reimburse contract support costs for third-party revenue expenditures."
+        },
+        {
+          "field": "holding",
+          "db": "The Indian Self-Determination and Education Assistance Act requires the Indian Health Service to pay contract support costs incurred by tribes when they collect and spend program income from third-party payers to further contracted healthcare functions.",
+          "scout": "The Indian Self-Determination and Education Assistance Act requires IHS to pay contract support costs that tribes incur when spending program income (from third-party payers like Medicare and Medicaid) on healthcare programs assumed from IHS, as these costs are directly attributable to the self-determination contracts."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011565,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 10,
+      "label": "Truck Insurance Exchange v. Kaiser Gypsum Co. Revisions: 6/07/24",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "8-0",
+        "majority_author": "Sotomayor",
+        "dissent_authors": [],
+        "substantive_winner": "Truck Insurance Exchange benefits from the ruling, as it establishes their standing as a party in interest to object to the bankruptcy plan.",
+        "practical_effect": "Insurers with financial responsibility for bankruptcy claims now have statutory standing to raise and be heard on any issue in Chapter 11 cases, eliminating the insurance neutrality test used by lower courts.",
+        "holding": "An insurer with financial responsibility for bankruptcy claims is a 'party in interest' under 11 U.S.C. §1109(b) that may raise and be heard on any issue in a Chapter 11 case.",
+        "issue_area": "federal_regulation",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-1079_868c.pdf",
+          "https://www.scotusblog.com/cases/case-files/truck-insurance-exchange-v-kaiser-gypsum-company-inc/",
+          "https://www.oyez.org/cases/2023/22-1079",
+          "https://www.cozen.com/news-resources/publications/2024/supreme-court-orders-stand-down-on-insurance-neutrality-test-for-standing",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-truck-insurance-exchange-v-kaiser-gypsum-co-inc-et-al",
+          "https://www.law.cornell.edu/supremecourt/text/22-1079",
+          "https://law.justia.com/cases/california/supreme-court/2024/s273179.html",
+          "https://www.hinshawlaw.com/en/insights/insights-for-insurers-alert/how-the-us-supreme-courts-rulings-on-kaiser-and-purdue-pharma-affect-insurers-rights-and-interests-in-chapter-11-cases",
+          "https://www.tysonmendes.com/a-seat-at-the-table-supreme-court-rules-insurers-have-a-right-to-be-heard-on-any-issue-in-chapter-11-cases/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Truck Insurance Exchange benefits from the ruling, as it establishes their standing as a 'party in interest' to object to the bankruptcy plan.",
+          "scout": "Truck Insurance Exchange benefits from the ruling, as it establishes their standing as a party in interest to object to the bankruptcy plan."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011355,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 11,
+      "label": "FDA",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Kavanaugh",
+        "dissent_authors": [],
+        "substantive_winner": "The FDA and Danco Laboratories benefit as the Court ruled the plaintiffs lack standing, preserving FDA's regulatory actions on mifepristone.",
+        "practical_effect": "Mifepristone remains available under FDA's 2016 and 2021 regulatory changes, as the challenge was dismissed for lack of standing.",
+        "holding": "Plaintiffs lack Article III standing to challenge the FDA's 2016 and 2021 actions modifying regulatory requirements for mifepristone because they have not shown concrete injury or causation, given federal conscience protections for doctors.",
+        "issue_area": "judicial_power",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-235_n7ip.pdf",
+          "https://www.oyez.org/cases/2023/23-235",
+          "https://www.scotusblog.com/cases/case-files/food-and-drug-administration-v-alliance-for-hippocratic-medicine-2/",
+          "https://harvardlawreview.org/print/vol-138/fda-v-alliance-for-hippocratic-medicine/",
+          "https://www.law.cornell.edu/supremecourt/text/23-235",
+          "https://societyfp.org/advocacy/fda-v-alliance-for-hippocratic-medicine/",
+          "https://www.supremecourt.gov/docket/docketfiles/html/public/23-235.html",
+          "https://www.fdli.org/2025/08/alliance-for-hippocratic-medicine-v-u-s-food-and-drug-administration-2/",
+          "https://constitution.congress.gov/browse/essay/intro.9-2-17/ALDE_00013904/",
+          "https://reproductiverights.org/cases/alliance-for-hippocratic-medicine-v-fda/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The FDA and Danco Laboratories benefit, as the ruling dismisses the challenge to mifepristone regulations on standing grounds, preserving FDA approvals.",
+          "scout": "The FDA and Danco Laboratories benefit as the Court ruled the plaintiffs lack standing, preserving FDA's regulatory actions on mifepristone."
+        },
+        {
+          "field": "holding",
+          "db": "The plaintiffs lack Article III standing to challenge the FDA's regulatory actions on mifepristone because they failed to demonstrate concrete injury, causation, and redressability.",
+          "scout": "Plaintiffs lack Article III standing to challenge the FDA's 2016 and 2021 actions modifying regulatory requirements for mifepristone because they have not shown concrete injury or causation, given federal conscience protections for doctors."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01132,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 12,
+      "label": "Starbucks Corp. v. McKinney",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "vacated_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "8-1",
+        "majority_author": "Thomas",
+        "dissent_authors": [
+          "Jackson"
+        ],
+        "substantive_winner": "Starbucks benefits from the ruling, as the Court vacated the lower courts' injunction order obtained by the NLRB and required application of a stricter four-factor test for future NLRB preliminary injunction requests.",
+        "practical_effect": "District courts must now apply the traditional four-factor test from Winter rather than a more lenient two-part test when evaluating NLRB requests for §10(j) preliminary injunctions, making such relief harder for the NLRB to obtain.",
+        "holding": "District courts must apply the traditional four factors articulated in Winter v. Natural Resources Defense Council, Inc. when considering the National Labor Relations Board's requests for a preliminary injunction under §10(j) of the National Labor Relations Act.",
+        "issue_area": "labor",
+        "case_citation": "602 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-367_f3b7.pdf",
+          "https://www.oyez.org/cases/2023/23-367",
+          "https://www.scotusblog.com/cases/case-files/starbucks-corp-v-mckinney/",
+          "https://harvardlawreview.org/?p=16805",
+          "https://www.faegredrinker.com/en/insights/publications/2024/6/supreme-court-decides-starbucks-corp-v-mckinney-regional-director-of-region-15-of-the-national-labor-relations-board",
+          "https://en.wikipedia.org/wiki/Starbucks_Corp._v._McKinney",
+          "https://www.law.cornell.edu/supremecourt/text/23-367",
+          "https://www.paschoslaw.com/blog/u-s-supreme-court-issues-major-labor-and-employment-law-opinion-in-the-case-of-starbucks-corp-v-mckinney/",
+          "https://fedsoc.org/case/starbucks-corporation-v-mckinney",
+          "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F23-367.html"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Starbucks benefits from the ruling, as the Court vacated the lower courts' injunction order and required application of a more stringent four-factor test for NLRB preliminary injunctions under §10(j).",
+          "scout": "Starbucks benefits from the ruling, as the Court vacated the lower courts' injunction order obtained by the NLRB and required application of a stricter four-factor test for future NLRB preliminary injunction requests."
+        },
+        {
+          "field": "holding",
+          "db": "District courts must apply the traditional four factors from Winter v. Natural Resources Defense Council when considering the NLRB's requests for preliminary injunctions under §10(j) of the NLRA, rather than a more lenient standard deferring to the Board's preliminary views.",
+          "scout": "District courts must apply the traditional four factors articulated in Winter v. Natural Resources Defense Council, Inc. when considering the National Labor Relations Board's requests for a preliminary injunction under §10(j) of the National Labor Relations Act."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011725,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 23,
+      "label": "Vidal",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Thomas",
+        "dissent_authors": [],
+        "substantive_winner": "The government (Vidal, as USPTO Director) and the Lanham Act's names clause. The ruling allows the USPTO to continue enforcing the prohibition on registering trademarks containing a living person's name without consent.",
+        "practical_effect": "The USPTO may continue to reject trademark applications that include a living person's name without that person's written consent, as the names clause does not violate the First Amendment.",
+        "holding": "The Lanham Act's names clause (15 U.S.C. § 1052(c)), which prohibits registration of a trademark using a living person's name without written consent, does not violate the First Amendment. The provision is viewpoint-neutral and supported by a history and tradition of content-based trademark restrictions.",
+        "issue_area": "first_amendment",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          2,
+          3
+        ],
+        "source_urls": [
+          "https://www.scotusblog.com/cases/case-files/vidal-v-elster/",
+          "https://constitution.congress.gov/browse/essay/intro.9-2-7/ALDE_00000083/",
+          "https://www.mayerbrown.com/en/insights/publications/2024/06/decision-alert-vidal-v-elster-no-22704",
+          "https://www.oyez.org/cases/2023/22-704",
+          "https://www.hklaw.com/en/insights/publications/2024/06/us-supreme-court-upholds-constitutionality-of-federal-trademark",
+          "https://www.fennemorelaw.com/trademark-blog-post-vidal-v-elster-no-22-704-u-s-june-13-2024/",
+          "https://harvardlawreview.org/?p=16795",
+          "https://www.law.cornell.edu/supremecourt/text/22-704",
+          "https://www.arelaw.com/are-trademark-alert-lanham-act-prohibition/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The government (Vidal, as Director of the USPTO) benefits, as the Court upheld the Lanham Act's names clause against Elster's First Amendment challenge.",
+          "scout": "The government (Vidal, as USPTO Director) and the Lanham Act's names clause. The ruling allows the USPTO to continue enforcing the prohibition on registering trademarks containing a living person's name without consent."
+        },
+        {
+          "field": "holding",
+          "db": "The Lanham Act's names clause, prohibiting registration of a trademark comprising a living individual's name without consent, does not violate the First Amendment, as supported by history and tradition of such content-based trademark restrictions.",
+          "scout": "The Lanham Act's names clause (15 U.S.C. § 1052(c)), which prohibits registration of a trademark using a living person's name without written consent, does not violate the First Amendment. The provision is viewpoint-neutral and supported by a history and tradition of content-based trademark restrictions."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.012455,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 27,
+      "label": "Campos-Chaves",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed_and_remanded",
+        "formal_disposition_detail": "Affirmed as to No. 22-674 (Campos-Chaves); Reversed as to No. 22-884 (Mendez-Colin); Vacated and Remanded as to No. 22-884 (Singh)",
+        "opinion_type": "majority",
+        "vote_split": "5-4",
+        "majority_author": "Alito",
+        "dissent_authors": [
+          "Jackson",
+          "Sotomayor",
+          "Kagan",
+          "Gorsuch"
+        ],
+        "substantive_winner": "The Government (Garland). Noncitizens who received defective Notices to Appear cannot rescind in absentia removal orders based on defective notice if they received proper notice of the hearing time and place through subsequent communications.",
+        "practical_effect": "Noncitizens subject to in absentia deportation orders lose the ability to challenge those orders on grounds of defective initial notice if they received hearing details in any form, incentivizing the government to issue incomplete Notices to Appear.",
+        "holding": "Aliens who received proper notice of the time and place of their removal hearings cannot seek rescission of in absentia removal orders on the basis of defective notice under 8 U.S.C. § 1229a(b)(5)(C)(ii), even if the initial Notice to Appear was defective.",
+        "issue_area": "immigration",
+        "case_citation": "602 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-674_bq7d.pdf",
+          "https://www.oyez.org/cases/2023/22-674",
+          "https://www.scotusblog.com/cases/case-files/campos-chaves-v-garland/",
+          "https://blackprelaw.studentgroups.columbia.edu/news/campos-chaves-v-garland-relationship-between-us-government-and-non-citizen",
+          "https://www.law.cornell.edu/supct/cert/22-674",
+          "https://www.supremecourt.gov/DocketPDF/22/22-674/289961/20231117141706794_22-674rbUnitedStates.pdf",
+          "https://www.acslaw.org/scotus_update/campos-chaves-v-garland/",
+          "https://minnesotalawreview.org/2024/04/15/supreme-speculation-what-oral-arguments-hint-about-how-justices-are-leaning-in-campos-chaves-v-garland/",
+          "https://www.aila.org/library/aila-president-supreme-court-decision-in-campos-chaves-gives-government-free-pass-and-undermines-due-process"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "disposition",
+          "db": "affirmed",
+          "scout": "affirmed_and_remanded"
+        },
+        {
+          "field": "substantive_winner",
+          "db": "The government benefits from the ruling, as it allows in absentia removal orders to stand when aliens receive proper subsequent notice despite an initially defective Notice to Appear (NTA).",
+          "scout": "The Government (Garland). Noncitizens who received defective Notices to Appear cannot rescind in absentia removal orders based on defective notice if they received proper notice of the hearing time and place through subsequent communications."
+        },
+        {
+          "field": "holding",
+          "db": "An alien ordered removed in absentia after receiving proper notice of the hearing under 8 U.S.C. §1229(a), even if the initial NTA was defective under §1229a(b)(5)(C)(ii), cannot seek rescission of the removal order.",
+          "scout": "Aliens who received proper notice of the time and place of their removal hearings cannot seek rescission of in absentia removal orders on the basis of defective notice under 8 U.S.C. § 1229a(b)(5)(C)(ii), even if the initial Notice to Appear was defective."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.012805,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 40,
+      "label": "Tyndall",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.00054
+    },
+    {
+      "caseId": 49,
+      "label": "Hamm",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "vacated_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "The state of Alabama (petitioner Hamm) benefits, as the Supreme Court intervened to challenge and seek clarification on the lower court's ruling exempting Smith from execution due to intellectual disability.",
+        "practical_effect": "The Eleventh Circuit's affirmation of Smith's intellectual disability finding and death sentence vacatur is vacated and remanded for clarification on whether it relied on a per se rule using only the lowest IQ score or a holistic approach.",
+        "holding": "The Court grants certiorari, vacates the Eleventh Circuit's judgment, and remands for clarification on the basis for affirming the district court's determination that Smith is intellectually disabled, noting potential misreading as a per se rule based solely on the lowest IQ score adjusted for standard error.",
+        "issue_area": "constitutional_rights",
+        "case_citation": "604 U.S. 1 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.law.cornell.edu/supremecourt/text/23A688",
+          "https://www.scotusblog.com/cases/case-files/hamm-v-smith-3/",
+          "https://www.oyez.org/cases/2025/24-872",
+          "https://supreme.justia.com/cases/federal/us/604/23-167/",
+          "https://www.supremecourt.gov/opinions/24pdf/604us1r01_2dq3.pdf",
+          "https://hat.capdefnet.org/news/supreme-court-grants-review-intellectual-disability-issue",
+          "https://petrieflom.law.harvard.edu/2026/01/23/hamm-v-smith-the-limits-of-legal-certainty-when-science-evolves/",
+          "https://www.scotusblog.com/2025/12/hamm-v-smith-and-the-future-of-capital-punishment/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Alabama (the state) benefits, as the Supreme Court vacated the lower court judgment vacating Smith's death sentence and remanded for clarification, potentially allowing reconsideration of his intellectual disability claim and reinstatement of the death penalty.",
+          "scout": "The state of Alabama (petitioner Hamm) benefits, as the Supreme Court intervened to challenge and seek clarification on the lower court's ruling exempting Smith from execution due to intellectual disability."
+        },
+        {
+          "field": "holding",
+          "db": "The judgment of the U.S. Court of Appeals for the Eleventh Circuit is vacated and remanded to clarify whether it afforded conclusive weight to the lower end of the standard error range for Smith's lowest IQ score of 72 or properly considered all relevant evidence of intellectual functioning per Hall v. Florida.",
+          "scout": "The Court grants certiorari, vacates the Eleventh Circuit's judgment, and remands for clarification on the basis for affirming the district court's determination that Smith is intellectually disabled, noting potential misreading as a per se rule based solely on the lowest IQ score adjusted for standard error."
+        },
+        {
+          "field": "issue_area",
+          "db": "due_process",
+          "scout": "constitutional_rights"
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01064,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 50,
+      "label": "Murray",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Sotomayor",
+        "dissent_authors": [],
+        "substantive_winner": "Murray benefits from the ruling, as the Court reversed the Second Circuit's imposition of a retaliatory intent requirement and remanded for further proceedings consistent with the statutory standard.",
+        "practical_effect": "Whistleblowers under the Sarbanes-Oxley Act no longer need to prove employer animus or retaliatory intent to establish a retaliation claim, easing their burden of proof.",
+        "holding": "A whistleblower plaintiff under 18 U.S.C. §1514A must prove that protected activity was a contributing factor in an adverse employment action but need not prove that the employer acted with retaliatory intent or animus.",
+        "issue_area": "labor",
+        "case_citation": "601 U.S. 23 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-660_7648.pdf",
+          "https://www.oyez.org/cases/2023/22-660",
+          "https://www.scotusblog.com/cases/case-files/murray-v-ubs-securities-llc/",
+          "https://www.crowell.com/en/insights/client-alerts/key-takeaways-from-supreme-court-decision-in-sox-whistleblowing-case-murray-v-ubs-securities-llc",
+          "https://www.law.cornell.edu/supremecourt/text/22-660",
+          "https://en.wikipedia.org/wiki/Murray_v._UBS_Securities,_LLC",
+          "https://www.bakerlaw.com/insights/murray-v-ubs-securities-llc-whistleblower-retaliation-without-need-to-prove-retaliatory-intent/",
+          "https://katzbanks.com/whistleblower-law-blog/murray-v-ubs-perspective/",
+          "https://www.hklaw.com/en/insights/publications/2024/02/no-retaliatory-intent-required-despite-the-headlines-nothing-new",
+          "https://www.wiggin.com/publication/supreme-court-update-murray-v-ubs-securities-inc-no-22-660-department-of-agriculture-rural-development-rural-housing-service-v-kirtz-no-22-846/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Murray. The Supreme Court reversed the Second Circuit's decision and held that whistleblowers under Sarbanes-Oxley need not prove retaliatory intent, only that protected activity was a contributing factor in the adverse employment action.",
+          "scout": "Murray benefits from the ruling, as the Court reversed the Second Circuit's imposition of a retaliatory intent requirement and remanded for further proceedings consistent with the statutory standard."
+        },
+        {
+          "field": "holding",
+          "db": "A whistleblower seeking protection under the Sarbanes-Oxley Act's antiretaliation provision must prove that their protected activity was a contributing factor in the employer's unfavorable personnel action, but need not prove that the employer acted with retaliatory intent or animus.",
+          "scout": "A whistleblower plaintiff under 18 U.S.C. §1514A must prove that protected activity was a contributing factor in an adverse employment action but need not prove that the employer acted with retaliatory intent or animus."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.0115,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 51,
+      "label": "Kirtz",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Gorsuch",
+        "dissent_authors": [],
+        "substantive_winner": "Reginald Kirtz benefits, as the ruling allows his FCRA claims against the USDA to proceed by waiving the agency's sovereign immunity.",
+        "practical_effect": "Federal agencies can now be sued for money damages under the FCRA's willful and negligent violation provisions when they furnish false credit information.",
+        "holding": "The Fair Credit Reporting Act waives the federal government's sovereign immunity by expressly authorizing suits for damages against 'any person,' defined to include government agencies, who willfully or negligently fail to comply with its requirements.",
+        "issue_area": "federal_regulation",
+        "case_citation": "601 U.S. 193 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-846_2co3.pdf",
+          "https://www.oyez.org/cases/2023/22-846",
+          "https://www.scotusblog.com/cases/case-files/department-of-agriculture-rural-development-rural-housing-service-v-kirtz/",
+          "https://www.faegredrinker.com/en/insights/publications/2024/2/supreme-court-decides-department-of-agriculture-rural-development-rural-housing-service-v-kirtz",
+          "https://www.law.cornell.edu/supremecourt/text/22-846",
+          "https://constitution.congress.gov/browse/essay/intro.9-2-24/ALDE_00000092/",
+          "https://law.yale.edu/yls-today/news/housing-clinic-files-scotus-brief-behalf-consumers-usda-v-kirtz",
+          "https://www.consumerfinancialserviceslawmonitor.com/2024/05/the-kirtz-decision-fcra-and-government-liability-unpacked/",
+          "https://www.supremecourt.gov/DocketPDF/22/22-846/269892/20230627144638809_22-846%20motion%20to%20dispense%20with%20JA%20revised.pdf"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 51,
+        "label": "Kirtz",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Kirtz benefits, as the Court held that the FCRA waives sovereign immunity, allowing his suit against the USDA for damages to proceed.",
+          "scout": "Reginald Kirtz benefits, as the ruling allows his FCRA claims against the USDA to proceed by waiving the agency's sovereign immunity."
+        },
+        {
+          "field": "holding",
+          "db": "The Fair Credit Reporting Act unequivocally waives the federal government's sovereign immunity by authorizing suits for damages against 'any person,' expressly defined to include government agencies, who willfully or negligently fail to comply with its requirements.",
+          "scout": "The Fair Credit Reporting Act waives the federal government's sovereign immunity by expressly authorizing suits for damages against 'any person,' defined to include government agencies, who willfully or negligently fail to comply with its requirements."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011399999999999999,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 54,
+      "label": "Finney",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "dismissed",
+        "formal_disposition_detail": "Petition for writ of certiorari denied due to failure to preserve objection, reviewable only for plain error under state law",
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "Jean Finney benefits as the Supreme Court's denial of certiorari leaves intact the lower court judgment in her favor awarding damages for employment discrimination.",
+        "practical_effect": "The lower court's affirmation of the trial judgment against the Missouri Department of Corrections stands, with no Supreme Court review of the juror dismissal issue.",
+        "holding": "The petition for a writ of certiorari is denied. Justice Alito issued a statement respecting the denial, noting serious constitutional concerns about dismissing jurors based on religious beliefs but concurring due to procedural preservation issues under state law.",
+        "issue_area": "constitutional_rights",
+        "case_citation": "601 U.S. ____ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/23-203_1co6.pdf",
+          "https://www.scotusblog.com/cases/case-files/missouri-department-of-corrections-v-finney/",
+          "https://www.law.cornell.edu/supremecourt/text/23-203",
+          "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F23-203.html",
+          "https://persecution.org/2024/02/29/missouri-jurors-dismissed-based-on-religious-beliefs/",
+          "https://religiousfreedominstitute.org/missouri-department-of-corrections-v-finney/",
+          "https://www.deseret.com/2024/02/27/supreme-court-rejects-religious-jurors-case/",
+          "https://www.scotusblog.com/wp-content/uploads/2024/01/20230831160121854_Appendix-Final-copy.pdf",
+          "https://courthousenews.com/alito-raises-fears-about-religious-expression-in-high-court-rejection-of-discrimination-case/",
+          "https://www.scotusblog.com/case-files/case-files/missouri-department-of-corrections-v-finney/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Jean Finney benefits, as the denial of certiorari leaves intact the lower court judgment in her favor awarding damages.",
+          "scout": "Jean Finney benefits as the Supreme Court's denial of certiorari leaves intact the lower court judgment in her favor awarding damages for employment discrimination."
+        },
+        {
+          "field": "holding",
+          "db": "The Court denied the petition for certiorari; Justice Alito issued a statement respecting the denial, agreeing the case raises serious Free Exercise and Equal Protection issues but declining review due to a state-law preservation issue.",
+          "scout": "The petition for a writ of certiorari is denied. Justice Alito issued a statement respecting the denial, noting serious constitutional concerns about dismissing jurors based on religious beliefs but concurring due to procedural preservation issues under state law."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01137,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 55,
+      "label": "Coalition for TJ v. Fairfax County School Board",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005449999999999999
+    },
+    {
+      "caseId": 56,
+      "label": "74 Pinehurst LLC v. New York",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005499999999999999
+    },
+    {
+      "caseId": 57,
+      "label": "In re Bowe",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.000525
+    },
+    {
+      "caseId": 59,
+      "label": "McElrath",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed",
+        "formal_disposition_detail": "Reversed the Georgia Supreme Court's decision allowing retrial; the Court held that the Double Jeopardy Clause prohibited retrial on the malice murder charge despite the state's repugnancy doctrine.",
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Jackson",
+        "dissent_authors": [],
+        "substantive_winner": "McElrath. The ruling prevents Georgia from retrying him for malice murder, as the jury's prior acquittal by reason of insanity constitutes a valid acquittal under the Double Jeopardy Clause regardless of the logical inconsistency with other verdicts.",
+        "practical_effect": "McElrath cannot be retried for malice murder; the jury's not guilty by reason of insanity verdict is final and bars prosecution on that charge.",
+        "holding": "The jury's verdict that McElrath was not guilty of malice murder by reason of insanity constituted an acquittal for Double Jeopardy purposes, and the Fifth Amendment's Double Jeopardy Clause prohibits retrial on that charge even though the verdict was logically inconsistent with guilty verdicts on related charges arising from the same conduct.",
+        "issue_area": "criminal_procedure",
+        "case_citation": "601 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2,
+          3
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-721_kjfl.pdf",
+          "https://www.law.cornell.edu/supremecourt/text/22-721",
+          "https://www.oyez.org/cases/2023/22-721",
+          "https://www.naag.org/attorney-general-journal/supreme-court-report-volume-31-issue-7/",
+          "https://harvardlawreview.org/?p=16797",
+          "https://nccriminallaw.sog.unc.edu/2024/03/13/case-summary-mcelrath-v-georgia-scotus/",
+          "https://constitution.congress.gov/browse/essay/intro.9-2-10/ALDE_00013896/",
+          "https://www.supremecourt.gov/DocketPDF/22/22-721/262873/20230405141644813_22-721%20Resp.%20Br..pdf",
+          "https://capcentral.org/case_summaries/mcelrath-v-georgia-2024-___u-s-___-144-s-ct-651/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Damian McElrath benefits, as the ruling bars Georgia from retrying him for malice murder due to the Double Jeopardy Clause.",
+          "scout": "McElrath. The ruling prevents Georgia from retrying him for malice murder, as the jury's prior acquittal by reason of insanity constitutes a valid acquittal under the Double Jeopardy Clause regardless of the logical inconsistency with other verdicts."
+        },
+        {
+          "field": "holding",
+          "db": "The jury's verdict of not guilty by reason of insanity on the malice-murder charge constituted an acquittal for Double Jeopardy Clause purposes, barring retrial on that charge even if repugnant to other verdicts under state law.",
+          "scout": "The jury's verdict that McElrath was not guilty of malice murder by reason of insanity constituted an acquittal for Double Jeopardy purposes, and the Fifth Amendment's Double Jeopardy Clause prohibits retrial on that charge even though the verdict was logically inconsistent with guilty verdicts on related charges arising from the same conduct."
+        },
+        {
+          "field": "issue_area",
+          "db": "constitutional_rights",
+          "scout": "criminal_procedure"
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.013204999999999998,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 60,
+      "label": "Great Lakes Ins. SE v. Raiders Retreat Realty Co.",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Kavanaugh",
+        "dissent_authors": [],
+        "substantive_winner": "Great Lakes Insurance SE benefits from the ruling, as the Court enforced the choice-of-law provision selecting New York law, rejecting Raiders Retreat's Pennsylvania-law claims.",
+        "practical_effect": "Choice-of-law provisions in maritime contracts are now presumptively enforceable under federal maritime law, limiting state public policy overrides.",
+        "holding": "Choice-of-law provisions in maritime contracts are presumptively enforceable under federal maritime law, with narrow exceptions not applicable here; the Third Circuit erred in remanding for consideration of Pennsylvania's public policy.",
+        "issue_area": "judicial_power",
+        "case_citation": "601 U.S. 65 (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/23pdf/22-500_7k47.pdf",
+          "https://www.oyez.org/cases/2023/22-500",
+          "https://www.scotusblog.com/cases/case-files/great-lakes-insurance-se-v-raiders-retreat-realty-co-llc/",
+          "https://en.wikipedia.org/wiki/Great_Lakes_Insurance_SE_v._Raiders_Retreat_Realty_Co.",
+          "https://www.law.cornell.edu/supremecourt/text/22-500",
+          "https://www.naag.org/attorney-general-journal/supreme-court-report-great-lakes-insurance-se-v-raiders-retreat-realty-co-22-500/",
+          "https://www.supremecourt.gov/docket/docketfiles/html/public/22-500.html",
+          "https://www.policyholderpulse.com/files/2023/04/Great-Lakes-Ins.-SE-v.-Raiders-Retreat-Realty-Co.pdf",
+          "https://www.wiggin.com/publication/supreme-court-update-great-lakes-insurance-se-v-raiders-retreat-realty-co-llc-no-22-500-and-mcelrath-v-georgia-no-22-721/",
+          "https://conflictoflaws.net/2024/u-s-supreme-court-decides-great-lakes/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 60,
+        "label": "Great Lakes",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Great Lakes Insurance SE. The Court's ruling upholds the enforceability of the choice-of-law provision in the maritime insurance contract, allowing Great Lakes to apply New York law and avoid Pennsylvania law claims.",
+          "scout": "Great Lakes Insurance SE benefits from the ruling, as the Court enforced the choice-of-law provision selecting New York law, rejecting Raiders Retreat's Pennsylvania-law claims."
+        },
+        {
+          "field": "holding",
+          "db": "Under federal admiralty law, choice-of-law provisions in maritime contracts are presumptively enforceable and cannot be rendered unenforceable merely because enforcement is contrary to the strong public policy of the state whose law is displaced, absent narrow exceptions not present here.",
+          "scout": "Choice-of-law provisions in maritime contracts are presumptively enforceable under federal maritime law, with narrow exceptions not applicable here; the Third Circuit erred in remanding for consideration of Pennsylvania's public policy."
+        },
+        {
+          "field": "issue_area",
+          "db": "other",
+          "scout": "judicial_power"
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011265,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 63,
+      "label": "Trump",
+      "status": "uncertain",
+      "scoutResult": {
+        "status": "uncertain",
+        "formal_disposition": "reversed",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "Donald Trump benefits, as the Court reversed the Colorado Supreme Court's decision excluding him from the primary ballot.",
+        "practical_effect": "States cannot enforce Section 3 of the Fourteenth Amendment against federal candidates like the President without congressional legislation.",
+        "holding": "The Constitution assigns Congress, not the states, the responsibility for enforcing Section 3 of the Fourteenth Amendment against federal officeholders and candidates; thus, Colorado exceeded its authority by disqualifying Trump from the ballot.",
+        "issue_area": "voting_rights",
+        "case_citation": "601 U.S. ___ (2024)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1
+        ],
+        "source_urls": [
+          "https://www.democracydocket.com/wp-content/uploads/2023/12/2024-03-04-Opinion.pdf",
+          "https://supremetoday.ai/doc/judgement/USSCOTUS00000000103"
+        ],
+        "needs_review": true,
+        "review_reason": "Only Tier 3 (Wikipedia/other) sources — no Tier 1 or Tier 2 corroboration",
+        "_actual_source_tiers": [
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 63,
+        "label": "Trump",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": null,
+          "scout": "Donald Trump benefits, as the Court reversed the Colorado Supreme Court's decision excluding him from the primary ballot."
+        },
+        {
+          "field": "holding",
+          "db": "The Court held that states do not have the power to enforce Section 3 of the Fourteenth Amendment against federal officeholders, including the President.",
+          "scout": "The Constitution assigns Congress, not the states, the responsibility for enforcing Section 3 of the Fourteenth Amendment against federal officeholders and candidates; thus, Colorado exceeded its authority by disqualifying Trump from the ballot."
+        }
+      ],
+      "issues": [
+        {
+          "code": "ONLY_TIER_3_SOURCES",
+          "field": "source_urls",
+          "message": "Only Tier 3 (Wikipedia/other) sources — no Tier 1 or Tier 2 corroboration"
+        }
+      ],
+      "retryInfo": null,
+      "cost": 0.009915,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 64,
+      "label": "Wullschleger",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Kagan",
+        "dissent_authors": [],
+        "substantive_winner": "Anastasia Wullschleger benefits as the case is remanded to state court, allowing her state-law claims to proceed there.",
+        "practical_effect": "Federal courts lose jurisdiction over state-law claims when plaintiffs amend complaints post-removal to drop all federal claims, requiring remand to state court.",
+        "holding": "When a plaintiff amends her complaint to delete the federal-law claims that enabled removal to federal court, leaving only state-law claims, the federal court loses supplemental jurisdiction over the state claims and must remand the case to state court.",
+        "issue_area": "judicial_power",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/24pdf/23-677_6jgm.pdf",
+          "https://www.scotusblog.com/cases/case-files/royal-canin-u-s-a-inc-v-wullschleger/",
+          "https://www.oyez.org/cases/2024/23-677",
+          "https://www.faegredrinker.com/en/insights/publications/2025/1/supreme-court-decides-royal-canin-usa-inc-v-wullschleger",
+          "https://www.law.cornell.edu/supremecourt/text/23-677",
+          "https://www.winston.com/en/blogs-and-podcasts/product-liability-and-mass-torts-digest/the-master-of-the-complaint-the-supreme-court-gives-plaintiffs-a-new-avenue-to-avoid-federal-court",
+          "https://www.supremecourt.gov/search.aspx?filename=%2Fdocket%2Fdocketfiles%2Fhtml%2Fpublic%2F23-677.html",
+          "https://www.wiggin.com/publication/supreme-court-update-royal-canin-u-s-a-inc-v-wullschleger-no-23-677/",
+          "https://www.law.cornell.edu/supct/cert/23-677"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 64,
+        "label": "Wullschleger",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Plaintiff Anastasia Wullschleger. The ruling affirms her right to amend her complaint post-removal to eliminate federal claims, thereby divesting the federal court of jurisdiction and forcing remand to state court.",
+          "scout": "Anastasia Wullschleger benefits as the case is remanded to state court, allowing her state-law claims to proceed there."
+        },
+        {
+          "field": "holding",
+          "db": "When a plaintiff amends her complaint to delete the federal-law claims that enabled removal to federal court, leaving only state-law claims behind, the federal court loses supplemental jurisdiction over the state claims, and the case must be remanded to state court. Federal jurisdiction depends on the allegations in the operative pleading, and the plaintiff is the master of the complaint.",
+          "scout": "When a plaintiff amends her complaint to delete the federal-law claims that enabled removal to federal court, leaving only state-law claims, the federal court loses supplemental jurisdiction over the state claims and must remand the case to state court."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011245,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 65,
+      "label": "Carrera",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "reversed_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "majority",
+        "vote_split": "9-0",
+        "majority_author": "Kavanaugh",
+        "dissent_authors": [],
+        "substantive_winner": "E.M.D. Sales, Inc. benefits from the ruling, as the Court rejected the heightened clear-and-convincing evidence standard applied by lower courts and remanded for reconsideration under the preponderance standard.",
+        "practical_effect": "Employers nationwide now face a lower evidentiary burden to prove FLSA exemptions, aligning with the majority circuit rule and easing overtime exemption defenses.",
+        "holding": "The preponderance-of-the-evidence standard applies when an employer seeks to demonstrate that an employee is exempt from the minimum-wage and overtime-pay provisions of the FLSA.",
+        "issue_area": "labor",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/24pdf/23-217_9o6b.pdf",
+          "https://www.oyez.org/cases/2024/23-217",
+          "https://www.scotusblog.com/cases/case-files/e-m-d-sales-inc-v-carrera/",
+          "https://www.law.cornell.edu/supremecourt/text/23-217",
+          "https://www.jacksonlewis.com/insights/us-supreme-court-makes-clear-there-no-heightened-standard-employers-establish-flsa-exemption-applies",
+          "https://fedsoc.org/commentary/fedsoc-blog/supreme-court-sticks-to-the-statute-in-latest-wage-and-hour-case",
+          "https://blogs.duanemorris.com/classactiondefense/2025/01/20/u-s-supreme-court-unanimously-holds-that-flsa-exemptions-are-subject-to-the-same-standard-of-proof-as-almost-all-other-civil-cases/",
+          "https://www.wiggin.com/publication/supreme-court-update-e-m-d-sales-inc-v-carrera-no-23-217/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "E.M.D. Sales, Inc. The ruling establishes that employers need only satisfy the preponderance-of-the-evidence standard (rather than the more demanding clear-and-convincing standard) to prove FLSA exemptions, making it easier for employers to defend against overtime claims.",
+          "scout": "E.M.D. Sales, Inc. benefits from the ruling, as the Court rejected the heightened clear-and-convincing evidence standard applied by lower courts and remanded for reconsideration under the preponderance standard."
+        },
+        {
+          "field": "holding",
+          "db": "The preponderance-of-the-evidence standard applies when an employer seeks to demonstrate that an employee is exempt from the minimum-wage and overtime-pay provisions of the Fair Labor Standards Act. The Court rejected the Fourth Circuit's heightened clear-and-convincing-evidence standard as inconsistent with the established default standard of proof in American civil litigation.",
+          "scout": "The preponderance-of-the-evidence standard applies when an employer seeks to demonstrate that an employee is exempt from the minimum-wage and overtime-pay provisions of the FLSA."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.01127,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 68,
+      "label": "TikTok Inc. v. Garland",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "affirmed",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "9-0",
+        "majority_author": null,
+        "dissent_authors": [],
+        "substantive_winner": "The U.S. Government benefits from the ruling, as the Court upheld the Act requiring TikTok's divestiture from Chinese control or effective ban.",
+        "practical_effect": "TikTok faces a ban in the U.S. unless divested from ByteDance within the Act's timeframe, addressing national security concerns over data collection by China.",
+        "holding": "The challenged provisions of the Protecting Americans from Foreign Adversary Controlled Applications Act are facially content-neutral, justified by national security interests in preventing China from collecting sensitive data from U.S. users, and do not violate petitioners' First Amendment rights.",
+        "issue_area": "first_amendment",
+        "case_citation": null,
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/24pdf/24-656_ca7d.pdf",
+          "https://www.scotusblog.com/cases/case-files/tiktok-inc-v-garland/",
+          "https://www.law.cornell.edu/supremecourt/text/24-656",
+          "https://www.supremecourt.gov/docket/docketfiles/html/public/24-656.html",
+          "https://www.oyez.org/cases/2024/24-656",
+          "https://constitution.congress.gov/browse/essay/intro.9-3-2/ALDE_00000111/",
+          "https://www.wiggin.com/publication/supreme-court-update-tiktok-inc-v-garland-no-24-656/",
+          "https://harvardlawreview.org/print/vol-139/tiktok-inc-v-garland/",
+          "https://www.aclu.org/cases/tiktok-inc-et-al-v-garland-amicus?document=Amicus-Brief-of-the-ACLU-et-al-%28Merits%29-",
+          "https://www.scotusblog.com/case-files/case-files/tiktok-inc-v-garland/"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": {
+        "caseId": 68,
+        "label": "TikTok",
+        "diffs": [],
+        "perfect": true
+      },
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "The Government and the Protecting Americans from Foreign Adversary Controlled Applications Act (PAFACA). The ruling upholds the law's constitutionality and enables enforcement of TikTok divestiture requirements or operational restrictions.",
+          "scout": "The U.S. Government benefits from the ruling, as the Court upheld the Act requiring TikTok's divestiture from Chinese control or effective ban."
+        },
+        {
+          "field": "holding",
+          "db": "The challenged provisions of the Protecting Americans from Foreign Adversary Controlled Applications Act do not violate petitioners' First Amendment rights. The Court assumed without deciding that the Act is subject to First Amendment scrutiny, but found that the content-neutral provisions are justified by the government's compelling national security interest in preventing China's collection of sensitive data from U.S. users.",
+          "scout": "The challenged provisions of the Protecting Americans from Foreign Adversary Controlled Applications Act are facially content-neutral, justified by national security interests in preventing China from collecting sensitive data from U.S. users, and do not violate petitioners' First Amendment rights."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.010960000000000001,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 71,
+      "label": "Andrew",
+      "status": "ok",
+      "scoutResult": {
+        "status": "ok",
+        "formal_disposition": "vacated_and_remanded",
+        "formal_disposition_detail": null,
+        "opinion_type": "per_curiam",
+        "vote_split": "7-2",
+        "majority_author": null,
+        "dissent_authors": [
+          "Thomas",
+          "Gorsuch"
+        ],
+        "substantive_winner": "Brenda Andrew. The Supreme Court vacated the Tenth Circuit's rejection of her habeas petition and remanded for reconsideration of whether the admission of unduly prejudicial evidence violated her due process rights.",
+        "practical_effect": "The Tenth Circuit must now re-evaluate Andrew's due process claim on the merits, considering whether the prosecution's introduction of irrelevant evidence about her personal life rendered her trial fundamentally unfair.",
+        "holding": "By the time of Andrew's trial, clearly established federal law—anchored in Payne v. Tennessee—provided that the Due Process Clause forbids the admission of evidence so unduly prejudicial as to render a criminal trial fundamentally unfair. The Tenth Circuit erred in rejecting Andrew's habeas petition under AEDPA by failing to recognize this rule as clearly established.",
+        "issue_area": "due_process",
+        "case_citation": "604 U.S. 86 (2025)",
+        "fact_confidence": {
+          "formal_disposition": "high",
+          "vote_split": "high",
+          "majority_author": "high",
+          "dissent_authors": "high",
+          "substantive_winner": "high"
+        },
+        "source_tiers_used": [
+          1,
+          2
+        ],
+        "source_urls": [
+          "https://www.supremecourt.gov/opinions/24pdf/23-6573_m647.pdf",
+          "https://www.scotusblog.com/cases/case-files/andrew-v-white/",
+          "https://harvardlawreview.org/print/vol-139/andrew-v-white/",
+          "https://constitution.congress.gov/browse/essay/intro.9-3-15/ALDE_00000122/",
+          "https://www.law.cornell.edu/supremecourt/text/23-6573",
+          "https://capcentral.org/case_summaries/andrew-v-white-u-s-supreme-court-23-6573/",
+          "https://en.wikipedia.org/wiki/Andrew_v._White",
+          "https://www.tdcaa.com/journal/in-andrew-v-white-the-supreme-court-weighs-in-on-undue-prejudice-and-due-process/",
+          "https://eji.org/wp-content/uploads/2005/11/1-21-25-scotus-andrew-per-curiam.pdf",
+          "https://www.casemine.com/commentary/us/affirmation-of-due-process-protections-against-unduly-prejudicial-evidence-in-criminal-trials/view"
+        ],
+        "needs_review": false,
+        "review_reason": null,
+        "_actual_source_tiers": [
+          1,
+          2,
+          3
+        ]
+      },
+      "goldComparison": null,
+      "dbDiffs": [
+        {
+          "field": "substantive_winner",
+          "db": "Brenda Andrew. The Supreme Court rejected the Tenth Circuit's narrow reading of precedent and held that clearly established federal law prohibits unduly prejudicial evidence that renders a trial fundamentally unfair, requiring reconsideration of her due process claim on remand.",
+          "scout": "Brenda Andrew. The Supreme Court vacated the Tenth Circuit's rejection of her habeas petition and remanded for reconsideration of whether the admission of unduly prejudicial evidence violated her due process rights."
+        },
+        {
+          "field": "holding",
+          "db": "By the time of Andrew's trial, clearly established federal law—anchored in Payne v. Tennessee—provided that the Due Process Clause forbids the admission of evidence so unduly prejudicial as to render a criminal trial fundamentally unfair. The Tenth Circuit erred in failing to recognize this rule as clearly established precedent.",
+          "scout": "By the time of Andrew's trial, clearly established federal law—anchored in Payne v. Tennessee—provided that the Due Process Clause forbids the admission of evidence so unduly prejudicial as to render a criminal trial fundamentally unfair. The Tenth Circuit erred in rejecting Andrew's habeas petition under AEDPA by failing to recognize this rule as clearly established."
+        }
+      ],
+      "issues": [],
+      "retryInfo": null,
+      "cost": 0.011904999999999999,
+      "written": false,
+      "rollback": null
+    },
+    {
+      "caseId": 73,
+      "label": "McHenry",
+      "status": "non_merits",
+      "triageSource": "perplexity",
+      "triage_needs_spot_check": true,
+      "cost": 0.0005549999999999999
+    }
+  ]
+}

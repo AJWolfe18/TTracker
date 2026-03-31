@@ -12,7 +12,14 @@ Kickstart development on a task with built-in review and workflow setup.
 
 When invoked, follow these steps in order:
 
-### 1. Review the Task
+### 1. Read Memories
+Before anything else, read from both memory MCP servers:
+- `memory-global` — user profile, preferences, cross-project context
+- `memory-project` — where we left off, active tickets, recent decisions
+
+Use this context to understand the current state before reviewing the task.
+
+### 2. Review the Task
 Read and analyze the provided prompt:
 
 ```
@@ -23,18 +30,18 @@ $ARGUMENTS
 - Check for clarity and completeness
 - Flag any ambiguities or missing info
 
-### 2. Expert Review
+### 3. Expert Review
 As a senior dev and QA reviewer:
 - Verify alignment with project patterns (check `/docs/code-patterns.md`)
 - Check for potential issues or anti-patterns
 - Ensure scope is clear and achievable in one session
 
-### 3. If Issues Found
+### 4. If Issues Found
 - List concerns clearly
 - Ask clarifying questions via AskUserQuestion
 - Wait for resolution before proceeding
 
-### 4. If No Issues - Setup Workflow
+### 5. If No Issues - Setup Workflow
 Create a TodoList with full workflow:
 - [ ] Implementation tasks (from the prompt)
 - [ ] Run code review: `Task(feature-dev:code-reviewer)`
@@ -42,12 +49,12 @@ Create a TodoList with full workflow:
 - [ ] Commit changes
 - [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via `/ado`. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.
 - [ ] Update ADO (move to appropriate state only after AC verification passes)
-- [ ] Create handoff doc
+- [ ] Run `/end-work` to save session state, commit, and push
 
-### 5. Update ADO
+### 6. Update ADO
 Use `/ado` command to move the relevant ticket to Active state.
 
-### 6. Begin Development
+### 7. Begin Development
 Start executing the todolist items sequentially.
 
 ---
