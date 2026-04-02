@@ -88,6 +88,7 @@ node_modules/.package-lock.json
 package-lock.json
 docs/guides/deployment/TTracker Search and filters.png
 .claude/settings.local.json
+.mcp.json
 Executive Orders (EO) — Simple Cate.md
 
 # RSS runtime logs and Supabase CLI temp files
@@ -105,3 +106,6 @@ TEST_BRANCH_MARKER.md
 
 # Test environment marker files (should only exist on test branch)
 TEST_FILES_DO_NOT_DEPLOY.md
+
+# Superpowers brainstorming sessions (local visual companion files)
+.superpowers/
