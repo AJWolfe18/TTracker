@@ -1,0 +1,150 @@
+{
+  "_comment": "Gold set validation results for SCOTUS Claude Agent prompt v1",
+  "_date": "2026-04-03",
+  "_trigger_id": "trig_01S2xQVXfaB8rGJpbaPCWPvV",
+  "_environment_id": "env_01YRYGLu8C8ijpVWdPAwgVSQ",
+  "_model": "claude-sonnet-4-20250514",
+  "_prompt_version": "v1",
+  "summary": {
+    "pass": true,
+    "disposition_accuracy": "5/5 (100%)",
+    "vote_split_accuracy": "5/5 (100%)",
+    "hard_field_accuracy": "5/5 (100%)",
+    "factual_errors": 0,
+    "runs_required": 2,
+    "total_duration_seconds": 518,
+    "notes": "Run #3 enriched Bufkin (120). Run #4 enriched TikTok (68), Horn (137), Davis (174), Barrett (286). TikTok required re-run due to JSON escaping error in run #3."
+  },
+  "run_logs": [
+    {
+      "log_id": 1,
+      "ran_at": "2026-04-04T02:00:16Z",
+      "completed_at": "2026-04-04T02:03:44Z",
+      "duration_seconds": 190,
+      "cases_found": 3,
+      "cases_enriched": 2,
+      "cases_skipped": 1,
+      "cases_failed": 0,
+      "notes": "Also enriched non-gold case 27 (Campos-Chaves). TikTok skipped after JSON error corrupted enrichment_status."
+    },
+    {
+      "log_id": 2,
+      "ran_at": "2026-04-04T02:10:10Z",
+      "completed_at": "2026-04-04T02:15:56Z",
+      "duration_seconds": 328,
+      "cases_found": 6,
+      "cases_enriched": 6,
+      "cases_skipped": 0,
+      "cases_failed": 0,
+      "notes": "Processed all 4 remaining gold cases + 2 non-gold cases (212 Stanley, 214 FDA). Clean run, no errors."
+    }
+  ],
+  "cases": [
+    {
+      "id": 286,
+      "label": "Barrett",
+      "enriched_at": "2026-04-04T02:15:38Z",
+      "run_log_id": 2,
+      "scoring": {
+        "disposition": {"expected": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"expected": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"expected": "Jackson", "actual": "Jackson", "score": "PASS"},
+        "dissent_authors": {"expected": [], "actual": [], "score": "PASS"},
+        "case_type": {"expected": "merits", "actual": "merits", "score": "PASS"},
+        "who_wins": {"expected_contains": ["Barrett"], "actual": "Dwayne Barrett, who faced dual convictions for a single act involving a firearm offense resulting in death", "score": "PASS"},
+        "ruling_impact_level": {"expected": 2, "actual": 2, "score": "PASS"},
+        "summary_factual_accuracy": {"score": "PASS", "note": "No factual errors. Matches gold example tone and content."}
+      },
+      "quality_notes": "Fixed old wrong disposition ('reversed' -> 'reversed_and_remanded'). Fixed author format ('Ketanji Jackson' -> 'Jackson'). ruling_label and editorial fields closely match gold example."
+    },
+    {
+      "id": 120,
+      "label": "Bufkin",
+      "enriched_at": "2026-04-04T02:03:31Z",
+      "run_log_id": 1,
+      "scoring": {
+        "disposition": {"expected": "affirmed", "actual": "affirmed", "score": "PASS"},
+        "vote_split": {"expected": "7-2", "actual": "7-2", "score": "PASS"},
+        "majority_author": {"expected": "Thomas", "actual": "Thomas", "score": "PASS"},
+        "dissent_authors": {"expected": ["Jackson", "Gorsuch"], "actual": ["Jackson", "Gorsuch"], "score": "PASS"},
+        "case_type": {"expected": "merits", "actual": "merits", "score": "PASS"},
+        "who_wins": {"expected_contains": ["VA", "Veterans Affairs", "government"], "actual": "The Department of Veterans Affairs, which retains deferential review of its benefit-of-the-doubt determinations in disability claims", "score": "PASS"},
+        "ruling_impact_level": {"expected": 3, "actual": 3, "score": "PASS"},
+        "summary_factual_accuracy": {"score": "PASS", "note": "No factual errors. Dissent attribution correct."}
+      },
+      "quality_notes": "Fixed author format ('Clarence Thomas' -> 'Thomas'). Editorial quality matches gold example."
+    },
+    {
+      "id": 137,
+      "label": "Horn",
+      "enriched_at": "2026-04-04T02:12:28Z",
+      "run_log_id": 2,
+      "scoring": {
+        "disposition": {"expected": "affirmed_and_remanded", "actual": "affirmed_and_remanded", "score": "PASS"},
+        "vote_split": {"expected": "5-4", "actual": "5-4", "score": "PASS"},
+        "majority_author": {"expected": "Barrett", "actual": "Barrett", "score": "PASS"},
+        "dissent_authors": {"expected": ["Thomas", "Kavanaugh", "Roberts", "Alito"], "actual": ["Thomas", "Kavanaugh", "Roberts", "Alito"], "score": "PASS"},
+        "case_type": {"expected": "merits", "actual": "merits", "score": "PASS"},
+        "who_wins": {"expected_contains": ["Horn"], "actual": "Douglas Horn and future RICO plaintiffs who suffered business losses stemming from personal injuries", "score": "PASS"},
+        "ruling_impact_level": {"expected": 3, "actual": 3, "score": "PASS"},
+        "summary_factual_accuracy": {"score": "PASS", "note": "No factual errors. Rare compound disposition correctly identified."}
+      },
+      "quality_notes": "Fixed old wrong disposition ('affirmed' -> 'affirmed_and_remanded'). Fixed author format ('Amy Barrett' -> 'Barrett'). Rare compound disposition handled correctly."
+    },
+    {
+      "id": 174,
+      "label": "Davis",
+      "enriched_at": "2026-04-04T02:13:09Z",
+      "run_log_id": 2,
+      "scoring": {
+        "disposition": {"expected": "dismissed", "actual": "dismissed", "score": "PASS"},
+        "vote_split": {"expected": "8-1", "actual": "8-1", "score": "PASS"},
+        "majority_author": {"expected": null, "actual": null, "score": "PASS"},
+        "dissent_authors": {"expected": ["Kavanaugh"], "actual": ["Kavanaugh"], "score": "PASS"},
+        "case_type": {"expected": "procedural", "actual": "procedural", "score": "PASS"},
+        "who_wins": {"expected_contains": ["No clear"], "actual": "No clear winner \u2014 case dismissed without a merits ruling", "score": "PASS"},
+        "ruling_impact_level": {"expected": 1, "actual": 1, "score": "PASS"},
+        "summary_factual_accuracy": {"score": "PASS", "note": "Correctly flagged as DIG. confidence=medium, needs_manual_review=true."}
+      },
+      "quality_notes": "Fixed old missing vote_split (null -> '8-1'). Correctly flagged as procedural with medium confidence and manual review needed. Old DB had wrong ruling_impact_level (2 -> 1)."
+    },
+    {
+      "id": 68,
+      "label": "TikTok",
+      "enriched_at": "2026-04-04T02:11:35Z",
+      "run_log_id": 2,
+      "scoring": {
+        "disposition": {"expected": "affirmed", "actual": "affirmed", "score": "PASS"},
+        "vote_split": {"expected": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"expected": null, "actual": null, "score": "PASS"},
+        "dissent_authors": {"expected": [], "actual": [], "score": "PASS"},
+        "case_type": {"expected": "merits", "actual": "merits", "score": "PASS"},
+        "who_wins": {"expected_contains": ["government", "federal"], "actual": "The federal government, which can enforce the Protecting Americans from Foreign Adversary Controlled Applications Act requiring TikTok's divestiture or shutdown", "score": "PASS"},
+        "ruling_impact_level": {"expected": 5, "actual": 5, "score": "PASS"},
+        "summary_factual_accuracy": {"score": "PASS", "note": "No factual errors. Per curiam correctly handled. Impact level 5 appropriately calibrated."}
+      },
+      "quality_notes": "Per curiam correctly identified (majority_author null). Required re-run due to JSON escaping error in run #3. Run #4 produced clean enrichment."
+    }
+  ],
+  "issues_found": [
+    {
+      "severity": "medium",
+      "issue": "JSON escaping in curl commands",
+      "detail": "Run #3 had a JSON error for TikTok case — single quotes in 'petitioners'' broke the single-quoted JSON body in curl. Agent retried but only updated status fields, not full enrichment. Required re-reset and re-run.",
+      "recommendation": "Prompt should emphasize using heredoc or double-quote escaping for curl JSON bodies containing apostrophes. Consider adding a validation step that verifies all enrichment fields were updated."
+    },
+    {
+      "severity": "low",
+      "issue": "Non-gold cases processed alongside gold cases",
+      "detail": "Run #3 processed case 27 (Campos-Chaves, not a gold case). Run #4 processed cases 212 and 214 (not gold cases). The agent processes ALL pending cases, not just target cases.",
+      "recommendation": "Expected behavior for production. For targeted validation, consider temporarily marking non-target cases to skip them."
+    },
+    {
+      "severity": "low",
+      "issue": "Query returned fewer cases than expected in run #3",
+      "detail": "Run #3 found only 3 of 6 pending cases. Run #4 found all 6. Possibly related to response size with large text fields in the select clause.",
+      "recommendation": "Monitor for consistency. May need to investigate PostgREST response limits for queries with large text columns."
+    }
+  ],
+  "verdict": "PASS — 100% accuracy on all hard fields across all 5 gold set cases. Prompt v1 is validated for production use."
+}

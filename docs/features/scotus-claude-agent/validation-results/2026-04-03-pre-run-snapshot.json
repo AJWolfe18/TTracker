@@ -1,0 +1,76 @@
+{
+  "_comment": "Pre-validation snapshot of 5 gold set cases before agent run. For rollback if needed.",
+  "_created": "2026-04-03",
+  "cases": [
+    {
+      "id": 286,
+      "case_name": "Barrett v. United States Revisions: 1/14/26",
+      "disposition": "reversed",
+      "vote_split": "9-0",
+      "majority_author": "Ketanji Jackson",
+      "dissent_authors": [],
+      "case_type": "merits",
+      "enrichment_status": "enriched",
+      "enriched_at": "2026-03-11T03:22:43.547+00:00",
+      "prompt_version": "v8-ado429-severity-bounds",
+      "fact_extraction_confidence": "high",
+      "ruling_impact_level": 1
+    },
+    {
+      "id": 120,
+      "case_name": "Bufkin v. Collins",
+      "disposition": "affirmed",
+      "vote_split": "7-2",
+      "majority_author": "Clarence Thomas",
+      "dissent_authors": ["Jackson", "Gorsuch"],
+      "case_type": "merits",
+      "enrichment_status": "enriched",
+      "enriched_at": "2026-03-11T03:21:00.706+00:00",
+      "prompt_version": "v8-ado429-severity-bounds",
+      "fact_extraction_confidence": "high",
+      "ruling_impact_level": 3
+    },
+    {
+      "id": 137,
+      "case_name": "Medical Marijuana, Inc. v. Horn",
+      "disposition": "affirmed",
+      "vote_split": "5-4",
+      "majority_author": "Amy Barrett",
+      "dissent_authors": ["Thomas", "Kavanaugh", "Roberts", "Alito"],
+      "case_type": "merits",
+      "enrichment_status": "enriched",
+      "enriched_at": "2026-03-09T03:56:57.689+00:00",
+      "prompt_version": "v8-ado429-severity-bounds",
+      "fact_extraction_confidence": "high",
+      "ruling_impact_level": 3
+    },
+    {
+      "id": 174,
+      "case_name": "Laboratory Corp. of America Holdings v. Davis",
+      "disposition": "dismissed",
+      "vote_split": null,
+      "majority_author": null,
+      "dissent_authors": [],
+      "case_type": "procedural",
+      "enrichment_status": "enriched",
+      "enriched_at": "2026-03-09T00:43:55.792+00:00",
+      "prompt_version": "v8-ado429-severity-bounds",
+      "fact_extraction_confidence": "medium",
+      "ruling_impact_level": 2
+    },
+    {
+      "id": 68,
+      "case_name": "TikTok Inc. v. Garland",
+      "disposition": "affirmed",
+      "vote_split": "9-0",
+      "majority_author": null,
+      "dissent_authors": [],
+      "case_type": "merits",
+      "enrichment_status": "enriched",
+      "enriched_at": "2026-03-11T03:20:05.746+00:00",
+      "prompt_version": "scout-v1.1",
+      "fact_extraction_confidence": "high",
+      "ruling_impact_level": 5
+    }
+  ]
+}
