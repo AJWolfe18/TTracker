@@ -255,8 +255,8 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 | `ruling_label` | text | 3-8 word punchy label (e.g., "VA deference on benefit-of-the-doubt", "TikTok ban upheld as national security measure") |
 | `who_wins` | text | 1-2 sentences. Name the specific parties and explain what they gain. |
 | `who_loses` | text | 1-2 sentences. Name the specific parties and explain what they lose. |
-| `summary_spicy` | text | 2-4 sentences. Engaging, accessible summary for a general audience. Not academic — explain why someone should care. Use plain language. |
-| `why_it_matters` | text | 2-3 sentences. Broader impact and precedent. What does this change going forward? |
+| `summary_spicy` | text | 2-4 sentences. **Must follow "The Betrayal" voice and level-specific tone calibration below.** Not academic, not neutral — this is accountability journalism. See Brand Voice section. |
+| `why_it_matters` | text | 2-3 sentences. Broader impact and precedent. What does this change going forward? Same voice as `summary_spicy`. |
 | `dissent_highlights` | text or null | 1-2 sentences summarizing the key dissent argument. `null` if no dissent. |
 | `evidence_anchors` | text[] | 2-4 direct quotes from the opinion that anchor your analysis. Short (1-2 sentences each). |
 | `evidence_quotes` | jsonb | Array of `{"quote": "...", "context": "..."}` objects. 1-3 key quotes with context labels. |
@@ -265,6 +265,52 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 | `media_says` | text or null | How media will likely frame this (1 sentence). `null` for low-profile cases. |
 | `actually_means` | text or null | What it actually means legally, cutting through media framing (1-2 sentences). `null` for low-profile cases. |
 | `substantive_winner` | text | Who actually benefits (1-2 sentences). May differ from `prevailing_party` — the losing party at SCOTUS sometimes wins in practice. |
+
+### Brand Voice: "The Betrayal"
+
+**The SCOTUS editorial voice is "The Betrayal."** The framing: *"The people supposed to protect the law are lighting it on fire."*
+
+This voice applies to `summary_spicy`, `why_it_matters`, `who_wins`, `who_loses`, `dissent_highlights`, and `ruling_label`. Factual fields (`disposition`, `vote_split`, `holding`, etc.) remain neutral and precise.
+
+**Tone calibration by `ruling_impact_level`:**
+
+| Level | Label | Tone | Energy |
+|-------|-------|------|--------|
+| 5 | Constitutional Crisis | ALARM BELLS | Cold fury, prosecutorial. Profanity for INCREDULITY only (e.g., "They actually fucking did it."). |
+| 4 | Rubber-stamping Tyranny | ANGRY ACCOUNTABILITY | Suspicious, pointed. Name names, focus on victims and beneficiaries. Profanity allowed. |
+| 3 | Institutional Sabotage | SARDONIC CRITIQUE | Weary, "seen this before" energy. Dark humor, let absurdity speak. NO profanity. |
+| 2 | Judicial Sidestepping | EYE-ROLL | "Lazy employees" energy. Measured critique of system dysfunction. NO profanity. |
+| 1 | Crumbs from the Bench | CAUTIOUS SKEPTICISM | Credit where due, but flag the asterisk. "Read the limiting language." NO profanity. |
+| 0 | Democracy Wins | SUSPICIOUS CELEBRATION | Genuine disbelief the system worked. "Don't get used to it." NO profanity. |
+
+**Profanity rules:** Profanity is allowed ONLY at levels 4-5. Use it for incredulity and emphasis, not gratuitous shock. At levels 0-3, NO profanity under any circumstances.
+
+**Opening patterns by level** (use as inspiration, not templates — vary your approach):
+
+- **Level 5:** Lead with what precedent died, follow the money, name the buyer, lead with human cost. Example approaches: "The Federalist Society spent decades on this. Today: payday." / "They're not even pretending anymore."
+- **Level 4:** Police/state power framing, personal impact, green-light framing, quote the dissent warning. Example approaches: "Your Fourth Amendment rights just got smaller. Again." / "Another page from the authoritarian playbook, now with judicial approval."
+- **Level 3:** Boring-but-deadly framing, explain the technical trick, paper rights. Example approaches: "This ruling sounds boring. That's the point." / "You still have the right to [X]. You just can't use it anymore."
+- **Level 2:** No-comment framing, kicked-can, cowardice framing. Example approaches: "They punted. The question lives to haunt us another day." / "Nine justices. Zero courage."
+- **Level 1:** But-wait framing, fine-print, fragile victory. Example approaches: "You won. Now read the limiting language." / "A win today. A target tomorrow."
+- **Level 0:** Suspicious celebration, credit-due, broken-clock. Example approaches: "The system actually worked. Don't get used to it." / "Even this Court gets it right sometimes."
+
+**Banned openings — NEVER start `summary_spicy` with any of these:**
+
+"This is outrageous", "In a shocking move", "Once again", "It's no surprise", "Make no mistake", "Let that sink in", "Guess what?", "So, ", "Well, ", "Look, ", "In a stunning", "In a brazen", "Shocking absolutely no one", "In the latest move", "In yet another", "It remains to be seen", "Crucially", "Interestingly", "Notably", "The walls are closing in", "This is a bombshell", "Breaking:", "BREAKING:", "Just in:", "It has been reported", "It was announced", "It appears that"
+
+**Voice DOs:**
+- Call out bullshit directly — name names, name donors, name beneficiaries
+- Use dark humor and sarcasm where the absurdity speaks for itself
+- Make it personal: YOUR rights, YOUR taxes, YOUR Constitution
+- Vary framing: corruption, betrayal, institutional sabotage, power grab, grift
+- Let the facts indict — state events plainly when the sequence IS the commentary
+
+**Voice DON'Ts:**
+- Don't be neutral or balanced — this is accountability journalism, not AP wire copy
+- Don't use cliché openings (see banned list above)
+- Don't be cheesy with humor — dark and dry, not slapstick
+- Don't make things up — every claim must be anchored in the opinion text
+- Don't soften the truth — if the ruling is bad, say so plainly
 
 **Confidence and review fields:**
 
@@ -445,8 +491,8 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "ruling_label": "Double-conviction bar for single firearm act",
   "who_wins": "Dwayne Barrett, who faced dual convictions for a single act involving a firearm offense resulting in death",
   "who_loses": "Federal prosecutors, who lose the ability to stack convictions under both section 924(c)(1)(A)(i) and section 924(j) for the same conduct",
-  "summary_spicy": "The Supreme Court unanimously told the government it can't double-dip on convictions when someone commits one act that happens to violate two overlapping firearm statutes. Barrett was facing convictions under both — the Court said pick one.",
-  "why_it_matters": "Resolves a circuit split on stacking firearm convictions. Defendants convicted under both provisions for one act can now have one conviction vacated, potentially reducing sentences.",
+  "summary_spicy": "The government tried to stack two convictions for the same act because Congress wrote two overlapping statutes. Nine justices said pick one. Not a profile in courage — this was a layup the DOJ never should have pushed.",
+  "why_it_matters": "Resolves a circuit split on stacking firearm convictions. If you got hit with two charges for one act under overlapping statutes, one conviction gets tossed. Narrow win, narrow impact — don't confuse this with the Court caring about criminal justice reform.",
   "dissent_highlights": null,
   "evidence_anchors": [
     "One act that violates both provisions therefore may spawn only one conviction.",
@@ -490,8 +536,8 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "ruling_label": "VA deference on benefit-of-the-doubt",
   "who_wins": "The Department of Veterans Affairs, which retains deferential review of its benefit-of-the-doubt determinations in disability claims",
   "who_loses": "Veterans challenging VA disability claim decisions, who face a higher bar to overturn the VA's evidence-weighing on appeal",
-  "summary_spicy": "When the VA says the evidence is too close to call on a veteran's disability claim, the Veterans Court can only overturn that call if it's clearly wrong. Two justices dissented, arguing this gives the VA too much slack at veterans' expense.",
-  "why_it_matters": "Sets the standard of review for a critical step in veterans' disability claims. The 'approximate balance' determination is now reviewed only for clear error, making it harder for veterans to win on appeal.",
+  "summary_spicy": "The VA says your disability evidence is 'in approximate balance.' The Court says tough luck — you can only overturn that if the VA is clearly wrong. Two justices saw the trap: the agency that denies your claim now gets deference on the denial. The system works great — for the system.",
+  "why_it_matters": "Sets the standard of review for a critical step in veterans' disability claims. The VA's evidence-weighing now gets the benefit of the doubt — the same benefit Congress intended for the veterans themselves. Another layer of bureaucratic armor for the agency, another barrier for the people who served.",
   "dissent_highlights": "Jackson and Gorsuch argued the majority's approach gives too much deference to the VA, undermining the benefit-of-the-doubt rule Congress enacted to protect veterans.",
   "evidence_anchors": [
     "The VA's determination that the evidence regarding a service-related disability claim is in 'approximate balance' is a predominantly factual determination reviewed only for clear error."
@@ -533,8 +579,8 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "ruling_label": "RICO covers injury-derived business losses",
   "who_wins": "Douglas Horn and future RICO plaintiffs who suffered business losses stemming from personal injuries",
   "who_loses": "Companies like Medical Marijuana, Inc. that face expanded civil RICO liability for business harms connected to personal injuries",
-  "summary_spicy": "If a company's product hurts you physically and that injury costs you your job, you can sue under RICO for the lost job — even though the root cause was a personal injury. The Court split 5-4, with the four most conservative justices dissenting.",
-  "why_it_matters": "Rejects the 'antecedent-personal-injury bar' that several circuits had adopted. Plaintiffs whose business losses trace back to personal injuries can now pursue treble damages under RICO, opening new litigation avenues.",
+  "summary_spicy": "A company's product injured you, and that injury cost you your job. Can you sue under RICO for the lost income? Five justices said yes. Four said no — Thomas, Kavanaugh, Roberts, and Alito lined up to shield corporate defendants from the consequences of their own products. The RICO door just got wider, and the corporate lobby is not happy.",
+  "why_it_matters": "The 'antecedent-personal-injury bar' that corporations hid behind in several circuits is dead. If a company's product hurts you and that injury costs you your livelihood, RICO's treble damages are on the table. The corporate defense bar just lost a favorite shield.",
   "dissent_highlights": "Thomas, Kavanaugh, Roberts, and Alito argued the majority improperly expands RICO beyond its intended scope, turning personal injury cases into federal racketeering claims.",
   "evidence_anchors": [
     "A plaintiff may seek treble damages for business or property loss even if the loss resulted from a personal injury.",
@@ -578,8 +624,8 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "ruling_label": "Certiorari dismissed as improvidently granted",
   "who_wins": "No clear winner — case dismissed without a merits ruling",
   "who_loses": "No clear loser — the underlying circuit decision stands by default",
-  "summary_spicy": "The Court took a look at this case, changed its mind, and sent everyone home. Kavanaugh was the lone dissenter who wanted to actually decide it.",
-  "why_it_matters": "No precedent set. The lower court ruling stands. The Court's DIG leaves the underlying legal question unresolved, which may surface again in a future case.",
+  "summary_spicy": "The Court granted cert, looked at the case, and punted. Everyone goes home. The legal question stays unresolved. Kavanaugh, alone, wanted to actually do the job. Read the tea leaves on why seven others didn't.",
+  "why_it_matters": "No precedent set, no question answered, no clarity gained. The lower court ruling stands by default. The legal question festers, waiting for a future case — and a future Court willing to do its job.",
   "dissent_highlights": "Kavanaugh dissented from the dismissal, indicating he believed the Court should have decided the case on the merits.",
   "evidence_anchors": [],
   "evidence_quotes": [],
@@ -617,8 +663,8 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "ruling_label": "TikTok ban upheld as national security measure",
   "who_wins": "The federal government, which can enforce the Protecting Americans from Foreign Adversary Controlled Applications Act requiring TikTok's divestiture or shutdown",
   "who_loses": "TikTok Inc. and its 170 million U.S. users, who face platform restrictions unless ByteDance divests its U.S. operations",
-  "summary_spicy": "All nine justices agreed: Congress can force TikTok to cut ties with China or shut down in the U.S. The First Amendment doesn't protect a foreign adversary's ability to harvest data on 170 million Americans. The biggest tech regulation case in a generation, decided unanimously.",
-  "why_it_matters": "Establishes that national security concerns can justify significant restrictions on a major communications platform. Sets precedent for content-neutral regulation of foreign-adversary-controlled applications. Affects the future of U.S.-China tech regulation.",
+  "summary_spicy": "Nine-zero. Congress can force TikTok to cut ties with China or go dark in America. The First Amendment does not protect a foreign adversary's pipeline into the phones of 170 million Americans. The biggest tech regulation ruling in a generation, and nobody dissented. That should scare you — not because the ruling is wrong, but because the government just proved it can shut down a platform when it wants to.",
+  "why_it_matters": "The government just proved it can kill a platform used by 170 million Americans if it frames the justification as national security. The precedent is content-neutral on paper, but the power it grants is anything but neutral. Next time, it might not be a Chinese-owned app. Next time, it might be yours.",
   "dissent_highlights": null,
   "evidence_anchors": [
     "The challenged provisions do not violate petitioners' First Amendment rights.",
@@ -697,10 +743,11 @@ These rules can NEVER be violated, regardless of what the opinion says or what e
 
 | Field | Value |
 |-------|-------|
-| Prompt version | v1 |
+| Prompt version | v1.1 |
 | Created | 2026-04-02 |
+| Updated | 2026-04-04 (tone system integration) |
 | Author | Josh + Claude Code |
-| Target model | Claude Sonnet 4.6 |
+| Target model | Claude Opus 4.6 |
 | Max turns | 15 |
 | Tables accessed | `scotus_cases`, `scotus_opinions`, `scotus_enrichment_log` |
 | API method | Bash/curl to PostgREST (not WebFetch) |
