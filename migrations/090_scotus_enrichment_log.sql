@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS scotus_enrichment_log (
     completed_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'running'
         CHECK (status IN ('running', 'completed', 'failed')),
-    agent_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
+    agent_model TEXT NOT NULL DEFAULT 'claude-opus-4-6',
     prompt_version TEXT NOT NULL,  -- format: 'v1', 'v2', etc. matching prompt-vN.md filename
     cases_found INTEGER NOT NULL DEFAULT 0,
     cases_enriched INTEGER NOT NULL DEFAULT 0,
@@ -28,5 +28,6 @@ CREATE TABLE IF NOT EXISTS scotus_enrichment_log (
 CREATE INDEX IF NOT EXISTS idx_scotus_enrichment_log_ran_at
     ON scotus_enrichment_log (ran_at DESC);
 
--- No RLS — internal observability table, only accessed via service_role.
--- Enabling RLS without policies would make the table inaccessible.
+-- Enable RLS — service_role bypasses RLS automatically, so agent writes work.
+-- Without RLS, the anon key (public) could read run logs including non-public case names.
+ALTER TABLE scotus_enrichment_log ENABLE ROW LEVEL SECURITY;

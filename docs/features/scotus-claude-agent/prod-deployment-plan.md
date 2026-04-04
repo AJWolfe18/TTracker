@@ -21,13 +21,19 @@
 
 | Task | Who | Why |
 |------|-----|-----|
-| Apply migrations to PROD DB | **Josh** (Supabase Dashboard) | Claude can't access PROD Supabase MCP |
-| Cherry-pick to main, create PR | **Claude** | Git operations |
-| Create PROD cloud environment | **Josh** (claude.ai/code) | Requires browser UI |
-| Create PROD trigger | **Claude** (RemoteTrigger API) | Needs environment ID from Josh |
-| Enable daily cron | **Claude** (RemoteTrigger API) | After trigger verified |
-| Review enriched cases | **Claude** (`/scotus-review`) | Automated quality gate |
-| Approve/publish cases | **Josh** (tells Claude which to publish) | Human publish gate |
+| 1. Apply migrations to PROD DB | **Josh** (Supabase Dashboard) | Claude can't access PROD Supabase MCP |
+| 2. Cherry-pick to main, create PR | **Claude** | Git operations |
+| 3. Create PROD cloud environment | **Josh** (claude.ai/code) | Requires browser UI |
+| 4. Create PROD trigger | **Claude** (RemoteTrigger API) | Needs environment ID from Josh |
+| 5. Enable daily cron | **Claude** (RemoteTrigger API) | After trigger verified |
+| 6. Re-enrich old-pipeline cases | **Claude** (triggers agent) | 94 cases have blank new fields |
+| 7. Review + publish | **Both** | Manual review workflow |
+
+## Important Notes
+
+- **94 old-pipeline cases** on PROD were enriched with the old GPT-4 scripts. They have NO `summary_spicy`, `ruling_label`, `substantive_winner`, or other v1.1 fields. The 51 published cases will show blank editorial content until re-enriched. Task 6 handles this.
+- **Feature flag:** Check `public/shared/flags-prod.json` — the `scotus` flag may be `false`, which would block published cases from appearing on trumpytracker.com even after `is_public=true` is set. Flip it ON when ready.
+- **Notification workflow:** Josh triggers `/scotus-review latest` manually when he wants to review. No automated alerting (nice-to-have, not blocking). Admin dashboard (ADO-340) replaces this when built.
 
 ---
 
@@ -114,7 +120,7 @@ CREATE TABLE IF NOT EXISTS scotus_enrichment_log (
     completed_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'running'
         CHECK (status IN ('running', 'completed', 'failed')),
-    agent_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
+    agent_model TEXT NOT NULL DEFAULT 'claude-opus-4-6',
     prompt_version TEXT NOT NULL,
     cases_found INTEGER NOT NULL DEFAULT 0,
     cases_enriched INTEGER NOT NULL DEFAULT 0,
@@ -128,6 +134,9 @@ CREATE TABLE IF NOT EXISTS scotus_enrichment_log (
 
 CREATE INDEX IF NOT EXISTS idx_scotus_enrichment_log_ran_at
     ON scotus_enrichment_log (ran_at DESC);
+
+-- RLS: service_role bypasses automatically, blocks anon key from reading run logs
+ALTER TABLE scotus_enrichment_log ENABLE ROW LEVEL SECURITY;
 ```
 
 - [ ] **Step 7: Verify all migrations applied**
@@ -236,17 +245,55 @@ Claude will use `RemoteTrigger create` with:
 - Environment: The PROD environment ID from Task 3
 - Model: `claude-opus-4-6`
 - Source repo: `https://github.com/AJWolfe18/TTracker`
-- Bootstrap prompt: Same as TEST but with `git checkout main` instead of `git checkout -B test origin/test`
+
+**Full PROD bootstrap prompt (verbatim):**
+```
+You are the SCOTUS Enrichment Agent. Follow these steps EXACTLY:
+
+Step A: You should already be on the main branch. Verify:
+git branch --show-current
+
+If not on main, run:
+git checkout main
+
+Step B: Verify the prompt file exists:
+ls -la docs/features/scotus-claude-agent/prompt-v1.md
+
+Step C: Read the file docs/features/scotus-claude-agent/prompt-v1.md using the Read tool. This file contains your complete workflow instructions.
+
+Step D: Follow every instruction in that file precisely. Do NOT skip any steps.
+
+IMPORTANT: The environment variables SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are already set.
+
+Begin with Step A now.
+```
 
 - [ ] **Step 2: Manual test run**
 
 Claude will trigger one run and verify:
 - Agent starts, reads prompt from main branch
-- Connects to PROD Supabase
+- Connects to PROD Supabase (NOT TEST)
+- `date -u -d "30 minutes ago"` works on the cloud runner (concurrent run check)
 - Finds pending cases (if any) or logs "0 cases found"
-- enrichment_log entry created on PROD with prompt_version = v1.1
+- enrichment_log entry created on PROD with `prompt_version = 'v1.1'`
 
-- [ ] **Step 3: Verify by checking PROD DB**
+- [ ] **Step 3: Verify opinion text availability**
+
+Josh runs in Supabase PROD SQL Editor:
+```sql
+SELECT sc.id, sc.case_name_short,
+  sc.syllabus IS NOT NULL AS has_syllabus,
+  so.id IS NOT NULL AS has_opinion
+FROM scotus_cases sc
+LEFT JOIN scotus_opinions so ON so.case_id = sc.id
+WHERE sc.enrichment_status = 'pending'
+ORDER BY sc.decided_at DESC
+LIMIT 10;
+```
+
+If most cases have `has_syllabus = false` AND `has_opinion = false`, the agent will fail them all. Verify CourtListener sync is populating opinion text for new cases.
+
+- [ ] **Step 4: Verify by checking PROD DB**
 
 Josh checks Supabase Dashboard for scotus_enrichment_log entries.
 
@@ -266,21 +313,65 @@ Claude will update the trigger with cron: `0 16 * * 1-5`
 
 ---
 
-### Task 6: Establish Manual Review Workflow
+### Task 6: Re-Enrich Old-Pipeline Cases
+
+**Who:** Claude (triggers agent runs) + Josh (approves results)
+**Depends on:** Task 4 (PROD trigger working)
+
+The 94 cases enriched by the old GPT-4 pipeline have no `summary_spicy`, `ruling_label`, `substantive_winner`, or other v1.1 fields. The 51 published cases will show blank editorial content. Reset them all for re-enrichment.
+
+- [ ] **Step 1: Unpublish old-enriched cases (safety)**
+
+Josh runs in PROD SQL Editor:
+```sql
+-- Take the 51 published cases offline while they're being re-enriched
+-- They'll come back online after Josh re-approves them
+UPDATE scotus_cases
+SET is_public = false
+WHERE is_public = true AND (prompt_version IS NULL OR prompt_version != 'v1.1');
+```
+
+- [ ] **Step 2: Reset old-enriched cases to pending**
+
+Josh runs:
+```sql
+UPDATE scotus_cases
+SET enrichment_status = 'pending', enriched_at = NULL, prompt_version = NULL
+WHERE enrichment_status = 'enriched' AND (prompt_version IS NULL OR prompt_version != 'v1.1');
+```
+
+Verify count: should be ~94 cases.
+
+- [ ] **Step 3: Run agent repeatedly until all processed**
+
+The agent processes 10 cases per run (limit in prompt Step 2). With ~94 cases, this takes ~10 runs. Claude triggers the PROD trigger manually until `cases_found = 0`.
+
+Expected: ~10 runs x ~5 min each = ~50 min total.
+
+- [ ] **Step 4: Review and re-publish**
+
+Claude runs `/scotus-review latest 10` after each batch. Josh approves. Claude sets `is_public = true` for approved cases.
+
+---
+
+### Task 7: Establish Manual Review Workflow
 
 **Who:** Claude + Josh (ongoing)
-**Depends on:** Task 5 (daily schedule active)
+**Depends on:** Task 5 (daily schedule active) + Task 6 (backfill complete)
 
 The daily workflow until the admin dashboard (ADO-340) is built:
 
 ```
-Agent runs daily at 4PM UTC
+Agent runs daily at 4PM UTC (weekdays)
+    |
+    v
+Josh opens Claude Code session, says: "review scotus"
     |
     v
 Claude runs:  /scotus-review latest
     |
     v
-Claude posts review summary to Josh
+Claude posts review summary
     |
     v
 Josh says: "publish 286, 120" or "hold 108 — check vote_split"
@@ -289,22 +380,26 @@ Josh says: "publish 286, 120" or "hold 108 — check vote_split"
 Claude flips is_public=true for approved cases
     |
     v
-Cases appear on trumpytracker.com
+Cases appear on trumpytracker.com (if scotus feature flag is ON)
 ```
 
-- [ ] **Step 1: Agree on notification method**
+- [ ] **Step 1: Josh triggers review manually**
 
-Options:
-- Claude checks after each daily run and posts review in next session
-- Josh triggers `/scotus-review latest` manually when he wants to review
+When Josh wants to check enrichments, he says "review scotus" or `/scotus-review latest`. No automated alerting — the admin dashboard (ADO-340) will replace this workflow.
 
-- [ ] **Step 2: Document the approval command**
+**Note:** During SCOTUS recess (Jul-Sep), the agent will run daily and find 0 cases. This is normal — no action needed.
 
-Josh says: "publish [case IDs]"
-Claude runs: `PATCH /scotus_cases?id=in.(<IDS>) SET is_public=true`
+- [ ] **Step 2: Approval commands**
 
-Josh says: "hold [case ID] — [reason]"
+Josh says: `publish [case IDs]`
+Claude runs: `PATCH /scotus_cases?id=in.(<IDS>)&prompt_version=eq.v1.1` → sets `is_public=true`
+
+Josh says: `hold [case ID] — [reason]`
 Claude adds reason to `low_confidence_reason` and keeps `is_public=false`
+
+- [ ] **Step 3: Verify feature flag**
+
+Check `public/shared/flags-prod.json` — if `scotus: false`, published cases won't appear on trumpytracker.com. Flip to `true` via PR to main when ready to go live.
 
 ---
 
@@ -313,8 +408,21 @@ Claude adds reason to `low_confidence_reason` and keeps `is_public=false`
 If the PROD agent produces bad enrichment:
 
 1. **Disable trigger:** Claude sets `enabled: false` via RemoteTrigger API
-2. **Revert bad enrichments:** `PATCH /scotus_cases?enrichment_status=eq.enriched&enriched_at=gt.[BAD_RUN_TIME] SET enrichment_status='pending', is_public=false`
-3. **Investigate:** Check `scotus_enrichment_log` for the bad run's `case_details` and `errors`
+2. **Identify affected cases first** (don't blindly revert):
+   ```sql
+   SELECT id, case_name_short, enriched_at, prompt_version
+   FROM scotus_cases
+   WHERE prompt_version = 'v1.1' AND enriched_at > '[BAD_RUN_TIMESTAMP]'
+   ORDER BY enriched_at DESC;
+   ```
+3. **Revert only v1.1 cases from the bad run:**
+   ```sql
+   UPDATE scotus_cases
+   SET enrichment_status = 'pending', is_public = false
+   WHERE prompt_version = 'v1.1' AND enriched_at > '[BAD_RUN_TIMESTAMP]';
+   ```
+   Use `prompt_version = 'v1.1'` to avoid accidentally reverting old-pipeline cases.
+4. **Investigate:** Check `scotus_enrichment_log` for the bad run's `case_details` and `errors`
 
 No cases go public without Josh's explicit approval, so bad enrichments never reach the frontend.
 
@@ -333,10 +441,14 @@ No cases go public without Josh's explicit approval, so bad enrichments never re
 
 ## Checklist Before Going Live
 
-- [ ] Migrations 087-090 applied to PROD and verified
-- [ ] PR merged to main with prompt-v1.md
-- [ ] PROD cloud environment created with correct Supabase credentials
-- [ ] PROD trigger created and test run successful
-- [ ] enrichment_log shows completed run on PROD
-- [ ] Daily cron enabled
-- [ ] First batch of cases reviewed with `/scotus-review` and approved by Josh
+- [ ] Migrations 087-090 applied to PROD and verified (Task 1)
+- [ ] PR merged to main with prompt-v1.md (Task 2)
+- [ ] PROD cloud environment created with correct Supabase credentials (Task 3)
+- [ ] PROD trigger created and test run successful (Task 4)
+- [ ] `date -d` works on cloud runner (Task 4 Step 2)
+- [ ] Opinion text available for pending cases (Task 4 Step 3)
+- [ ] enrichment_log shows completed run on PROD with `prompt_version = 'v1.1'` (Task 4 Step 4)
+- [ ] Daily cron enabled (Task 5)
+- [ ] Old-pipeline cases re-enriched and re-published (Task 6)
+- [ ] `scotus` feature flag in `flags-prod.json` set to `true` (Task 7 Step 3)
+- [ ] First batch of new cases reviewed with `/scotus-review` and approved by Josh
