@@ -87,6 +87,27 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/scotus_cases?id=eq.123" \
 
 **Verify writes:** The response is a JSON array of affected rows. If the array is empty `[]`, no rows were updated — the filter matched nothing. Treat empty response as an error.
 
+### JSON Body Construction (IMPORTANT)
+
+**Never pass agent-generated text directly in single-quoted `-d '...'` curl arguments.** Apostrophes in opinion text (e.g., "petitioners'") will break shell quoting and cause silent failures or partial updates.
+
+**Always use this pattern for PATCH/POST bodies containing generated text:**
+
+1. Write the JSON body to a temp file using the Write tool:
+   - Write the complete JSON object to `/tmp/patch-body.json`
+2. Reference the file in curl:
+   ```bash
+   curl -s -X PATCH "${SUPABASE_URL}/rest/v1/scotus_cases?id=eq.123" \
+     -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+     -H "Content-Type: application/json" \
+     -H "Prefer: return=representation" \
+     -d @/tmp/patch-body.json
+   ```
+3. This approach handles all special characters (apostrophes, quotes, newlines) safely.
+
+**For simple bodies with only static/known-safe values** (no opinion-derived text), inline `-d '{...}'` is acceptable.
+
 ### Timestamps
 
 PostgREST does NOT support `NOW()` in PATCH/POST bodies. Generate ISO 8601 timestamps:
@@ -119,7 +140,7 @@ Execute these steps in order on every run.
 
 ### Step 1: Log Run Start
 
-Create a log entry to mark this run as started:
+Create a log entry to mark this run as started. This body has only simple values, so inline `-d` is safe here:
 
 ```bash
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -283,50 +304,60 @@ If any check fails, fix the field before writing. If you cannot fix it (e.g., am
 
 ### Step 6: Write to Database
 
-Write enrichment as a single atomic PATCH per case:
+Write enrichment as a single atomic PATCH per case. **Use the temp file pattern** (see Section 2 "JSON Body Construction") to avoid shell quoting issues with apostrophes in opinion text.
 
 ```bash
 ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+```
 
+**Step A:** Use the Write tool to create `/tmp/patch-case-{CASE_ID}.json` with the full JSON body:
+
+```json
+{
+  "disposition": "...",
+  "holding": "...",
+  "vote_split": "...",
+  "majority_author": "...",
+  "dissent_authors": [],
+  "case_type": "...",
+  "ruling_impact_level": 0,
+  "ruling_label": "...",
+  "who_wins": "...",
+  "who_loses": "...",
+  "summary_spicy": "...",
+  "why_it_matters": "...",
+  "dissent_highlights": null,
+  "evidence_anchors": [],
+  "evidence_quotes": [],
+  "issue_area": "...",
+  "prevailing_party": "...",
+  "practical_effect": "...",
+  "merits_reached": true,
+  "dissent_exists": false,
+  "fact_extraction_confidence": "high",
+  "low_confidence_reason": null,
+  "needs_manual_review": false,
+  "source_char_count": 0,
+  "enrichment_status": "enriched",
+  "enriched_at": "{ENRICHED_AT value}",
+  "prompt_version": "v1",
+  "source_data_version": "v1-syllabus",
+  "media_says": null,
+  "actually_means": null,
+  "substantive_winner": "...",
+  "is_merits_decision": true
+}
+```
+
+**Step B:** Send the file via curl:
+
+```bash
 curl -s -X PATCH "${SUPABASE_URL}/rest/v1/scotus_cases?id=eq.{CASE_ID}" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d '{
-    "disposition": "...",
-    "holding": "...",
-    "vote_split": "...",
-    "majority_author": "...",
-    "dissent_authors": [],
-    "case_type": "...",
-    "ruling_impact_level": 0,
-    "ruling_label": "...",
-    "who_wins": "...",
-    "who_loses": "...",
-    "summary_spicy": "...",
-    "why_it_matters": "...",
-    "dissent_highlights": null,
-    "evidence_anchors": [],
-    "evidence_quotes": [],
-    "issue_area": "...",
-    "prevailing_party": "...",
-    "practical_effect": "...",
-    "merits_reached": true,
-    "dissent_exists": false,
-    "fact_extraction_confidence": "high",
-    "low_confidence_reason": null,
-    "needs_manual_review": false,
-    "source_char_count": 0,
-    "enrichment_status": "enriched",
-    "enriched_at": "'"${ENRICHED_AT}"'",
-    "prompt_version": "v1",
-    "source_data_version": "v1-syllabus",
-    "media_says": null,
-    "actually_means": null,
-    "substantive_winner": "...",
-    "is_merits_decision": true
-  }'
+  -d @/tmp/patch-case-{CASE_ID}.json
 ```
 
 **Verify the response:** It must be a non-empty JSON array containing the updated row. If empty `[]` or an error, the write failed — log the error and continue to the next case.
@@ -337,26 +368,36 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/scotus_cases?id=eq.{CASE_ID}" \
 
 ### Step 7: Log Run Completion
 
-After processing all cases (or after a failure), update the log entry from Step 1:
+After processing all cases (or after a failure), update the log entry from Step 1. **Use the temp file pattern** for the body (case_details may contain apostrophes from case names).
 
 ```bash
 COMPLETED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+```
 
+**Step A:** Use the Write tool to create `/tmp/patch-log.json`:
+
+```json
+{
+  "status": "completed",
+  "completed_at": "{COMPLETED_AT value}",
+  "cases_found": 0,
+  "cases_enriched": 0,
+  "cases_failed": 0,
+  "cases_skipped": 0,
+  "case_details": [],
+  "duration_seconds": 0
+}
+```
+
+**Step B:** Send via curl:
+
+```bash
 curl -s -X PATCH "${SUPABASE_URL}/rest/v1/scotus_enrichment_log?id=eq.{LOG_ID}" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d '{
-    "status": "completed",
-    "completed_at": "'"${COMPLETED_AT}"'",
-    "cases_found": {N},
-    "cases_enriched": {N},
-    "cases_failed": {N},
-    "cases_skipped": {N},
-    "case_details": [{...per-case summary...}],
-    "duration_seconds": {N}
-  }'
+  -d @/tmp/patch-log.json
 ```
 
 **`case_details` format:** Array of objects, one per case:
