@@ -1,0 +1,251 @@
+{
+  "_comment": "Extended validation results for SCOTUS Claude Agent prompt v1",
+  "_date": "2026-04-03",
+  "_trigger_id": "trig_01S2xQVXfaB8rGJpbaPCWPvV",
+  "_environment_id": "env_01YRYGLu8C8ijpVWdPAwgVSQ",
+  "_model": "claude-sonnet-4-20250514",
+  "_prompt_version": "v1",
+  "summary": {
+    "pass": false,
+    "total_cases": 15,
+    "cases_passed": 10,
+    "cases_failed": 5,
+    "hard_field_accuracy": "10/15 (66.7%)",
+    "pass_criteria": "0 hard-field FAILs across 15 cases",
+    "runs_required": 6,
+    "total_duration_minutes": 37,
+    "failure_pattern": "Agent defaults to per curiam (null author) and 9-0 (unanimous) when syllabus text lacks explicit vote/author info. Systematic bias toward unanimity assumptions.",
+    "notes": "Gold set (5/5) passed because those cases had clear syllabus text. Extended set exposes weakness on cases with ambiguous source text."
+  },
+  "run_logs": [
+    {"log_id": 3, "cases_enriched": 3, "cases_failed": 0, "note": "IDs 59, 10, 23"},
+    {"log_id": 4, "cases_enriched": 3, "cases_failed": 7, "note": "IDs 78, 75, 108. Hit turn limit, marked 7 as failed (not actual failures)."},
+    {"log_id": 5, "cases_enriched": 1, "cases_failed": 0, "note": "ID 114"},
+    {"log_id": 6, "cases_enriched": 4, "cases_failed": 0, "note": "IDs 118, 131, 138, 226"},
+    {"log_id": 7, "cases_enriched": 3, "cases_failed": 0, "note": "IDs 235, 238, 285"},
+    {"log_id": 8, "cases_enriched": 1, "cases_failed": 0, "note": "ID 287"}
+  ],
+  "cases": [
+    {
+      "id": 10,
+      "case_name": "Truck Insurance Exchange v. Kaiser Gypsum Co.",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "8-0", "actual": "8-0", "score": "PASS"},
+        "majority_author": {"agent": "Sotomayor", "actual": "Sotomayor", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 23,
+      "case_name": "Vidal v. Elster",
+      "scoring": {
+        "disposition": {"agent": "reversed", "actual": "reversed", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": null, "actual": "Thomas", "score": "FAIL"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "FAIL",
+      "notes": "Thomas wrote the opinion. Fractured concurrences may have confused agent into per curiam."
+    },
+    {
+      "id": 59,
+      "case_name": "McElrath v. Georgia",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": "Jackson", "actual": "Jackson", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 75,
+      "case_name": "Hungary v. Simon",
+      "scoring": {
+        "disposition": {"agent": "vacated_and_remanded", "actual": "vacated_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": "Sotomayor", "actual": "Sotomayor", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 78,
+      "case_name": "Williams v. Reed",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "5-4", "actual": "5-4", "score": "PASS"},
+        "majority_author": {"agent": "Kavanaugh", "actual": "Kavanaugh", "score": "PASS"},
+        "dissent_authors": {"agent": ["Thomas", "Alito", "Gorsuch", "Barrett"], "actual": ["Thomas", "Alito", "Gorsuch", "Barrett"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 108,
+      "case_name": "Glossip v. Oklahoma",
+      "scoring": {
+        "disposition": {"agent": "other", "actual": "reversed_and_remanded", "score": "FAIL"},
+        "vote_split": {"agent": "9-0", "actual": "5-3", "score": "FAIL"},
+        "majority_author": {"agent": null, "actual": "Sotomayor", "score": "FAIL"},
+        "dissent_authors": {"agent": [], "actual": ["Thomas", "Alito"], "score": "FAIL"},
+        "case_type": {"agent": "procedural", "actual": "merits", "score": "FAIL"}
+      },
+      "overall": "FAIL",
+      "notes": "All fields wrong. Major death penalty case. Agent had insufficient source text or completely misread. Gorsuch recused (hence 5-3)."
+    },
+    {
+      "id": 114,
+      "case_name": "Dewberry Group v. Dewberry Engineers",
+      "scoring": {
+        "disposition": {"agent": "vacated_and_remanded", "actual": "vacated_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": "Kagan", "actual": "Kagan", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 118,
+      "case_name": "City and County of San Francisco v. EPA",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "5-4", "score": "FAIL"},
+        "majority_author": {"agent": "Alito", "actual": "Alito", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": ["Barrett", "Kagan", "Sotomayor", "Jackson"], "score": "FAIL"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "FAIL",
+      "notes": "Agent got vote split wrong (9-0 vs 5-4) and missed 4 dissenters."
+    },
+    {
+      "id": 131,
+      "case_name": "Bondi v. Vanderstok",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "7-2", "actual": "7-2", "score": "PASS"},
+        "majority_author": {"agent": "Gorsuch", "actual": "Gorsuch", "score": "PASS"},
+        "dissent_authors": {"agent": ["Thomas", "Alito"], "actual": ["Thomas", "Alito"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 138,
+      "case_name": "FDA v. Wages and White Lion",
+      "scoring": {
+        "disposition": {"agent": "vacated_and_remanded", "actual": "vacated_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": null, "actual": "Alito", "score": "FAIL"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "FAIL",
+      "notes": "Alito wrote the opinion, not per curiam. Agent defaulted to per curiam."
+    },
+    {
+      "id": 226,
+      "case_name": "Medina v. Planned Parenthood South Atlantic",
+      "scoring": {
+        "disposition": {"agent": "affirmed", "actual": "reversed_and_remanded", "score": "FAIL"},
+        "vote_split": {"agent": "9-0", "actual": "6-3", "score": "FAIL"},
+        "majority_author": {"agent": null, "actual": "Gorsuch", "score": "FAIL"},
+        "dissent_authors": {"agent": [], "actual": ["Jackson", "Sotomayor", "Kagan"], "score": "FAIL"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "FAIL",
+      "notes": "Multiple fields wrong. Agent defaulted to affirmed/9-0/per curiam — likely had poor source text."
+    },
+    {
+      "id": 235,
+      "case_name": "Kennedy v. Braidwood Management",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "6-3", "actual": "6-3", "score": "PASS"},
+        "majority_author": {"agent": "Kavanaugh", "actual": "Kavanaugh", "score": "PASS"},
+        "dissent_authors": {"agent": ["Thomas", "Alito", "Gorsuch"], "actual": ["Thomas", "Alito", "Gorsuch"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 238,
+      "case_name": "Free Speech Coalition v. Paxton",
+      "scoring": {
+        "disposition": {"agent": "affirmed", "actual": "affirmed", "score": "PASS"},
+        "vote_split": {"agent": "6-3", "actual": "6-3", "score": "PASS"},
+        "majority_author": {"agent": "Thomas", "actual": "Thomas", "score": "PASS"},
+        "dissent_authors": {"agent": ["Kagan", "Sotomayor", "Jackson"], "actual": ["Kagan", "Sotomayor", "Jackson"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 285,
+      "case_name": "Bowe v. United States",
+      "scoring": {
+        "disposition": {"agent": "vacated_and_remanded", "actual": "vacated_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "5-4", "actual": "5-4", "score": "PASS"},
+        "majority_author": {"agent": "Sotomayor", "actual": "Sotomayor", "score": "PASS"},
+        "dissent_authors": {"agent": ["Gorsuch", "Thomas", "Alito", "Barrett"], "actual": ["Gorsuch", "Thomas", "Alito", "Barrett"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    },
+    {
+      "id": 287,
+      "case_name": "Case v. Montana",
+      "scoring": {
+        "disposition": {"agent": "affirmed", "actual": "affirmed", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS"},
+        "majority_author": {"agent": "Kagan", "actual": "Kagan", "score": "PASS"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "overall": "PASS"
+    }
+  ],
+  "issues_found": [
+    {
+      "severity": "high",
+      "issue": "Agent defaults to per curiam and 9-0 when uncertain",
+      "detail": "5 of 15 cases failed. Pattern: when syllabus text lacks explicit vote split or authorship info, agent assumes unanimity and per curiam instead of flagging as low confidence.",
+      "affected_cases": [23, 108, 118, 138, 226],
+      "recommendation": "Add prompt instruction: 'If the syllabus does not explicitly state the vote split or author, set fact_extraction_confidence to low and needs_manual_review to true. NEVER assume 9-0 or per curiam — if you cannot find explicit evidence, flag it.'"
+    },
+    {
+      "severity": "high",
+      "issue": "Glossip v. Oklahoma completely wrong on all fields",
+      "detail": "Agent produced other/9-0/null/procedural for a major merits case (reversed_and_remanded/5-3/Sotomayor/merits). Suggests agent had insufficient source text or fundamentally misread the opinion.",
+      "affected_cases": [108],
+      "recommendation": "Investigate source text quality for this case. May need to fetch full opinion text (Priority 3 in Step 3) when syllabus is ambiguous."
+    },
+    {
+      "severity": "medium",
+      "issue": "PostgREST response size limits throughput",
+      "detail": "Step 2 query returns syllabus + opinion_excerpt for all pending cases. With 9+ pending cases, PostgREST truncates the response. Agent only sees 1-3 cases per run.",
+      "recommendation": "Split Step 2 into two queries: (1) IDs-only query, (2) per-case text fetch in Step 3."
+    },
+    {
+      "severity": "medium",
+      "issue": "Turn limit constrains batch processing",
+      "detail": "15-turn limit + ~10 setup turns = only 1-4 cases per run. Adequate for daily production (0-5 cases) but insufficient for catch-up batches.",
+      "recommendation": "For catch-up: run locally. For production: current limit is acceptable."
+    }
+  ],
+  "verdict": "FAIL — 5/15 hard-field failures (66.7% accuracy). Does not meet pass criteria of 0 FAILs. Prompt needs iteration to fix per-curiam/unanimity default bias before going live.",
+  "next_steps": [
+    "Task 4 iteration: Add explicit instruction against assuming 9-0/per curiam",
+    "Task 4 iteration: Add instruction to flag low confidence when vote/author not explicit in text",
+    "Investigate Glossip source text quality",
+    "Optimize Step 2 query split for throughput",
+    "Re-run extended validation after prompt fix"
+  ]
+}

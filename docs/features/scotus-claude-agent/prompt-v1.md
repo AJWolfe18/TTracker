@@ -221,6 +221,11 @@ curl -s "${SUPABASE_URL}/rest/v1/scotus_opinions?case_id=eq.{CASE_ID}&select=opi
 
 For each case, read the opinion text and produce ALL of the following fields. Use your reasoning to extract facts and craft editorial content in a single pass.
 
+**CRITICAL — Do NOT guess vote splits or authorship:**
+- If the text does not explicitly state the vote split, do NOT assume `9-0`. Set `vote_split` to what you can determine, set `fact_extraction_confidence = 'low'`, and set `needs_manual_review = true` with a reason like `"Vote split not explicit in syllabus text"`.
+- If the text does not explicitly name the opinion author, do NOT assume per curiam (`null`). Look for "Justice X delivered the opinion" or similar language. If absent, set `fact_extraction_confidence = 'low'` and `needs_manual_review = true`.
+- **It is better to flag uncertainty than to guess wrong.** A `needs_manual_review = true` flag costs Josh 30 seconds. A wrong vote split or author erodes trust in the entire system.
+
 **Fact fields** (must be accurate — these have hard validation):
 
 | Field | Type | Constraints | How to determine |
@@ -285,7 +290,9 @@ Before writing each case, run this checklist mentally:
 
 - [ ] `disposition` is one of the allowed enum values?
 - [ ] `vote_split` matches format `N-N` and numbers add up to 9 (or less for recusals)?
-- [ ] `majority_author` is a current SCOTUS justice last name, or null for per curiam?
+- [ ] `vote_split` was found explicitly in the text (not assumed)? If assumed, flag low confidence.
+- [ ] `majority_author` is a current SCOTUS justice last name, or null ONLY if confirmed per curiam?
+- [ ] `majority_author` was found explicitly in the text (e.g., "Justice X delivered the opinion")? If not found, flag low confidence.
 - [ ] `dissent_authors` are all current SCOTUS justice last names?
 - [ ] `case_type` is one of the allowed enum values?
 - [ ] `ruling_impact_level` is between 0 and 5?
