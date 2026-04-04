@@ -27,7 +27,7 @@ $ARGUMENTS
 
 ### 1. Fetch Enriched Cases
 
-Query TEST DB for the specified cases:
+Query the connected Supabase database for the specified cases:
 
 ```
 GET /scotus_cases?id=in.(<IDS>)&select=id,case_name,case_name_short,disposition,holding,vote_split,majority_author,dissent_authors,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,evidence_quotes,issue_area,prevailing_party,practical_effect,merits_reached,dissent_exists,fact_extraction_confidence,low_confidence_reason,needs_manual_review,enrichment_status,enriched_at,prompt_version,media_says,actually_means,substantive_winner
