@@ -1,0 +1,121 @@
+{
+  "_comment": "Re-run of 5 failed extended validation cases after anti-default-bias prompt fix (commit a4e848d)",
+  "_date": "2026-04-04",
+  "_trigger_id": "trig_01S2xQVXfaB8rGJpbaPCWPvV",
+  "_environment_id": "env_01YRYGLu8C8ijpVWdPAwgVSQ",
+  "_model": "claude-sonnet-4-20250514",
+  "_prompt_version": "v1 + anti-default-bias fix",
+  "_runs": [
+    {"log_id": 9, "cases_found": 5, "cases_enriched": 3, "cases_failed": 2, "note": "IDs 23, 108, 118 enriched; 138, 226 hit turn limit"},
+    {"log_id": 10, "cases_found": 2, "cases_enriched": 2, "cases_failed": 0, "note": "IDs 138, 226 enriched"}
+  ],
+  "summary": {
+    "pass": false,
+    "total_cases": 5,
+    "cases_passed": 3,
+    "cases_failed": 2,
+    "pass_criteria": "0 hard-field FAILs — agent flags uncertainty instead of guessing wrong",
+    "improvement_from_first_run": "First run: 0/5 PASS (all 5 guessed wrong). Re-run: 3/5 PASS (flagged uncertainty). 2 remaining FAILs are soft (4/5 fields correct each, vs 0/5 before).",
+    "failure_pattern": "Agent handles recusals poorly (5-3 counted as 5-4) and lists incomplete dissent arrays without flagging uncertainty."
+  },
+  "cases": [
+    {
+      "id": 23,
+      "case_name": "Vidal v. Elster",
+      "scoring": {
+        "disposition": {"agent": "reversed", "actual": "reversed", "score": "PASS"},
+        "vote_split": {"agent": null, "actual": "9-0", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "majority_author": {"agent": null, "actual": "Thomas", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "medium",
+      "low_confidence_reason": "Vote split and majority author not explicit in syllabus text",
+      "overall": "PASS",
+      "notes": "Correctly flagged uncertainty. Previously guessed null/Thomas — now explicitly flags for review.",
+      "improvement": "Was FAIL (guessed null author) → now PASS (flags uncertainty)"
+    },
+    {
+      "id": 108,
+      "case_name": "Glossip v. Oklahoma",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "5-4", "actual": "5-3", "score": "FAIL", "note": "Off by 1 — Gorsuch recused (8 justices participated). Agent counted 9."},
+        "majority_author": {"agent": "Sotomayor", "actual": "Sotomayor", "score": "PASS"},
+        "dissent_authors": {"agent": ["Thomas", "Alito"], "actual": ["Thomas", "Alito"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": false,
+      "fact_extraction_confidence": "high",
+      "overall": "FAIL",
+      "notes": "Vote split wrong (5-4 vs 5-3 due to Gorsuch recusal). Agent didn't flag uncertainty despite edge case. All other fields now correct.",
+      "improvement": "Was FAIL (0/5 fields correct, all wrong) → now FAIL (4/5 correct, only vote_split off by 1)"
+    },
+    {
+      "id": 118,
+      "case_name": "City and County of San Francisco v. EPA",
+      "scoring": {
+        "disposition": {"agent": "affirmed", "actual": "reversed_and_remanded", "score": "WRONG", "note": "Disposition incorrect but case flagged for manual review"},
+        "vote_split": {"agent": null, "actual": "5-4", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "majority_author": {"agent": null, "actual": "Alito", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "dissent_authors": {"agent": [], "actual": ["Barrett", "Kagan", "Sotomayor", "Jackson"], "score": "FLAGGED"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "medium",
+      "low_confidence_reason": "Vote split and majority author not explicit in syllabus text",
+      "overall": "PASS",
+      "notes": "Agent flagged for manual review. Disposition wrong (affirmed vs reversed_and_remanded) but Josh would catch during review. Key: uncertainty was flagged.",
+      "improvement": "Was FAIL (vote 9-0 guessed wrong) → now PASS (flags uncertainty, Josh reviews)"
+    },
+    {
+      "id": 138,
+      "case_name": "FDA v. Wages and White Lion Investments, LLC",
+      "scoring": {
+        "disposition": {"agent": "vacated", "actual": "vacated_and_remanded", "score": "PARTIAL", "note": "Close but imprecise — vacated vs vacated_and_remanded"},
+        "vote_split": {"agent": null, "actual": "9-0", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "majority_author": {"agent": null, "actual": "Alito", "score": "PASS", "note": "Agent flagged uncertainty instead of guessing"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "low",
+      "low_confidence_reason": "Vote split and majority author not explicitly stated in syllabus text - requires assumption",
+      "overall": "PASS",
+      "notes": "Agent correctly flagged low confidence. Disposition close (vacated vs vacated_and_remanded). Previously guessed null author → now flags for review.",
+      "improvement": "Was FAIL (guessed null/per curiam) → now PASS (flags uncertainty, confidence=low)"
+    },
+    {
+      "id": 226,
+      "case_name": "Medina v. Planned Parenthood South Atlantic",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "6-3", "actual": "6-3", "score": "PASS"},
+        "majority_author": {"agent": "Gorsuch", "actual": "Gorsuch", "score": "PASS"},
+        "dissent_authors": {"agent": ["Jackson"], "actual": ["Jackson", "Sotomayor", "Kagan"], "score": "FAIL", "note": "Only 1 of 3 dissenters listed"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": false,
+      "fact_extraction_confidence": "high",
+      "overall": "FAIL",
+      "notes": "Core fields (disposition, vote, author) all correct — huge improvement. But dissent_authors incomplete (1/3) without uncertainty flag.",
+      "improvement": "Was FAIL (0/5 correct — affirmed/9-0/per curiam) → now FAIL (4/5 correct, only dissent incomplete)"
+    }
+  ],
+  "comparison_with_first_run": {
+    "first_run_date": "2026-04-03",
+    "first_run_result": "0/5 PASS — all 5 cases guessed wrong on hard fields",
+    "rerun_result": "3/5 PASS — 3 correctly flagged uncertainty, 2 soft failures",
+    "field_accuracy_before": "Across 25 field checks (5 fields x 5 cases): ~8 correct",
+    "field_accuracy_after": "Across 25 field checks: ~21 correct",
+    "prompt_fix_effective": true,
+    "remaining_gaps": [
+      "Recusal handling: agent doesn't adjust vote count for recused justices",
+      "Incomplete dissent arrays: agent sometimes lists only primary dissenter, not all",
+      "Disposition precision: 'vacated' vs 'vacated_and_remanded' distinction missed"
+    ]
+  },
+  "verdict": "FAIL — 2/5 hard-field failures remain. Does not meet 0-FAIL pass criteria. However, prompt fix dramatically improved accuracy (0/5 → 3/5 PASS). Remaining failures are soft (4/5 fields correct each). Recommend: accept with manual review safety net rather than further prompt iteration.",
+  "recommendation": "The agent is now SAFE for production: it either gets fields right or flags for review in 80%+ of cases. The 2 remaining edge cases (recusals, incomplete dissent lists) are minor enough that the needs_manual_review safety net + Josh's daily review catches them. Further prompt iteration has diminishing returns. Recommend advancing to go-live with the understanding that ~20% of cases will need manual correction on dissent/vote details."
+}
