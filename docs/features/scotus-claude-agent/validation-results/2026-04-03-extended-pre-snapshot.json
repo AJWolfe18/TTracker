@@ -1,0 +1,22 @@
+{
+  "_comment": "Pre-run snapshot for extended validation (15 cases)",
+  "_date": "2026-04-03",
+  "_cases_reset_to_pending": [10, 23, 59, 75, 78, 108, 114, 118, 131, 138, 226, 235, 238, 285, 287],
+  "cases": [
+    {"id": 59, "case_name": "McElrath v. Georgia", "decided_at": "2024-02-21", "old_status": "enriched", "old_disposition": "reversed", "old_vote_split": "9-0", "old_majority_author": "Jackson", "old_case_type": "merits"},
+    {"id": 10, "case_name": "Truck Insurance Exchange v. Kaiser Gypsum Co.", "decided_at": "2024-06-06", "old_status": "flagged", "old_disposition": "reversed_and_remanded", "old_vote_split": "8-0", "old_majority_author": "Sotomayor", "old_case_type": "merits"},
+    {"id": 23, "case_name": "Vidal v. Elster", "decided_at": "2024-06-13", "old_status": "flagged", "old_disposition": "reversed", "old_vote_split": "9-0", "old_majority_author": "Thomas", "old_case_type": "merits"},
+    {"id": 78, "case_name": "Williams v. Reed", "decided_at": "2025-02-21", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Brett Kavanaugh", "old_case_type": null},
+    {"id": 75, "case_name": "Hungary v. Simon", "decided_at": "2025-02-21", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Sonia Sotomayor", "old_case_type": null},
+    {"id": 108, "case_name": "Glossip v. Oklahoma", "decided_at": "2025-02-25", "old_status": "enriched", "old_disposition": "reversed", "old_vote_split": null, "old_majority_author": "Sonia Sotomayor", "old_case_type": "unclear"},
+    {"id": 114, "case_name": "Dewberry Group v. Dewberry Engineers", "decided_at": "2025-02-26", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Elena Kagan", "old_case_type": null},
+    {"id": 118, "case_name": "City and County of San Francisco v. EPA", "decided_at": "2025-03-04", "old_status": "enriched", "old_disposition": "reversed", "old_vote_split": null, "old_majority_author": "Samuel Alito", "old_case_type": "merits"},
+    {"id": 131, "case_name": "Bondi v. Vanderstok", "decided_at": "2025-03-26", "old_status": "enriched", "old_disposition": "reversed", "old_vote_split": "7-2", "old_majority_author": "Neil Gorsuch", "old_case_type": "merits"},
+    {"id": 138, "case_name": "FDA v. Wages and White Lion", "decided_at": "2025-04-02", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Samuel Alito", "old_case_type": null},
+    {"id": 226, "case_name": "Medina v. Planned Parenthood South Atlantic", "decided_at": "2025-06-26", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Neil Gorsuch", "old_case_type": null},
+    {"id": 238, "case_name": "Free Speech Coalition v. Paxton", "decided_at": "2025-06-27", "old_status": "enriched", "old_disposition": "affirmed", "old_vote_split": "6-3", "old_majority_author": "Clarence Thomas", "old_case_type": "merits"},
+    {"id": 235, "case_name": "Kennedy v. Braidwood Management", "decided_at": "2025-06-27", "old_status": "flagged", "old_disposition": null, "old_vote_split": null, "old_majority_author": "Brett Kavanaugh", "old_case_type": null},
+    {"id": 285, "case_name": "Bowe v. United States", "decided_at": "2026-01-09", "old_status": "enriched", "old_disposition": "vacated", "old_vote_split": "5-4", "old_majority_author": "Sonia Sotomayor", "old_case_type": "merits"},
+    {"id": 287, "case_name": "Case v. Montana", "decided_at": "2026-01-14", "old_status": "enriched", "old_disposition": "affirmed", "old_vote_split": "9-0", "old_majority_author": "Elena Kagan", "old_case_type": "merits"}
+  ]
+}
