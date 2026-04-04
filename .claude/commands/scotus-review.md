@@ -30,7 +30,7 @@ $ARGUMENTS
 Query TEST DB for the specified cases:
 
 ```
-GET /scotus_cases?id=in.(<IDS>)&select=id,case_name,case_name_short,disposition,holding,vote_split,majority_author,dissent_authors,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,issue_area,prevailing_party,practical_effect,merits_reached,dissent_exists,fact_extraction_confidence,low_confidence_reason,needs_manual_review,enrichment_status,enriched_at,prompt_version,media_says,actually_means,substantive_winner
+GET /scotus_cases?id=in.(<IDS>)&select=id,case_name,case_name_short,disposition,holding,vote_split,majority_author,dissent_authors,case_type,ruling_impact_level,ruling_label,who_wins,who_loses,summary_spicy,why_it_matters,dissent_highlights,evidence_anchors,evidence_quotes,issue_area,prevailing_party,practical_effect,merits_reached,dissent_exists,fact_extraction_confidence,low_confidence_reason,needs_manual_review,enrichment_status,enriched_at,prompt_version,media_says,actually_means,substantive_winner
 ```
 
 If "latest" was specified, use:
@@ -96,6 +96,7 @@ For each case, evaluate `summary_spicy` and `why_it_matters` against the tone sy
 
 For each case, verify:
 - [ ] All required fields populated (no nulls where values expected)
+- [ ] `ruling_label` is 3-8 words and not generic
 - [ ] `evidence_anchors` has 2-4 actual quotes
 - [ ] `evidence_quotes` has 1-3 entries with context
 - [ ] `who_wins` / `who_loses` name specific parties
