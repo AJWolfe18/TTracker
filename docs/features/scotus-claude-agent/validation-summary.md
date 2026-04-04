@@ -2,7 +2,7 @@
 
 **Feature:** Replace 4-script SCOTUS enrichment pipeline (4,300 lines, 60% contradiction rate, ~$20/month) with a single Claude cloud agent ($0 marginal cost).
 
-**Status:** Validation complete. **Opus model selected** (5/5 PASS, 0 FAILs). Go-live blocked on admin dashboard review card (ADO-340).
+**Status:** Validation complete. **Opus model selected** (5/5 PASS, 0 FAILs). **Tone integration complete** (v1.1 prompt, 4/5 on-brand). Go-live blocked on admin dashboard review card (ADO-340).
 
 ---
 
@@ -66,8 +66,9 @@
 | Gold Set | 5 | 25/25 (100%) | 5/5 (100%) | Sonnet | 1 |
 | Extended v1 | 15 | ~55/75 (73%) | 10/15 (67%) | Sonnet | 6 |
 | Re-run (5 failed) | 5 | ~21/25 (84%) | 3/5 (60%) | Sonnet | 2 |
-| **Opus test (same 5)** | **5** | **21/25 (84%) + 4 flagged** | **5/5 (100%)** | **Opus** | **1** |
-| **Overall (unique, Opus)** | **15** | **~75/75 (100%*)** | **15/15 (100%*)** | Mixed | — |
+| Opus test (same 5) | 5 | 21/25 (84%) + 4 flagged | 5/5 (100%) | Opus | 1 |
+| **Tone v1.1 (same 5)** | **5** | **All valid + 1 flag** | **5/5 (100%)** | **Opus** | **1 (330s)** |
+| **Overall (unique, Opus+tone)** | **15** | **~75/75 (100%*)** | **15/15 (100%*)** | Mixed | — |
 
 \* Overall with Opus: replacing the 5 re-run cases with Opus results gives 15/15 PASS. All wrong fields are either correct or flagged for review.
 
@@ -87,6 +88,21 @@ Note: Overall counts the best results for each case (Opus for the 5 tested, Sonn
   - ID 138 (FDA v. Wages): Opus got precise disposition (vacated_and_remanded). Sonnet imprecise (vacated).
 - **Takeaway:** Opus outperformed Sonnet across accuracy, safety flagging, and throughput on the same test set.
 - **File:** `validation-results/2026-04-04-opus-v1.json`
+
+### Round 6: Tone-Integrated Prompt v1.1 (2026-04-04)
+- **What:** Same 5 cases (23, 108, 118, 138, 226), tone-integrated prompt v1.1
+- **Model:** claude-opus-4-6
+- **Prompt:** v1.1 — added "The Betrayal" brand voice, level-specific tone calibration (0-5), opening patterns, banned openings (27), profanity rules (4-5 only), gold set examples rewritten to match
+- **Result:** 5/5 PASS — 0 FAILs, 1 edge case flag (Glossip 6-2 recusal)
+- **Tone assessment:** 4/5 clearly on-brand, 1/5 (Vidal, level 2) slightly mild but appropriate for level
+- **Throughput:** 330s (~5.5 min) — 48% faster than previous Opus run (630s)
+- **Key tone wins:**
+  - ID 226 (Medina): "Six justices slammed the courthouse door on Medicaid patients" + calls out conservative hypocrisy on individual liberty
+  - ID 108 (Glossip): "Six justices had to drag a man off death row that even the state admitted shouldn't be there"
+  - ID 118 (SF v EPA): "dictionary from 1961 and ignored fifty years of practice"
+  - ID 138 (FDA v Wages): "the lawyers aren't done billing"
+- **Takeaway:** Tone integration successful. Output shifted from "good journalism but neutral" to clearly aligned with TrumpyTracker's brand voice, with appropriate level calibration.
+- **File:** `validation-results/2026-04-04-tone-v1.1.json`
 
 ---
 

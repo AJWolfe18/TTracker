@@ -1,0 +1,80 @@
+{
+  "_comment": "Tone-integrated prompt test — same 5 cases, v1.1 prompt with Betrayal voice + tone calibration",
+  "_date": "2026-04-04",
+  "_trigger_id": "trig_01S2xQVXfaB8rGJpbaPCWPvV",
+  "_environment_id": "env_01YRYGLu8C8ijpVWdPAwgVSQ",
+  "_model": "claude-opus-4-6",
+  "_prompt_version": "v1.1 (tone system integration — The Betrayal voice, level calibration, banned openings, profanity rules)",
+  "_commit": "72a59c4",
+  "_runs": [
+    {"log_id": 12, "cases_found": 5, "cases_enriched": 5, "cases_failed": 0, "duration_seconds": 330, "note": "All 5 in single run, ~5.5 min (faster than previous Opus run at 630s)"}
+  ],
+  "summary": {
+    "pass": true,
+    "total_cases": 5,
+    "cases_passed": 5,
+    "cases_flagged": 1,
+    "cases_failed": 0,
+    "pass_criteria": "0 hard-field FAILs, tone aligned with The Betrayal voice at appropriate level",
+    "tone_assessment": "4/5 clearly on-brand, 1/5 (Vidal, level 2) slightly mild but appropriate for level",
+    "field_accuracy": "All fields structurally valid. One edge case flag: Glossip vote_split 6-2 (Gorsuch recusal) correctly identified in editorial but not flagged in confidence fields.",
+    "throughput": "5 cases in 330s (~5.5 min) — nearly 2x faster than previous Opus run (630s)"
+  },
+  "cases": [
+    {
+      "id": 23,
+      "case_name": "Vidal v. Elster",
+      "ruling_impact_level": 2,
+      "hard_fields": "8/8 PASS",
+      "editorial": "10/10 PASS",
+      "tone": "Soft flag — competent eye-roll but slightly mild for brand. Appropriate for level 2.",
+      "overall": "PASS WITH SOFT FLAG",
+      "summary_spicy_preview": "The PTO said no to registering 'Trump too small' as a trademark, and nine justices agreed..."
+    },
+    {
+      "id": 108,
+      "case_name": "Glossip v. Oklahoma",
+      "ruling_impact_level": 4,
+      "hard_fields": "7/8 — vote_split 6-2 (recusal) correctly identified but needs_manual_review=false",
+      "editorial": "10/10 PASS",
+      "tone": "On-brand. Cold fury appropriate for level 4. Names names. 'Six justices had to drag a man off death row.'",
+      "overall": "PASS WITH FLAG",
+      "summary_spicy_preview": "The state's star witness lied about his psychiatric meds. The prosecutor knew and said nothing..."
+    },
+    {
+      "id": 118,
+      "case_name": "City and County of San Francisco v. EPA",
+      "ruling_impact_level": 3,
+      "hard_fields": "8/8 PASS — all gold truth fields match",
+      "editorial": "10/10 PASS",
+      "tone": "On-brand. Sardonic critique. 'dictionary from 1961 and ignored fifty years of practice.'",
+      "overall": "PASS",
+      "summary_spicy_preview": "The EPA told San Francisco: don't pollute the ocean. Five justices said that's not specific enough..."
+    },
+    {
+      "id": 138,
+      "case_name": "FDA v. Wages and White Lion",
+      "ruling_impact_level": 3,
+      "hard_fields": "8/8 PASS",
+      "editorial": "10/10 PASS",
+      "tone": "On-brand. Dry humor. 'the lawyers aren't done billing.'",
+      "overall": "PASS",
+      "summary_spicy_preview": "The Fifth Circuit tried to green-light flavored vapes by accusing the FDA of moving the goalposts..."
+    },
+    {
+      "id": 226,
+      "case_name": "Medina v. Planned Parenthood South Atlantic",
+      "ruling_impact_level": 4,
+      "hard_fields": "8/8 PASS",
+      "editorial": "10/10 PASS",
+      "tone": "On-brand, strongest of five. Angry accountability. Calls out hypocrisy directly. 'slammed the courthouse door on Medicaid patients.'",
+      "overall": "PASS",
+      "summary_spicy_preview": "Six justices slammed the courthouse door on Medicaid patients..."
+    }
+  ],
+  "comparison_to_previous": {
+    "vs_opus_v1": "Same hard field accuracy. Major improvement in editorial voice — previous run was 'good journalism but too neutral.' Now clearly aligned with The Betrayal brand voice.",
+    "vs_sonnet_v1": "Hard fields: Opus still outperforms (correct 6-2 on Glossip, all 3 dissenters on Medina). Tone: Dramatically better with v1.1 prompt.",
+    "throughput": "330s vs 630s (previous Opus) — 48% faster. May be due to simpler prompt bootstrap or server conditions."
+  }
+}
