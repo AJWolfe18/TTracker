@@ -1,0 +1,142 @@
+{
+  "_comment": "Opus model test — same 5 cases as Sonnet re-run, identical prompt (v1 + anti-default-bias fix)",
+  "_date": "2026-04-04",
+  "_trigger_id": "trig_01S2xQVXfaB8rGJpbaPCWPvV",
+  "_environment_id": "env_01YRYGLu8C8ijpVWdPAwgVSQ",
+  "_model": "claude-opus-4-6",
+  "_prompt_version": "v1 + anti-default-bias fix",
+  "_runs": [
+    {"log_id": 11, "cases_found": 5, "cases_enriched": 5, "cases_failed": 0, "note": "All 5 cases completed in a SINGLE run (Sonnet needed 2 runs)"}
+  ],
+  "summary": {
+    "pass": true,
+    "total_cases": 5,
+    "cases_passed": 5,
+    "cases_failed": 0,
+    "pass_criteria": "0 hard-field FAILs — agent flags uncertainty instead of guessing wrong",
+    "field_accuracy": "21/25 fields correct (84%), 4 fields wrong but all flagged for manual review",
+    "throughput": "All 5 cases in 1 run (~10 min). Sonnet needed 2 runs for same 5 cases.",
+    "key_differences_from_sonnet": [
+      "ID 118 (SF v. EPA): Opus got all 5 fields correct. Sonnet got disposition wrong (affirmed vs reversed_and_remanded) and returned null for vote/author/dissent.",
+      "ID 226 (Medina v. PP): Opus identified all 3 dissenters. Sonnet listed 1 of 3 and did not flag the gap.",
+      "ID 108 (Glossip): Both wrong on vote_split (recusal edge case). Opus flagged for review (needs_manual_review=true). Sonnet did not (needs_manual_review=false, confidence=high).",
+      "ID 138 (FDA v. Wages): Opus got precise disposition (vacated_and_remanded). Sonnet got imprecise (vacated)."
+    ]
+  },
+  "cases": [
+    {
+      "id": 23,
+      "case_name": "Vidal v. Elster",
+      "scoring": {
+        "disposition": {"agent": "reversed", "actual": "reversed", "score": "PASS"},
+        "vote_split": {"agent": "9-0", "actual": "9-0", "score": "PASS", "note": "Opus correctly identified 9-0. Sonnet returned null."},
+        "majority_author": {"agent": null, "actual": "Thomas", "score": "PASS", "note": "Agent flagged uncertainty (confidence=low, needs_manual_review=true)"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "low",
+      "low_confidence_reason": "Syllabus text truncated — vote split and majority author not explicitly stated in available text",
+      "overall": "PASS",
+      "fields_correct": 4,
+      "fields_flagged": 1,
+      "notes": "Got vote_split correct where Sonnet returned null. Author still unknown but flagged appropriately.",
+      "vs_sonnet": "Opus correctly identified vote_split (9-0). Sonnet returned null."
+    },
+    {
+      "id": 108,
+      "case_name": "Glossip v. Oklahoma",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "6-3", "actual": "5-3", "score": "FLAGGED", "note": "Wrong (Gorsuch recusal = 8 justices, agent counted 9). Flagged for manual review."},
+        "majority_author": {"agent": "Sotomayor", "actual": "Sotomayor", "score": "PASS"},
+        "dissent_authors": {"agent": ["Thomas", "Alito"], "actual": ["Thomas", "Alito"], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "medium",
+      "low_confidence_reason": "Authorship block truncated — third dissenter inferred but text cut off",
+      "overall": "PASS",
+      "fields_correct": 4,
+      "fields_flagged": 1,
+      "notes": "Vote split wrong (6-3 vs 5-3 — Gorsuch recusal). Agent flagged for manual review. Sonnet also got vote wrong (5-4) but did not flag.",
+      "vs_sonnet": "Both wrong on vote_split due to recusal. Opus flagged (needs_manual_review=true). Sonnet did not (needs_manual_review=false, confidence=high)."
+    },
+    {
+      "id": 118,
+      "case_name": "City and County of San Francisco v. EPA",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS", "note": "Sonnet got WRONG (affirmed)"},
+        "vote_split": {"agent": "5-4", "actual": "5-4", "score": "PASS", "note": "Sonnet returned null"},
+        "majority_author": {"agent": "Alito", "actual": "Alito", "score": "PASS", "note": "Sonnet returned null"},
+        "dissent_authors": {"agent": ["Barrett", "Sotomayor", "Kagan", "Jackson"], "actual": ["Barrett", "Kagan", "Sotomayor", "Jackson"], "score": "PASS", "note": "All 4 dissenters correct. Sonnet returned empty array."},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "medium",
+      "low_confidence_reason": "Highly fractured opinions with partial joinders",
+      "overall": "PASS",
+      "fields_correct": 5,
+      "fields_flagged": 0,
+      "notes": "All 5 fields correct despite fractured opinions. Sonnet got 1/5 correct (case_type only).",
+      "vs_sonnet": "Opus 5/5 correct. Sonnet 1/5 correct (disposition wrong, vote/author/dissent all null/empty). Largest gap between models."
+    },
+    {
+      "id": 138,
+      "case_name": "FDA v. Wages and White Lion Investments, LLC",
+      "scoring": {
+        "disposition": {"agent": "vacated_and_remanded", "actual": "vacated_and_remanded", "score": "PASS", "note": "Sonnet got imprecise (vacated only)"},
+        "vote_split": {"agent": "8-1", "actual": "9-0", "score": "FLAGGED", "note": "Wrong but confidence=low, needs_manual_review=true"},
+        "majority_author": {"agent": null, "actual": "Alito", "score": "PASS", "note": "Flagged uncertainty (confidence=low)"},
+        "dissent_authors": {"agent": [], "actual": [], "score": "PASS"},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": true,
+      "fact_extraction_confidence": "low",
+      "low_confidence_reason": "No authorship info in available text",
+      "overall": "PASS",
+      "fields_correct": 3,
+      "fields_flagged": 2,
+      "notes": "Disposition precise (vacated_and_remanded vs Sonnet's imprecise 'vacated'). Vote/author flagged appropriately.",
+      "vs_sonnet": "Opus got precise disposition (vacated_and_remanded). Sonnet got imprecise (vacated). Both flagged uncertain fields."
+    },
+    {
+      "id": 226,
+      "case_name": "Medina v. Planned Parenthood South Atlantic",
+      "scoring": {
+        "disposition": {"agent": "reversed_and_remanded", "actual": "reversed_and_remanded", "score": "PASS"},
+        "vote_split": {"agent": "6-3", "actual": "6-3", "score": "PASS"},
+        "majority_author": {"agent": "Gorsuch", "actual": "Gorsuch", "score": "PASS"},
+        "dissent_authors": {"agent": ["Jackson", "Sotomayor", "Kagan"], "actual": ["Jackson", "Sotomayor", "Kagan"], "score": "PASS", "note": "All 3 dissenters correct. Sonnet only got 1 (Jackson)."},
+        "case_type": {"agent": "merits", "actual": "merits", "score": "PASS"}
+      },
+      "needs_manual_review": false,
+      "fact_extraction_confidence": "high",
+      "overall": "PASS",
+      "fields_correct": 5,
+      "fields_flagged": 0,
+      "notes": "All 5 fields correct with high confidence. Sonnet's worst case (4/5 correct but dissent incomplete and not flagged = FAIL).",
+      "vs_sonnet": "Opus 5/5 correct, confidence=high. Sonnet 4/5 correct but listed 1 of 3 dissenters and did not flag the gap."
+    }
+  ],
+  "comparison_with_sonnet": {
+    "sonnet_date": "2026-04-04",
+    "sonnet_model": "claude-sonnet-4-20250514",
+    "sonnet_result": "3/5 PASS, 2/5 FAIL",
+    "sonnet_field_accuracy": "~21/25 correct",
+    "opus_result": "5/5 PASS, 0/5 FAIL",
+    "opus_field_accuracy": "21/25 correct + 4 flagged = 25/25 either correct or flagged",
+    "opus_runs": 1,
+    "sonnet_runs": 2,
+    "key_differences": [
+      "Opus: 5/5 PASS vs Sonnet: 3/5 PASS — Opus flags every wrong answer",
+      "ID 118: Opus got all 5 fields correct. Sonnet got disposition WRONG.",
+      "ID 226: Opus got all 3 dissenters. Sonnet only 1 and didn't flag.",
+      "ID 108: Both wrong on recusal math. Opus flagged, Sonnet didn't.",
+      "ID 138: Opus got precise disposition. Sonnet imprecise.",
+      "Throughput: Opus completed all 5 in 1 run. Sonnet needed 2 runs."
+    ]
+  },
+  "verdict": "PASS — 5/5 cases pass (0 hard-field FAILs). Opus outperformed Sonnet on these 5 cases across accuracy, uncertainty flagging, and throughput.",
+  "recommendation": "Switch to Opus. Handles fractured opinions, dissent arrays, and recusal edge cases better than Sonnet. Every wrong answer flagged for review. No additional cost (included in subscription)."
+}
