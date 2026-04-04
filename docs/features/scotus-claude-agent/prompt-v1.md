@@ -69,7 +69,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/scotus_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d '{"prompt_version": "v1", "run_source": "cloud-agent"}'
+  -d '{"prompt_version": "v1.1", "run_source": "cloud-agent"}'
 ```
 
 **Important:** `Prefer: return=representation` makes the response include the created/modified row(s). Always use this for POST and PATCH so you can verify the write succeeded.
@@ -150,7 +150,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/scotus_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"prompt_version\": \"v1\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
+  -d "{\"prompt_version\": \"v1.1\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
 ```
 
 **Save the returned `id`** — you need it in Step 7 to update this log entry.
@@ -326,7 +326,7 @@ This voice applies to `summary_spicy`, `why_it_matters`, `who_wins`, `who_loses`
 |-------|-------|
 | `enrichment_status` | Always `'enriched'` on success |
 | `enriched_at` | Current ISO 8601 timestamp |
-| `prompt_version` | `'v1'` |
+| `prompt_version` | `'v1.1'` |
 | `source_data_version` | `'v2-full-opinion'` or `'v1-syllabus'` (from Step 3) |
 | `source_char_count` | Total characters of opinion text actually read |
 
@@ -393,7 +393,7 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "source_char_count": 0,
   "enrichment_status": "enriched",
   "enriched_at": "{ENRICHED_AT value}",
-  "prompt_version": "v1",
+  "prompt_version": "v1.1",
   "source_data_version": "v1-syllabus",
   "media_says": null,
   "actually_means": null,
@@ -649,7 +649,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
 
 **Case:** TikTok Inc. v. Garland, No. 24-656 (Jan 17, 2025)
 **Type:** Per curiam (no named majority author), unanimous 9-0, maximum impact
-**Why selected:** Tests per curiam handling and impact level 5 calibration
+**Why selected:** Tests per curiam handling and impact level 5 calibration. Note: profanity is *allowed* at level 5 but not *required* — this case is self-indicting at volume and doesn't need it.
 
 ```json
 {
