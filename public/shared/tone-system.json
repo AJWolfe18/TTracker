@@ -1,0 +1,107 @@
+{
+  "_meta": {
+    "description": "Shared tone system for TrumpyTracker - single source of truth",
+    "version": "1.0.0",
+    "lastUpdated": "2026-01-18"
+  },
+
+  "colors": {
+    "5": { "bg": "#fee2e2", "text": "#7f1d1d", "border": "#dc2626", "emoji": "🔴" },
+    "4": { "bg": "#fed7aa", "text": "#7c2d12", "border": "#ea580c", "emoji": "🟠" },
+    "3": { "bg": "#fef3c7", "text": "#713f12", "border": "#f59e0b", "emoji": "🟡" },
+    "2": { "bg": "#dbeafe", "text": "#1e3a8a", "border": "#3b82f6", "emoji": "🔵" },
+    "1": { "bg": "#cffafe", "text": "#155e75", "border": "#06b6d4", "emoji": "⚪" },
+    "0": { "bg": "#d1fae5", "text": "#064e3b", "border": "#10b981", "emoji": "🟢" }
+  },
+
+  "profanityAllowed": {
+    "5": true,
+    "4": true,
+    "3": false,
+    "2": false,
+    "1": false,
+    "0": false
+  },
+
+  "toneCalibration": {
+    "5": "ALARM BELLS: Cold fury, prosecutorial. Profanity for INCREDULITY. 'They actually fucking did it.'",
+    "4": "ANGRY ACCOUNTABILITY: Suspicious, pointed. Name names, focus on victims and beneficiaries. Profanity allowed.",
+    "3": "SARDONIC CRITIQUE: Weary, 'seen this before' energy. Dark humor, let absurdity speak. NO profanity.",
+    "2": "EYE-ROLL: 'Lazy employees' energy. Measured critique of system dysfunction. NO profanity.",
+    "1": "CAUTIOUS SKEPTICISM: Credit where due, but flag the asterisk. 'Read the limiting language.' NO profanity.",
+    "0": "SUSPICIOUS CELEBRATION: Genuine disbelief the system worked. 'Don't get used to it.' NO profanity."
+  },
+
+  "labels": {
+    "pardons": {
+      "_voice": "The Transaction",
+      "_framing": "This isn't mercy; it's a receipt for a donation.",
+      "5": { "spicy": "Pay 2 Win", "neutral": "Transaction" },
+      "4": { "spicy": "Cronies-in-Chief", "neutral": "Direct Relationship" },
+      "3": { "spicy": "The Party Favor", "neutral": "Network Connection" },
+      "2": { "spicy": "The PR Stunt", "neutral": "Celebrity/Fame" },
+      "1": { "spicy": "The Ego Discount", "neutral": "Flattery" },
+      "0": { "spicy": "Actual Mercy", "neutral": "Merit-Based" }
+    },
+    "stories": {
+      "_voice": "The Chaos",
+      "_framing": "Look at this specific dumpster fire inside the larger dumpster fire.",
+      "5": { "spicy": "Constitutional Dumpster Fire", "neutral": "Constitutional Crisis" },
+      "4": { "spicy": "Criminal Bullshit", "neutral": "Criminal Activity" },
+      "3": { "spicy": "The Deep Swamp", "neutral": "Institutional Corruption" },
+      "2": { "spicy": "The Great Gaslight", "neutral": "Misleading/Spin" },
+      "1": { "spicy": "Accidental Sanity", "neutral": "Mixed Outcome" },
+      "0": { "spicy": "A Broken Clock Moment", "neutral": "Positive Outcome" }
+    },
+    "eos": {
+      "_voice": "The Power Grab",
+      "_framing": "The King's pen is moving. Here's who gets hurt and who gets rich.",
+      "5": { "spicy": "Authoritarian Power Grab", "neutral": "Unprecedented Authority" },
+      "4": { "spicy": "Weaponized Executive", "neutral": "Targeted Action" },
+      "3": { "spicy": "Corporate Giveaway", "neutral": "Industry Benefit" },
+      "2": { "spicy": "Smoke and Mirrors", "neutral": "Symbolic Action" },
+      "1": { "spicy": "Surprisingly Not Terrible", "neutral": "Neutral Impact" },
+      "0": { "spicy": "Actually Helpful", "neutral": "Beneficial Policy" }
+    },
+    "scotus": {
+      "_voice": "The Betrayal",
+      "_framing": "The people supposed to protect the law are lighting it on fire.",
+      "5": { "spicy": "Constitutional Crisis", "neutral": "Landmark Reversal" },
+      "4": { "spicy": "Rubber-stamping Tyranny", "neutral": "Executive Deference" },
+      "3": { "spicy": "Institutional Sabotage", "neutral": "Precedent Erosion" },
+      "2": { "spicy": "Judicial Sidestepping", "neutral": "Narrow Ruling" },
+      "1": { "spicy": "Crumbs from the Bench", "neutral": "Limited Victory" },
+      "0": { "spicy": "Democracy Wins", "neutral": "Rights Affirmed" }
+    }
+  },
+
+  "bannedOpenings": [
+    "This is outrageous",
+    "In a shocking move",
+    "Once again",
+    "It's no surprise",
+    "Make no mistake",
+    "Let that sink in",
+    "Guess what?",
+    "So, ",
+    "Well, ",
+    "Look, ",
+    "In a stunning",
+    "In a brazen",
+    "Shocking absolutely no one",
+    "In the latest move",
+    "In yet another",
+    "It remains to be seen",
+    "Crucially",
+    "Interestingly",
+    "Notably",
+    "The walls are closing in",
+    "This is a bombshell",
+    "Breaking:",
+    "BREAKING:",
+    "Just in:",
+    "It has been reported",
+    "It was announced",
+    "It appears that"
+  ]
+}

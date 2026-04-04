@@ -86,6 +86,13 @@
   --severity-minor-bg: #16a34a;
   --severity-minor-text: #ffffff;
   --severity-minor-glow: none;
+  /* ADO-270: New alarm levels for 0-1 */
+  --severity-low-bg: #06b6d4;
+  --severity-low-text: #ffffff;
+  --severity-low-glow: none;
+  --severity-positive-bg: #10b981;
+  --severity-positive-text: #ffffff;
+  --severity-positive-glow: none;
 
   /* Pagination */
   --pagination-bg: #ffffff;
@@ -191,6 +198,13 @@
   --severity-minor-bg: #16a34a;
   --severity-minor-text: #ffffff;
   --severity-minor-glow: 0 1px 4px rgba(22, 163, 74, 0.3);
+  /* ADO-270: New alarm levels for 0-1 */
+  --severity-low-bg: #06b6d4;
+  --severity-low-text: #ffffff;
+  --severity-low-glow: 0 1px 4px rgba(6, 182, 212, 0.3);
+  --severity-positive-bg: #10b981;
+  --severity-positive-text: #ffffff;
+  --severity-positive-glow: 0 1px 4px rgba(16, 185, 129, 0.3);
 
   /* Pagination */
   --pagination-bg: rgba(31, 41, 55, 0.6);
@@ -621,6 +635,10 @@
   white-space: nowrap;
 }
 
+.tt-timestamp-right {
+  margin-left: auto;
+}
+
 /* Headline */
 .tt-headline {
   font-family: var(--font-headline);
@@ -687,6 +705,93 @@
   background: var(--severity-minor-bg);
   color: var(--severity-minor-text);
   box-shadow: var(--severity-minor-glow);
+}
+/* ADO-270: New alarm levels for 0-1 */
+.tt-severity[data-severity="low"] {
+  background: var(--severity-low-bg);
+  color: var(--severity-low-text);
+  box-shadow: var(--severity-low-glow);
+}
+.tt-severity[data-severity="positive"] {
+  background: var(--severity-positive-bg);
+  color: var(--severity-positive-text);
+  box-shadow: var(--severity-positive-glow);
+}
+
+/* ============================================
+   SCOTUS RULING IMPACT BADGES (ADO-82)
+   0=Democracy Wins (green) to 5=Constitutional Crisis (red)
+   ============================================ */
+.tt-scotus-impact {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Impact level 5: Constitutional Crisis - Red 🔴 */
+.tt-scotus-impact[data-impact="5"] {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* Impact level 4: Rubber-stamping Tyranny - Orange 🟠 */
+.tt-scotus-impact[data-impact="4"] {
+  background: #ea580c;
+  color: #ffffff;
+}
+
+/* Impact level 3: Institutional Sabotage - Yellow 🟡 */
+.tt-scotus-impact[data-impact="3"] {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+/* Impact level 2: Judicial Sidestepping - Blue 🔵 */
+.tt-scotus-impact[data-impact="2"] {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+/* Impact level 1: Crumbs from the Bench - Gray ⚪ */
+.tt-scotus-impact[data-impact="1"] {
+  background: #9ca3af;
+  color: #ffffff;
+}
+
+/* Impact level 0: Democracy Wins - Green 🟢 */
+.tt-scotus-impact[data-impact="0"] {
+  background: #10b981;
+  color: #ffffff;
+}
+
+/* Large impact badge variant (for detail modal) */
+.tt-scotus-impact-large {
+  font-size: 0.8125rem;
+  padding: 6px 14px;
+}
+
+[data-theme="dark"] .tt-scotus-impact[data-impact="5"] {
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.4);
+}
+[data-theme="dark"] .tt-scotus-impact[data-impact="4"] {
+  box-shadow: 0 1px 4px rgba(234, 88, 12, 0.4);
+}
+[data-theme="dark"] .tt-scotus-impact[data-impact="3"] {
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4);
+}
+[data-theme="dark"] .tt-scotus-impact[data-impact="2"] {
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.4);
+}
+[data-theme="dark"] .tt-scotus-impact[data-impact="1"] {
+  box-shadow: 0 1px 4px rgba(156, 163, 175, 0.4);
+}
+[data-theme="dark"] .tt-scotus-impact[data-impact="0"] {
+  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.4);
 }
 
 /* Summary block */
@@ -2607,5 +2712,369 @@
   outline: 2px solid var(--text-link);
   outline-offset: 2px;
   box-shadow: 0 0 0 3px var(--search-focus-ring, rgba(59, 130, 246, 0.3));
+}
+
+/* ============================================
+   SCOTUS TRACKER STYLING (ADO-83)
+   ============================================ */
+
+/* SCOTUS Card Header */
+.tt-scotus-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+/* SCOTUS Term badge */
+.tt-scotus-term {
+  display: inline-block;
+  padding: 4px 10px;
+  background: var(--summary-bg);
+  color: var(--text-muted);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* SCOTUS Term - muted version for footer */
+.tt-scotus-term-muted {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* SCOTUS Disposition badge - prominent outcome indicator */
+.tt-disposition-badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  /* Default - gray */
+  background: #6b7280;
+  color: #fff;
+}
+
+/* Disposition colors - semantic by outcome */
+.tt-disposition-badge[data-disposition="reversed"],
+.tt-disposition-badge[data-disposition="reversed-and-remanded"] {
+  background: #dc2626;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="affirmed"],
+.tt-disposition-badge[data-disposition="affirmed-and-remanded"] {
+  background: #16a34a;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="vacated"],
+.tt-disposition-badge[data-disposition="vacated-and-remanded"] {
+  background: #ca8a04;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="remanded"] {
+  background: #2563eb;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="dismissed"] {
+  background: #6b7280;
+  color: #fff;
+}
+
+.tt-disposition-badge[data-disposition="granted"],
+.tt-disposition-badge[data-disposition="denied"] {
+  background: #7c3aed;
+  color: #fff;
+}
+
+/* SCOTUS Case metadata row */
+.tt-scotus-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.tt-scotus-author {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tt-scotus-author-icon {
+  opacity: 0.6;
+}
+
+.tt-scotus-vote {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* SCOTUS Who Wins preview */
+.tt-scotus-wins {
+  background: var(--summary-bg);
+  border-left: 3px solid var(--summary-border);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 0 6px 6px 0;
+  flex-grow: 1;
+}
+
+.tt-scotus-wins-text {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--summary-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* SCOTUS Detail Modal */
+.tt-scotus-modal {
+  max-width: 800px;
+}
+
+.tt-scotus-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* SCOTUS Section in modal */
+.tt-scotus-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.tt-scotus-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 16px;
+  padding-bottom: 0;
+}
+
+.tt-scotus-section-title {
+  font-family: var(--font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.tt-scotus-section-content {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+/* SCOTUS Meta grid in modal */
+.tt-scotus-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.tt-scotus-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tt-scotus-meta-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tt-scotus-meta-value {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+/* SCOTUS Links */
+.tt-scotus-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.tt-scotus-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--filter-bg);
+  border: 1px solid var(--filter-border);
+  border-radius: 6px;
+  color: var(--text-link);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.tt-scotus-link:hover {
+  background: var(--filter-hover-bg);
+  border-color: var(--text-link);
+  text-decoration: none;
+}
+
+[data-theme="dark"] .tt-scotus-link {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* SCOTUS Evidence anchors */
+.tt-scotus-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tt-scotus-evidence-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--summary-bg);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* ===========================
+   ADO-82: SCOTUS Components
+   Vote Fracture / Dissent Block / Media Spin Panel
+   =========================== */
+
+/* Vote fracture badge */
+.tt-vote-fracture {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: rgba(110, 130, 160, 0.14);
+  color: rgba(20, 30, 45, 0.90);
+  white-space: nowrap;
+}
+
+/* Variant tints via data attribute */
+.tt-vote-fracture[data-fracture="unanimous"] {
+  background: rgba(40, 160, 90, 0.14);
+  border-color: rgba(40, 160, 90, 0.22);
+}
+
+.tt-vote-fracture[data-fracture="tight"] {
+  background: rgba(220, 150, 40, 0.16);
+  border-color: rgba(220, 150, 40, 0.26);
+}
+
+/* Dissent callout block */
+.tt-dissent-block {
+  border: 1px solid rgba(0,0,0,0.10);
+  border-left: 4px solid rgba(234, 120, 30, 0.95);
+  border-radius: 12px;
+  background: rgba(220, 40, 40, 0.08);
+  padding: 12px 14px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+}
+
+.tt-dissent-block-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tt-dissent-block-title {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.tt-dissent-block-authors {
+  font-style: italic;
+  opacity: 0.85;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tt-dissent-block-body {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .tt-vote-fracture {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(120, 150, 190, 0.18);
+  color: rgba(245, 248, 252, 0.92);
+}
+
+[data-theme="dark"] .tt-vote-fracture[data-fracture="unanimous"] {
+  background: rgba(50, 200, 120, 0.18);
+  border-color: rgba(50, 200, 120, 0.22);
+}
+
+[data-theme="dark"] .tt-vote-fracture[data-fracture="tight"] {
+  background: rgba(245, 180, 70, 0.20);
+  border-color: rgba(245, 180, 70, 0.24);
+}
+
+[data-theme="dark"] .tt-dissent-block {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(235, 80, 80, 0.10);
+}
+
+
+/* Mobile responsive SCOTUS styles */
+@media (max-width: 640px) {
+  .tt-scotus-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .tt-scotus-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tt-scotus-links {
+    flex-direction: column;
+  }
+
+  .tt-scotus-link {
+    width: 100%;
+    justify-content: center;
+  }
+
 }
 

@@ -1,5 +1,6 @@
 // TrumpyTracker EO Theme Preview - Executive Orders Page
 // Matches story theme styling with EO-specific content
+// ADO-271: Updated to use shared tone-system.json for labels and colors
 
 (function() {
   'use strict';
@@ -14,6 +15,96 @@
   const SUPABASE_ANON_KEY = window.SUPABASE_CONFIG?.SUPABASE_ANON_KEY;
 
   const ITEMS_PER_PAGE = 12;
+
+  // ===========================================
+  // TONE SYSTEM (ADO-271)
+  // ===========================================
+
+  // Fallback labels if tone-system.json fails to load
+  const FALLBACK_EO_LABELS = {
+    5: { spicy: 'Authoritarian Power Grab', neutral: 'Unprecedented Authority' },
+    4: { spicy: 'Weaponized Executive', neutral: 'Targeted Action' },
+    3: { spicy: 'Corporate Giveaway', neutral: 'Industry Benefit' },
+    2: { spicy: 'Smoke and Mirrors', neutral: 'Symbolic Action' },
+    1: { spicy: 'Surprisingly Not Terrible', neutral: 'Neutral Impact' },
+    0: { spicy: 'Actually Helpful', neutral: 'Beneficial Policy' }
+  };
+
+  // Legacy eo_impact_type → alarm_level mapping (for backward compat)
+  const LEGACY_IMPACT_TO_ALARM = {
+    fascist_power_grab: 5,
+    authoritarian_overreach: 4,
+    corrupt_grift: 3,
+    performative_bullshit: 2
+  };
+
+  // Global tone system state (loaded once)
+  let toneSystemData = null;
+  let toneSystemLoaded = false;
+
+  /**
+   * Load tone system JSON (called once on app mount)
+   */
+  async function loadToneSystem() {
+    if (toneSystemLoaded) return;
+    try {
+      const response = await fetch('./shared/tone-system.json');
+      if (response.ok) {
+        toneSystemData = await response.json();
+      }
+    } catch (e) {
+      console.warn('Failed to load tone-system.json, using fallbacks');
+    }
+    toneSystemLoaded = true;
+  }
+
+  /**
+   * Get alarm level for an EO (with legacy fallback)
+   * @param {Object} eo - Executive order object
+   * @returns {number} Alarm level 0-5
+   */
+  function getAlarmLevel(eo) {
+    // Prefer alarm_level if present
+    if (eo.alarm_level !== null && eo.alarm_level !== undefined) {
+      return Math.max(0, Math.min(5, Math.trunc(eo.alarm_level)));
+    }
+    // Fallback: map legacy eo_impact_type to alarm_level
+    if (eo.eo_impact_type && LEGACY_IMPACT_TO_ALARM[eo.eo_impact_type] !== undefined) {
+      return LEGACY_IMPACT_TO_ALARM[eo.eo_impact_type];
+    }
+    // Default to level 3 if nothing available
+    return 3;
+  }
+
+  /**
+   * Get label for alarm level (spicy or neutral)
+   * @param {number} level - Alarm level 0-5
+   * @param {boolean} spicy - Whether to use spicy label
+   * @returns {string} Label text
+   */
+  function getAlarmLabel(level, spicy = true) {
+    const labelKey = spicy ? 'spicy' : 'neutral';
+    const labels = toneSystemData?.labels?.eos || FALLBACK_EO_LABELS;
+    return labels[level]?.[labelKey] || labels[3]?.[labelKey] || 'Policy Action';
+  }
+
+  /**
+   * Get color class for alarm level
+   * @param {number} level - Alarm level 0-5
+   * @returns {string} Color class name
+   */
+  function getAlarmColor(level) {
+    // Map alarm levels to CSS severity classes
+    const colorMap = {
+      5: 'critical',
+      4: 'severe',
+      3: 'moderate',
+      2: 'minor',
+      1: 'minor',
+      0: 'minor'
+    };
+    return colorMap[level] || 'moderate';
+  }
 
   // EO Category labels (match database values)
   const EO_CATEGORIES = {
@@ -334,8 +425,10 @@
     const [expanded, setExpanded] = useState(false);
 
     const categoryLabel = EO_CATEGORIES[eo.category] || 'Uncategorized';
-    const impactLabel = IMPACT_LABELS[eo.eo_impact_type] || '';
-    const impactColor = IMPACT_COLORS[eo.eo_impact_type] || 'minor';
+    // ADO-271: Use alarm_level with legacy fallback
+    const alarmLevel = getAlarmLevel(eo);
+    const alarmLabel = getAlarmLabel(alarmLevel, true); // spicy labels
+    const alarmColor = getAlarmColor(alarmLevel);
     const actionTier = ACTION_TIERS[eo.action_tier] || '';
     const summary = eo.section_what_it_means || eo.title || '';
     const hasLongSummary = summary.length > 200;
@@ -357,10 +450,10 @@
           className: 'tt-category',
           'data-cat': eo.category
         }, categoryLabel),
-        impactLabel && React.createElement('span', {
+        alarmLabel && React.createElement('span', {
           className: 'tt-severity',
-          'data-severity': impactColor
-        }, impactLabel),
+          'data-severity': alarmColor
+        }, alarmLabel),
         actionTier && React.createElement('span', { className: 'tt-action-tier' }, actionTier)
       ),
 
@@ -453,15 +546,16 @@
             className: 'tt-detail-headline'
           }, eo.title),
 
+          // ADO-271: Use alarm_level with legacy fallback
           React.createElement('div', { className: 'tt-detail-meta' },
             React.createElement('span', { className: 'tt-detail-date' },
               'Signed: ',
               formatDate(eo.date || eo.created_at)
             ),
-            eo.eo_impact_type && React.createElement('span', {
+            React.createElement('span', {
               className: 'tt-severity',
-              'data-severity': IMPACT_COLORS[eo.eo_impact_type] || 'minor'
-            }, IMPACT_LABELS[eo.eo_impact_type]),
+              'data-severity': getAlarmColor(getAlarmLevel(eo))
+            }, getAlarmLabel(getAlarmLevel(eo), true)),
             eo.action_tier && React.createElement('span', { className: 'tt-action-tier' },
               ACTION_TIERS[eo.action_tier]
             )
@@ -573,8 +667,11 @@
     async function loadEOs() {
       try {
         setLoading(true);
+        // ADO-271: Load tone system first
+        await loadToneSystem();
+        // ADO-271: Include alarm_level in query
         const data = await supabaseRequest(
-          'executive_orders?select=id,order_number,title,date,category,eo_impact_type,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&order=date.desc,id.desc&limit=500'
+          'executive_orders?select=id,order_number,title,date,category,eo_impact_type,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&order=date.desc,id.desc&limit=500'
         );
         setAllEOs(data || []);
         setError(null);
