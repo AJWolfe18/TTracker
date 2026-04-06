@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       // SCOTUS: all stats
       supabase
         .from('scotus_cases')
-        .select('id,is_public'),
+        .select('id,is_public,needs_manual_review,enrichment_status'),
 
       // Executive Orders: total
       supabase
@@ -139,6 +139,8 @@ Deno.serve(async (req) => {
     const scotusTotal = scotus.length
     const scotusPublished = scotus.filter(s => s.is_public).length
     const scotusDraft = scotus.filter(s => !s.is_public).length
+    const scotusNeedsReview = scotus.filter(s => s.needs_manual_review).length
+    const scotusPending = scotus.filter(s => s.enrichment_status === 'pending').length
 
     // Determine pipeline status
     const lastFetchedAt = lastFeedFetchResult.data?.last_fetched_at
@@ -195,7 +197,9 @@ Deno.serve(async (req) => {
       scotus: {
         total: scotusTotal,
         published: scotusPublished,
-        draft: scotusDraft
+        draft: scotusDraft,
+        needs_review: scotusNeedsReview,
+        pending: scotusPending
       },
       executive_orders: {
         total: eosResult.count ?? 0
@@ -227,6 +231,7 @@ Deno.serve(async (req) => {
                pardonsNeedsReview +
                pardonsDraft +
                scotusDraft +
+               scotusNeedsReview +
                feedsFailed,
         breakdown: {
           stories_need_review: storiesNeedsReviewCount,
@@ -234,6 +239,7 @@ Deno.serve(async (req) => {
           pardons_need_review: pardonsNeedsReview,
           pardons_unpublished: pardonsDraft,
           scotus_unpublished: scotusDraft,
+          scotus_needs_review: scotusNeedsReview,
           feeds_failed: feedsFailed
         }
       },
