@@ -2431,6 +2431,10 @@
             const h = React.createElement;
             const [formData, setFormData] = useState(() => ({
                 // Case Identity (read-only in display but included for reference)
+                case_name: scotusCase?.case_name || '',
+                docket_number: scotusCase?.docket_number || '',
+                term: scotusCase?.term || '',
+                decided_at: scotusCase?.decided_at ? scotusCase.decided_at.substring(0, 10) : '',
                 disposition: scotusCase?.disposition || '',
                 case_type: scotusCase?.case_type || '',
                 // Vote & Opinion
@@ -2464,7 +2468,7 @@
             const [saving, setSaving] = useState(false);
             const [error, setError] = useState(null);
             const [isConflict, setIsConflict] = useState(false);
-            const [openSections, setOpenSections] = useState({ case_identity: true, vote_opinion: true, editorial: true, evidence: false, status_qa: false });
+            const [openSections, setOpenSections] = useState({ case_identity: true, vote_opinion: true, editorial: true, evidence: true, status_qa: false });
 
             const originalUpdatedAt = scotusCase?.updated_at;
 
@@ -2491,8 +2495,15 @@
                 try {
                     const updates = {};
 
-                    // Text fields
-                    const textFields = ['vote_split', 'majority_author', 'ruling_label', 'summary_spicy', 'who_wins', 'who_loses', 'why_it_matters', 'dissent_highlights', 'practical_effect', 'media_says', 'actually_means', 'holding', 'qa_review_note', 'manual_review_note'];
+                    // Text fields (case identity + vote + editorial)
+                    const textFields = ['case_name', 'docket_number', 'term', 'vote_split', 'majority_author', 'ruling_label', 'summary_spicy', 'who_wins', 'who_loses', 'why_it_matters', 'dissent_highlights', 'practical_effect', 'media_says', 'actually_means', 'holding'];
+
+                    // Date fields
+                    for (const f of ['decided_at']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = scotusCase[f] ? scotusCase[f].substring(0, 10) : null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
                     for (const f of textFields) {
                         const newVal = formData[f] || null;
                         const oldVal = scotusCase[f] || null;
@@ -2673,13 +2684,13 @@
                             // Section 1: Case Identity (open)
                             sectionHeader('case_identity', 'Case Identity'),
                             openSections.case_identity && h('div', null,
-                                readOnlyField('Case Name', scotusCase.case_name),
+                                textField('case_name', 'Case Name', { used: true }),
                                 h('div', { className: 'form-row' },
-                                    readOnlyField('Docket Number', scotusCase.docket_number),
-                                    readOnlyField('Term', scotusCase.term)
+                                    textField('docket_number', 'Docket Number', { used: true }),
+                                    textField('term', 'Term', { used: true })
                                 ),
                                 h('div', { className: 'form-row' },
-                                    readOnlyField('Decided', scotusCase.decided_at ? new Date(scotusCase.decided_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null),
+                                    textField('decided_at', 'Decided (YYYY-MM-DD)', { type: 'date', used: true }),
                                     selectField('disposition', 'Disposition', SCOTUS_DISPOSITIONS, true)
                                 ),
                                 selectField('case_type', 'Case Type', SCOTUS_CASE_TYPES, true)

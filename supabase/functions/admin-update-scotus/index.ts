@@ -9,6 +9,8 @@ import { checkAdminPassword } from '../_shared/auth.ts'
 
 // Allowed fields that can be updated (whitelist for security) — 28 fields
 const ALLOWED_FIELDS = [
+  // Case Identity (4)
+  'case_name', 'docket_number', 'term', 'decided_at',
   // Vote (3)
   'vote_split', 'majority_author', 'dissent_authors',
   // Classification (6)
