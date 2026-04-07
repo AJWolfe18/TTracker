@@ -3360,6 +3360,7 @@
             // Actions
             const [editingCase, setEditingCase] = useState(null);
             const [undoInfo, setUndoInfo] = useState(null);
+            const [enrichingIds, setEnrichingIds] = useState(new Set());
             const [selectedIds, setSelectedIds] = useState(new Set());
             const [showRejectDialog, setShowRejectDialog] = useState(false);
             const [rejectingCase, setRejectingCase] = useState(null);
@@ -3419,7 +3420,11 @@
                     if (token !== fetchTokenRef.current) return;
 
                     if (loadMore) {
-                        setCases(prev => [...prev, ...(data.scotus_cases || [])]);
+                        setCases(prev => {
+                            const existingIds = new Set(prev.map(c => c.id));
+                            const newCases = (data.scotus_cases || []).filter(c => !existingIds.has(c.id));
+                            return [...prev, ...newCases];
+                        });
                     } else {
                         setCases(data.scotus_cases || []);
                     }
@@ -3518,6 +3523,8 @@
 
             // Handle re-enrich
             const handleReEnrich = async (c) => {
+                if (enrichingIds.has(c.id)) return;
+                setEnrichingIds(prev => new Set([...prev, c.id]));
                 try {
                     const { data, error: fnError } = await supabase.functions.invoke(
                         'admin-update-scotus',
@@ -3543,6 +3550,8 @@
                 } catch (err) {
                     console.error('Re-enrich error:', err);
                     toast?.addToast(err.message || 'Failed to re-enrich', 'error');
+                } finally {
+                    setEnrichingIds(prev => { const s = new Set(prev); s.delete(c.id); return s; });
                 }
             };
 
@@ -3978,12 +3987,15 @@
                                                                 &#9999;&#65039; Edit
                                                             </button>
                                                             <button
-                                                                className="btn-icon"
+                                                                className={`btn-icon${enrichingIds.has(c.id) ? ' enriching' : ''}`}
                                                                 onClick={() => handleReEnrich(c)}
-                                                                disabled={c.enrichment_status === 'pending'}
-                                                                title={c.enrichment_status === 'pending' ? 'Already pending' : 'Re-enrich'}
+                                                                disabled={c.enrichment_status === 'pending' || enrichingIds.has(c.id)}
+                                                                title={c.enrichment_status === 'pending' ? 'Already pending' : enrichingIds.has(c.id) ? 'Queuing...' : 'Re-enrich'}
                                                             >
-                                                                &#129302; Re-enrich
+                                                                {enrichingIds.has(c.id)
+                                                                    ? <><span className="spinner-sm"></span> Queuing</>
+                                                                    : '\uD83E\uDD16 Re-enrich'
+                                                                }
                                                             </button>
                                                             {c.is_public ? (
                                                                 <button className="btn-icon" onClick={() => handleUnpublish(c)} title="Unpublish">
