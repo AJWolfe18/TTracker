@@ -414,6 +414,14 @@
         .badge-severe { background: rgba(249, 115, 22, 0.2); color: #f97316; }
         .badge-moderate { background: rgba(234, 179, 8, 0.2); color: #eab308; }
         .badge-minor { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .badge-info { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .badge-cool { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
+        .scotus-needs-review { border-left: 3px solid #fbbf24; }
+        .bulk-checkbox { accent-color: #3b82f6; width: 16px; height: 16px; cursor: pointer; }
+        .reject-dialog { background: #1e293b; border: 1px solid #ef4444; border-radius: 8px; padding: 16px; margin-top: 12px; }
+        .run-log-card { margin-top: 16px; }
+        .run-log-card .card-header { cursor: pointer; user-select: none; }
+        .run-log-card .card-header:hover { background: rgba(59, 130, 246, 0.05); }
         .load-more-btn {
             display: block;
             width: 100%;
@@ -2357,6 +2365,420 @@
             'research_status', 'post_pardon_status', 'post_pardon_notes', 'is_public', 'needs_review', 'primary_source_url', 'source_urls'
         ];
 
+        // SCOTUS constants — source: public/shared/tone-system.json scotus labels
+        const SCOTUS_IMPACT_LEVELS = [
+            { value: 5, label: 'Constitutional Crisis', badgeClass: 'badge-critical' },
+            { value: 4, label: 'Rubber-stamping Tyranny', badgeClass: 'badge-severe' },
+            { value: 3, label: 'Institutional Sabotage', badgeClass: 'badge-moderate' },
+            { value: 2, label: 'Judicial Sidestepping', badgeClass: 'badge-info' },
+            { value: 1, label: 'Crumbs from the Bench', badgeClass: 'badge-cool' },
+            { value: 0, label: 'Democracy Wins', badgeClass: 'badge-active' },
+        ];
+        const SCOTUS_IMPACT_MAP = Object.fromEntries(SCOTUS_IMPACT_LEVELS.map(l => [l.value, l]));
+
+        // Source: migration 087 CHECK constraint on scotus_cases.disposition
+        const SCOTUS_DISPOSITIONS = [
+            { value: 'affirmed', label: 'Affirmed' },
+            { value: 'reversed', label: 'Reversed' },
+            { value: 'vacated', label: 'Vacated' },
+            { value: 'remanded', label: 'Remanded' },
+            { value: 'reversed_and_remanded', label: 'Reversed & Remanded' },
+            { value: 'vacated_and_remanded', label: 'Vacated & Remanded' },
+            { value: 'affirmed_and_remanded', label: 'Affirmed & Remanded' },
+            { value: 'dismissed', label: 'Dismissed' },
+            { value: 'granted', label: 'Granted' },
+            { value: 'denied', label: 'Denied' },
+            { value: 'GVR', label: 'GVR' },
+            { value: 'other', label: 'Other' },
+        ];
+
+        // Source: migration 087 CHECK constraint on scotus_cases.case_type
+        const SCOTUS_CASE_TYPES = [
+            { value: 'merits', label: 'Merits' },
+            { value: 'procedural', label: 'Procedural' },
+            { value: 'shadow_docket', label: 'Shadow Docket' },
+            { value: 'cert_stage', label: 'Cert Stage' },
+            { value: 'unclear', label: 'Unclear' },
+        ];
+
+        // Source: migration 087 CHECK constraint on scotus_cases.qa_status
+        const SCOTUS_QA_STATUSES = [
+            { value: 'pending_qa', label: 'Pending QA' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'flagged', label: 'Flagged' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'human_override', label: 'Human Override' },
+        ];
+
+        // Source: migration 087 CHECK constraint on scotus_cases.enrichment_status
+        const SCOTUS_ENRICHMENT_STATUSES = [
+            { value: 'pending', label: 'Pending' },
+            { value: 'enriched', label: 'Enriched' },
+            { value: 'flagged', label: 'Flagged' },
+            { value: 'failed', label: 'Failed' },
+        ];
+
+        // Source: migration 087 CHECK constraint on scotus_cases.prevailing_party
+        const SCOTUS_PREVAILING_PARTIES = [
+            { value: 'petitioner', label: 'Petitioner' },
+            { value: 'respondent', label: 'Respondent' },
+            { value: 'partial', label: 'Partial' },
+            { value: 'unclear', label: 'Unclear' },
+        ];
+
+        // EditScotusModal Component
+        function EditScotusModal({ scotusCase, onClose, onSave, onRefresh, supabase, password }) {
+            const h = React.createElement;
+            const [formData, setFormData] = useState(() => ({
+                // Case Identity (read-only in display but included for reference)
+                disposition: scotusCase?.disposition || '',
+                case_type: scotusCase?.case_type || '',
+                // Vote & Opinion
+                vote_split: scotusCase?.vote_split || '',
+                majority_author: scotusCase?.majority_author || '',
+                dissent_authors: (scotusCase?.dissent_authors || []).join(', '),
+                prevailing_party: scotusCase?.prevailing_party || '',
+                merits_reached: scotusCase?.merits_reached ?? false,
+                // Editorial Content
+                ruling_impact_level: scotusCase?.ruling_impact_level ?? '',
+                ruling_label: scotusCase?.ruling_label || '',
+                summary_spicy: scotusCase?.summary_spicy || '',
+                who_wins: scotusCase?.who_wins || '',
+                who_loses: scotusCase?.who_loses || '',
+                why_it_matters: scotusCase?.why_it_matters || '',
+                dissent_highlights: scotusCase?.dissent_highlights || '',
+                practical_effect: scotusCase?.practical_effect || '',
+                media_says: scotusCase?.media_says || '',
+                actually_means: scotusCase?.actually_means || '',
+                // Evidence
+                evidence_anchors: (scotusCase?.evidence_anchors || []).join('\n'),
+                holding: scotusCase?.holding || '',
+                // Status & QA
+                is_public: scotusCase?.is_public ?? false,
+                qa_status: scotusCase?.qa_status || '',
+                qa_review_note: scotusCase?.qa_review_note || '',
+                needs_manual_review: scotusCase?.needs_manual_review ?? false,
+                manual_review_note: scotusCase?.manual_review_note || '',
+                enrichment_status: scotusCase?.enrichment_status || '',
+            }));
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
+            const [openSections, setOpenSections] = useState({ case_identity: true, vote_opinion: true, editorial: false, evidence: false, status_qa: false });
+
+            const originalUpdatedAt = scotusCase?.updated_at;
+
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
+
+            const handleChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const toggleSection = (section) => {
+                setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSaving(true);
+                setError(null);
+
+                try {
+                    const updates = {};
+
+                    // Text fields
+                    const textFields = ['vote_split', 'majority_author', 'ruling_label', 'summary_spicy', 'who_wins', 'who_loses', 'why_it_matters', 'dissent_highlights', 'practical_effect', 'media_says', 'actually_means', 'holding', 'qa_review_note', 'manual_review_note'];
+                    for (const f of textFields) {
+                        const newVal = formData[f] || null;
+                        const oldVal = scotusCase[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Enum fields
+                    for (const f of ['disposition', 'case_type', 'prevailing_party', 'qa_status', 'enrichment_status']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = scotusCase[f] || null;
+                        if (newVal !== oldVal) updates[f] = newVal;
+                    }
+
+                    // Boolean fields
+                    for (const f of ['is_public', 'needs_manual_review', 'merits_reached']) {
+                        if (formData[f] !== (scotusCase[f] ?? false)) updates[f] = formData[f];
+                    }
+
+                    // Integer: ruling_impact_level
+                    const newImpact = formData.ruling_impact_level === '' ? null : parseInt(formData.ruling_impact_level, 10);
+                    const oldImpact = scotusCase.ruling_impact_level ?? null;
+                    if (newImpact !== oldImpact) updates.ruling_impact_level = newImpact;
+
+                    // Array: dissent_authors (comma-separated) — sort before comparing to avoid spurious writes
+                    const newDissent = formData.dissent_authors ? formData.dissent_authors.split(',').map(s => s.trim()).filter(Boolean) : [];
+                    const oldDissent = scotusCase.dissent_authors || [];
+                    if (JSON.stringify([...newDissent].sort()) !== JSON.stringify([...oldDissent].sort())) updates.dissent_authors = newDissent;
+
+                    // Array: evidence_anchors (newline-separated)
+                    const newAnchors = formData.evidence_anchors ? formData.evidence_anchors.split('\n').map(s => s.trim()).filter(Boolean) : [];
+                    const oldAnchors = scotusCase.evidence_anchors || [];
+                    if (JSON.stringify(newAnchors) !== JSON.stringify(oldAnchors)) updates.evidence_anchors = newAnchors;
+
+                    if (Object.keys(updates).length === 0) {
+                        onClose();
+                        return;
+                    }
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_id: scotusCase.id,
+                                updates,
+                                original_updated_at: originalUpdatedAt
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        if (body?.conflict) {
+                            setIsConflict(true);
+                            setError(body.error || 'Record was modified by another process. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Update failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    const changedFields = data.changed_fields || {};
+                    const firstChangedField = Object.keys(changedFields)[0];
+
+                    onSave(data.scotus_case, firstChangedField ? {
+                        entityType: 'scotus',
+                        entityId: String(scotusCase.id),
+                        fieldName: firstChangedField,
+                        oldValue: changedFields[firstChangedField]?.old
+                    } : null);
+                } catch (err) {
+                    console.error('Save error:', err);
+                    setError(err.message || 'Failed to save changes');
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            // Helper: section header
+            const sectionHeader = (key, label) =>
+                h('div', { className: 'form-section-header', onClick: () => toggleSection(key) },
+                    h('h4', null, label),
+                    h('span', { className: 'form-section-arrow' + (openSections[key] ? ' open' : '') }, '\u25B6')
+                );
+
+            // Helper: label with optional red asterisk (indicates field is displayed on public site)
+            const fieldLabel = (label, used) =>
+                used ? h('label', { className: 'form-label' }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*')) : h('label', { className: 'form-label' }, label);
+
+            // Helper: text input field
+            const textField = (field, label, opts = {}) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, opts.used),
+                    h('input', {
+                        type: opts.type || 'text',
+                        className: 'form-input',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        placeholder: opts.placeholder || '',
+                        readOnly: opts.readOnly || false,
+                        style: opts.readOnly ? { opacity: 0.6, cursor: 'not-allowed' } : {},
+                        ...opts.inputProps
+                    })
+                );
+
+            // Helper: read-only display field
+            const readOnlyField = (label, value) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('div', { style: { padding: '10px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#94a3b8', fontSize: '14px' } }, value || '-')
+                );
+
+            // Helper: select field
+            const selectField = (field, label, options, used) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('select', {
+                        className: 'form-select',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value)
+                    },
+                        h('option', { value: '' }, 'Not set'),
+                        options.map(opt =>
+                            h('option', { key: opt.value, value: opt.value }, opt.label)
+                        )
+                    )
+                );
+
+            // Helper: textarea field
+            const textareaField = (field, label, rows = 3, used = false) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('textarea', {
+                        className: 'form-textarea',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        rows
+                    })
+                );
+
+            // Helper: boolean checkbox
+            const boolField = (field, label, used = false) =>
+                h('div', { className: 'form-group', style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                    h('input', {
+                        type: 'checkbox',
+                        checked: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.checked),
+                        style: { accentColor: '#3b82f6', width: '16px', height: '16px' }
+                    }),
+                    used
+                        ? h('label', { className: 'form-label', style: { marginBottom: 0 } }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*'))
+                        : h('label', { className: 'form-label', style: { marginBottom: 0 } }, label)
+                );
+
+            return h('div', { className: 'modal-overlay' },
+                h('div', { className: 'modal-content' },
+                    h('div', { className: 'modal-header' },
+                        h('h3', { className: 'modal-title' }, 'Edit SCOTUS Case #' + scotusCase.id + (scotusCase.case_name ? ' - ' + scotusCase.case_name : '')),
+                        h('button', { className: 'modal-close', onClick: onClose }, '\u00D7')
+                    ),
+                    h('form', { onSubmit: handleSubmit },
+                        h('div', { className: 'modal-body' },
+                            // Error banner
+                            error && h('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && h('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
+
+                            // Section 1: Case Identity (open)
+                            sectionHeader('case_identity', 'Case Identity'),
+                            openSections.case_identity && h('div', null,
+                                readOnlyField('Case Name', scotusCase.case_name),
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Docket Number', scotusCase.docket_number),
+                                    readOnlyField('Term', scotusCase.term)
+                                ),
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Decided', scotusCase.decided_at ? new Date(scotusCase.decided_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null),
+                                    selectField('disposition', 'Disposition', SCOTUS_DISPOSITIONS, true)
+                                ),
+                                selectField('case_type', 'Case Type', SCOTUS_CASE_TYPES, true)
+                            ),
+
+                            // Section 2: Vote & Opinion (open)
+                            sectionHeader('vote_opinion', 'Vote & Opinion'),
+                            openSections.vote_opinion && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    textField('vote_split', 'Vote Split', { placeholder: 'e.g. 6-3', used: true }),
+                                    textField('majority_author', 'Majority Author', { used: true })
+                                ),
+                                textField('dissent_authors', 'Dissent Authors (comma-separated)', { placeholder: 'e.g. Sotomayor, Kagan, Jackson', used: true }),
+                                h('div', { className: 'form-row' },
+                                    selectField('prevailing_party', 'Prevailing Party', SCOTUS_PREVAILING_PARTIES, true),
+                                    boolField('merits_reached', 'Merits Reached', true)
+                                )
+                            ),
+
+                            // Section 3: Editorial Content (collapsed)
+                            sectionHeader('editorial', 'Editorial Content'),
+                            openSections.editorial && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    h('div', { className: 'form-group' },
+                                        fieldLabel('Impact Level', true),
+                                        h('select', {
+                                            className: 'form-select',
+                                            value: formData.ruling_impact_level,
+                                            onChange: (ev) => handleChange('ruling_impact_level', ev.target.value)
+                                        },
+                                            h('option', { value: '' }, 'Not set'),
+                                            SCOTUS_IMPACT_LEVELS.map(l =>
+                                                h('option', { key: l.value, value: String(l.value) }, l.value + ' - ' + l.label)
+                                            )
+                                        )
+                                    ),
+                                    textField('ruling_label', 'Ruling Label', { used: true })
+                                ),
+                                textareaField('summary_spicy', 'Summary (Spicy)', 5, true),
+                                h('div', { className: 'form-row' },
+                                    textareaField('who_wins', 'Who Wins', 3, true),
+                                    textareaField('who_loses', 'Who Loses', 3, true)
+                                ),
+                                textareaField('why_it_matters', 'Why It Matters', 3, true),
+                                textareaField('dissent_highlights', 'Dissent Highlights', 3, true),
+                                textareaField('practical_effect', 'Practical Effect', 3, true),
+                                h('div', { className: 'form-row' },
+                                    textareaField('media_says', 'Media Says', 3),
+                                    textareaField('actually_means', 'Actually Means', 3)
+                                )
+                            ),
+
+                            // Section 4: Evidence (collapsed)
+                            sectionHeader('evidence', 'Evidence'),
+                            openSections.evidence && h('div', null,
+                                h('div', { className: 'form-group' },
+                                    fieldLabel('Evidence Anchors (one per line)', true),
+                                    h('textarea', {
+                                        className: 'form-textarea',
+                                        value: formData.evidence_anchors,
+                                        onChange: (ev) => handleChange('evidence_anchors', ev.target.value),
+                                        rows: 5,
+                                        placeholder: 'One evidence anchor per line...'
+                                    })
+                                ),
+                                textareaField('holding', 'Holding', 3, true)
+                            ),
+
+                            // Section 5: Status & QA (collapsed)
+                            sectionHeader('status_qa', 'Status & QA'),
+                            openSections.status_qa && h('div', null,
+                                h('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px' } },
+                                    boolField('is_public', 'Published', true),
+                                    boolField('needs_manual_review', 'Needs Manual Review')
+                                ),
+                                h('div', { className: 'form-row' },
+                                    selectField('qa_status', 'QA Status', SCOTUS_QA_STATUSES),
+                                    selectField('enrichment_status', 'Enrichment Status', SCOTUS_ENRICHMENT_STATUSES)
+                                ),
+                                textareaField('qa_review_note', 'QA Review Note', 2),
+                                textareaField('manual_review_note', 'Manual Review Note', 2),
+                                readOnlyField('Low Confidence Reason', scotusCase.low_confidence_reason),
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Enriched At', scotusCase.enriched_at ? new Date(scotusCase.enriched_at).toLocaleString() : null),
+                                    readOnlyField('Prompt Version', scotusCase.prompt_version)
+                                )
+                            )
+                        ),
+                        h('div', { className: 'modal-footer' },
+                            h('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
+                            h('button', { type: 'submit', className: 'btn-primary', disabled: saving || isConflict },
+                                saving ? 'Saving...' : 'Save Changes'
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
         // PardonsTab Component
         function PardonsTab({ password, supabase }) {
             const [pardons, setPardons] = useState([]);
@@ -2742,9 +3164,10 @@
                             className="stories-select"
                             value={`${sortBy}-${sortDir}`}
                             onChange={(e) => {
-                                const parts = e.target.value.split('-');
-                                setSortBy(parts[0]);
-                                setSortDir(parts[1]);
+                                const val = e.target.value;
+                                const lastDash = val.lastIndexOf('-');
+                                setSortBy(val.substring(0, lastDash));
+                                setSortDir(val.substring(lastDash + 1));
                             }}
                         >
                             <option value="pardon_date-desc">Date (Newest)</option>
@@ -2887,6 +3310,818 @@
                             onClose={() => setEditingPardon(null)}
                             onSave={handleSaveEdit}
                             onRefresh={() => fetchPardons(false, null)}
+                            supabase={supabase}
+                            password={password}
+                        />
+                    )}
+
+                    {/* Undo Toast */}
+                    {undoInfo && (
+                        <div className="toast-container">
+                            <UndoToast
+                                entityType={undoInfo.entityType}
+                                entityId={undoInfo.entityId}
+                                fieldName={undoInfo.fieldName}
+                                oldValue={undoInfo.oldValue}
+                                onUndo={handleUndo}
+                                onDismiss={() => setUndoInfo(null)}
+                            />
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ScotusTab Component
+        function ScotusTab({ password, supabase }) {
+            const [cases, setCases] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [cursor, setCursor] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+            const [availableTerms, setAvailableTerms] = useState([]);
+
+            // Sub-tab: '' = All, 'false' = Drafts (default), 'true' = Published
+            const [isPublicFilter, setIsPublicFilter] = useState('false');
+
+            // Filters
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [termFilter, setTermFilter] = useState('');
+            const [enrichmentStatusFilter, setEnrichmentStatusFilter] = useState('');
+            const [needsManualReviewFilter, setNeedsManualReviewFilter] = useState('');
+            const [qaStatusFilter, setQaStatusFilter] = useState('');
+            const [caseTypeFilter, setCaseTypeFilter] = useState('');
+            const [impactLevelFilter, setImpactLevelFilter] = useState('');
+            const [sortBy, setSortBy] = useState('decided_at');
+            const [sortDir, setSortDir] = useState('desc');
+
+            // Actions
+            const [editingCase, setEditingCase] = useState(null);
+            const [undoInfo, setUndoInfo] = useState(null);
+            const [selectedIds, setSelectedIds] = useState(new Set());
+            const [showRejectDialog, setShowRejectDialog] = useState(false);
+            const [rejectingCase, setRejectingCase] = useState(null);
+            const [rejectNote, setRejectNote] = useState('');
+
+            // Run log
+            const [runLogData, setRunLogData] = useState(null);
+            const [runLogLoading, setRunLogLoading] = useState(false);
+            const [runLogExpanded, setRunLogExpanded] = useState(false);
+
+            // Race control
+            const fetchTokenRef = useRef(0);
+
+            // Toast context
+            const toast = useToast();
+
+            // Debounce search (300ms)
+            useEffect(() => {
+                const timer = setTimeout(() => setDebouncedSearch(search), 300);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Fetch cases from edge function
+            const fetchCases = useCallback(async (loadMore = false, nextCursor = null) => {
+                const token = ++fetchTokenRef.current;
+
+                if (loadMore) {
+                    setLoadingMore(true);
+                } else {
+                    setLoading(true);
+                }
+                setError(null);
+
+                try {
+                    const reqBody = { action: 'list', limit: 25, sortBy, sortDir };
+                    if (debouncedSearch) reqBody.search = debouncedSearch;
+                    if (isPublicFilter !== '') reqBody.isPublic = isPublicFilter;
+                    if (termFilter) reqBody.term = termFilter;
+                    if (enrichmentStatusFilter) reqBody.enrichmentStatus = enrichmentStatusFilter;
+                    if (needsManualReviewFilter) reqBody.needsManualReview = needsManualReviewFilter;
+                    if (qaStatusFilter) reqBody.qaStatus = qaStatusFilter;
+                    if (caseTypeFilter) reqBody.caseType = caseTypeFilter;
+                    if (impactLevelFilter !== '') reqBody.impactLevel = parseInt(impactLevelFilter, 10);
+                    if (nextCursor) reqBody.cursor = nextCursor;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch SCOTUS cases');
+
+                    // Stale response check
+                    if (token !== fetchTokenRef.current) return;
+
+                    if (loadMore) {
+                        setCases(prev => [...prev, ...(data.scotus_cases || [])]);
+                    } else {
+                        setCases(data.scotus_cases || []);
+                    }
+
+                    setCursor(data.pagination?.next_cursor || null);
+                    setHasMore(data.pagination?.has_more || false);
+
+                    // Update available terms from response
+                    if (data.available_terms && data.available_terms.length > 0) {
+                        setAvailableTerms(data.available_terms);
+                    }
+                } catch (err) {
+                    if (token !== fetchTokenRef.current) return;
+                    console.error('SCOTUS fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) {
+                        setLoading(false);
+                        setLoadingMore(false);
+                    }
+                }
+            }, [supabase, password, debouncedSearch, isPublicFilter, termFilter, enrichmentStatusFilter, needsManualReviewFilter, qaStatusFilter, caseTypeFilter, impactLevelFilter, sortBy, sortDir]);
+
+            // Re-fetch when filters change — reset state
+            useEffect(() => {
+                setCases([]);
+                setCursor(null);
+                setHasMore(false);
+                setSelectedIds(new Set());
+                fetchCases(false, null);
+            }, [fetchCases]);
+
+            // Load more handler
+            const handleLoadMore = () => {
+                if (hasMore && !loadingMore) {
+                    fetchCases(true, cursor);
+                }
+            };
+
+            // Format date
+            const formatDate = (d) => {
+                if (!d) return '-';
+                const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            // Get impact badge
+            const getImpactBadge = (level) => {
+                const info = SCOTUS_IMPACT_MAP[level];
+                if (!info) return { class: 'badge-archived', label: '-' };
+                return { class: info.badgeClass, label: `${level} - ${info.label}` };
+            };
+
+            // Get enrichment status badge
+            const getEnrichmentBadge = (status) => {
+                if (status === 'enriched') return { class: 'badge-active', label: 'Enriched' };
+                if (status === 'pending') return { class: 'badge-pending', label: 'Pending' };
+                if (status === 'failed') return { class: 'badge-failed', label: 'Failed' };
+                if (status === 'flagged') return { class: 'badge-moderate', label: 'Flagged' };
+                return { class: 'badge-archived', label: status || '-' };
+            };
+
+            // Handle edit
+            const handleEdit = (c) => setEditingCase(c);
+
+            // Handle save from edit modal
+            const handleSaveEdit = (updatedCase, undoData) => {
+                setCases(prev => prev.map(c => c.id === updatedCase.id ? { ...c, ...updatedCase } : c));
+                setEditingCase(null);
+                if (undoData) {
+                    setUndoInfo(undoData);
+                } else {
+                    toast?.addToast('SCOTUS case updated successfully', 'success');
+                }
+            };
+
+            // Handle undo
+            const handleUndo = async () => {
+                if (!undoInfo) return;
+                try {
+                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
+                        p_entity_type: undoInfo.entityType,
+                        p_entity_id: undoInfo.entityId,
+                        p_changed_by: 'admin'
+                    });
+                    if (rpcError) throw new Error(rpcError.message);
+                    if (!data?.success) throw new Error(data?.error || 'Undo failed');
+                    toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
+                    setUndoInfo(null);
+                    fetchCases(false, null);
+                } catch (err) {
+                    console.error('Undo error:', err);
+                    toast?.addToast(err.message || 'Failed to undo', 'error');
+                }
+            };
+
+            // Handle re-enrich
+            const handleReEnrich = async (c) => {
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_id: c.id,
+                                updates: { enrichment_status: 'pending', enriched_at: null },
+                                original_updated_at: c.updated_at
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Re-enrich failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
+                    toast?.addToast('Queued for re-enrichment. Will be enriched on next agent run (weekdays 4PM UTC).', 'success');
+                } catch (err) {
+                    console.error('Re-enrich error:', err);
+                    toast?.addToast(err.message || 'Failed to re-enrich', 'error');
+                }
+            };
+
+            // Handle publish
+            const handlePublish = async (c) => {
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_id: c.id,
+                                updates: { is_public: true },
+                                original_updated_at: c.updated_at
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        if (body?.conflict) {
+                            toast?.addToast('Conflict: record was modified. Refresh and try again.', 'error');
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Publish failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'scotus',
+                            entityId: String(c.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast('Published', 'success');
+                    }
+                } catch (err) {
+                    console.error('Publish error:', err);
+                    toast?.addToast(err.message || 'Failed to publish', 'error');
+                }
+            };
+
+            // Handle unpublish
+            const handleUnpublish = async (c) => {
+                if (!confirm('Unpublish this case? It will be removed from the public site.')) return;
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_id: c.id,
+                                updates: { is_public: false },
+                                original_updated_at: c.updated_at
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        if (body?.conflict) {
+                            toast?.addToast('Conflict: record was modified. Refresh and try again.', 'error');
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Unpublish failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
+
+                    const changedFields = data.changed_fields || {};
+                    const firstField = Object.keys(changedFields)[0];
+                    if (firstField) {
+                        setUndoInfo({
+                            entityType: 'scotus',
+                            entityId: String(c.id),
+                            fieldName: firstField,
+                            oldValue: changedFields[firstField]?.old
+                        });
+                    } else {
+                        toast?.addToast('Unpublished', 'success');
+                    }
+                } catch (err) {
+                    console.error('Unpublish error:', err);
+                    toast?.addToast(err.message || 'Failed to unpublish', 'error');
+                }
+            };
+
+            // Handle reject
+            const handleReject = async () => {
+                if (!rejectNote.trim()) return;
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_id: rejectingCase.id,
+                                updates: { qa_status: 'rejected', qa_review_note: rejectNote.trim() },
+                                original_updated_at: rejectingCase.updated_at
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        if (body?.conflict) {
+                            toast?.addToast('Conflict: record was modified. Refresh and try again.', 'error');
+                            setShowRejectDialog(false);
+                            setRejectingCase(null);
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Reject failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    setCases(prev => prev.map(sc => sc.id === rejectingCase.id ? { ...sc, ...data.scotus_case } : sc));
+                    toast?.addToast('Rejected. Will be re-enriched on next agent run (weekdays 4PM UTC).', 'success');
+                    setShowRejectDialog(false);
+                    setRejectingCase(null);
+                    setRejectNote('');
+                } catch (err) {
+                    console.error('Reject error:', err);
+                    toast?.addToast(err.message || 'Failed to reject', 'error');
+                }
+            };
+
+            // Handle bulk publish
+            const handleBulkPublish = async () => {
+                if (selectedIds.size === 0) return;
+                if (!confirm(`Publish ${selectedIds.size} selected case(s)?`)) return;
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                case_ids: [...selectedIds],
+                                updates: { is_public: true }
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Bulk publish failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+
+                    const summary = data.summary || {};
+                    toast?.addToast(`Published ${summary.published_count || 0}, skipped ${summary.skipped_count || 0}`, 'success');
+
+                    // Update local rows for published IDs
+                    const publishedSet = new Set(data.published || []);
+                    setCases(prev => prev.map(c => publishedSet.has(c.id) ? { ...c, is_public: true, qa_status: 'approved' } : c));
+                    setSelectedIds(new Set());
+                } catch (err) {
+                    console.error('Bulk publish error:', err);
+                    toast?.addToast(err.message || 'Failed to bulk publish', 'error');
+                }
+            };
+
+            // Handle checkbox toggle
+            const toggleSelect = (id) => {
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                });
+            };
+
+            // Handle master checkbox
+            const toggleSelectAll = () => {
+                if (selectedIds.size === cases.length) {
+                    setSelectedIds(new Set());
+                } else {
+                    setSelectedIds(new Set(cases.map(c => c.id)));
+                }
+            };
+
+            // Fetch run log (lazy)
+            const fetchRunLog = async () => {
+                setRunLogLoading(true);
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-scotus',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action: 'run_log' }
+                        }
+                    );
+
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch run log');
+                    setRunLogData(data.enrichment_runs || []);
+                } catch (err) {
+                    console.error('Run log error:', err);
+                    toast?.addToast(err.message || 'Failed to fetch run log', 'error');
+                } finally {
+                    setRunLogLoading(false);
+                }
+            };
+
+            // Toggle run log
+            const handleToggleRunLog = () => {
+                if (!runLogExpanded) {
+                    setRunLogExpanded(true);
+                    if (!runLogData) fetchRunLog();
+                } else {
+                    setRunLogExpanded(false);
+                }
+            };
+
+            const isDraftsTab = isPublicFilter === 'false';
+
+            const subTabs = [
+                { value: '', label: 'All' },
+                { value: 'false', label: 'Drafts' },
+                { value: 'true', label: 'Published' },
+            ];
+
+            return (
+                <div>
+                    {/* Sub-tabs */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+                        {subTabs.map(tab => (
+                            <button
+                                key={tab.value}
+                                className={`tab-btn ${isPublicFilter === tab.value ? 'active' : ''}`}
+                                onClick={() => setIsPublicFilter(tab.value)}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Toolbar */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search by case name or ID..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={termFilter}
+                            onChange={(e) => setTermFilter(e.target.value)}
+                        >
+                            <option value="">All Terms</option>
+                            {availableTerms.map(t =>
+                                <option key={t} value={t}>{t}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={enrichmentStatusFilter}
+                            onChange={(e) => setEnrichmentStatusFilter(e.target.value)}
+                        >
+                            <option value="">All Enrichment</option>
+                            {SCOTUS_ENRICHMENT_STATUSES.map(s =>
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={needsManualReviewFilter}
+                            onChange={(e) => setNeedsManualReviewFilter(e.target.value)}
+                        >
+                            <option value="">Manual Review: All</option>
+                            <option value="true">Needs Review</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={qaStatusFilter}
+                            onChange={(e) => setQaStatusFilter(e.target.value)}
+                        >
+                            <option value="">All QA Status</option>
+                            {SCOTUS_QA_STATUSES.map(s =>
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={caseTypeFilter}
+                            onChange={(e) => setCaseTypeFilter(e.target.value)}
+                        >
+                            <option value="">All Case Types</option>
+                            {SCOTUS_CASE_TYPES.map(t =>
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={impactLevelFilter}
+                            onChange={(e) => setImpactLevelFilter(e.target.value)}
+                        >
+                            <option value="">All Impact Levels</option>
+                            {SCOTUS_IMPACT_LEVELS.map(l =>
+                                <option key={l.value} value={String(l.value)}>{l.value} - {l.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={`${sortBy}-${sortDir}`}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                const lastDash = val.lastIndexOf('-');
+                                setSortBy(val.substring(0, lastDash));
+                                setSortDir(val.substring(lastDash + 1));
+                            }}
+                        >
+                            <option value="decided_at-desc">Decided (Newest)</option>
+                            <option value="decided_at-asc">Decided (Oldest)</option>
+                            <option value="ruling_impact_level-desc">Impact (High-Low)</option>
+                            <option value="ruling_impact_level-asc">Impact (Low-High)</option>
+                            <option value="id-desc">ID (Newest)</option>
+                            <option value="id-asc">ID (Oldest)</option>
+                        </select>
+                    </div>
+
+                    {/* Bulk publish bar */}
+                    {isDraftsTab && selectedIds.size > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', padding: '10px 16px', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '14px', color: '#e2e8f0' }}>{selectedIds.size} selected</span>
+                            <button
+                                className="btn-primary"
+                                style={{ padding: '6px 16px', fontSize: '13px' }}
+                                onClick={handleBulkPublish}
+                                disabled={selectedIds.size > 50}
+                                title={selectedIds.size > 50 ? 'Max 50 per batch' : ''}
+                            >
+                                Publish Selected ({selectedIds.size})
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                style={{ padding: '6px 12px', fontSize: '13px' }}
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading SCOTUS cases...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">SCOTUS Cases</h2>
+                                <span className="stories-count">
+                                    Showing {cases.length} cases
+                                    {hasMore && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            {isDraftsTab && <th><input type="checkbox" className="bulk-checkbox" checked={cases.length > 0 && selectedIds.size === cases.length} onChange={toggleSelectAll} /></th>}
+                                            <th>ID</th>
+                                            <th>Case</th>
+                                            <th>Decided</th>
+                                            <th>Impact</th>
+                                            <th>Vote</th>
+                                            <th>Status</th>
+                                            <th>Flags</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {cases.length === 0 && (
+                                            <tr>
+                                                <td colSpan={isDraftsTab ? 9 : 8} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No cases found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {cases.map(c => {
+                                            const impactBadge = getImpactBadge(c.ruling_impact_level);
+                                            const enrichBadge = getEnrichmentBadge(c.enrichment_status);
+
+                                            return (
+                                                <tr key={c.id} className={c.needs_manual_review ? 'scotus-needs-review' : ''}>
+                                                    {isDraftsTab && (
+                                                        <td>
+                                                            <input type="checkbox" className="bulk-checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} />
+                                                        </td>
+                                                    )}
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{c.id}</td>
+                                                    <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={c.case_name}>
+                                                        {c.case_name || c.case_name_short || '(Unknown)'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(c.decided_at)}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${impactBadge.class}`}>{impactBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {c.vote_split || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${enrichBadge.class}`}>{enrichBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ fontSize: '13px' }}>
+                                                        {c.needs_manual_review && <span style={{ color: '#fbbf24' }} title="Needs manual review">&#9888;</span>}
+                                                        {c.is_public && <span style={{ color: '#4ade80', marginLeft: '4px' }} title="Published">&#10003;</span>}
+                                                    </td>
+                                                    <td>
+                                                        <div className="row-actions">
+                                                            <button className="btn-icon" onClick={() => handleEdit(c)} title="Edit">
+                                                                &#9999;&#65039; Edit
+                                                            </button>
+                                                            <button
+                                                                className="btn-icon"
+                                                                onClick={() => handleReEnrich(c)}
+                                                                disabled={c.enrichment_status === 'pending'}
+                                                                title={c.enrichment_status === 'pending' ? 'Already pending' : 'Re-enrich'}
+                                                            >
+                                                                &#129302; Re-enrich
+                                                            </button>
+                                                            {c.is_public ? (
+                                                                <button className="btn-icon" onClick={() => handleUnpublish(c)} title="Unpublish">
+                                                                    &#128228; Unpublish
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    onClick={() => handlePublish(c)}
+                                                                    disabled={c.enrichment_status !== 'enriched'}
+                                                                    title={c.enrichment_status !== 'enriched' ? 'Must be enriched to publish' : 'Publish'}
+                                                                >
+                                                                    &#128229; Publish
+                                                                </button>
+                                                            )}
+                                                            <button className="btn-icon" onClick={() => { setRejectingCase(c); setShowRejectDialog(true); setRejectNote(''); }} title="Reject & Re-queue">
+                                                                &#128683; Reject
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {hasMore && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Reject Dialog */}
+                    {showRejectDialog && rejectingCase && (
+                        <div className="modal-overlay">
+                            <div style={{ background: '#1e293b', border: '1px solid #ef4444', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '480px' }}>
+                                <h3 style={{ margin: '0 0 12px', color: '#f8fafc', fontSize: '16px' }}>Reject & Re-queue: #{rejectingCase.id}</h3>
+                                <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px' }}>{rejectingCase.case_name}</p>
+                                <textarea
+                                    className="form-textarea"
+                                    placeholder="Reason for rejection (required)..."
+                                    value={rejectNote}
+                                    onChange={(e) => setRejectNote(e.target.value)}
+                                    rows={3}
+                                    autoFocus
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                                    <button className="btn-secondary" onClick={() => { setShowRejectDialog(false); setRejectingCase(null); setRejectNote(''); }}>Cancel</button>
+                                    <button className="btn-primary" onClick={handleReject} disabled={!rejectNote.trim()} style={{ background: '#ef4444' }}>Reject & Re-queue</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Agent Run Log */}
+                    <div className="card run-log-card">
+                        <div className="card-header" onClick={handleToggleRunLog}>
+                            <h2 className="card-title">
+                                <span>Agent Run Log</span>
+                                <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{runLogExpanded ? '▼' : '▶'}</span>
+                            </h2>
+                            {runLogExpanded && (
+                                <button
+                                    className="btn-icon"
+                                    onClick={(e) => { e.stopPropagation(); fetchRunLog(); }}
+                                    title="Refresh"
+                                    style={{ fontSize: '14px' }}
+                                >
+                                    ↻ Refresh
+                                </button>
+                            )}
+                        </div>
+                        {runLogExpanded && (
+                            <div style={{ overflowX: 'auto' }}>
+                                {runLogLoading ? (
+                                    <div className="loading" style={{ padding: '20px' }}>
+                                        <div className="spinner"></div>
+                                        Loading run log...
+                                    </div>
+                                ) : !runLogData || runLogData.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No agent runs recorded yet.</div>
+                                ) : (
+                                    <table className="stories-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Date</th>
+                                                <th>Status</th>
+                                                <th>Model</th>
+                                                <th>Found</th>
+                                                <th>Enriched</th>
+                                                <th>Failed</th>
+                                                <th>Duration</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {runLogData.map(run => (
+                                                <tr key={run.id} style={run.status === 'failed' ? { background: 'rgba(239, 68, 68, 0.1)' } : {}}>
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{run.id}</td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {run.ran_at ? new Date(run.ran_at).toLocaleString() : '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${run.status === 'completed' ? 'badge-active' : 'badge-failed'}`}>
+                                                            {run.status || '-'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px' }}>{run.agent_model || '-'}</td>
+                                                    <td style={{ color: '#e2e8f0', fontSize: '13px' }}>{run.cases_found ?? '-'}</td>
+                                                    <td style={{ color: '#4ade80', fontSize: '13px' }}>{run.cases_enriched ?? '-'}</td>
+                                                    <td style={{ color: run.cases_failed > 0 ? '#f87171' : '#64748b', fontSize: '13px' }}>{run.cases_failed ?? '-'}</td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px' }}>
+                                                        {run.duration_seconds ? `${Math.round(run.duration_seconds)}s` : '-'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Edit SCOTUS Modal */}
+                    {editingCase && (
+                        <EditScotusModal
+                            scotusCase={editingCase}
+                            onClose={() => setEditingCase(null)}
+                            onSave={handleSaveEdit}
+                            onRefresh={() => fetchCases(false, null)}
                             supabase={supabase}
                             password={password}
                         />
@@ -3076,7 +4311,7 @@
                     supabase.from('articles').select('id', { count: 'exact', head: true }),
                     supabase.from('feed_registry').select('id,is_active,failure_count'),
                     supabase.from('pardons').select('id,is_public,needs_review'),
-                    supabase.from('scotus_cases').select('id,is_public'),
+                    supabase.from('scotus_cases').select('id,is_public,needs_manual_review'),
                     supabase.from('executive_orders').select('id', { count: 'exact', head: true }),
                     supabase.from('budgets').select('*').eq('day', today).single(),
                     supabase.from('feed_registry').select('last_fetched_at').not('last_fetched_at', 'is', null).order('last_fetched_at', { ascending: false }).limit(1).single()
@@ -3095,6 +4330,7 @@
                 // Process SCOTUS
                 const scotus = scotusData.data || [];
                 const scotusDraft = scotus.filter(s => !s.is_public).length;
+                const scotusNeedsReview = scotus.filter(s => s.needs_manual_review).length;
 
                 // Pipeline status
                 let pipelineStatus = 'unknown';
@@ -3168,13 +4404,14 @@
                         minutes_since_last_run: minutesSinceLastRun
                     },
                     needs_attention: {
-                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview,
+                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview + scotusNeedsReview,
                         breakdown: {
                             stories_need_review: 0,
                             stories_enrichment_failed: storiesEnrichFailed.count ?? 0,
                             pardons_need_review: pardonsNeedsReview,
                             pardons_unpublished: pardonsDraft,
                             scotus_unpublished: scotusDraft,
+                            scotus_needs_review: scotusNeedsReview,
                             feeds_failed: feedsFailed
                         }
                     },
@@ -3232,7 +4469,7 @@
                 { id: 'home', label: 'Home' },
                 { id: 'stories', label: 'Stories' },
                 { id: 'pardons', label: 'Pardons' },
-                { id: 'scotus', label: 'SCOTUS', disabled: true },
+                { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders', disabled: true },
                 { id: 'feeds', label: 'Feeds', disabled: true }
             ];
@@ -3402,6 +4639,12 @@
                                                 {stats.needs_attention.breakdown.scotus_unpublished}
                                             </span>
                                         </div>
+                                        <div className="attention-item" title="SCOTUS cases needing manual review" onClick={() => setActiveTab('scotus')}>
+                                            <span>SCOTUS needs review</span>
+                                            <span className={`attention-count ${(stats.needs_attention?.breakdown?.scotus_needs_review ?? 0) === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention?.breakdown?.scotus_needs_review ?? 0}
+                                            </span>
+                                        </div>
                                         <div className="attention-item" title="Feeds with 5+ consecutive failures">
                                             <span>Feeds failed</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
@@ -3522,7 +4765,11 @@
                             <PardonsTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && (
+                        {activeTab === 'scotus' && (
+                            <ScotusTab password={password} supabase={supabase} />
+                        )}
+
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
