@@ -18,7 +18,7 @@ const SORT_MAP: Record<string, string> = {
 // Cursor validation patterns per sort column type
 const CURSOR_VALIDATORS: Record<string, RegExp> = {
   id: /^\d+$/,
-  decided_at: /^\d{4}-\d{2}-\d{2}$/,
+  decided_at: /^\d{4}-\d{2}-\d{2}(T[\d:.+Z-]{1,25})?$/,
   ruling_impact_level: /^[0-5]$/,
   case_name_short: /^[\w .'\-]+$/,
 }
@@ -240,11 +240,7 @@ Deno.serve(async (req) => {
       if (sortCol === 'id') {
         nextCursor = String(last.id)
       } else {
-        let sortValue = String(last[sortCol] ?? '')
-        // Trim timestamps to date-only to match CURSOR_VALIDATORS pattern
-        if (sortCol === 'decided_at' && sortValue.includes('T')) {
-          sortValue = sortValue.substring(0, 10)
-        }
+        const sortValue = String(last[sortCol] ?? '')
         nextCursor = `${sortValue}::${last.id}`
       }
     }
