@@ -3977,19 +3977,17 @@
                                                             <button className="btn-icon" onClick={() => handleEdit(c)} title="Edit">
                                                                 &#9999;&#65039; Edit
                                                             </button>
-                                                            {!c.is_public && (
-                                                                <button
-                                                                    className={`btn-icon${enrichingIds.has(c.id) ? ' enriching' : ''}`}
-                                                                    onClick={() => handleReEnrich(c)}
-                                                                    disabled={c.enrichment_status === 'pending' || enrichingIds.has(c.id)}
-                                                                    title={c.enrichment_status === 'pending' ? 'Already pending' : enrichingIds.has(c.id) ? 'Queuing...' : 'Re-enrich'}
-                                                                >
-                                                                    {enrichingIds.has(c.id)
-                                                                        ? <><span className="spinner-sm"></span> Queuing</>
-                                                                        : '\uD83E\uDD16 Re-enrich'
-                                                                    }
-                                                                </button>
-                                                            )}
+                                                            <button
+                                                                className={`btn-icon${enrichingIds.has(c.id) ? ' enriching' : ''}`}
+                                                                onClick={() => handleReEnrich(c)}
+                                                                disabled={c.enrichment_status === 'pending' || enrichingIds.has(c.id)}
+                                                                title={c.enrichment_status === 'pending' ? 'Already pending' : enrichingIds.has(c.id) ? 'Queuing...' : 'Re-enrich'}
+                                                            >
+                                                                {enrichingIds.has(c.id)
+                                                                    ? <><span className="spinner-sm"></span> Queuing</>
+                                                                    : '\uD83E\uDD16 Re-enrich'
+                                                                }
+                                                            </button>
                                                             {c.is_public ? (
                                                                 <button className="btn-icon" onClick={() => handleUnpublish(c)} title="Unpublish">
                                                                     &#128228; Unpublish
