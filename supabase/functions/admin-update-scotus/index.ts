@@ -260,10 +260,11 @@ Deno.serve(async (req) => {
 
     // Step 3: Apply coupled workflows
 
-    // Publish: is_public false→true → also set qa_status, qa_reviewed_at
+    // Publish: is_public false→true → also set qa_status, qa_reviewed_at, clear needs_manual_review
     if (sanitizedUpdates.is_public === true && !currentCase.is_public) {
       sanitizedUpdates.qa_status = 'approved'
       sanitizedUpdates.qa_reviewed_at = new Date().toISOString()
+      sanitizedUpdates.needs_manual_review = false
     }
 
     // Unpublish: is_public true→false → reset qa_status, clear qa_reviewed_at
@@ -425,6 +426,7 @@ async function handleBulkPublish(caseIds: unknown[], req: Request): Promise<Resp
         is_public: true,
         qa_status: 'approved',
         qa_reviewed_at: now,
+        needs_manual_review: false,
       })
       .eq('id', id)
       .eq('updated_at', currentCase.updated_at)
