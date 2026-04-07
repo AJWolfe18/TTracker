@@ -3545,7 +3545,11 @@
                     }
                     if (data?.error) throw new Error(data.error);
 
-                    setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
+                    setCases(prev => prev.map(sc =>
+                        sc.id === c.id
+                            ? { ...sc, ...(data?.scotus_case ?? { enrichment_status: 'pending' }) }
+                            : sc
+                    ));
                     toast?.addToast('Queued for re-enrichment. Will be enriched on next agent run (weekdays 4PM UTC).', 'success');
                 } catch (err) {
                     console.error('Re-enrich error:', err);
