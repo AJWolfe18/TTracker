@@ -275,7 +275,17 @@ Deno.serve(async (req) => {
       sanitizedUpdates.qa_reviewed_at = null
     }
 
-    // Reject: qa_status→'rejected' → reset enrichment for re-queue
+    // Re-enrich: enrichment_status→'pending' → also unpublish and reset QA
+    if (sanitizedUpdates.enrichment_status === 'pending' && currentCase.enrichment_status !== 'pending') {
+      sanitizedUpdates.enriched_at = null
+      if (currentCase.is_public) {
+        sanitizedUpdates.is_public = false
+        sanitizedUpdates.qa_status = 'pending_qa'
+        sanitizedUpdates.qa_reviewed_at = null
+      }
+    }
+
+    // Reject (legacy — kept for API compat but no longer used by frontend)
     if (sanitizedUpdates.qa_status === 'rejected') {
       if (!sanitizedUpdates.qa_review_note) {
         return jsonResponse({ error: 'qa_review_note is required when rejecting a case' }, 400)

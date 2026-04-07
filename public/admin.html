@@ -3373,9 +3373,6 @@
             const [undoInfo, setUndoInfo] = useState(null);
             const [enrichingIds, setEnrichingIds] = useState(new Set());
             const [selectedIds, setSelectedIds] = useState(new Set());
-            const [showRejectDialog, setShowRejectDialog] = useState(false);
-            const [rejectingCase, setRejectingCase] = useState(null);
-            const [rejectNote, setRejectNote] = useState('');
 
             // Run log
             const [runLogData, setRunLogData] = useState(null);
@@ -3535,6 +3532,8 @@
             // Handle re-enrich
             const handleReEnrich = async (c) => {
                 if (enrichingIds.has(c.id)) return;
+                const wasPublic = c.is_public;
+                if (wasPublic && !confirm('This will unpublish the case and queue it for re-enrichment. Continue?')) return;
                 setEnrichingIds(prev => new Set([...prev, c.id]));
                 try {
                     const { data, error: fnError } = await supabase.functions.invoke(
@@ -3543,7 +3542,7 @@
                             headers: { 'x-admin-password': password },
                             body: {
                                 case_id: c.id,
-                                updates: { enrichment_status: 'pending', enriched_at: null },
+                                updates: { enrichment_status: 'pending' },
                                 original_updated_at: c.updated_at
                             }
                         }
@@ -3558,10 +3557,13 @@
 
                     setCases(prev => prev.map(sc =>
                         sc.id === c.id
-                            ? { ...sc, ...(data?.scotus_case ?? { enrichment_status: 'pending' }) }
+                            ? { ...sc, ...(data?.scotus_case ?? { enrichment_status: 'pending', is_public: false }) }
                             : sc
                     ));
-                    toast?.addToast('Queued for re-enrichment. Will be enriched on next agent run (weekdays 4PM UTC).', 'success');
+                    const msg = wasPublic
+                        ? 'Unpublished and queued for re-enrichment. Next agent run: weekdays 4PM UTC.'
+                        : 'Queued for re-enrichment. Next agent run: weekdays 4PM UTC.';
+                    toast?.addToast(msg, 'success');
                 } catch (err) {
                     console.error('Re-enrich error:', err);
                     toast?.addToast(err.message || 'Failed to re-enrich', 'error');
@@ -3639,45 +3641,6 @@
                 }
             };
 
-            // Handle reject
-            const handleReject = async () => {
-                if (!rejectNote.trim()) return;
-                try {
-                    const { data, error: fnError } = await supabase.functions.invoke(
-                        'admin-update-scotus',
-                        {
-                            headers: { 'x-admin-password': password },
-                            body: {
-                                case_id: rejectingCase.id,
-                                updates: { qa_status: 'rejected', qa_review_note: rejectNote.trim() },
-                                original_updated_at: rejectingCase.updated_at
-                            }
-                        }
-                    );
-
-                    if (fnError) {
-                        let body = data;
-                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
-                        if (body?.conflict) {
-                            toast?.addToast('Conflict: record was modified. Refresh and try again.', 'error');
-                            setShowRejectDialog(false);
-                            setRejectingCase(null);
-                            return;
-                        }
-                        throw new Error(body?.error || fnError.message || 'Reject failed');
-                    }
-                    if (data?.error) throw new Error(data.error);
-
-                    setCases(prev => prev.map(sc => sc.id === rejectingCase.id ? { ...sc, ...data.scotus_case } : sc));
-                    toast?.addToast('Rejected. Will be re-enriched on next agent run (weekdays 4PM UTC).', 'success');
-                    setShowRejectDialog(false);
-                    setRejectingCase(null);
-                    setRejectNote('');
-                } catch (err) {
-                    console.error('Reject error:', err);
-                    toast?.addToast(err.message || 'Failed to reject', 'error');
-                }
-            };
 
             // Handle bulk publish
             const handleBulkPublish = async () => {
@@ -4002,11 +3965,6 @@
                                                                     &#128229; Publish
                                                                 </button>
                                                             )}
-                                                            {!c.is_public && (
-                                                                <button className="btn-icon" onClick={() => { setRejectingCase(c); setShowRejectDialog(true); setRejectNote(''); }} title="Reject & Re-queue">
-                                                                    &#128683; Reject
-                                                                </button>
-                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -4026,28 +3984,6 @@
                                     </button>
                                 </div>
                             )}
-                        </div>
-                    )}
-
-                    {/* Reject Dialog */}
-                    {showRejectDialog && rejectingCase && (
-                        <div className="modal-overlay">
-                            <div style={{ background: '#1e293b', border: '1px solid #ef4444', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '480px' }}>
-                                <h3 style={{ margin: '0 0 12px', color: '#f8fafc', fontSize: '16px' }}>Reject & Re-queue: #{rejectingCase.id}</h3>
-                                <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px' }}>{rejectingCase.case_name}</p>
-                                <textarea
-                                    className="form-textarea"
-                                    placeholder="Reason for rejection (required)..."
-                                    value={rejectNote}
-                                    onChange={(e) => setRejectNote(e.target.value)}
-                                    rows={3}
-                                    autoFocus
-                                />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-                                    <button className="btn-secondary" onClick={() => { setShowRejectDialog(false); setRejectingCase(null); setRejectNote(''); }}>Cancel</button>
-                                    <button className="btn-primary" onClick={handleReject} disabled={!rejectNote.trim()} style={{ background: '#ef4444' }}>Reject & Re-queue</button>
-                                </div>
-                            </div>
                         </div>
                     )}
 
