@@ -2388,7 +2388,7 @@
             { value: 'dismissed', label: 'Dismissed' },
             { value: 'granted', label: 'Granted' },
             { value: 'denied', label: 'Denied' },
-            { value: 'GVR', label: 'GVR' },
+            { value: 'GVR', label: 'GVR (Grant, Vacate, Remand)' },
             { value: 'other', label: 'Other' },
         ];
 
@@ -2464,7 +2464,7 @@
             const [saving, setSaving] = useState(false);
             const [error, setError] = useState(null);
             const [isConflict, setIsConflict] = useState(false);
-            const [openSections, setOpenSections] = useState({ case_identity: true, vote_opinion: true, editorial: false, evidence: false, status_qa: false });
+            const [openSections, setOpenSections] = useState({ case_identity: true, vote_opinion: true, editorial: true, evidence: false, status_qa: false });
 
             const originalUpdatedAt = scotusCase?.updated_at;
 
@@ -2499,15 +2499,15 @@
                         if (newVal !== oldVal) updates[f] = newVal;
                     }
 
-                    // Enum fields
-                    for (const f of ['disposition', 'case_type', 'prevailing_party', 'qa_status', 'enrichment_status']) {
+                    // Enum fields (qa_status, enrichment_status excluded — managed by Publish/Reject/Re-enrich buttons)
+                    for (const f of ['disposition', 'case_type', 'prevailing_party']) {
                         const newVal = formData[f] || null;
                         const oldVal = scotusCase[f] || null;
                         if (newVal !== oldVal) updates[f] = newVal;
                     }
 
-                    // Boolean fields
-                    for (const f of ['is_public', 'needs_manual_review', 'merits_reached']) {
+                    // Boolean fields (is_public, needs_manual_review excluded — managed by buttons)
+                    for (const f of ['merits_reached']) {
                         if (formData[f] !== (scotusCase[f] ?? false)) updates[f] = formData[f];
                     }
 
@@ -2695,7 +2695,10 @@
                                 textField('dissent_authors', 'Dissent Authors (comma-separated)', { placeholder: 'e.g. Sotomayor, Kagan, Jackson', used: true }),
                                 h('div', { className: 'form-row' },
                                     selectField('prevailing_party', 'Prevailing Party', SCOTUS_PREVAILING_PARTIES, true),
-                                    boolField('merits_reached', 'Merits Reached', true)
+                                    h('div', { className: 'form-group', style: { display: 'flex', alignItems: 'center', gap: '8px' }, title: 'Did the court rule on the actual legal question, vs. dismissing on procedure?' },
+                                        h('input', { type: 'checkbox', checked: formData.merits_reached, onChange: (ev) => handleChange('merits_reached', ev.target.checked), style: { accentColor: '#3b82f6', width: '16px', height: '16px' } }),
+                                        h('label', { className: 'form-label', style: { marginBottom: 0 } }, 'Merits Reached ', h('span', { style: { color: '#64748b', fontSize: '12px' } }, '(hover for info)'))
+                                    )
                                 )
                             ),
 
@@ -2736,36 +2739,33 @@
                             sectionHeader('evidence', 'Evidence'),
                             openSections.evidence && h('div', null,
                                 h('div', { className: 'form-group' },
-                                    fieldLabel('Evidence Anchors (one per line)', true),
+                                    fieldLabel('Citations (one per line)', true),
                                     h('textarea', {
                                         className: 'form-textarea',
                                         value: formData.evidence_anchors,
                                         onChange: (ev) => handleChange('evidence_anchors', ev.target.value),
                                         rows: 5,
-                                        placeholder: 'One evidence anchor per line...'
+                                        placeholder: 'One citation per line...'
                                     })
                                 ),
-                                textareaField('holding', 'Holding', 3, true)
+                                textareaField('holding', "Court's Ruling", 3, true)
                             ),
 
-                            // Section 5: Status & QA (collapsed)
+                            // Section 5: Status & QA (collapsed) — fields are read-only; use Publish/Reject/Re-enrich buttons instead
                             sectionHeader('status_qa', 'Status & QA'),
                             openSections.status_qa && h('div', null,
-                                h('div', { style: { display: 'flex', gap: '24px', marginBottom: '16px' } },
-                                    boolField('is_public', 'Published', true),
-                                    boolField('needs_manual_review', 'Needs Manual Review')
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Published', scotusCase.is_public ? 'Yes' : 'No'),
+                                    readOnlyField('QA Status', SCOTUS_QA_STATUSES.find(s => s.value === scotusCase.qa_status)?.label || scotusCase.qa_status || '-')
                                 ),
                                 h('div', { className: 'form-row' },
-                                    selectField('qa_status', 'QA Status', SCOTUS_QA_STATUSES),
-                                    selectField('enrichment_status', 'Enrichment Status', SCOTUS_ENRICHMENT_STATUSES)
+                                    readOnlyField('Enrichment Status', SCOTUS_ENRICHMENT_STATUSES.find(s => s.value === scotusCase.enrichment_status)?.label || scotusCase.enrichment_status || '-'),
+                                    readOnlyField('Needs Manual Review', scotusCase.needs_manual_review ? 'Yes — AI inferred data that may need verification' : 'No')
                                 ),
-                                textareaField('qa_review_note', 'QA Review Note', 2),
-                                textareaField('manual_review_note', 'Manual Review Note', 2),
-                                readOnlyField('Low Confidence Reason', scotusCase.low_confidence_reason),
-                                h('div', { className: 'form-row' },
-                                    readOnlyField('Enriched At', scotusCase.enriched_at ? new Date(scotusCase.enriched_at).toLocaleString() : null),
-                                    readOnlyField('Prompt Version', scotusCase.prompt_version)
-                                )
+                                scotusCase.qa_review_note && readOnlyField('QA Review Note', scotusCase.qa_review_note),
+                                scotusCase.manual_review_note && readOnlyField('Manual Review Note', scotusCase.manual_review_note),
+                                scotusCase.low_confidence_reason && readOnlyField('Low Confidence Reason', scotusCase.low_confidence_reason),
+                                readOnlyField('Enriched At', scotusCase.enriched_at ? new Date(scotusCase.enriched_at).toLocaleString() : '-')
                             )
                         ),
                         h('div', { className: 'modal-footer' },
@@ -3586,19 +3586,7 @@
                     if (data?.error) throw new Error(data.error);
 
                     setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
-
-                    const changedFields = data.changed_fields || {};
-                    const firstField = Object.keys(changedFields)[0];
-                    if (firstField) {
-                        setUndoInfo({
-                            entityType: 'scotus',
-                            entityId: String(c.id),
-                            fieldName: firstField,
-                            oldValue: changedFields[firstField]?.old
-                        });
-                    } else {
-                        toast?.addToast('Published', 'success');
-                    }
+                    toast?.addToast('Published', 'success');
                 } catch (err) {
                     console.error('Publish error:', err);
                     toast?.addToast(err.message || 'Failed to publish', 'error');
@@ -3633,19 +3621,7 @@
                     if (data?.error) throw new Error(data.error);
 
                     setCases(prev => prev.map(sc => sc.id === c.id ? { ...sc, ...data.scotus_case } : sc));
-
-                    const changedFields = data.changed_fields || {};
-                    const firstField = Object.keys(changedFields)[0];
-                    if (firstField) {
-                        setUndoInfo({
-                            entityType: 'scotus',
-                            entityId: String(c.id),
-                            fieldName: firstField,
-                            oldValue: changedFields[firstField]?.old
-                        });
-                    } else {
-                        toast?.addToast('Unpublished', 'success');
-                    }
+                    toast?.addToast('Unpublished', 'success');
                 } catch (err) {
                     console.error('Unpublish error:', err);
                     toast?.addToast(err.message || 'Failed to unpublish', 'error');
@@ -3990,17 +3966,19 @@
                                                             <button className="btn-icon" onClick={() => handleEdit(c)} title="Edit">
                                                                 &#9999;&#65039; Edit
                                                             </button>
-                                                            <button
-                                                                className={`btn-icon${enrichingIds.has(c.id) ? ' enriching' : ''}`}
-                                                                onClick={() => handleReEnrich(c)}
-                                                                disabled={c.enrichment_status === 'pending' || enrichingIds.has(c.id)}
-                                                                title={c.enrichment_status === 'pending' ? 'Already pending' : enrichingIds.has(c.id) ? 'Queuing...' : 'Re-enrich'}
-                                                            >
-                                                                {enrichingIds.has(c.id)
-                                                                    ? <><span className="spinner-sm"></span> Queuing</>
-                                                                    : '\uD83E\uDD16 Re-enrich'
-                                                                }
-                                                            </button>
+                                                            {!c.is_public && (
+                                                                <button
+                                                                    className={`btn-icon${enrichingIds.has(c.id) ? ' enriching' : ''}`}
+                                                                    onClick={() => handleReEnrich(c)}
+                                                                    disabled={c.enrichment_status === 'pending' || enrichingIds.has(c.id)}
+                                                                    title={c.enrichment_status === 'pending' ? 'Already pending' : enrichingIds.has(c.id) ? 'Queuing...' : 'Re-enrich'}
+                                                                >
+                                                                    {enrichingIds.has(c.id)
+                                                                        ? <><span className="spinner-sm"></span> Queuing</>
+                                                                        : '\uD83E\uDD16 Re-enrich'
+                                                                    }
+                                                                </button>
+                                                            )}
                                                             {c.is_public ? (
                                                                 <button className="btn-icon" onClick={() => handleUnpublish(c)} title="Unpublish">
                                                                     &#128228; Unpublish
@@ -4015,9 +3993,11 @@
                                                                     &#128229; Publish
                                                                 </button>
                                                             )}
-                                                            <button className="btn-icon" onClick={() => { setRejectingCase(c); setShowRejectDialog(true); setRejectNote(''); }} title="Reject & Re-queue">
-                                                                &#128683; Reject
-                                                            </button>
+                                                            {!c.is_public && (
+                                                                <button className="btn-icon" onClick={() => { setRejectingCase(c); setShowRejectDialog(true); setRejectNote(''); }} title="Reject & Re-queue">
+                                                                    &#128683; Reject
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>
