@@ -237,9 +237,16 @@ Deno.serve(async (req) => {
     let nextCursor: string | null = null
     if (hasMore && cases.length > 0) {
       const last = cases[cases.length - 1] as Record<string, unknown>
-      nextCursor = sortCol === 'id'
-        ? String(last.id)
-        : `${last[sortCol]}::${last.id}`
+      if (sortCol === 'id') {
+        nextCursor = String(last.id)
+      } else {
+        let sortValue = String(last[sortCol] ?? '')
+        // Trim timestamps to date-only to match CURSOR_VALIDATORS pattern
+        if (sortCol === 'decided_at' && sortValue.includes('T')) {
+          sortValue = sortValue.substring(0, 10)
+        }
+        nextCursor = `${sortValue}::${last.id}`
+      }
     }
 
     return jsonResponse({
