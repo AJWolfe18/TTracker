@@ -73,6 +73,20 @@ Invoke ADO operations via subagent to isolate context cost.
 
 ---
 
+## HTML Formatting (CRITICAL)
+
+ADO Description and Acceptance Criteria are **rich text (HTML)** fields.
+NEVER write plain text or markdown into these fields — always use HTML:
+
+- Paragraphs: `<p>Text</p>`
+- Bold: `<b>Bold</b>`
+- Bullets: `<ul><li>Item</li></ul>`
+- Numbered: `<ol><li>Step</li></ol>`
+- Line breaks: `<br>`
+- Headers: `<h3>Section</h3>`
+
+---
+
 ## Response Format
 
 Subagent returns concise summary:

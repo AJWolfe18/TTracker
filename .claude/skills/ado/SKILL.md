@@ -99,14 +99,32 @@ Execute ADO operation: [DESCRIBE WHAT USER WANTS]
 **Example - Query work item:**
 mcp__azure-devops__wit_get_work_item(project="TTracker", id=123)
 
+**IMPORTANT — HTML FORMATTING FOR RICH TEXT FIELDS:**
+ADO Description and Acceptance Criteria fields are rich text (HTML). NEVER write plain text or markdown — always use HTML tags. Examples:
+- Paragraphs: `<p>Text here</p>`
+- Bold: `<b>Bold text</b>`
+- Bullet lists: `<ul><li>Item 1</li><li>Item 2</li></ul>`
+- Numbered lists: `<ol><li>Step 1</li><li>Step 2</li></ol>`
+- Line breaks: `<br>`
+- Headers: `<h3>Section</h3>`
+- Links: `<a href="url">text</a>`
+
 **Example - Create User Story:**
 mcp__azure-devops__wit_create_work_item(
   project="TTracker",
   workItemType="User Story",
   fields=[
     {"name": "System.Title", "value": "Feature title here"},
-    {"name": "System.Description", "value": "Description here"},
+    {"name": "System.Description", "value": "<p>Description here with <b>formatting</b>.</p><ul><li>Key point 1</li><li>Key point 2</li></ul>"},
     {"name": "System.Tags", "value": "jira:TTRC-XXX"}
+  ]
+)
+
+**Example - Acceptance Criteria (ALWAYS use HTML checklist format):**
+mcp__azure-devops__wit_update_work_item(
+  id=123,
+  updates=[
+    {"path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria", "value": "<ul><li>AC 1: Feature does X</li><li>AC 2: Edge case Y is handled</li><li>AC 3: Tests pass</li></ul>"}
   ]
 )
 
