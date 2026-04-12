@@ -49,7 +49,7 @@ const REASONS = Object.freeze({
  * @param {string} skip.pipeline     — use PIPELINES.*
  * @param {string} skip.reason       — use REASONS.*
  * @param {string} [skip.entity_type]
- * @param {string} [skip.entity_id]
+ * @param {string|number|null} [skip.entity_id] — coerced to string; 0 is preserved, only null/undefined becomes NULL
  * @param {object} [skip.metadata]
  * @returns {Promise<void>} resolves even on insert failure (skip-logging must not break the pipeline)
  */
