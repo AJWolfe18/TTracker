@@ -4085,6 +4085,211 @@
             );
         }
 
+        // SkipsTab Component — Silent-skip observability (ADO-466)
+        function SkipsTab({ password, supabase }) {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [hours, setHours] = useState(24);
+            const [pipelineFilter, setPipelineFilter] = useState('');
+            const [reasonFilter, setReasonFilter] = useState('');
+            const fetchTokenRef = useRef(0);
+
+            const TIME_RANGES = [
+                { label: '24h', value: 24 },
+                { label: '7d', value: 168 },
+                { label: '30d', value: 720 }
+            ];
+
+            const fetchSkips = useCallback(async () => {
+                const token = ++fetchTokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const reqBody = { hours, limit: 50 };
+                    if (pipelineFilter) reqBody.pipeline = pipelineFilter;
+                    if (reasonFilter) reqBody.reason = reasonFilter;
+
+                    const { data: result, error: fnError } = await supabase.functions.invoke(
+                        'admin-pipeline-skips',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Failed to load skips');
+                    if (token !== fetchTokenRef.current) return;
+                    setData(result);
+                } catch (err) {
+                    if (token === fetchTokenRef.current) setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) setLoading(false);
+                }
+            }, [hours, pipelineFilter, reasonFilter, password, supabase]);
+
+            useEffect(() => {
+                fetchSkips();
+            }, [fetchSkips]);
+
+            const clearFilters = () => {
+                setPipelineFilter('');
+                setReasonFilter('');
+            };
+
+            const formatTimestamp = (iso) => {
+                if (!iso) return '—';
+                const d = new Date(iso);
+                const now = new Date();
+                const mins = Math.floor((now.getTime() - d.getTime()) / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ago`;
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            };
+
+            const formatMetadata = (meta) => {
+                if (!meta || typeof meta !== 'object' || Object.keys(meta).length === 0) return '—';
+                try {
+                    return JSON.stringify(meta);
+                } catch (_) {
+                    return '[object]';
+                }
+            };
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>Pipeline Skips — Silent-Skip Observability</span></h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {TIME_RANGES.map(r => (
+                                    <button
+                                        key={r.value}
+                                        className={`tab-btn ${hours === r.value ? 'active' : ''}`}
+                                        onClick={() => setHours(r.value)}
+                                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
+                                    >
+                                        {r.label}
+                                    </button>
+                                ))}
+                                <button onClick={fetchSkips} disabled={loading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    {loading ? '...' : '↻'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            {(pipelineFilter || reasonFilter) && (
+                                <div style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                    <strong>Filters:</strong>{' '}
+                                    {pipelineFilter && <span style={{ background: '#374151', padding: '0.2rem 0.5rem', borderRadius: '4px', marginRight: '0.5rem' }}>pipeline={pipelineFilter}</span>}
+                                    {reasonFilter && <span style={{ background: '#374151', padding: '0.2rem 0.5rem', borderRadius: '4px', marginRight: '0.5rem' }}>reason={reasonFilter}</span>}
+                                    <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline' }}>clear</button>
+                                </div>
+                            )}
+
+                            {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                            {loading && !data ? (
+                                <div className="loading"><div className="spinner"></div>Loading…</div>
+                            ) : data ? (
+                                <>
+                                    <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#9ca3af' }}>
+                                        <strong style={{ color: '#e5e7eb' }}>{data.total_count.toLocaleString()}</strong> skip{data.total_count === 1 ? '' : 's'} in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}
+                                        {data.truncated && <span style={{ color: '#fbbf24', marginLeft: '0.5rem' }}>(truncated — showing first 10,000)</span>}
+                                    </div>
+
+                                    {data.by_pipeline.length === 0 ? (
+                                        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                                            No skips recorded in this time range. 🎉
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                                            {data.by_pipeline.map(p => (
+                                                <div key={p.pipeline} style={{ border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem', background: '#1f2937' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                        <div>
+                                                            <button
+                                                                onClick={() => setPipelineFilter(pipelineFilter === p.pipeline ? '' : p.pipeline)}
+                                                                style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '1rem', fontWeight: 600, padding: 0 }}
+                                                                title="Filter by this pipeline"
+                                                            >
+                                                                {p.pipeline}
+                                                            </button>
+                                                        </div>
+                                                        <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{p.count.toLocaleString()}</div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                        {p.reasons.map(r => (
+                                                            <button
+                                                                key={r.reason}
+                                                                onClick={() => {
+                                                                    setPipelineFilter(p.pipeline);
+                                                                    setReasonFilter(reasonFilter === r.reason ? '' : r.reason);
+                                                                }}
+                                                                style={{
+                                                                    background: reasonFilter === r.reason && pipelineFilter === p.pipeline ? '#3b82f6' : '#374151',
+                                                                    border: 'none',
+                                                                    color: '#e5e7eb',
+                                                                    padding: '0.25rem 0.5rem',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '0.85rem',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                                title="Filter by this reason"
+                                                            >
+                                                                {r.reason}: <strong>{r.count}</strong>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {data.recent_rows.length > 0 && (
+                                        <>
+                                            <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#e5e7eb' }}>
+                                                Recent {data.recent_rows.length} row{data.recent_rows.length === 1 ? '' : 's'}
+                                            </h3>
+                                            <div style={{ overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                    <thead>
+                                                        <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                                            <th style={{ padding: '0.5rem', color: '#9ca3af' }}>When</th>
+                                                            <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Pipeline</th>
+                                                            <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Reason</th>
+                                                            <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Entity</th>
+                                                            <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Metadata</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {data.recent_rows.map(row => (
+                                                            <tr key={row.id} style={{ borderBottom: '1px solid #1f2937' }}>
+                                                                <td style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatTimestamp(row.created_at)}</td>
+                                                                <td style={{ padding: '0.5rem' }}>{row.pipeline}</td>
+                                                                <td style={{ padding: '0.5rem' }}>{row.reason}</td>
+                                                                <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${row.entity_type || '—'}: ${row.entity_id || '—'}`}>
+                                                                    {row.entity_type ? `${row.entity_type}: ${row.entity_id || '—'}` : (row.entity_id || '—')}
+                                                                </td>
+                                                                <td style={{ padding: '0.5rem', color: '#9ca3af', maxWidth: '350px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.75rem' }} title={formatMetadata(row.metadata)}>
+                                                                    {formatMetadata(row.metadata)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Main App Component
         function AdminDashboard() {
             const [activeTab, setActiveTab] = useState('home');
@@ -4411,6 +4616,7 @@
                 { id: 'stories', label: 'Stories' },
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
+                { id: 'skips', label: 'Skips' },
                 { id: 'eos', label: 'Exec Orders', disabled: true },
                 { id: 'feeds', label: 'Feeds', disabled: true }
             ];
@@ -4706,11 +4912,15 @@
                             <PardonsTab password={password} supabase={supabase} />
                         )}
 
+                        {activeTab === 'skips' && (
+                            <SkipsTab password={password} supabase={supabase} />
+                        )}
+
                         {activeTab === 'scotus' && (
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'skips' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>

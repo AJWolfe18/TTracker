@@ -7,12 +7,12 @@
  * MUST write a row to pipeline_skips before skipping — no bare console.log.
  *
  * Usage:
- *   const { PIPELINES, REASONS, recordSkip } = require('./lib/skip-reasons');
+ *   import { PIPELINES, REASONS, recordSkip } from './lib/skip-reasons.js';
  *   await recordSkip(supabase, {
  *     pipeline: PIPELINES.RSS_ENRICHMENT,
  *     reason: REASONS.BUDGET_EXCEEDED,
  *     entity_type: 'story',
- *     entity_id: String(story.id),
+ *     entity_id: story.id,
  *     metadata: { spent_usd: 4.82, day: '2026-04-12' }
  *   });
  *
@@ -21,7 +21,7 @@
  * malformed row.
  */
 
-const PIPELINES = Object.freeze({
+export const PIPELINES = Object.freeze({
   RSS_FETCH:          'rss_fetch',          // scripts/rss/fetch_feed.js — freshness filter, dedup rejection
   RSS_ENRICHMENT:     'rss_enrichment',     // scripts/rss-tracker-supabase.js — budget cap, entity extraction gate
   EMBEDDINGS:         'embeddings',         // scripts/rss-tracker-supabase.js — embedding failures
@@ -30,7 +30,7 @@ const PIPELINES = Object.freeze({
   STORY_ENRICHMENT:   'story_enrichment',   // scripts/enrichment/enrich-stories-inline.js — no-articles failure
 });
 
-const REASONS = Object.freeze({
+export const REASONS = Object.freeze({
   BUDGET_EXCEEDED:       'budget_exceeded',       // daily OpenAI budget cap hit
   FRESHNESS_FILTER:      'freshness_filter',      // article outside freshness window
   NO_ARTICLES:           'no_articles',           // story/entity aggregation had zero articles linked
@@ -53,9 +53,13 @@ const REASONS = Object.freeze({
  * @param {object} [skip.metadata]
  * @returns {Promise<void>} resolves even on insert failure (skip-logging must not break the pipeline)
  */
-async function recordSkip(supabase, { pipeline, reason, entity_type, entity_id, metadata }) {
+export async function recordSkip(supabase, { pipeline, reason, entity_type, entity_id, metadata }) {
   if (!pipeline || !reason) {
     console.warn('[skip-reasons] recordSkip called without pipeline or reason — ignoring');
+    return;
+  }
+  if (!supabase || typeof supabase.from !== 'function') {
+    console.warn(`[skip-reasons] recordSkip called without supabase client (pipeline=${pipeline}, reason=${reason})`);
     return;
   }
   try {
@@ -75,5 +79,3 @@ async function recordSkip(supabase, { pipeline, reason, entity_type, entity_id, 
     console.warn(`[skip-reasons] recordSkip threw (pipeline=${pipeline}, reason=${reason}):`, err?.message || err);
   }
 }
-
-module.exports = { PIPELINES, REASONS, recordSkip };

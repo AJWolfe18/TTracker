@@ -9,6 +9,7 @@ import { fetchWithTimeout, readLimitedResponse, withRetry, getNetworkConfig } fr
 import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
 import { toStr, toBool, toStrArray } from './utils/primitive.js';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -439,11 +440,30 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   const articleDate = new Date(publishedAt);
   
   if (articleDate < cutoffDate) {
+    const ageHours = Math.round((Date.now() - articleDate.getTime()) / (1000 * 60 * 60));
     safeLog('info', 'Skipping old article', {
       article_url: articleUrl,
       published_at: publishedAt,
-      age_hours: Math.round((Date.now() - articleDate.getTime()) / (1000 * 60 * 60)),
+      age_hours: ageHours,
       max_age_hours: maxAgeHours
+    });
+    // ADO-466: Records skip for observability. High-volume site — each old article
+    // in the RSS feed window gets re-recorded on every 2-hour run until it drops
+    // off the source feed. 30-day retention cron + 100K aggregation cap in
+    // admin-pipeline-skips edge function keep this manageable. Future optimization:
+    // batch to one row per (feed, run) with count in metadata.
+    await recordSkip(db, {
+      pipeline: PIPELINES.RSS_FETCH,
+      reason: REASONS.FRESHNESS_FILTER,
+      entity_type: 'article_url',
+      entity_id: articleUrl,
+      metadata: {
+        feed_id: feedId,
+        source_name: sourceName,
+        published_at: publishedAt,
+        age_hours: ageHours,
+        max_age_hours: maxAgeHours
+      }
     });
     return { is_new: false, skipped: true, reason: 'too_old' };
   }
