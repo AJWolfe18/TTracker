@@ -4101,6 +4101,55 @@
                 { label: '30d', value: 720 }
             ];
 
+            // Plain-language explanations for each (pipeline, reason) pair
+            const REASON_COPY = {
+                'rss_fetch/freshness_filter': {
+                    what: 'RSS article was older than the freshness window (96 hours by default) and was skipped during feed ingestion.',
+                    why_volume: 'Expected high volume — every feed re-fetch re-evaluates the same old articles until they drop off the source feed.',
+                    action: 'No action needed. Informational only.'
+                },
+                'rss_enrichment/budget_exceeded': {
+                    what: 'Daily OpenAI budget cap was hit. Story enrichment stopped for the rest of the day.',
+                    why_volume: 'Should be rare — means one day\'s activity exceeded $5 spend.',
+                    action: 'If this happens frequently, raise the cap or investigate what\'s driving cost.'
+                },
+                'entity_extraction/budget_exceeded': {
+                    what: 'Daily OpenAI budget cap was hit before entity extraction could run.',
+                    why_volume: 'Should be rare.',
+                    action: 'Same as above — raise cap or investigate cost driver.'
+                },
+                'embeddings/embedding_failure': {
+                    what: 'OpenAI embedding call failed for an article. The article will retry on the next pipeline run.',
+                    why_volume: 'Sporadic failures are normal (network blips, rate limits). Sustained volume = real problem.',
+                    action: 'If >10/day or same article repeatedly, investigate OpenAI status or article content issues.'
+                },
+                'entity_extraction/parse_error': {
+                    what: 'GPT returned malformed JSON when extracting entities. That article has no entities.',
+                    why_volume: 'Rare with gpt-4o-mini. Indicates prompt regression or model quirk.',
+                    action: 'Investigate if sustained — may need prompt tweak.'
+                },
+                'entity_extraction/api_error': {
+                    what: 'OpenAI API call errored during entity extraction.',
+                    why_volume: 'Sporadic is normal. Sustained = investigate.',
+                    action: 'Check OpenAI status, rate limits, or API key.'
+                },
+                'entity_aggregation/no_articles': {
+                    what: 'A story had no article_story links when we tried to aggregate entities. Edge case.',
+                    why_volume: 'Should be near-zero — usually a timing issue.',
+                    action: 'Investigate if frequent — may indicate a broken join or cleanup gap.'
+                },
+                'entity_aggregation/no_entities': {
+                    what: 'A story\'s linked articles had no entities extracted yet.',
+                    why_volume: 'Normal for brand-new stories before the next extraction cycle runs.',
+                    action: 'No action unless persistent for older stories.'
+                },
+                'story_enrichment/no_articles': {
+                    what: 'Tried to enrich a story but no articles were linked to it. Shouldn\'t happen.',
+                    why_volume: 'Should be zero in steady state.',
+                    action: 'Investigate immediately — indicates a broken link or upstream bug.'
+                }
+            };
+
             const fetchSkips = useCallback(async () => {
                 const token = ++fetchTokenRef.current;
                 setLoading(true);
@@ -4161,7 +4210,7 @@
                 <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                            <h2 className="card-title"><span>Pipeline Skips — Silent-Skip Observability</span></h2>
+                            <h2 className="card-title"><span>Pipeline Skips</span></h2>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                 {TIME_RANGES.map(r => (
                                     <button
@@ -4179,6 +4228,19 @@
                             </div>
                         </div>
                         <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every time the pipeline silently drops work (too-old articles, budget caps, failed embeddings, etc.) it records a row here so you have visibility. <strong style={{ color: '#e5e7eb' }}>Most skips are expected</strong> — watch for unusual spikes or patterns, not individual rows. Click a pipeline or reason to filter. Hover a reason chip to see what it means.
+                            </div>
+
+                            {reasonFilter && REASON_COPY[`${pipelineFilter}/${reasonFilter}`] && (
+                                <div style={{ background: '#1e3a8a', border: '1px solid #3b82f6', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                                    <div style={{ marginBottom: '0.25rem' }}><strong>{pipelineFilter} / {reasonFilter}</strong></div>
+                                    <div style={{ color: '#dbeafe' }}><strong>What:</strong> {REASON_COPY[`${pipelineFilter}/${reasonFilter}`].what}</div>
+                                    <div style={{ color: '#dbeafe' }}><strong>Volume:</strong> {REASON_COPY[`${pipelineFilter}/${reasonFilter}`].why_volume}</div>
+                                    <div style={{ color: '#dbeafe' }}><strong>Action:</strong> {REASON_COPY[`${pipelineFilter}/${reasonFilter}`].action}</div>
+                                </div>
+                            )}
+
                             {(pipelineFilter || reasonFilter) && (
                                 <div style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
                                     <strong>Filters:</strong>{' '}
@@ -4220,27 +4282,33 @@
                                                         <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{p.count.toLocaleString()}</div>
                                                     </div>
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                                        {p.reasons.map(r => (
-                                                            <button
-                                                                key={r.reason}
-                                                                onClick={() => {
-                                                                    setPipelineFilter(p.pipeline);
-                                                                    setReasonFilter(reasonFilter === r.reason ? '' : r.reason);
-                                                                }}
-                                                                style={{
-                                                                    background: reasonFilter === r.reason && pipelineFilter === p.pipeline ? '#3b82f6' : '#374151',
-                                                                    border: 'none',
-                                                                    color: '#e5e7eb',
-                                                                    padding: '0.25rem 0.5rem',
-                                                                    borderRadius: '4px',
-                                                                    fontSize: '0.85rem',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                                title="Filter by this reason"
-                                                            >
-                                                                {r.reason}: <strong>{r.count}</strong>
-                                                            </button>
-                                                        ))}
+                                                        {p.reasons.map(r => {
+                                                            const copy = REASON_COPY[`${p.pipeline}/${r.reason}`];
+                                                            const tooltipText = copy
+                                                                ? `${copy.what}\n\nVolume: ${copy.why_volume}\n\nAction: ${copy.action}`
+                                                                : 'Click to filter by this reason';
+                                                            return (
+                                                                <button
+                                                                    key={r.reason}
+                                                                    onClick={() => {
+                                                                        setPipelineFilter(p.pipeline);
+                                                                        setReasonFilter(reasonFilter === r.reason ? '' : r.reason);
+                                                                    }}
+                                                                    style={{
+                                                                        background: reasonFilter === r.reason && pipelineFilter === p.pipeline ? '#3b82f6' : '#374151',
+                                                                        border: 'none',
+                                                                        color: '#e5e7eb',
+                                                                        padding: '0.25rem 0.5rem',
+                                                                        borderRadius: '4px',
+                                                                        fontSize: '0.85rem',
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                    title={tooltipText}
+                                                                >
+                                                                    {r.reason}: <strong>{r.count}</strong>
+                                                                </button>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             ))}
