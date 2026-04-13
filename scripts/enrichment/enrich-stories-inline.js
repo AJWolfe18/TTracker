@@ -9,6 +9,7 @@
 import OpenAI from 'openai';
 import { SYSTEM_PROMPT } from './prompts/stories.js';
 import { normalizeEntities } from '../lib/entity-normalization.js';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 import {
   PROMPT_VERSION,
   estimateStoryFrame,
@@ -235,6 +236,13 @@ export async function enrichStory(story, { supabase, openaiClient }) {
   const links = await fetchStoryArticles(story_id, supabase);
   if (!links.length) {
     console.error(`❌ No articles found for story ${story_id}`);
+    await recordSkip(supabase, {
+      pipeline: PIPELINES.STORY_ENRICHMENT,
+      reason: REASONS.NO_ARTICLES,
+      entity_type: 'story',
+      entity_id: story_id,
+      metadata: {}
+    });
     throw new Error('No articles found for story');
   }
 

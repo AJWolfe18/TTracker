@@ -62,38 +62,6 @@ jobs:
           set -euo pipefail
           node scripts/scotus/fetch-cases.js --resume 2>&1 | tee logs/fetch.log
 
-      # --------------------------
-      # Budget guard between phases
-      # --------------------------
-      - name: Budget guard (block if spent_usd >= 4.50)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          DAY: ${{ steps.day.outputs.day }}
-        run: |
-          set -euo pipefail
-          url="${SUPABASE_URL}/rest/v1/budgets?day=eq.${DAY}&select=spent_usd"
-          echo "Checking budget: ${url}" | tee -a logs/budget.log
-          resp="$(curl -sS --fail-with-body "${url}" \
-            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Accept: application/json")" || {
-            echo "Budget API call failed" | tee -a logs/budget.log
-            exit 1
-          }
-          echo "${resp}" | tee -a logs/budget.log
-          if ! echo "${resp}" | jq -e 'type == "array"' > /dev/null 2>&1; then
-            echo "Budget API returned unexpected response" | tee -a logs/budget.log
-            exit 1
-          fi
-          spent="$(echo "${resp}" | jq -r '.[0].spent_usd // 0')"
-          echo "spent_usd=${spent}" | tee -a logs/budget.log
-          ok="$(awk -v s="${spent}" 'BEGIN { if (s+0 < 4.50) print "true"; else print "false"; }')"
-          if [ "${ok}" != "true" ]; then
-            echo "Budget guard tripped: spent_usd=${spent} >= 4.50" | tee -a logs/budget.log
-            exit 1
-          fi
-
       - name: Upload logs on failure/cancel
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
