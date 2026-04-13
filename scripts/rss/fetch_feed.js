@@ -615,5 +615,6 @@ function detectOpinionContent(url, content, title) {
 }
 
 export {
-  handleFetchFeed
+  handleFetchFeed,
+  processArticleItemAtomic
 };
