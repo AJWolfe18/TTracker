@@ -37,7 +37,7 @@ const ESTIMATED_COST_PER_STORY = 0.003; // GPT-4o-mini average
 // RSS Tracker Class
 // =====================================================================
 
-class RSSTracker {
+export class RSSTracker {
   constructor() {
     // Environment setup
     this.environment = process.env.ENVIRONMENT || 'test';
