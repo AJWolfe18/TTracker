@@ -227,7 +227,7 @@
     {
       "id": 217,
       "label": "Esteras",
-      "disposition": "vacated",
+      "disposition": "vacated_and_remanded",
       "majority_author_last": "Barrett",
       "dissent_authors_last": ["Alito", "Gorsuch"],
       "vote_split": "7-2",

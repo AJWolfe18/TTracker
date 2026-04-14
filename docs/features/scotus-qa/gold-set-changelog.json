@@ -50,6 +50,18 @@
       "impact": "Fixes disposition mismatch for case 137. New enum value added to scout-parser.js VALID_DISPOSITIONS and syllabus-extractor.js."
     },
     {
+      "date": "2026-03-27",
+      "case_id": 217,
+      "case_name": "Esteras v. Esteras",
+      "field": "disposition",
+      "previous": "vacated",
+      "corrected": "vacated_and_remanded",
+      "source": "SCOTUS opinion syllabus (verified via syllabus extractor audit)",
+      "verified_by": "Claude (syllabus extractor)",
+      "reason": "Gold comparison had a fuzzy match hack (startsWith('vacated')) that masked the mismatch. Removed fuzzy match, corrected gold truth.",
+      "impact": "Fixes masked disposition mismatch for case 217"
+    },
+    {
       "date": "2026-03-26",
       "action": "removed",
       "case_id": 280,
