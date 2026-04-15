@@ -104,11 +104,19 @@ function safeCategories(item) {
  * @returns {string} - ISO 8601 date string
  */
 function normalizePublishedAt(item) {
-  // toStr() returns '' (not undefined) for null/missing inputs, so use || not ??
-  // to correctly fall through from an empty isoDate to pubDate.
-  const raw = toStr(item.isoDate) || toStr(item.pubDate) || '';
+  // Prefer isoDate; if missing OR unparsable, fall back to pubDate.
+  // toStr() returns '' for null/missing, so empty strings naturally fall through.
+  const isoRaw = toStr(item.isoDate);
+  const pubRaw = toStr(item.pubDate);
 
-  // Fallback: now, if missing or unparsable
+  let raw = '';
+  if (isoRaw && !Number.isNaN(new Date(isoRaw).getTime())) {
+    raw = isoRaw;
+  } else if (pubRaw && !Number.isNaN(new Date(pubRaw).getTime())) {
+    raw = pubRaw;
+  }
+
+  // Fallback: now, if neither is usable
   if (!raw) return new Date().toISOString();
 
   const d = new Date(raw);
