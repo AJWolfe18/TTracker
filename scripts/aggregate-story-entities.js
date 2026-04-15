@@ -23,6 +23,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { normalizeEntityId } from './lib/entity-normalization.js';
+import { recordSkip, PIPELINES, REASONS } from './lib/skip-reasons.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -88,6 +89,13 @@ async function main() {
 
     if (!articleStories || articleStories.length === 0) {
       skipped++;
+      await recordSkip(supabase, {
+        pipeline: PIPELINES.ENTITY_AGGREGATION,
+        reason: REASONS.NO_ARTICLES,
+        entity_type: 'story',
+        entity_id: story.id,
+        metadata: {}
+      });
       continue;
     }
 
@@ -115,6 +123,13 @@ async function main() {
     // Skip if no entities found
     if (Object.keys(entityCounter).length === 0) {
       skipped++;
+      await recordSkip(supabase, {
+        pipeline: PIPELINES.ENTITY_AGGREGATION,
+        reason: REASONS.NO_ENTITIES,
+        entity_type: 'story',
+        entity_id: story.id,
+        metadata: { article_count: articleStories.length }
+      });
       continue;
     }
 

@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { clusterArticle, resetRunState, getRunStats } from './rss/hybrid-clustering.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
+import { recordSkip, PIPELINES, REASONS } from './lib/skip-reasons.js';
 import {
   enrichStory as enrichStoryImpl,
   shouldEnrichStory,
@@ -36,7 +37,7 @@ const ESTIMATED_COST_PER_STORY = 0.003; // GPT-4o-mini average
 // RSS Tracker Class
 // =====================================================================
 
-class RSSTracker {
+export class RSSTracker {
   constructor() {
     // Environment setup
     this.environment = process.env.ENVIRONMENT || 'test';
@@ -251,6 +252,13 @@ class RSSTracker {
           if (!Array.isArray(embedding) || embedding.length === 0) {
             console.error(`❌ Invalid embedding response for ${article.id}`);
             this.stats.embedding_failures++;
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.EMBEDDINGS,
+              reason: REASONS.EMBEDDING_FAILURE,
+              entity_type: 'article',
+              entity_id: article.id,
+              metadata: { cause: 'invalid_embedding_response' }
+            });
             continue;
           }
 
@@ -266,6 +274,13 @@ class RSSTracker {
           if (updateError) {
             console.error(`❌ Failed to store embedding for ${article.id}:`, updateError.message);
             this.stats.embedding_failures++;
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.EMBEDDINGS,
+              reason: REASONS.EMBEDDING_FAILURE,
+              entity_type: 'article',
+              entity_id: article.id,
+              metadata: { cause: 'db_update_failed', message: updateError.message }
+            });
             continue;
           }
 
@@ -273,6 +288,13 @@ class RSSTracker {
         } catch (err) {
           console.error(`❌ Embedding failed for ${article.id}:`, err.message);
           this.stats.embedding_failures++;
+          await recordSkip(this.supabase, {
+            pipeline: PIPELINES.EMBEDDINGS,
+            reason: REASONS.EMBEDDING_FAILURE,
+            entity_type: 'article',
+            entity_id: article.id,
+            metadata: { cause: 'api_exception', message: err.message }
+          });
           // Continue with next article - this one will retry next run
         }
       }
@@ -307,6 +329,13 @@ class RSSTracker {
 
       if (budget?.spent_usd >= DAILY_BUDGET_LIMIT) {
         console.log('[RSS] Daily budget exceeded, skipping entity extraction');
+        await recordSkip(this.supabase, {
+          pipeline: PIPELINES.ENTITY_EXTRACTION,
+          reason: REASONS.BUDGET_EXCEEDED,
+          entity_type: 'pipeline',
+          entity_id: 'rss_entity_extraction',
+          metadata: { spent_usd: budget.spent_usd, limit: DAILY_BUDGET_LIMIT, day: today }
+        });
         return;
       }
 
@@ -348,7 +377,8 @@ class RSSTracker {
           const { entities, tokens } = await extractArticleEntities(
             article.title,
             content,
-            this.openai
+            this.openai,
+            { supabase: this.supabase, articleId: article.id }
           );
           updateFields.entities = entities.length > 0 ? entities : [];
           if (entities.length > 0) {

@@ -14,6 +14,7 @@
  */
 
 import { normalizeEntities } from '../lib/entity-normalization.js';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 // ============================================================================
 // Entity Extraction Prompt
@@ -108,9 +109,14 @@ IMPORTANT: Return ONLY the JSON object with "entities" key.`;
  * @param {string} title - Article title
  * @param {string} content - Article content (scraped_content or excerpt)
  * @param {OpenAI} openaiClient - OpenAI client instance
+ * @param {object} [options]
+ * @param {import('@supabase/supabase-js').SupabaseClient} [options.supabase] - If provided, skip events are recorded to pipeline_skips
+ * @param {string|number} [options.articleId] - Article ID to associate with skip events
  * @returns {Promise<{entities: Array, tokens: object|null}>}
  */
-export async function extractArticleEntities(title, content, openaiClient) {
+export async function extractArticleEntities(title, content, openaiClient, options = {}) {
+  const { supabase = null, articleId = null } = options;
+
   // Prepare article text (truncate to 4000 chars for token efficiency)
   const articleText = `Title: ${title}\n\nContent: ${content || '(no content)'}`.slice(0, 4000);
 
@@ -141,10 +147,24 @@ export async function extractArticleEntities(title, content, openaiClient) {
         entities = parsed;
       } else {
         console.warn('[entity-extraction] Unexpected JSON structure, returning empty');
+        await recordSkip(supabase, {
+          pipeline: PIPELINES.ENTITY_EXTRACTION,
+          reason: REASONS.PARSE_ERROR,
+          entity_type: 'article',
+          entity_id: articleId,
+          metadata: { cause: 'unexpected_json_structure' }
+        });
         return { entities: [], tokens: response.usage };
       }
     } catch (parseErr) {
       console.error('[entity-extraction] JSON parse error:', parseErr.message);
+      await recordSkip(supabase, {
+        pipeline: PIPELINES.ENTITY_EXTRACTION,
+        reason: REASONS.PARSE_ERROR,
+        entity_type: 'article',
+        entity_id: articleId,
+        metadata: { cause: 'json_parse_failed', message: parseErr.message }
+      });
       return { entities: [], tokens: response.usage };
     }
 
@@ -169,6 +189,13 @@ export async function extractArticleEntities(title, content, openaiClient) {
 
   } catch (err) {
     console.error(`[entity-extraction] API error: ${err.message}`);
+    await recordSkip(supabase, {
+      pipeline: PIPELINES.ENTITY_EXTRACTION,
+      reason: REASONS.API_ERROR,
+      entity_type: 'article',
+      entity_id: articleId,
+      metadata: { message: err.message }
+    });
     return { entities: [], tokens: null };
   }
 }
