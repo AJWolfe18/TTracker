@@ -8,16 +8,17 @@ Launch a Task tool (general-purpose) subagent to validate current changes before
 
 ## MANDATORY Before Committing
 
-### 1. Code Review (Required unless trivial)
+### 1. Code Review — Two-Pass (Required unless trivial)
 
-**Run code review for ANY non-trivial change:**
+**Run BOTH code reviews for ANY non-trivial change:**
 ```
-Task(feature-dev:code-reviewer): "Review changes for bugs, security, and pattern compliance"
+Pass 1: Task(feature-dev:code-reviewer): "Review changes for bugs, security, and pattern compliance"
+Pass 2: Agent(superpowers:code-reviewer): "Review for production readiness, architecture, requirements alignment"
 ```
 
-**Skip ONLY for:** typo fixes, single-line changes, config tweaks
+**Skip BOTH only for:** typo fixes, single-line changes, config tweaks
 
-**If issues found:** Fix them before proceeding.
+**If issues found:** Fix Critical/Important findings before proceeding.
 
 ### 2. ADO Status Update (Required)
 
@@ -77,7 +78,7 @@ After validation, provide:
 ```
 ✅ PRE-COMMIT VALIDATION
 
-Code Review: ✅ Ran feature-dev:code-reviewer (or ⏭️ Skipped - trivial change)
+Code Review: ✅ Ran feature-dev:code-reviewer + superpowers:code-reviewer (or ⏭️ Skipped - trivial change)
 ADO Update: ✅ ADO-XXX moved to Testing (or ❌ Need ticket number)
 QA Tests: ✅ npm run qa:smoke passed
 Patterns: ✅ Compliant

@@ -46,10 +46,12 @@ Also update `memory-global` if any new user preferences, feedback, or cross-proj
 - Delete observations that are no longer true
 - Check for duplicates before writing
 
-### 2. Code Review
-Run code review on all changes made this session:
-- `Task(feature-dev:code-reviewer)` for non-trivial changes
-- Skip for: typo fixes, single-line changes, config tweaks
+### 2. Code Review (Two-Pass)
+Run BOTH code reviews on all changes made this session:
+1. `Task(feature-dev:code-reviewer)` — pattern compliance, bugs, security
+2. `Agent(superpowers:code-reviewer)` — production readiness, architecture, requirements alignment
+- Fix any Critical/Important findings before proceeding
+- Skip BOTH only for: typo fixes, single-line changes, config tweaks
 
 ### 3. QA Tests
 Run relevant test suite:

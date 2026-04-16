@@ -44,7 +44,7 @@ As a senior dev and QA reviewer:
 ### 5. If No Issues - Setup Workflow
 Create a TodoList with full workflow:
 - [ ] Implementation tasks (from the prompt)
-- [ ] Run code review: `Task(feature-dev:code-reviewer)`
+- [ ] Run two-pass code review: `Task(feature-dev:code-reviewer)` then `Agent(superpowers:code-reviewer)`
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit changes
 - [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via `/ado`. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.

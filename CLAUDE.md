@@ -56,9 +56,11 @@ docs/features/
 - [ ] Follow plan/todos linearly (don't jump around)
 - [ ] Validate with subagent BEFORE marking todos complete
 - [ ] Check MCP tools before claiming "I can't"
-- [ ] **Run code review** on any non-trivial change: `Task(feature-dev:code-reviewer)`
+- [ ] **Run two-pass code review** on any non-trivial change:
+  1. `Task(feature-dev:code-reviewer)` — pattern compliance, bugs, security
+  2. `Agent(superpowers:code-reviewer)` — production readiness, architecture, requirements alignment
+  - Fix Critical/Important findings before proceeding
   - Skip only for: typo fixes, single-line changes, config tweaks
-  - Run for: logic changes, new functions, bug fixes, refactoring
 
 ### ✅ End Every Session
 - [ ] Run `/end-work` — this handles: memory save, handoff doc, code review, QA, commit, push, ADO update
