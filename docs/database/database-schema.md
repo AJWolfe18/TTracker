@@ -169,6 +169,30 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 
 ---
 
+### `executive_orders_enrichment_log`
+**Purpose:** Per-EO enrichment observability for the EO Claude Agent (ADO-476)
+**Migration:** `20260415000000_executive_orders_enrichment_log.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (BIGSERIAL) |
+| eo_id | INTEGER | FK to executive_orders.id (ON DELETE CASCADE) |
+| prompt_version | TEXT | Enrichment prompt version (e.g., 'v1') |
+| run_id | TEXT | Links rows from same agent run |
+| status | TEXT | 'running', 'completed', or 'failed' |
+| duration_ms | INTEGER | Enrichment time in milliseconds |
+| needs_manual_review | BOOLEAN | Default false — flagged for admin review |
+| notes | TEXT | Free-form notes (nullable) |
+| created_at | TIMESTAMPTZ | When enrichment started |
+
+**Key Indexes:**
+- `idx_eo_enrichment_log_created_at` — `created_at DESC`
+- `idx_eo_enrichment_log_eo_id_created_at` — `(eo_id, created_at DESC)`
+
+**RLS Policies:** None — internal observability table, service_role only
+
+---
+
 ### `pending_submissions`
 **Purpose:** Manual article submission queue
 
