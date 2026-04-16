@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-04-15
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -189,7 +189,7 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 - `idx_eo_enrichment_log_created_at` — `created_at DESC`
 - `idx_eo_enrichment_log_eo_id_created_at` — `(eo_id, created_at DESC)`
 
-**RLS Policies:** None — internal observability table, service_role only
+**RLS Policies:** RLS enabled, no SELECT policies — blocks anon/authenticated, service_role bypasses
 
 ---
 
