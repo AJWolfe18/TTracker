@@ -81,4 +81,4 @@ The agent was tested against a harnessed variant of prompt-v1.md (`v1+harness`).
 
 ## Structured Results
 
-See: `validation-results/2026-04-16-gold-set-v1.json`
+See: `validation-results/2026-04-17-gold-set-v1.json`
