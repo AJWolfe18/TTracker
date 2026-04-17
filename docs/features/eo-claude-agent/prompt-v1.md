@@ -176,7 +176,7 @@ Rows with `run_id` matching yours are leftover from a previous crashed run of th
 ### Step 2: Find Unenriched EOs
 
 ```bash
-curl -s "${SUPABASE_URL}/rest/v1/executive_orders?or=(enriched_at.is.null,prompt_version.is.null,prompt_version.neq.v1)&order_number=in.(14349,14338,14330,14343,14317)&select=id,order_number,title,date,source_url,category,description&order=date.asc&limit=5" \
+curl -s "${SUPABASE_URL}/rest/v1/executive_orders?or=(enriched_at.is.null,prompt_version.is.null,prompt_version.neq.v1)&select=id,order_number,title,date,source_url,category,description&order=date.asc&limit=5" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
