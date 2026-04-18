@@ -4488,8 +4488,9 @@
             const [nextCursor, setNextCursor] = useState(null);
             const [counts, setCounts] = useState({ needs_review: 0, unenriched: 0, unpublished: 0, published: 0, failed: 0, all: 0 });
 
-            // Sub-tab + filters
-            const [subtab, setSubtab] = useState('needs_review');
+            // Sub-tab + filters. Default to 'all' so cold-start shows data;
+            // admin clicks the Needs Review or Unpublished badge (with count) when there's work.
+            const [subtab, setSubtab] = useState('all');
             const [search, setSearch] = useState('');
             const [debouncedSearch, setDebouncedSearch] = useState('');
             const [alarmLevelFilter, setAlarmLevelFilter] = useState('');
