@@ -98,10 +98,12 @@ Deno.serve(async (req) => {
         .from('scotus_cases')
         .select('id,is_public,needs_manual_review,enrichment_status'),
 
-      // Executive Orders: total
+      // Executive Orders: full state (mirrors SCOTUS aggregation pattern)
+      // Once migration 092 lands, is_public + needs_manual_review exist; pre-migration
+      // the request errors and we fall back to total-only counts gracefully.
       supabase
         .from('executive_orders')
-        .select('id', { count: 'exact', head: true }),
+        .select('id,is_public,needs_manual_review'),
 
       // Budget: today
       supabase
@@ -170,6 +172,14 @@ Deno.serve(async (req) => {
     // Handle needs_review count - column may not exist yet (returns 0 if error)
     const storiesNeedsReviewCount = storiesNeedsReviewResult.error ? 0 : (storiesNeedsReviewResult.count ?? 0)
 
+    // Process EO data — fall back to total-only if migration 092 hasn't landed
+    // (the new columns is_public + needs_manual_review come from that migration)
+    const eosArray = eosResult.error ? [] : (eosResult.data || [])
+    const eosTotal = eosArray.length
+    const eosPublished = eosArray.filter((e: { is_public?: boolean }) => e.is_public === true).length
+    const eosDraft = eosArray.filter((e: { is_public?: boolean }) => e.is_public === false).length
+    const eosNeedsReview = eosArray.filter((e: { needs_manual_review?: boolean }) => e.needs_manual_review === true).length
+
     // Build response
     const response = {
       stories: {
@@ -202,7 +212,10 @@ Deno.serve(async (req) => {
         pending: scotusPending
       },
       executive_orders: {
-        total: eosResult.count ?? 0
+        total: eosTotal,
+        published: eosPublished,
+        draft: eosDraft,
+        needs_review: eosNeedsReview
       },
       budget: budgetResult.data ? {
         day: budgetResult.data.day,
@@ -232,6 +245,7 @@ Deno.serve(async (req) => {
                pardonsDraft +
                scotusDraft +
                scotusNeedsReview +
+               eosNeedsReview +
                feedsFailed,
         breakdown: {
           stories_need_review: storiesNeedsReviewCount,
@@ -240,6 +254,7 @@ Deno.serve(async (req) => {
           pardons_unpublished: pardonsDraft,
           scotus_unpublished: scotusDraft,
           scotus_needs_review: scotusNeedsReview,
+          executive_orders_needs_review: eosNeedsReview,
           feeds_failed: feedsFailed
         }
       },
