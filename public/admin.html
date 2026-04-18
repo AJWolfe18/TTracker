@@ -2426,6 +2426,48 @@
             { value: 'unclear', label: 'Unclear' },
         ];
 
+        // ─── EO Constants (ADO-480) ───────────────────────────────────────────────
+
+        // Tone-system spicy labels per alarm_level (mirrors public/eo-app.js FALLBACK_EO_LABELS)
+        const EO_ALARM_LEVELS = [
+            { value: 5, label: 'Authoritarian Power Grab', badgeClass: 'badge-critical' },
+            { value: 4, label: 'Weaponized Executive', badgeClass: 'badge-severe' },
+            { value: 3, label: 'Corporate Giveaway', badgeClass: 'badge-moderate' },
+            { value: 2, label: 'Smoke and Mirrors', badgeClass: 'badge-info' },
+            { value: 1, label: 'Surprisingly Not Terrible', badgeClass: 'badge-cool' },
+            { value: 0, label: 'Actually Helpful', badgeClass: 'badge-active' },
+        ];
+        const EO_ALARM_MAP = Object.fromEntries(EO_ALARM_LEVELS.map(l => [l.value, l]));
+
+        // Source: agent prompt v1 (docs/features/eo-claude-agent/prompt-v1.md) — canonical category enum
+        const EO_CATEGORY_OPTIONS = [
+            { value: 'immigration_border', label: 'Immigration & Border' },
+            { value: 'environment_energy', label: 'Environment & Energy' },
+            { value: 'health_care', label: 'Health Care' },
+            { value: 'education', label: 'Education' },
+            { value: 'justice_civil_rights_voting', label: 'Justice & Civil Rights / Voting' },
+            { value: 'natsec_foreign', label: 'Natsec & Foreign' },
+            { value: 'economy_jobs_taxes', label: 'Economy / Jobs / Taxes' },
+            { value: 'technology_data_privacy', label: 'Technology / Data / Privacy' },
+            { value: 'infra_housing_transport', label: 'Infrastructure / Housing / Transport' },
+            { value: 'gov_ops_workforce', label: 'Gov Ops & Workforce' },
+        ];
+
+        const EO_ACTION_TIERS = [
+            { value: 'direct', label: 'Direct' },
+            { value: 'systemic', label: 'Systemic' },
+            { value: 'tracking', label: 'Tracking' },
+        ];
+
+        const EO_SUB_TABS = [
+            { value: 'needs_review', label: 'Needs Review' },
+            { value: 'unenriched', label: 'Unenriched' },
+            { value: 'unpublished', label: 'Unpublished' },
+            { value: 'published', label: 'Published' },
+            { value: 'failed', label: 'Failed' },
+            { value: 'all', label: 'All' },
+        ];
+
         // EditScotusModal Component
         function EditScotusModal({ scotusCase, onClose, onSave, onRefresh, supabase, password }) {
             const h = React.createElement;
@@ -4085,6 +4127,1018 @@
             );
         }
 
+        // ─── EditExecutiveOrderModal Component (ADO-480) ──────────────────────────
+        function EditExecutiveOrderModal({ eo, onClose, onSave, onRefresh, supabase, password }) {
+            const h = React.createElement;
+            const [formData, setFormData] = useState(() => ({
+                // Identity
+                order_number: eo?.order_number || '',
+                title: eo?.title || '',
+                date: eo?.date ? eo.date.substring(0, 10) : '',
+                source_url: eo?.source_url || '',
+                // Editorial
+                section_what_they_say: eo?.section_what_they_say || '',
+                section_what_it_means: eo?.section_what_it_means || '',
+                section_reality_check: eo?.section_reality_check || '',
+                section_why_it_matters: eo?.section_why_it_matters || '',
+                // Metadata
+                alarm_level: eo?.alarm_level ?? '',
+                category: eo?.category || '',
+                regions: (eo?.regions || []).join(', '),
+                policy_areas: (eo?.policy_areas || []).join(', '),
+                affected_agencies: (eo?.affected_agencies || []).join(', '),
+                // Action
+                action_tier: eo?.action_tier || '',
+                action_confidence: eo?.action_confidence ?? '',
+                action_reasoning: eo?.action_reasoning || '',
+                action_section: eo?.action_section ? JSON.stringify(eo.action_section, null, 2) : '',
+            }));
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [isConflict, setIsConflict] = useState(false);
+            const [openSections, setOpenSections] = useState({
+                identity: false, editorial: true, metadata: true, action: false, system: false,
+            });
+
+            const originalUpdatedAt = eo?.updated_at;
+
+            // Escape key closes modal
+            useEffect(() => {
+                const handler = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handler);
+                return () => document.removeEventListener('keydown', handler);
+            }, [onClose]);
+
+            const handleChange = (field, value) => {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            };
+
+            const toggleSection = (section) => {
+                setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+            };
+
+            // Sort + stringify array compare so [A,B] vs [B,A] is no-op
+            const arraysEqualUnordered = (a, b) =>
+                JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setSaving(true);
+                setError(null);
+
+                try {
+                    const fields = {};
+
+                    // Identity (text)
+                    for (const f of ['order_number', 'title', 'source_url']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = eo[f] || null;
+                        if (newVal !== oldVal) fields[f] = newVal;
+                    }
+
+                    // Identity (date)
+                    const newDate = formData.date || null;
+                    const oldDate = eo.date ? eo.date.substring(0, 10) : null;
+                    if (newDate !== oldDate) fields.date = newDate;
+
+                    // Editorial (text)
+                    for (const f of ['section_what_they_say', 'section_what_it_means', 'section_reality_check', 'section_why_it_matters']) {
+                        const newVal = formData[f] || null;
+                        const oldVal = eo[f] || null;
+                        if (newVal !== oldVal) fields[f] = newVal;
+                    }
+
+                    // Metadata: alarm_level (int 0-5)
+                    const newAlarm = formData.alarm_level === '' ? null : parseInt(formData.alarm_level, 10);
+                    const oldAlarm = eo.alarm_level ?? null;
+                    if (newAlarm !== oldAlarm) fields.alarm_level = newAlarm;
+
+                    // Metadata: category
+                    const newCat = formData.category || null;
+                    const oldCat = eo.category || null;
+                    if (newCat !== oldCat) fields.category = newCat;
+
+                    // Metadata: arrays (comma-separated; sort+stringify compare)
+                    for (const f of ['regions', 'policy_areas', 'affected_agencies']) {
+                        const newArr = formData[f] ? formData[f].split(',').map(s => s.trim()).filter(Boolean) : [];
+                        const oldArr = eo[f] || [];
+                        if (!arraysEqualUnordered(newArr, oldArr)) fields[f] = newArr;
+                    }
+
+                    // Action
+                    const newTier = formData.action_tier || null;
+                    const oldTier = eo.action_tier || null;
+                    if (newTier !== oldTier) fields.action_tier = newTier;
+
+                    const newConf = formData.action_confidence === '' ? null : parseInt(formData.action_confidence, 10);
+                    const oldConf = eo.action_confidence ?? null;
+                    if (newConf !== oldConf) fields.action_confidence = newConf;
+
+                    const newReason = formData.action_reasoning || null;
+                    const oldReason = eo.action_reasoning || null;
+                    if (newReason !== oldReason) fields.action_reasoning = newReason;
+
+                    // action_section (JSONB) — parse + structural compare
+                    let newSection = null;
+                    if (formData.action_section.trim()) {
+                        try {
+                            newSection = JSON.parse(formData.action_section);
+                        } catch (parseErr) {
+                            setError('action_section must be valid JSON');
+                            setSaving(false);
+                            return;
+                        }
+                    }
+                    const oldSection = eo.action_section ?? null;
+                    if (JSON.stringify(newSection) !== JSON.stringify(oldSection)) fields.action_section = newSection;
+
+                    if (Object.keys(fields).length === 0) {
+                        onClose();
+                        return;
+                    }
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                action: 'update',
+                                id: eo.id,
+                                fields,
+                                if_updated_at: originalUpdatedAt,
+                            }
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try {
+                            if (!body && fnError.context) body = await fnError.context.json();
+                        } catch (_) {}
+                        if (body?.error === 'stale_updated_at') {
+                            setIsConflict(true);
+                            setError(body.message || 'Record was modified. Close and refresh to get the latest data.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(body?.error || fnError.message || 'Update failed');
+                    }
+                    if (data && data.ok === false) {
+                        if (data.error === 'stale_updated_at') {
+                            setIsConflict(true);
+                            setError(data.message || 'Record was modified. Close and refresh.');
+                            setSaving(false);
+                            return;
+                        }
+                        throw new Error(data.error || 'Update failed');
+                    }
+
+                    onSave(data.item);
+                } catch (err) {
+                    console.error('Save error:', err);
+                    setError(err.message || 'Failed to save changes');
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            // ─── Field helpers ─────────────────────────────────────────────────────
+            const sectionHeader = (key, label) =>
+                h('div', { className: 'form-section-header', onClick: () => toggleSection(key) },
+                    h('h4', null, label),
+                    h('span', { className: 'form-section-arrow' + (openSections[key] ? ' open' : '') }, '\u25B6')
+                );
+
+            const fieldLabel = (label, used) =>
+                used
+                    ? h('label', { className: 'form-label' }, label, h('span', { style: { color: '#ef4444', marginLeft: '3px' } }, '*'))
+                    : h('label', { className: 'form-label' }, label);
+
+            const textField = (field, label, opts = {}) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, opts.used),
+                    h('input', {
+                        type: opts.type || 'text',
+                        className: 'form-input',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        placeholder: opts.placeholder || '',
+                    })
+                );
+
+            const selectField = (field, label, options, used) =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('select', {
+                        className: 'form-select',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value)
+                    },
+                        h('option', { value: '' }, 'Not set'),
+                        options.map(opt =>
+                            h('option', { key: String(opt.value), value: String(opt.value) }, opt.label)
+                        )
+                    )
+                );
+
+            const textareaField = (field, label, rows = 5, used = false, placeholder = '') =>
+                h('div', { className: 'form-group' },
+                    fieldLabel(label, used),
+                    h('textarea', {
+                        className: 'form-textarea',
+                        value: formData[field],
+                        onChange: (ev) => handleChange(field, ev.target.value),
+                        rows,
+                        placeholder,
+                    })
+                );
+
+            const readOnlyField = (label, value) =>
+                h('div', { className: 'form-group' },
+                    h('label', { className: 'form-label' }, label),
+                    h('div', { style: { padding: '10px 12px', background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#94a3b8', fontSize: '14px', wordBreak: 'break-all' } }, value || '-')
+                );
+
+            // Display-only severity_rating (server-derived from alarm_level)
+            const derivedSeverity = (() => {
+                const lvl = formData.alarm_level === '' ? null : parseInt(formData.alarm_level, 10);
+                if (lvl == null || isNaN(lvl)) return '-';
+                if (lvl >= 5) return 'critical';
+                if (lvl === 4) return 'high';
+                if (lvl === 3) return 'medium';
+                if (lvl === 2) return 'low';
+                return '-';  // 0 or 1
+            })();
+
+            const latestLog = eo.latest_log || null;
+
+            return h('div', { className: 'modal-overlay' },
+                h('div', { className: 'modal-content' },
+                    h('div', { className: 'modal-header' },
+                        h('h3', { className: 'modal-title' },
+                            'Edit EO #' + eo.id +
+                            (eo.order_number ? ' (EO ' + eo.order_number + ')' : '') +
+                            (eo.title ? ' - ' + eo.title : '')
+                        ),
+                        h('button', { className: 'modal-close', onClick: onClose }, '\u00D7')
+                    ),
+                    h('form', { onSubmit: handleSubmit },
+                        h('div', { className: 'modal-body' },
+                            error && h('div', { className: 'error-banner', style: { marginBottom: '16px' } },
+                                error,
+                                isConflict && h('button', {
+                                    type: 'button',
+                                    className: 'btn-primary',
+                                    style: { marginLeft: '12px', padding: '4px 12px', fontSize: '13px' },
+                                    onClick: () => { onRefresh && onRefresh(); onClose(); }
+                                }, 'Close & Refresh')
+                            ),
+
+                            // ── Section: Identity ─────────────────────
+                            sectionHeader('identity', 'Identity'),
+                            openSections.identity && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    textField('order_number', 'EO Number', { placeholder: 'e.g. 14338', used: true }),
+                                    textField('date', 'Signing Date', { type: 'date', used: true })
+                                ),
+                                textField('title', 'Title', { used: true }),
+                                textField('source_url', 'Source URL', { placeholder: 'https://federalregister.gov/...', used: true })
+                            ),
+
+                            // ── Section: Editorial ────────────────────
+                            sectionHeader('editorial', 'Editorial'),
+                            openSections.editorial && h('div', null,
+                                textareaField('section_what_they_say', 'What They Say (150-200 words, neutral framing)', 6, true),
+                                textareaField('section_what_it_means', 'What It Means (150-200 words, editorial)', 6, true),
+                                textareaField('section_reality_check', 'Reality Check (100-150 words)', 5, true),
+                                textareaField('section_why_it_matters', 'Why It Matters (100-150 words)', 5, true)
+                            ),
+
+                            // ── Section: Metadata ─────────────────────
+                            sectionHeader('metadata', 'Metadata'),
+                            openSections.metadata && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('alarm_level', 'Alarm Level (0-5)', EO_ALARM_LEVELS.map(l => ({ value: l.value, label: l.value + ' - ' + l.label })), true),
+                                    selectField('category', 'Category', EO_CATEGORY_OPTIONS, true)
+                                ),
+                                readOnlyField('Severity Rating (auto-derived from alarm_level)', derivedSeverity),
+                                textField('regions', 'Regions (comma-separated, max 3)', { placeholder: 'e.g. National, Northeast', used: true }),
+                                textField('policy_areas', 'Policy Areas (comma-separated, max 3, Title Case)', { placeholder: 'e.g. Labor, Federal Workforce', used: true }),
+                                textField('affected_agencies', 'Affected Agencies (comma-separated, max 3, acronyms)', { placeholder: 'e.g. DOL, NLRB', used: true })
+                            ),
+
+                            // ── Section: Action ───────────────────────
+                            sectionHeader('action', 'Action'),
+                            openSections.action && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    selectField('action_tier', 'Action Tier', EO_ACTION_TIERS, true),
+                                    textField('action_confidence', 'Confidence (1-10)', { type: 'number', used: true })
+                                ),
+                                textareaField('action_reasoning', 'Action Reasoning (one sentence)', 2, true),
+                                textareaField('action_section', 'Action Section (JSON — null when tier=tracking)', 8, false, '{ "title": "...", "actions": [ ... ] }')
+                            ),
+
+                            // ── Section: System ───────────────────────
+                            sectionHeader('system', 'System (read-only)'),
+                            openSections.system && h('div', null,
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('ID', eo.id),
+                                    readOnlyField('Prompt Version', eo.prompt_version || 'NULL (unenriched)')
+                                ),
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Enriched At', eo.enriched_at || '-'),
+                                    readOnlyField('Updated At', eo.updated_at || '-')
+                                ),
+                                h('div', { className: 'form-row' },
+                                    readOnlyField('Is Public', String(eo.is_public)),
+                                    readOnlyField('Needs Manual Review', String(eo.needs_manual_review))
+                                ),
+                                readOnlyField('Enrichment Meta',
+                                    eo.enrichment_meta ? JSON.stringify(eo.enrichment_meta, null, 2) : '-'
+                                ),
+                                latestLog && h('div', null,
+                                    h('h5', { style: { color: '#94a3b8', marginTop: '12px', marginBottom: '8px' } }, 'Latest Log Row'),
+                                    h('div', { className: 'form-row' },
+                                        readOnlyField('Status', latestLog.status),
+                                        readOnlyField('Run ID', latestLog.run_id)
+                                    ),
+                                    h('div', { className: 'form-row' },
+                                        readOnlyField('Duration (ms)', latestLog.duration_ms ?? '-'),
+                                        readOnlyField('Flagged', String(latestLog.needs_manual_review))
+                                    ),
+                                    latestLog.notes && readOnlyField('Notes', latestLog.notes)
+                                )
+                            )
+                        ),
+                        h('div', { className: 'modal-footer' },
+                            h('button', { type: 'button', className: 'btn-secondary', onClick: onClose, disabled: saving }, 'Cancel'),
+                            h('button', { type: 'submit', className: 'btn-primary', disabled: saving }, saving ? 'Saving...' : 'Save Changes')
+                        )
+                    )
+                )
+            );
+        }
+
+        // ─── ExecutiveOrdersTab Component (ADO-480) ───────────────────────────────
+        function ExecutiveOrdersTab({ password, supabase }) {
+            const [items, setItems] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [loadingMore, setLoadingMore] = useState(false);
+            const [error, setError] = useState(null);
+            const [nextCursor, setNextCursor] = useState(null);
+            const [counts, setCounts] = useState({ needs_review: 0, unenriched: 0, unpublished: 0, published: 0, failed: 0, all: 0 });
+
+            // Sub-tab + filters
+            const [subtab, setSubtab] = useState('needs_review');
+            const [search, setSearch] = useState('');
+            const [debouncedSearch, setDebouncedSearch] = useState('');
+            const [alarmLevelFilter, setAlarmLevelFilter] = useState('');
+            const [categoryFilter, setCategoryFilter] = useState('');
+            const [sort, setSort] = useState('date-desc');
+
+            // Actions
+            const [editingEo, setEditingEo] = useState(null);
+            const [busyIds, setBusyIds] = useState(new Set());
+            const [selectedIds, setSelectedIds] = useState(new Set());
+
+            // Run log
+            const [runLogData, setRunLogData] = useState(null);
+            const [runLogLoading, setRunLogLoading] = useState(false);
+            const [runLogExpanded, setRunLogExpanded] = useState(false);
+            const [selectedRunDetail, setSelectedRunDetail] = useState(null);
+
+            // Race control
+            const fetchTokenRef = useRef(0);
+
+            // Toast context
+            const toast = useToast();
+
+            // Debounce search (300ms)
+            useEffect(() => {
+                const timer = setTimeout(() => setDebouncedSearch(search), 300);
+                return () => clearTimeout(timer);
+            }, [search]);
+
+            // Fetch list from edge function
+            const fetchList = useCallback(async (loadMore = false, cursor = null) => {
+                const token = ++fetchTokenRef.current;
+
+                if (loadMore) setLoadingMore(true); else setLoading(true);
+                setError(null);
+
+                try {
+                    const filters = {};
+                    if (debouncedSearch) filters.search = debouncedSearch;
+                    if (alarmLevelFilter !== '') filters.alarm_level = [parseInt(alarmLevelFilter, 10)];
+                    if (categoryFilter) filters.category = [categoryFilter];
+
+                    const reqBody = {
+                        action: 'list',
+                        subtab,
+                        filters,
+                        sort,
+                        limit: 25,
+                    };
+                    if (cursor) reqBody.after = cursor;
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Failed to fetch EOs');
+                    }
+
+                    // Stale response check
+                    if (token !== fetchTokenRef.current) return;
+
+                    if (loadMore) {
+                        setItems(prev => {
+                            const existing = new Set(prev.map(i => i.id));
+                            return [...prev, ...(data.items || []).filter(i => !existing.has(i.id))];
+                        });
+                    } else {
+                        setItems(data.items || []);
+                    }
+                    setNextCursor(data.next_cursor || null);
+                    setCounts(data.counts_by_subtab || counts);
+                } catch (err) {
+                    if (token !== fetchTokenRef.current) return;
+                    console.error('EO fetch error:', err);
+                    setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) {
+                        setLoading(false);
+                        setLoadingMore(false);
+                    }
+                }
+            }, [supabase, password, subtab, debouncedSearch, alarmLevelFilter, categoryFilter, sort]);
+
+            // Re-fetch when filters change — reset state
+            useEffect(() => {
+                setItems([]);
+                setNextCursor(null);
+                setSelectedIds(new Set());
+                fetchList(false, null);
+            }, [fetchList]);
+
+            const handleLoadMore = () => {
+                if (nextCursor && !loadingMore) fetchList(true, nextCursor);
+            };
+
+            const formatDate = (d) => {
+                if (!d) return '-';
+                const date = new Date(d + (d.includes('T') ? '' : 'T00:00:00'));
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
+            const getAlarmBadge = (level) => {
+                const info = EO_ALARM_MAP[level];
+                if (!info) return { class: 'badge-archived', label: '-' };
+                return { class: info.badgeClass, label: level + ' - ' + info.label };
+            };
+
+            // ── Action handlers (publish/unpublish/re-enrich/edit/bulk) ─────────
+            const callUpdate = async (action, eo, opts = {}) => {
+                if (busyIds.has(eo.id)) return;
+                setBusyIds(prev => new Set([...prev, eo.id]));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                action,
+                                id: eo.id,
+                                if_updated_at: eo.updated_at,
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || body?.message || fnError.message || (action + ' failed'));
+                    }
+                    if (data && data.ok === false) {
+                        throw new Error(data.message || data.error || (action + ' failed'));
+                    }
+
+                    const updated = data.item;
+                    setItems(prev => prev.map(i => i.id === eo.id ? { ...i, ...updated } : i));
+                    toast?.addToast(opts.successMsg || (action + ' succeeded'), 'success');
+                } catch (err) {
+                    console.error(action + ' error:', err);
+                    toast?.addToast(err.message || ('Failed to ' + action), 'error');
+                } finally {
+                    setBusyIds(prev => { const s = new Set(prev); s.delete(eo.id); return s; });
+                }
+            };
+
+            const handlePublish   = (eo) => callUpdate('publish', eo, { successMsg: 'Published' });
+            const handleUnpublish = (eo) => {
+                if (!confirm('Unpublish this EO? It will be removed from the public site.')) return;
+                callUpdate('unpublish', eo, { successMsg: 'Unpublished' });
+            };
+            const handleReEnrich = (eo) => {
+                if (eo.is_public && !confirm('This will unpublish the EO and queue it for re-enrichment. Continue?')) return;
+                callUpdate('re_enrich', eo, { successMsg: 'Marked for re-enrichment. Trigger the EO agent workflow to process.' });
+            };
+
+            const handleEdit = (eo) => setEditingEo(eo);
+
+            const handleSaveEdit = (updated) => {
+                setItems(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i));
+                setEditingEo(null);
+                toast?.addToast('EO updated', 'success');
+            };
+
+            // Bulk publish (max 50)
+            const handleBulkPublish = async () => {
+                if (selectedIds.size === 0) return;
+                if (selectedIds.size > 50) {
+                    toast?.addToast('Bulk publish capped at 50 items', 'error');
+                    return;
+                }
+                if (!confirm('Publish ' + selectedIds.size + ' selected EO(s)?')) return;
+                try {
+                    // Re-filter on submit: items the admin selected may have been
+                    // published or unenriched between selection and submit. Server
+                    // catches it too, but this trims the request and keeps the
+                    // count-they-see vs count-they-submit expectation tight.
+                    const itemsPayload = items
+                        .filter(i => selectedIds.has(i.id) && !i.is_public && i.prompt_version === 'v1')
+                        .map(i => ({ id: i.id, if_updated_at: i.updated_at }));
+                    if (itemsPayload.length === 0) {
+                        toast?.addToast('No eligible items to publish (all already published or unenriched)', 'error');
+                        return;
+                    }
+
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action: 'bulk_publish', items: itemsPayload }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Bulk publish failed');
+                    }
+
+                    const summary = data.summary || {};
+                    const publishedSet = new Set((data.published || []).map(p => p.id));
+                    setItems(prev => prev.map(i => publishedSet.has(i.id) ? { ...i, is_public: true, needs_manual_review: false } : i));
+
+                    if ((data.skipped?.length || 0) + (data.failed?.length || 0) > 0) {
+                        const lines = [];
+                        if (data.skipped?.length) lines.push('Skipped (' + data.skipped.length + '): ' + data.skipped.map(s => '#' + s.id + ' (' + s.reason + ')').join(', '));
+                        if (data.failed?.length) lines.push('Failed (' + data.failed.length + '): ' + data.failed.map(f => '#' + f.id + ' (' + f.reason + ')').join(', '));
+                        alert('Published ' + (summary.published_count || 0) + '.\n\n' + lines.join('\n\n'));
+                    } else {
+                        toast?.addToast('Published ' + (summary.published_count || 0), 'success');
+                    }
+
+                    setSelectedIds(new Set());
+                } catch (err) {
+                    console.error('Bulk publish error:', err);
+                    toast?.addToast(err.message || 'Failed to bulk publish', 'error');
+                }
+            };
+
+            const toggleSelect = (id) => {
+                setSelectedIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                });
+            };
+            const toggleSelectAll = () => {
+                const eligible = items.filter(i => !i.is_public && i.prompt_version === 'v1').map(i => i.id);
+                if (selectedIds.size === eligible.length && eligible.length > 0) {
+                    setSelectedIds(new Set());
+                } else {
+                    setSelectedIds(new Set(eligible));
+                }
+            };
+
+            // Run log lazy fetch
+            const fetchRunLog = async () => {
+                setRunLogLoading(true);
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action: 'run_log' }
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch run log');
+                    setRunLogData(data.runs || []);
+                } catch (err) {
+                    console.error('Run log error:', err);
+                    toast?.addToast(err.message || 'Failed to fetch run log', 'error');
+                } finally {
+                    setRunLogLoading(false);
+                }
+            };
+            const handleToggleRunLog = () => {
+                if (!runLogExpanded) {
+                    setRunLogExpanded(true);
+                    if (!runLogData) fetchRunLog();
+                } else {
+                    setRunLogExpanded(false);
+                }
+            };
+
+            const fetchRunDetail = async (runId) => {
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-executive-orders',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action: 'run_log_detail', run_id: runId }
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Failed to fetch run detail');
+                    setSelectedRunDetail({ run_id: runId, runs: data.runs || [] });
+                } catch (err) {
+                    console.error('Run detail error:', err);
+                    toast?.addToast(err.message || 'Failed to fetch run detail', 'error');
+                }
+            };
+
+            const isUnpublishedTab = subtab === 'unpublished' || subtab === 'needs_review';
+
+            return (
+                <div>
+                    {/* Sub-tabs */}
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                        {EO_SUB_TABS.map(tab => (
+                            <button
+                                key={tab.value}
+                                className={`tab-btn ${subtab === tab.value ? 'active' : ''}`}
+                                onClick={() => setSubtab(tab.value)}
+                            >
+                                {tab.label} <span style={{ fontSize: '11px', opacity: 0.7, marginLeft: '4px' }}>({counts[tab.value] ?? 0})</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Toolbar */}
+                    <div className="stories-toolbar">
+                        <input
+                            type="text"
+                            className="stories-search"
+                            placeholder="Search by EO number or title..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                        <select
+                            className="stories-select"
+                            value={alarmLevelFilter}
+                            onChange={(e) => setAlarmLevelFilter(e.target.value)}
+                        >
+                            <option value="">All Alarm Levels</option>
+                            {EO_ALARM_LEVELS.map(l =>
+                                <option key={l.value} value={String(l.value)}>{l.value} - {l.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                            <option value="">All Categories</option>
+                            {EO_CATEGORY_OPTIONS.map(c =>
+                                <option key={c.value} value={c.value}>{c.label}</option>
+                            )}
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={sort}
+                            onChange={(e) => setSort(e.target.value)}
+                        >
+                            <option value="date-desc">Date (Newest)</option>
+                            <option value="date-asc">Date (Oldest)</option>
+                            <option value="alarm_level-desc">Alarm (High-Low)</option>
+                            <option value="alarm_level-asc">Alarm (Low-High)</option>
+                            <option value="enriched_at-desc">Enriched (Newest)</option>
+                        </select>
+                    </div>
+
+                    {/* Bulk publish bar */}
+                    {isUnpublishedTab && selectedIds.size > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', padding: '10px 16px', background: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}>
+                            <span style={{ fontSize: '14px', color: '#e2e8f0' }}>{selectedIds.size} selected</span>
+                            <button
+                                className="btn-primary"
+                                style={{ padding: '6px 16px', fontSize: '13px' }}
+                                onClick={handleBulkPublish}
+                                disabled={selectedIds.size > 50}
+                                title={selectedIds.size > 50 ? 'Max 50 per batch' : ''}
+                            >
+                                Publish Selected ({selectedIds.size})
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                style={{ padding: '6px 12px', fontSize: '13px' }}
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="error-banner">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="loading">
+                            <div className="spinner"></div>
+                            Loading executive orders...
+                        </div>
+                    ) : (
+                        <div className="card">
+                            <div className="card-header">
+                                <h2 className="card-title">Executive Orders</h2>
+                                <span className="stories-count">
+                                    Showing {items.length} of {counts[subtab] ?? 0}
+                                    {nextCursor && ' (more available)'}
+                                </span>
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="stories-table">
+                                    <thead>
+                                        <tr>
+                                            {isUnpublishedTab && (
+                                                <th>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="bulk-checkbox"
+                                                        checked={(() => {
+                                                            const eligible = items.filter(i => !i.is_public && i.prompt_version === 'v1');
+                                                            return eligible.length > 0 && selectedIds.size === eligible.length;
+                                                        })()}
+                                                        onChange={toggleSelectAll}
+                                                    />
+                                                </th>
+                                            )}
+                                            <th>ID</th>
+                                            <th>EO #</th>
+                                            <th>Title</th>
+                                            <th>Date</th>
+                                            <th>Alarm</th>
+                                            <th>Category</th>
+                                            <th>State</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {items.length === 0 && (
+                                            <tr>
+                                                <td colSpan={isUnpublishedTab ? 9 : 8} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                    No EOs found matching your filters.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {items.map(eo => {
+                                            const alarmBadge = getAlarmBadge(eo.alarm_level);
+                                            const isEnriched = eo.prompt_version === 'v1';
+                                            const isBusy = busyIds.has(eo.id);
+                                            const eligibleForSelect = !eo.is_public && isEnriched;
+
+                                            return (
+                                                <tr key={eo.id} className={eo.needs_manual_review ? 'scotus-needs-review' : ''}>
+                                                    {isUnpublishedTab && (
+                                                        <td>
+                                                            <input
+                                                                type="checkbox"
+                                                                className="bulk-checkbox"
+                                                                checked={selectedIds.has(eo.id)}
+                                                                onChange={() => toggleSelect(eo.id)}
+                                                                disabled={!eligibleForSelect}
+                                                                title={!eligibleForSelect ? (eo.is_public ? 'Already published' : 'Not yet enriched') : ''}
+                                                            />
+                                                        </td>
+                                                    )}
+                                                    <td style={{ color: '#64748b', fontSize: '13px' }}>{eo.id}</td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px' }}>{eo.order_number || '-'}</td>
+                                                    <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={eo.title}>
+                                                        {eo.title || '(Untitled)'}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {formatDate(eo.date)}
+                                                    </td>
+                                                    <td>
+                                                        {eo.alarm_level != null
+                                                            ? <span className={`badge ${alarmBadge.class}`}>{alarmBadge.label}</span>
+                                                            : <span style={{ color: '#64748b', fontSize: '13px' }}>-</span>
+                                                        }
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px' }}>
+                                                        {EO_CATEGORY_OPTIONS.find(c => c.value === eo.category)?.label || eo.category || '-'}
+                                                    </td>
+                                                    <td style={{ fontSize: '13px' }}>
+                                                        {eo.needs_manual_review && <span style={{ color: '#fbbf24' }} title="Needs manual review">&#9888;</span>}
+                                                        {eo.is_public && <span style={{ color: '#4ade80', marginLeft: '4px' }} title="Published">&#10003;</span>}
+                                                        {!isEnriched && <span style={{ color: '#94a3b8', marginLeft: '4px', fontSize: '11px' }} title="Unenriched">UN</span>}
+                                                    </td>
+                                                    <td>
+                                                        <div className="row-actions">
+                                                            <button className="btn-icon" onClick={() => handleEdit(eo)} title="Edit">
+                                                                &#9999;&#65039; Edit
+                                                            </button>
+                                                            <button
+                                                                className={`btn-icon${isBusy ? ' enriching' : ''}`}
+                                                                onClick={() => handleReEnrich(eo)}
+                                                                disabled={isBusy}
+                                                                title={isBusy ? 'Working...' : 'Re-enrich'}
+                                                            >
+                                                                {isBusy ? <><span className="spinner-sm"></span> Working</> : '\u21BB Re-enrich'}
+                                                            </button>
+                                                            {eo.is_public ? (
+                                                                <button className="btn-icon" onClick={() => handleUnpublish(eo)} disabled={isBusy} title="Unpublish">
+                                                                    &#128228; Unpublish
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    onClick={() => handlePublish(eo)}
+                                                                    disabled={isBusy || !isEnriched}
+                                                                    title={!isEnriched ? 'Must be enriched (v1) to publish' : 'Publish'}
+                                                                >
+                                                                    &#128229; Publish
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {nextCursor && (
+                                <div style={{ padding: '0 20px 20px' }}>
+                                    <button
+                                        className="load-more-btn"
+                                        onClick={handleLoadMore}
+                                        disabled={loadingMore}
+                                    >
+                                        {loadingMore ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Agent Run Log */}
+                    <div className="card run-log-card">
+                        <div className="card-header" onClick={handleToggleRunLog}>
+                            <h2 className="card-title">
+                                <span>Agent Run Log</span>
+                                <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>{runLogExpanded ? '▼' : '▶'}</span>
+                            </h2>
+                            {runLogExpanded && (
+                                <button
+                                    className="btn-icon"
+                                    onClick={(e) => { e.stopPropagation(); fetchRunLog(); }}
+                                    title="Refresh"
+                                    style={{ fontSize: '14px' }}
+                                >
+                                    ↻ Refresh
+                                </button>
+                            )}
+                        </div>
+                        {runLogExpanded && (
+                            <div style={{ overflowX: 'auto' }}>
+                                {runLogLoading ? (
+                                    <div className="loading" style={{ padding: '20px' }}>
+                                        <div className="spinner"></div>
+                                        Loading run log...
+                                    </div>
+                                ) : !runLogData || runLogData.length === 0 ? (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No agent runs recorded yet.</div>
+                                ) : (
+                                    <table className="stories-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Run ID</th>
+                                                <th>Started</th>
+                                                <th>Processed</th>
+                                                <th>Flagged</th>
+                                                <th>Failed</th>
+                                                <th>Duration</th>
+                                                <th>Detail</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {runLogData.map(run => (
+                                                <tr key={run.run_id} style={(run.status_counts?.failed || 0) > 0 ? { background: 'rgba(239, 68, 68, 0.05)' } : {}}>
+                                                    <td style={{ color: '#94a3b8', fontSize: '12px', fontFamily: 'monospace', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={run.run_id}>
+                                                        {run.run_id}
+                                                    </td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                                                        {run.started_at ? new Date(run.started_at).toLocaleString() : '-'}
+                                                    </td>
+                                                    <td style={{ color: '#e2e8f0', fontSize: '13px' }}>{run.eos_processed ?? 0}</td>
+                                                    <td style={{ color: run.eos_flagged > 0 ? '#fbbf24' : '#64748b', fontSize: '13px' }}>{run.eos_flagged ?? 0}</td>
+                                                    <td style={{ color: (run.status_counts?.failed || 0) > 0 ? '#f87171' : '#64748b', fontSize: '13px' }}>{run.status_counts?.failed || 0}</td>
+                                                    <td style={{ color: '#94a3b8', fontSize: '13px' }}>
+                                                        {run.total_duration_ms ? Math.round(run.total_duration_ms / 1000) + 's' : '-'}
+                                                    </td>
+                                                    <td>
+                                                        <button className="btn-icon" style={{ fontSize: '12px' }} onClick={() => fetchRunDetail(run.run_id)}>View</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Run Detail Modal */}
+                    {selectedRunDetail && (
+                        <div className="modal-overlay" onClick={() => setSelectedRunDetail(null)}>
+                            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px' }}>
+                                <div className="modal-header">
+                                    <h3 className="modal-title">Run {selectedRunDetail.run_id}</h3>
+                                    <button className="modal-close" onClick={() => setSelectedRunDetail(null)}>×</button>
+                                </div>
+                                <div className="modal-body">
+                                    {selectedRunDetail.runs.length === 0 ? (
+                                        <div style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>No log rows for this run.</div>
+                                    ) : (
+                                        <table className="stories-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>EO #</th>
+                                                    <th>Title</th>
+                                                    <th>Status</th>
+                                                    <th>Flagged</th>
+                                                    <th>Duration</th>
+                                                    <th>Notes</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {selectedRunDetail.runs.map(row => (
+                                                    <tr key={row.id}>
+                                                        <td style={{ fontSize: '13px', color: '#94a3b8' }}>{row.eo_order_number || '-'}</td>
+                                                        <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#e2e8f0' }} title={row.eo_title}>
+                                                            {row.eo_title || '(Unknown)'}
+                                                        </td>
+                                                        <td>
+                                                            <span className={`badge ${row.status === 'completed' ? 'badge-active' : row.status === 'failed' ? 'badge-failed' : 'badge-pending'}`}>
+                                                                {row.status}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ fontSize: '13px' }}>
+                                                            {row.needs_manual_review ? <span style={{ color: '#fbbf24' }}>&#9888;</span> : '-'}
+                                                        </td>
+                                                        <td style={{ fontSize: '13px', color: '#94a3b8' }}>
+                                                            {row.duration_ms ? Math.round(row.duration_ms / 1000) + 's' : '-'}
+                                                        </td>
+                                                        <td style={{ fontSize: '12px', color: '#94a3b8', maxWidth: '300px' }}>
+                                                            {row.notes || '-'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Edit EO Modal */}
+                    {editingEo && (
+                        <EditExecutiveOrderModal
+                            eo={editingEo}
+                            onClose={() => setEditingEo(null)}
+                            onSave={handleSaveEdit}
+                            onRefresh={() => fetchList(false, null)}
+                            supabase={supabase}
+                            password={password}
+                        />
+                    )}
+                </div>
+            );
+        }
+
         // SkipsTab Component — Silent-skip observability (ADO-466)
         function SkipsTab({ password, supabase }) {
             const [data, setData] = useState(null);
@@ -4514,7 +5568,7 @@
                     feedsData,
                     pardonsData,
                     scotusData,
-                    eosTotal,
+                    eosData,
                     budgetData,
                     lastFetch
                 ] = await Promise.all([
@@ -4526,7 +5580,7 @@
                     supabase.from('feed_registry').select('id,is_active,failure_count'),
                     supabase.from('pardons').select('id,is_public,needs_review'),
                     supabase.from('scotus_cases').select('id,is_public,needs_manual_review'),
-                    supabase.from('executive_orders').select('id', { count: 'exact', head: true }),
+                    supabase.from('executive_orders').select('id,is_public,needs_manual_review'),
                     supabase.from('budgets').select('*').eq('day', today).single(),
                     supabase.from('feed_registry').select('last_fetched_at').not('last_fetched_at', 'is', null).order('last_fetched_at', { ascending: false }).limit(1).single()
                 ]);
@@ -4545,6 +5599,14 @@
                 const scotus = scotusData.data || [];
                 const scotusDraft = scotus.filter(s => !s.is_public).length;
                 const scotusNeedsReview = scotus.filter(s => s.needs_manual_review).length;
+
+                // Process EOs (admin-stats fallback). If migration 092 hasn't landed,
+                // eosData.error will be set; render is_public/needs_manual_review as 0.
+                const eos = eosData.error ? [] : (eosData.data || []);
+                const eosTotal = eos.length;
+                const eosPublished = eos.filter(e => e.is_public === true).length;
+                const eosDraft = eos.filter(e => e.is_public === false).length;
+                const eosNeedsReview = eos.filter(e => e.needs_manual_review === true).length;
 
                 // Pipeline status
                 let pipelineStatus = 'unknown';
@@ -4597,7 +5659,10 @@
                         draft: scotusDraft
                     },
                     executive_orders: {
-                        total: eosTotal.count ?? 0
+                        total: eosTotal,
+                        published: eosPublished,
+                        draft: eosDraft,
+                        needs_review: eosNeedsReview
                     },
                     budget: budget ? {
                         day: budget.day,
@@ -4618,7 +5683,7 @@
                         minutes_since_last_run: minutesSinceLastRun
                     },
                     needs_attention: {
-                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview + scotusNeedsReview,
+                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview + scotusNeedsReview + eosNeedsReview,
                         breakdown: {
                             stories_need_review: 0,
                             stories_enrichment_failed: storiesEnrichFailed.count ?? 0,
@@ -4626,6 +5691,7 @@
                             pardons_unpublished: pardonsDraft,
                             scotus_unpublished: scotusDraft,
                             scotus_needs_review: scotusNeedsReview,
+                            executive_orders_needs_review: eosNeedsReview,
                             feeds_failed: feedsFailed
                         }
                     },
@@ -4684,7 +5750,7 @@
                 { id: 'stories', label: 'Stories' },
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
-                { id: 'eos', label: 'Exec Orders', disabled: true },
+                { id: 'eos', label: 'Exec Orders' },
                 { id: 'feeds', label: 'Feeds', disabled: true },
                 { id: 'skips', label: 'Failures' }
             ];
@@ -4860,6 +5926,12 @@
                                                 {stats.needs_attention?.breakdown?.scotus_needs_review ?? 0}
                                             </span>
                                         </div>
+                                        <div className="attention-item" title="Executive Orders needing manual review" onClick={() => setActiveTab('eos')}>
+                                            <span>EOs needs review</span>
+                                            <span className={`attention-count ${(stats.needs_attention?.breakdown?.executive_orders_needs_review ?? 0) === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention?.breakdown?.executive_orders_needs_review ?? 0}
+                                            </span>
+                                        </div>
                                         <div className="attention-item" title="Feeds with 5+ consecutive failures">
                                             <span>Feeds failed</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
@@ -4984,11 +6056,15 @@
                             <SkipsTab password={password} supabase={supabase} />
                         )}
 
+                        {activeTab === 'eos' && (
+                            <ExecutiveOrdersTab password={password} supabase={supabase} />
+                        )}
+
                         {activeTab === 'scotus' && (
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'skips' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
