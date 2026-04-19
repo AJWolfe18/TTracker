@@ -26,6 +26,22 @@ const ALLOWED_FIELDS = [
   'action_tier', 'action_confidence', 'action_reasoning', 'action_section',
 ]
 
+// Claude agent prompt versions — versions written by the new Claude EO agent.
+// Add new versions here when the agent prompt is bumped (e.g., 'v1.2', 'v2').
+// Used by publish gates so future prompt bumps don't break the admin publish flow (ADO-481).
+//
+// IMPORTANT: 'v1' is intentionally NOT in this list — it's the column default and was
+// also written by the retired GPT pipeline. A row at 'v1' is either unenriched (schema
+// default) or legacy GPT output, NOT Claude-enriched. The Claude agent now writes 'v1.1'.
+//
+// MUST stay in lockstep with the same constant in:
+//   - supabase/functions/admin-executive-orders/index.ts
+//   - public/admin.html
+// Drift is caught by the contract test in scripts/tests/admin-eo-contracts.test.mjs.
+const CLAUDE_AGENT_VERSIONS = ['v1.1']
+const isClaudeEnriched = (pv: string | null | undefined): boolean =>
+  pv != null && CLAUDE_AGENT_VERSIONS.includes(pv)
+
 // Server-managed fields — explicit reject if client tries to set them via update
 const REJECTED_FIELDS_IN_UPDATE = [
   'severity_rating',  // server-derived from alarm_level
@@ -345,11 +361,11 @@ async function handlePublish(supabase: any, body: Record<string, unknown>) {
   const current = await fetchEoForCAS(supabase, id)
   if (!current) return jsonResponse({ error: 'EO not found' }, 404)
 
-  if (current.prompt_version !== 'v1') {
+  if (!isClaudeEnriched(current.prompt_version)) {
     return jsonResponse({
       ok: false,
       error: 'not_enriched',
-      message: `Cannot publish: EO has prompt_version '${current.prompt_version ?? 'NULL'}', must be 'v1'`,
+      message: `Cannot publish: EO has prompt_version '${current.prompt_version ?? 'NULL'}', must be one of [${CLAUDE_AGENT_VERSIONS.join(', ')}]`,
     }, 400)
   }
 
@@ -530,11 +546,11 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
       skipped.push({ id: item.id, current_updated_at: cur.updated_at, reason: 'already_published' })
       continue
     }
-    if (cur.prompt_version !== 'v1') {
+    if (!isClaudeEnriched(cur.prompt_version)) {
       failed.push({
         id: item.id,
         reason: 'not_enriched',
-        message: `prompt_version is '${cur.prompt_version ?? 'NULL'}', must be 'v1'`,
+        message: `prompt_version is '${cur.prompt_version ?? 'NULL'}', must be one of [${CLAUDE_AGENT_VERSIONS.join(', ')}]`,
       })
       continue
     }

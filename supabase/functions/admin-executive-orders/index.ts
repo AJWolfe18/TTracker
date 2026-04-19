@@ -35,6 +35,23 @@ const VALID_CATEGORIES = [
 ]
 const VALID_SUBTABS = ['needs_review', 'unenriched', 'unpublished', 'published', 'failed', 'all']
 
+// Claude agent prompt versions — versions written by the new Claude EO agent.
+// Add new versions here when the agent prompt is bumped (e.g., 'v1.2', 'v2').
+// Predicate `isClaudeEnriched` decouples admin filters/gates from a single literal,
+// so future bumps don't break the admin UI (ADO-481).
+//
+// IMPORTANT: 'v1' is intentionally NOT in this list — it's the column default and was
+// also written by the retired GPT pipeline. A row at 'v1' is either unenriched (schema
+// default) or legacy GPT output, NOT Claude-enriched. The Claude agent now writes 'v1.1'.
+//
+// MUST stay in lockstep with the same constant in:
+//   - supabase/functions/admin-update-executive-orders/index.ts
+//   - public/admin.html
+// Drift is caught by the contract test in scripts/tests/admin-eo-contracts.test.mjs.
+const CLAUDE_AGENT_VERSIONS = ['v1.1']
+const isClaudeEnriched = (pv: string | null | undefined): boolean =>
+  pv != null && CLAUDE_AGENT_VERSIONS.includes(pv)
+
 // Cursor/date validators
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/  // strict YYYY-MM-DD; rejects ISO timestamps
 
@@ -223,15 +240,15 @@ function matchesSubtab(
 ): boolean {
   switch (subtab) {
     case 'needs_review':
-      return eo.prompt_version === 'v1' && !eo.is_public && eo.needs_manual_review
+      return isClaudeEnriched(eo.prompt_version) && !eo.is_public && eo.needs_manual_review
     case 'unenriched':
-      return eo.prompt_version !== 'v1'
+      return !isClaudeEnriched(eo.prompt_version)
     case 'unpublished':
-      return eo.prompt_version === 'v1' && !eo.is_public
+      return isClaudeEnriched(eo.prompt_version) && !eo.is_public
     case 'published':
       return eo.is_public === true
     case 'failed':
-      return eo.prompt_version !== 'v1' && latestLogStatus === 'failed'
+      return !isClaudeEnriched(eo.prompt_version) && latestLogStatus === 'failed'
     case 'all':
     default:
       return true

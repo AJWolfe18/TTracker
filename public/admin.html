@@ -2468,6 +2468,21 @@
             { value: 'all', label: 'All' },
         ];
 
+        // Claude EO agent prompt versions. Add new entries when the agent prompt is bumped
+        // (e.g., 'v1.2', 'v2'). Keeps bulk-publish eligibility decoupled from a single literal
+        // so future bumps don't break the admin UI (ADO-481).
+        //
+        // IMPORTANT: 'v1' is intentionally NOT in this list — it's the column default and was
+        // also written by the retired GPT pipeline. A row at 'v1' is either unenriched (schema
+        // default) or legacy GPT output, NOT Claude-enriched. The Claude agent now writes 'v1.1'.
+        //
+        // MUST stay in lockstep with CLAUDE_AGENT_VERSIONS in:
+        //   - supabase/functions/admin-executive-orders/index.ts
+        //   - supabase/functions/admin-update-executive-orders/index.ts
+        // Drift is caught by the contract test in scripts/tests/admin-eo-contracts.test.mjs.
+        const CLAUDE_AGENT_VERSIONS = ['v1.1'];
+        const isClaudeEnriched = (pv) => pv != null && CLAUDE_AGENT_VERSIONS.includes(pv);
+
         // EditScotusModal Component
         function EditScotusModal({ scotusCase, onClose, onSave, onRefresh, supabase, password }) {
             const h = React.createElement;
@@ -4673,7 +4688,7 @@
                     // catches it too, but this trims the request and keeps the
                     // count-they-see vs count-they-submit expectation tight.
                     const itemsPayload = items
-                        .filter(i => selectedIds.has(i.id) && !i.is_public && i.prompt_version === 'v1')
+                        .filter(i => selectedIds.has(i.id) && !i.is_public && isClaudeEnriched(i.prompt_version))
                         .map(i => ({ id: i.id, if_updated_at: i.updated_at }));
                     if (itemsPayload.length === 0) {
                         toast?.addToast('No eligible items to publish (all already published or unenriched)', 'error');
@@ -4741,7 +4756,7 @@
                 });
             };
             const toggleSelectAll = () => {
-                const eligible = items.filter(i => !i.is_public && i.prompt_version === 'v1').map(i => i.id);
+                const eligible = items.filter(i => !i.is_public && isClaudeEnriched(i.prompt_version)).map(i => i.id);
                 if (selectedIds.size === eligible.length && eligible.length > 0) {
                     setSelectedIds(new Set());
                 } else {
@@ -4907,7 +4922,7 @@
                                                         type="checkbox"
                                                         className="bulk-checkbox"
                                                         checked={(() => {
-                                                            const eligible = items.filter(i => !i.is_public && i.prompt_version === 'v1');
+                                                            const eligible = items.filter(i => !i.is_public && isClaudeEnriched(i.prompt_version));
                                                             return eligible.length > 0 && selectedIds.size === eligible.length;
                                                         })()}
                                                         onChange={toggleSelectAll}
@@ -4934,7 +4949,7 @@
                                         )}
                                         {items.map(eo => {
                                             const alarmBadge = getAlarmBadge(eo.alarm_level);
-                                            const isEnriched = eo.prompt_version === 'v1';
+                                            const isEnriched = isClaudeEnriched(eo.prompt_version);
                                             const isBusy = busyIds.has(eo.id);
                                             const eligibleForSelect = !eo.is_public && isEnriched;
 
