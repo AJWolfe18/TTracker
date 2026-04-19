@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-04-15
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -153,7 +153,31 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 ## Supporting Tables
 
 ### `executive_orders`
-**Purpose:** Presidential executive order tracking
+**Purpose:** Presidential executive order tracking. Enriched by the EO Claude Agent (ADO-476/477/478/479).
+
+**Agent-writes (v1 prompt — canonical):**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| section_what_they_say | TEXT NOT NULL | 150-200 words, neutral framing |
+| section_what_it_means | TEXT NOT NULL | 150-200 words, editorial |
+| section_reality_check | TEXT NOT NULL | 100-150 words |
+| section_why_it_matters | TEXT NOT NULL | 100-150 words |
+| alarm_level | SMALLINT | 0-5, canonical severity. Drives frontend labels via `tone-system.json` |
+| severity_rating | VARCHAR | **Server-derived** from `alarm_level` via `supabase/functions/_shared/eo-severity.ts`. Never directly editable. (`critical`/`high`/`medium`/`low`/null) |
+| category | EO_CATEGORY enum | One of: `immigration_border`, `environment_energy`, `health_care`, `education`, `justice_civil_rights_voting`, `natsec_foreign`, `economy_jobs_taxes`, `technology_data_privacy`, `infra_housing_transport`, `gov_ops_workforce` |
+| regions | TEXT[] NOT NULL | ≤ 3 entries |
+| policy_areas | TEXT[] NOT NULL | ≤ 3 entries, Title Case |
+| affected_agencies | TEXT[] NOT NULL | ≤ 3 entries, standard acronyms |
+| action_tier | TEXT | `direct` / `systemic` / `tracking` |
+| action_confidence | INTEGER | 1-10 |
+| action_reasoning | TEXT NOT NULL | One-sentence explanation |
+| action_section | JSONB | `{title, actions[]}` when direct/systemic; **null** when tracking |
+| enriched_at | TIMESTAMPTZ | Set on successful agent run |
+| prompt_version | TEXT | `v1` for agent-written rows; NULL signals "needs (re-)enrichment" |
+| enrichment_meta | JSONB | `{model, source, enriched_at, prompt_version, signing_statement_used}` |
+
+**System fields:**
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -161,11 +185,59 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | order_number | VARCHAR | EO number (e.g., "14343") |
 | date | DATE | Signing date |
 | title | TEXT | Order title |
-| summary | TEXT | AI summary |
-| category | VARCHAR | Policy category |
-| severity_rating | VARCHAR | Impact level |
 | source_url | TEXT | Federal Register URL |
-| spicy_summary | TEXT | Engaging summary |
+| created_at | TIMESTAMPTZ | Row inserted |
+| updated_at | TIMESTAMPTZ | Auto-incremented `BEFORE UPDATE` (migration 092) — supports admin optimistic locking |
+| added_at | TIMESTAMPTZ | Discovery timestamp |
+| archived | BOOLEAN | Exists, not surfaced by admin tab |
+| archive_reason | TEXT | Exists, not surfaced by admin tab |
+| verified | BOOLEAN | Exists, not surfaced by admin tab |
+
+**Admin publish gate (added by migration 092 — ADO-480):**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| is_public | BOOLEAN NOT NULL DEFAULT false | Canonical "is this EO visible on the public site?" Backfilled to `true` for all pre-migration rows. New rows require explicit admin publish. Filtered by `public/eo-app.js` via `is_public=eq.true`. |
+| needs_manual_review | BOOLEAN NOT NULL DEFAULT false | Row-level flag synced from `executive_orders_enrichment_log.needs_manual_review` via DB trigger on `status='completed'` writes. Cleared by admin publish (durable acknowledgment). When trigger raises this flag, `is_public` is auto-set to `false` (re-flag auto-unpublishes). |
+
+**Triggers:**
+- `eo_set_updated_at` (BEFORE UPDATE) — auto-advances `updated_at` so admin CAS works
+- `eo_log_sync_needs_review_insert` (AFTER INSERT on `executive_orders_enrichment_log`, WHEN `status='completed'`)
+- `eo_log_sync_needs_review_update` (AFTER UPDATE OF status on `executive_orders_enrichment_log`, WHEN `status='completed' AND OLD.status IS DISTINCT FROM 'completed'`)
+- Existing `lock_enriched_at` (migration 023) — passes through re-enrich `prompt_version=NULL, enriched_at=NULL` writes via NULL-comparison short-circuit
+
+**Indexes:**
+- `idx_eo_publish_state` — `(prompt_version, is_public, needs_manual_review)` supports admin tab predicates
+
+**Legacy fields (old GPT pipeline, dead weight — scheduled for drop in ADO-481 after PROD re-enrichment):**
+
+`summary`, `spicy_summary`, `shareable_hook`, `severity_label_inapp`, `severity_label_share`, `eo_impact_type`, `agencies_affected`, `impact_areas`, `severity`, `policy_direction`, `implementation_timeline`, `implementation_status`, `impact_score`, `legal_challenges`, `related_orders`, `description`, `federal_register_url`, `pdf_url`, `citation`, `publication_date`, `document_number`, `source`, `type`
+
+Admin tab ignores all of them (never selects, never writes). Public frontend renders labels from `tone-system.json` via `alarm_level`, NOT from `severity_label_*` fields.
+
+---
+
+### `executive_orders_enrichment_log`
+**Purpose:** Per-EO enrichment observability for the EO Claude Agent (ADO-476)
+**Migration:** `20260415000000_executive_orders_enrichment_log.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (BIGSERIAL) |
+| eo_id | INTEGER | FK to executive_orders.id (ON DELETE CASCADE) |
+| prompt_version | TEXT | Enrichment prompt version (e.g., 'v1') |
+| run_id | TEXT | Links rows from same agent run |
+| status | TEXT | 'running', 'completed', or 'failed' |
+| duration_ms | INTEGER | Enrichment time in milliseconds |
+| needs_manual_review | BOOLEAN | Default false — flagged for admin review |
+| notes | TEXT | Free-form notes (nullable) |
+| created_at | TIMESTAMPTZ | When enrichment started |
+
+**Key Indexes:**
+- `idx_eo_enrichment_log_created_at` — `created_at DESC`
+- `idx_eo_enrichment_log_eo_id_created_at` — `(eo_id, created_at DESC)`
+
+**RLS Policies:** RLS enabled, no SELECT policies — blocks anon/authenticated, service_role bypasses
 
 ---
 
