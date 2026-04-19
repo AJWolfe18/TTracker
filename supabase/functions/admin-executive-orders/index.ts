@@ -108,10 +108,20 @@ function encodeCursor(payload: CursorPayload): string {
   return btoa(JSON.stringify(payload))
 }
 
+// Search is interpolated into a PostgREST `.or()` predicate string downstream. Reject
+// any character that could alter the filter grammar — `,` separates predicates,
+// `()` groups them, `"` opens quoted literals. Backslash neutralized by the `%_\\`
+// escape in applyUserFilters, but explicit rejection here fails closed.
+const SEARCH_FORBIDDEN_RE = /[,()"`\\]/
+
 // Validate filter inputs and return an error string or null.
 function validateFilters(filters: Record<string, unknown>): string | null {
-  if (filters.search != null && typeof filters.search !== 'string') {
-    return 'filters.search must be a string'
+  if (filters.search != null) {
+    if (typeof filters.search !== 'string') return 'filters.search must be a string'
+    if (filters.search.length > 200) return 'filters.search must be ≤200 characters'
+    if (SEARCH_FORBIDDEN_RE.test(filters.search)) {
+      return 'filters.search contains unsupported characters (,()\"`\\)'
+    }
   }
 
   if (filters.alarm_level != null) {
@@ -422,9 +432,14 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
       `${sort.col}.${op}.${cursor.val},and(${sort.col}.eq.${cursor.val},id.${op}."${cursor.id}")`
     )
   }
-  if (sort.col === 'alarm_level' || sort.col === 'enriched_at') {
-    listQuery = listQuery.not(sort.col, 'is', null)
-  }
+  // NOTE: we intentionally do NOT filter NULLs out of alarm_level / enriched_at sort
+  // results. Previous revisions did, which made unenriched EOs disappear from the
+  // list whenever the user picked one of those sorts — breaking the counts_by_subtab
+  // contract. With `nullsFirst: false`, NULLs sort to the end; first-page queries
+  // see them if there's room. Keyset pagination on the non-NULL value range won't
+  // normally dive into the NULL tail (PostgreSQL's `col < value` excludes NULL by
+  // SQL semantics), but that's a known limitation of the keyset approach rather
+  // than a reason to hide rows from the list predicate itself.
 
   // Fetch limit + 1 for has_more detection
   listQuery = listQuery.limit(limit + 1)
