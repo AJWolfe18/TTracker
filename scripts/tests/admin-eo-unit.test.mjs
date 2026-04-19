@@ -40,10 +40,20 @@ function parseSort(input) {
 // admin-executive-orders / index.ts — cursor decode.
 // Cursor schema: {col, val, id}. `col` MUST match the request's sort column
 // or the cursor is rejected (catches stale URLs from when sort was different).
-// Returns null (no cursor), 'invalid' (malformed), or {col, val, id}.
+// Returns null (no cursor), 'invalid' (malformed), or {col, val, id: string}.
+//
+// `id` is opaque — PROD uses VARCHAR(50) legacy `eo_<ts>_<suffix>`, TEST uses
+// INTEGER coerced to string. Pattern `[A-Za-z0-9_-]{1,50}` prevents PostgREST
+// filter injection (`,`, `(`, `)`, `"`) when the id is interpolated into a
+// keyset filter downstream. Legacy numeric-ID cursors are accepted for
+// backward compatibility (coerced to string on decode).
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ALARM_RE = /^[0-5]$/;
-const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+// Full-string anchor mandatory — without `$` a payload that starts ISO-like but
+// continues with `,and(id.gt.0` would pass validation and inject a second
+// predicate clause into the PostgREST `.or()` string.
+const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+const EO_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
 function validateCursorVal(col, val) {
   if (col === 'date') return DATE_RE.test(val);
   if (col === 'alarm_level') return ALARM_RE.test(val);
@@ -60,8 +70,9 @@ function decodeCursor(cursor, expectedCol) {
     const id = decoded.id;
     if (typeof col !== 'string' || col !== expectedCol) return 'invalid';
     if (typeof val !== 'string' || !validateCursorVal(col, val)) return 'invalid';
-    if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) return 'invalid';
-    return { col, val, id };
+    const idStr = typeof id === 'number' && Number.isFinite(id) ? String(id) : id;
+    if (typeof idStr !== 'string' || !EO_ID_RE.test(idStr)) return 'invalid';
+    return { col, val, id: idStr };
   } catch {
     return 'invalid';
   }
@@ -141,27 +152,35 @@ test('parseSort rejects invalid inputs', () => {
 
 // ─── Cursor encode/decode (plan §6.1: "Cursor roundtrip", "Date cursor validator") ──
 
-test('encodeCursor + decodeCursor roundtrip for date sort', () => {
-  const payload = { col: 'date', val: '2024-01-15', id: 42 };
+test('encodeCursor + decodeCursor roundtrip for date sort (string id — PROD format)', () => {
+  // PROD IDs are legacy `eo_<timestamp>_<suffix>` VARCHAR(50).
+  const payload = { col: 'date', val: '2024-01-15', id: 'eo_1775754706788_9yyufp4qa' };
   const encoded = encodeCursor(payload);
   assert.deepEqual(decodeCursor(encoded, 'date'), payload);
 });
 
 test('encodeCursor + decodeCursor roundtrip for alarm_level sort (underscored col)', () => {
-  const payload = { col: 'alarm_level', val: '5', id: 100 };
+  const payload = { col: 'alarm_level', val: '5', id: 'eo_1774458464771_xeklz674w' };
   const encoded = encodeCursor(payload);
   assert.deepEqual(decodeCursor(encoded, 'alarm_level'), payload);
 });
 
 test('encodeCursor + decodeCursor roundtrip for enriched_at sort', () => {
-  const payload = { col: 'enriched_at', val: '2026-04-17T20:30:45Z', id: 200 };
+  const payload = { col: 'enriched_at', val: '2026-04-17T20:30:45Z', id: 'eo_1774976561506_kebv7taqw' };
   const encoded = encodeCursor(payload);
   assert.deepEqual(decodeCursor(encoded, 'enriched_at'), payload);
 });
 
+test('decodeCursor accepts legacy numeric-ID cursors (TEST backward-compat, coerces to string)', () => {
+  // TEST used INTEGER IDs pre-ADO-481. Old browser sessions with cached URLs must still work.
+  const payload = { col: 'date', val: '2024-01-15', id: 42 };
+  const encoded = encodeCursor(payload);
+  assert.deepEqual(decodeCursor(encoded, 'date'), { col: 'date', val: '2024-01-15', id: '42' });
+});
+
 test('decodeCursor rejects cursor whose col mismatches expected', () => {
   // Stale cursor from a previous sort must NOT silently page wrong data.
-  const dateCursor = encodeCursor({ col: 'date', val: '2024-01-15', id: 1 });
+  const dateCursor = encodeCursor({ col: 'date', val: '2024-01-15', id: 'eo_abc123' });
   assert.equal(decodeCursor(dateCursor, 'alarm_level'), 'invalid');
 });
 
@@ -188,11 +207,77 @@ test('decodeCursor rejects out-of-range alarm_level cursor val', () => {
   assert.equal(decodeCursor(encodeCursor({ col: 'alarm_level', val: 'x', id: 1 }), 'alarm_level'), 'invalid');
 });
 
-test('decodeCursor rejects bad id types', () => {
-  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 0 }), 'date'), 'invalid');
-  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: -1 }), 'date'), 'invalid');
-  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 1.5 }), 'date'), 'invalid');
-  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'abc' }), 'date'), 'invalid');
+test('decodeCursor rejects PostgREST-injection attempts via enriched_at cursor val', () => {
+  // Without the `$` anchor on ISO_TS_RE, a payload like
+  // "2026-04-17T00:00:00,and(id.gt.0" would pass validation and inject a second
+  // predicate into the `.or()` filter we build in admin-executive-orders/index.ts.
+  assert.equal(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: '2026-04-17T00:00:00,and(id.gt.0', id: 'a' }), 'enriched_at'),
+    'invalid'
+  );
+  assert.equal(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: '2026-04-17T00:00:00 OR 1=1', id: 'a' }), 'enriched_at'),
+    'invalid'
+  );
+  // Legit timezone variants still accepted
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: '2026-04-17T20:30:45.123Z', id: 'eo_a1' }), 'enriched_at'),
+    { col: 'enriched_at', val: '2026-04-17T20:30:45.123Z', id: 'eo_a1' }
+  );
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: '2026-04-17T20:30:45+00:00', id: 'eo_a1' }), 'enriched_at'),
+    { col: 'enriched_at', val: '2026-04-17T20:30:45+00:00', id: 'eo_a1' }
+  );
+});
+
+test('decodeCursor rejects bad id types / unsafe chars', () => {
+  // Empty / missing / non-string/number
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: '' }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: null }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: { x: 1 } }), 'date'), 'invalid');
+  // Non-finite numbers (NaN/Infinity serialize as null; null fails String coercion branch anyway)
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: Number.NaN }), 'date'), 'invalid');
+  // PostgREST-dangerous characters (could break `.or()` predicate parsing if interpolated raw)
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'eo,evil' }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'eo(evil)' }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'eo"evil' }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'eo.dot' }), 'date'), 'invalid');
+  // Length > 50
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: 'a'.repeat(51) }), 'date'), 'invalid');
+});
+
+// ─── parseId (admin-update-executive-orders) — ID shape validation ─────────
+// Mirror of parseId() in admin-update-executive-orders/index.ts. Accepts PROD
+// legacy `eo_<ts>_<suffix>` strings AND TEST integer IDs coerced to strings.
+const PARSE_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
+function parseId(raw) {
+  const s = typeof raw === 'number' ? String(raw) : (typeof raw === 'string' ? raw : null);
+  if (s === null || !PARSE_ID_RE.test(s)) return null;
+  return s;
+}
+
+test('parseId accepts PROD string IDs', () => {
+  assert.equal(parseId('eo_1775754706788_9yyufp4qa'), 'eo_1775754706788_9yyufp4qa');
+  assert.equal(parseId('eo_1774458464771_xeklz674w'), 'eo_1774458464771_xeklz674w');
+});
+
+test('parseId accepts TEST integer IDs (number or string form)', () => {
+  assert.equal(parseId(42), '42');
+  assert.equal(parseId('42'), '42');
+  assert.equal(parseId(1), '1');
+});
+
+test('parseId rejects empty / non-alphanumeric / oversize IDs', () => {
+  assert.equal(parseId(''), null);
+  assert.equal(parseId(null), null);
+  assert.equal(parseId(undefined), null);
+  assert.equal(parseId({}), null);
+  assert.equal(parseId('eo,evil'), null);
+  assert.equal(parseId('eo(evil)'), null);
+  assert.equal(parseId('eo.dot'), null);
+  assert.equal(parseId('eo evil'), null);
+  assert.equal(parseId('eo"evil'), null);
+  assert.equal(parseId('a'.repeat(51)), null);
 });
 
 // ─── Tab predicate (plan §6.1: every "List returns only matching predicate" row) ──

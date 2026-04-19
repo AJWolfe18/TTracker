@@ -4,9 +4,17 @@
 --
 -- DEPENDENCY: executive_orders table must exist
 
+-- NOTE: executive_orders.id type drift between TEST (INTEGER) and PROD (VARCHAR(50)).
+-- VARCHAR(50) is the canonical target — edge-function code treats IDs as opaque strings
+-- in both envs. TEST was first applied with INTEGER before this patch; that's fine
+-- because CREATE TABLE IF NOT EXISTS no-ops on the existing table.
+--
+-- CLEAN-SLATE REBUILD CAVEAT: on a fresh TEST (executive_orders.id still INTEGER) this
+-- FK will fail. Fix: align executive_orders.id to VARCHAR(50) on TEST or seed TEST from
+-- a PROD schema dump before running this migration.
 CREATE TABLE IF NOT EXISTS executive_orders_enrichment_log (
     id BIGSERIAL PRIMARY KEY,
-    eo_id INTEGER NOT NULL REFERENCES executive_orders(id) ON DELETE CASCADE,
+    eo_id VARCHAR(50) NOT NULL REFERENCES executive_orders(id) ON DELETE CASCADE,
     prompt_version TEXT NOT NULL,
     run_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'running'

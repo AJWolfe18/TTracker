@@ -79,8 +79,10 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/executive_orders_enrichment_log" \
 
 ### PATCH (update rows matching filter)
 
+`{EO_ID}` is a string in both environments (PROD legacy `eo_<timestamp>_<suffix>`, TEST numeric coerced). PostgREST accepts both forms unquoted in `id=eq.<value>` URL filters.
+
 ```bash
-curl -s -X PATCH "${SUPABASE_URL}/rest/v1/executive_orders?id=eq.123" \
+curl -s -X PATCH "${SUPABASE_URL}/rest/v1/executive_orders?id=eq.{EO_ID}" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
@@ -100,7 +102,7 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/executive_orders?id=eq.123" \
    - Write the complete JSON object to `/tmp/patch-body.json`
 2. Reference the file in curl:
    ```bash
-   curl -s -X PATCH "${SUPABASE_URL}/rest/v1/executive_orders?id=eq.123" \
+   curl -s -X PATCH "${SUPABASE_URL}/rest/v1/executive_orders?id=eq.{EO_ID}" \
      -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
      -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
      -H "Content-Type: application/json" \
@@ -195,6 +197,8 @@ For each EO, first insert a per-EO log row marking the start of processing, then
 
 **Step 3A — Insert per-EO log row (template):**
 
+`EO_ID` is a string in both environments (PROD uses legacy `eo_<timestamp>_<suffix>` like `eo_1775754706788_9yyufp4qa`; TEST uses numeric IDs that PostgREST accepts as strings). Always JSON-quote `EO_ID` in the body. Unquoted interpolation would produce invalid JSON on PROD.
+
 ```bash
 START_TIME=$(date +%s%3N)  # milliseconds since epoch, used for duration_ms in Step 7
 
@@ -203,7 +207,7 @@ LOG_ROW=$(curl -s -X POST "${SUPABASE_URL}/rest/v1/executive_orders_enrichment_l
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"eo_id\": ${EO_ID}, \"prompt_version\": \"v1\", \"run_id\": \"${RUN_ID}\", \"status\": \"running\"}")
+  -d "{\"eo_id\": \"${EO_ID}\", \"prompt_version\": \"v1\", \"run_id\": \"${RUN_ID}\", \"status\": \"running\"}")
 
 LOG_ID=$(echo "$LOG_ROW" | jq -r '.[0].id' 2>/dev/null || echo "$LOG_ROW" | grep -oE '"id":[0-9]+' | head -1 | cut -d: -f2)
 ```
