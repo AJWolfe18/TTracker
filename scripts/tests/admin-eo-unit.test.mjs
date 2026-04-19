@@ -280,6 +280,51 @@ test('parseId rejects empty / non-alphanumeric / oversize IDs', () => {
   assert.equal(parseId('a'.repeat(51)), null);
 });
 
+// ─── Search input validation (Codex P1: PostgREST filter-grammar injection) ───
+// Mirror of validateFilters()'s search branch in admin-executive-orders/index.ts.
+// The live function interpolates `filters.search` into a PostgREST `.or()` string,
+// so characters that alter the filter grammar (`,` `(` `)` `"` backtick `\`) must
+// be rejected server-side rather than hoping `%/_/\\` escaping is enough.
+const SEARCH_FORBIDDEN_RE = /[,()"`\\]/;
+function validateSearch(value) {
+  if (value == null) return null;
+  if (typeof value !== 'string') return 'filters.search must be a string';
+  if (value.length > 200) return 'filters.search must be ≤200 characters';
+  if (SEARCH_FORBIDDEN_RE.test(value)) return 'forbidden chars';
+  return null;
+}
+
+test('validateSearch accepts normal search terms', () => {
+  assert.equal(validateSearch(null), null);
+  assert.equal(validateSearch(undefined), null);
+  assert.equal(validateSearch(''), null);
+  assert.equal(validateSearch('schedule g'), null);
+  assert.equal(validateSearch('14349'), null);
+  assert.equal(validateSearch('DEI rollback'), null);
+  assert.equal(validateSearch('labor-management'), null);
+});
+
+test('validateSearch rejects PostgREST grammar chars', () => {
+  // Injection attempt: craft a search that would break out of ilike and inject
+  // a second predicate into the enclosing .or() expression.
+  assert.equal(validateSearch('evil,and(id.lt.0'), 'forbidden chars');
+  assert.equal(validateSearch('foo(bar)'), 'forbidden chars');
+  assert.equal(validateSearch('foo,bar'), 'forbidden chars');
+  assert.equal(validateSearch('foo"bar'), 'forbidden chars');
+  assert.equal(validateSearch('foo`bar'), 'forbidden chars');
+  assert.equal(validateSearch('foo\\bar'), 'forbidden chars');
+});
+
+test('validateSearch rejects oversize input', () => {
+  assert.equal(validateSearch('a'.repeat(201)), 'filters.search must be ≤200 characters');
+  assert.equal(validateSearch('a'.repeat(200)), null); // boundary ok
+});
+
+test('validateSearch rejects wrong type', () => {
+  assert.equal(validateSearch(42), 'filters.search must be a string');
+  assert.equal(validateSearch({ foo: 'bar' }), 'filters.search must be a string');
+});
+
 // ─── Tab predicate (plan §6.1: every "List returns only matching predicate" row) ──
 
 test('matchesSubtab — needs_review predicate', () => {
