@@ -575,7 +575,6 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
     published.push({ id: item.id, new_updated_at: data.updated_at as string })
   }
 
-  console.log(`admin_action: bulk_publish_eo published=${published.length} skipped=${skipped.length} failed=${failed.length}`)
 
   return jsonResponse({
     success: true,

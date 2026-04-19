@@ -18,17 +18,17 @@
 BEGIN;
 
 -- ─────────────────────────────────────────────────────────────
--- Column adds
+-- Column adds — idempotent (safe to re-run)
 -- ─────────────────────────────────────────────────────────────
 ALTER TABLE executive_orders
-  ADD COLUMN is_public boolean NOT NULL DEFAULT true,
-  ADD COLUMN needs_manual_review boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS needs_manual_review boolean NOT NULL DEFAULT false;
 
 -- Explicit backfill: every existing row stays visible on the public site.
--- The DEFAULT true above already covers this for the ALTER itself, but the
--- redundant UPDATE makes intent explicit and survives a re-run on partially
--- migrated data.
-UPDATE executive_orders SET is_public = true;
+-- The DEFAULT true above already covers fresh ADD COLUMN applies; this redundant
+-- UPDATE makes intent explicit and keeps idempotent re-runs correct on partially
+-- migrated data where columns exist but values drifted.
+UPDATE executive_orders SET is_public = true WHERE is_public IS DISTINCT FROM true;
 
 -- Future rows default to false (require explicit admin publish).
 ALTER TABLE executive_orders ALTER COLUMN is_public SET DEFAULT false;
