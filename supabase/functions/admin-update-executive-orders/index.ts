@@ -207,14 +207,19 @@ Deno.serve(async (req) => {
 
 // ─── Single-row helpers ─────────────────────────────────────────────────────
 
-function parseId(raw: unknown): number | null {
-  const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10)
-  if (isNaN(n) || !Number.isInteger(n) || n <= 0) return null
-  return n
+// IDs are opaque strings: PROD uses legacy `eo_<timestamp>_<suffix>` (VARCHAR(50)), TEST
+// uses numeric IDs coerced to strings. Accept either form. Pattern restriction keeps
+// PostgREST filter values safe (no `,`, `(`, `)`, `.`, quotes, etc.).
+const EO_ID_RE = /^[A-Za-z0-9_-]{1,50}$/
+
+function parseId(raw: unknown): string | null {
+  const s = typeof raw === 'number' ? String(raw) : (typeof raw === 'string' ? raw : null)
+  if (s === null || !EO_ID_RE.test(s)) return null
+  return s
 }
 
 // deno-lint-ignore no-explicit-any
-async function fetchEoForCAS(supabase: any, id: number) {
+async function fetchEoForCAS(supabase: any, id: string) {
   const { data, error } = await supabase
     .from('executive_orders')
     .select('id, is_public, prompt_version, enriched_at, updated_at, alarm_level, action_tier')
@@ -222,7 +227,7 @@ async function fetchEoForCAS(supabase: any, id: number) {
     .single()
   if (error || !data) return null
   return data as {
-    id: number
+    id: string
     is_public: boolean
     prompt_version: string | null
     enriched_at: string | null
@@ -237,7 +242,7 @@ async function fetchEoForCAS(supabase: any, id: number) {
 // deno-lint-ignore no-explicit-any
 async function handleUpdate(supabase: any, body: Record<string, unknown>) {
   const id = parseId(body.id)
-  if (id === null) return jsonResponse({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return jsonResponse({ error: 'id must be a non-empty alphanumeric string (≤50 chars, [A-Za-z0-9_-])' }, 400)
 
   const ifUpdatedAt = body.if_updated_at
   if (typeof ifUpdatedAt !== 'string' || !ISO_DATETIME_RE.test(ifUpdatedAt)) {
@@ -330,7 +335,7 @@ async function handleUpdate(supabase: any, body: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 async function handlePublish(supabase: any, body: Record<string, unknown>) {
   const id = parseId(body.id)
-  if (id === null) return jsonResponse({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return jsonResponse({ error: 'id must be a non-empty alphanumeric string (≤50 chars, [A-Za-z0-9_-])' }, 400)
 
   const ifUpdatedAt = body.if_updated_at
   if (typeof ifUpdatedAt !== 'string' || !ISO_DATETIME_RE.test(ifUpdatedAt)) {
@@ -380,7 +385,7 @@ async function handlePublish(supabase: any, body: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 async function handleUnpublish(supabase: any, body: Record<string, unknown>) {
   const id = parseId(body.id)
-  if (id === null) return jsonResponse({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return jsonResponse({ error: 'id must be a non-empty alphanumeric string (≤50 chars, [A-Za-z0-9_-])' }, 400)
 
   const ifUpdatedAt = body.if_updated_at
   if (typeof ifUpdatedAt !== 'string' || !ISO_DATETIME_RE.test(ifUpdatedAt)) {
@@ -422,7 +427,7 @@ async function handleUnpublish(supabase: any, body: Record<string, unknown>) {
 // deno-lint-ignore no-explicit-any
 async function handleReEnrich(supabase: any, body: Record<string, unknown>) {
   const id = parseId(body.id)
-  if (id === null) return jsonResponse({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return jsonResponse({ error: 'id must be a non-empty alphanumeric string (≤50 chars, [A-Za-z0-9_-])' }, 400)
 
   const ifUpdatedAt = body.if_updated_at
   if (typeof ifUpdatedAt !== 'string' || !ISO_DATETIME_RE.test(ifUpdatedAt)) {
@@ -473,7 +478,7 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
   }
 
   // Validate each item shape upfront
-  type Item = { id: number; if_updated_at: string }
+  type Item = { id: string; if_updated_at: string }
   const parsedItems: Item[] = []
   for (const raw of items) {
     if (!raw || typeof raw !== 'object') {
@@ -491,9 +496,9 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
     parsedItems.push({ id, if_updated_at: iua })
   }
 
-  const published: { id: number; new_updated_at: string }[] = []
-  const skipped: { id: number; current_updated_at?: string; reason: string }[] = []
-  const failed: { id: number; reason: string; message: string }[] = []
+  const published: { id: string; new_updated_at: string }[] = []
+  const skipped: { id: string; current_updated_at?: string; reason: string }[] = []
+  const failed: { id: string; reason: string; message: string }[] = []
 
   // Pre-fetch all rows for state checks (already_published, not_enriched)
   const ids = parsedItems.map(i => i.id)
@@ -506,9 +511,9 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
     return jsonResponse({ error: 'Failed to fetch EOs for bulk publish' }, 500)
   }
 
-  const stateById = new Map<number, { is_public: boolean; prompt_version: string | null; updated_at: string }>()
+  const stateById = new Map<string, { is_public: boolean; prompt_version: string | null; updated_at: string }>()
   for (const r of (currentRows ?? [])) {
-    stateById.set(r.id as number, {
+    stateById.set(String(r.id), {
       is_public: r.is_public as boolean,
       prompt_version: r.prompt_version as string | null,
       updated_at: r.updated_at as string,

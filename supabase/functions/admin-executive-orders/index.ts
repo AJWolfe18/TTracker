@@ -60,15 +60,23 @@ function parseSort(input: unknown): { col: string; dir: 'asc' | 'desc' } | null 
 }
 
 // Cursor schema:
-//   { col: 'date',         val: 'YYYY-MM-DD',   id: number }
-//   { col: 'alarm_level',  val: '0'..'5',       id: number }
-//   { col: 'enriched_at',  val: ISO timestamp,  id: number }
+//   { col: 'date',         val: 'YYYY-MM-DD',   id: string }
+//   { col: 'alarm_level',  val: '0'..'5',       id: string }
+//   { col: 'enriched_at',  val: ISO timestamp,  id: string }
 // `col` MUST match the request's sort column or the cursor is rejected with 400 —
 // catches stale URLs from when the sort was different.
-interface CursorPayload { col: string; val: string; id: number }
+//
+// `id` is an opaque EO identifier: PROD legacy `eo_<timestamp>_<suffix>` (VARCHAR(50))
+// or TEST numeric ID coerced to string. Restricted to `[A-Za-z0-9_-]` so it can be
+// safely interpolated into PostgREST filter strings without breaking on `,`/`(`/`)`.
+interface CursorPayload { col: string; val: string; id: string }
 
+const EO_ID_RE = /^[A-Za-z0-9_-]{1,50}$/
 const ALARM_RE = /^[0-5]$/
-const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+// Full-string anchor is mandatory — without `$` a payload like
+// `2026-04-17T00:00:00,and(id.gt.0` would pass the prefix check and inject a
+// second predicate into the `.or()` string we construct below.
+const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/
 
 function validateCursorVal(col: string, val: string): boolean {
   if (col === 'date') return DATE_RE.test(val)            // strict YYYY-MM-DD only
@@ -87,8 +95,10 @@ function decodeCursor(cursor: string | undefined | null, expectedCol: string): C
     const id = (decoded as Record<string, unknown>).id
     if (typeof col !== 'string' || col !== expectedCol) return 'invalid'
     if (typeof val !== 'string' || !validateCursorVal(col, val)) return 'invalid'
-    if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) return 'invalid'
-    return { col, val, id }
+    // Accept either string or number (legacy cursors from TEST days); coerce to string.
+    const idStr = typeof id === 'number' && Number.isFinite(id) ? String(id) : id
+    if (typeof idStr !== 'string' || !EO_ID_RE.test(idStr)) return 'invalid'
+    return { col, val, id: idStr }
   } catch {
     return 'invalid'
   }
@@ -145,12 +155,11 @@ function applyUserFilters(query: any, filters: Record<string, unknown>) {
   const search = typeof filters.search === 'string' ? filters.search.trim() : ''
   if (search.length > 0) {
     const escaped = search.replace(/[%_\\]/g, '\\$&')
-    if (/^\d+$/.test(search)) {
-      // Numeric search → match order_number OR id
-      query = query.or(`order_number.ilike.%${escaped}%,id.eq.${parseInt(search, 10)}`)
-    } else {
-      query = query.or(`order_number.ilike.%${escaped}%,title.ilike.%${escaped}%`)
-    }
+    // Always search order_number + title. Previously the numeric branch also filtered
+    // on `id.eq` but that only matched on TEST (INTEGER IDs) — on PROD (VARCHAR legacy
+    // `eo_<ts>_<suffix>` IDs) a bare digit search never matches the id column anyway,
+    // and user-facing search on the internal DB id is not a useful UX in either env.
+    query = query.or(`order_number.ilike.%${escaped}%,title.ilike.%${escaped}%`)
   }
 
   const alarmLevels = filters.alarm_level as number[] | undefined
@@ -310,12 +319,14 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   }
   const truncated = (stateRows ?? []).length >= STATE_HARD_CAP
 
-  const allFilteredIds = (stateRows ?? []).map((r: { id: number }) => r.id)
+  // IDs treated as opaque strings: PROD is VARCHAR(50), TEST is INTEGER. String
+  // coercion unifies the two so Map keys / PostgREST filters work on both.
+  const allFilteredIds: string[] = (stateRows ?? []).map((r: { id: unknown }) => String(r.id))
 
   // ─── Step 2: fetch latest log row per EO (in scope) ───
   // Two-step: pull recent log rows for these EOs, then keep latest per eo_id.
   // Tiebreaker: created_at DESC, id DESC (per plan §4.4)
-  const latestLogByEoId = new Map<number, { id: number; status: string; created_at: string; needs_manual_review: boolean; run_id: string; duration_ms: number | null; notes: string | null; prompt_version: string }>()
+  const latestLogByEoId = new Map<string, { id: number; status: string; created_at: string; needs_manual_review: boolean; run_id: string; duration_ms: number | null; notes: string | null; prompt_version: string }>()
 
   if (allFilteredIds.length > 0) {
     // Batch in 200-id chunks to keep PostgREST query length reasonable
@@ -336,8 +347,9 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
       }
 
       for (const row of (logRows ?? [])) {
-        if (!latestLogByEoId.has(row.eo_id)) {
-          latestLogByEoId.set(row.eo_id, {
+        const key = String(row.eo_id)
+        if (!latestLogByEoId.has(key)) {
+          latestLogByEoId.set(key, {
             id: row.id,
             status: row.status,
             created_at: row.created_at,
@@ -357,7 +369,7 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
     needs_review: 0, unenriched: 0, unpublished: 0, published: 0, failed: 0, all: 0,
   }
   for (const row of (stateRows ?? [])) {
-    const latestStatus = latestLogByEoId.get(row.id)?.status ?? null
+    const latestStatus = latestLogByEoId.get(String(row.id))?.status ?? null
     counts.all++
     if (matchesSubtab(row, latestStatus, 'needs_review')) counts.needs_review++
     if (matchesSubtab(row, latestStatus, 'unenriched')) counts.unenriched++
@@ -367,10 +379,10 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   }
 
   // ─── Step 4: filter to current sub-tab + collect matching IDs ───
-  const matchingIds: number[] = []
+  const matchingIds: string[] = []
   for (const row of (stateRows ?? [])) {
-    const latestStatus = latestLogByEoId.get(row.id)?.status ?? null
-    if (matchesSubtab(row, latestStatus, subtab)) matchingIds.push(row.id)
+    const latestStatus = latestLogByEoId.get(String(row.id))?.status ?? null
+    if (matchesSubtab(row, latestStatus, subtab)) matchingIds.push(String(row.id))
   }
 
   if (matchingIds.length === 0) {
@@ -399,10 +411,15 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   // Cursor — keyset on (sort.col, id) for any whitelisted sort column.
   // alarm_level + enriched_at filter out NULLs (DB sorts with nullsFirst:false anyway,
   // but explicit `.not(col, 'is', null)` keeps `.or()` predicates clean).
+  //
+  // cursor.id is passed as a double-quoted PostgREST literal. This works for both
+  // INTEGER (TEST) and VARCHAR (PROD) id columns — PostgreSQL casts the quoted string
+  // to the column's declared type. EO_ID_RE on decode guarantees no `,`/`(`/`)`/`"`
+  // can break the `.or()` predicate parser.
   if (cursor) {
     const op = ascending ? 'gt' : 'lt'
     listQuery = listQuery.or(
-      `${sort.col}.${op}.${cursor.val},and(${sort.col}.eq.${cursor.val},id.${op}.${cursor.id})`
+      `${sort.col}.${op}.${cursor.val},and(${sort.col}.eq.${cursor.val},id.${op}."${cursor.id}")`
     )
   }
   if (sort.col === 'alarm_level' || sort.col === 'enriched_at') {
@@ -421,16 +438,18 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   const hasMore = (listRows ?? []).length > limit
   const items = (hasMore ? (listRows ?? []).slice(0, limit) : (listRows ?? [])).map((eo: Record<string, unknown>) => ({
     ...eo,
-    latest_log: latestLogByEoId.get(eo.id as number) ?? null,
+    latest_log: latestLogByEoId.get(String(eo.id)) ?? null,
   }))
 
-  // Next cursor — encodes (sort.col, last item's value, id)
+  // Next cursor — encodes (sort.col, last item's value, id). ID coerced to string and
+  // validated against EO_ID_RE before encoding so malformed IDs never make it into a
+  // cursor that would be rejected by decodeCursor on the next Load More.
   let nextCursor: string | null = null
   if (hasMore && items.length > 0) {
     const last = items[items.length - 1]
     const rawVal = last[sort.col]
-    const lastId = last.id as number
-    if (rawVal != null) {
+    const lastId = String(last.id)
+    if (rawVal != null && EO_ID_RE.test(lastId)) {
       const valStr = String(rawVal)
       if (validateCursorVal(sort.col, valStr)) {
         nextCursor = encodeCursor({ col: sort.col, val: valStr, id: lastId })
