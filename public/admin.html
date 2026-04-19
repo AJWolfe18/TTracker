@@ -4694,8 +4694,20 @@
                     }
 
                     const summary = data.summary || {};
-                    const publishedSet = new Set((data.published || []).map(p => p.id));
-                    setItems(prev => prev.map(i => publishedSet.has(i.id) ? { ...i, is_public: true, needs_manual_review: false } : i));
+                    // Merge per-row new_updated_at from the bulk response so subsequent
+                    // CAS operations on published rows (single publish/unpublish/update)
+                    // carry the fresh updated_at in if_updated_at. Previously we only
+                    // flipped is_public + needs_manual_review locally, which let the
+                    // next mutation fail with stale_updated_at despite the row actually
+                    // being current.
+                    const newUpdatedAtById = new Map(
+                        (data.published || []).map(p => [p.id, p.new_updated_at])
+                    );
+                    setItems(prev => prev.map(i => {
+                        const newUpdatedAt = newUpdatedAtById.get(i.id);
+                        if (newUpdatedAt == null) return i;
+                        return { ...i, is_public: true, needs_manual_review: false, updated_at: newUpdatedAt };
+                    }));
 
                     if ((data.skipped?.length || 0) + (data.failed?.length || 0) > 0) {
                         const lines = [];

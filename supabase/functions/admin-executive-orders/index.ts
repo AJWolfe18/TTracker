@@ -107,7 +107,15 @@ function decodeCursor(cursor: string | undefined | null, expectedCol: string): C
     if (typeof val !== 'string' || !validateCursorVal(col, val)) return 'invalid'
     // Accept either string or number (legacy cursors from TEST days); coerce to string.
     const idStr = typeof id === 'number' && Number.isFinite(id) ? String(id) : id
-    if (typeof idStr !== 'string' || !EO_ID_RE.test(idStr)) return 'invalid'
+    if (typeof idStr !== 'string') return 'invalid'
+    // Special case: Phase-2 BRIDGE cursor emitted when Phase-1 exhausts mid-scan
+    // with NULL rows still in scope. Empty id here means "no id keyset yet —
+    // start of NULL tail". Only legal when val === NULL_SENTINEL.
+    if (idStr === '') {
+      if (val !== NULL_SENTINEL) return 'invalid'
+      return { col, val, id: '' }
+    }
+    if (!EO_ID_RE.test(idStr)) return 'invalid'
     return { col, val, id: idStr }
   } catch {
     return 'invalid'
@@ -326,9 +334,16 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   // Hard cap of 5000 prevents PostgREST silent default-cap (1000) from yielding
   // wrong counts; if hit, response sets `truncated: true` so the UI can warn.
   const STATE_HARD_CAP = 5000
+  // Include the nullable sort column in the state select so we can later compute
+  // `hasNullsInScope` without an extra query — needed to emit a Phase-2 bridge
+  // cursor when Phase-1 keyset exhausts across multiple pages without the NULL
+  // boundary falling inside a fetched page.
+  const stateSelect = NULLABLE_SORT_COLS.has(sort.col)
+    ? `id, prompt_version, is_public, needs_manual_review, ${sort.col}`
+    : 'id, prompt_version, is_public, needs_manual_review'
   let stateQuery = supabase
     .from('executive_orders')
-    .select('id, prompt_version, is_public, needs_manual_review')
+    .select(stateSelect)
     .limit(STATE_HARD_CAP)
   stateQuery = applyUserFilters(stateQuery, filters)
 
@@ -399,10 +414,18 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   }
 
   // ─── Step 4: filter to current sub-tab + collect matching IDs ───
+  // Also track whether any in-scope row has NULL in the nullable sort column —
+  // used below to emit a Phase-2 bridge cursor when Phase-1 keyset exhausts.
   const matchingIds: string[] = []
+  let hasNullsInScope = false
   for (const row of (stateRows ?? [])) {
     const latestStatus = latestLogByEoId.get(String(row.id))?.status ?? null
-    if (matchesSubtab(row, latestStatus, subtab)) matchingIds.push(String(row.id))
+    if (matchesSubtab(row, latestStatus, subtab)) {
+      matchingIds.push(String(row.id))
+      if (NULLABLE_SORT_COLS.has(sort.col) && (row as Record<string, unknown>)[sort.col] == null) {
+        hasNullsInScope = true
+      }
+    }
   }
 
   if (matchingIds.length === 0) {
@@ -447,10 +470,14 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   if (cursor) {
     const op = ascending ? 'gt' : 'lt'
     if (cursor.val === NULL_SENTINEL) {
-      // Phase 2: all remaining rows have NULL in the sort column.
+      // Phase 2: all remaining rows have NULL in the sort column. Bridge cursor
+      // (empty id) skips the id keyset so we scan the entire NULL tail from the
+      // start; subsequent pages within Phase 2 carry a real id and keyset on it.
       listQuery = listQuery.is(sort.col, null)
-      if (ascending) listQuery = listQuery.gt('id', cursor.id)
-      else listQuery = listQuery.lt('id', cursor.id)
+      if (cursor.id !== '') {
+        if (ascending) listQuery = listQuery.gt('id', cursor.id)
+        else listQuery = listQuery.lt('id', cursor.id)
+      }
     } else {
       // Phase 1: non-NULL keyset. Also exclude NULL rows — those belong to Phase 2
       // and would otherwise duplicate-emit when the client transitions.
@@ -476,8 +503,16 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
     return jsonResponse({ error: 'Failed to fetch EOs' }, 500)
   }
 
-  const hasMore = (listRows ?? []).length > limit
-  const items = (hasMore ? (listRows ?? []).slice(0, limit) : (listRows ?? [])).map((eo: Record<string, unknown>) => ({
+  const rawRows = listRows ?? []
+  const hasMore = rawRows.length > limit
+  // Capture the discarded probe row (the limit+1-th row) so the next-cursor emission
+  // can detect the non-null → null boundary even when the boundary falls between the
+  // last kept row and the discarded probe. Without this, a page whose last kept row
+  // is non-null but whose probe row is NULL would emit a Phase-1 cursor, and the
+  // subsequent Phase-1 query (with `.not(col, 'is', null)`) would return zero rows —
+  // stranding the unenriched tail as unreachable.
+  const probeRow = hasMore ? rawRows[limit] : null
+  const items = (hasMore ? rawRows.slice(0, limit) : rawRows).map((eo: Record<string, unknown>) => ({
     ...eo,
     latest_log: latestLogByEoId.get(String(eo.id)) ?? null,
   }))
@@ -486,30 +521,38 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   // and validated against EO_ID_RE before encoding so malformed IDs can't produce a
   // cursor that would be rejected by decodeCursor on the next Load More.
   //
-  // Phase-2 emission: if the last returned row has NULL in the sort column (nullable
-  // sorts only), emit a NULL_SENTINEL cursor so Load More paginates into the NULL tail.
-  // If the current request is already Phase 2 (cursor.val === NULL_SENTINEL), preserve
-  // that phase — all remaining rows continue to be NULL, keyed on id alone.
+  // Phase-2 emission triggers when ANY of:
+  //   (a) already in Phase 2 — `cursor.val === NULL_SENTINEL`, continue by id
+  //   (b) last kept row has NULL in the sort column — boundary crossed inside page
+  //   (c) last kept row is non-null BUT the probe row is NULL — boundary at edge
+  // Phase-2 BRIDGE emission triggers when:
+  //   (d) Phase 1 exhausted this page (hasMore=false) with no NULL boundary hit,
+  //       but NULL rows still exist in scope — emit bridge cursor (empty id) so
+  //       Load More jumps straight to the start of the NULL tail.
+  // Without (d), a multi-page Phase-1 scan that never sees a NULL on any page
+  // would silently strand the unenriched tail — the exact bug ADO-481 addresses.
   let nextCursor: string | null = null
+  const inPhase2 = cursor?.val === NULL_SENTINEL
   if (hasMore && items.length > 0) {
     const last = items[items.length - 1]
     const rawVal = last[sort.col]
     const lastId = String(last.id)
     if (EO_ID_RE.test(lastId)) {
-      const inPhase2 = cursor?.val === NULL_SENTINEL
-      if (inPhase2 || rawVal == null) {
-        // Phase-2 continuation OR boundary crossover from non-null to NULL tail.
-        // NULL_SENTINEL only valid for nullable columns; validateCursorVal enforces this.
-        if (NULLABLE_SORT_COLS.has(sort.col)) {
-          nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: lastId })
-        }
-      } else {
+      const probeIsNull = probeRow != null && probeRow[sort.col] == null
+      const shouldEnterPhase2 = (inPhase2 || rawVal == null || probeIsNull)
+        && NULLABLE_SORT_COLS.has(sort.col)
+      if (shouldEnterPhase2) {
+        nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: lastId })
+      } else if (rawVal != null) {
         const valStr = String(rawVal)
         if (validateCursorVal(sort.col, valStr)) {
           nextCursor = encodeCursor({ col: sort.col, val: valStr, id: lastId })
         }
       }
     }
+  } else if (!hasMore && !inPhase2 && hasNullsInScope && NULLABLE_SORT_COLS.has(sort.col)) {
+    // Phase-1 exhausted but NULL rows remain — bridge to Phase 2 with empty id.
+    nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: '' })
   }
 
   return jsonResponse({

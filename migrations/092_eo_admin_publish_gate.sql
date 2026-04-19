@@ -18,19 +18,24 @@
 BEGIN;
 
 -- ─────────────────────────────────────────────────────────────
--- Column adds — idempotent (safe to re-run)
+-- Column adds — idempotent (safe to re-run, admin-publish-state preserving)
 -- ─────────────────────────────────────────────────────────────
+-- First-apply backfill: every existing row stays visible on the public site.
+-- `NOT NULL DEFAULT true` on ADD COLUMN populates the initial backfill for free —
+-- no explicit UPDATE needed.
+--
+-- Re-apply safety: ADD COLUMN IF NOT EXISTS is a no-op when the column already
+-- exists, so the existing row values are preserved. We DELIBERATELY do not
+-- UPDATE here — a post-migration admin action that unpublishes a row (sets
+-- is_public=false) must survive a migration replay. A previous revision of
+-- this file ran `UPDATE … WHERE is_public IS DISTINCT FROM true` which would
+-- have republished any admin-unpublished row on re-run; that was a bug.
 ALTER TABLE executive_orders
   ADD COLUMN IF NOT EXISTS is_public boolean NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS needs_manual_review boolean NOT NULL DEFAULT false;
 
--- Explicit backfill: every existing row stays visible on the public site.
--- The DEFAULT true above already covers fresh ADD COLUMN applies; this redundant
--- UPDATE makes intent explicit and keeps idempotent re-runs correct on partially
--- migrated data where columns exist but values drifted.
-UPDATE executive_orders SET is_public = true WHERE is_public IS DISTINCT FROM true;
-
--- Future rows default to false (require explicit admin publish).
+-- Future rows default to false (require explicit admin publish). Safe to re-run:
+-- ALTER COLUMN SET DEFAULT is idempotent (no-op if the default is already false).
 ALTER TABLE executive_orders ALTER COLUMN is_public SET DEFAULT false;
 
 -- ─────────────────────────────────────────────────────────────
