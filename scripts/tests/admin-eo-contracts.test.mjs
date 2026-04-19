@@ -108,11 +108,19 @@ test('list with subtab=published returns only is_public=true items', async () =>
   }
 });
 
-test('list with subtab=unenriched returns only prompt_version != v1', async () => {
+// CLAUDE_AGENT_VERSIONS — kept in lockstep with edge-function constants. ADO-481.
+// 'v1' deliberately excluded (column default + legacy GPT output, never Claude).
+const CLAUDE_AGENT_VERSIONS = ['v1.1'];
+
+test('list with subtab=unenriched returns only items NOT in CLAUDE_AGENT_VERSIONS', async () => {
   const { status, data } = await call(FN_LIST, { action: 'list', subtab: 'unenriched', limit: 10 });
   assert.equal(status, 200);
   for (const item of data.items) {
-    assert.notEqual(item.prompt_version, 'v1', `unenriched item ${item.id} has prompt_version=v1`);
+    assert.equal(
+      CLAUDE_AGENT_VERSIONS.includes(item.prompt_version),
+      false,
+      `unenriched item ${item.id} has prompt_version=${item.prompt_version} which IS in Claude versions`,
+    );
   }
 });
 
