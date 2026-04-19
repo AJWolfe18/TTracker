@@ -4700,11 +4700,18 @@
                     // flipped is_public + needs_manual_review locally, which let the
                     // next mutation fail with stale_updated_at despite the row actually
                     // being current.
+                    //
+                    // ID normalization: PROD ids are strings (eo_<ts>_<suffix>), TEST
+                    // are integers. The edge-function response always coerces id to
+                    // string via parseId(), while the list API passes through the raw
+                    // DB type. Coerce both sides to string here so the Map lookup works
+                    // in both environments — otherwise on TEST the merge silently skips
+                    // and the next CAS op fails with stale_updated_at.
                     const newUpdatedAtById = new Map(
-                        (data.published || []).map(p => [p.id, p.new_updated_at])
+                        (data.published || []).map(p => [String(p.id), p.new_updated_at])
                     );
                     setItems(prev => prev.map(i => {
-                        const newUpdatedAt = newUpdatedAtById.get(i.id);
+                        const newUpdatedAt = newUpdatedAtById.get(String(i.id));
                         if (newUpdatedAt == null) return i;
                         return { ...i, is_public: true, needs_manual_review: false, updated_at: newUpdatedAt };
                     }));
