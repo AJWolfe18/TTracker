@@ -76,7 +76,16 @@ function decodeCursor(cursor, expectedCol) {
     if (typeof col !== 'string' || col !== expectedCol) return 'invalid';
     if (typeof val !== 'string' || !validateCursorVal(col, val)) return 'invalid';
     const idStr = typeof id === 'number' && Number.isFinite(id) ? String(id) : id;
-    if (typeof idStr !== 'string' || !EO_ID_RE.test(idStr)) return 'invalid';
+    if (typeof idStr !== 'string') return 'invalid';
+    // Bridge cursor: empty id legal ONLY when val === NULL_SENTINEL. Signals
+    // "Phase-1 exhausted with NULLs still in scope — start Phase 2 from the top
+    // of the NULL tail." Emitted by the server when no real id is available yet
+    // to keyset on.
+    if (idStr === '') {
+      if (val !== NULL_SENTINEL) return 'invalid';
+      return { col, val, id: '' };
+    }
+    if (!EO_ID_RE.test(idStr)) return 'invalid';
     return { col, val, id: idStr };
   } catch {
     return 'invalid';
@@ -231,6 +240,27 @@ test('decodeCursor rejects NULL_SENTINEL for non-nullable `date` sort', () => {
   // nonsensical and must be rejected so we don't route to the Phase-2 filter branch.
   const bad = encodeCursor({ col: 'date', val: 'null', id: 'eo_abc123' });
   assert.equal(decodeCursor(bad, 'date'), 'invalid');
+});
+
+test('decodeCursor accepts Phase-2 BRIDGE cursor (empty id + NULL_SENTINEL val)', () => {
+  // Bridge cursor emitted by server when Phase-1 exhausts with NULL rows still
+  // in scope. Empty id is legal ONLY when paired with NULL_SENTINEL.
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'alarm_level', val: 'null', id: '' }), 'alarm_level'),
+    { col: 'alarm_level', val: 'null', id: '' }
+  );
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: 'null', id: '' }), 'enriched_at'),
+    { col: 'enriched_at', val: 'null', id: '' }
+  );
+});
+
+test('decodeCursor rejects empty id for non-bridge cursors', () => {
+  // Empty id only legal for Phase-2 bridge (val === NULL_SENTINEL). Any other
+  // cursor with empty id is malformed and must be rejected.
+  assert.equal(decodeCursor(encodeCursor({ col: 'date', val: '2024-01-15', id: '' }), 'date'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'alarm_level', val: '3', id: '' }), 'alarm_level'), 'invalid');
+  assert.equal(decodeCursor(encodeCursor({ col: 'enriched_at', val: '2026-04-17T20:30:45Z', id: '' }), 'enriched_at'), 'invalid');
 });
 
 test('decodeCursor rejects PostgREST-injection attempts via enriched_at cursor val', () => {
