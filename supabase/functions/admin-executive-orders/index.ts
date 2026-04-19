@@ -61,14 +61,20 @@ function parseSort(input: unknown): { col: string; dir: 'asc' | 'desc' } | null 
 
 // Cursor schema:
 //   { col: 'date',         val: 'YYYY-MM-DD',   id: string }
-//   { col: 'alarm_level',  val: '0'..'5',       id: string }
-//   { col: 'enriched_at',  val: ISO timestamp,  id: string }
+//   { col: 'alarm_level',  val: '0'..'5' | NULL_SENTINEL, id: string }
+//   { col: 'enriched_at',  val: ISO timestamp | NULL_SENTINEL, id: string }
 // `col` MUST match the request's sort column or the cursor is rejected with 400 —
 // catches stale URLs from when the sort was different.
 //
 // `id` is an opaque EO identifier: PROD legacy `eo_<timestamp>_<suffix>` (VARCHAR(50))
 // or TEST numeric ID coerced to string. Restricted to `[A-Za-z0-9_-]` so it can be
 // safely interpolated into PostgREST filter strings without breaking on `,`/`(`/`)`.
+//
+// NULL_SENTINEL ('null' literal): only valid for nullable sort columns (alarm_level,
+// enriched_at). Signals the paginator is in the NULL tail — all remaining rows have
+// NULL in the sort column, paginated by id. Without this, keyset pagination on
+// `col < value` would skip NULL rows entirely (SQL semantics: NULL < anything is
+// UNKNOWN, not TRUE) and the unenriched tail would be unreachable past page 1.
 interface CursorPayload { col: string; val: string; id: string }
 
 const EO_ID_RE = /^[A-Za-z0-9_-]{1,50}$/
@@ -77,8 +83,12 @@ const ALARM_RE = /^[0-5]$/
 // `2026-04-17T00:00:00,and(id.gt.0` would pass the prefix check and inject a
 // second predicate into the `.or()` string we construct below.
 const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/
+const NULL_SENTINEL = 'null'
+const NULLABLE_SORT_COLS = new Set(['alarm_level', 'enriched_at'])
 
 function validateCursorVal(col: string, val: string): boolean {
+  // NULL_SENTINEL only valid for nullable sort columns.
+  if (val === NULL_SENTINEL) return NULLABLE_SORT_COLS.has(col)
   if (col === 'date') return DATE_RE.test(val)            // strict YYYY-MM-DD only
   if (col === 'alarm_level') return ALARM_RE.test(val)
   if (col === 'enriched_at') return ISO_TS_RE.test(val)
@@ -419,27 +429,43 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
   }
 
   // Cursor — keyset on (sort.col, id) for any whitelisted sort column.
-  // alarm_level + enriched_at filter out NULLs (DB sorts with nullsFirst:false anyway,
-  // but explicit `.not(col, 'is', null)` keeps `.or()` predicates clean).
   //
-  // cursor.id is passed as a double-quoted PostgREST literal. This works for both
-  // INTEGER (TEST) and VARCHAR (PROD) id columns — PostgreSQL casts the quoted string
-  // to the column's declared type. EO_ID_RE on decode guarantees no `,`/`(`/`)`/`"`
-  // can break the `.or()` predicate parser.
+  // Two-phase pagination for nullable sort columns (alarm_level, enriched_at):
+  //   Phase 1 (cursor.val != NULL_SENTINEL): keyset on the non-NULL value range.
+  //   Phase 2 (cursor.val === NULL_SENTINEL): `.is(col, null)` + id keyset only.
+  //
+  // The phase transition happens when Phase 1 exhausts — the next_cursor emission
+  // below detects the end of the non-NULL range and emits a NULL_SENTINEL cursor so
+  // the client can continue into the NULL tail. Without this, unenriched rows
+  // (NULL alarm_level / enriched_at) are unreachable past the first page of these
+  // sorts because SQL `col < value` returns UNKNOWN (not TRUE) for NULL.
+  //
+  // cursor.id is passed as a double-quoted PostgREST literal. Works for both
+  // INTEGER (TEST) and VARCHAR (PROD) id columns — PostgreSQL casts the quoted
+  // string to the column's declared type. EO_ID_RE on decode guarantees no
+  // `,`/`(`/`)`/`"` can break the `.or()` predicate parser.
   if (cursor) {
     const op = ascending ? 'gt' : 'lt'
-    listQuery = listQuery.or(
-      `${sort.col}.${op}.${cursor.val},and(${sort.col}.eq.${cursor.val},id.${op}."${cursor.id}")`
-    )
+    if (cursor.val === NULL_SENTINEL) {
+      // Phase 2: all remaining rows have NULL in the sort column.
+      listQuery = listQuery.is(sort.col, null)
+      if (ascending) listQuery = listQuery.gt('id', cursor.id)
+      else listQuery = listQuery.lt('id', cursor.id)
+    } else {
+      // Phase 1: non-NULL keyset. Also exclude NULL rows — those belong to Phase 2
+      // and would otherwise duplicate-emit when the client transitions.
+      listQuery = listQuery.or(
+        `${sort.col}.${op}.${cursor.val},and(${sort.col}.eq.${cursor.val},id.${op}."${cursor.id}")`
+      )
+      if (NULLABLE_SORT_COLS.has(sort.col)) {
+        listQuery = listQuery.not(sort.col, 'is', null)
+      }
+    }
   }
-  // NOTE: we intentionally do NOT filter NULLs out of alarm_level / enriched_at sort
-  // results. Previous revisions did, which made unenriched EOs disappear from the
-  // list whenever the user picked one of those sorts — breaking the counts_by_subtab
-  // contract. With `nullsFirst: false`, NULLs sort to the end; first-page queries
-  // see them if there's room. Keyset pagination on the non-NULL value range won't
-  // normally dive into the NULL tail (PostgreSQL's `col < value` excludes NULL by
-  // SQL semantics), but that's a known limitation of the keyset approach rather
-  // than a reason to hide rows from the list predicate itself.
+  // First-page (no cursor) + nullable sort: NULLs appear naturally at the tail via
+  // `nullsFirst: false`. If there's room on page 1 for NULLs, they show up; the
+  // next_cursor below detects the NULL boundary and emits a NULL_SENTINEL cursor
+  // so subsequent pages stay in Phase 2.
 
   // Fetch limit + 1 for has_more detection
   listQuery = listQuery.limit(limit + 1)
@@ -456,18 +482,32 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
     latest_log: latestLogByEoId.get(String(eo.id)) ?? null,
   }))
 
-  // Next cursor — encodes (sort.col, last item's value, id). ID coerced to string and
-  // validated against EO_ID_RE before encoding so malformed IDs never make it into a
+  // Next cursor — encodes (sort.col, last item's value, id). ID is coerced to string
+  // and validated against EO_ID_RE before encoding so malformed IDs can't produce a
   // cursor that would be rejected by decodeCursor on the next Load More.
+  //
+  // Phase-2 emission: if the last returned row has NULL in the sort column (nullable
+  // sorts only), emit a NULL_SENTINEL cursor so Load More paginates into the NULL tail.
+  // If the current request is already Phase 2 (cursor.val === NULL_SENTINEL), preserve
+  // that phase — all remaining rows continue to be NULL, keyed on id alone.
   let nextCursor: string | null = null
   if (hasMore && items.length > 0) {
     const last = items[items.length - 1]
     const rawVal = last[sort.col]
     const lastId = String(last.id)
-    if (rawVal != null && EO_ID_RE.test(lastId)) {
-      const valStr = String(rawVal)
-      if (validateCursorVal(sort.col, valStr)) {
-        nextCursor = encodeCursor({ col: sort.col, val: valStr, id: lastId })
+    if (EO_ID_RE.test(lastId)) {
+      const inPhase2 = cursor?.val === NULL_SENTINEL
+      if (inPhase2 || rawVal == null) {
+        // Phase-2 continuation OR boundary crossover from non-null to NULL tail.
+        // NULL_SENTINEL only valid for nullable columns; validateCursorVal enforces this.
+        if (NULLABLE_SORT_COLS.has(sort.col)) {
+          nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: lastId })
+        }
+      } else {
+        const valStr = String(rawVal)
+        if (validateCursorVal(sort.col, valStr)) {
+          nextCursor = encodeCursor({ col: sort.col, val: valStr, id: lastId })
+        }
       }
     }
   }

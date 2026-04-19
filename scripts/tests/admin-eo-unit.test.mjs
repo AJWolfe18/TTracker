@@ -54,7 +54,12 @@ const ALARM_RE = /^[0-5]$/;
 // predicate clause into the PostgREST `.or()` string.
 const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
 const EO_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
+const NULL_SENTINEL = 'null';
+const NULLABLE_SORT_COLS = new Set(['alarm_level', 'enriched_at']);
 function validateCursorVal(col, val) {
+  // Phase-2 cursor: NULL_SENTINEL signals "paginate the NULL tail by id alone".
+  // Only valid for nullable sort columns (alarm_level, enriched_at).
+  if (val === NULL_SENTINEL) return NULLABLE_SORT_COLS.has(col);
   if (col === 'date') return DATE_RE.test(val);
   if (col === 'alarm_level') return ALARM_RE.test(val);
   if (col === 'enriched_at') return ISO_TS_RE.test(val);
@@ -205,6 +210,27 @@ test('decodeCursor rejects ISO timestamps for date field (SCOTUS inverse bug)', 
 test('decodeCursor rejects out-of-range alarm_level cursor val', () => {
   assert.equal(decodeCursor(encodeCursor({ col: 'alarm_level', val: '6', id: 1 }), 'alarm_level'), 'invalid');
   assert.equal(decodeCursor(encodeCursor({ col: 'alarm_level', val: 'x', id: 1 }), 'alarm_level'), 'invalid');
+});
+
+test('decodeCursor accepts NULL_SENTINEL for nullable sort columns (phase-2 cursor)', () => {
+  // Phase-2 cursor signals "paginator is in NULL tail — all remaining rows have NULL
+  // in the sort col, paginate by id alone." Required because SQL `col < value`
+  // excludes NULL and a plain keyset can never reach the NULL tail.
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'alarm_level', val: 'null', id: 'eo_abc123' }), 'alarm_level'),
+    { col: 'alarm_level', val: 'null', id: 'eo_abc123' }
+  );
+  assert.deepEqual(
+    decodeCursor(encodeCursor({ col: 'enriched_at', val: 'null', id: 'eo_abc123' }), 'enriched_at'),
+    { col: 'enriched_at', val: 'null', id: 'eo_abc123' }
+  );
+});
+
+test('decodeCursor rejects NULL_SENTINEL for non-nullable `date` sort', () => {
+  // date has a NOT NULL constraint on executive_orders — NULL_SENTINEL cursor is
+  // nonsensical and must be rejected so we don't route to the Phase-2 filter branch.
+  const bad = encodeCursor({ col: 'date', val: 'null', id: 'eo_abc123' });
+  assert.equal(decodeCursor(bad, 'date'), 'invalid');
 });
 
 test('decodeCursor rejects PostgREST-injection attempts via enriched_at cursor val', () => {
