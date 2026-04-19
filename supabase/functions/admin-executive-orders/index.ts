@@ -539,10 +539,17 @@ async function handleList(supabase: any, body: Record<string, unknown>) {
     const lastId = String(last.id)
     if (EO_ID_RE.test(lastId)) {
       const probeIsNull = probeRow != null && probeRow[sort.col] == null
-      const shouldEnterPhase2 = (inPhase2 || rawVal == null || probeIsNull)
-        && NULLABLE_SORT_COLS.has(sort.col)
-      if (shouldEnterPhase2) {
+      if (NULLABLE_SORT_COLS.has(sort.col) && (inPhase2 || rawVal == null)) {
+        // Phase-2 continuation OR boundary INSIDE the page (last kept row is NULL).
+        // lastId is a meaningful keyset in the NULL-sort id ordering — use it.
         nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: lastId })
+      } else if (NULLABLE_SORT_COLS.has(sort.col) && probeIsNull && rawVal != null) {
+        // Boundary AT the page edge — last kept row is non-null, probe row is NULL.
+        // lastId belongs to the non-null universe and has no meaningful ordering
+        // against NULL-sort row ids. Emit bridge (empty id) so Phase 2 scans the
+        // whole NULL tail from the top, instead of accidentally id-keyset-skipping
+        // NULL rows whose ids happen to be lexically ≥ lastId.
+        nextCursor = encodeCursor({ col: sort.col, val: NULL_SENTINEL, id: '' })
       } else if (rawVal != null) {
         const valStr = String(rawVal)
         if (validateCursorVal(sort.col, valStr)) {
