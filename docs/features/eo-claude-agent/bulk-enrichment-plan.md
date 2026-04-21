@@ -45,7 +45,7 @@ Each session:
 | **Combined** | **~20/day** | If 1 session/day + auto-cron |
 | **Time to drain** | **~12 sessions** | 224 ÷ 20 ≈ 12 days |
 
-**Trigger limit bump (optional):** Test increasing Step 2 `limit=5` to `limit=10` — Opus processed 5 with turns to spare. If 10 works, auto-cron doubles to 10/day and drain time drops to ~9 sessions.
+**Post-backlog:** New EOs are sparse (0-3/week). Once backlog is drained, the daily trigger handles the trickle easily — 5/run is overkill for steady-state. The trigger exists for ongoing maintenance, not bulk throughput.
 
 ## Quality Gates
 
@@ -54,7 +54,7 @@ Each session:
 - Alarm levels start at 2, earn upgrades with cited evidence
 - Named actors from FR text or clearly identified affected parties (not fabricated)
 - Statutory authorities from order text only
-- **Spot-check cadence:** Josh reviews 5 random EOs every ~50 enriched via admin dashboard
+- **Spot-check (non-blocking):** Josh reviews a sample via admin dashboard when convenient. Enrichment never pauses for review — if Josh finds issues, fixes happen in the next session alongside continued enrichment
 
 ## Backlog Drain Tracking
 
