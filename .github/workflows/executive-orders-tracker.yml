@@ -63,14 +63,13 @@ jobs:
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
       run: node scripts/executive-orders-tracker-supabase.js
 
-    - name: Phase 2 - Enrich Executive Orders (GPT)
-      env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
-        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
-      run: |
-        echo "Phase 2: Enrich unenriched executive orders"
-        node scripts/enrichment/enrich-executive-orders.js 50
+    # GPT enrichment step DISABLED 2026-04-19 (ADO-481).
+    # Reason: Claude Code cloud agent now handles EO enrichment, writing prompt_version='v1.1'.
+    # The legacy GPT enricher writes 'v4-ado273' which would corrupt v1.1 rows back to v4-ado273
+    # (the prevent_enriched_at_update trigger lets that direction pass since 'v4-ado273' > 'v1.1'
+    # lexicographically), so this step must NOT run while the Claude agent is the source of truth.
+    # Import step above is preserved so new EOs from Federal Register continue to land in PROD
+    # for the Claude agent to enrich. Full retirement is tracked in ADO-482.
 
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |

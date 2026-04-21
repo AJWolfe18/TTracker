@@ -10,6 +10,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // ─── Helper mirrors (kept in sync with edge function source) ───────────────
 
@@ -95,19 +96,25 @@ function encodeCursor(payload) {
   return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
 }
 
+// Mirror of CLAUDE_AGENT_VERSIONS in admin-executive-orders / admin-update-executive-orders.
+// Bump entries here in lockstep with the edge-function constants when the agent prompt is bumped.
+// 'v1' is intentionally NOT in this list — see the constant comment in the edge functions.
+const CLAUDE_AGENT_VERSIONS = ['v1.1'];
+const isClaudeEnriched = (pv) => pv != null && CLAUDE_AGENT_VERSIONS.includes(pv);
+
 // admin-executive-orders / index.ts — tab predicate.
 function matchesSubtab(eo, latestLogStatus, subtab) {
   switch (subtab) {
     case 'needs_review':
-      return eo.prompt_version === 'v1' && !eo.is_public && eo.needs_manual_review;
+      return isClaudeEnriched(eo.prompt_version) && !eo.is_public && eo.needs_manual_review;
     case 'unenriched':
-      return eo.prompt_version !== 'v1';
+      return !isClaudeEnriched(eo.prompt_version);
     case 'unpublished':
-      return eo.prompt_version === 'v1' && !eo.is_public;
+      return isClaudeEnriched(eo.prompt_version) && !eo.is_public;
     case 'published':
       return eo.is_public === true;
     case 'failed':
-      return eo.prompt_version !== 'v1' && latestLogStatus === 'failed';
+      return !isClaudeEnriched(eo.prompt_version) && latestLogStatus === 'failed';
     case 'all':
     default:
       return true;
@@ -384,40 +391,93 @@ test('validateSearch rejects wrong type', () => {
 // ─── Tab predicate (plan §6.1: every "List returns only matching predicate" row) ──
 
 test('matchesSubtab — needs_review predicate', () => {
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: true }, null, 'needs_review'), true);
-  // Wrong prompt version
+  // v1.1 (current Claude agent output) counts as enriched
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: true }, null, 'needs_review'), true);
+  // v1 is column default / legacy GPT output → NOT a Claude version → never in needs_review
+  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: true }, null, 'needs_review'), false);
+  // Wrong prompt version (null = unenriched)
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: true }, null, 'needs_review'), false);
   // Already public
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: true, needs_manual_review: true }, null, 'needs_review'), false);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: true, needs_manual_review: true }, null, 'needs_review'), false);
   // Not flagged
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'needs_review'), false);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, null, 'needs_review'), false);
 });
 
 test('matchesSubtab — unenriched predicate', () => {
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: false }, null, 'unenriched'), true);
   assert.equal(matchesSubtab({ prompt_version: 'v0', is_public: false, needs_manual_review: false }, null, 'unenriched'), true);
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'unenriched'), false);
+  // Old GPT pipeline output (v4-ado273) is NOT a Claude version → "unenriched" from admin POV
+  assert.equal(matchesSubtab({ prompt_version: 'v4-ado273', is_public: false, needs_manual_review: false }, null, 'unenriched'), true);
+  // v1 (column default OR retired GPT output) is NOT Claude-enriched
+  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'unenriched'), true);
+  // Only v1.1 (current Claude agent) counts as enriched
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, null, 'unenriched'), false);
 });
 
 test('matchesSubtab — unpublished predicate', () => {
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'unpublished'), true);
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: true }, null, 'unpublished'), true); // also unpublished if flagged
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: true, needs_manual_review: false }, null, 'unpublished'), false);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, null, 'unpublished'), true);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: true }, null, 'unpublished'), true); // also unpublished if flagged
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: true, needs_manual_review: false }, null, 'unpublished'), false);
+  // v1 is NOT Claude-enriched → not in unpublished tab
+  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'unpublished'), false);
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: false }, null, 'unpublished'), false);
 });
 
 test('matchesSubtab — published predicate', () => {
+  // Published is orthogonal to enrichment — purely is_public=true
   assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: true, needs_manual_review: false }, null, 'published'), true);
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, null, 'published'), false);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: true, needs_manual_review: false }, null, 'published'), true);
+  assert.equal(matchesSubtab({ prompt_version: 'v4-ado273', is_public: true, needs_manual_review: false }, null, 'published'), true);
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, null, 'published'), false);
 });
 
 test('matchesSubtab — failed predicate uses LATEST log status (plan §6.1 "Failed sub-tab uses latest log")', () => {
-  // Latest log = failed → IS in Failed
+  // Latest log = failed AND not Claude-enriched → IS in Failed
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: false }, 'failed', 'failed'), true);
+  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, 'failed', 'failed'), true); // v1 = unenriched per ADO-481
   // Latest log = completed → NOT in Failed (even if any older log was failed; caller passes only the latest)
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: false }, 'completed', 'failed'), false);
-  // Already enriched (v1) → NOT in Failed regardless of log
-  assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: false }, 'failed', 'failed'), false);
+  // Already Claude-enriched (v1.1) → NOT in Failed regardless of log
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, 'failed', 'failed'), false);
+});
+
+test('isClaudeEnriched predicate (ADO-481 version-collision fix)', () => {
+  // Only v1.1 is in CLAUDE_AGENT_VERSIONS — v1 deliberately excluded (column default + legacy GPT)
+  assert.equal(isClaudeEnriched('v1.1'), true);
+  // Versions NOT in list
+  assert.equal(isClaudeEnriched('v1'), false);
+  assert.equal(isClaudeEnriched('v4-ado273'), false);
+  assert.equal(isClaudeEnriched('v0'), false);
+  assert.equal(isClaudeEnriched('v2'), false);
+  // Null and undefined
+  assert.equal(isClaudeEnriched(null), false);
+  assert.equal(isClaudeEnriched(undefined), false);
+});
+
+// ─── Drift detection (ADO-481 I1) ──────────────────────────────────────────
+// CLAUDE_AGENT_VERSIONS lives in 3 source files (2 edge functions + admin.html).
+// They MUST stay byte-identical or the publish flow silently desyncs (UI shows
+// rows the edge function then rejects, or vice versa). This test greps each
+// source file and asserts the array literals match.
+test('CLAUDE_AGENT_VERSIONS is in lockstep across edge functions and admin.html', () => {
+  const repoRoot = new URL('../../', import.meta.url).pathname.replace(/^\/([A-Za-z]):/, '$1:');
+  const files = [
+    [`${repoRoot}supabase/functions/admin-executive-orders/index.ts`, /CLAUDE_AGENT_VERSIONS\s*=\s*(\[[^\]]+\])/],
+    [`${repoRoot}supabase/functions/admin-update-executive-orders/index.ts`, /CLAUDE_AGENT_VERSIONS\s*=\s*(\[[^\]]+\])/],
+    [`${repoRoot}public/admin.html`, /CLAUDE_AGENT_VERSIONS\s*=\s*(\[[^\]]+\])/],
+  ];
+  const lists = files.map(([path, re]) => {
+    const content = readFileSync(path, 'utf8');
+    const match = content.match(re);
+    assert.ok(match, `CLAUDE_AGENT_VERSIONS not found in ${path}`);
+    // Normalize whitespace + trailing commas so cross-language formatting differences don't cause false drift
+    return match[1].replace(/\s+/g, '').replace(/,\]/g, ']');
+  });
+  assert.equal(lists[0], lists[1], `Drift between admin-executive-orders and admin-update-executive-orders: ${lists[0]} vs ${lists[1]}`);
+  assert.equal(lists[0], lists[2], `Drift between edge functions and admin.html: ${lists[0]} vs ${lists[2]}`);
+  // Also assert the test mirror at top of THIS file matches
+  const testMirror = JSON.stringify(CLAUDE_AGENT_VERSIONS).replace(/"/g, "'");
+  assert.equal(lists[0], testMirror, `Drift between sources and unit-test mirror: ${lists[0]} vs ${testMirror}`);
 });
 
 test('matchesSubtab — all predicate matches everything', () => {
