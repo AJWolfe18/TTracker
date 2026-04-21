@@ -7,10 +7,10 @@
 
 ## Current State
 
-- **Done:** 27 at v1.1 (all factual errors fixed, all reviewed against FR text)
-- **Remaining:** 224 (171 at v1 + 53 at NULL)
+- **Done:** 52 at v1.1 (all reviewed against FR text)
+- **Remaining:** 198 (mostly v1, a few NULL)
 - **Daily cron:** Active, 5/day weekdays via PROD trigger
-- **Next in queue:** EO 14189 "Celebrating America's 250th Birthday" (2025-02-03) — 14187 already done
+- **Next in queue:** EO 14199 "Withdrawing the United States From...Certain United Nations Organizations" (2025-02-10)
 - **ADO-489:** DONE (SCOTUS trigger git-pull fix applied)
 
 ## Per-EO Process (NO EXCEPTIONS)
@@ -119,7 +119,7 @@ Each session, loop until context runs low:
 | Session | Date | Manual | Trigger | Total Done | Remaining |
 |---|---|---|---|---|---|
 | 2 | 2026-04-21 | 17 | 10 | 27 | 224 |
-| 3 | | | | | |
+| 3 | 2026-04-21 | 20 | ~5 | 52 | 198 |
 | 4 | | | | | |
 
 ## Pre-Session Checklist
