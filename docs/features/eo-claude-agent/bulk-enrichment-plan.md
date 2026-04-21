@@ -1,80 +1,75 @@
 # EO Bulk Enrichment Plan
 
-**Created:** 2026-04-21 (ADO-481 Session 2)
-**Status:** In progress — 26/250 done, 224 remaining
+**Created:** 2026-04-21 | **Updated:** 2026-04-21 (post-review)
 **Ticket:** ADO-481 (Active)
+**Goal:** Re-enrich all ~224 remaining EOs from legacy GPT pipeline to v1.1
 
-## Background
+## Current State
 
-251 PROD EOs needed re-enrichment from legacy GPT pipeline (88% level-4 saturation, fabricated cronyism, banned phrases). Session 2 enriched 26 (16 manual + 10 trigger). Review found 7 of 15 manual enrichments have factual errors in specific claims (wrong statutes, wrong timelines, wrong organization names). Alarm levels are all correct.
+- **Done:** 27 at v1.1 (all factual errors fixed, all reviewed against FR text)
+- **Remaining:** 224 (171 at v1 + 53 at NULL)
+- **Daily cron:** Active, 5/day weekdays via PROD trigger
+- **Next in queue:** EO 14189 "Celebrating America's 250th Birthday" (2025-02-03) — 14187 already done
 
-## Process (MANDATORY — no shortcuts)
+## Per-EO Process (NO EXCEPTIONS)
 
-For every EO:
-1. **Fetch FR text** via `body_html_url`: `https://www.federalregister.gov/documents/full_text/html/{year}/{month}/{day}/{doc_number}.html`
-2. **Read the text** — extract statutory authorities, mechanisms, named entities, timelines
-3. **Write editorial** from the actual source text following prompt-v1.md rules
-4. **Quality check** all invariants (banned phrases, word counts, named-actor rule, alarm-level calibration)
-5. **UPDATE via SQL** with `source: "federal-register"` in enrichment_meta
-6. **INSERT log row** for observability
+1. **Fetch FR text** via `body_html_url`:
+   ```
+   https://www.federalregister.gov/documents/full_text/html/{year}/{month}/{day}/{doc_number}.html
+   ```
+2. **Fallback chain** if body_html_url fails:
+   - Try govinfo: `https://www.govinfo.gov/content/pkg/FR-{year}-{month}-{day}/html/{doc_number}.htm`
+   - Try FR API: `https://www.federalregister.gov/api/v1/documents/{doc_number}.json`
+   - If all fail (<500 chars): mark failed, skip. **NEVER write from knowledge.**
+3. **Write editorial** from actual source text per prompt-v1.md
+4. **Quality check** invariants (banned phrases, word counts, named-actor rule, alarm calibration)
+5. **UPDATE via SQL** with `enrichment_meta.source = "federal-register"`
 
-**NEVER write from knowledge alone.** The Session 2 review proved this produces ~47% factual error rate on specific claims.
+## Session Execution Pattern
 
-## Session 3 Plan (Next Session)
+Each session:
 
-### Step 1: Fix 7 factual errors (30 min)
+1. Query next 5 unenriched EOs: `WHERE prompt_version = 'v1' ORDER BY date ASC LIMIT 5`
+2. Fetch FR text for all 5 in **parallel** (5 concurrent WebFetch calls)
+3. Write editorial for each from FR text
+4. Execute 3-5 SQL UPDATEs in **parallel**
+5. Repeat until context runs low
+6. **Expected throughput:** 10-15 EOs/session (FR fetch + editorial + SQL)
 
-Fetch FR text, fix the specific wrong claims, UPDATE via SQL:
+## Throughput Optimization
 
-| EO | Fix |
-|---|---|
-| 14150 | Remove false EO 13985 rescission + 120-day timeline |
-| 14153 | Correct statutory authorities, remove "13M acres" and "Tax Cuts and Jobs Act" |
-| 14155 | Replace Green Climate Fund reference (wrong institution) |
-| 14157 | Fix org names (generic cartels + TdA + MS-13, not Sinaloa/CJNG), add Alien Enemies Act |
-| 14167 | Remove Insurrection Act / 10 USC § 252 citations |
-| 14173 | Fix timeline (90/120 days not 60), add certification + investigation mechanisms |
-| 14164 | Add commutation reversal, precedent overruling, alien targeting provisions |
+| Channel | Rate | Notes |
+|---|---|---|
+| Manual (in-session) | 10-15/session | Parallel FR fetch + parallel SQL |
+| PROD trigger (auto) | 5/day weekdays | Confirmed v1.1 output with git-pull fix |
+| **Combined** | **~20/day** | If 1 session/day + auto-cron |
+| **Time to drain** | **~12 sessions** | 224 ÷ 20 ≈ 12 days |
 
-### Step 2: Fix 3 minor precision issues (10 min)
-
-| EO | Fix |
-|---|---|
-| 14160 | Specify two-category parent definition |
-| 14175 | Clarify 30+15 day designation process |
-| 14181 | Note NC disaster coverage |
-
-### Step 3: ADO-489 SCOTUS trigger fix (5 min)
-
-Update SCOTUS PROD trigger Step A to include `git fetch + git reset --hard origin/main`.
-
-### Step 4: Continue new enrichments (remaining time)
-
-Resume from EO 14187 (already done in Session 2 with correct FR-text process).
-Next in queue after 14187: remaining v1 EOs from Feb 2025 onward.
-
-**Pace:** ~10-12 EOs per session with FR text fetch (slower than knowledge-only but accurate).
-**Remaining:** 224 EOs. At 10/session + 5/day trigger = ~15 sessions to drain.
-**Daily cron:** Active, processing 5/day automatically with correct v1.1 output.
+**Trigger limit bump (optional):** Test increasing Step 2 `limit=5` to `limit=10` — Opus processed 5 with turns to spare. If 10 works, auto-cron doubles to 10/day and drain time drops to ~9 sessions.
 
 ## Quality Gates
 
-- Every enrichment must have `source: "federal-register"` in enrichment_meta
-- If FR text fetch fails (404, <500 chars), mark as failed and skip — do not guess
-- Alarm levels start at 2, earn upgrades with evidence from FR text
-- Named actors must appear in FR text or be clearly identified affected parties
-- Statutory authorities must come from the order text, not external knowledge
+- `enrichment_meta.source` MUST be `"federal-register"` — anything else means the process was skipped
+- FR text < 500 chars = failed fetch, skip the EO
+- Alarm levels start at 2, earn upgrades with cited evidence
+- Named actors from FR text or clearly identified affected parties (not fabricated)
+- Statutory authorities from order text only
+- **Spot-check cadence:** Josh reviews 5 random EOs every ~50 enriched via admin dashboard
 
-## Tracking
+## Backlog Drain Tracking
 
-| Metric | Value |
-|---|---|
-| Total PROD EOs | ~250 |
-| Enriched at v1.1 | 27 (26 session 2 + 1 session 2 trigger run 3) |
-| Need factual fix | 7 |
-| Need minor fix | 3 |
-| Clean | 17 |
-| Remaining v1 backlog | 171 |
-| Remaining NULL backlog | 53 |
-| Daily trigger rate | 5/day weekdays |
-| Manual enrichment rate | ~10-12/session |
+Update this after each session:
+
+| Session | Date | Manual | Trigger | Total Done | Remaining |
+|---|---|---|---|---|---|
+| 2 | 2026-04-21 | 17 | 10 | 27 | 224 |
+| 3 | | | | | |
+| 4 | | | | | |
+
+## Pre-Session Checklist
+
+- [ ] `git branch --show-current` → test
+- [ ] Read this plan + memory
+- [ ] ADO-489 done? (SCOTUS trigger git-pull fix — do first if not)
+- [ ] Query remaining count: `SELECT COUNT(*) FROM executive_orders WHERE prompt_version != 'v1.1' OR prompt_version IS NULL`
+- [ ] Start enrichment loop
