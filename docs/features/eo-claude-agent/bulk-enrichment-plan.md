@@ -7,10 +7,10 @@
 
 ## Current State
 
-- **Done:** 52 at v1.1 (all reviewed against FR text)
-- **Remaining:** 198 (mostly v1, a few NULL)
+- **Done:** 132 at v1.1 (all reviewed against FR text)
+- **Remaining:** 118
 - **Daily cron:** Active, 5/day weekdays via PROD trigger
-- **Next in queue:** EO 14199 "Withdrawing the United States From...Certain United Nations Organizations" (2025-02-10)
+- **Next in queue:** EO 14280 "Reinstating Commonsense School Discipline Policies" (2025-04-28)
 - **ADO-489:** DONE (SCOTUS trigger git-pull fix applied)
 
 ## Per-EO Process (NO EXCEPTIONS)
@@ -119,8 +119,16 @@ Each session, loop until context runs low:
 | Session | Date | Manual | Trigger | Total Done | Remaining |
 |---|---|---|---|---|---|
 | 2 | 2026-04-21 | 17 | 10 | 27 | 224 |
-| 3 | 2026-04-21 | 20 | ~5 | 52 | 198 |
+| 3 | 2026-04-21 | 100 | ~5 | 132 | 118 |
 | 4 | | | | | |
+
+## Post-Backlog: Sync PROD → TEST
+
+Once the backlog is fully drained, copy PROD data to TEST DB for both:
+- `executive_orders` table (all enriched EO rows)
+- `scotus_cases` table (all enriched SCOTUS rows)
+
+This keeps TEST in sync for development/testing against real enriched content.
 
 ## Pre-Session Checklist
 
