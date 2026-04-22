@@ -1,17 +1,18 @@
 # EO Bulk Enrichment Plan
 
-**Created:** 2026-04-21 | **Updated:** 2026-04-21 (v4 — Session 3 extended, 100 EOs done)
+**Created:** 2026-04-21 | **Updated:** 2026-04-21 (v5 — Session 4 in progress, 60 EOs done)
 **Ticket:** ADO-481 (Active)
 **Goal:** Re-enrich all ~224 remaining EOs from legacy GPT pipeline to v1.1
 **Standard:** `docs/features/eo-claude-agent/prompt-v1.md` — the SAME rules the cloud agent follows
 
 ## Current State
 
-- **Done:** 132 at v1.1 (all reviewed against FR text)
-- **Remaining:** 118
+- **Done:** 192 at v1.1 (all reviewed against FR text)
+- **Remaining:** 58
 - **Daily cron:** Active, 5/day weekdays via PROD trigger
-- **Next in queue:** EO 14280 "Reinstating Commonsense School Discipline Policies" (2025-04-28)
+- **Next in queue:** EO 14337 (2025-08-19) — next unenriched after 14336
 - **ADO-489:** DONE (SCOTUS trigger git-pull fix applied)
+- **Session 5 target:** Finish all 58 remaining in one session without stopping. Do NOT pause for checkpoints — run the full loop until backlog = 0.
 
 ## Per-EO Process (NO EXCEPTIONS)
 
@@ -86,25 +87,32 @@ Dollar-quoted text, `enrichment_meta.source = "federal-register"`, `prompt_versi
 
 ## Session Execution Pattern
 
-Each session, loop until context runs low:
+Each session, loop until done:
 
-1. Query next 5 unenriched: `WHERE prompt_version = 'v1' OR prompt_version IS NULL ORDER BY date ASC LIMIT 5`
+1. Query next 5 unenriched: `WHERE prompt_version != 'v1.1' OR prompt_version IS NULL ORDER BY date ASC LIMIT 5`
 2. **Parallel fetch:** 5 WebFetch calls for FR text simultaneously
 3. **Write editorial** for each from FR text (sequential — needs context per EO)
-4. **Parallel UPDATE:** 3-5 SQL calls simultaneously
+4. **Parallel UPDATE:** 5 SQL calls simultaneously
 5. **Repeat** from step 1 with next 5
-6. **Target: 15-20 EOs per session** (3-4 loops of 5)
+6. **Do NOT stop for checkpoints.** Run the full loop until remaining = 0.
 
-## Throughput
+## Throughput (updated Session 4)
 
 | Channel | Rate | Notes |
 |---|---|---|
-| Manual (in-session) | 15-20/session | 3-4 batches of 5, parallel fetch + SQL |
+| Manual (in-session) | 60+/session | 12 batches of 5, parallel fetch + SQL |
 | PROD trigger (auto) | 5/day weekdays | Handles trickle once backlog drained |
-| **Combined** | **~25/day** | 1 session/day + auto-cron |
-| **Time to drain** | **~10 sessions** | 224 ÷ 25 ≈ 9-10 sessions |
+| **Time to drain** | **1 more session** | 58 remaining, easily achievable |
 
 **Post-backlog:** New EOs are sparse (0-3/week). The daily trigger handles steady-state easily.
+
+## Opening Variety Rule
+
+**Avoid repetitive `section_what_it_means` openings.** Session 4 audit found ~17% started with "This is..." — acceptable but flagged. Rules:
+- Never start two consecutive EOs with the same opening pattern
+- Lead with the specific subject, a direct observation, or a punchy framing — not "This order..." or "This is..."
+- Vary across: named-target leads, framing-deconstruction leads, data-first leads, voice/tone leads, question leads
+- **Daily trigger (prompt-v1.md):** Check if the prompt already has opening variety guidance. If not, add a note in the next prompt revision. The trigger only does 1-5 EOs/day so repetition risk is low, but worth a line in the prompt.
 
 ## Quality Gates
 
@@ -120,7 +128,12 @@ Each session, loop until context runs low:
 |---|---|---|---|---|---|
 | 2 | 2026-04-21 | 17 | 10 | 27 | 224 |
 | 3 | 2026-04-21 | 100 | ~5 | 132 | 118 |
-| 4 | | | | | |
+| 4 | 2026-04-21 | 60 | ~5 | 192 | 58 |
+| 5 | | | | | |
+
+**Session 4 notes:** Covered EOs 14277-14336 (Apr 28 – Aug 19, 2025). Alarm distribution: 1×5, 5×4, 13×3, 33×2, 8×1, 0×0. Zero level-4 saturation (legacy was 88%). Opening variety audit: ~17% "This is..." — flagged, adding variety rule above. `action_section` is JSONB (reader actions), not text — don't overwrite it; `action_tier = 'tracking'` requires `action_section = NULL`.
+
+**Session 5 instruction:** Start fresh, read memory + this plan. Run the full 58 without stopping. Apply opening variety rule. Update this table when done. Then run `/end-work`.
 
 ## Post-Backlog: Sync PROD → TEST
 
