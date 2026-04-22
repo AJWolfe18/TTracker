@@ -349,10 +349,8 @@ scripts/
 ├── rss-tracker-supabase.js # Main RSS pipeline
 ├── enrichment/             # AI enrichment
 │   ├── enrich-stories-inline.js
-│   ├── enrich-executive-orders.js
 │   ├── prompts/            # Per-feature prompts
 │   │   ├── stories.js
-│   │   ├── executive-orders.js
 │   │   └── pardons.js
 │   ├── prompts.js          # Barrel re-export (backwards compat)
 │   └── scraper.js
