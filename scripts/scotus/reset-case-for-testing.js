@@ -43,5 +43,4 @@ if (error) {
 }
 
 console.log(`✅ Case ${caseId} reset to pending`);
-console.log('\nNow run:');
-console.log(`  LAYER_B_MODE=shadow node scripts/scotus/enrich-scotus.js --limit=1`);
+console.log('\nCase is now ready for re-enrichment by the Claude agent.');
