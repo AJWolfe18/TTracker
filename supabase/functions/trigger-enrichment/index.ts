@@ -10,8 +10,6 @@ import { checkAdminPassword } from '../_shared/auth.ts'
 const COSTS: Record<string, number> = {
   story: 0.003,
   pardon: 0.005,
-  scotus: 0.01,
-  eo: 0.008,
   article_entities: 0.0003
 }
 
@@ -114,7 +112,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate entity_type is one of the allowed types
-    const validTypes = ['story', 'pardon', 'scotus', 'eo']
+    const validTypes = ['story', 'pardon']
     if (!validTypes.includes(entity_type)) {
       return new Response(
         JSON.stringify({ error: `Invalid entity_type. Must be one of: ${validTypes.join(', ')}` }),
@@ -163,10 +161,6 @@ Deno.serve(async (req) => {
       pardon: {
         file: 'enrich-pardons.yml',
         buildInputs: (id, env) => ({ pardon_id: String(id), limit: '1', force: 'true' })
-      },
-      scotus: {
-        file: 'enrich-scotus.yml',
-        buildInputs: (id, env) => ({ case_id: String(id), environment: env })
       }
     }
 

@@ -27,7 +27,7 @@ The TrumpyTracker admin dashboard provides comprehensive management capabilities
 Manual GitHub Actions workflows for test environment:
 - `test-manual-article.yml`: Process articles in test
 - `test-daily-tracker.yml`: Run daily tracker in test
-- `test-executive-orders.yml`: Run executive orders tracker in test
+- *(test-executive-orders.yml retired — ADO-482)*
 
 Access via: GitHub → Actions → Select workflow → Run workflow
 
