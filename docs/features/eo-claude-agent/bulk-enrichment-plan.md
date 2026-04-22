@@ -1,18 +1,17 @@
 # EO Bulk Enrichment Plan
 
-**Created:** 2026-04-21 | **Updated:** 2026-04-21 (v5 — Session 4 in progress, 60 EOs done)
-**Ticket:** ADO-481 (Active)
+**Created:** 2026-04-21 | **Updated:** 2026-04-22 (v6 — COMPLETE. Backlog = 0.)
+**Ticket:** ADO-481
 **Goal:** Re-enrich all ~224 remaining EOs from legacy GPT pipeline to v1.1
 **Standard:** `docs/features/eo-claude-agent/prompt-v1.md` — the SAME rules the cloud agent follows
 
 ## Current State
 
-- **Done:** 192 at v1.1 (all reviewed against FR text)
-- **Remaining:** 58
-- **Daily cron:** Active, 5/day weekdays via PROD trigger
-- **Next in queue:** EO 14337 (2025-08-19) — next unenriched after 14336
+- **Done:** 250 at v1.1 (ALL EOs enriched from FR text)
+- **Remaining:** 0 ✅
+- **Daily cron:** Active, 5/day weekdays via PROD trigger (handles new EOs)
+- **Backlog drained:** Session 5 (2026-04-22)
 - **ADO-489:** DONE (SCOTUS trigger git-pull fix applied)
-- **Session 5 target:** Finish all 58 remaining in one session without stopping. Do NOT pause for checkpoints — run the full loop until backlog = 0.
 
 ## Per-EO Process (NO EXCEPTIONS)
 
@@ -129,11 +128,13 @@ Each session, loop until done:
 | 2 | 2026-04-21 | 17 | 10 | 27 | 224 |
 | 3 | 2026-04-21 | 100 | ~5 | 132 | 118 |
 | 4 | 2026-04-21 | 60 | ~5 | 192 | 58 |
-| 5 | | | | | |
+| 5 | 2026-04-22 | 58 | ~5 | 250 | 0 |
 
 **Session 4 notes:** Covered EOs 14277-14336 (Apr 28 – Aug 19, 2025). Alarm distribution: 1×5, 5×4, 13×3, 33×2, 8×1, 0×0. Zero level-4 saturation (legacy was 88%). Opening variety audit: ~17% "This is..." — flagged, adding variety rule above. `action_section` is JSONB (reader actions), not text — don't overwrite it; `action_tier = 'tracking'` requires `action_section = NULL`.
 
-**Session 5 instruction:** Start fresh, read memory + this plan. Run the full 58 without stopping. Apply opening variety rule. Update this table when done. Then run `/end-work`.
+**Session 5 notes:** Covered EOs 14337-14400 (Aug 19, 2025 – Apr 9, 2026). All 58 completed in one session without stopping. Alarm distribution: 14×1, 30×2, 12×3, 3×4, 0×5. Zero level-4 saturation. Level-4s were: 14343 (labor exclusions), 14398 (anti-DEI contractors), 14399 (election citizenship verification). One title correction: EO 14361 was "Regulatory Relief for Coke Oven..." in DB but FR says "Modifying the Scope of Tariffs on the Government of Brazil" — corrected during enrichment. Opening variety rule applied throughout — no consecutive duplicate patterns. `action_tier = 'systemic'/'direct'` requires non-null `action_section` (learned from 14337 constraint error in batch 1).
+
+**BACKLOG COMPLETE.** Daily PROD trigger handles new EOs going forward. Next: run `/end-work`, then sync PROD → TEST.
 
 ## Post-Backlog: Sync PROD → TEST
 
