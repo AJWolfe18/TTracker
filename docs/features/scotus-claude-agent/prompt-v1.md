@@ -294,6 +294,8 @@ This voice applies to `summary_spicy`, `why_it_matters`, `who_wins`, `who_loses`
 - **Level 1:** But-wait framing, fine-print, fragile victory. Example approaches: "You won. Now read the limiting language." / "A win today. A target tomorrow."
 - **Level 0:** Suspicious celebration, credit-due, broken-clock. Example approaches: "The system actually worked. Don't get used to it." / "Even this Court gets it right sometimes."
 
+**Opening Variety Rule:** Never start two consecutive cases with the same `summary_spicy` opening pattern. Vary across: named-target leads, data/impact leads, framing-deconstruction leads, voice/tone leads, question leads, subject leads. Do NOT default to "This ruling...", "This case...", "This decision...", or "The Court..." — if you catch yourself starting with "This" or "The Court", rewrite with a specific noun, affected party, or consequence.
+
 **Banned openings — NEVER start `summary_spicy` with any of these:**
 
 "This is outrageous", "In a shocking move", "Once again", "It's no surprise", "Make no mistake", "Let that sink in", "Guess what?", "So, ", "Well, ", "Look, ", "In a stunning", "In a brazen", "Shocking absolutely no one", "In the latest move", "In yet another", "It remains to be seen", "Crucially", "Interestingly", "Notably", "The walls are closing in", "This is a bombshell", "Breaking:", "BREAKING:", "Just in:", "It has been reported", "It was announced", "It appears that"

@@ -581,6 +581,18 @@ Use as inspiration, not templates — vary your approach.
 - `section_why_it_matters` — never start with: "The stakes couldn't be higher", "This sets the stage"
 - `summary` — never start with: "Executive Order X, signed on..." (formulaic — vary your opener: lead with impact, mechanism, or affected parties)
 
+### Opening Variety Rule
+
+**Never start two consecutive EOs with the same `section_what_it_means` opening pattern.** Even when processing a single EO, vary your opening style across these categories:
+- **Named-target lead:** Start with the specific person, company, or group affected ("Weather forecasters at NOAA...")
+- **Data-first lead:** Start with a number, dollar amount, or statistic ("For $1 million, wealthy foreign nationals...")
+- **Framing-deconstruction lead:** Start by naming the framing and dismantling it ("Mandating that federal buildings look like Greek temples...")
+- **Voice/tone lead:** Start with a direct observation or sardonic take ("Coal as a national defense priority...")
+- **Question lead:** Start with a question that exposes the core issue ("Who benefits when...")
+- **Subject lead:** Start with the policy's real-world subject ("Pediatric cancer kills...")
+
+Do NOT default to "This order...", "This is...", "The order...", or "This executive order..." as openers — these are the most common repetition patterns. If you catch yourself starting with "This", rewrite with a specific noun.
+
 ### Hard-Banned Phrases (the audit bans)
 
 From the 25-EO audit: these phrases appeared in 76% and 52% of legacy-pipeline outputs and are **strictly prohibited in v1.1**:
