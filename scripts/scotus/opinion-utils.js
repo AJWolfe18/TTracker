@@ -4,7 +4,6 @@
  * Used by:
  * - fetch-cases.js (new case ingestion)
  * - backfill-opinions.js (backfilling existing v1 cases)
- * - scotus-fact-extraction.js (disposition extraction)
  */
 
 import crypto from 'crypto';
