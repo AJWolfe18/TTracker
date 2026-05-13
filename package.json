@@ -22,7 +22,13 @@
     "research:pardons:dry-run": "node scripts/enrichment/perplexity-research.js --dry-run",
     "enrich:pardons": "node scripts/enrichment/enrich-pardons.js",
     "enrich:pardons:dry-run": "node scripts/enrichment/enrich-pardons.js --dry-run",
-    "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js"
+    "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:ui": "vitest run",
+    "lint": "tsc --noEmit",
+    "build:check": "npm run lint && npm run test:ui && npm run build"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
@@ -36,7 +42,10 @@
     "openai": "^4.28.0",
     "pg": "^8.11.0",
     "playwright": "^1.40.0",
-    "rss-parser": "^3.13.0"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "rss-parser": "^3.13.0",
+    "wouter": "^3.9.0"
   },
   "keywords": [
     "political",
@@ -45,5 +54,13 @@
     "automation"
   ],
   "author": "Political Transparency Project",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
+  }
 }

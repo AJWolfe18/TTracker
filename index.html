@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrumpyTracker — accountability log</title>
+  <meta name="description" content="A daily accountability log for the Trump administration. Sourced, cited, updated." />
+
+  <link rel="icon" type="image/jpeg" href="/trumpytracker-logo.jpeg" />
+  <meta property="og:title" content="TrumpyTracker" />
+  <meta property="og:description" content="A daily accountability log. Sourced, cited, updated." />
+  <meta property="og:image" content="/og-default.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=JetBrains+Mono:wght@400;500;600;700&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- FOUC prevention: set mode before any CSS/React loads -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('tt-mode');
+      var mode = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-mode', mode);
+    })();
+  </script>
+
+  <style>
+    /* Critical inline styles to prevent FOUC */
+    html[data-mode="dark"] { background: #0a0a0b; color: #f5f5f4; }
+    html[data-mode="light"] { background: #fcfcfa; color: #0f1216; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: 'Inter Tight', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    ::selection { background: #ff4d4d; color: #0a0a0b; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
