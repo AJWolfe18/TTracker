@@ -15,6 +15,7 @@
 
 import { normalizeEntities } from '../lib/entity-normalization.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { isFatalOpenAIError } from '../lib/openai-errors.js';
 
 // ============================================================================
 // Entity Extraction Prompt
@@ -196,6 +197,7 @@ export async function extractArticleEntities(title, content, openaiClient, optio
       entity_id: articleId,
       metadata: { message: err.message }
     });
+    if (isFatalOpenAIError(err)) throw err;
     return { entities: [], tokens: null };
   }
 }
