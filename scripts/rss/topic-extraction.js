@@ -8,6 +8,8 @@
  * The LLM output is NOT trusted directly - it's cleaned and validated.
  */
 
+import { isFatalOpenAIError } from '../lib/openai-errors.js';
+
 // ============================================================================
 // Synonym Canonicalization (TTRC-302)
 // ============================================================================
@@ -168,6 +170,7 @@ export async function extractTopicSlug(title, content = '', excerpt = '', openai
     return canonicalSlug;
   } catch (error) {
     console.error(`[topic-extraction] Error extracting slug:`, error.message);
+    if (isFatalOpenAIError(error)) throw error;
     return null;
   }
 }
