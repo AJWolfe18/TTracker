@@ -52,10 +52,10 @@ export const THEME_SEVERITY_LIGHT: Record<string, Record<number, SeverityColor>>
   midnight: {
     5: { accent: "#7a1f17", bg: "#fbe7e3", text: "#4a0f0a", ring: "#7a1f17" },
     4: { accent: "#8a4a2e", bg: "#fbe7d9", text: "#4a200f", ring: "#8a4a2e" },
-    3: { accent: "#5e636b", bg: "#eef0f2", text: "#1a1d22", ring: "#7a8089" },
-    2: { accent: "#5e636b", bg: "#eef0f2", text: "#1a1d22", ring: "#7a8089" },
+    3: { accent: "#6b5a3e", bg: "#f2ede3", text: "#2e2518", ring: "#8a7a5e" },
+    2: { accent: "#3e5a6b", bg: "#e3eef2", text: "#18252e", ring: "#5e7a8a" },
     1: { accent: "#6c727a", bg: "#eef0f2", text: "#262a30", ring: "#8a9098" },
-    0: { accent: "#6c727a", bg: "#eef0f2", text: "#262a30", ring: "#8a9098" },
+    0: { accent: "#2e6b4a", bg: "#e3f2ea", text: "#183e28", ring: "#4a8a68" },
   },
   mutedEditorial: {
     5: { accent: "#8a6f3e", bg: "#f0e8d2", text: "#3a2e15", ring: "#8a6f3e" },

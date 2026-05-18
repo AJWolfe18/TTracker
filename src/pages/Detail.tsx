@@ -18,7 +18,7 @@ interface DetailProps {
 
 export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps) {
   const { theme, headType: type, mode } = useTheme();
-  const [hmode, setHmode] = useState('spicy');
+  const hmode = 'spicy';
   const [showShare, setShowShare] = useState(false);
 
   if (loading || !item) {
@@ -51,7 +51,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
           <div style={{ marginBottom: 22 }}>
             <div style={{ width: 56, height: 2, background: c.accent, marginBottom: 12 }} />
             <div style={{ fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.18em', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ color: c.accent, fontWeight: 700 }}>Level {item.alarm} · {TONE_SYSTEM.colors[item.alarm]?.label}</span>
+              <span style={{ color: c.accent, fontWeight: 700 }}>{TONE_SYSTEM.colors[item.alarm]?.label}</span>
               <span style={{ color: theme.dim }}>·</span>
               <span style={{ color: theme.dim }}>{TONE_SYSTEM.typeLabels[item.type]}</span>
               <span style={{ color: theme.dim }}>·</span>
@@ -70,17 +70,6 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
           }}>
             {pickHeadline(item, hmode)}
           </h1>
-
-          {/* Headline toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginTop: 22, border: `1px solid ${theme.line}`, borderRadius: 2, overflow: 'hidden', width: 'fit-content', fontFamily: type.mono, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            {([['spicy', 'Spicy'], ['neutral', 'Neutral']] as const).map(([k, lbl]) => (
-              <button key={k} onClick={() => setHmode(k)} style={{
-                padding: '8px 14px', border: 'none',
-                background: hmode === k ? theme.ink : 'transparent',
-                color: hmode === k ? theme.bg : theme.dim, cursor: 'pointer',
-              }}>{lbl}</button>
-            ))}
-          </div>
 
           <p style={{ fontFamily: type.display, fontWeight: 400, fontSize: 22, lineHeight: 1.45, color: theme.dim, marginTop: 28, textWrap: 'pretty' }}>
             {item.dek}
@@ -149,7 +138,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
                   const rc = alarmPalette(r.alarm, 'restrained', mode, 'midnight');
                   return (
                     <div key={r.id} onClick={() => onOpenItem(r.id)} style={{ cursor: 'pointer', padding: '16px 0', borderTop: `2px solid ${rc.accent}` }}>
-                      <div style={{ fontFamily: type.mono, fontSize: 10, color: rc.accent, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 8 }}>L{r.alarm} · {TONE_SYSTEM.typeLabels[r.type]}</div>
+                      <div style={{ fontFamily: type.mono, fontSize: 10, color: rc.accent, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 8 }}>{TONE_SYSTEM.typeLabels[r.type]}</div>
                       <div style={{ fontFamily: type.display, fontWeight: 600, fontSize: 16, lineHeight: 1.2, color: theme.ink, textWrap: 'balance' }}>{pickHeadline(r, hmode)}</div>
                     </div>
                   );

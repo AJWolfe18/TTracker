@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { alarmPalette } from '@/tokens';
 import { Header } from '@/components/Header';
@@ -9,7 +8,6 @@ import { Kicker } from '@/components/Kicker';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { ErrorState } from '@/edge-states/ErrorState';
 import { EmptyState } from '@/edge-states/EmptyState';
-import { FilterEmpty } from '@/edge-states/FilterEmpty';
 import { fmtDate, relDate } from '@/lib/date-utils';
 import { pickHeadline } from '@/lib/pick-headline';
 import type { DisplayItem, DisplayStats } from '@/types';
@@ -24,7 +22,6 @@ interface HomeProps {
 
 export function Home({ items, stats, loading, error, onOpenItem }: HomeProps) {
   const { theme, headType, mode } = useTheme();
-  const [activeType, setActiveType] = useState('all');
   const headlineMode = 'spicy';
 
   if (loading) {
@@ -66,11 +63,10 @@ export function Home({ items, stats, loading, error, onOpenItem }: HomeProps) {
     );
   }
 
-  const filtered = activeType === 'all' ? items : items.filter(e => e.type === activeType);
   const sortedAll = [...items].sort((a, b) => b.alarm - a.alarm || b.updated.localeCompare(a.updated));
   const lead = sortedAll[0];
   const featuredSecond = sortedAll.find(e => e.id !== lead.id && e.alarm >= 4);
-  const rest = filtered
+  const rest = items
     .filter(e => e.id !== lead.id && (!featuredSecond || e.id !== featuredSecond.id))
     .sort((a, b) => b.published.localeCompare(a.published));
   const cLead = alarmPalette(lead.alarm, 'restrained', mode, 'midnight');
@@ -106,57 +102,19 @@ export function Home({ items, stats, loading, error, onOpenItem }: HomeProps) {
           </div>
         </section>
 
-        {/* TYPE FILTER */}
-        <div role="tablist" style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${theme.line}`, overflowX: 'auto', margin: '20px 0 0' }}>
-          {([
-            ['all', 'All', items.length],
-            ['stories', 'Stories', stats.byType.stories],
-            ['eos', 'Executive Orders', stats.byType.eos],
-            ['scotus', 'SCOTUS', stats.byType.scotus],
-            ['pardons', 'Pardons', stats.byType.pardons],
-          ] as const).map(([k, lbl, n]) => {
-            const active = activeType === k;
-            return (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveType(k)}
-                style={{
-                  fontFamily: headType.mono, fontWeight: 600, fontSize: 11,
-                  padding: '12px 16px', border: 'none', cursor: 'pointer',
-                  background: 'transparent',
-                  color: active ? theme.ink : theme.dim,
-                  textTransform: 'uppercase', letterSpacing: '0.14em',
-                  borderBottom: active ? `2px solid ${theme.ink}` : '2px solid transparent',
-                  whiteSpace: 'nowrap',
-                }}>
-                {lbl} <span style={{ opacity: 0.5, marginLeft: 6, fontSize: 10 }}>[{n || 0}]</span>
-              </button>
-            );
-          })}
-        </div>
-
         {/* FEATURED CARD */}
-        {activeType === 'all' && featuredSecond && (
+        {featuredSecond && (
           <div style={{ padding: '28px 0 0' }}>
             <Card item={featuredSecond} headlineMode={headlineMode} onOpen={onOpenItem} featured />
           </div>
         )}
 
         {/* GRID */}
-        {rest.length === 0 && activeType !== 'all' ? (
-          <FilterEmpty
-            label={({ stories: 'Stories', eos: 'Executive Orders', scotus: 'SCOTUS', pardons: 'Pardons' } as Record<string, string>)[activeType] || activeType}
-            onReset={() => setActiveType('all')}
-          />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20, padding: '24px 0 0' }}>
-            {rest.map(it => (
-              <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
-            ))}
-          </div>
-        )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20, padding: '24px 0 0' }}>
+          {rest.map(it => (
+            <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
+          ))}
+        </div>
 
         <Footer />
       </main>

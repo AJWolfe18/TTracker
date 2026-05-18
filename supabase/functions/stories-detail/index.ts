@@ -56,13 +56,13 @@ serve(async (req: Request) => {
           id,
           url,
           url_hash,
-          headline,
+          title,
           source_name,
           source_domain,
           published_at,
-          content,
           content_type,
           opinion_flag,
+          excerpt,
           metadata
         )
       `)
