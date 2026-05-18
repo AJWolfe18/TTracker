@@ -26,10 +26,9 @@ export function Header({ current }: { current?: string }) {
         <nav aria-label="Main navigation" style={{ display: 'flex', gap: 18, fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }} className="tt-nav">
           {[
             { label: 'Home', href: '/' },
-            { label: 'Stories', href: '/?filter=stories' },
-            { label: 'EOs', href: '/?filter=eos' },
-            { label: 'SCOTUS', href: '/?filter=scotus' },
-            { label: 'Pardons', href: '/?filter=pardons' },
+            { label: 'EO', href: '/eos' },
+            { label: 'SCOTUS', href: '/scotus' },
+            { label: 'Pardons', href: '/pardons' },
             { label: 'About', href: '/about' },
           ].map(item => (
             <Link key={item.label} href={item.href} style={{

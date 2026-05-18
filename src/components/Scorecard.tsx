@@ -41,14 +41,9 @@ export function Scorecard({ stats }: ScorecardProps) {
         </div>
         <div style={{ display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
           <Cell label="Active" value={stats.active} />
-          <Cell label="L5" value={stats.byAlarm[5] || 0} color={cL5.accent} />
-          <Cell label="L4" value={stats.byAlarm[4] || 0} color={cL4.accent} />
-          <Cell label="L3" value={stats.byAlarm[3] || 0} />
-          <span style={{ width: 1, height: 20, background: theme.line }} />
-          <Cell label="Stories" value={stats.byType.stories || 0} />
-          <Cell label="EOs" value={stats.byType.eos || 0} />
-          <Cell label="SCOTUS" value={stats.byType.scotus || 0} />
-          <Cell label="Pardons" value={stats.byType.pardons || 0} />
+          <Cell label="Crisis" value={stats.byAlarm[5] || 0} color={cL5.accent} />
+          <Cell label="Severe" value={stats.byAlarm[4] || 0} color={cL4.accent} />
+          <Cell label="Total" value={stats.total} />
           <span style={{ width: 1, height: 20, background: theme.line }} />
           <Cell label="Day" value={dayCount} />
         </div>

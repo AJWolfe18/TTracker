@@ -45,7 +45,7 @@ export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, fontFamily: headType.mono, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
         <span style={{ color: c.accent, fontWeight: 700 }}>
-          L{item.alarm} · {TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}
+          {TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}
         </span>
         <span style={{ color: theme.dim }}>{TONE_SYSTEM.typeLabels[item.type]}</span>
       </div>
@@ -59,9 +59,9 @@ export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
         {pickHeadline(item, headlineMode)}
       </h3>
 
-      {featured && (
+      {item.dek && (
         <p style={{
-          fontFamily: headType.display, fontSize: 17, lineHeight: 1.45,
+          fontFamily: headType.display, fontSize: featured ? 17 : 14, lineHeight: 1.45,
           color: theme.dim, margin: '0 0 18px', maxWidth: 760, textWrap: 'pretty',
         }}>{item.dek}</p>
       )}

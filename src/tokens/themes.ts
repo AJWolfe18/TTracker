@@ -22,7 +22,7 @@ export const THEMES: Record<string, ThemePalette> = {
 };
 
 export const LIGHT_THEMES: Record<string, ThemePalette> = {
-  midnight: { bg: "#fcfcfa", bg2: "#f1f1ee", ink: "#0f1216", dim: "#5e636b", line: "#d8dadd", accent: "#7a1f17", paper: "#ffffff" },
+  midnight: { bg: "#f5f5f5", bg2: "#ebebeb", ink: "#2b2b2b", dim: "#4b5563", line: "#e5e7eb", accent: "#7a1f17", paper: "#ffffff" },
   carbon: { bg: "#f4f5f6", bg2: "#e8eaec", ink: "#131618", dim: "#6a7078", line: "#c9ced3", accent: "#9a2d22", paper: "#ffffff" },
   newsprint: { bg: "#f4ecd8", bg2: "#ebe2c4", ink: "#15110a", dim: "#6b614a", line: "#d6cba1", accent: "#9a2d22", paper: "#faf3dd" },
   editorialWhite: { bg: "#fcfcfa", bg2: "#f1f1ee", ink: "#0f1216", dim: "#5e636b", line: "#d8dadd", accent: "#7a1f17", paper: "#ffffff" },
