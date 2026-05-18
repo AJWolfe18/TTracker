@@ -97,8 +97,15 @@ export async function fetchPardons(options?: FetchOptions): Promise<FetchResult>
   return { items: (data.items || []).map(pardonToItem), nextCursor: data.next_cursor || null, hasMore: data.has_more || false };
 }
 
+function validateId(id: string | number): number | null {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export async function fetchEoDetail(id: string | number, signal?: AbortSignal): Promise<DisplayItem | null> {
-  const query = `executive_orders?select=*&id=eq.${id}&is_public=eq.true`;
+  const numId = validateId(id);
+  if (!numId) return null;
+  const query = `executive_orders?select=id,order_number,title,date,category,alarm_level,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url&id=eq.${numId}&is_public=eq.true`;
   const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal });
   if (!res.ok) return null;
   const data: Record<string, unknown>[] = await res.json();
@@ -109,7 +116,9 @@ export async function fetchEoDetail(id: string | number, signal?: AbortSignal): 
 }
 
 export async function fetchScotusDetail(id: string | number, signal?: AbortSignal): Promise<DisplayItem | null> {
-  const query = `scotus_cases?select=*&id=eq.${id}&is_public=eq.true`;
+  const numId = validateId(id);
+  if (!numId) return null;
+  const query = `scotus_cases?select=id,case_name,case_name_short,docket_number,term,decided_at,vote_split,majority_author,case_type,ruling_impact_level,ruling_label,summary_spicy,who_wins,who_loses,why_it_matters,dissent_highlights,source_url,pdf_url&id=eq.${numId}&is_public=eq.true`;
   const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal });
   if (!res.ok) return null;
   const data: Record<string, unknown>[] = await res.json();

@@ -76,8 +76,8 @@ function TypePage({
     setLoading(true);
     setError(false);
     fetcher({ signal: ac.signal })
-      .then(result => { setItems(result.items); setError(false); })
-      .catch(err => { if (err.name !== 'AbortError') setError(true); })
+      .then(result => { if (!ac.signal.aborted) { setItems(result.items); setError(false); } })
+      .catch(err => { if (err.name !== 'AbortError' && !ac.signal.aborted) setError(true); })
       .finally(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
   }, [fetcher]);
@@ -112,8 +112,8 @@ function DetailRoute({
     setDetailLoading(true);
 
     fetcher(id, ac.signal)
-      .then(detail => { if (detail) setItem(detail); })
-      .catch(err => { if (err.name !== 'AbortError') setItem(null); })
+      .then(detail => { if (!ac.signal.aborted && detail) setItem(detail); })
+      .catch(err => { if (err.name !== 'AbortError' && !ac.signal.aborted) setItem(null); })
       .finally(() => { if (!ac.signal.aborted) setDetailLoading(false); });
 
     return () => ac.abort();

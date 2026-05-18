@@ -30,7 +30,12 @@ serve(async (req: Request) => {
     // Get story details
     const { data: story, error: storyError } = await supabase
       .from('stories')
-      .select('*')
+      .select(`
+        id, story_hash, primary_headline, primary_source, primary_source_url,
+        primary_source_domain, primary_actor, last_updated_at, first_seen_at,
+        status, severity, alarm_level, category, topic_tags, source_count,
+        has_opinion, summary_neutral, summary_spicy
+      `)
       .eq('id', storyId)
       .single()
     

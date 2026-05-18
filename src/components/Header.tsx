@@ -41,12 +41,14 @@ export function Header({ current }: { current?: string }) {
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <input
-            placeholder="Search..."
+            placeholder="Search coming soon"
             aria-label="Search stories"
+            disabled
             style={{
               background: theme.bg2, border: `1px solid ${theme.line}`,
-              color: theme.ink, fontFamily: type.mono, fontSize: 12,
+              color: theme.dim, fontFamily: type.mono, fontSize: 12,
               padding: '6px 10px', borderRadius: 2, width: 160, outline: 'none',
+              opacity: 0.6, cursor: 'not-allowed',
             }}
             className="tt-search"
           />
