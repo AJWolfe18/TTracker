@@ -14,6 +14,9 @@ interface CardProps {
 export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
   const { theme, headType, bodyType, mode } = useTheme();
   const c = alarmPalette(item.alarm, 'restrained', mode, 'midnight');
+  const isLight = mode === 'light';
+  const restShadow = isLight ? '0 1px 4px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)' : 'none';
+  const hoverShadow = isLight ? '0 4px 16px rgba(0,0,0,0.14), 0 8px 24px rgba(0,0,0,0.06)' : '0 6px 18px rgba(0,0,0,0.18)';
 
   return (
     <article
@@ -26,6 +29,7 @@ export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
         cursor: 'pointer', position: 'relative',
         background: theme.paper, border: `1px solid ${theme.line}`,
         padding: '0 22px 18px',
+        boxShadow: restShadow,
         transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
         gridColumn: featured ? '1 / -1' : 'auto',
         minHeight: featured ? 240 : 220,
@@ -33,12 +37,12 @@ export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
       }}
       onMouseEnter={e => {
         e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.18)';
+        e.currentTarget.style.boxShadow = hoverShadow;
         e.currentTarget.style.borderColor = theme.dim;
       }}
       onMouseLeave={e => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.boxShadow = restShadow;
         e.currentTarget.style.borderColor = theme.line;
       }}>
       <div style={{ height: 2, background: c.accent, margin: '0 -22px 16px' }} />

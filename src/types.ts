@@ -12,6 +12,8 @@ export interface DisplayItem {
   body: string;
   sources: { label: string; url: string }[];
   tags: string[];
+  sections?: { heading: string; content: string }[];
+  meta?: { label: string; value: string }[];
 }
 
 export interface DisplayStats {

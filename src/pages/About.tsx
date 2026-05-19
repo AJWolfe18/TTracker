@@ -63,9 +63,8 @@ export function About() {
         <h2 style={{ fontFamily: type.display, fontWeight: 600, fontSize: 28, letterSpacing: type.displayTracking, marginTop: 56, marginBottom: 16 }}>Editorial rules</h2>
         <ul style={{ fontFamily: type.display, fontSize: 17, lineHeight: 1.7, color: theme.ink, paddingLeft: 20 }}>
           <li>Every claim links to a primary source. Every one.</li>
-          <li>We publish both a spicy and a neutral headline. Share whichever you prefer.</li>
+          <li>We call out the bullshit — and there's a whole lot to go around.</li>
           <li>Corrections are logged publicly. Mistakes happen; cover-ups shouldn't.</li>
-          <li>We don't both-sides. We don't "it remains to be seen." We don't "observers note."</li>
           <li>If we got it wrong, tell us. If you need us to pull a name for safety, tell us faster.</li>
         </ul>
 
