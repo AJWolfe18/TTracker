@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { TONE_SYSTEM, alarmPalette } from '@/tokens';
 import { Header } from '@/components/Header';
@@ -20,6 +20,13 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
   const { theme, headType: type, mode } = useTheme();
   const hmode = 'spicy';
   const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
 
   if (loading || !item) {
     return (
@@ -34,6 +41,11 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
 
   const c = alarmPalette(item.alarm, 'restrained', mode, 'midnight');
 
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+  }
+
   return (
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: type.sans, minHeight: '100vh' }}>
       <Header />
@@ -43,7 +55,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             fontFamily: type.mono, fontSize: 11, letterSpacing: '0.12em',
             padding: '8px 0', border: 'none', background: 'transparent', color: theme.dim,
             cursor: 'pointer', textTransform: 'uppercase', marginTop: 20,
-          }}>← Back to dispatch</button>
+          }}>&larr; Back to dispatch</button>
         </Link>
 
         <article style={{ padding: '32px 0 48px' }}>
@@ -52,13 +64,13 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             <div style={{ width: 56, height: 2, background: c.accent, marginBottom: 12 }} />
             <div style={{ fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.18em', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ color: c.accent, fontWeight: 700 }}>{TONE_SYSTEM.colors[item.alarm]?.label}</span>
-              <span style={{ color: theme.dim }}>·</span>
+              <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{TONE_SYSTEM.typeLabels[item.type]}</span>
-              <span style={{ color: theme.dim }}>·</span>
+              <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}</span>
-              <span style={{ color: theme.dim }}>·</span>
+              <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{item.category}</span>
-              <span style={{ color: theme.dim }}>·</span>
+              <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{fmtDate(item.published)}</span>
             </div>
           </div>
@@ -71,13 +83,62 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             {pickHeadline(item, hmode)}
           </h1>
 
-          <p style={{ fontFamily: type.display, fontWeight: 400, fontSize: 22, lineHeight: 1.45, color: theme.dim, marginTop: 28, textWrap: 'pretty' }}>
-            {item.dek}
-          </p>
+          {item.dek && (
+            <p style={{ fontFamily: type.display, fontWeight: 400, fontSize: 22, lineHeight: 1.45, color: theme.dim, marginTop: 28, textWrap: 'pretty' }}>
+              {item.dek}
+            </p>
+          )}
 
-          <div style={{ fontFamily: type.display, fontSize: 18, lineHeight: 1.65, color: theme.ink, marginTop: 28, textWrap: 'pretty' }}>
-            {item.body}
-          </div>
+          {/* Body text (for stories that have plain body) */}
+          {item.body && (
+            <div style={{ fontFamily: type.display, fontSize: 18, lineHeight: 1.65, color: theme.ink, marginTop: 28, textWrap: 'pretty' }}>
+              {item.body}
+            </div>
+          )}
+
+          {/* Meta grid (SCOTUS vote split, Pardons corruption level, etc.) */}
+          {item.meta && item.meta.length > 0 && (
+            <div style={{
+              marginTop: 32, padding: '20px 24px', background: theme.bg2,
+              border: `1px solid ${theme.line}`, borderRadius: 2,
+              display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 32px',
+            }}>
+              {item.meta.map((m, i) => (
+                <div key={i}>
+                  <div style={{ fontFamily: type.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.15em', color: theme.dim, marginBottom: 6 }}>
+                    {m.label}
+                  </div>
+                  {m.label === 'Corruption Level' ? (
+                    <CorruptionBar value={m.value} accent={c.accent} dim={theme.line} />
+                  ) : (
+                    <div style={{ fontFamily: type.sans, fontSize: 15, color: theme.ink, lineHeight: 1.4 }}>
+                      {m.value}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Sections (EO editorial sections, SCOTUS dissent, Pardons detail) */}
+          {item.sections && item.sections.length > 0 && (
+            <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 28 }}>
+              {item.sections.map((s, i) => (
+                <section key={i}>
+                  <h3 style={{
+                    fontFamily: type.display, fontSize: 20, fontWeight: 700,
+                    color: theme.ink, marginBottom: 14, marginTop: 0,
+                    borderBottom: `3px solid ${c.accent}`, paddingBottom: 10,
+                  }}>
+                    {s.heading}
+                  </h3>
+                  <div style={{ fontFamily: type.display, fontSize: 17, lineHeight: 1.65, color: theme.ink, textWrap: 'pretty' }}>
+                    {s.content}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
 
           {/* Action row */}
           <div style={{ display: 'flex', gap: 10, marginTop: 36, flexWrap: 'wrap' }}>
@@ -85,9 +146,9 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
               ↗ Generate Share Card
             </button>
             <button
-              onClick={() => navigator.clipboard.writeText(window.location.href)}
-              style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.line}`, background: 'transparent', color: theme.ink, cursor: 'pointer', borderRadius: 2, textTransform: 'uppercase' }}>
-              Copy Link
+              onClick={handleCopyLink}
+              style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.line}`, background: 'transparent', color: copied ? '#4ade80' : theme.ink, cursor: 'pointer', borderRadius: 2, textTransform: 'uppercase', transition: 'color 0.2s' }}>
+              {copied ? 'Copied!' : 'Copy Link'}
             </button>
             <a
               href={`mailto:corrections@trumpytracker.com?subject=Correction: ${encodeURIComponent(item.headline_neutral)}&body=Story ID: ${item.id}%0A%0AWhich claim is incorrect:%0A%0ACorrect information:%0A%0ASource URL:`}
@@ -104,7 +165,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
           {item.sources.length > 0 && (
             <section style={{ marginTop: 48, padding: '24px 24px', background: theme.bg2, border: `1px solid ${theme.line}`, borderRadius: 2 }}>
               <div style={{ fontFamily: type.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.15em', color: theme.dim, marginBottom: 14 }}>
-                Primary Sources · every claim cited
+                Primary Sources &middot; every claim cited
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {item.sources.map((src, i) => (
@@ -150,6 +211,25 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
         <Footer />
       </main>
       <style>{`@media (max-width: 700px) { .tt-related { grid-template-columns: 1fr !important; } }`}</style>
+    </div>
+  );
+}
+
+function CorruptionBar({ value, accent, dim }: { value: string; accent: string; dim: string }) {
+  const filled = (value.match(/●/g) || []).length;
+  const total = 5;
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} style={{
+          width: 18, height: 18, borderRadius: 2,
+          background: i < filled ? accent : dim,
+          opacity: i < filled ? 1 : 0.3,
+        }} />
+      ))}
+      <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 700, color: accent }}>
+        {filled}/{total}
+      </span>
     </div>
   );
 }

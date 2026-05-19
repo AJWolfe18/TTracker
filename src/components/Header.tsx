@@ -1,14 +1,39 @@
+import { useState, useRef } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { Link } from 'wouter';
+import { SearchOverlay } from './SearchOverlay';
 
 export function Header({ current }: { current?: string }) {
   const { theme, headType: type, mode, toggleMode } = useTheme();
   const isLight = mode === 'light';
+  const [query, setQuery] = useState('');
+  const [showOverlay, setShowOverlay] = useState(false);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+
+  function handleSearchChange(value: string) {
+    setQuery(value);
+    setShowOverlay(value.length >= 2);
+  }
+
+  function handleClose() {
+    setQuery('');
+    setShowOverlay(false);
+  }
+
+  function handleSubscribeClick() {
+    const el = document.getElementById('tt-newsletter-input');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => el.focus(), 400);
+    }
+  }
 
   return (
     <header style={{
       borderBottom: `1px solid ${theme.line}`,
-      background: theme.bg, position: 'sticky', top: 0, zIndex: 20,
+      background: isLight ? theme.paper : theme.bg,
+      boxShadow: isLight ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
+      position: 'sticky', top: 0, zIndex: 20,
     }}>
       <a href="#main-content" className="skip-link">Skip to content</a>
       <div style={{
@@ -26,9 +51,9 @@ export function Header({ current }: { current?: string }) {
         <nav aria-label="Main navigation" style={{ display: 'flex', gap: 18, fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }} className="tt-nav">
           {[
             { label: 'Home', href: '/' },
-            { label: 'EO', href: '/eos' },
-            { label: 'SCOTUS', href: '/scotus' },
+            { label: 'Executive Orders', href: '/eos' },
             { label: 'Pardons', href: '/pardons' },
+            { label: 'Supreme Court', href: '/scotus' },
             { label: 'About', href: '/about' },
           ].map(item => (
             <Link key={item.label} href={item.href} style={{
@@ -40,18 +65,28 @@ export function Header({ current }: { current?: string }) {
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <input
-            placeholder="Search coming soon"
-            aria-label="Search stories"
-            disabled
-            style={{
-              background: theme.bg2, border: `1px solid ${theme.line}`,
-              color: theme.dim, fontFamily: type.mono, fontSize: 12,
-              padding: '6px 10px', borderRadius: 2, width: 160, outline: 'none',
-              opacity: 0.6, cursor: 'not-allowed',
-            }}
-            className="tt-search"
-          />
+          <div ref={searchWrapperRef} style={{ position: 'relative' }}>
+            <input
+              placeholder="Search stories..."
+              aria-label="Search stories"
+              value={query}
+              onChange={e => handleSearchChange(e.target.value)}
+              onFocus={() => { if (query.length >= 2) setShowOverlay(true); }}
+              style={{
+                background: theme.bg2, border: `1px solid ${theme.line}`,
+                color: theme.ink, fontFamily: type.mono, fontSize: 12,
+                padding: '6px 10px', borderRadius: 2, width: 160, outline: 'none',
+              }}
+              className="tt-search"
+            />
+            {showOverlay && (
+              <SearchOverlay
+                query={query}
+                onClose={handleClose}
+                wrapperRef={searchWrapperRef}
+              />
+            )}
+          </div>
           <button
             onClick={toggleMode}
             aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
@@ -65,12 +100,14 @@ export function Header({ current }: { current?: string }) {
             }}>
             {isLight ? '☾' : '☀'}
           </button>
-          <button style={{
-            fontFamily: type.mono, fontSize: 10, letterSpacing: '0.14em',
-            padding: '7px 12px', border: `1px solid ${theme.ink}`, background: 'transparent',
-            color: theme.ink, cursor: 'pointer', borderRadius: 2, fontWeight: 600,
-            textTransform: 'uppercase',
-          }}>Subscribe</button>
+          <button
+            onClick={handleSubscribeClick}
+            style={{
+              fontFamily: type.mono, fontSize: 10, letterSpacing: '0.14em',
+              padding: '7px 12px', border: `1px solid ${theme.ink}`, background: 'transparent',
+              color: theme.ink, cursor: 'pointer', borderRadius: 2, fontWeight: 600,
+              textTransform: 'uppercase',
+            }}>Subscribe</button>
         </div>
       </div>
       <style>{`

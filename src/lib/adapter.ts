@@ -133,6 +133,7 @@ export function detailToItem(data: DetailResponse): DisplayItem {
 
   return {
     ...base,
+    dek: '',
     body: data.story.summary_neutral || data.story.summary_spicy || data.story.primary_headline || '',
     sources: sources.length > 0 ? sources : base.sources,
   };
@@ -165,9 +166,20 @@ const EO_CATEGORY_LABELS: Record<string, string> = {
   gov_ops_workforce: 'Government Operations',
 };
 
+const ACTION_TIER_LABELS: Record<string, string> = {
+  direct: 'Act Now',
+  systemic: 'Watch Closely',
+  tracking: 'Tracking',
+};
+
 export function eoToItem(raw: Record<string, unknown>): DisplayItem {
   const sources: { label: string; url: string }[] = [];
   if (raw.source_url) sources.push({ label: 'Federal Register', url: raw.source_url as string });
+
+  const tags: string[] = [];
+  if (raw.order_number) tags.push(`EO ${raw.order_number}`);
+  const tierLabel = ACTION_TIER_LABELS[raw.action_tier as string];
+  if (tierLabel) tags.push(tierLabel);
 
   return {
     id: raw.id as number,
@@ -182,7 +194,7 @@ export function eoToItem(raw: Record<string, unknown>): DisplayItem {
     dek: truncateDek((raw.section_what_it_means as string) || ''),
     body: (raw.section_why_it_matters as string) || '',
     sources,
-    tags: [],
+    tags,
   };
 }
 
@@ -214,7 +226,7 @@ export function scotusToItem(raw: Record<string, unknown>): DisplayItem {
     dek: truncateDek((raw.summary_spicy as string) || (raw.who_wins as string) || ''),
     body: (raw.why_it_matters as string) || '',
     sources,
-    tags: raw.vote_split ? [raw.vote_split as string] : [],
+    tags: [raw.ruling_label, raw.vote_split, raw.majority_author].filter(Boolean) as string[],
   };
 }
 
@@ -233,7 +245,31 @@ const CONNECTION_LABELS: Record<string, string> = {
   no_connection: 'No Known Connection',
 };
 
+const POST_PARDON_LABELS: Record<string, string> = {
+  quiet: 'Quiet',
+  under_investigation: 'Under Investigation',
+  re_offended: 'Re-offended',
+};
+
 export function pardonToItem(raw: Record<string, unknown>): DisplayItem {
+  const name = (raw.recipient_name as string) || '';
+  const nickname = raw.nickname as string;
+  const displayName = nickname ? `${name} ("${nickname}")` : name;
+
+  const sources: { label: string; url: string }[] = [];
+  if (raw.primary_source_url) sources.push({ label: 'Source', url: raw.primary_source_url as string });
+  const sourceUrls = raw.source_urls as string[] | null;
+  if (Array.isArray(sourceUrls)) {
+    sourceUrls.forEach((u, i) => {
+      if (u && !sources.some(s => s.url === u)) sources.push({ label: `Source ${i + 2}`, url: u });
+    });
+  }
+
+  const tags: string[] = [];
+  if (raw.recipient_type === 'group' && raw.recipient_count) {
+    tags.push(`~${raw.recipient_count} people`);
+  }
+
   return {
     id: raw.id as number,
     type: 'pardons',
@@ -242,13 +278,138 @@ export function pardonToItem(raw: Record<string, unknown>): DisplayItem {
     status: 'active',
     published: (raw.pardon_date as string) || '',
     updated: (raw.pardon_date as string) || '',
-    headline_spicy: (raw.recipient_name as string) || '',
-    headline_neutral: (raw.recipient_name as string) || '',
+    headline_spicy: displayName,
+    headline_neutral: displayName,
     dek: truncateDek((raw.summary_spicy as string) || (raw.crime_description as string) || ''),
     body: (raw.crime_description as string) || '',
-    sources: [],
-    tags: [],
+    sources,
+    tags,
   };
+}
+
+// ── Detail-Specific Adapters ──
+
+function corruptionDots(level: number): string {
+  const clamped = Math.max(0, Math.min(5, level));
+  return '●'.repeat(clamped) + '○'.repeat(5 - clamped);
+}
+
+function formatMoney(amount: number): string {
+  return '$' + amount.toLocaleString('en-US');
+}
+
+function pushMeta(arr: { label: string; value: string }[], label: string, raw: unknown) {
+  if (raw == null || raw === '') return;
+  if (typeof raw === 'number' && isNaN(raw)) return;
+  arr.push({ label, value: String(raw) });
+}
+
+function pushSection(arr: { heading: string; content: string }[], heading: string, raw: unknown) {
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return;
+  arr.push({ heading, content: String(raw) });
+}
+
+export function eoDetailToItem(raw: Record<string, unknown>): DisplayItem {
+  const base = eoToItem(raw);
+  const meta: { label: string; value: string }[] = [];
+  if (raw.order_number) meta.push({ label: 'Executive Order', value: `EO ${raw.order_number}` });
+  pushMeta(meta, 'Signed', raw.date);
+  const tierLabel = ACTION_TIER_LABELS[raw.action_tier as string];
+  if (tierLabel) meta.push({ label: 'Action Level', value: tierLabel });
+
+  const sections: { heading: string; content: string }[] = [];
+  pushSection(sections, 'What They Say', raw.section_what_they_say);
+  pushSection(sections, 'What It Really Means', raw.section_what_it_means);
+  pushSection(sections, 'Reality Check', raw.section_reality_check);
+  pushSection(sections, 'Why It Matters', raw.section_why_it_matters);
+  return { ...base, dek: '', body: '', meta: meta.length > 0 ? meta : undefined, sections };
+}
+
+export function scotusDetailToItem(raw: Record<string, unknown>): DisplayItem {
+  const base = scotusToItem(raw);
+  const meta: { label: string; value: string }[] = [];
+  pushMeta(meta, 'Docket', raw.docket_number);
+  pushMeta(meta, 'Citation', raw.citation);
+  pushMeta(meta, 'Decided', raw.decided_at);
+  pushMeta(meta, 'Argued', raw.argued_at);
+  pushMeta(meta, 'Disposition', raw.disposition);
+  pushMeta(meta, 'Vote', raw.vote_split);
+  pushMeta(meta, 'Majority Opinion', raw.majority_author);
+  const dissentAuthors = raw.dissent_authors;
+  if (Array.isArray(dissentAuthors) && dissentAuthors.length > 0) {
+    meta.push({ label: 'Dissenting', value: dissentAuthors.join(', ') });
+  } else if (typeof dissentAuthors === 'string' && dissentAuthors) {
+    meta.push({ label: 'Dissenting', value: dissentAuthors });
+  }
+  pushMeta(meta, 'Term', raw.term);
+
+  const sections: { heading: string; content: string }[] = [];
+  pushSection(sections, 'Summary', raw.summary_spicy);
+  pushSection(sections, 'Why It Matters', raw.why_it_matters);
+  pushSection(sections, 'Who Wins', raw.who_wins);
+  pushSection(sections, 'Who Loses', raw.who_loses);
+  pushSection(sections, 'Dissent Highlights', raw.dissent_highlights);
+
+  return { ...base, dek: '', body: '', meta, sections };
+}
+
+export function pardonDetailToItem(raw: Record<string, unknown>): DisplayItem {
+  const base = pardonToItem(raw);
+  const meta: { label: string; value: string }[] = [];
+
+  pushMeta(meta, 'Pardon Date', raw.pardon_date);
+  pushMeta(meta, 'Clemency Type', raw.clemency_type);
+  pushMeta(meta, 'Crime', raw.crime_category);
+  pushMeta(meta, 'Original Sentence', raw.original_sentence);
+
+  const corruptionLevel = Number(raw.corruption_level);
+  if (!isNaN(corruptionLevel) && corruptionLevel > 0) {
+    meta.push({ label: 'Corruption Level', value: corruptionDots(corruptionLevel) });
+  }
+
+  const connType = raw.primary_connection_type as string;
+  if (connType && CONNECTION_LABELS[connType]) {
+    meta.push({ label: 'Trump Connection', value: CONNECTION_LABELS[connType] });
+  }
+
+  const donation = Number(raw.donation_amount_usd);
+  if (!isNaN(donation) && donation > 0) {
+    meta.push({ label: 'Donation Amount', value: formatMoney(donation) });
+  }
+
+  if (raw.recipient_type === 'group' && raw.recipient_criteria) {
+    meta.push({ label: 'Group Criteria', value: String(raw.recipient_criteria) });
+  }
+
+  const postStatus = POST_PARDON_LABELS[raw.post_pardon_status as string];
+  if (postStatus && raw.post_pardon_status !== 'quiet') {
+    meta.push({ label: 'Post-Pardon Status', value: postStatus });
+  }
+
+  const sections: { heading: string; content: string }[] = [];
+  pushSection(sections, 'The Connection', raw.trump_connection_detail);
+  pushSection(sections, 'The Real Story', raw.summary_spicy);
+  pushSection(sections, 'Why It Matters', raw.why_it_matters);
+  pushSection(sections, 'The Pattern', raw.pattern_analysis);
+
+  const timeline = raw.receipts_timeline;
+  if (Array.isArray(timeline) && timeline.length > 0) {
+    const timelineText = timeline.map((e: Record<string, unknown>) => {
+      const parts: string[] = [];
+      if (e.event_type) parts.push(String(e.event_type).toUpperCase());
+      if (e.date) parts.push(String(e.date));
+      if (e.description) parts.push(String(e.description));
+      if (e.amount_usd) parts.push(`$${Number(e.amount_usd).toLocaleString('en-US')}`);
+      return parts.join(' — ');
+    }).join('\n\n');
+    pushSection(sections, 'The Receipts', timelineText);
+  } else if (typeof timeline === 'string' && timeline.trim()) {
+    pushSection(sections, 'The Receipts', timeline);
+  }
+
+  pushSection(sections, 'What Happened Next', raw.post_pardon_notes);
+
+  return { ...base, dek: '', body: '', meta, sections };
 }
 
 export { CATEGORY_LABELS, SEVERITY_TO_ALARM };
