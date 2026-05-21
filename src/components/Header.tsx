@@ -127,6 +127,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
         borderTop: `1px solid ${theme.line}`,
         padding: '8px 20px', gap: 16,
         fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+        width: '100%',
       }}>
         {[
           { label: 'Home', href: '/' },
