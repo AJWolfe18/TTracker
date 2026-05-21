@@ -139,8 +139,7 @@ export function Home({
             <span>Filed {fmtDate(lead.published)}</span>
             <span>·</span>
             <span>Updated {relDate(lead.updated)}</span>
-            <span>·</span>
-            <span>{lead.sources.length} sources</span>
+            {lead.sources.length > 1 && (<><span>·</span><span>{lead.sources.length} sources</span></>)}
           </div>
         </div>
       </section>
