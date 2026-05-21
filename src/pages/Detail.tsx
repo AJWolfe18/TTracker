@@ -42,6 +42,10 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
 
   const c = alarmPalette(item.alarm, 'restrained', mode, 'midnight');
 
+  const correctionSubject = `Correction: ${item.headline_neutral}`;
+  const correctionBody = `Story ID: ${item.id}\n\nWhich claim is incorrect:\n\nCorrect information:\n\nSource URL:`;
+  const mailtoHref = `mailto:corrections@trumpytracker.com?subject=${encodeURIComponent(correctionSubject)}&body=${encodeURIComponent(correctionBody)}`;
+
   async function handleCopyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -170,7 +174,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
               {copied ? 'Copied!' : 'Copy Link'}
             </button>
             <a
-              href={`mailto:corrections@trumpytracker.com?subject=Correction: ${encodeURIComponent(item.headline_neutral)}&body=Story ID: ${item.id}%0A%0AWhich claim is incorrect:%0A%0ACorrect information:%0A%0ASource URL:`}
+              href={mailtoHref}
               style={{ textDecoration: 'none', fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.line}`, background: 'transparent', color: theme.ink, cursor: 'pointer', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block' }}>
               Report Correction
             </a>
