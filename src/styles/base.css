@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; overflow-x: hidden; }
 body { font-family: 'Inter Tight', system-ui, sans-serif; }
 html[data-mode="dark"] body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 html[data-mode="light"] body { -webkit-font-smoothing: auto; }

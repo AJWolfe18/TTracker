@@ -21,8 +21,8 @@ export function FilterBar({
   const { theme, headType: type } = useTheme();
 
   return (
-    <div style={{ padding: '16px 0', borderBottom: `1px solid ${theme.line}` }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+    <div style={{ padding: '16px 0', borderBottom: `1px solid ${theme.line}`, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {config.dimensions.map(dim => (
           dim.type === 'pills'
             ? <PillGroup key={dim.key} dim={dim} active={activeFilters[dim.key] || ''} onChange={v => onFilterChange(dim.key, v || null)} />
