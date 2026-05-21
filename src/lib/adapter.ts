@@ -131,11 +131,20 @@ export function detailToItem(data: DetailResponse): DisplayItem {
       url: a.url,
     }));
 
+  const sections: { heading: string; content: string }[] = [];
+  if (data.story.summary_neutral) {
+    sections.push({ heading: 'The Story', content: data.story.summary_neutral });
+  }
+  if (data.story.summary_spicy && data.story.summary_spicy !== data.story.summary_neutral) {
+    sections.push({ heading: 'The Real Take', content: data.story.summary_spicy });
+  }
+
   return {
     ...base,
     dek: '',
-    body: data.story.summary_neutral || data.story.summary_spicy || data.story.primary_headline || '',
+    body: '',
     sources: sources.length > 0 ? sources : base.sources,
+    sections: sections.length > 0 ? sections : undefined,
   };
 }
 
@@ -289,19 +298,27 @@ export function pardonToItem(raw: Record<string, unknown>): DisplayItem {
 
 // ── Detail-Specific Adapters ──
 
-function corruptionDots(level: number): string {
-  const clamped = Math.max(0, Math.min(5, level));
-  return '●'.repeat(clamped) + '○'.repeat(5 - clamped);
-}
-
 function formatMoney(amount: number): string {
   return '$' + amount.toLocaleString('en-US');
+}
+
+function fmtMetaDate(val: unknown): string | null {
+  if (val == null || val === '') return null;
+  const s = String(val);
+  const d = new Date(s.includes('T') ? s : s + 'T00:00:00');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function pushMeta(arr: { label: string; value: string }[], label: string, raw: unknown) {
   if (raw == null || raw === '') return;
   if (typeof raw === 'number' && isNaN(raw)) return;
   arr.push({ label, value: String(raw) });
+}
+
+function pushMetaDate(arr: { label: string; value: string }[], label: string, raw: unknown) {
+  const formatted = fmtMetaDate(raw);
+  if (formatted) arr.push({ label, value: formatted });
 }
 
 function pushSection(arr: { heading: string; content: string }[], heading: string, raw: unknown) {
@@ -313,9 +330,7 @@ export function eoDetailToItem(raw: Record<string, unknown>): DisplayItem {
   const base = eoToItem(raw);
   const meta: { label: string; value: string }[] = [];
   if (raw.order_number) meta.push({ label: 'Executive Order', value: `EO ${raw.order_number}` });
-  pushMeta(meta, 'Signed', raw.date);
-  const tierLabel = ACTION_TIER_LABELS[raw.action_tier as string];
-  if (tierLabel) meta.push({ label: 'Action Level', value: tierLabel });
+  pushMetaDate(meta, 'Signed', raw.date);
 
   const sections: { heading: string; content: string }[] = [];
   pushSection(sections, 'What They Say', raw.section_what_they_say);
@@ -330,9 +345,9 @@ export function scotusDetailToItem(raw: Record<string, unknown>): DisplayItem {
   const meta: { label: string; value: string }[] = [];
   pushMeta(meta, 'Docket', raw.docket_number);
   pushMeta(meta, 'Citation', raw.citation);
-  pushMeta(meta, 'Decided', raw.decided_at);
-  pushMeta(meta, 'Argued', raw.argued_at);
-  pushMeta(meta, 'Disposition', raw.disposition);
+  pushMetaDate(meta, 'Decided', raw.decided_at);
+  pushMetaDate(meta, 'Argued', raw.argued_at);
+  if (raw.disposition) meta.push({ label: 'Disposition', value: String(raw.disposition).charAt(0).toUpperCase() + String(raw.disposition).slice(1) });
   pushMeta(meta, 'Vote', raw.vote_split);
   pushMeta(meta, 'Majority Opinion', raw.majority_author);
   const dissentAuthors = raw.dissent_authors;
@@ -357,15 +372,10 @@ export function pardonDetailToItem(raw: Record<string, unknown>): DisplayItem {
   const base = pardonToItem(raw);
   const meta: { label: string; value: string }[] = [];
 
-  pushMeta(meta, 'Pardon Date', raw.pardon_date);
-  pushMeta(meta, 'Clemency Type', raw.clemency_type);
+  pushMetaDate(meta, 'Pardon Date', raw.pardon_date);
+  if (raw.clemency_type) meta.push({ label: 'Clemency Type', value: String(raw.clemency_type).charAt(0).toUpperCase() + String(raw.clemency_type).slice(1) });
   pushMeta(meta, 'Crime', raw.crime_category);
   pushMeta(meta, 'Original Sentence', raw.original_sentence);
-
-  const corruptionLevel = Number(raw.corruption_level);
-  if (!isNaN(corruptionLevel) && corruptionLevel > 0) {
-    meta.push({ label: 'Corruption Level', value: corruptionDots(corruptionLevel) });
-  }
 
   const connType = raw.primary_connection_type as string;
   if (connType && CONNECTION_LABELS[connType]) {
@@ -387,8 +397,8 @@ export function pardonDetailToItem(raw: Record<string, unknown>): DisplayItem {
   }
 
   const sections: { heading: string; content: string }[] = [];
-  pushSection(sections, 'The Connection', raw.trump_connection_detail);
   pushSection(sections, 'The Real Story', raw.summary_spicy);
+  pushSection(sections, 'The Connection', raw.trump_connection_detail);
   pushSection(sections, 'Why It Matters', raw.why_it_matters);
   pushSection(sections, 'The Pattern', raw.pattern_analysis);
 

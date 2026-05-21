@@ -103,13 +103,13 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
             aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
             title={isLight ? 'Dark mode' : 'Light mode'}
             style={{
-              fontFamily: type.mono, fontSize: 12, padding: '7px 9px',
+              fontFamily: type.mono, fontSize: 10, letterSpacing: '0.14em',
+              padding: '7px 12px',
               border: `1px solid ${theme.line}`, background: 'transparent',
               color: theme.ink, cursor: 'pointer', borderRadius: 2,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 30, height: 30,
+              textTransform: 'uppercase', fontWeight: 600,
             }}>
-            {isLight ? '☾' : '☀'}
+            {isLight ? 'Dark' : 'Light'}
           </button>
           <button
             onClick={handleSubscribeClick}

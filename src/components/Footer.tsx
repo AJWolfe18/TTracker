@@ -34,7 +34,7 @@ export function Footer() {
             TrumpyTracker
           </div>
           <p style={{ fontFamily: type.sans, fontSize: 14, color: theme.dim, lineHeight: 1.55, maxWidth: 360 }}>
-            A daily accountability log. Sourced, cited, updated. We publish both the spicy headline and the neutral one — your choice which to share.
+            A daily accountability log. Sourced, cited, updated.
           </p>
           <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
             <input
@@ -65,21 +65,40 @@ export function Footer() {
           )}
         </div>
         {([
-          ['Tracking', ['Stories', 'Executive Orders', 'SCOTUS', 'Pardons']],
-          ['The Site', ['About', 'Editorial Standards', 'Contact', 'RSS']],
-          ['Legal', ['Sources', 'Corrections', 'Privacy', 'Fair Use']],
+          ['Tracking', [
+            { label: 'Stories', href: '/' },
+            { label: 'Executive Orders', href: '/eos' },
+            { label: 'SCOTUS', href: '/scotus' },
+            { label: 'Pardons', href: '/pardons' },
+          ]],
+          ['The Site', [
+            { label: 'About', href: '/about' },
+            { label: 'Editorial Standards', href: null },
+            { label: 'Contact', href: null },
+            { label: 'RSS', href: null },
+          ]],
+          ['Legal', [
+            { label: 'Sources', href: null },
+            { label: 'Corrections', href: null },
+            { label: 'Privacy', href: null },
+            { label: 'Fair Use', href: null },
+          ]],
         ] as const).map(([title, links]) => (
           <div key={title}>
             <div style={{ fontFamily: type.mono, fontSize: 10, color: theme.dim, textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 14 }}>{title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {links.map(l => <a key={l} href="#" style={{ fontFamily: type.sans, fontSize: 13, color: theme.ink, textDecoration: 'none' }}>{l}</a>)}
+              {links.map(l => l.href ? (
+                <a key={l.label} href={l.href} style={{ fontFamily: type.sans, fontSize: 13, color: theme.ink, textDecoration: 'none' }}>{l.label}</a>
+              ) : (
+                <span key={l.label} style={{ fontFamily: type.sans, fontSize: 13, color: theme.dim, cursor: 'default' }}>{l.label}</span>
+              ))}
             </div>
           </div>
         ))}
       </div>
       <div style={{ marginTop: 40, paddingTop: 20, borderTop: `1px solid ${theme.line}`, fontFamily: type.mono, fontSize: 10, color: theme.dim, display: 'flex', justifyContent: 'space-between', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
         <span>&copy; 2026 TrumpyTracker &middot; reader-supported</span>
-        <span>last updated: {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+        <span>last updated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
       </div>
       <style>{`@media (max-width: 800px) { .tt-footer-grid { grid-template-columns: 1fr 1fr !important; } }`}</style>
     </footer>

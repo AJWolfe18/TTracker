@@ -64,11 +64,9 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
           <div style={{ marginBottom: 22 }}>
             <div style={{ width: 56, height: 2, background: c.accent, marginBottom: 12 }} />
             <div style={{ fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.18em', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ color: c.accent, fontWeight: 700 }}>{TONE_SYSTEM.colors[item.alarm]?.label}</span>
+              <span style={{ color: c.accent, fontWeight: 700 }}>{TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}</span>
               <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{TONE_SYSTEM.typeLabels[item.type]}</span>
-              <span style={{ color: theme.dim }}>&middot;</span>
-              <span style={{ color: theme.dim }}>{TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}</span>
               <span style={{ color: theme.dim }}>&middot;</span>
               <span style={{ color: theme.dim }}>{item.category}</span>
               <span style={{ color: theme.dim }}>&middot;</span>
@@ -112,7 +110,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
                   {m.label === 'Corruption Level' ? (
                     <CorruptionBar value={m.value} accent={c.accent} dim={theme.line} />
                   ) : (
-                    <div style={{ fontFamily: type.sans, fontSize: 15, color: theme.ink, lineHeight: 1.4 }}>
+                    <div style={{ fontFamily: type.sans, fontSize: 16, fontWeight: 600, color: theme.ink, lineHeight: 1.4 }}>
                       {m.value}
                     </div>
                   )}
@@ -233,14 +231,14 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
 }
 
 const TIMELINE_COLORS: Record<string, string> = {
-  donation: '#16a34a',
-  conviction: '#dc2626',
-  pardon_request: '#ca8a04',
-  pardon_granted: '#9333ea',
-  mar_a_lago_visit: '#f97316',
-  sentencing: '#be123c',
-  investigation: '#0891b2',
-  legal_filing: '#3b82f6',
+  donation: '#6b7280',
+  conviction: '#6b7280',
+  pardon_request: '#6b7280',
+  pardon_granted: '#6b7280',
+  mar_a_lago_visit: '#6b7280',
+  sentencing: '#6b7280',
+  investigation: '#6b7280',
+  legal_filing: '#6b7280',
   other: '#6b7280',
 };
 
@@ -301,7 +299,7 @@ function ReceiptsTimeline({ events, theme, type }: { events: TimelineEvent[]; th
                 </div>
               )}
               {evt.amount_usd != null && evt.amount_usd > 0 && (
-                <div style={{ fontFamily: type.mono, fontSize: 14, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
+                <div style={{ fontFamily: type.mono, fontSize: 14, fontWeight: 700, color: theme.ink, marginTop: 4 }}>
                   ${evt.amount_usd.toLocaleString('en-US')}
                 </div>
               )}

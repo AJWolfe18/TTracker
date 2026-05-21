@@ -168,27 +168,26 @@ describe('detailToItem', () => {
     expect(item.sources).toEqual([{ label: 'Reuters', url: 'https://reuters.com/article/test' }]);
   });
 
-  it('sets body from summary_neutral', () => {
+  it('maps summary_neutral to a section', () => {
     const data: DetailResponse = {
       story: makeStory({ summary_neutral: 'The body text.' }),
       articles: [],
     };
     const item = detailToItem(data);
-    expect(item.body).toBe('The body text.');
+    expect(item.body).toBe('');
+    expect(item.sections).toBeDefined();
+    expect(item.sections![0]).toEqual({ heading: 'The Story', content: 'The body text.' });
   });
 
-  it('body falls back through summary_spicy then primary_headline', () => {
-    const data1: DetailResponse = {
-      story: makeStory({ summary_neutral: null, summary_spicy: 'Spicy body.' }),
+  it('maps both summaries as separate sections when different', () => {
+    const data: DetailResponse = {
+      story: makeStory({ summary_neutral: 'Neutral take.', summary_spicy: 'Spicy take.' }),
       articles: [],
     };
-    expect(detailToItem(data1).body).toBe('Spicy body.');
-
-    const data2: DetailResponse = {
-      story: makeStory({ summary_neutral: null, summary_spicy: null, primary_headline: 'Headline as body.' }),
-      articles: [],
-    };
-    expect(detailToItem(data2).body).toBe('Headline as body.');
+    const item = detailToItem(data);
+    expect(item.sections).toHaveLength(2);
+    expect(item.sections![0].heading).toBe('The Story');
+    expect(item.sections![1].heading).toBe('The Real Take');
   });
 
   it('no field is undefined', () => {

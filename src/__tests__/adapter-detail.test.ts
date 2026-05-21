@@ -37,12 +37,11 @@ describe('eoDetailToItem', () => {
     expect(item.sections![1].heading).toBe('Why It Matters');
   });
 
-  it('maps meta with order_number and action_tier', () => {
+  it('maps meta with order_number and signed date', () => {
     const item = eoDetailToItem(fullEo);
     expect(item.meta).toBeDefined();
     expect(item.meta!.find(m => m.label === 'Executive Order')?.value).toBe('EO 14200');
-    expect(item.meta!.find(m => m.label === 'Signed')?.value).toBe('2025-03-15');
-    expect(item.meta!.find(m => m.label === 'Action Level')?.value).toBe('Act Now');
+    expect(item.meta!.find(m => m.label === 'Signed')?.value).toBe('15 Mar 2025');
   });
 
   it('body and dek are empty (content in sections)', () => {
@@ -158,12 +157,6 @@ describe('pardonDetailToItem', () => {
     original_sentence: '5 years federal prison',
   };
 
-  it('maps corruption level as dots', () => {
-    const item = pardonDetailToItem(fullPardon);
-    const corruptionMeta = item.meta!.find(m => m.label === 'Corruption Level');
-    expect(corruptionMeta?.value).toBe('●●●●○');
-  });
-
   it('formats donation amount', () => {
     const item = pardonDetailToItem(fullPardon);
     const donationMeta = item.meta!.find(m => m.label === 'Donation Amount');
@@ -178,7 +171,7 @@ describe('pardonDetailToItem', () => {
 
   it('includes pardon date and crime in meta', () => {
     const item = pardonDetailToItem(fullPardon);
-    expect(item.meta!.find(m => m.label === 'Pardon Date')?.value).toBe('2025-01-20');
+    expect(item.meta!.find(m => m.label === 'Pardon Date')?.value).toBe('20 Jan 2025');
     expect(item.meta!.find(m => m.label === 'Crime')?.value).toBe('white_collar');
     expect(item.meta!.find(m => m.label === 'Original Sentence')?.value).toBe('5 years federal prison');
   });
@@ -223,9 +216,9 @@ describe('pardonDetailToItem', () => {
     expect(item.headline_spicy).toBe('John Doe ("Johnny")');
   });
 
-  it('corruption dots clamps at 5', () => {
-    const item = pardonDetailToItem({ ...fullPardon, corruption_level: 7 });
-    const corruptionMeta = item.meta!.find(m => m.label === 'Corruption Level');
-    expect(corruptionMeta?.value).toBe('●●●●●');
+  it('preserves base fields', () => {
+    const item = pardonDetailToItem(fullPardon);
+    expect(item.type).toBe('pardons');
+    expect(item.id).toBe(200);
   });
 });

@@ -2,12 +2,12 @@ import { TONE_SYSTEM } from './tone-system';
 import { THEME_SEVERITY, THEME_SEVERITY_LIGHT, type SeverityColor } from './severity';
 
 const LIGHT_RESTRAINED: Record<number, SeverityColor> = {
-  5: { accent: "#9a2d22", bg: "#f7ebe6", text: "#5c1810", ring: "#9a2d22" },
-  4: { accent: "#8a5a1f", bg: "#f6efd9", text: "#4c2e0a", ring: "#8a5a1f" },
-  3: { accent: "#57534e", bg: "#ecebe7", text: "#2b2a27", ring: "#78716c" },
-  2: { accent: "#57534e", bg: "#ecebe7", text: "#2b2a27", ring: "#78716c" },
-  1: { accent: "#57534e", bg: "#ecebe7", text: "#2b2a27", ring: "#78716c" },
-  0: { accent: "#57534e", bg: "#ecebe7", text: "#2b2a27", ring: "#78716c" },
+  5: { accent: "#8b1a12", bg: "#f7ebe6", text: "#5c1810", ring: "#8b1a12" },
+  4: { accent: "#b8860b", bg: "#faf0d4", text: "#4a3506", ring: "#b8860b" },
+  3: { accent: "#7a6a3e", bg: "#f2ede3", text: "#3a2e18", ring: "#8a7a5e" },
+  2: { accent: "#4a6a80", bg: "#e8edf2", text: "#1e2e3a", ring: "#5e7a8a" },
+  1: { accent: "#4a7a8a", bg: "#e6f0f2", text: "#1a2e35", ring: "#5a8a9a" },
+  0: { accent: "#1a7a4a", bg: "#e3f2ea", text: "#0a3e22", ring: "#3a9a68" },
 };
 
 const LIGHT_FULL: Record<number, SeverityColor> = {

@@ -21,12 +21,10 @@ export function Kicker({ theme, type, item, accent }: KickerProps) {
         letterSpacing: '0.18em', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
       }}>
         <span style={{ color: accent, fontWeight: 700 }}>
-          Level {item.alarm} · {TONE_SYSTEM.colors[item.alarm]?.label}
+          {TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}
         </span>
         <span style={{ color: theme.dim }}>·</span>
         <span style={{ color: theme.dim }}>{TONE_SYSTEM.typeLabels[item.type]}</span>
-        <span style={{ color: theme.dim }}>·</span>
-        <span style={{ color: theme.dim }}>{TONE_SYSTEM.labels[item.type]?.[item.alarm]?.spicy}</span>
       </div>
     </div>
   );

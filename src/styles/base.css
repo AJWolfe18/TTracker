@@ -8,7 +8,7 @@ button { font-family: inherit; color: inherit; }
 input { font-family: inherit; color: inherit; }
 
 html[data-mode="dark"] { background: #0a0a0b; color: #f5f5f4; }
-html[data-mode="light"] { background: #f5f5f5; color: #2b2b2b; }
+html[data-mode="light"] { background: #f8f8fa; color: #1a1a1a; }
 
 ::selection { background: #ff4d4d; color: #0a0a0b; }
 
@@ -17,9 +17,9 @@ html[data-mode="light"] { background: #f5f5f5; color: #2b2b2b; }
 ::-webkit-scrollbar-thumb { background: #2a2a2d; border-radius: 0; }
 ::-webkit-scrollbar-thumb:hover { background: #3a3a3d; }
 
-html[data-mode="light"] ::-webkit-scrollbar-track { background: #f5f5f5; }
-html[data-mode="light"] ::-webkit-scrollbar-thumb { background: #c8cacd; }
-html[data-mode="light"] ::-webkit-scrollbar-thumb:hover { background: #c0c3c7; }
+html[data-mode="light"] ::-webkit-scrollbar-track { background: #f8f8fa; }
+html[data-mode="light"] ::-webkit-scrollbar-thumb { background: #d0d3d8; }
+html[data-mode="light"] ::-webkit-scrollbar-thumb:hover { background: #b8bcc2; }
 
 @keyframes tt-shimmer {
   0%, 100% { opacity: 0.55; }
