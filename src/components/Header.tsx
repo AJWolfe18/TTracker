@@ -154,7 +154,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
           .tt-search { display: none !important; }
           .tt-logo { font-size: 17px !important; }
           .tt-mode-toggle { padding: 6px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
-          .tt-subscribe { padding: 6px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
+          .tt-subscribe { padding: 6px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; border-color: ${theme.line} !important; }
         }
         @media (max-width: 400px) {
           .tt-logo { font-size: 15px !important; }
