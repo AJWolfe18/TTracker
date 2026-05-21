@@ -27,7 +27,7 @@ export function LoadingSkeleton() {
           <div key={i} style={{ width: w, height: 14, background: theme.bg2, borderRadius: 2, animation: 'tt-shimmer 1.6s ease-in-out infinite' }} />
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20, padding: '24px 0 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: 20, padding: '24px 0 0' }}>
         {[0, 1, 2, 3, 4, 5].map(i => (
           <div key={i} style={{ background: theme.paper, border: `1px solid ${theme.line}`, padding: '0 22px 18px', minHeight: 220, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ height: 2, background: theme.line, margin: '0 -22px 16px' }} />

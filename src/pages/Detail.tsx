@@ -97,7 +97,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
 
           {/* Meta grid (SCOTUS vote split, Pardons corruption level, etc.) */}
           {item.meta && item.meta.length > 0 && (
-            <div style={{
+            <div className="tt-meta-grid" style={{
               marginTop: 32, padding: '20px 24px', background: theme.bg2,
               border: `1px solid ${theme.line}`, borderRadius: 2,
               display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 32px',
@@ -225,7 +225,14 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
         </article>
         <Footer />
       </main>
-      <style>{`@media (max-width: 700px) { .tt-related { grid-template-columns: 1fr !important; } }`}</style>
+      <style>{`
+        @media (max-width: 700px) {
+          .tt-related { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 500px) {
+          .tt-meta-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

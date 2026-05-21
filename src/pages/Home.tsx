@@ -98,7 +98,7 @@ export function Home({
         {filterBar}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))',
           gap: 20, padding: '24px 0 0',
         }}>
           {items.map(it => (
@@ -155,7 +155,7 @@ export function Home({
       )}
 
       {/* GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 20, padding: '24px 0 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: 20, padding: '24px 0 0' }}>
         {rest.map(it => (
           <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
         ))}
