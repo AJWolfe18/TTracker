@@ -15,9 +15,19 @@ const About = lazy(() => import('@/pages/About').then(m => ({ default: m.About }
 
 type DetailFetcher = (id: string | number, signal?: AbortSignal) => Promise<DisplayItem | null>;
 
+declare global {
+  interface Window { gtag?: (...args: unknown[]) => void; }
+}
+
 export function App() {
   const themeValue = useThemeProvider();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+
+  useEffect(() => {
+    if (window.gtag) {
+      window.gtag('config', 'G-5MDT4HFMNB', { page_path: location });
+    }
+  }, [location]);
 
   const makeOpenHandler = (prefix: string) => (id: string | number) => {
     navigate(`/${prefix}/${id}`);

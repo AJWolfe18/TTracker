@@ -20,6 +20,15 @@
     rel="stylesheet"
   />
 
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5MDT4HFMNB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-5MDT4HFMNB');
+  </script>
+
   <!-- FOUC prevention: set mode before any CSS/React loads -->
   <script>
     (function () {
@@ -32,7 +41,7 @@
   <style>
     /* Critical inline styles to prevent FOUC */
     html[data-mode="dark"] { background: #0a0a0b; color: #f5f5f4; }
-    html[data-mode="light"] { background: #f5f5f5; color: #2b2b2b; }
+    html[data-mode="light"] { background: #f8f8fa; color: #1a1a1a; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body { font-family: 'Inter Tight', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }

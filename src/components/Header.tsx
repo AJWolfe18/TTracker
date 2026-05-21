@@ -121,10 +121,33 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
             }}>Subscribe</button>
         </div>
       </div>
+      {/* Mobile nav */}
+      <nav aria-label="Mobile navigation" className="tt-mobile-nav" style={{
+        display: 'none', overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        borderTop: `1px solid ${theme.line}`,
+        padding: '8px 20px', gap: 16,
+        fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+      }}>
+        {[
+          { label: 'Home', href: '/' },
+          { label: 'EOs', href: '/eos' },
+          { label: 'Pardons', href: '/pardons' },
+          { label: 'SCOTUS', href: '/scotus' },
+          { label: 'About', href: '/about' },
+        ].map(item => (
+          <Link key={item.label} href={item.href}
+            aria-current={current === item.label || (item.label === 'EOs' && current === 'Executive Orders') || (item.label === 'SCOTUS' && current === 'Supreme Court') ? 'page' : undefined}
+            style={{
+              color: (current === item.label || (item.label === 'EOs' && current === 'Executive Orders') || (item.label === 'SCOTUS' && current === 'Supreme Court')) ? theme.ink : theme.dim,
+              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>{item.label}</Link>
+        ))}
+      </nav>
       <style>{`
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
         @media (max-width: 800px) {
           .tt-nav { display: none !important; }
+          .tt-mobile-nav { display: flex !important; }
           .tt-search { display: none !important; }
         }
         @media (max-width: 480px) {
