@@ -113,6 +113,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
           </button>
           <button
             onClick={handleSubscribeClick}
+            className="tt-subscribe"
             style={{
               fontFamily: type.mono, fontSize: 10, letterSpacing: '0.14em',
               padding: '7px 12px', border: `1px solid ${theme.ink}`, background: 'transparent',
@@ -150,6 +151,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
           .tt-nav { display: none !important; }
           .tt-mobile-nav { display: flex !important; }
           .tt-search { display: none !important; }
+          .tt-subscribe { display: none !important; }
         }
         @media (max-width: 480px) {
           .tt-search { display: none !important; }
