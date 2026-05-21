@@ -30,12 +30,12 @@ export interface TabFilterConfig {
 
 const ALARM_PILLS: FilterOption[] = [
   { label: 'All', urlValue: '', apiValue: '' },
-  { label: '5', urlValue: '5', apiValue: '5' },
-  { label: '4', urlValue: '4', apiValue: '4' },
-  { label: '3', urlValue: '3', apiValue: '3' },
-  { label: '2', urlValue: '2', apiValue: '2' },
-  { label: '1', urlValue: '1', apiValue: '1' },
-  { label: '0', urlValue: '0', apiValue: '0' },
+  { label: 'Crisis', urlValue: '5', apiValue: '5' },
+  { label: 'Severe', urlValue: '4', apiValue: '4' },
+  { label: 'Serious', urlValue: '3', apiValue: '3' },
+  { label: 'Notable', urlValue: '2', apiValue: '2' },
+  { label: 'Watch', urlValue: '1', apiValue: '1' },
+  { label: 'Win', urlValue: '0', apiValue: '0' },
 ];
 
 const STORIES_CONFIG: TabFilterConfig = {
@@ -72,7 +72,7 @@ const STORIES_CONFIG: TabFilterConfig = {
     },
     {
       key: 'alarm',
-      label: 'Alarm Level',
+      label: 'Severity',
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
@@ -113,7 +113,7 @@ const EOS_CONFIG: TabFilterConfig = {
     },
     {
       key: 'alarm',
-      label: 'Alarm Level',
+      label: 'Severity',
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
@@ -164,7 +164,7 @@ const SCOTUS_CONFIG: TabFilterConfig = {
     },
     {
       key: 'impact',
-      label: 'Impact Level',
+      label: 'Severity',
       type: 'pills',
       postgrestColumn: 'ruling_impact_level',
       postgrestOp: 'eq',

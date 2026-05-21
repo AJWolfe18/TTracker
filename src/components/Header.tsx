@@ -102,6 +102,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
             onClick={toggleMode}
             aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
             title={isLight ? 'Dark mode' : 'Light mode'}
+            className="tt-mode-toggle"
             style={{
               fontFamily: type.mono, fontSize: 10, letterSpacing: '0.14em',
               padding: '7px 12px',
@@ -151,7 +152,8 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
           .tt-nav { display: none !important; }
           .tt-mobile-nav { display: flex !important; }
           .tt-search { display: none !important; }
-          .tt-subscribe { display: none !important; }
+          .tt-mode-toggle { padding: 7px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
+          .tt-subscribe { padding: 7px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
         }
         @media (max-width: 480px) {
           .tt-search { display: none !important; }
