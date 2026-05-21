@@ -1,38 +1,106 @@
 import { url, anonKey } from './supabase';
-import { adaptActiveResponse, adaptSearchResponse, detailToItem, eoToItem, scotusToItem, pardonToItem, eoDetailToItem, scotusDetailToItem, pardonDetailToItem } from './adapter';
+import { storyToItem, eoToItem, scotusToItem, pardonToItem, detailToItem, eoDetailToItem, scotusDetailToItem, pardonDetailToItem } from './adapter';
+import { buildPostgrestUrl, buildIlikeOr, buildFtsParam, parseContentRange } from './postgrest';
+import { getFilterConfig } from './filters';
 import type { DisplayItem } from '@/types';
+import type { TabFilterConfig } from './filters';
 
 export interface FetchOptions {
-  cursor?: string;
-  limit?: number;
+  page?: number;
+  filters?: Record<string, string>;
   signal?: AbortSignal;
 }
 
 export interface FetchResult {
   items: DisplayItem[];
-  nextCursor: string | null;
-  hasMore: boolean;
+  total: number;
+  page: number;
+  totalPages: number;
 }
 
-const headers = {
+const baseHeaders = {
   'apikey': anonKey,
   'Authorization': `Bearer ${anonKey}`,
   'Content-Type': 'application/json',
 };
 
-export async function fetchActiveStories(options?: FetchOptions): Promise<FetchResult> {
-  const params = new URLSearchParams();
-  if (options?.cursor) params.set('cursor', options.cursor);
-  if (options?.limit) params.set('limit', String(options.limit));
+function buildFilters(config: TabFilterConfig, filters?: Record<string, string>): string[] {
+  const out = [...config.baseFilters];
+  if (!filters) return out;
 
-  const qs = params.toString();
-  const endpoint = `${url}/functions/v1/stories-active${qs ? '?' + qs : ''}`;
+  for (const dim of config.dimensions) {
+    const val = filters[dim.key];
+    if (val) {
+      const allowed = new Set(dim.options.map(o => o.apiValue).filter(Boolean));
+      if (allowed.has(val)) {
+        out.push(`${dim.postgrestColumn}=${dim.postgrestOp}.${val}`);
+      }
+    }
+  }
 
-  const res = await fetch(endpoint, { headers, signal: options?.signal });
-  if (!res.ok) throw new Error(`stories-active: ${res.status}`);
+  const q = filters.q;
+  if (q && q.trim()) {
+    if (config.searchVectorColumn) {
+      out.push(buildFtsParam(config.searchVectorColumn, q));
+    } else if (config.searchColumns.length > 0) {
+      out.push(buildIlikeOr(config.searchColumns, q));
+    }
+  }
 
-  const data = await res.json();
-  return adaptActiveResponse(data);
+  return out;
+}
+
+type Adapter = (raw: Record<string, unknown>) => DisplayItem;
+
+const ADAPTERS: Record<string, Adapter> = {
+  stories: (raw => storyToItem(raw as unknown as Parameters<typeof storyToItem>[0])) as Adapter,
+  eos: eoToItem,
+  scotus: scotusToItem,
+  pardons: pardonToItem,
+};
+
+export async function fetchList(
+  tabType: string,
+  options?: FetchOptions,
+): Promise<FetchResult> {
+  const config = getFilterConfig(tabType);
+  const adapter = ADAPTERS[tabType] || ADAPTERS.stories;
+  const pg = options?.page ?? 1;
+
+  const filters = buildFilters(config, options?.filters);
+  const { url: reqUrl, headers: preferHeaders } = buildPostgrestUrl(
+    url, config.table, {
+      select: config.selectFields,
+      filters,
+      order: config.orderBy,
+      limit: config.pageSize,
+      page: pg,
+    },
+  );
+
+  const res = await fetch(reqUrl, {
+    headers: { ...baseHeaders, ...preferHeaders },
+    signal: options?.signal,
+  });
+
+  // 416 = offset beyond total (empty page, but Content-Range still valid)
+  if (!res.ok && res.status !== 416) {
+    throw new Error(`${config.table}: ${res.status}`);
+  }
+
+  const total = parseContentRange(res.headers.get('content-range')) ?? 0;
+  const data: Record<string, unknown>[] = res.status === 416 ? [] : await res.json();
+  const items = data.map(adapter);
+  const totalPages = total === 0 ? 0 : Math.ceil(total / config.pageSize);
+
+  return { items, total, page: pg, totalPages };
+}
+
+// ── Detail fetchers (unchanged — single item by ID) ──
+
+function validateId(id: string | number): number | null {
+  const n = Number(id);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export async function fetchStoryDetail(
@@ -40,73 +108,21 @@ export async function fetchStoryDetail(
   signal?: AbortSignal,
 ): Promise<DisplayItem | null> {
   const endpoint = `${url}/functions/v1/stories-detail/${id}`;
-
-  const res = await fetch(endpoint, { headers, signal });
+  const res = await fetch(endpoint, { headers: baseHeaders, signal });
   if (!res.ok) {
     if (res.status === 404) return null;
     throw new Error(`stories-detail: ${res.status}`);
   }
-
   const data = await res.json();
   if (!data?.story) return null;
   return detailToItem(data);
-}
-
-export async function searchStories(
-  query: string,
-  options?: FetchOptions,
-): Promise<FetchResult> {
-  const params = new URLSearchParams();
-  params.set('q', query);
-  if (options?.cursor) params.set('cursor', options.cursor);
-  if (options?.limit) params.set('limit', String(options.limit));
-
-  const endpoint = `${url}/functions/v1/stories-search?${params.toString()}`;
-
-  const res = await fetch(endpoint, { headers, signal: options?.signal });
-  if (!res.ok) throw new Error(`stories-search: ${res.status}`);
-
-  const data = await res.json();
-  return adaptSearchResponse(data);
-}
-
-export async function fetchExecutiveOrders(options?: FetchOptions): Promise<FetchResult> {
-  const query = 'executive_orders?select=id,order_number,title,date,category,alarm_level,action_tier,section_what_it_means,section_why_it_matters,source_url&is_public=eq.true&order=date.desc,id.desc&limit=100';
-  const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal: options?.signal });
-  if (!res.ok) throw new Error(`executive_orders: ${res.status}`);
-
-  const data: Record<string, unknown>[] = await res.json();
-  return { items: data.map(eoToItem), nextCursor: null, hasMore: false };
-}
-
-export async function fetchScotusCases(options?: FetchOptions): Promise<FetchResult> {
-  const query = 'scotus_cases?select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,case_type,ruling_impact_level,ruling_label,summary_spicy,who_wins,who_loses,why_it_matters,source_url,pdf_url&is_public=eq.true&order=decided_at.desc&limit=100';
-  const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal: options?.signal });
-  if (!res.ok) throw new Error(`scotus_cases: ${res.status}`);
-
-  const data: Record<string, unknown>[] = await res.json();
-  return { items: data.map(scotusToItem), nextCursor: null, hasMore: false };
-}
-
-export async function fetchPardons(options?: FetchOptions): Promise<FetchResult> {
-  const endpoint = `${url}/functions/v1/pardons-active`;
-  const res = await fetch(endpoint, { headers, signal: options?.signal });
-  if (!res.ok) throw new Error(`pardons-active: ${res.status}`);
-
-  const data = await res.json();
-  return { items: (data.items || []).map(pardonToItem), nextCursor: data.next_cursor || null, hasMore: data.has_more || false };
-}
-
-function validateId(id: string | number): number | null {
-  const n = Number(id);
-  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export async function fetchEoDetail(id: string | number, signal?: AbortSignal): Promise<DisplayItem | null> {
   const numId = validateId(id);
   if (!numId) return null;
   const query = `executive_orders?select=id,order_number,title,date,category,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url&id=eq.${numId}&is_public=eq.true`;
-  const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal });
+  const res = await fetch(`${url}/rest/v1/${query}`, { headers: baseHeaders, signal });
   if (!res.ok) return null;
   const data: Record<string, unknown>[] = await res.json();
   if (!data.length) return null;
@@ -117,7 +133,7 @@ export async function fetchScotusDetail(id: string | number, signal?: AbortSigna
   const numId = validateId(id);
   if (!numId) return null;
   const query = `scotus_cases?select=id,case_name,case_name_short,docket_number,citation,term,decided_at,argued_at,vote_split,majority_author,dissent_authors,case_type,ruling_impact_level,ruling_label,disposition,summary_spicy,who_wins,who_loses,why_it_matters,dissent_highlights,source_url,pdf_url&id=eq.${numId}&is_public=eq.true`;
-  const res = await fetch(`${url}/rest/v1/${query}`, { headers, signal });
+  const res = await fetch(`${url}/rest/v1/${query}`, { headers: baseHeaders, signal });
   if (!res.ok) return null;
   const data: Record<string, unknown>[] = await res.json();
   if (!data.length) return null;
@@ -126,7 +142,7 @@ export async function fetchScotusDetail(id: string | number, signal?: AbortSigna
 
 export async function fetchPardonDetail(id: string | number, signal?: AbortSignal): Promise<DisplayItem | null> {
   const endpoint = `${url}/functions/v1/pardons-detail?id=${id}`;
-  const res = await fetch(endpoint, { headers, signal });
+  const res = await fetch(endpoint, { headers: baseHeaders, signal });
   if (!res.ok) return null;
   const data = await res.json();
   if (!data?.pardon) return null;

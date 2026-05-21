@@ -1,4 +1,4 @@
-import type { DisplayItem } from '@/types';
+import type { DisplayItem, TimelineEvent } from '@/types';
 
 const CATEGORY_LABELS: Record<string, string> = {
   corruption_scandals: 'Corruption & Scandals',
@@ -393,13 +393,28 @@ export function pardonDetailToItem(raw: Record<string, unknown>): DisplayItem {
   pushSection(sections, 'The Pattern', raw.pattern_analysis);
 
   const timeline = raw.receipts_timeline;
+  let timelineEvents: TimelineEvent[] | undefined;
   if (Array.isArray(timeline) && timeline.length > 0) {
-    const timelineText = timeline.map((e: Record<string, unknown>) => {
+    timelineEvents = timeline
+      .map((e: Record<string, unknown>): TimelineEvent => ({
+        event_type: String(e.event_type || 'other'),
+        date: String(e.date || ''),
+        description: String(e.description || ''),
+        amount_usd: e.amount_usd ? Number(e.amount_usd) : undefined,
+        source_url: e.source_url ? String(e.source_url) : undefined,
+      }))
+      .sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
+      });
+    const timelineText = timelineEvents.map(e => {
       const parts: string[] = [];
-      if (e.event_type) parts.push(String(e.event_type).toUpperCase());
-      if (e.date) parts.push(String(e.date));
-      if (e.description) parts.push(String(e.description));
-      if (e.amount_usd) parts.push(`$${Number(e.amount_usd).toLocaleString('en-US')}`);
+      if (e.event_type) parts.push(e.event_type.toUpperCase());
+      if (e.date) parts.push(e.date);
+      if (e.description) parts.push(e.description);
+      if (e.amount_usd) parts.push(formatMoney(e.amount_usd));
       return parts.join(' — ');
     }).join('\n\n');
     pushSection(sections, 'The Receipts', timelineText);
@@ -409,7 +424,7 @@ export function pardonDetailToItem(raw: Record<string, unknown>): DisplayItem {
 
   pushSection(sections, 'What Happened Next', raw.post_pardon_notes);
 
-  return { ...base, dek: '', body: '', meta, sections };
+  return { ...base, dek: '', body: '', meta, sections, timelineEvents };
 }
 
 export { CATEGORY_LABELS, SEVERITY_TO_ALARM };

@@ -1,24 +1,17 @@
-import { useState, useRef } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { Link } from 'wouter';
-import { SearchOverlay } from './SearchOverlay';
+import { isTest } from '@/lib/supabase';
 
-export function Header({ current }: { current?: string }) {
+interface HeaderProps {
+  current?: string;
+  searchPlaceholder?: string;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+}
+
+export function Header({ current, searchPlaceholder, searchQuery, onSearchChange }: HeaderProps) {
   const { theme, headType: type, mode, toggleMode } = useTheme();
   const isLight = mode === 'light';
-  const [query, setQuery] = useState('');
-  const [showOverlay, setShowOverlay] = useState(false);
-  const searchWrapperRef = useRef<HTMLDivElement>(null);
-
-  function handleSearchChange(value: string) {
-    setQuery(value);
-    setShowOverlay(value.length >= 2);
-  }
-
-  function handleClose() {
-    setQuery('');
-    setShowOverlay(false);
-  }
 
   function handleSubscribeClick() {
     const el = document.getElementById('tt-newsletter-input');
@@ -44,8 +37,16 @@ export function Header({ current }: { current?: string }) {
           <div style={{
             fontFamily: type.display, fontWeight: 700, fontSize: 20,
             letterSpacing: type.displayTracking, color: theme.ink,
+            display: 'flex', alignItems: 'center', gap: 8,
           }}>
             TRUMPY<span style={{ color: theme.dim, fontWeight: 400 }}>/</span>TRACKER
+            {isTest && (
+              <span style={{
+                fontFamily: type.mono, fontSize: 9, letterSpacing: '0.2em',
+                padding: '2px 6px', background: '#f97316', color: '#0a0a0b',
+                fontWeight: 700, borderRadius: 2, verticalAlign: 'super',
+              }}>TEST</span>
+            )}
           </div>
         </Link>
         <nav aria-label="Main navigation" style={{ display: 'flex', gap: 18, fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }} className="tt-nav">
@@ -56,37 +57,47 @@ export function Header({ current }: { current?: string }) {
             { label: 'Supreme Court', href: '/scotus' },
             { label: 'About', href: '/about' },
           ].map(item => (
-            <Link key={item.label} href={item.href} style={{
-              color: current === item.label ? theme.ink : theme.dim,
-              textDecoration: 'none',
-              borderBottom: current === item.label ? `1px solid ${theme.ink}` : '1px solid transparent',
-              paddingBottom: 2,
-            }}>{item.label}</Link>
+            <Link key={item.label} href={item.href}
+              aria-current={current === item.label ? 'page' : undefined}
+              style={{
+                color: current === item.label ? theme.ink : theme.dim,
+                textDecoration: 'none',
+                borderBottom: current === item.label ? `1px solid ${theme.ink}` : '1px solid transparent',
+                paddingBottom: 2,
+              }}>{item.label}</Link>
           ))}
         </nav>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div ref={searchWrapperRef} style={{ position: 'relative' }}>
-            <input
-              placeholder="Search stories..."
-              aria-label="Search stories"
-              value={query}
-              onChange={e => handleSearchChange(e.target.value)}
-              onFocus={() => { if (query.length >= 2) setShowOverlay(true); }}
-              style={{
-                background: theme.bg2, border: `1px solid ${theme.line}`,
-                color: theme.ink, fontFamily: type.mono, fontSize: 12,
-                padding: '6px 10px', borderRadius: 2, width: 160, outline: 'none',
-              }}
-              className="tt-search"
-            />
-            {showOverlay && (
-              <SearchOverlay
-                query={query}
-                onClose={handleClose}
-                wrapperRef={searchWrapperRef}
+          {onSearchChange && (
+            <div style={{ position: 'relative' }}>
+              <label htmlFor="tt-search" className="sr-only">
+                {searchPlaceholder || 'Search...'}
+              </label>
+              <input
+                id="tt-search"
+                placeholder={searchPlaceholder || 'Search...'}
+                value={searchQuery || ''}
+                onChange={e => onSearchChange(e.target.value)}
+                style={{
+                  background: theme.bg2, border: `1px solid ${theme.line}`,
+                  color: theme.ink, fontFamily: type.mono, fontSize: 12,
+                  padding: '6px 26px 6px 10px', borderRadius: 2, width: 180, outline: 'none',
+                }}
+                className="tt-search"
               />
-            )}
-          </div>
+              {searchQuery && (
+                <button
+                  onClick={() => onSearchChange('')}
+                  aria-label="Clear search"
+                  style={{
+                    position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                    border: 'none', background: 'none', color: theme.dim,
+                    cursor: 'pointer', fontSize: 14, padding: '0 4px', lineHeight: 1,
+                  }}
+                >×</button>
+              )}
+            </div>
+          )}
           <button
             onClick={toggleMode}
             aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
@@ -111,6 +122,7 @@ export function Header({ current }: { current?: string }) {
         </div>
       </div>
       <style>{`
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
         @media (max-width: 800px) {
           .tt-nav { display: none !important; }
           .tt-search { display: none !important; }

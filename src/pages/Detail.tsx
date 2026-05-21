@@ -6,7 +6,8 @@ import { Footer } from '@/components/Footer';
 import { ShareCardPreview } from '@/components/ShareCard';
 import { fmtDate } from '@/lib/date-utils';
 import { pickHeadline } from '@/lib/pick-headline';
-import type { DisplayItem } from '@/types';
+import type { DisplayItem, TimelineEvent } from '@/types';
+import type { ThemePalette } from '@/tokens/themes';
 import { Link } from 'wouter';
 
 interface DetailProps {
@@ -123,20 +124,36 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
           {/* Sections (EO editorial sections, SCOTUS dissent, Pardons detail) */}
           {item.sections && item.sections.length > 0 && (
             <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 28 }}>
-              {item.sections.map((s, i) => (
-                <section key={i}>
-                  <h3 style={{
-                    fontFamily: type.display, fontSize: 20, fontWeight: 700,
-                    color: theme.ink, marginBottom: 14, marginTop: 0,
-                    borderBottom: `3px solid ${c.accent}`, paddingBottom: 10,
-                  }}>
-                    {s.heading}
-                  </h3>
-                  <div style={{ fontFamily: type.display, fontSize: 17, lineHeight: 1.65, color: theme.ink, textWrap: 'pretty' }}>
-                    {s.content}
-                  </div>
-                </section>
-              ))}
+              {item.sections.map((s, i) => {
+                if (s.heading === 'The Receipts' && item.timelineEvents && item.timelineEvents.length > 0) {
+                  return (
+                    <section key={i}>
+                      <h3 style={{
+                        fontFamily: type.display, fontSize: 20, fontWeight: 700,
+                        color: theme.ink, marginBottom: 14, marginTop: 0,
+                        borderBottom: `3px solid ${c.accent}`, paddingBottom: 10,
+                      }}>
+                        {s.heading}
+                      </h3>
+                      <ReceiptsTimeline events={item.timelineEvents} theme={theme} type={type} />
+                    </section>
+                  );
+                }
+                return (
+                  <section key={i}>
+                    <h3 style={{
+                      fontFamily: type.display, fontSize: 20, fontWeight: 700,
+                      color: theme.ink, marginBottom: 14, marginTop: 0,
+                      borderBottom: `3px solid ${c.accent}`, paddingBottom: 10,
+                    }}>
+                      {s.heading}
+                    </h3>
+                    <div style={{ fontFamily: type.display, fontSize: 17, lineHeight: 1.65, color: theme.ink, textWrap: 'pretty' }}>
+                      {s.content}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           )}
 
@@ -211,6 +228,93 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
         <Footer />
       </main>
       <style>{`@media (max-width: 700px) { .tt-related { grid-template-columns: 1fr !important; } }`}</style>
+    </div>
+  );
+}
+
+const TIMELINE_COLORS: Record<string, string> = {
+  donation: '#16a34a',
+  conviction: '#dc2626',
+  pardon_request: '#ca8a04',
+  pardon_granted: '#9333ea',
+  mar_a_lago_visit: '#f97316',
+  sentencing: '#be123c',
+  investigation: '#0891b2',
+  legal_filing: '#3b82f6',
+  other: '#6b7280',
+};
+
+const TIMELINE_LABELS: Record<string, string> = {
+  donation: 'Donation',
+  conviction: 'Conviction',
+  pardon_request: 'Pardon Request',
+  pardon_granted: 'Pardon Granted',
+  mar_a_lago_visit: 'Mar-a-Lago Visit',
+  sentencing: 'Sentencing',
+  investigation: 'Investigation',
+  legal_filing: 'Legal Filing',
+  other: 'Other',
+};
+
+function ReceiptsTimeline({ events, theme, type }: { events: TimelineEvent[]; theme: ThemePalette; type: { mono: string; display: string; sans: string } }) {
+  return (
+    <div style={{ position: 'relative', paddingLeft: 28 }}>
+      {events.map((evt, i) => {
+        const color = TIMELINE_COLORS[evt.event_type] || TIMELINE_COLORS.other;
+        const label = TIMELINE_LABELS[evt.event_type] || evt.event_type;
+        const isLast = i === events.length - 1;
+        return (
+          <div key={i} style={{ position: 'relative', paddingBottom: isLast ? 0 : 24 }}>
+            {/* Dot */}
+            <div style={{
+              position: 'absolute', left: -28, top: 2,
+              width: 12, height: 12, borderRadius: '50%',
+              background: color, zIndex: 1,
+            }} />
+            {/* Connecting line */}
+            {!isLast && (
+              <div style={{
+                position: 'absolute', left: -23, top: 14,
+                width: 2, bottom: 0, background: theme.line,
+              }} />
+            )}
+            {/* Content */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{
+                  fontFamily: type.mono, fontSize: 10, fontWeight: 700,
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  padding: '2px 8px', borderRadius: 2,
+                  background: color, color: '#ffffff',
+                }}>
+                  {label}
+                </span>
+                {evt.date && (
+                  <span style={{ fontFamily: type.mono, fontSize: 12, color: theme.dim }}>
+                    {evt.date}
+                  </span>
+                )}
+              </div>
+              {evt.description && (
+                <div style={{ fontFamily: type.display, fontSize: 15, lineHeight: 1.5, color: theme.ink, marginTop: 4 }}>
+                  {evt.description}
+                </div>
+              )}
+              {evt.amount_usd != null && evt.amount_usd > 0 && (
+                <div style={{ fontFamily: type.mono, fontSize: 14, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
+                  ${evt.amount_usd.toLocaleString('en-US')}
+                </div>
+              )}
+              {evt.source_url && (
+                <a href={evt.source_url} target="_blank" rel="noopener noreferrer"
+                  style={{ fontFamily: type.mono, fontSize: 12, color: '#3b82f6', marginTop: 4, display: 'inline-block' }}>
+                  Source ↗
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
