@@ -28,7 +28,8 @@
     "preview": "vite preview",
     "test:ui": "vitest run",
     "lint": "tsc --noEmit",
-    "build:check": "npm run lint && npm run test:ui && npm run build"
+    "build:check": "npm run lint && npm run test:ui && npm run build",
+    "build:secure": "npm run build && node scripts/build-security-check.js"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

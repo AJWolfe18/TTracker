@@ -1,3 +1,11 @@
+export interface TimelineEvent {
+  event_type: string;
+  date: string;
+  description: string;
+  amount_usd?: number;
+  source_url?: string;
+}
+
 export interface DisplayItem {
   id: string | number;
   type: string;
@@ -14,6 +22,7 @@ export interface DisplayItem {
   tags: string[];
   sections?: { heading: string; content: string }[];
   meta?: { label: string; value: string }[];
+  timelineEvents?: TimelineEvent[];
 }
 
 export interface DisplayStats {
