@@ -21,8 +21,8 @@ export function FilterBar({
   const { theme, headType: type } = useTheme();
 
   return (
-    <div style={{ padding: '16px 0', borderBottom: `1px solid ${theme.line}`, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ padding: '16px 0', borderBottom: `1px solid ${theme.line}` }} className="tt-filter-bar">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         {config.dimensions.map(dim => (
           dim.type === 'pills'
             ? <PillGroup key={dim.key} dim={dim} active={activeFilters[dim.key] || ''} onChange={v => onFilterChange(dim.key, v || null)} />
@@ -72,7 +72,7 @@ export function FilterBar({
 function PillGroup({ dim, active, onChange }: { dim: FilterDimension; active: string; onChange: (v: string) => void }) {
   const { theme, headType: type } = useTheme();
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div className="tt-pill-group" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
       <span style={{ fontFamily: type.mono, fontSize: 10, color: theme.dim, letterSpacing: '0.12em', textTransform: 'uppercase', marginRight: 4 }}>
         {dim.label}:
       </span>

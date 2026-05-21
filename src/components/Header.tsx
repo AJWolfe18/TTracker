@@ -34,7 +34,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
       }}>
         <Link href="/" style={{ textDecoration: 'none' }}>
-          <div style={{
+          <div className="tt-logo" style={{
             fontFamily: type.display, fontWeight: 700, fontSize: 20,
             letterSpacing: type.displayTracking, color: theme.ink,
             display: 'flex', alignItems: 'center', gap: 8,
@@ -152,8 +152,12 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
           .tt-nav { display: none !important; }
           .tt-mobile-nav { display: flex !important; }
           .tt-search { display: none !important; }
-          .tt-mode-toggle { padding: 7px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
-          .tt-subscribe { padding: 7px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
+          .tt-logo { font-size: 17px !important; }
+          .tt-mode-toggle { padding: 6px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
+          .tt-subscribe { padding: 6px 8px !important; font-size: 9px !important; letter-spacing: 0.08em !important; }
+        }
+        @media (max-width: 400px) {
+          .tt-logo { font-size: 15px !important; }
         }
         @media (max-width: 480px) {
           .tt-search { display: none !important; }
