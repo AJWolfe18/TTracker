@@ -52,6 +52,18 @@ export function Home({
     : filterConfig?.tabType === 'pardons' ? 'Pardons'
     : 'Home';
 
+  const filterBar = filterConfig && activeFilters && onFilterChange && onClearFilters ? (
+    <FilterBar
+      config={filterConfig}
+      activeFilters={activeFilters}
+      onFilterChange={onFilterChange}
+      onClearAll={onClearFilters}
+      hasActiveFilters={hasActiveFilters || false}
+      total={total ?? items.length}
+      filteredTotal={filteredTotal ?? items.length}
+    />
+  ) : null;
+
   const shell = (children: React.ReactNode) => (
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: headType.sans, minHeight: '100vh' }}>
       <Header
@@ -61,19 +73,6 @@ export function Home({
         onSearchChange={onSearchChange}
       />
       <Scorecard stats={stats} />
-      {filterConfig && activeFilters && onFilterChange && onClearFilters && (
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
-          <FilterBar
-            config={filterConfig}
-            activeFilters={activeFilters}
-            onFilterChange={onFilterChange}
-            onClearAll={onClearFilters}
-            hasActiveFilters={hasActiveFilters || false}
-            total={total ?? items.length}
-            filteredTotal={filteredTotal ?? items.length}
-          />
-        </div>
-      )}
       <main id="main-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
         {children}
         {totalPages != null && totalPages > 1 && onPageChange && (
@@ -95,15 +94,18 @@ export function Home({
   // When filters active: flat grid (no hero/featured)
   if (showFiltered) {
     return shell(
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-        gap: 20, padding: '24px 0 0',
-      }}>
-        {items.map(it => (
-          <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
-        ))}
-      </div>
+      <>
+        {filterBar}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: 20, padding: '24px 0 0',
+        }}>
+          {items.map(it => (
+            <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
+          ))}
+        </div>
+      </>
     );
   }
 
@@ -142,6 +144,9 @@ export function Home({
           </div>
         </div>
       </section>
+
+      {/* FILTERS (below hero, above featured) */}
+      {filterBar}
 
       {/* FEATURED CARD */}
       {featuredSecond && (

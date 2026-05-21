@@ -17,8 +17,6 @@ export function FilterBar({
   onFilterChange,
   onClearAll,
   hasActiveFilters,
-  total,
-  filteredTotal,
 }: FilterBarProps) {
   const { theme, headType: type } = useTheme();
 
@@ -32,53 +30,41 @@ export function FilterBar({
         ))}
       </div>
 
-      {/* Active filters + results count */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: hasActiveFilters ? 10 : 6 }}>
-        <div role="status" aria-live="polite" style={{
-          fontFamily: type.mono, fontSize: 12, color: theme.dim,
-          letterSpacing: '0.06em',
-        }}>
-          {hasActiveFilters
-            ? `${filteredTotal} matching item${filteredTotal !== 1 ? 's' : ''}`
-            : `${total} item${total !== 1 ? 's' : ''}`
-          }
-        </div>
-
-        {hasActiveFilters && (
-          <>
-            {Object.entries(activeFilters).map(([key, value]) => {
-              const dim = config.dimensions.find(d => d.key === key);
-              const opt = dim?.options.find(o => o.urlValue === value);
-              if (!dim || !opt) return null;
-              return (
-                <span key={key} style={{
-                  fontFamily: type.mono, fontSize: 11, padding: '3px 8px',
-                  border: `1px solid ${theme.line}`, borderRadius: 2,
-                  color: theme.ink, display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}>
-                  {dim.label}: {opt.label}
-                  <button
-                    onClick={() => onFilterChange(key, null)}
-                    aria-label={`Remove ${dim.label} filter`}
-                    style={{
-                      border: 'none', background: 'none', color: theme.dim,
-                      cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1,
-                    }}
-                  >×</button>
-                </span>
-              );
-            })}
-            <button
-              onClick={onClearAll}
-              style={{
+      {/* Active filter chips */}
+      {hasActiveFilters && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 10 }}>
+          {Object.entries(activeFilters).map(([key, value]) => {
+            const dim = config.dimensions.find(d => d.key === key);
+            const opt = dim?.options.find(o => o.urlValue === value);
+            if (!dim || !opt) return null;
+            return (
+              <span key={key} style={{
                 fontFamily: type.mono, fontSize: 11, padding: '3px 8px',
-                border: 'none', background: 'none', color: theme.dim,
-                cursor: 'pointer', textDecoration: 'underline',
-              }}
-            >Clear all</button>
-          </>
-        )}
-      </div>
+                border: `1px solid ${theme.line}`, borderRadius: 2,
+                color: theme.ink, display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+                {dim.label}: {opt.label}
+                <button
+                  onClick={() => onFilterChange(key, null)}
+                  aria-label={`Remove ${dim.label} filter`}
+                  style={{
+                    border: 'none', background: 'none', color: theme.dim,
+                    cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1,
+                  }}
+                >×</button>
+              </span>
+            );
+          })}
+          <button
+            onClick={onClearAll}
+            style={{
+              fontFamily: type.mono, fontSize: 11, padding: '3px 8px',
+              border: 'none', background: 'none', color: theme.dim,
+              cursor: 'pointer', textDecoration: 'underline',
+            }}
+          >Clear all</button>
+        </div>
+      )}
     </div>
   );
 }

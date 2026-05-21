@@ -19,7 +19,7 @@ export function AlarmDial({ level, size = 44, showLabel = false, variant = 'dot'
         {[0, 1, 2, 3, 4, 5].map(i => (
           <div key={i} style={{
             width: size * 0.09, height: (i + 1) * (size * 0.1),
-            background: i <= level ? c.accent : 'rgba(255,255,255,0.09)',
+            background: i <= level ? c.accent : 'rgba(128,128,128,0.15)',
             borderRadius: 1,
           }} />
         ))}

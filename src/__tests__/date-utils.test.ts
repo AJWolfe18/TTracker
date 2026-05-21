@@ -3,15 +3,15 @@ import { fmtDate, relDate } from '@/lib/date-utils';
 
 describe('fmtDate', () => {
   it('formats date-only ISO string', () => {
-    expect(fmtDate('2026-04-14')).toBe('Apr 14, 2026');
+    expect(fmtDate('2026-04-14')).toBe('14 Apr 2026');
   });
 
   it('formats full ISO datetime', () => {
-    expect(fmtDate('2026-04-14T12:00:00Z')).toBe('Apr 14, 2026');
+    expect(fmtDate('2026-04-14T12:00:00Z')).toBe('14 Apr 2026');
   });
 
   it('formats another date correctly', () => {
-    expect(fmtDate('2026-01-01')).toBe('Jan 1, 2026');
+    expect(fmtDate('2026-01-01')).toBe('1 Jan 2026');
   });
 });
 

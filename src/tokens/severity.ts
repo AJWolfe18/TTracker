@@ -50,12 +50,12 @@ export const THEME_SEVERITY: Record<string, Record<number, SeverityColor>> = {
 
 export const THEME_SEVERITY_LIGHT: Record<string, Record<number, SeverityColor>> = {
   midnight: {
-    5: { accent: "#7a1f17", bg: "#fbe7e3", text: "#4a0f0a", ring: "#7a1f17" },
-    4: { accent: "#8a4a2e", bg: "#fbe7d9", text: "#4a200f", ring: "#8a4a2e" },
-    3: { accent: "#6b5a3e", bg: "#f2ede3", text: "#2e2518", ring: "#8a7a5e" },
-    2: { accent: "#3e5a6b", bg: "#e3eef2", text: "#18252e", ring: "#5e7a8a" },
-    1: { accent: "#6c727a", bg: "#eef0f2", text: "#262a30", ring: "#8a9098" },
-    0: { accent: "#2e6b4a", bg: "#e3f2ea", text: "#183e28", ring: "#4a8a68" },
+    5: { accent: "#8b1a12", bg: "#fbe7e3", text: "#4a0f0a", ring: "#8b1a12" },
+    4: { accent: "#b8860b", bg: "#faf0d4", text: "#4a3506", ring: "#b8860b" },
+    3: { accent: "#7a6a3e", bg: "#f2ede3", text: "#2e2518", ring: "#8a7a5e" },
+    2: { accent: "#2d6a8a", bg: "#e3eef2", text: "#18252e", ring: "#4a8aaa" },
+    1: { accent: "#4a7a8a", bg: "#e6f0f2", text: "#1a2e35", ring: "#5a8a9a" },
+    0: { accent: "#0a7a4a", bg: "#ddf5e8", text: "#0a3e22", ring: "#2a9a5a" },
   },
   mutedEditorial: {
     5: { accent: "#8a6f3e", bg: "#f0e8d2", text: "#3a2e15", ring: "#8a6f3e" },

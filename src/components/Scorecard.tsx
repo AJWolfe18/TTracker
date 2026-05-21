@@ -12,7 +12,7 @@ export function Scorecard({ stats }: ScorecardProps) {
   const today = new Date();
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - 6);
-  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   const cL5 = alarmPalette(5, 'restrained', mode, 'midnight');
   const cL4 = alarmPalette(4, 'restrained', mode, 'midnight');
 

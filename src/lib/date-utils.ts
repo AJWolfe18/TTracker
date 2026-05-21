@@ -1,6 +1,6 @@
 export function fmtDate(iso: string): string {
   const d = new Date(iso.includes('T') ? iso : iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export function relDate(iso: string): string {
