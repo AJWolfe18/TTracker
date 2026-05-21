@@ -119,9 +119,8 @@ export async function fetchStoryDetail(
 }
 
 export async function fetchEoDetail(id: string | number, signal?: AbortSignal): Promise<DisplayItem | null> {
-  const numId = validateId(id);
-  if (!numId) return null;
-  const query = `executive_orders?select=id,order_number,title,date,category,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url&id=eq.${numId}&is_public=eq.true`;
+  const safeId = encodeURIComponent(String(id));
+  const query = `executive_orders?select=id,order_number,title,date,category,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url&id=eq.${safeId}&is_public=eq.true`;
   const res = await fetch(`${url}/rest/v1/${query}`, { headers: baseHeaders, signal });
   if (!res.ok) return null;
   const data: Record<string, unknown>[] = await res.json();
