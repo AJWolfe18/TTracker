@@ -77,7 +77,7 @@ export function Card({ item, headlineMode, onOpen, featured }: CardProps) {
         textTransform: 'uppercase', letterSpacing: '0.12em',
       }}>
         <span>{item.category}</span>
-        <span>{relDate(item.updated)} · {item.sources.length} src</span>
+        <span>{relDate(item.updated)}{item.sources.length > 1 ? ` · ${item.sources.length} src` : ''}</span>
       </div>
     </article>
   );
