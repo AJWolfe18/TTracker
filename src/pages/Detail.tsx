@@ -3,7 +3,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { TONE_SYSTEM, alarmPalette } from '@/tokens';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { ShareCardPreview } from '@/components/ShareCard';
+
 import { fmtDate } from '@/lib/date-utils';
 import { pickHeadline } from '@/lib/pick-headline';
 import type { DisplayItem, TimelineEvent } from '@/types';
@@ -20,7 +20,7 @@ interface DetailProps {
 export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps) {
   const { theme, headType: type, mode } = useTheme();
   const hmode = 'spicy';
-  const [showShare, setShowShare] = useState(false);
+
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -54,6 +54,40 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
       setCopied(false);
     }
   }
+
+  function shareToX() {
+    const text = encodeURIComponent(pickHeadline(item, hmode));
+    const url = encodeURIComponent(window.location.href);
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function shareToThreads() {
+    const content = encodeURIComponent(pickHeadline(item, hmode) + ' ' + window.location.href);
+    window.open(`https://threads.net/intent/post?text=${content}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function shareToFacebook() {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent(pickHeadline(item, hmode));
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function shareToReddit() {
+    const url = encodeURIComponent(window.location.href);
+    const title = encodeURIComponent(pickHeadline(item, hmode));
+    window.open(`https://reddit.com/submit?url=${url}&title=${title}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function handleNativeShare() {
+    if (navigator.share) {
+      navigator.share({
+        title: pickHeadline(item, hmode),
+        url: window.location.href,
+      }).catch(() => {});
+    }
+  }
+
+  const supportsNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   return (
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: type.sans, minHeight: '100vh' }}>
@@ -163,11 +197,23 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             </div>
           )}
 
-          {/* Action row */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 36, flexWrap: 'wrap' }}>
-            <button onClick={() => setShowShare(!showShare)} style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.ink}`, background: theme.ink, color: theme.bg, cursor: 'pointer', borderRadius: 2, fontWeight: 700, textTransform: 'uppercase' }}>
-              ↗ Generate Share Card
-            </button>
+          {/* Share + Action row */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 36, flexWrap: 'wrap', alignItems: 'center' }}>
+            {supportsNativeShare && (
+              <button onClick={handleNativeShare} style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.ink}`, background: theme.ink, color: theme.bg, cursor: 'pointer', borderRadius: 2, fontWeight: 700, textTransform: 'uppercase' }}>
+                Share
+              </button>
+            )}
+            {[
+              { label: 'X', handler: shareToX },
+              { label: 'Threads', handler: shareToThreads },
+              { label: 'Facebook', handler: shareToFacebook },
+              { label: 'Reddit', handler: shareToReddit },
+            ].map(({ label, handler }) => (
+              <button key={label} onClick={handler} style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.ink}`, background: theme.ink, color: theme.bg, cursor: 'pointer', borderRadius: 2, fontWeight: 700, textTransform: 'uppercase' }}>
+                {label}
+              </button>
+            ))}
             <button
               onClick={handleCopyLink}
               style={{ fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.line}`, background: 'transparent', color: copied ? '#4ade80' : theme.ink, cursor: 'pointer', borderRadius: 2, textTransform: 'uppercase', transition: 'color 0.2s' }}>
@@ -179,8 +225,6 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
               Report Correction
             </a>
           </div>
-
-          {showShare && <ShareCardPreview item={item} hmode={hmode} />}
 
           {/* Sources */}
           {item.sources.length > 0 && (
