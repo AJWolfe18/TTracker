@@ -2,6 +2,22 @@
   command = "npm run build"
   publish = "dist"
 
+[[edge_functions]]
+  function = "og-tags"
+  path = "/detail/*"
+
+[[edge_functions]]
+  function = "og-tags"
+  path = "/eos/*"
+
+[[edge_functions]]
+  function = "og-tags"
+  path = "/scotus/*"
+
+[[edge_functions]]
+  function = "og-tags"
+  path = "/pardons/*"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
