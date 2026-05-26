@@ -11,6 +11,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { enrichStory } from './enrichment/enrich-stories-inline.js';
+import { isFatalOpenAIError } from './lib/openai-errors.js';
 
 // Validate environment
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -125,6 +126,10 @@ async function main() {
     } catch (err) {
       failed++;
       console.error(`[FAIL] Story ${story.id}: ${err.message}`);
+      if (isFatalOpenAIError(err)) {
+        console.error(`🚨 FATAL: OpenAI auth/payment error (${err.status}). Stopping backfill.`);
+        process.exit(1);
+      }
     }
   }
 

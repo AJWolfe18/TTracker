@@ -333,26 +333,30 @@ async function getStory(id: string): Promise<Story | null> {
 
 ### Component Structure
 ```
-src/
-├── components/
-│   ├── stories/
-│   │   ├── StoryList.jsx          # List view
-│   │   ├── StoryCard.jsx          # Individual card
-│   │   └── StoryDetail.jsx        # Detail view
-│   ├── articles/
-│   │   ├── ArticleList.jsx
-│   │   └── ArticleCard.jsx
-│   └── common/
-│       ├── LoadingSpinner.jsx     # Reusable loading
-│       └── ErrorMessage.jsx       # Reusable error
-├── hooks/
-│   ├── useStories.js              # Data fetching
-│   └── usePagination.js           # Pagination logic
-├── utils/
-│   ├── dateFormatting.js          # Date helpers
-│   └── apiHelpers.js              # API utilities
-└── types/
-    └── supabase.ts                # Generated types
+public/
+├── index.html              # Main dashboard
+├── admin.html              # Admin panel
+├── executive-orders.html   # EO tracker
+├── app.js                  # Main app logic
+├── shared.js               # Shared utilities
+└── supabase-browser-config.js  # Supabase client
+
+scripts/
+├── rss-tracker-supabase.js # Main RSS pipeline
+├── enrichment/             # AI enrichment
+│   ├── enrich-stories-inline.js
+│   ├── prompts/            # Per-feature prompts
+│   │   ├── stories.js
+│   │   └── pardons.js
+│   ├── prompts.js          # Barrel re-export (backwards compat)
+│   └── scraper.js
+└── rss/                    # RSS parsing
+    └── fetch_feed.js
+
+supabase/functions/         # Edge Functions
+├── stories-active/
+├── stories-detail/
+└── articles-manual/
 ```
 
 **Why:** Clear organization, easy to find code  

@@ -12,6 +12,8 @@ import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
 import { clusterArticle, resetRunState, getRunStats } from './rss/hybrid-clustering.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
+import { recordSkip, PIPELINES, REASONS } from './lib/skip-reasons.js';
+import { isFatalOpenAIError } from './lib/openai-errors.js';
 import {
   enrichStory as enrichStoryImpl,
   shouldEnrichStory,
@@ -36,7 +38,7 @@ const ESTIMATED_COST_PER_STORY = 0.003; // GPT-4o-mini average
 // RSS Tracker Class
 // =====================================================================
 
-class RSSTracker {
+export class RSSTracker {
   constructor() {
     // Environment setup
     this.environment = process.env.ENVIRONMENT || 'test';
@@ -251,6 +253,13 @@ class RSSTracker {
           if (!Array.isArray(embedding) || embedding.length === 0) {
             console.error(`❌ Invalid embedding response for ${article.id}`);
             this.stats.embedding_failures++;
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.EMBEDDINGS,
+              reason: REASONS.EMBEDDING_FAILURE,
+              entity_type: 'article',
+              entity_id: article.id,
+              metadata: { cause: 'invalid_embedding_response' }
+            });
             continue;
           }
 
@@ -266,6 +275,13 @@ class RSSTracker {
           if (updateError) {
             console.error(`❌ Failed to store embedding for ${article.id}:`, updateError.message);
             this.stats.embedding_failures++;
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.EMBEDDINGS,
+              reason: REASONS.EMBEDDING_FAILURE,
+              entity_type: 'article',
+              entity_id: article.id,
+              metadata: { cause: 'db_update_failed', message: updateError.message }
+            });
             continue;
           }
 
@@ -273,13 +289,34 @@ class RSSTracker {
         } catch (err) {
           console.error(`❌ Embedding failed for ${article.id}:`, err.message);
           this.stats.embedding_failures++;
-          // Continue with next article - this one will retry next run
+
+          if (isFatalOpenAIError(err)) {
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.EMBEDDINGS,
+              reason: REASONS.API_ERROR,
+              entity_type: 'article',
+              entity_id: article.id,
+              metadata: { error_status: err.status, error_type: err.type, message: err.message?.slice(0, 200) }
+            });
+            this.runStatus = 'failed';
+            console.error(`🚨 FATAL: OpenAI auth/payment error (${err.status}). Aborting embeddings.`);
+            throw err;
+          }
+
+          await recordSkip(this.supabase, {
+            pipeline: PIPELINES.EMBEDDINGS,
+            reason: REASONS.EMBEDDING_FAILURE,
+            entity_type: 'article',
+            entity_id: article.id,
+            metadata: { cause: 'api_exception', message: err.message }
+          });
         }
       }
 
       console.log(`✅ Embeddings complete: ${this.stats.embeddings_generated} generated, ${this.stats.embedding_failures} failed`);
 
     } catch (err) {
+      if (isFatalOpenAIError(err)) throw err;
       console.error('❌ enrichArticles() failed:', err.message);
     }
   }
@@ -307,6 +344,13 @@ class RSSTracker {
 
       if (budget?.spent_usd >= DAILY_BUDGET_LIMIT) {
         console.log('[RSS] Daily budget exceeded, skipping entity extraction');
+        await recordSkip(this.supabase, {
+          pipeline: PIPELINES.ENTITY_EXTRACTION,
+          reason: REASONS.BUDGET_EXCEEDED,
+          entity_type: 'pipeline',
+          entity_id: 'rss_entity_extraction',
+          metadata: { spent_usd: budget.spent_usd, limit: DAILY_BUDGET_LIMIT, day: today }
+        });
         return;
       }
 
@@ -348,7 +392,8 @@ class RSSTracker {
           const { entities, tokens } = await extractArticleEntities(
             article.title,
             content,
-            this.openai
+            this.openai,
+            { supabase: this.supabase, articleId: article.id }
           );
           updateFields.entities = entities.length > 0 ? entities : [];
           if (entities.length > 0) {
@@ -391,6 +436,7 @@ class RSSTracker {
       this.stats.slugs_extracted = slugsExtracted;
 
     } catch (err) {
+      if (isFatalOpenAIError(err)) throw err;
       console.error('[RSS] extractArticleEntitiesPhase() failed:', err.message);
     }
   }
@@ -551,15 +597,32 @@ class RSSTracker {
             break; // Budget cap reached
           }
         } catch (enrichErr) {
-          // Log error
           console.error(`❌ Enrichment failed for story ${story.id}:`, enrichErr.message);
-          
-          // Track failure
           this.stats.enrichment_failed++;
+
+          if (isFatalOpenAIError(enrichErr)) {
+            await recordSkip(this.supabase, {
+              pipeline: PIPELINES.STORY_ENRICHMENT,
+              reason: REASONS.API_ERROR,
+              entity_type: 'story',
+              entity_id: story.id,
+              metadata: { error_status: enrichErr.status, error_type: enrichErr.type, message: enrichErr.message?.slice(0, 200) }
+            });
+            this.runStatus = 'failed';
+            console.error(`🚨 FATAL: OpenAI auth/payment error (${enrichErr.status}). Aborting enrichment.`);
+            throw enrichErr;
+          }
+
+          await recordSkip(this.supabase, {
+            pipeline: PIPELINES.STORY_ENRICHMENT,
+            reason: REASONS.API_ERROR,
+            entity_type: 'story',
+            entity_id: story.id,
+            metadata: { message: enrichErr.message?.slice(0, 200) }
+          });
+
           this.runStatus = 'partial_success';
-          
-          // Set cooldown timestamp (nested try-catch for safety)
-          // CRITICAL: Don't let DB errors crash the run
+
           try {
             await this.supabase
               .from('stories')
@@ -567,11 +630,8 @@ class RSSTracker {
               .eq('id', story.id);
           } catch (updateErr) {
             console.error(`⚠️ Failed to update last_enriched_at for story ${story.id}:`, updateErr.message);
-            // Swallow error - don't crash run if DB update fails
-            // Story will retry next run (acceptable)
           }
-          
-          // Continue to next story
+
           continue;
         }
       }
@@ -579,6 +639,7 @@ class RSSTracker {
       console.log(`✅ Enriched ${this.stats.stories_enriched} stories (cost: $${this.stats.total_openai_cost_usd.toFixed(4)})`);
 
     } catch (err) {
+      if (isFatalOpenAIError(err)) throw err;
       console.error('❌ Enrichment failed:', err.message);
     }
   }

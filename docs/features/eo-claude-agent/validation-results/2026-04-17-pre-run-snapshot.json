@@ -1,0 +1,8 @@
+{
+  "_comment": "Pre-run snapshot of 5 gold EOs before baseline reset for ADO-479 validation",
+  "_date": "2026-04-17",
+  "_gold_eo_ids": {"14317": 20, "14330": 5, "14338": 258, "14343": 252, "14349": 279},
+  "_old_alarm_levels": {"14317": 5, "14330": 4, "14338": 4, "14343": 4, "14349": 4},
+  "_old_prompt_versions": {"14317": "v3-ado271", "14330": "v4-ado273", "14338": "v4-ado273", "14343": "v4-ado273", "14349": "v4-ado273"},
+  "_note": "Full row data omitted from this file for size. The data was captured via PostgREST GET at 2026-04-17T04:35Z and is available in the session transcript."
+}

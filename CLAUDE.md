@@ -213,6 +213,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ❌ Missing CORS headers in Edge Functions - Breaks frontend calls
 - ❌ `console.log` in production - Remove before commit
 - ❌ Unhandled promise rejections - Always use try-catch for async
+- ❌ **Silent skips without DB record** (ADO-466) - Every `continue`/early `return` that skips work MUST write a row to `pipeline_skips` before skipping. Use `recordSkip()` from `scripts/lib/skip-reasons.js`:
+  ```js
+  import { recordSkip, PIPELINES, REASONS } from './lib/skip-reasons.js';
+  await recordSkip(supabase, {
+    pipeline: PIPELINES.RSS_ENRICHMENT, reason: REASONS.BUDGET_EXCEEDED,
+    entity_type: 'story', entity_id: story.id, metadata: { spent_usd }
+  });
+  continue;
+  ```
+  - `recordSkip()` never throws — safe to call before any skip
+  - Add new pipelines/reasons to `skip-reasons.js` (not inline strings) so typos fail JS lookup, not DB
+  - Observability via admin dashboard → Skips tab
 
 ### Workflow
 - ❌ Say "needs ADO update" - DO IT immediately via `/ado` command
@@ -491,6 +503,7 @@ VALUES (
 **Azure DevOps Integration:** Direct work item operations
 - **Use `/ado` command** for all work item operations
 - See `/docs/guides/ado-workflow.md` for states, types, and workflow
+- **If ADO MCP reports "PAT expired" but the PAT is new — STOP.** Read `/docs/guides/mcp-pat-troubleshooting.md` FIRST. The MCP token lives in `~/.claude.json`, NOT `settings.json`. Updating settings files does nothing. Don't waste time on `/mcp reconnect` or restarts until you've run the 30-second diagnostic in that doc.
 
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)

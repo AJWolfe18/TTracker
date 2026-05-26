@@ -32,6 +32,8 @@ serve(async (req: Request) => {
         first_seen_at,
         status,
         severity,
+        alarm_level,
+        category,
         topic_tags,
         source_count,
         has_opinion,

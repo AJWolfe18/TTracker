@@ -670,8 +670,11 @@
         // ADO-271: Load tone system first
         await loadToneSystem();
         // ADO-271: Include alarm_level in query
+        // is_public=eq.true: client-side publish gate (ADO-480 migration 092).
+        // Backfilled to true for all pre-migration rows; new agent-enriched EOs
+        // require explicit admin publish before they appear here.
         const data = await supabaseRequest(
-          'executive_orders?select=id,order_number,title,date,category,eo_impact_type,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&order=date.desc,id.desc&limit=500'
+          'executive_orders?select=id,order_number,title,date,category,eo_impact_type,alarm_level,action_tier,section_what_it_means,section_what_they_say,section_reality_check,section_why_it_matters,source_url,created_at&is_public=eq.true&order=date.desc,id.desc&limit=500'
         );
         setAllEOs(data || []);
         setError(null);

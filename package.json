@@ -13,12 +13,23 @@
     "qa:integration": "node scripts/tests/attach-or-create-integration-fixed.mjs",
     "qa:idempotency": "node scripts/tests/enqueue-idempotency.mjs",
     "qa:concurrency": "node scripts/tests/clustering-concurrency-fixed.mjs",
-    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency",
+    "qa:silent-skips": "node scripts/tests/silent-skip-paths.test.mjs",
+    "qa:eo-admin-unit": "node scripts/tests/admin-eo-unit.test.mjs",
+    "qa:eo-admin-contracts": "node scripts/tests/admin-eo-contracts.test.mjs",
+    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency && npm run qa:silent-skips && npm run qa:eo-admin-unit",
     "ingest:pardons": "node scripts/ingest/doj-pardons-scraper.js",
     "research:pardons": "node scripts/enrichment/perplexity-research.js",
     "research:pardons:dry-run": "node scripts/enrichment/perplexity-research.js --dry-run",
     "enrich:pardons": "node scripts/enrichment/enrich-pardons.js",
-    "enrich:pardons:dry-run": "node scripts/enrichment/enrich-pardons.js --dry-run"
+    "enrich:pardons:dry-run": "node scripts/enrichment/enrich-pardons.js --dry-run",
+    "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:ui": "vitest run",
+    "lint": "tsc --noEmit",
+    "build:check": "npm run lint && npm run test:ui && npm run build",
+    "build:secure": "npm run build && node scripts/build-security-check.js"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
@@ -26,13 +37,17 @@
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.1",
     "he": "1.2.0",
+    "html-to-image": "^1.11.13",
     "jsdom": "^27.1.0",
     "natural": "^6.10.0",
     "node-fetch": "^3.3.2",
     "openai": "^4.28.0",
     "pg": "^8.11.0",
     "playwright": "^1.40.0",
-    "rss-parser": "^3.13.0"
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "rss-parser": "^3.13.0",
+    "wouter": "^3.9.0"
   },
   "keywords": [
     "political",
@@ -41,5 +56,13 @@
     "automation"
   ],
   "author": "Political Transparency Project",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
+  }
 }

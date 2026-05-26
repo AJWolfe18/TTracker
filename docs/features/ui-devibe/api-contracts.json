@@ -1,0 +1,61 @@
+{
+  "description": "Frozen API response shapes from Supabase TEST edge functions (2026-05-12)",
+  "stories-active": {
+    "endpoint": "/functions/v1/stories-active",
+    "returns": "{ items: Story[] }",
+    "fields": {
+      "id": "number",
+      "story_hash": "string",
+      "primary_headline": "string",
+      "primary_source": "string",
+      "primary_source_url": "string",
+      "primary_source_domain": "string",
+      "primary_actor": "string",
+      "last_updated_at": "string (ISO timestamp with timezone)",
+      "first_seen_at": "string (ISO timestamp with timezone)",
+      "status": "string ('active' | 'closed')",
+      "severity": "string | null ('critical' | 'severe' | 'moderate' | 'minor' | null)",
+      "topic_tags": "string[] | null",
+      "source_count": "number",
+      "has_opinion": "boolean",
+      "summary_neutral": "string | null",
+      "summary_spicy": "string | null"
+    }
+  },
+  "stories-search": {
+    "endpoint": "/functions/v1/stories-search?q=<query>",
+    "returns": "{ items: Story[] }",
+    "fields_additional_to_active": {
+      "closed_at": "string | null",
+      "reopen_count": "number",
+      "severity_level": "number (0-5) | null",
+      "category": "string | null",
+      "headline": "string | null",
+      "confidence_score": "number",
+      "search_vector": "string",
+      "last_enriched_at": "string | null",
+      "lifecycle_state": "string ('emerging' | etc.)",
+      "enrichment_status": "string | null",
+      "alarm_level": "number | null",
+      "topic_slugs": "string[]",
+      "top_entities": "string[]",
+      "entity_counter": "object",
+      "centroid_embedding_v1": "string (HUGE - do not use in frontend)"
+    }
+  },
+  "stories-detail": {
+    "endpoint": "/functions/v1/stories-detail/<id>",
+    "status": "BROKEN - column articles_1.headline does not exist",
+    "note": "Needs edge function fix before Phase 3. Detail page will need article data."
+  },
+  "severity-mapping": {
+    "description": "DB severity text -> UI alarm level number",
+    "critical": 5,
+    "severe": 4,
+    "moderate": 3,
+    "minor": 2,
+    "low": 1,
+    "positive": 0,
+    "null_fallback": "Use severity_level or alarm_level if available, else default to 2 (NOTABLE)"
+  }
+}

@@ -1,0 +1,49 @@
+name: Pipeline Skips Cleanup (PROD scheduled)
+
+# ADO-466: Silent Skip Visibility
+# Deletes pipeline_skips rows older than 30 days to cap table size.
+# Runs daily at 04:00 UTC (low-traffic window).
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: "Retention window in days (default 30)"
+        required: false
+        default: "30"
+        type: string
+
+concurrency:
+  group: pipeline-skips-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete old skip rows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # PROD-only, kill switch respected
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true'
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      RETENTION_DAYS: ${{ github.event.inputs.retention_days || '30' }}
+    steps:
+      - name: Delete rows older than retention window
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d "${RETENTION_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Retention window: ${RETENTION_DAYS} days. Cutoff (UTC): ${cutoff}"
+
+          # PostgREST DELETE with filter; Prefer: return=representation gives us the deleted rows
+          resp="$(curl -sS --fail-with-body \
+            -X DELETE \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Prefer: return=representation" \
+            "${SUPABASE_URL}/rest/v1/pipeline_skips?created_at=lt.${cutoff}&select=id")"
+
+          deleted_count="$(echo "${resp}" | jq 'length')"
+          echo "Deleted ${deleted_count} row(s) older than ${cutoff}"
