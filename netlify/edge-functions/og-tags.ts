@@ -119,12 +119,12 @@ function replaceMetaTag(html: string, property: string, value: string): string {
 async function fetchRecord(
   supabaseUrl: string,
   anonKey: string,
-  config: RouteConfig,
+  routeConfig: RouteConfig,
   id: string,
 ): Promise<Record<string, unknown> | null> {
   const safeId = encodeURIComponent(id);
-  const filterStr = [...config.filters, `id=eq.${safeId}`].join('&');
-  const url = `${supabaseUrl}/rest/v1/${config.table}?select=${config.select}&${filterStr}&limit=1`;
+  const filterStr = [...routeConfig.filters, `id=eq.${safeId}`].join('&');
+  const url = `${supabaseUrl}/rest/v1/${routeConfig.table}?select=${routeConfig.select}&${filterStr}&limit=1`;
 
   const res = await fetch(url, {
     headers: {
@@ -133,56 +133,31 @@ async function fetchRecord(
     },
   });
 
-  const body = await res.text();
-  if (!res.ok) return { __error: true, status: res.status, body: body.substring(0, 150) } as any;
-  try {
-    const rows = JSON.parse(body);
-    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  } catch {
-    return null;
-  }
+  if (!res.ok) return null;
+  const rows: Record<string, unknown>[] = await res.json();
+  return rows.length > 0 ? rows[0] : null;
 }
 
 export default async (req: Request, context: Context) => {
   const ua = req.headers.get('user-agent') || '';
-
   if (!isCrawler(ua)) {
     return context.next();
   }
 
   const url = new URL(req.url);
   const route = parseRoute(url.pathname);
-  if (!route) {
-    const r = await context.next();
-    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-route' } });
-  }
+  if (!route) return context.next();
 
   const routeConfig = ROUTE_CONFIGS[route.type];
-  if (!routeConfig) {
-    const r = await context.next();
-    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-config' } });
-  }
+  if (!routeConfig) return context.next();
 
   const supabaseUrl = Netlify.env.get('SUPABASE_URL');
   const anonKey = Netlify.env.get('SUPABASE_ANON_KEY');
-  if (!supabaseUrl || !anonKey) {
-    const r = await context.next();
-    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `no-env:url=${!!supabaseUrl}:key=${!!anonKey}` } });
-  }
+  if (!supabaseUrl || !anonKey) return context.next();
 
   try {
-    const safeId = encodeURIComponent(route.id);
-    const filterStr = [...routeConfig.filters, `id=eq.${safeId}`].join('&');
-    const fetchUrl = `${supabaseUrl}/rest/v1/${routeConfig.table}?select=${routeConfig.select}&${filterStr}&limit=1`;
-
     const record = await fetchRecord(supabaseUrl, anonKey, routeConfig, route.id);
-    if (!record || (record as any).__error) {
-      const debugInfo = (record as any)?.__error
-        ? `fetch-${(record as any).status}:${(record as any).body}`
-        : `no-rows:id=${route.id}`;
-      const r = await context.next();
-      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': debugInfo.substring(0, 300) } });
-    }
+    if (!record) return context.next();
 
     const origin = url.origin;
     const title = routeConfig.buildTitle(record);
@@ -208,11 +183,10 @@ export default async (req: Request, context: Context) => {
 
     return new Response(html, {
       status: response.status,
-      headers: { ...Object.fromEntries(response.headers), 'x-og-debug': 'injected' },
+      headers: response.headers,
     });
-  } catch (err) {
-    const r = await context.next();
-    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `error:${(err as Error).message}` } });
+  } catch {
+    return context.next();
   }
 }
 
