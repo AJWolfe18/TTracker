@@ -138,8 +138,9 @@ async function fetchRecord(
   return rows.length > 0 ? rows[0] : null;
 }
 
-export default async function handler(req: Request, context: Context) {
+export default async (req: Request, context: Context) => {
   const ua = req.headers.get('user-agent') || '';
+
   if (!isCrawler(ua)) {
     return context.next();
   }
@@ -147,51 +148,60 @@ export default async function handler(req: Request, context: Context) {
   const url = new URL(req.url);
   const route = parseRoute(url.pathname);
   if (!route) {
-    return context.next();
+    const r = await context.next();
+    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-route' } });
   }
 
-  const config = ROUTE_CONFIGS[route.type];
-  if (!config) {
-    return context.next();
+  const routeConfig = ROUTE_CONFIGS[route.type];
+  if (!routeConfig) {
+    const r = await context.next();
+    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-config' } });
   }
 
   const supabaseUrl = Netlify.env.get('SUPABASE_URL');
   const anonKey = Netlify.env.get('SUPABASE_ANON_KEY');
   if (!supabaseUrl || !anonKey) {
-    return context.next();
+    const r = await context.next();
+    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `no-env:url=${!!supabaseUrl}:key=${!!anonKey}` } });
   }
 
-  const record = await fetchRecord(supabaseUrl, anonKey, config, route.id);
-  if (!record) {
-    return context.next();
+  try {
+    const record = await fetchRecord(supabaseUrl, anonKey, routeConfig, route.id);
+    if (!record) {
+      const r = await context.next();
+      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-record' } });
+    }
+
+    const origin = url.origin;
+    const title = routeConfig.buildTitle(record);
+    const description = routeConfig.buildDescription(record);
+    const summary = truncate(
+      String(record.summary_spicy || record.section_what_it_means || description),
+      200,
+    );
+    const canonicalUrl = `${origin}/${route.type}/${route.id}`;
+    const imageUrl = `${origin}/og-default.png`;
+
+    const response = await context.next();
+    let html = await response.text();
+
+    html = replaceMetaTag(html, 'og:title', title);
+    html = replaceMetaTag(html, 'og:description', description);
+    html = replaceMetaTag(html, 'og:image', imageUrl);
+    html = replaceMetaTag(html, 'og:url', canonicalUrl);
+    html = replaceMetaTag(html, 'og:type', 'article');
+    html = replaceMetaTag(html, 'twitter:card', 'summary_large_image');
+    html = replaceMetaTag(html, 'twitter:title', title);
+    html = replaceMetaTag(html, 'twitter:description', summary);
+
+    return new Response(html, {
+      status: response.status,
+      headers: { ...Object.fromEntries(response.headers), 'x-og-debug': 'injected' },
+    });
+  } catch (err) {
+    const r = await context.next();
+    return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `error:${(err as Error).message}` } });
   }
-
-  const origin = url.origin;
-  const title = config.buildTitle(record);
-  const description = config.buildDescription(record);
-  const summary = truncate(
-    String(record.summary_spicy || record.section_what_it_means || description),
-    200,
-  );
-  const canonicalUrl = `${origin}/${route.type}/${route.id}`;
-  const imageUrl = `${origin}/og-default.png`;
-
-  const response = await context.next();
-  let html = await response.text();
-
-  html = replaceMetaTag(html, 'og:title', title);
-  html = replaceMetaTag(html, 'og:description', description);
-  html = replaceMetaTag(html, 'og:image', imageUrl);
-  html = replaceMetaTag(html, 'og:url', canonicalUrl);
-  html = replaceMetaTag(html, 'og:type', 'article');
-  html = replaceMetaTag(html, 'twitter:card', 'summary_large_image');
-  html = replaceMetaTag(html, 'twitter:title', title);
-  html = replaceMetaTag(html, 'twitter:description', summary);
-
-  return new Response(html, {
-    status: response.status,
-    headers: response.headers,
-  });
 }
 
 export const config: Config = {
