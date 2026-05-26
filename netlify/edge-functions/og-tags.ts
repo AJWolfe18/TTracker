@@ -133,13 +133,14 @@ async function fetchRecord(
     },
   });
 
-  if (!res.ok) {
-    console.log(`OG fetch failed: ${res.status} ${res.statusText} for ${url}`);
+  const body = await res.text();
+  if (!res.ok) return { __error: true, status: res.status, body: body.substring(0, 150) } as any;
+  try {
+    const rows = JSON.parse(body);
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch {
     return null;
   }
-  const rows: Record<string, unknown>[] = await res.json();
-  console.log(`OG fetch: ${rows.length} rows from ${url}`);
-  return rows.length > 0 ? rows[0] : null;
 }
 
 export default async (req: Request, context: Context) => {
@@ -175,9 +176,12 @@ export default async (req: Request, context: Context) => {
     const fetchUrl = `${supabaseUrl}/rest/v1/${routeConfig.table}?select=${routeConfig.select}&${filterStr}&limit=1`;
 
     const record = await fetchRecord(supabaseUrl, anonKey, routeConfig, route.id);
-    if (!record) {
+    if (!record || (record as any).__error) {
+      const debugInfo = (record as any)?.__error
+        ? `fetch-${(record as any).status}:${(record as any).body}`
+        : `no-rows:id=${route.id}`;
       const r = await context.next();
-      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `no-record:${fetchUrl.substring(0, 200)}` } });
+      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': debugInfo.substring(0, 300) } });
     }
 
     const origin = url.origin;
