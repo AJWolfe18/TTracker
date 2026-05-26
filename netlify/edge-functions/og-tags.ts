@@ -1,4 +1,4 @@
-import type { Context } from "https://edge.netlify.com";
+import type { Context, Config } from "@netlify/edge-functions";
 
 const CRAWLER_PATTERNS = [
   'facebookexternalhit',
@@ -193,3 +193,7 @@ export default async function handler(req: Request, context: Context) {
     headers: response.headers,
   });
 }
+
+export const config: Config = {
+  path: ["/detail/*", "/eos/*", "/scotus/*", "/pardons/*"],
+};

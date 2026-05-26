@@ -58,6 +58,7 @@
   "author": "Political Transparency Project",
   "license": "MIT",
   "devDependencies": {
+    "@netlify/edge-functions": "^3.0.7",
     "@resvg/resvg-js": "^2.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
