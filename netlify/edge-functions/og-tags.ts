@@ -180,10 +180,15 @@ export default async (req: Request, context: Context) => {
     html = replaceMetaTag(html, 'twitter:card', 'summary_large_image');
     html = replaceMetaTag(html, 'twitter:title', title);
     html = replaceMetaTag(html, 'twitter:description', summary);
+    html = replaceMetaTag(html, 'twitter:image', imageUrl);
+
+    const headers = new Headers(response.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
 
     return new Response(html, {
       status: response.status,
-      headers: response.headers,
+      headers,
     });
   } catch {
     return context.next();
