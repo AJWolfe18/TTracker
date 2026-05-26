@@ -133,8 +133,12 @@ async function fetchRecord(
     },
   });
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.log(`OG fetch failed: ${res.status} ${res.statusText} for ${url}`);
+    return null;
+  }
   const rows: Record<string, unknown>[] = await res.json();
+  console.log(`OG fetch: ${rows.length} rows from ${url}`);
   return rows.length > 0 ? rows[0] : null;
 }
 
@@ -166,10 +170,14 @@ export default async (req: Request, context: Context) => {
   }
 
   try {
+    const safeId = encodeURIComponent(route.id);
+    const filterStr = [...routeConfig.filters, `id=eq.${safeId}`].join('&');
+    const fetchUrl = `${supabaseUrl}/rest/v1/${routeConfig.table}?select=${routeConfig.select}&${filterStr}&limit=1`;
+
     const record = await fetchRecord(supabaseUrl, anonKey, routeConfig, route.id);
     if (!record) {
       const r = await context.next();
-      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': 'no-record' } });
+      return new Response(await r.text(), { status: r.status, headers: { ...Object.fromEntries(r.headers), 'x-og-debug': `no-record:${fetchUrl.substring(0, 200)}` } });
     }
 
     const origin = url.origin;
