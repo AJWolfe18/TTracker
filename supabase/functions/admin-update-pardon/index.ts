@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Integer 1-5: corruption_level
+    // Integer 0-5: corruption_level
     if ('corruption_level' in sanitizedUpdates) {
       const v = sanitizedUpdates.corruption_level
       if (v !== null) {
