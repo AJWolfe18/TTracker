@@ -34,7 +34,8 @@ const VALID_CRIME_CATEGORIES = [
 const VALID_CONNECTION_TYPES = [
   'mar_a_lago_vip', 'major_donor', 'family', 'political_ally',
   'campaign_staff', 'business_associate', 'jan6_defendant',
-  'fake_electors', 'celebrity', 'no_connection',
+  'fake_electors', 'celebrity', 'cabinet_connection', 'lobbyist',
+  'wealthy_unknown', 'no_connection',
 ]
 const VALID_RESEARCH_STATUS = ['complete', 'in_progress', 'pending']
 
@@ -162,13 +163,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Integer 1-5: corruption_level
+    // Integer 0-5: corruption_level
     if ('corruption_level' in sanitizedUpdates) {
       const v = sanitizedUpdates.corruption_level
       if (v !== null) {
         const level = parseInt(String(v), 10)
-        if (isNaN(level) || level < 1 || level > 5) {
-          return jsonResponse({ error: 'corruption_level must be an integer between 1 and 5' }, 400)
+        if (isNaN(level) || level < 0 || level > 5) {
+          return jsonResponse({ error: 'corruption_level must be an integer between 0 and 5' }, 400)
         }
         sanitizedUpdates.corruption_level = level
       }
