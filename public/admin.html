@@ -5991,6 +5991,12 @@
                                                 {stats.needs_attention.breakdown.stories_enrichment_failed}
                                             </span>
                                         </div>
+                                        <div className="attention-item" title="Pardons flagged for review before publish" onClick={() => setActiveTab('pardons')}>
+                                            <span>Pardons needs review</span>
+                                            <span className={`attention-count ${(stats.needs_attention?.breakdown?.pardons_need_review ?? 0) === 0 ? 'zero' : ''}`}>
+                                                {stats.needs_attention?.breakdown?.pardons_need_review ?? 0}
+                                            </span>
+                                        </div>
                                         <div className="attention-item" title="Pardons not yet published">
                                             <span>Pardons unpublished</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.pardons_unpublished === 0 ? 'zero' : ''}`}>

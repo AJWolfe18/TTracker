@@ -20,7 +20,7 @@ BEGIN;
 CREATE OR REPLACE FUNCTION public.enforce_pardons_publish_gate()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SET search_path = pg_catalog, public, extensions
+SET search_path = pg_catalog, public
 AS $$
 BEGIN
   IF NEW.needs_review = true THEN
