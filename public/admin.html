@@ -2867,6 +2867,7 @@
             const [corruptionLevelFilter, setCorruptionLevelFilter] = useState('');
             const [researchStatusFilter, setResearchStatusFilter] = useState('');
             const [enrichmentFilter, setEnrichmentFilter] = useState('');
+            const [needsReviewFilter, setNeedsReviewFilter] = useState('');
             const [sortBy, setSortBy] = useState('pardon_date');
             const [sortDir, setSortDir] = useState('desc');
 
@@ -2944,6 +2945,7 @@
                     if (corruptionLevelFilter) reqBody.corruptionLevel = corruptionLevelFilter;
                     if (researchStatusFilter) reqBody.researchStatus = researchStatusFilter;
                     if (enrichmentFilter) reqBody.enrichment = enrichmentFilter;
+                    if (needsReviewFilter !== '') reqBody.needsReview = needsReviewFilter;
                     if (nextCursor) reqBody.cursor = nextCursor;
 
                     const { data, error: fnError } = await supabase.functions.invoke(
@@ -2977,13 +2979,13 @@
                         setLoadingMore(false);
                     }
                 }
-            }, [supabase, password, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+            }, [supabase, password, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, needsReviewFilter, sortBy, sortDir]);
 
             // Re-fetch when filters change
             useEffect(() => {
                 setCursor(null);
                 fetchPardons(false, null);
-            }, [fetchPardons, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, sortBy, sortDir]);
+            }, [fetchPardons, debouncedSearch, isPublicFilter, crimeCategoryFilter, connectionTypeFilter, corruptionLevelFilter, researchStatusFilter, enrichmentFilter, needsReviewFilter, sortBy, sortDir]);
 
             // Load more handler with guard
             const handleLoadMore = () => {
@@ -3149,6 +3151,37 @@
                 }
             };
 
+            // Approve & Publish: atomically clears needs_review and sets is_public=true.
+            // Required for flagged rows — a plain publish would be reverted by the DB trigger.
+            const handleApproveAndPublish = async (pardon) => {
+                setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: true, needs_review: false } : p));
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke(
+                        'admin-update-pardon',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: {
+                                pardon_id: pardon.id,
+                                updates: { is_public: true, needs_review: false },
+                                original_updated_at: pardon.updated_at
+                            }
+                        }
+                    );
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Approve failed');
+                    }
+                    if (data?.error) throw new Error(data.error);
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, ...data.pardon } : p));
+                    toast?.addToast('Approved & Published', 'success');
+                } catch (err) {
+                    console.error('Approve & publish error:', err);
+                    setPardons(prev => prev.map(p => p.id === pardon.id ? { ...p, is_public: pardon.is_public, needs_review: pardon.needs_review } : p));
+                    toast?.addToast(err.message || 'Failed to approve', 'error');
+                }
+            };
+
             const subTabs = [
                 { value: '', label: 'All' },
                 { value: 'false', label: 'Drafts' },
@@ -3227,6 +3260,15 @@
                             <option value="">All Enrichment</option>
                             <option value="enriched">Enriched</option>
                             <option value="pending">Not Enriched</option>
+                        </select>
+                        <select
+                            className="stories-select"
+                            value={needsReviewFilter}
+                            onChange={(e) => setNeedsReviewFilter(e.target.value)}
+                        >
+                            <option value="">All Review Status</option>
+                            <option value="true">Needs Review</option>
+                            <option value="false">Cleared</option>
                         </select>
                         <select
                             className="stories-select"
@@ -3346,9 +3388,15 @@
                                                                     : '🤖 Enrich'
                                                                 }
                                                             </button>
-                                                            <button className="btn-icon" onClick={() => handleTogglePublish(pardon)} title={pardon.is_public ? 'Unpublish' : 'Publish'}>
-                                                                {pardon.is_public ? '📤 Unpublish' : '📥 Publish'}
-                                                            </button>
+                                                            {pardon.needs_review && !pardon.is_public ? (
+                                                                <button className="btn-icon" onClick={() => handleApproveAndPublish(pardon)} title="Clear review flag and publish" style={{color: '#16a34a'}}>
+                                                                    ✅ Approve & Publish
+                                                                </button>
+                                                            ) : (
+                                                                <button className="btn-icon" onClick={() => handleTogglePublish(pardon)} title={pardon.is_public ? 'Unpublish' : 'Publish'}>
+                                                                    {pardon.is_public ? '📤 Unpublish' : '📥 Publish'}
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>

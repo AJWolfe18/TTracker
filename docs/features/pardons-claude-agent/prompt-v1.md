@@ -403,9 +403,9 @@ This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`.
 | `enriched_at` | Current ISO 8601 timestamp |
 | `prompt_version` | `'v1'` |
 | `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1", "run_source": "cloud-agent"}` |
-| `is_public` | `true` (auto-publish after enrichment) |
+| `is_public` | `false` when `needs_review = true`; `true` when `needs_review = false`. Set these together — never set `is_public = true` without also confirming `needs_review = false`. A DB trigger enforces this gate on every write. |
 | `research_status` | `'complete'` |
-| `needs_review` | `true` when `corruption_level = 0` or low confidence. `false` otherwise. |
+| `needs_review` | `true` when: `corruption_level = 0`, low confidence, co-defendant role ambiguity, OR `recipient_name` disagrees with researched name. `false` otherwise. |
 
 ### Step 5: Validate Before Writing
 
@@ -421,7 +421,7 @@ Before writing each pardon, run this checklist:
 - [ ] `summary_spicy` follows The Transaction voice at the correct tone level?
 - [ ] `summary_spicy` does NOT start with a banned opening?
 - [ ] No fabricated connections (every claim has a cited source)?
-- [ ] `is_public` is set to `true`?
+- [ ] `is_public = false` when `needs_review = true`; `is_public = true` when `needs_review = false`?
 - [ ] No NEVER-WRITE columns included (see list below)?
 - [ ] For group pardons: editorial addresses the group/action, not fictitious individuals?
 
@@ -453,7 +453,7 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "enriched_at": "{ENRICHED_AT value}",
   "prompt_version": "v1",
   "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1", "run_source": "cloud-agent"},
-  "is_public": true,
+  "is_public": false,
   "research_status": "complete",
   "needs_review": false,
   "post_pardon_status": "quiet",
@@ -481,8 +481,8 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/pardons?id=eq.{PARDON_ID}" \
 `summary_neutral`, `summary_spicy`, `why_it_matters`, `pattern_analysis`,
 `source_urls` (MUST be `[]` not `null`),
 `enriched_at`, `prompt_version`, `enrichment_meta`,
-`is_public` (= true), `research_status` (= 'complete'),
-`needs_review` (= true when corruption_level = 0 or low confidence),
+`is_public` (= `false` when `needs_review = true`; `true` when `needs_review = false`), `research_status` (= 'complete'),
+`needs_review` (= true when corruption_level = 0, low confidence, co-defendant role ambiguity, or recipient_name disagrees with researched name),
 `post_pardon_status` (= 'quiet', 'under_investigation', or 're_offended'),
 `post_pardon_notes` (summary of post-pardon developments, null if quiet)
 
@@ -745,7 +745,7 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
 These rules can NEVER be violated:
 
 1. **Never fabricate connections.** If you can't find evidence, say so. Set `no_connection` and move on.
-2. **Always set `is_public = true`** in the enrichment PATCH — auto-publish after enrichment.
+2. **Set `is_public = (NOT needs_review)`** — `is_public = true` only when `needs_review = false`. If `needs_review = true`, set `is_public = false`. A DB trigger also enforces this gate on every write path.
 3. **Always log every run** — even if 0 pardons found, even if an error occurs.
 4. **Always populate `crime_description`** — this is the #1 data gap we're fixing. Use `offense_raw` + web research.
 5. **One PATCH per pardon** — atomic writes, no partial updates.
