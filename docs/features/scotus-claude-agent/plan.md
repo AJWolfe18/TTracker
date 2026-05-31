@@ -8,6 +8,9 @@
 
 **Tech Stack:** Claude Sonnet 4.6 (cloud agent), Supabase PostgREST API (direct HTTP, no MCP dependency)
 
+> **⚠️ DESIGN AMENDMENT — 2026-05-31 (auto-publish is intentional):**
+> This plan was written around a **human-review-before-publish** model (the agent never sets `is_public`; Josh flips it after review). That model was **deliberately replaced**: the agent now **auto-publishes on enrichment** (`is_public = true`), because high-quality cases were sitting unpublished waiting on manual review (2026-05-27 fix). The authoritative behavior lives in `prompt-v1.md`. The `is_public = always false / human flips after review` references below (architecture diagram, prompt-requirements table, validation checklist) are **superseded** — kept for design history. `needs_manual_review` / `fact_extraction_confidence` remain as advisory uncertainty flags, not a publish gate. (For pardons, a *deliberate exception* — `needs_review` blocking publish — is tracked separately in ADO-527; SCOTUS/EO stay publish-by-default unless decided otherwise.)
+
 ---
 
 ## Why This Route
@@ -93,11 +96,11 @@ Claude Agent (Sonnet 4.6, Anthropic cloud)
     ├── Validates: internal checks before each write
     ├── Writes: PATCH enrichment fields to scotus_cases (enrichment_status = 'enriched')
     ├── Logs: PATCH run completion to scotus_enrichment_log (status='completed')
-    └── Never: sets qa_status, is_public, or self-approves
+    └── Sets is_public = true (auto-publish — see 2026-05-31 amendment; originally "never publishes")
     ↓
-Human Review (Josh)
+Human Review (Josh) — now POST-publish, optional
     ├── Reviews enrichment via admin dashboard or SQL
-    ├── Sets qa_status = 'approved' and is_public = true
+    ├── Can unpublish / correct if an issue is found
     └── Flags issues for prompt iteration
 ```
 
@@ -167,7 +170,7 @@ The agent prompt is the core deliverable. It must be self-contained (agent start
 | Opinion text in two tables | `syllabus`/`opinion_excerpt` on `scotus_cases`; `opinion_full_text` on `scotus_opinions` (separate table, query by `case_id`) |
 | Token budget for long opinions | Cap opinion text at 30,000 chars; note truncation in output if capped |
 | Concurrent runs | Agent checks for `status = 'running'` in log table at start; bails if overlap detected |
-| Auto-publishing | `is_public` always `false`. Human flips after review. |
+| Auto-publishing | **Intentional: `is_public = true` on enrichment** (2026-05-31 amendment). Review is post-publish. |
 | No observability | Agent writes to `scotus_enrichment_log` at start and end of every run |
 
 ### Gold Set Examples to Embed
@@ -407,7 +410,7 @@ Verify every critical and medium issue is addressed:
 - Calibration examples at multiple impact levels? YES/NO
 - Prompt injection defense? YES/NO
 - Complete write payload with explicit WRITE list and NEVER-WRITE list? YES/NO
-- is_public always false? YES/NO
+- is_public set to true on enrichment (auto-publish — see 2026-05-31 amendment)? YES/NO
 - Observability log writes? YES/NO
 - Write verification (check affected rows)? YES/NO
 - Opinion text read from correct tables (scotus_cases + scotus_opinions)? YES/NO
