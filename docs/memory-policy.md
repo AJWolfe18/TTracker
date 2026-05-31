@@ -42,6 +42,11 @@ If it fails either test → don't store it; point to the doc instead.
 - Demote to DEEP when the **work** is closed/done and rarely needed.
 - **Live production systems stay HOT even if the ADO ticket is closed** (e.g. `scotus-agent`, `eo-agent` — running daily, referenced often). Test: *still running / still referenced? → HOT. Done and rarely needed? → DEEP.*
 
+## Trimming DEEP — append-and-correct, never tidy-trim
+- **Trim/update DEEP when a fact CHANGES** — superseded, reversed, or now wrong. Stale-and-wrong is the one thing you never keep in any tier (a `search_nodes` hit could mislead).
+- **Do NOT trim DEEP merely for redundancy with HOT.** Duplicated-but-accurate phrasing is harmless in a search-only store that's never bulk-loaded. Deleting correct history to save cosmetic tidiness isn't worth the risk (files are gitignored, no version history).
+- Net: DEEP is **append-and-correct**, not tidy-pruned.
+
 ## /end-work does BOTH every session
 1. **APPEND** new observations that pass the filter.
 2. **CURATE** (this is what stops bloat): update/delete stale observations; enforce the cap; demote closed-work entities to DEEP (extract any reusable gotcha to HOT first).
