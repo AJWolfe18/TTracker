@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'MEMORY REMINDER: A commit was just made. Save current session state to memory-project now — what was done, decisions made, and what the next session should pick up.'",
+            "command": "echo 'MEMORY REMINDER: A commit was just made. Per docs/memory-policy.md, /end-work should APPEND + CURATE memory-project (HOT): update active-work, prune stale obs, demote closed work to memory-deep. Back up first (files are gitignored).'",
             "if": "Bash(git commit*)",
             "statusMessage": "Checking post-commit memory save..."
           }
