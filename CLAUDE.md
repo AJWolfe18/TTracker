@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
 **Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
 **Source of Truth**: ADO for status, plans for implementation details only
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (global + project)
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 📁 Quick Reference
 
 **First 3 commands every session:**
-1. Read from `memory-global` + `memory-project` MCP servers → understand context
+1. Read `memory-global` + `memory-project` (HOT) → understand context. Do NOT bulk-read `memory-deep` (archive) — `search_nodes` it on demand only. Rules: `docs/memory-policy.md`
 2. `git branch --show-current` → Must be `test`
 3. Check if memory or ADO references an active plan → EXECUTE it (don't re-plan)
 
@@ -45,7 +45,7 @@ docs/features/
 ## 🔄 Session Workflow Checklist
 
 ### ✅ Start Every Session (5 min)
-- [ ] Read from `memory-global` + `memory-project` MCP servers FIRST
+- [ ] Read `memory-global` + `memory-project` (HOT) FIRST (search `memory-deep` only if task touches old work)
 - [ ] Verify on `test` branch: `git branch --show-current`
 - [ ] Query ADO via `/ado` command (if ticket-based work)
 - [ ] Review existing plan in `/docs/features/[feature]/` OR create if complex
@@ -360,6 +360,8 @@ WHERE day = CURRENT_DATE;
 | `PERPLEXITY_API_KEY` | Perplexity (shared) |
 | `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
 | `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
+| `DISCORD_WEBHOOK_URL` | Discord alerts (shared) — used by rss-tracker-test/prod + pardons-tracker workflows; alerts are non-blocking if unset |
+| `COURTLISTENER_API_TOKEN` | SCOTUS case fetch (CourtListener API) |
 
 **Important:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
 
