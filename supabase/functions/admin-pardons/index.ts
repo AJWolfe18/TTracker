@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
     const corruptionLevel = String(body.corruptionLevel ?? '')
     const researchStatus = String(body.researchStatus ?? '')
     const enrichment = String(body.enrichment ?? '')
+    const needsReview = String(body.needsReview ?? '')
     const sortBy = String(body.sortBy ?? 'pardon_date')
     const sortDir = String(body.sortDir ?? 'desc')
     const cursor = String(body.cursor ?? '')
@@ -185,6 +186,13 @@ Deno.serve(async (req) => {
       query = query.not('enriched_at', 'is', null)
     } else if (enrichment === 'pending') {
       query = query.is('enriched_at', null)
+    }
+
+    // Filter: needsReview
+    if (needsReview === 'true') {
+      query = query.eq('needs_review', true)
+    } else if (needsReview === 'false') {
+      query = query.eq('needs_review', false)
     }
 
     // Search: by name or exact ID
