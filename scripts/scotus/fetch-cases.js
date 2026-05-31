@@ -436,7 +436,7 @@ async function processCluster(cluster) {
   const caseRecord = {
     courtlistener_cluster_id: clusterId,
     courtlistener_docket_id: cluster.docket_id || null,
-    case_name: cluster.case_name,
+    case_name: (cluster.case_name || '').replace(/\s*Revisions?:\s*\d{1,2}\/\d{2}\/\d{2,4}\s*$/i, ''),
     case_name_short: cluster.case_name_short || null,
     case_name_full: cluster.case_name_full || null,
     docket_number: docket?.docket_number || null,
