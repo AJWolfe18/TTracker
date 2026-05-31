@@ -1,0 +1,26 @@
+# TrumpyTracker
+
+> AI-powered political accountability tracker: RSS feeds → clustered Stories → AI summaries, plus SCOTUS, Executive Orders, and Pardons trackers. Node.js/JavaScript + Supabase (Postgres + Edge Functions) + Vanilla/React frontend on Netlify.
+
+## Start
+- [Project rules & workflow](CLAUDE.md): branching, budget, MCP tools, anti-patterns — read first
+- [Architecture](docs/ARCHITECTURE.md): high-level system map + pipeline flow
+- [Docs map](docs/README.md): full documentation index
+
+## Decisions
+- [Architecture Decision Records](docs/decisions/): why the system is built this way
+
+## How-to (procedures)
+- [Supabase updates](docs/how-to/supabase-update.md)
+- [Trigger RSS (TEST)](docs/guides/triggering-rss-tracker-test.md)
+- [PROD deployment checklist](docs/guides/prod-deployment-checklist.md)
+
+## Reference
+- [Database schema](docs/database/database-schema.md)
+- [Memory policy](docs/memory-policy.md)
+
+## Notes for agents
+- Work on `test` branch; `main` is protected (PR-only). Never push origin main.
+- Budget < $50/month hard limit. State cost impact before proposing AI features.
+- Minimize Supabase egress: never `select=*`, always `limit`, never fetch `embedding`/`content` unless required.
+- No Python in this repo — Node.js/JavaScript only.

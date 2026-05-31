@@ -547,16 +547,16 @@ VALUES (
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
 
-**Memory MCP (Knowledge Graph):** Point-in-time state snapshots for fast session startup
-- **`memory-global`** — User profile, preferences, feedback, cross-project context. Shared across ALL projects.
-- **`memory-project`** — Project-specific: where we left off, active tickets, key decisions. Isolated to this project.
-- **Session start:** ALWAYS read both memory servers before doing anything
-- **Session end:** Save state via `/end-work` command (auto-saves to memory)
-- **Mid-session:** Save when user says "remember" or when a non-obvious decision is made
-- **What to save:** Quick-hit facts — ticket state, blockers, decisions (and WHY), what's next
-- **What NOT to save:** Things in git log, code, CLAUDE.md, ADO, or handoff docs
+**Memory MCP (Knowledge Graph):** 3-tier knowledge graph. **Full rules live in `docs/memory-policy.md`** — this is a summary, don't duplicate the policy here.
+- **`memory-global`** — identity, preferences, cross-project context. Shared across ALL projects. Always read.
+- **`memory-project` (HOT)** — active work, conventions, pointers, reusable gotchas. Always read. Keep small.
+- **`memory-deep` (archive)** — closed-work history. **Search only** (`search_nodes`/`open_nodes`), NEVER bulk-loaded.
+- **Session start:** read Global + HOT only; search DEEP on demand
+- **Session end:** `/end-work` does append + curate (back up first — files are gitignored)
+- **STORE:** durable facts, decisions + WHY, gotchas, pointers (ADO#, doc path, commit)
+- **NEVER STORE:** status (→ADO), metrics/spend/counts (→Supabase), narrative (→handoffs), anything in git/code/CLAUDE.md
 - **Built-in auto-memory is DISABLED** — use ONLY the MCP knowledge graph servers
-- Storage: `C:\Users\Josh\.claude-memory\global\` and `C:\Users\Josh\.claude-memory\ttracker\`
+- Storage: `C:\Users\Josh\.claude-memory\{global,ttracker,ttracker-archive}\`
 
 **Handoff Docs (`/docs/handoffs/`):** Full narrative context for session continuity
 - **ALWAYS create a handoff doc** at end of every non-trivial session via `/end-work`

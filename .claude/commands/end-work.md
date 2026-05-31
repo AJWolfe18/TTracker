@@ -12,39 +12,45 @@ Wrap up a development session: save state to memory, review code, commit, push, 
 
 When invoked, follow these steps in order:
 
-### 1. Save Session State to Memory
-Save the current session state to `memory-project` (project-specific memory). Create or update entities and observations for:
-- **What was worked on** — ticket numbers, feature names, files changed
-- **Where we left off** — current state of the work, what's done vs remaining
-- **Decisions made** — any architecture, design, or approach decisions and WHY
-- **What's next** — the immediate next steps for the next session
-- **Blockers or issues** — anything unresolved
+### 1. Update Memory (append + curate — per `docs/memory-policy.md`)
 
-Also update `memory-global` if any new user preferences, feedback, or cross-project learnings were discovered during the session.
+**SAFETY FIRST (memory files are gitignored — no version history):**
+Before deleting or overwriting any observation, back up all memory.jsonl files to
+`C:\Users\Josh\.claude-memory\_backups\<YYYY-MM-DD>\` (global, ttracker, ttracker-archive).
+Never `delete_entities` by guessing names — read the graph first.
 
-**The filter — only save what passes this test:**
-> "Would the next session waste 5+ minutes without this info?"
-> If yes → save it. If no → skip it.
+**The filter — store an observation ONLY if:**
+> "Would the next session waste 5+ minutes without this, AND is it not already in ADO / git / code / a doc?"
+> If it fails either test → don't store it; point to the doc instead.
 
-**SAVE (not captured elsewhere):**
-- Where we left off and what's next (ADO state alone doesn't tell the full story)
-- WHY a decision was made (the code shows WHAT, not WHY)
-- Non-obvious gotchas hit during the session
-- User feedback or preference changes
+Do BOTH every session:
 
-**DON'T SAVE (derivable from other sources):**
-- What files were changed (git log shows this)
-- Code patterns or architecture (read the code)
-- Step-by-step task details (ephemeral, use todos)
-- Anything already in CLAUDE.md or ADO ticket description
-- Exact code snippets (they go stale immediately)
+**APPEND** (Global + Project HOT):
+- New decisions made this session and **WHY** (highest value)
+- New durable conventions or gotchas discovered
+- Update the `active-work` anchor: what's live + next step (NOT status — that's ADO)
+- Update `memory-global` only for new user preferences / cross-project learnings
 
-**Keep it tight:**
-- Max 3-5 observations per session save
-- One sentence per observation, not paragraphs
-- Update existing entities, don't create new ones for the same thing
-- Delete observations that are no longer true
-- Check for duplicates before writing
+**CURATE** (mandatory — this is what stops bloat):
+- Delete/update observations this session made stale
+- Cap each entity at ~6 observations (entityType `gotcha` collections exempt); if a feature
+  log is growing, trim it to a pointer
+- If WORK CLOSED this session: extract any reusable gotcha to HOT, then move the entity to
+  `memory-deep` (archive). **Live production systems stay HOT even if the ticket is closed.**
+- Never duplicate across Global / HOT / DEEP
+
+**Conventions:** entityType = category (`profile|convention|gotcha|pointer|feature`);
+`[YYYY-MM-DD]` prefix on volatile observations; pointer/feature entities lead with a
+META line (`tier | updated | ado | docs`).
+
+**Hard limits:** max 3-5 new observations per session; one sentence each.
+
+### 1a. Update living docs (ONLY if system shape changed)
+If this session changed schema, a pipeline, an API/contract, or system structure:
+- Update `docs/ARCHITECTURE.md` (and the Mermaid flow if data flow changed)
+- Update the affected `docs/explanation/` or `docs/reference/` (or `docs/architecture/`, `docs/database/`) file
+- If a real architecture DECISION was made, add an ADR to `docs/decisions/`
+Skip entirely for bugfixes, UI tweaks, copy changes, or config edits.
 
 ### 2. Code Review (Two-Pass)
 Run BOTH code reviews on all changes made this session:

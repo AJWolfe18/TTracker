@@ -12,11 +12,15 @@ Kickstart development on a task with built-in review and workflow setup.
 
 When invoked, follow these steps in order:
 
-### 1. Read Memories
-Before anything else, read from both memory MCP servers:
+### 1. Read Memories (tiered — do NOT bulk-read everything)
+Read only the always-loaded tiers:
 - `memory-global` — user profile, preferences, cross-project context
-- `memory-project` — where we left off, active tickets, recent decisions
+- `memory-project` (HOT) — active work, conventions, pointers, reusable gotchas
 
+Do NOT `read_graph` the `memory-deep` (archive) server. Only `search_nodes` / `open_nodes`
+against it on demand, when the task touches old/closed work.
+
+Rules for what lives where: `docs/memory-policy.md`.
 Use this context to understand the current state before reviewing the task.
 
 ### 2. Review the Task
