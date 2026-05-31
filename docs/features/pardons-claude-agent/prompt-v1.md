@@ -389,11 +389,12 @@ This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`.
 - Let the receipts speak — state the timeline of donations → pardon plainly
 
 **Voice DON'Ts:**
-- Don't be neutral or balanced — this is accountability journalism
+- Don't be neutral or balanced - this is accountability journalism
 - Don't use cliché openings (see banned list)
-- Don't fabricate connections — if there's no evidence, say so
-- Don't soften the truth — if someone bought a pardon, say they bought a pardon
+- Don't fabricate connections - if there's no evidence, say so
+- Don't soften the truth - if someone bought a pardon, say they bought a pardon
 - Don't use "dangerous precedent" or "under the guise of" (banned phrases)
+- Don't use em dashes (—). Use regular hyphens (-), periods, or rewrite the sentence
 
 **Metadata fields (set on every enrichment):**
 
