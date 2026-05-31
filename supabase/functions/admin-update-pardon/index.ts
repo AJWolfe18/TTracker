@@ -370,11 +370,15 @@ Deno.serve(async (req) => {
     }
 
     // Step 3: Log diffs (only fields that actually changed)
+    // Use the DB-returned row (data) for new values — not sanitizedUpdates — so
+    // trigger-reverted fields (e.g. is_public forced false by the publish gate) are
+    // logged accurately rather than as a change that never happened.
     const changedFields: Record<string, { old: string | null; new: string | null }> = {}
-    for (const [field, newValue] of Object.entries(sanitizedUpdates)) {
+    for (const field of Object.keys(sanitizedUpdates)) {
       const oldValue = currentPardon[field]
+      const actualNewValue = (data as Record<string, unknown>)[field]
       const oldStr = oldValue != null ? String(typeof oldValue === 'object' ? JSON.stringify(oldValue) : oldValue) : null
-      const newStr = newValue != null ? String(typeof newValue === 'object' ? JSON.stringify(newValue) : newValue) : null
+      const newStr = actualNewValue != null ? String(typeof actualNewValue === 'object' ? JSON.stringify(actualNewValue) : actualNewValue) : null
 
       if (oldStr !== newStr) {
         changedFields[field] = { old: oldStr, new: newStr }
