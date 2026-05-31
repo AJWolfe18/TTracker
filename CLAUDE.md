@@ -238,13 +238,8 @@ docs/features/
 - ❌ Hardcoded IDs in queries - Use parameterized queries
 - ❌ Missing `ON DELETE` behavior - Always specify CASCADE/SET NULL/RESTRICT
 
-### Database Egress (Critical - costs real money!)
-- ❌ `select=*` in MCP queries - Use `select=id,field1,field2` (only fields needed)
-- ❌ Queries without `limit` - Always add `limit=10` for exploration
-- ❌ Fetching `embedding` field - 6KB per row, use only when computing similarity
-- ❌ Fetching `content` field from articles - 5KB+ per row, use only when needed
-- ❌ Running re-cluster/backfill without warning - 1800 articles with embeddings = 5-7GB egress
-- ❌ Multiple Claude sessions doing heavy exploration - Egress accumulates across sessions
+### Database Egress (costs real money!)
+- See Critical Rule #11 above for the full egress rules — don't duplicate here.
 
 ### Code
 - ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
@@ -301,7 +296,7 @@ docs/features/
 - Total: $50/month across all services
 - Daily pipeline cap: $5/day for story enrichment
 - Supabase egress: 5GB/month free tier (overages: $0.09/GB)
-- Current spend: ~$20/month (OpenAI only)
+- Current spend: query the `budgets` table (don't trust a number hardcoded here)
 
 **Cost per Operation:**
 - Story enrichment: ~$0.003/story (GPT-4o-mini)
@@ -337,7 +332,7 @@ WHERE day = CURRENT_DATE;
 ### TEST Environment (test branch)
 - **Database:** Supabase TEST (RSS + Story Clustering schema)
 - **Deploy:** Auto-deploy to Netlify test site
-- **Status:** Active development (~2700 stories, ~3100 articles, 18 feeds)
+- **Status:** Active development (live counts: query Supabase, don't hardcode here)
 - **Marker File:** `TEST_BRANCH_MARKER.md` presence indicates TEST environment
 
 ### PROD Environment (main branch)
@@ -420,9 +415,9 @@ rss-tracker-supabase.js (inline script)
         ↓ Writes to
 Stories + Articles Tables
     ↓ Queries via
-Edge Functions (stories-active, stories-detail)
+Edge Functions (stories-active, stories-detail) + PostgREST direct reads
     ↓ Serves
-Frontend (public/index.html)
+Frontend (Vite + React app)
 ```
 
 **Trigger Methods:**
@@ -569,11 +564,13 @@ VALUES (
 ## Tech Stack
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
-- **Frontend:** Vanilla JS, HTML5, CSS3, Tailwind CSS
-- **AI:** OpenAI GPT-4o-mini for enrichment
+- **Frontend:** Vite + React + TypeScript (Tailwind CSS). Admin dashboard (`admin.html`) is standalone vanilla JS.
+- **AI:** OpenAI GPT-4o-mini (RSS/story enrichment); Claude cloud agents (SCOTUS/EO/Pardons enrichment)
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
+
+**High-level architecture + data flow:** `docs/ARCHITECTURE.md` · **Why decisions were made:** `docs/decisions/` (ADRs) · **Doc index:** `docs/README.md`
 
 ## ADO Workflow
 
@@ -696,6 +693,6 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ---
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-05-30
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`
