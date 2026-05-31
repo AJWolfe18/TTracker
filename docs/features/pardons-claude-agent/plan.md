@@ -655,6 +655,8 @@ Tasks 1 and 4 can potentially run in parallel. Tasks 2→3 are sequential (promp
 |------|----------|------|----------|
 | 2026-05-28 | Claude (feature-dev:code-reviewer) | Pattern compliance | 2 critical (RLS + skipped column), 5 important. All fixed. |
 | 2026-05-28 | Claude (staff eng architecture) | Production readiness | 5 critical (admin validation bugs, NOT NULL constraints, missing columns), 7 important. All critical fixed in plan. |
+| 2026-05-30 | Claude (feature-dev:code-reviewer) | S1+S2 pattern compliance | 2 critical (migration 071 dependency, migration 063 dependency). Both addressed — prerequisites section added to prompt. |
+| 2026-05-30 | Claude (staff eng architecture) | S1+S2 production readiness | 3 critical (research_status governance, enrichment_prompt_version gap, migration 071), 6 important. All addressed — see notes below. |
 
 **Critical fixes applied:**
 1. RLS enabled on `pardons_enrichment_log` (matching 090/091 pattern)
@@ -672,6 +674,14 @@ Tasks 1 and 4 can potentially run in parallel. Tasks 2→3 are sequential (promp
 - No `enrichment_status` state machine on pardons — using `enriched_at IS NULL` filter (acceptable for v1)
 - Re-enrichment time estimate: ~4-6 hours with web research (longer than SCOTUS)
 - PR #94 auto-publish fix applies to pardons via `is_public` column (same pattern as EO/SCOTUS)
+
+**S1+S2 review decisions (2026-05-30):**
+- `research_status`: Agent WRITES `'complete'` (correct — agent replaces both Perplexity research and GPT enrichment). Plan's NEVER-WRITE list was authored before this was resolved. Prompt is authoritative.
+- `enrichment_prompt_version`: Column does NOT EXIST in any migration. Plan reference was an error. The real column is `prompt_version` (from migration 071). Prompt correctly uses `prompt_version` only.
+- Step A (git fetch/reset): IS in SCOTUS and EO prompts — both were updated per ADO-489/481 learning about cached git repos. Reviewers were incorrect about pattern divergence.
+- Prerequisites section added to prompt header (migrations 063, 071, 094 must be applied).
+- Security rule added: never include env var values in PATCH data fields (web research injection defense).
+- Group pardon guidance expanded in Step 3.
 
 ---
 
