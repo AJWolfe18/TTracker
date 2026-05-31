@@ -14,10 +14,12 @@ When invoked, follow these steps in order:
 
 ### 1. Update Memory (append + curate — per `docs/memory-policy.md`)
 
-**SAFETY FIRST (memory files are gitignored — no version history):**
-Before deleting or overwriting any observation, back up all memory.jsonl files to
-`C:\Users\Josh\.claude-memory\_backups\<YYYY-MM-DD>\` (global, ttracker, ttracker-archive).
-Never `delete_entities` by guessing names — read the graph first.
+**SAFETY (memory files are gitignored — no version history):**
+Appends need NO backup (appending can't lose data). Only before a DESTRUCTIVE op
+(deleting/overwriting/trimming an existing observation, or demoting into DEEP) back up
+ONLY the file you're about to mutate to `C:\Users\Josh\.claude-memory\_backups\<YYYY-MM-DD>\`
+— not all three (curating HOT → back up `ttracker` only; demoting into DEEP → back up
+`ttracker-archive` only). Never `delete_entities` by guessing names — read the graph first.
 
 **The filter — store an observation ONLY if:**
 > "Would the next session waste 5+ minutes without this, AND is it not already in ADO / git / code / a doc?"

@@ -52,6 +52,7 @@ If it fails either test → don't store it; point to the doc instead.
 2. **CURATE** (this is what stops bloat): update/delete stale observations; enforce the cap; demote closed-work entities to DEEP (extract any reusable gotcha to HOT first).
 
 ## Safety — memory has NO version history (files are gitignored)
-- Before ANY destructive operation (delete/overwrite), back up all three `memory.jsonl` files to `~/.claude-memory/_backups/<date>/`.
+- **Appends never need a backup** — appending can't lose data (worst case: delete the new line). This is the common case; don't back up for it.
+- Only before a **destructive** op (delete/overwrite/trim an existing observation, or demote into DEEP) back up **only the file you're about to mutate** to `~/.claude-memory/_backups/<date>/` — NOT all three. (Curating HOT → back up `ttracker` only. Demoting into DEEP → back up `ttracker-archive` only.) HOT is ~9 KB, so this is cheap.
 - After curation, re-read HOT and confirm it matches intent before finishing.
 - Never `delete_entities` by guessing names — read the graph first. (Lesson learned 2026-05-30.)
