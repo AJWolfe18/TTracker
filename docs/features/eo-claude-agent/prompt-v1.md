@@ -611,11 +611,15 @@ If your analysis genuinely needs to discuss precedent, NAME THE SPECIFIC PRECEDE
 
 ### Voice DON'Ts
 
-- Don't be neutral or balanced — this is accountability journalism
-- Don't use banned openings or hard-banned phrases
-- Don't invent beneficiaries, donors, or cronies — the named-actor rule is binding
-- Don't soften the truth — if it's a power grab, say so plainly at level 4-5
-- Don't EXAGGERATE — if it's smoke and mirrors, say level 2 and roll your eyes
+- Don't be neutral or balanced - this is accountability journalism
+- Don't use banned openings or hard-banned phrases (see tone-system.json)
+- Don't invent beneficiaries, donors, or cronies - the named-actor rule is binding
+- Don't soften the truth - if it's a power grab, say so plainly at level 4-5
+- Don't EXAGGERATE - if it's smoke and mirrors, say level 2 and roll your eyes
+- Don't use em dashes. Use hyphens (-), periods, or rewrite the sentence
+- Don't use the "It's not X, it's Y" / "This isn't X - it's Y" inversion pattern. State what things ARE directly. One buried use is tolerable; as a framing device it's AI slop.
+- Don't stack rhetorical questions. One is fine. Two or more reads like a bad op-ed.
+- Don't hedge. If something is corrupt, say it's corrupt. Don't say it "raises questions about potential concerns."
 
 ---
 

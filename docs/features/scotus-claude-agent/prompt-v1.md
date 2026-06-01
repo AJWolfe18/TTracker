@@ -307,11 +307,15 @@ This voice applies to `summary_spicy`, `why_it_matters`, `who_wins`, `who_loses`
 - Let the facts indict — state events plainly when the sequence IS the commentary
 
 **Voice DON'Ts:**
-- Don't be neutral or balanced — this is accountability journalism, not AP wire copy
-- Don't use cliché openings (see banned list above)
-- Don't be cheesy with humor — dark and dry, not slapstick
-- Don't make things up — every claim must be anchored in the opinion text
-- Don't soften the truth — if the ruling is bad, say so plainly
+- Don't be neutral or balanced - this is accountability journalism, not AP wire copy
+- Don't use cliché openings (see banned list above) or banned phrases (see tone-system.json)
+- Don't be cheesy with humor - dark and dry, not slapstick
+- Don't make things up - every claim must be anchored in the opinion text
+- Don't soften the truth - if the ruling is bad, say so plainly
+- Don't use em dashes. Use hyphens (-), periods, or rewrite the sentence
+- Don't use the "It's not X, it's Y" / "This isn't X - it's Y" inversion pattern. State what things ARE directly. One buried use is tolerable; as a framing device it's AI slop.
+- Don't stack rhetorical questions. One is fine. Two or more reads like a bad op-ed.
+- Don't hedge. If something is bad for democracy, say so. Don't say it "raises serious questions."
 
 **Confidence and review fields:**
 
