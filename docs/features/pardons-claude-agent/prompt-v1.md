@@ -172,7 +172,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/pardons_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"prompt_version\": \"v1\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
+  -d "{\"prompt_version\": \"v1.1\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
 ```
 
 **Save the returned `id`** — you need it in Step 7 to update this log entry.
@@ -203,6 +203,11 @@ curl -s "${SUPABASE_URL}/rest/v1/pardons?enriched_at=is.null&select=id,recipient
 ```
 
 **If 0 pardons returned:** Healthy empty run. Log completion with `pardons_found = 0` and stop.
+
+**Protected pardons — NEVER overwrite these (skip silently):**
+- **id = 3** (Jan 6 Mass Pardon) — group card representing 1500+ defendants. Manually curated with ongoing rearrest tracking. If it appears in your query results, skip it, log as `{"id": 3, "status": "skipped", "note": "Protected: Jan 6 group card is manually curated"}`, and increment `pardons_skipped`.
+
+If a protected pardon appears in results, exclude it from your processing count (e.g., 5 found minus 1 protected = 4 to process).
 
 **Limit = 5:** Pardons require web research per recipient, which is time-intensive. 5 pardons per run balances thoroughness with the 15-turn agent limit.
 
@@ -242,6 +247,29 @@ For major donors, also check FEC:
 WebFetch(url=https://www.google.com/search?q=<recipient_name>+FEC+donation+Republican+Trump, prompt="Find Federal Election Commission donation records for this person. Include amounts, recipients, and dates.")
 ```
 
+**Step 3C.2: Connection Investigation Protocol (MANDATORY — run for every pardon)**
+
+Direct personal connections (donations, rallies) are obvious. The pardons that damage trust are the ones with INDIRECT or INSTITUTIONAL connections that look like "no connection" on the surface. Run these 4 checks:
+
+**Layer 1 — Attorney/Advocate:** Who is the pardon attorney or legal team? Search specifically:
+```
+WebFetch(url=https://www.google.com/search?q=<recipient_name>+pardon+attorney+lawyer+who+advocated, prompt="Who advocated for or filed this pardon/clemency petition? Identify the attorney, law firm, or advocate. Check if they served in Trump's administration, are major GOP figures, or have Mar-a-Lago connections.")
+```
+If the attorney is a former Trump administration official (former AG, SG, White House counsel, etc.) or partner at a firm with deep Trump ties, that IS a connection — classify as `political_ally` or `lobbyist`.
+
+**Layer 2 — Strategic Legal Value:** Does this pardon set precedent that benefits Trump personally? If the case involves challenges to executive prosecution power, bribery law definitions, obstruction standards, or executive privilege — the pardon may serve Trump's legal interests regardless of the recipient's personal connection to him.
+
+**Layer 3 — Financial Backing:** Who funded the defense or clemency petition? Wealthy backers paying elite law firms for a clemency push is often invisible until you search for it:
+```
+WebFetch(url=https://www.google.com/search?q=<recipient_name>+defense+funded+who+paid+legal+fees, prompt="Who paid for this person's legal defense or clemency petition? Look for wealthy backers, PACs, legal defense funds, or cryptocurrency payments connected to the case.")
+```
+
+**Layer 4 — Co-Defendant Test:** If others were convicted in the same case but NOT pardoned, that's a signal. Search for co-defendants:
+```
+WebFetch(url=https://www.google.com/search?q=<recipient_name>+co-defendant+same+case+not+pardoned, prompt="Were other people convicted in the same case? Did they also receive pardons? If not, what's different about this specific person?")
+```
+If co-defendants in identical circumstances didn't get pardoned, something specific about THIS person drew attention — find what.
+
 **Step 3D: Check for post-pardon developments (MANDATORY for all pardons).**
 
 Search for post-pardon news — especially arrests, re-offenses, new investigations, or violations of pardon conditions:
@@ -264,7 +292,7 @@ If post-pardon status changes from `'quiet'`, always set `needs_review = true` s
 
 **If web research yields nothing:** That's fine — many pardons are low-profile. Use the DOJ `offense_raw` field to write a basic `crime_description` and set `corruption_level` based on available evidence. Set `needs_review = true` with a note about limited research results.
 
-**Research time budget:** Spend 2-3 WebFetch calls per pardon. Don't chase every lead — focus on the most relevant sources.
+**Research time budget:** Spend 5-8 WebFetch calls per pardon (Steps 3B-3D combined). The Connection Investigation Protocol (Step 3C.2) adds 2-4 calls but catches institutional connections that surface-level research misses. Don't chase dead leads past 2 attempts — if a search returns nothing useful, move on.
 
 **Group pardons (recipient_type = 'group'):** Research the group/action rather than individual recipients. Use `recipient_criteria` for context on who's included. Set `crime_description` to describe the shared offense (e.g., "Participated in the January 6th Capitol breach..."). Set `donation_amount_usd` to `null` (no individual donor). Assess `corruption_level` based on the political transaction for the group as a whole (e.g., Jan 6 mass pardon = L4 inner circle protection).
 
@@ -289,7 +317,11 @@ For each pardon, use your research to produce ALL of the following fields in a s
 
 4. **Every connection claim must be sourced.** If you say someone donated to Trump, cite the FEC record or news article. If you say someone was an inner-circle ally, cite the evidence. "No evidence of connection" is a valid finding — use it when appropriate and set L1.
 
-5. **Flag uncertainty.** If you're not confident about the corruption level or connection type, set `needs_review = true` with a specific reason. A flagged enrichment costs Josh 30 seconds. A wrong corruption level erodes trust.
+5. **Flag uncertainty.** If you're not confident about the corruption level or connection type, set `needs_review = true` AND include a `review_reason` in `enrichment_meta` (see metadata fields below). A flagged enrichment costs Josh 30 seconds. A wrong corruption level erodes trust.
+
+6. **Unexplained pardons for serious criminals default to L3, not L1.** If the recipient committed serious crimes (violent offenses, major drug trafficking, large-scale fraud) AND no public justification, advocacy channel, or connection can be found despite thorough research — assign `corruption_level >= 3` and `primary_connection_type = 'wealthy_unknown'`. The absence of any documented reason for pardoning a major criminal IS itself suspicious. Legitimate clemency leaves a paper trail (advocacy organizations, attorney statements, sentencing reform campaigns, Alice Marie Johnson referral). Silent pardons for serious criminals suggest undocumented channels. Set `needs_review = true` with review_reason explaining the gap.
+
+   **The L1 test:** L1 is ONLY appropriate when the crime itself is minor/non-violent AND the sentence was arguably excessive AND no deeper investigation reveals hidden connections. A drug kingpin with $6.7M in seized assets and zero public justification is NOT L1 — that's L3 minimum ("someone paid, we can't prove who").
 
 ---
 
@@ -349,7 +381,7 @@ For each pardon, use your research to produce ALL of the following fields in a s
 
 ### Brand Voice: "The Transaction"
 
-**The pardons editorial voice is "The Transaction."** The framing: *"This isn't mercy; it's a receipt for a donation."*
+**The pardons editorial voice is "The Transaction."** The framing: every pardon is a business deal. Someone paid, someone delivered. Follow the money, name the players, show the receipt.
 
 This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`. Neutral fields (`summary_neutral`, `crime_description`) remain factual and precise.
 
@@ -395,17 +427,18 @@ This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`.
 - Don't soften the truth - if someone bought a pardon, say they bought a pardon
 - Don't use "dangerous precedent" or "under the guise of" (banned phrases)
 - Don't use em dashes (—). Use regular hyphens (-), periods, or rewrite the sentence
+- Don't use the "It's not X, it's Y" / "This isn't X - it's Y" inversion pattern. One-time use deep in a piece is fine. As a structural device or opener it's formulaic AI slop. Just state what the thing IS directly. "He paid for a pardon" not "This isn't mercy - it's a transaction."
 
 **Metadata fields (set on every enrichment):**
 
 | Field | Value |
 |-------|-------|
 | `enriched_at` | Current ISO 8601 timestamp |
-| `prompt_version` | `'v1'` |
-| `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1", "run_source": "cloud-agent"}` |
+| `prompt_version` | `'v1.1'` |
+| `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1.1", "run_source": "cloud-agent"}` — when `needs_review = true`, ALSO include `"review_reason": "<one sentence explaining why flagged>"`. Example: `{"model": "claude-opus-4-6", "prompt_version": "v1.1", "run_source": "cloud-agent", "review_reason": "Major drug trafficker with zero documented advocacy channel — silent pardon for serious criminal"}` |
 | `is_public` | `false` when `needs_review = true`; `true` when `needs_review = false`. Set these together — never set `is_public = true` without also confirming `needs_review = false`. A DB trigger enforces this gate on every write. |
 | `research_status` | `'complete'` |
-| `needs_review` | `true` when: `corruption_level = 0`, low confidence, co-defendant role ambiguity, OR `recipient_name` disagrees with researched name. `false` otherwise. |
+| `needs_review` | `true` when: `corruption_level = 0`, low confidence, co-defendant role ambiguity, `recipient_name` disagrees with researched name, OR serious criminal with no documented advocacy channel. `false` otherwise. **NOT for:** minor date discrepancies (just use the best-sourced date), formatting differences, or trivial metadata mismatches. Only flag when the content accuracy or corruption classification is uncertain. |
 
 ### Step 5: Validate Before Writing
 
@@ -422,6 +455,7 @@ Before writing each pardon, run this checklist:
 - [ ] `summary_spicy` does NOT start with a banned opening?
 - [ ] No fabricated connections (every claim has a cited source)?
 - [ ] `is_public = false` when `needs_review = true`; `is_public = true` when `needs_review = false`?
+- [ ] If `needs_review = true`, does `enrichment_meta` contain a `review_reason` string?
 - [ ] No NEVER-WRITE columns included (see list below)?
 - [ ] For group pardons: editorial addresses the group/action, not fictitious individuals?
 
@@ -451,8 +485,8 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "pattern_analysis": "...",
   "source_urls": ["https://..."],
   "enriched_at": "{ENRICHED_AT value}",
-  "prompt_version": "v1",
-  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1", "run_source": "cloud-agent"},
+  "prompt_version": "v1.1",
+  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.1", "run_source": "cloud-agent"},
   "is_public": false,
   "research_status": "complete",
   "needs_review": false,
@@ -482,7 +516,8 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/pardons?id=eq.{PARDON_ID}" \
 `source_urls` (MUST be `[]` not `null`),
 `enriched_at`, `prompt_version`, `enrichment_meta`,
 `is_public` (= `false` when `needs_review = true`; `true` when `needs_review = false`), `research_status` (= 'complete'),
-`needs_review` (= true when corruption_level = 0, low confidence, co-defendant role ambiguity, or recipient_name disagrees with researched name),
+`needs_review` (= true when corruption_level = 0, low confidence, co-defendant role ambiguity, recipient_name disagrees with researched name, OR serious criminal with no documented advocacy channel),
+NOTE: when `needs_review = true`, `enrichment_meta` MUST contain `"review_reason": "<one sentence>"` explaining what triggered the flag,
 `post_pardon_status` (= 'quiet', 'under_investigation', or 're_offended'),
 `post_pardon_notes` (summary of post-pardon developments, null if quiet)
 
@@ -673,32 +708,34 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
 }
 ```
 
-### Example 5: Garnett Gilbert Smith (id 71) — Level 1 (The Ego Discount)
+### Example 5: Garnett Gilbert Smith (id 71) — Level 3 (The Party Favor — unexplained)
 
 **Pardon:** Garnett Gilbert Smith, commutation 2025-05-28
 **Offense:** Conspiracy to distribute and possess with intent to distribute cocaine
-**Why selected:** No documented Trump connection, potential genuine mercy case
+**Why selected:** Major drug trafficker with zero documented connection — demonstrates the "unexplained serious criminal" rule
 
 ```json
 {
-  "crime_description": "Convicted of conspiracy to distribute cocaine and possession with intent to distribute. Details of the specific case and sentencing are limited in public records.",
-  "corruption_level": 1,
-  "primary_connection_type": "no_connection",
+  "crime_description": "Ran a multimillion-dollar cocaine distribution empire out of Baltimore, acquiring large quantities from suppliers in California and distributing over 1,000 kilograms of cocaine in less than two years. Authorities seized approximately $6.7 million in assets including an Aston Martin, a Lamborghini Murcielago, a Maybach, and multiple other luxury vehicles. The DEA described him as one of the largest cocaine and heroin dealers arrested in recent history. Convicted of conspiracy to distribute cocaine, sentenced to 25 years in federal prison.",
+  "corruption_level": 3,
+  "primary_connection_type": "wealthy_unknown",
   "secondary_connection_types": [],
-  "corruption_reasoning": "Level 1: No documented financial, political, or personal connection to Trump found through web research. No FEC donation records. No campaign appearances. No advocacy by Trump allies. The commutation appears to be a standard clemency action, possibly through the DOJ pardon attorney process. Limited public information about the case makes it difficult to assess further.",
-  "trump_connection_detail": "No documented connection to Donald Trump was found through web research, FEC records, or news reporting. No political donations, no campaign involvement, no advocacy by known Trump allies.",
+  "corruption_reasoning": "Level 3: Smith distributed over 1,000 kg of cocaine, had $6.7M in seized assets, and was described by the DEA as one of the largest dealers ever arrested. Despite thorough research, NO public justification for his commutation exists — no advocacy organization, no attorney statement, no Alice Marie Johnson referral, no sentencing reform campaign. The Baltimore Sun investigated and found no explanation. Rep. Olszewski introduced a constitutional amendment (Pardon Integrity Act) in direct response. Legitimate clemency for serious criminals leaves a paper trail. Silent pardons for drug kingpins suggest undocumented channels.",
+  "trump_connection_detail": "No documented connection to Donald Trump was found through web research, FEC records, or news reporting. No political donations, no campaign involvement, no advocacy by known Trump allies including Alice Marie Johnson. The Baltimore Sun investigated the commutation and found no public justification. Maryland Representative Johnny Olszewski responded by introducing the Pardon Integrity Act, a proposed constitutional amendment to allow Congress to overturn egregious pardons. The absence of any documented advocacy channel for a convicted drug kingpin is itself notable.",
   "donation_amount_usd": null,
   "receipts_timeline": [
-    {"date": "2025-05-28", "event_type": "pardon_granted", "description": "Sentence commuted by presidential action", "source_url": null, "amount_usd": null}
+    {"date": "2014-01-01", "event_type": "legal_proceeding", "description": "Convicted in federal court of conspiracy to distribute cocaine; sentenced to 25 years", "source_url": null, "amount_usd": null},
+    {"date": "2025-05-28", "event_type": "pardon_granted", "description": "Sentence commuted by presidential action. No public justification given.", "source_url": null, "amount_usd": null}
   ],
-  "summary_neutral": "Garnett Gilbert Smith received a commutation of sentence on May 28, 2025 for a federal conviction on cocaine distribution and possession charges.",
-  "summary_spicy": "No donor receipts. No MAGA rally appearances. No congressional allies lobbying on his behalf. Garnett Gilbert Smith's commutation is that rare clemency action where the paper trail leads nowhere — no transaction, no favor, no obvious angle. File under: possibly genuine, definitely unusual for this president.",
-  "why_it_matters": "In a clemency record dominated by donors, allies, and political promises, the occasional no-connection commutation raises a question: is this mercy, or is the connection just harder to find? The absence of evidence isn't evidence of absence — but it's the best we've got.",
-  "pattern_analysis": "Low-profile drug conviction commutation with no documented Trump connection. One of the few clemency actions that appears to have gone through standard DOJ channels rather than political ones.",
-  "source_urls": [],
-  "is_public": true,
+  "summary_neutral": "Garnett Gilbert Smith, convicted in 2014 of distributing over 1,000 kilograms of cocaine through a multimillion-dollar Baltimore drug operation, received a commutation of his 25-year sentence on May 28, 2025. No public explanation for the clemency was provided.",
+  "summary_spicy": "One thousand kilograms of cocaine. A fleet that included a Lamborghini, an Aston Martin, and a Maybach. $6.7 million in seized assets. The DEA called Garnett Gilbert Smith one of the biggest dealers they'd ever arrested. No donor receipts to Republican committees. No Alice Marie Johnson advocacy. No MAGA rally appearances. No documented connection at all. Someone got this commutation to the president's desk, but the paper trail goes cold - and that silence is louder than any receipt.",
+  "why_it_matters": "Smith's commutation provoked Maryland Representative Johnny Olszewski to introduce the Pardon Integrity Act, a proposed constitutional amendment to let Congress overturn egregious pardons. When a commutation for a convicted drug kingpin with no documented presidential connection triggers a call for constitutional reform, the question shifts from 'why this pardon' to 'who benefits from clemency decisions that leave no fingerprints.'",
+  "pattern_analysis": "Unexplained clemency for a serious criminal. No documented advocacy channel, no sentencing reform campaign, no public justification. The absence of a paper trail for a convicted drug kingpin with $6.7M in assets suggests undocumented connections.",
+  "source_urls": ["https://www.baltimoresun.com/2025/12/09/trump-pardons-baltimore-drugs-garnett-gilbert-smith/", "https://foxbaltimore.com/news/local/president0trump-pardons-baltimore-drug-trafficker-garnett-smith"],
+  "is_public": false,
   "research_status": "complete",
-  "needs_review": true
+  "needs_review": true,
+  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.1", "run_source": "cloud-agent", "review_reason": "Major drug trafficker with zero documented advocacy channel — silent pardon for serious criminal suggests undocumented connections"}
 }
 ```
 
@@ -744,7 +781,7 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
 
 These rules can NEVER be violated:
 
-1. **Never fabricate connections.** If you can't find evidence, say so. Set `no_connection` and move on.
+1. **Never fabricate connections.** If you can't find evidence of a connection, say so. For minor/non-violent crimes, set `no_connection`. For serious criminals with no documented advocacy channel, set `wealthy_unknown` (see rule 6 in Anti-default-bias). Never invent a specific connection type without sourced evidence.
 2. **Set `is_public = (NOT needs_review)`** — `is_public = true` only when `needs_review = false`. If `needs_review = true`, set `is_public = false`. A DB trigger also enforces this gate on every write path.
 3. **Always log every run** — even if 0 pardons found, even if an error occurs.
 4. **Always populate `crime_description`** — this is the #1 data gap we're fixing. Use `offense_raw` + web research.
@@ -763,8 +800,9 @@ These rules can NEVER be violated:
 
 | Field | Value |
 |-------|-------|
-| Prompt version | v1 |
+| Prompt version | v1.1 |
 | Created | 2026-05-30 |
+| Updated | 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
 | Author | Josh + Claude Code |
 | Target model | Claude Opus 4.6 |
 | Max turns | 15 |

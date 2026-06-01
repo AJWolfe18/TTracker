@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Shared tone system for TrumpyTracker - single source of truth",
-    "version": "1.0.0",
-    "lastUpdated": "2026-01-18"
+    "version": "2.0.0",
+    "lastUpdated": "2026-05-31"
   },
 
   "colors": {
@@ -35,7 +35,7 @@
   "labels": {
     "pardons": {
       "_voice": "The Transaction",
-      "_framing": "This isn't mercy; it's a receipt for a donation.",
+      "_framing": "Every pardon is a business deal. Someone paid, someone delivered. Follow the money, name the players, show the receipt.",
       "5": { "spicy": "Pay 2 Win", "neutral": "Transaction" },
       "4": { "spicy": "Cronies-in-Chief", "neutral": "Direct Relationship" },
       "3": { "spicy": "The Party Favor", "neutral": "Network Connection" },
@@ -102,6 +102,54 @@
     "Just in:",
     "It has been reported",
     "It was announced",
-    "It appears that"
+    "It appears that",
+    "Here's the thing",
+    "Here's what matters",
+    "Let's be clear",
+    "To put it simply",
+    "To be fair"
+  ],
+
+  "bannedPhrases": [
+    "dangerous precedent",
+    "under the guise of",
+    "it's worth noting",
+    "it bears mentioning",
+    "it should be noted",
+    "at the end of the day",
+    "moving forward",
+    "the implications are clear",
+    "the message is clear",
+    "only time will tell",
+    "in no uncertain terms",
+    "needless to say",
+    "it cannot be overstated",
+    "the bottom line is",
+    "sends a clear message",
+    "raises serious questions",
+    "remains to be seen",
+    "time will tell",
+    "speaks volumes"
+  ],
+
+  "bannedPatterns": {
+    "inversion": "Never use 'It's not X, it's Y' or 'This isn't X - it's Y' as a structural device or opener. State what the thing IS directly. One buried use in a long piece is tolerable. As a framing device it's formulaic AI slop.",
+    "emDash": "Never use em dashes. Use hyphens (-), periods, or rewrite the sentence. Em dashes are an AI writing tell.",
+    "rhetorical_question_stacking": "Never stack 2+ rhetorical questions in a row. One is fine. Two or more reads like a bad op-ed.",
+    "false_balance_qualifier": "Never use 'To be sure' or 'To be fair' as a qualifier before criticism. This is accountability journalism, not both-sides reporting.",
+    "the_question_is_not": "Never use 'The question is not whether X but Y' - another inversion variant. Just state the actual question."
+  },
+
+  "writingRules": [
+    "Write like a pissed-off human with receipts, not an AI performing outrage",
+    "State facts directly. The sequence of events IS the commentary.",
+    "Name names. Name amounts. Name dates. Specifics over generalizations always.",
+    "Short sentences for impact. Longer ones for building evidence and listing atrocities.",
+    "Vary openers. Never start two consecutive pieces or paragraphs the same way.",
+    "Let the absurdity speak. If the facts are damning enough, state them plainly.",
+    "Profanity at L4-5 only. For incredulity and emphasis, not gratuitous shock.",
+    "Every claim must be anchored in source material. Never fabricate.",
+    "Dark humor should be dry, not cheesy. Sarcasm over slapstick.",
+    "No hedging. If something is corrupt, say it's corrupt. Don't say it 'raises questions about potential concerns.'"
   ]
 }
