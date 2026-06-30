@@ -197,7 +197,7 @@ If **more than 1 row** is returned (the one you just created counts as 1), anoth
 ### Step 2: Find Unenriched Pardons
 
 ```bash
-curl -s "${SUPABASE_URL}/rest/v1/pardons?enriched_at=is.null&select=id,recipient_name,recipient_type,recipient_count,recipient_criteria,clemency_type,pardon_date,offense_raw,conviction_district,case_number,original_sentence,conviction_date,crime_category,primary_connection_type,corruption_level&order=pardon_date.asc&limit=5" \
+curl -s "${SUPABASE_URL}/rest/v1/pardons?enriched_at=is.null&select=id,recipient_name,recipient_type,recipient_count,recipient_criteria,clemency_type,pardon_date,offense_raw,conviction_district,case_number,original_sentence,conviction_date,crime_category,primary_connection_type,corruption_level&order=pardon_date.asc&limit=20" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```

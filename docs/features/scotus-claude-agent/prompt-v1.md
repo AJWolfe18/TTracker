@@ -174,14 +174,14 @@ If **more than 1 row** is returned (the one you just created counts as 1), anoth
 ### Step 2: Find Unenriched Cases
 
 ```bash
-curl -s "${SUPABASE_URL}/rest/v1/scotus_cases?enrichment_status=in.(pending,failed)&select=id,case_name,case_name_short,docket_number,term,decided_at,syllabus,opinion_excerpt,source_data_version&order=decided_at.asc&limit=10" \
+curl -s "${SUPABASE_URL}/rest/v1/scotus_cases?enrichment_status=in.(pending,failed)&select=id,case_name,case_name_short,docket_number,term,decided_at,syllabus,opinion_excerpt,source_data_version&order=decided_at.asc&limit=20" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
 **If 0 cases returned:** This is normal (especially during SCOTUS recess July–September). Log completion with `cases_found = 0` and stop. This is a healthy run, not a failure.
 
-**Limit = 10:** Handles end-of-term surges in June. Typical days have 0–5 cases.
+**Limit = 20:** Clears backlogs faster. Typical days have 0-5 new cases but backlog can be larger.
 
 **Order = `decided_at.asc`:** Process oldest cases first (clears any backlog before new cases).
 
