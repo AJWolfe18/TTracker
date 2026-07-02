@@ -254,7 +254,94 @@ For each story, read its source articles (title + `content` or `excerpt`, whiche
 
 ## Gold Set Calibration Examples
 
-(To be populated in Task 4 — 5 examples spanning alarm_level 0-5, curated from real published stories)
+These 5 stories are pulled from PROD (`trumpytracker.com`'s live database, read via the public anon key on 2026-07-01) and manually fact-checked against their real source articles. Every one is a genuine published story - none are invented. Use them to calibrate your output quality, tone, and - most importantly - your **alarm-level discipline across the full 0-5 range**, including the low end (0-1) where the retired GPT-4o-mini pipeline never landed at all: a 300-row survey of the most recent PROD stories found 0 stories at level 0, only 2 at level 1, 31 at level 2, 58 at level 3, 164 at level 4, and 36 at level 5 - meaning roughly 67% of live stories sat at level 4-5, which is the exact saturation bug this agent exists to fix.
+
+**Read all five before enriching anything new.** Each example lists the legacy (GPT-4o-mini) pipeline's rating alongside the gold truth, so the variance itself is part of what you're internalizing. Only the 6 fields this gold set covers (`summary_neutral`, `summary_spicy`, `category`, `alarm_level`, `severity`, `primary_actor`) are shown below - `top_entities`/`entity_counter` and the operational fields (`last_enriched_at`, `enrichment_status`, etc.) follow the same JSON shape described in Section 2/3 above and aren't re-demonstrated here.
+
+### Example 1: Story 11934 - A real constitutional check landing as a real win (Level 0)
+
+**Headline:** "US supreme court upholds birthright citizenship in blow to Trump agenda" (The Guardian)
+
+**Why selected:** Tests the level-0/1 boundary the retired pipeline never reached. The Supreme Court rejected the administration's attempt to narrow the 14th Amendment's birthright-citizenship guarantee - a constitutional check working exactly as designed, with no rollback, no asterisk, no partial loss identified anywhere in the source. Legacy pipeline rated this 1 ("Accidental Sanity"); on fact-checking, there's no mixed outcome here at all - a court stopped an anti-democratic policy push outright, which is the textbook case for "A Broken Clock Moment." Gold truth: **0**. One-sentence justification: a verified judicial check that fully stopped an administration's attempt to narrow a constitutional right, with no partial rollback in the record, meets the level-0 bar exactly and doesn't clear any bar for an "upgrade."
+
+```json
+{
+  "summary_neutral": "The U.S. Supreme Court ruled against the Trump administration's effort to narrow birthright citizenship, upholding the longstanding constitutional guarantee that people born in the United States are citizens. The decision is a defeat for the administration's push to limit the 14th Amendment's citizenship clause. The ruling leaves the existing citizenship framework intact.",
+  "summary_spicy": "The Supreme Court checked a Trump policy for once, and birthright citizenship survives intact. Enjoy it. The same court has waved through plenty of this administration's overreach, so treat this as one working part of a mostly broken clock, not a trend.",
+  "category": "civil_liberties",
+  "alarm_level": 0,
+  "severity": null,
+  "primary_actor": "U.S. Supreme Court"
+}
+```
+
+### Example 2: Story 11975 - A safe-seat primary upset, real but low-stakes (Level 1)
+
+**Headline:** "Democratic socialist Melat Kiros defeats 15-term incumbent in Colorado House primary" (The Guardian / PBS NewsHour / NYT Politics - 3 linked source articles)
+
+**Why selected:** Tests the level-1 side of the same boundary Example 1 tests from level 0, using a story that is genuinely mixed rather than genuinely positive. A 29-year-old democratic-socialist challenger unseating a 15-term incumbent in a Democratic primary is real news and part of a broader insurgent-left pattern this cycle, but it's a single-party primary in a safely Democratic district - no national power shift, no institutional harm or benefit. Legacy pipeline also rated this 1, which is correct; it's included specifically to show the pipeline can land here and to give the agent a genuine (not just a downgrade) level-1 anchor. Gold truth: **1**. One-sentence justification: a real but contained electoral development with no institutional-scale consequence is "mixed outcome" territory, not a policy or corruption pattern that would earn a level-2 upgrade.
+
+```json
+{
+  "summary_neutral": "Democratic socialist Melat Kiros, a 29-year-old lawyer, defeated 15-term incumbent Representative Diana DeGette in the Democratic primary for Colorado's 1st Congressional District. The result is part of a broader pattern of insurgent, left-flank candidates ousting establishment-backed incumbents in 2026 primaries. Kiros is now the presumptive Democratic nominee in the safely Democratic Denver-area seat.",
+  "summary_spicy": "A 29-year-old democratic socialist just retired a congresswoman who'd held the seat since 1997. Credit where it's due: primary voters actually showed up and used them. Read the limiting language, though - this is one safe Denver seat changing hands within the same party, not a power shift in Washington.",
+  "category": "democracy_elections",
+  "alarm_level": 1,
+  "severity": null,
+  "primary_actor": "Melat Kiros"
+}
+```
+
+### Example 3: Story 12029 - Low-stakes spin, correctly categorized (Level 2)
+
+**Headline:** "How Trump Made 'Y.M.C.A.' His Anthem, Despite the Village People and Victor Willis's Mixed Feelings" (NYT Politics)
+
+**Why selected:** Tests level-2 calibration on a misleading public claim with real but purely reputational stakes. Trump has publicly credited Village People lead singer Victor Willis with supporting him "right from the beginning," but the source article establishes the band's actual history with him is "more complicated" than that framing - a small, verifiable instance of reshaping a real relationship for a cleaner soundbite, with no institutional actor, no policy, no named victim beyond the mismatch itself. Legacy pipeline also rated this 2, correctly - it's included to show the pipeline isn't uniformly broken at the low end, only saturated at the high end. Gold truth: **2**. One-sentence justification: a named actor's misleading public claim with measurable but low-stakes (reputational only) consequence is exactly the "Great Gaslight" profile, and there's no institutional mechanism or concrete harm present to justify a level-3 upgrade.
+
+```json
+{
+  "summary_neutral": "President Trump has adopted the Village People's 'Y.M.C.A.' as a signature rally anthem and has publicly credited the group's lead singer, Victor Willis, with supporting him 'right from the beginning.' The band's actual history with Trump is more complicated than that framing suggests. The mismatch between Trump's public account and the band's mixed feelings has drawn renewed attention.",
+  "summary_spicy": "Trump says Victor Willis was with him 'right from the beginning.' The Village People's own history with the guy says otherwise. Nobody's losing a house or a job over a rally song, but the pattern is the point: take a real relationship, sand off every uncomfortable edge, and sell the smooth version at the podium.",
+  "category": "media_disinformation",
+  "alarm_level": 2,
+  "severity": "minor",
+  "primary_actor": "Donald Trump"
+}
+```
+
+### Example 4: Story 12021 - Right alarm level, wrong category (Level 3)
+
+**Headline:** "Judge orders Pentagon to lift policy requiring journalists to be accompanied by an escort" (PBS NewsHour Politics)
+
+**Why selected:** Tests category discipline independent of alarm-level discipline. A federal judge ordered the Pentagon to rescind a policy requiring journalists to be escorted by public-affairs officers on Defense Department premises, following a New York Times lawsuit - a named institutional actor (the Pentagon) engaged in a real, survivable pattern of restricting press access, now checked by a court. Legacy pipeline rated this 3, which is the correct alarm level, but filed it under `media_disinformation` - this is a press-freedom/access story, not a disinformation story, and belongs in `civil_liberties`. Gold truth: **3** (category corrected). One-sentence justification: a named institutional actor's real but survivable pattern of press-access restriction, now judicially checked rather than escalating, is squarely "Deep Swamp" territory - concerning enough to name, not yet a concrete criminal or constitutional harm that would earn a level-4 upgrade.
+
+```json
+{
+  "summary_neutral": "A federal judge ordered the Pentagon to rescind a policy requiring journalists to be accompanied by a public-affairs escort while reporting from Defense Department facilities, following a lawsuit filed by The New York Times. It was not immediately clear whether the ruling applies only to Times reporters or to the entire press corps covering the Pentagon. The policy had restricted journalists' ability to move and gather information independently inside the building.",
+  "summary_spicy": "The Pentagon spent months treating reporters like unsupervised toddlers who might wander off with a nuclear code, and a judge just told them to knock it off. Whether that order covers every outlet or just the New York Times is still an open question, which tells you how half-built this rollback is. Controlling where journalists can walk without an actual security justification is exactly the kind of institutional overreach courts exist to check.",
+  "category": "civil_liberties",
+  "alarm_level": 3,
+  "severity": "moderate",
+  "primary_actor": "Pentagon (Department of Defense)"
+}
+```
+
+### Example 5: Story 11918 - Headline says "defies," the record says something one notch less (Level 4)
+
+**Headline:** "Arkansas defies federal court to launch SNAP candy-and-soda ban Wednesday" (Fortune)
+
+**Why selected:** Tests resisting a headline-driven inflation, the same failure mode EO's Example 1 tested from the opposite direction. The source confirms Arkansas Governor Sarah Huckabee Sanders proceeded with a ban on using SNAP benefits to buy candy and soda days after a federal judge ruled that comparable restrictions adopted by *other* states violate federal law - real, concrete, named-actor harm to food-assistance recipients' purchasing choices. But no order currently binds Arkansas's own program specifically; the state is proceeding despite an adverse precedent, not in defiance of an injunction against itself, so this falls one notch short of the level-5 "courts defied" bar even though the headline uses that exact word. Legacy pipeline rated this 5 ("critical"); gold truth is one level lower. Gold truth: **4**. One-sentence justification: a named actor (Gov. Sanders) took a concrete, non-speculative action harming a specific population after courts had already found the identical mechanism unlawful elsewhere, which earns level 4, but the absence of a court order specifically binding Arkansas means it doesn't clear the level-5 bar of a verified, courts-defied constitutional-crisis-scale event.
+
+```json
+{
+  "summary_neutral": "Arkansas moved forward with a ban on using SNAP (food stamp) benefits to buy candy and soda, launching the policy this week despite a federal judge ruling days earlier that comparable restrictions adopted by other states violate federal law. Governor Sarah Huckabee Sanders announced the rollout, betting that Arkansas's own USDA waiver will hold up where others didn't. No court has yet blocked Arkansas's specific waiver.",
+  "summary_spicy": "Arkansas just watched a federal judge call this exact SNAP candy-and-soda scheme illegal in other states and launched it anyway. Governor Sarah Huckabee Sanders is betting food-stamp recipients won't have the money or the lawyers to fight back before the next ruling lands. The people losing grocery choices here are the ones already living on the tightest budget in the state.",
+  "category": "policy_legislation",
+  "alarm_level": 4,
+  "severity": "severe",
+  "primary_actor": "Arkansas Governor Sarah Huckabee Sanders"
+}
+```
 
 ---
 
