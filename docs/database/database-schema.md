@@ -405,6 +405,30 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 
 ---
 
+### `stories_enrichment_log`
+**Purpose:** Per-story enrichment observability for the Stories Claude Agent (ADO-528)
+**Migration:** `098_stories_enrichment_log.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (BIGSERIAL) |
+| story_id | BIGINT | FK to stories.id (ON DELETE CASCADE) — **nullable**: NULL = run-level heartbeat row on a healthy 0-candidate cycle (unlike EO's `eo_id`, which is NOT NULL — Stories runs 12x/day vs EO's 1x/day, so empty runs are common, not rare) |
+| prompt_version | TEXT | Enrichment prompt version (e.g., 'claude-v1') |
+| run_id | TEXT | Links rows from same agent run |
+| status | TEXT | 'running', 'completed', or 'failed' |
+| duration_ms | INTEGER | Enrichment time in milliseconds |
+| needs_manual_review | BOOLEAN | Default false — flagged for admin review |
+| notes | TEXT | Free-form notes (nullable) |
+| created_at | TIMESTAMPTZ | When enrichment started |
+
+**Key Indexes:**
+- `idx_stories_enrichment_log_created_at` — `created_at DESC`
+- `idx_stories_enrichment_log_story_id_created_at` — `(story_id, created_at DESC)`
+
+**RLS Policies:** RLS enabled, no SELECT policies — blocks anon/authenticated, service_role bypasses
+
+---
+
 ### `pending_submissions`
 **Purpose:** Manual article submission queue
 
