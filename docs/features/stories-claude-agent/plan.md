@@ -642,6 +642,8 @@ Save to `docs/features/stories-claude-agent/validation-results/YYYY-MM-DD-gold-s
 
 ## Task 6: Extended Validation (15-20 additional stories)
 
+**Status: DONE (2026-07-03).** See `docs/features/stories-claude-agent/validation-results/2026-07-03-task5-6-validation.md` — the 2026-07-02 40-story live TEST run exceeded this requirement (2x minimum volume), L4-5 combined at 3% (well under the 50% fail threshold), zero hard-field (alarm_level/severity/category) mismatches across all 40. Task 5's literal gold-set-ID-sync step was also closed by the same document via a documented deviation (scored a 9-story sample from the real run instead of syncing 5 PROD IDs into TEST) — see that file's "Deviation" section.
+
 **Files:**
 - Create: `docs/features/stories-claude-agent/validation-results/YYYY-MM-DD-extended-v1.json`
 
