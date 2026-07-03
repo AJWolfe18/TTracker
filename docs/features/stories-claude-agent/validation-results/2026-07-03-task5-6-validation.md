@@ -56,6 +56,16 @@ Well under the 50% fail threshold — this is the core saturation bug fix, confi
 
 **Entity ID spot-check (all 9 stories' `top_entities`):** every ID either matches a canonical `ENTITY_ALIASES` entry exactly (`US-TRUMP`, `ORG-SUPREME-COURT`, `ORG-WHITE-HOUSE`, `ORG-NYT`, `LOC-USA`, `LOC-DC`) or is a validly-patterned novel ID consistent with existing conventions (`US-KIROS`, `LOC-QATAR`, `LOC-COLORADO`). Zero `BAD_IDS` violations, zero malformed IDs.
 
+## Bonus: direct same-story A/B (legacy GPT vs. Claude agent)
+
+Josh independently spot-checked a PROD story (`12007`, legacy GPT output) that happens to be the exact same real-world news event as TEST story `17009` in the sample above — same headline, "The Democratic Incumbents Most at Risk of Losing to Progressive Primary Challengers in 2026." This is a cleaner comparison than anything constructed for this validation, since it's a true same-input A/B across the two pipelines.
+
+**Legacy GPT-4o-mini (PROD 12007):** *"...staring down the barrel of... sweating bullets... shake the very foundations... they could find themselves out on their asses, and frankly, it's about goddamn time!"* — profanity and manufactured outrage on a routine primary-challenger story with no institutional-scale stakes.
+
+**Claude agent (TEST 17009), same story:** *"Democratic incumbents who have held safe seats for years are finding out those seats were not as guaranteed as advertised... An incumbent who has not had a real primary in a decade is not necessarily good at running one."* `alarm_level: 1` ("Accidental Sanity"), no profanity, measured rather than hyped.
+
+This is direct evidence of the exact failure mode this migration targets: the legacy pipeline manufactures outrage/profanity regardless of whether a story earns it (also reading more like "AI performing outrage" than a human voice — the thing `tone-system.json`'s own writing rules ban), while the new agent calibrates to what the story actually supports.
+
 ## Conclusion
 
 Both AC4 and AC5 are satisfied. The saturation bug fix is confirmed under real production-shaped conditions (real articles, real Claude Sonnet reasoning, no curated shortcuts), which is stronger evidence than the plan's literal synced-gold-ID replay would have produced. Proceeding to Task 7 (PROD cutover).
