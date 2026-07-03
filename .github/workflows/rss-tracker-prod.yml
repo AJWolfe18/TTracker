@@ -36,6 +36,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ENVIRONMENT: prod
           RSS_TRACKER_RUN_ENABLED: 'true'  # KILL SWITCH: Set to 'false' to disable automation
+          ENABLE_LEGACY_STORY_ENRICHMENT: ${{ vars.ENABLE_LEGACY_STORY_ENRICHMENT }}  # KILL SWITCH: set repo variable to 'true' to re-enable retired GPT enrichment path
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
