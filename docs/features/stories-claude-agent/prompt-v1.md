@@ -411,7 +411,7 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/stories?id=eq.${STORY_ID}&last_enriche
   "category": "executive_actions",
   "alarm_level": 3,
   "severity": "moderate",
-  "primary_actor": "ORG-ICE",
+  "primary_actor": "ICE",
   "top_entities": ["ORG-ICE", "US-TRUMP", "LOC-TEXAS"],
   "entity_counter": {"ORG-ICE": 2, "US-TRUMP": 1, "LOC-TEXAS": 1},
   "last_enriched_at": "2026-07-01T16:31:02Z",
