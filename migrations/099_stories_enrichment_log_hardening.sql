@@ -44,12 +44,15 @@ DELETE FROM stories_enrichment_log l
 USING to_delete d
 WHERE l.ctid = d.ctid;
 
--- Enforce one heartbeat row per run_id. CONCURRENTLY avoids locking writers on a table that
--- grows continuously at a 2-hour cadence (must run outside an explicit transaction block).
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_stories_enrichment_log_run_heartbeat_unique
+-- Enforce one heartbeat row per run_id. Not built CONCURRENTLY: this table is brand new
+-- (near-zero rows on TEST, doesn't exist yet on PROD), so there's no meaningful lock-contention
+-- risk today, and CONCURRENTLY cannot run inside a transaction block - since migrations here are
+-- applied manually via the Supabase SQL Editor, we don't control whether the session wraps
+-- multi-statement scripts in one, so it's safer not to depend on it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stories_enrichment_log_run_heartbeat_unique
     ON stories_enrichment_log (run_id)
     WHERE story_id IS NULL;
 
 -- Per-run lookups/drill-down (e.g. "show me every row from run X") would otherwise seq-scan.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_stories_enrichment_log_run_id_created_at
+CREATE INDEX IF NOT EXISTS idx_stories_enrichment_log_run_id_created_at
     ON stories_enrichment_log (run_id, created_at DESC);
