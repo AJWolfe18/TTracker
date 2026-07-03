@@ -715,7 +715,15 @@ export class RSSTracker {
       await this.clusterArticles();
 
       // 5. Enrich stories with AI summaries
-      await this.enrichStories();
+      // Stories Claude Agent (docs/features/stories-claude-agent/) now owns enrichment,
+      // running on its own 2-hour cloud-agent cron. Legacy GPT-4o-mini path kept as a
+      // 60-day cold-standby rollback — re-enable only if the Claude agent needs to be
+      // paused. Story rows created by clustering stay invisible (summary_neutral IS NULL,
+      // TTRC-119 gate) until either path enriches them.
+      if (process.env.ENABLE_LEGACY_STORY_ENRICHMENT === 'true') {
+        console.log('⚠️  ENABLE_LEGACY_STORY_ENRICHMENT=true — running retired GPT enrichment path');
+        await this.enrichStories();
+      }
 
       // 6. Log final stats
       await this.finalizeRunStats();
