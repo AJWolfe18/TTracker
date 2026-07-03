@@ -147,10 +147,10 @@ Read `scripts/lib/entity-normalization.js` in full before extracting any entitie
 
 ### Step 1: Generate Run ID + Coarse Concurrency Check
 
-Create a single run identifier for this entire run:
+Create a single run identifier for this entire run. Millisecond precision (not just seconds) matters here: `stories_enrichment_log` has a unique index on `run_id` for heartbeat rows (`story_id IS NULL`), so two runs launched in the same second (e.g. a manual trigger firing moments before/after the scheduled cron) must not collide on `run_id`, or one run's heartbeat insert would fail outright instead of being caught gracefully by Step 1's concurrency check below.
 
 ```bash
-RUN_ID="stories-$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+RUN_ID="stories-$(date -u +%Y-%m-%dT%H-%M-%S.%3NZ)"
 ```
 
 Every per-story log row this run inserts shares this `run_id` — that's how the admin dashboard groups a run's activity.
