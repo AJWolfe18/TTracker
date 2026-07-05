@@ -56,5 +56,78 @@ Set the `ENABLE_TIERB_MARGIN_BYPASS` **repo variable** to `'false'` (GitHub → 
 
 ## Deferred Work (AC4 — two separate future tickets, not scoped here)
 
-1. **Narrative/thread tracking layer.** Design a mechanism to group multiple already-correctly-clustered stories into one ongoing narrative thread across weeks/months (e.g., Epstein, ICE). This is the actual prerequisite for a future "Important Stories Tracker" feature (surfacing/tracking only major ongoing threads instead of treating every story equally) — not scoped in this doc, needs its own discovery + plan.
-2. **Historical backfill / re-cluster of legacy stories.** Re-evaluate existing stories against each other with whatever improved method exists at the time. Recommend **not** doing this as a standalone project against just the Tier B bypass fix (too low-yield per the analysis above) — bundle it with the thread-tracking work once that's scoped, since building the thread-merge machinery once and running one backfill pass is more efficient than backfilling twice.
+1. **Narrative/thread tracking layer** — ADO-530. Design a mechanism to group multiple already-correctly-clustered stories into one ongoing narrative thread across weeks/months (e.g., Epstein, ICE). This is the actual prerequisite for a future "Important Stories Tracker" feature (surfacing/tracking only major ongoing threads instead of treating every story equally) — not scoped in this doc, needs its own discovery + plan.
+2. **Historical backfill / re-cluster of legacy stories** — ADO-531. Re-evaluate existing stories against each other with whatever improved method exists at the time. Recommend **not** doing this as a standalone project against just the Tier B bypass fix (too low-yield per the analysis above) — bundle it with the thread-tracking work once that's scoped, since building the thread-merge machinery once and running one backfill pass is more efficient than backfilling twice.
+
+---
+
+## Appendix: Raw Evidence & Methodology (for future reference — avoid re-running the same diagnostics)
+
+### What's already ruled out (don't re-investigate)
+
+- **Candidate generation is not the bottleneck.** `candidate-generation.js`'s OR-blocking (time 72h / entity overlap / ANN top-60 / slug match, 200-candidate cap) is generous. Sampled near-miss `candidate_count` values ranged 146-200 — the right story is reliably present in the candidate pool; the issue (where one exists at all) is in scoring/gating, not recall.
+- **Tier A bypass mechanism is trustworthy.** 8/8 hand-verified live merges were correct (see table below). Do not re-audit Tier A without new evidence of a problem.
+- **Widening the 72h/48h time windows is not a good idea.** Near-misses beyond the window are dominated by 100+ day (up to ~160 day) gaps with high embedding similarity from generic recurring phrasing — these look like correctly-rejected different events, not missed merges. Confirmed via the per-entry `time_diff_hours` values below.
+- **Enrichment-pipeline interaction is fine as-is.** `attachToStory()` (`hybrid-clustering.js:1742-1867`) never touches `last_enriched_at`/`enrichment_meta`, but the Stories Claude Agent's Step 2 query (`prompt-v1.md` line 179) already re-picks any story where `last_enriched_at < 12h ago` regardless of cause — so a late merge into an already-enriched story self-corrects within a bounded ≤12h window. Not a gap worth fixing.
+
+### Near-miss `blocked_by` breakdown (16-entry, 1-day sample; 7-day sample below has the scaled version)
+
+| Blocker | Count | % |
+|---|---|---|
+| margin | 15 | 94% |
+| time | 11 | 69% |
+| guardrail | 8 | 50% |
+| corroboration | 2 | 13% |
+| embed | 2 | 13% |
+
+`tierb_margin_bypass_would_fire: true` in only **1 of 16** (6%) — most "margin" blocks also had "time" or "guardrail" as a co-blocker, so the bypass alone wouldn't resolve them. The one clean example: article `art-b4356c4d` → story 12118, `embed_best=0.902`, `time_diff_hours=13.5`, `blocked_by=["margin"]` only, `tierb_margin_bypass_would_fire_via="title_token"`.
+
+**7-day scaled sample (19 of ~57 runs):** 92 near-miss events, 85 eligible (7 outside the ≤48h bypass window entirely), **2/85 (2.4%) would-fire=true** → extrapolated **~6 additional attaches/week** against a ~250-260/week base.
+
+### Concrete example: July 4th "Salute to America 250" speech fragmented across 5 stories (PROD, live 2026-07-05)
+
+| Story ID | Headline | source_count |
+|---|---|---|
+| 12118 | "Trump launches America's 250th birthday celebrations..." | 5 (created first) |
+| 12145 | "Crowds Evacuated as Storms Menace Washington Ahead of Trump Speech" | 2 |
+| 12147 | "In Fourth of July Speech, Trump Celebrates America and Derides Foes" | 1 |
+| 12148 | "Trump hails 'golden age of America'..." | 1 |
+| 12165 | "WATCH: Trump delivers keynote address at 'Salute to America 250'..." | 1 |
+
+Other singleton headlines reviewed in the same sample (NATO funding, Pelosi's husband car incident, Bill Archer obituary, Iran prayer service, Doug Jones profile) read as genuinely distinct events — not evidence of missed merges. The July 4th cluster is the clearest real fragmentation example found.
+
+### 8/8 hand-verified live Tier A merges (real headlines pulled via PostgREST, PROD)
+
+| Article title | Story `primary_headline` | Verdict |
+|---|---|---|
+| Julia Letlow wins GOP primary, LA | "Republican trying to out-MAGA Trump's pick to a Senate victory" | Correct — same primary race |
+| "Housing bill Trump refuses to sign heads to his desk" | "Johnson Says He Will Send Housing Bill to Trump" | Correct |
+| "SCOTUS rules Trump can fire leaders of independent agencies" | "SCOTUS, for now, blocks Trump from firing Fed board member Lisa Cook" | Correct (same ruling, Fed carve-out facet) |
+| "SCOTUS rejects Trump's challenge to counting late mail-in ballots" | same wording, story side | Correct |
+| "SCOTUS rules against Trump in quest to fire Fed Gov. Lisa Cook" | "SCOTUS says Fed's Cook can keep her job... upholds other Trump firings" | Correct |
+| "NJ Rep. Tom Kean returns to Congress after mysterious absence" | "Kean Set to Speak at Capitol After Mysterious Absence" | Correct |
+| "Judge Blocks Postal Service From Imposing Restrictions on Mail-In Ballots" | "US judge blocks Trump bid to limit mail-in voting" | Correct |
+| "Trump hijacks the US at 250 celebrations" (podcast) | "Trump hijacks America at 250 celebrations – podcast" | Correct — same episode |
+
+### Methodology (reproducible commands)
+
+```bash
+# List recent PROD runs
+gh run list --repo AJWolfe18/TTracker --workflow="rss-tracker-prod.yml" --limit 100 --json databaseId,createdAt,conclusion
+
+# Pull near-miss log lines from a run
+gh run view <id> --repo AJWolfe18/TTracker --log 2>&1 | grep -o '"type":"CROSS_RUN_NEAR_MISS".*'
+# NOTE: the grep match starts mid-object (no opening brace) but DOES include the real closing brace.
+# When parsing with node, prepend only "{" — do NOT also append "}" or JSON.parse fails
+# ("Unexpected non-whitespace character after JSON"). This exact mistake was made once already.
+JSON.parse("{" + line)   // correct
+JSON.parse("{" + line + "}")  // WRONG - double brace
+
+# Pull clustering summary lines (attach-path totals)
+gh run view <id> --repo AJWolfe18/TTracker --log 2>&1 | grep -o '"type":"CLUSTERING_SUMMARY".*'
+
+# Read-only PROD data access without SQL/MCP: extract the PROD anon key from
+# public/supabase-browser-config.js (intentionally public/browser-facing) and hit PostgREST
+# directly with minimal-field selects (select=id,primary_headline / select=id,title), always
+# with &limit=. Never select embedding_v1/centroid_embedding_v1/content/scraped_html.
+```
