@@ -38,8 +38,8 @@ Two distinct, independent findings — not one:
 
 ## Change Made This Session
 
-- `.github/workflows/rss-tracker-prod.yml`: added `ENABLE_TIERB_MARGIN_BYPASS: 'true'`
-- `.github/workflows/rss-tracker-test.yml`: added `ENABLE_TIERB_MARGIN_BYPASS: 'true'` (parity, TEST is manually triggered so no schedule risk)
+- `.github/workflows/rss-tracker-prod.yml`: added `ENABLE_TIERB_MARGIN_BYPASS: ${{ vars.ENABLE_TIERB_MARGIN_BYPASS || 'true' }}` — defaults ON, matching the `ENABLE_LEGACY_STORY_ENRICHMENT` kill-switch pattern (Codex review caught the original hardcoded `'true'`, which would have required a workflow-file PR to roll back instead of a repo-variable flip).
+- `.github/workflows/rss-tracker-test.yml`: same change, for parity (TEST is manually triggered so no schedule risk).
 - No code changes to `hybrid-clustering.js` itself — the bypass logic already exists and is tested via months of shadow-mode logging.
 
 ### Rollout / Monitoring
@@ -50,7 +50,7 @@ Two distinct, independent findings — not one:
 
 ### Rollback
 
-Set `ENABLE_TIERB_MARGIN_BYPASS` back to `'false'` (or remove the line) in both workflow files. No data migration, no state to unwind — it only affects the decision at clustering time for new articles going forward.
+Set the `ENABLE_TIERB_MARGIN_BYPASS` **repo variable** to `'false'` (GitHub → Settings → Secrets and variables → Actions → Variables) for instant rollback — no code change or PR needed. No data migration, no state to unwind — it only affects the decision at clustering time for new articles going forward.
 
 ---
 

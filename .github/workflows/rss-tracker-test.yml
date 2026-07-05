@@ -36,7 +36,7 @@ jobs:
           ENVIRONMENT: test
           RSS_TRACKER_RUN_ENABLED: 'true'
           ENABLE_LEGACY_STORY_ENRICHMENT: ${{ vars.ENABLE_LEGACY_STORY_ENRICHMENT }}
-          ENABLE_TIERB_MARGIN_BYPASS: 'true'  # ADO-529: keep TEST in parity with PROD for this flag
+          ENABLE_TIERB_MARGIN_BYPASS: ${{ vars.ENABLE_TIERB_MARGIN_BYPASS || 'true' }}  # ADO-529: keep TEST in parity with PROD for this flag; repo variable overrides for instant rollback
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
