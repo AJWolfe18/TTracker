@@ -64,3 +64,23 @@ ADO-528 and ADO-529 both have comments added this session with this same context
 2. Start the ADO-529 clustering diagnostic (AC1-AC4 already defined: sample review → root cause → recommendation → plan doc if a fix is warranted). Don't skip the diagnostic-first step — same discipline this project's own origin required.
 3. Once a clustering fix is chosen and applied, scope and run a backfill re-cluster pass over legacy/historical stories using the improved method.
 4. Keep the future "Important Stories Tracker" feature in mind as the reason for #2/#3, but don't start scoping it yet — it needs its own ticket once the clustering foundation is solid.
+
+## Starting Prompt for Next Session
+
+```
+/start-work Continue Stories Claude Agent PROD cutover (ADO-528) and kick off clustering work (ADO-529).
+Three things this session:
+1. Enable the PROD cron schedule (30 */2 * * *) on trig_0182WcUVyjF7Q5o2GWJMxbo1 and reconfirm legacy
+GPT enrichment stays off (ENABLE_LEGACY_STORY_ENRICHMENT should stay false). This closes ADO-528 AC6
+and starts the 3-day monitoring window (plan.md Task 7 Step 4).
+2. Start ADO-529 (Clustering Quality Audit) - diagnose why PROD only clusters ~1.4 articles/story.
+AC1-AC4 already defined: diagnostic sample review first, then root cause, then a documented
+recommendation, then a plan doc if a fix is warranted. Don't skip the diagnostic step.
+3. Once a clustering fix is chosen, scope re-running the improved method on legacy/historical stories
+(backfill, not just going-forward) - this is prep work for a future "Important Stories Tracker" feature
+(surface/track only major ongoing threads like Epstein, ICE, not treat every story equally). Don't scope
+that feature yet, just note it as the reason for the backfill.
+
+See docs/handoffs/2026-07-05-ado-528-stories-agent-prod-cutover-progress.md for full detail on what's
+already been verified (migrations on PROD, legacy-exclusion check passed, model switched to claude-sonnet-5).
+```
