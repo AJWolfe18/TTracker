@@ -241,6 +241,16 @@ Deliberately NOT full code — each story session follows the normal code → re
 
 ### ADO-532: Eval harness + gold set
 
+> **Built 2026-07-05.** Correction to the note below: the `scripts/evals/` harness had been
+> DELETED in commit `2c7572f` (April 2026, legacy-GPT retirement) — the generic skeleton
+> (run-eval.js, eval-types.js) was restored from git history and generalized rather than
+> rebuilt. Delivered: 208-pair gold set + offline replay runner + baseline
+> (bypass OFF: P=100%/R=40.0%, 100% replay-vs-live agreement; bypass ON (current PROD):
+> P=98.1%/R=53.0%). Full numbers, file inventory, and CLI usage:
+> `docs/features/ai-evals/plan.md` § Clustering Eval. Known limitation: the Tier A/B cascade
+> is transcribed in clustering-eval.js (live code inlines it in clusterArticle) — extract a
+> shared pure function during ADO-534, gated on this gold set.
+
 - **Location:** extend the existing harness — `scripts/evals/` (see `docs/features/ai-evals/plan.md` for its structure). Add `scripts/evals/clustering-eval.js` + `scripts/evals/clustering-gold-set.json`. Do NOT build a new harness.
 - **Gold set entry shape (per pair):**
   ```json
