@@ -37,7 +37,7 @@ jobs:
           ENVIRONMENT: prod
           RSS_TRACKER_RUN_ENABLED: 'true'  # KILL SWITCH: Set to 'false' to disable automation
           ENABLE_LEGACY_STORY_ENRICHMENT: ${{ vars.ENABLE_LEGACY_STORY_ENRICHMENT }}  # KILL SWITCH: set repo variable to 'true' to re-enable retired GPT enrichment path
-          ENABLE_TIERB_MARGIN_BYPASS: 'true'  # ADO-529: corroboration-based margin bypass for Tier B cross-run clustering overrides (already live unconditionally for Tier A; verified correct via 8/8 spot-checked live merges)
+          ENABLE_TIERB_MARGIN_BYPASS: ${{ vars.ENABLE_TIERB_MARGIN_BYPASS || 'true' }}  # ADO-529: corroboration-based margin bypass for Tier B cross-run clustering overrides (already live unconditionally for Tier A; verified correct via 8/8 spot-checked live merges). Defaults ON; set repo variable to 'false' for instant rollback without a code change.
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
