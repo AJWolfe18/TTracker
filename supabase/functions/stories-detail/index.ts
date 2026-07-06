@@ -13,7 +13,7 @@ serve(async (req: Request) => {
     const url = new URL(req.url)
     // Extract story ID from path or query param
     const pathParts = url.pathname.split('/')
-    const storyId = pathParts[pathParts.length - 1] || url.searchParams.get('id')
+    let storyId = pathParts[pathParts.length - 1] || url.searchParams.get('id')
     
     if (!storyId) {
       return new Response(
@@ -26,19 +26,21 @@ serve(async (req: Request) => {
     }
     
     const supabase = getSupabaseClient(req)
-    
-    // Get story details
-    const { data: story, error: storyError } = await supabase
-      .from('stories')
-      .select(`
+
+    const STORY_FIELDS = `
         id, story_hash, primary_headline, primary_source, primary_source_url,
         primary_source_domain, primary_actor, last_updated_at, first_seen_at,
         status, severity, alarm_level, category, topic_tags, source_count,
-        has_opinion, summary_neutral, summary_spicy
-      `)
+        has_opinion, summary_neutral, summary_spicy, merged_into_story_id
+      `
+
+    // Get story details
+    let { data: story, error: storyError } = await supabase
+      .from('stories')
+      .select(STORY_FIELDS)
       .eq('id', storyId)
       .single()
-    
+
     if (storyError || !story) {
       return new Response(
         JSON.stringify({ error: 'Story not found' }),
@@ -47,6 +49,38 @@ serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       )
+    }
+
+    // ADO-533: if this story was merged away, follow the tombstone chain to the terminal survivor
+    // so old links resolve to the live story. Chains can be multi-hop across runs (A merges into B,
+    // then later B merges into C), so we loop until merged_into_story_id IS NULL. A visited-set guards
+    // against a cycle (which merge_stories should never create) and a hop cap bounds the work.
+    let redirectedFrom: string | null = null
+    if (story.merged_into_story_id) {
+      redirectedFrom = String(story.id)
+      const seen = new Set<string>([String(story.id)])
+      let hops = 0
+      while (story.merged_into_story_id && hops++ < 10) {
+        const nextId = String(story.merged_into_story_id)
+        if (seen.has(nextId)) break // cycle guard — stop rather than loop forever
+        seen.add(nextId)
+        const { data: survivor, error: survivorError } = await supabase
+          .from('stories')
+          .select(STORY_FIELDS)
+          .eq('id', nextId)
+          .single()
+        if (survivorError || !survivor) {
+          return new Response(
+            JSON.stringify({ error: 'Story not found' }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          )
+        }
+        story = survivor
+        storyId = nextId
+      }
     }
     
     // Get associated articles (changed from political_entries)
@@ -96,6 +130,7 @@ serve(async (req: Request) => {
       JSON.stringify({
         story,
         articles: formattedArticles,
+        redirected_from: redirectedFrom, // ADO-533: set when the requested id was a merged tombstone
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
