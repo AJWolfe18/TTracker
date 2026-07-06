@@ -1957,26 +1957,35 @@ async function createNewStory(article) {
         // merge_stories never clears the loser's story_hash, so attaching here would orphan the article
         // on a dead story (invisible + never enriched). Follow merged_into_story_id to the live survivor.
         let target = existingStory;
-        const seen = new Set([target.id]);
-        while (target && (target.status === 'merged_into' || target.merged_into_story_id)) {
-          const nextId = target.merged_into_story_id;
-          if (!nextId || seen.has(nextId)) {
-            console.error(`[ADO-533] Tombstone redirect broken (story=${target.id} -> ${nextId}); throwing.`);
-            target = null;
-            break;
+        if (existingStory.status === 'merged_into' || existingStory.merged_into_story_id) {
+          // Walk the tombstone chain with MINIMAL columns (never pull centroid vectors — egress rule #11);
+          // fetch the terminal survivor's full row once, only if the chain resolves to a live story.
+          let hop = existingStory;
+          let nextId = existingStory.merged_into_story_id;
+          const seen = new Set([existingStory.id]);
+          while (nextId && !seen.has(nextId)) {
+            seen.add(nextId);
+            const { data: h, error: hopErr } = await getSupabaseClient()
+              .from('stories')
+              .select('id, status, merged_into_story_id')
+              .eq('id', nextId)
+              .maybeSingle();
+            if (hopErr || !h) {
+              console.error(`[ADO-533] Tombstone survivor lookup failed (id=${nextId}): ${hopErr?.message || 'not found'}`);
+              hop = null;
+              break;
+            }
+            hop = h;
+            nextId = (h.status === 'merged_into' || h.merged_into_story_id) ? h.merged_into_story_id : null;
           }
-          seen.add(nextId);
-          const { data: survivor, error: hopErr } = await getSupabaseClient()
-            .from('stories')
-            .select('*')
-            .eq('id', nextId)
-            .maybeSingle();
-          if (hopErr || !survivor) {
-            console.error(`[ADO-533] Tombstone survivor lookup failed (id=${nextId}): ${hopErr?.message || 'not found'}`);
+          if (hop && hop.status !== 'merged_into' && !hop.merged_into_story_id) {
+            const { data: full, error: fullErr } = await getSupabaseClient()
+              .from('stories').select('*').eq('id', hop.id).maybeSingle();
+            target = (!fullErr && full) ? full : null;
+          } else {
+            console.error(`[ADO-533] Tombstone redirect unresolved from story ${existingStory.id}; throwing.`);
             target = null;
-            break;
           }
-          target = survivor;
         }
         if (target) {
           console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${target.id}${target.id !== existingStory.id ? ` (redirected from tombstone ${existingStory.id})` : ''}`);
