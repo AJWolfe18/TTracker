@@ -192,19 +192,25 @@ merge count is **below the cap of 10**, call `merge_stories`. Choose survivor/lo
 **the older story (smaller `first_seen_at`, tie-break smaller `id`) is the survivor**; the newer is the
 loser. This keeps the original story's URL/id stable.
 
+Always pass `p_run_id` (this run's `RUN_ID`) so the DB-side hard cap can enforce the per-run merge limit
+even if this prompt's own counting is wrong (defense-in-depth, migration 101):
+
 ```bash
 curl -s -X POST "${API_BASE}/rpc/merge_stories" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
-  -d "{\"p_loser_id\": ${LOSER_ID}, \"p_survivor_id\": ${SURVIVOR_ID}}"
+  -d "{\"p_loser_id\": ${LOSER_ID}, \"p_survivor_id\": ${SURVIVOR_ID}, \"p_run_id\": \"${RUN_ID}\"}"
 ```
 
 The RPC returns JSON. `ok:true, skipped:false` = merged (set `merged=true` for the log). `skipped:true`
-(loser already merged) or `ok:false` (e.g. survivor is itself a tombstone) = NOT merged; log
-`merged=false` and add the reason to the rationale. Once the cap of 10 executed merges is hit, log any
-further `merge` verdicts with `merged=false` and rationale note `"cap_reached"` — do not execute more
-this run.
+(loser already merged) or `ok:false` = NOT merged; log `merged=false` and add the `reason` to the
+rationale. Specific `ok:false` reasons to expect: `survivor_is_merged` (survivor is itself a tombstone —
+target the ultimate survivor instead), and `run_merge_cap_reached` (the DB-side hard cap of 10 executed
+merges for this run was hit — a backstop to your own counting). Once you have executed 10 merges this run,
+stop executing further merges: log any additional `merge` verdicts with `merged=false` and rationale note
+`"cap_reached"`. The DB enforces the same 10 regardless, so a `run_merge_cap_reached` response is not an
+error — just log it and move on.
 
 **Chained fragments:** if you merged B into A earlier this run and later judge C a match for that same
 event, target the surviving story A as the survivor (never a story you already tombstoned this run).
@@ -306,7 +312,8 @@ sequence → keep, even if they share entities and sit minutes apart.
    skip.
 2. `merged=true` ONLY when `merge_stories` returned `ok:true, skipped:false` this run. Dry-run rows are
    always `merged=false, dry_run=true`.
-3. At most 10 executed merges per run (live mode).
+3. At most 10 executed merges per run (live mode) — prompt-capped AND DB-enforced via `p_run_id`
+   (migration 101); the DB returns `run_merge_cap_reached` past the cap regardless of prompt behavior.
 4. Survivor is always the older story; a story tombstoned earlier this run is never chosen as a loser
    again and never as a merge target's loser.
 5. Default-DENY: uncertainty → `uncertain`/`keep`, never `merge`.
@@ -320,7 +327,9 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 - `prompt_version`: `judge-v1`
 - Model: Claude Sonnet (exact model id set at cron creation, session 2).
-- Log table: `clustering_judge_log` (migration 100). Merge machinery: `merge_stories(loser, survivor)`.
-  Candidates: `get_clustering_judge_candidates(p_min_sim, p_days, p_max_pairs)`.
+- Log table: `clustering_judge_log` (migration 100). Merge machinery:
+  `merge_stories(p_loser_id, p_survivor_id, p_run_id)` (migration 101 added `p_run_id` + a DB-side hard
+  cap of 10 executed merges/run; migration 101 also excludes merged tombstones from live clustering
+  candidates). Candidates: `get_clustering_judge_candidates(p_min_sim, p_days, p_max_pairs)`.
 - Cadence (session 2): 3x/day, offset from RSS runs.
 - Binding merge ruling: `scripts/evals/clustering-gold-set.json` `meta.verification_status`.

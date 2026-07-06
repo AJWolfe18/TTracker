@@ -157,6 +157,7 @@ async function getTimeBlockCandidates(article) {
     .from('stories')
     .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
+    .is('merged_into_story_id', null)  // ADO-533 P1: never attach to a merged-away tombstone
     .gte('latest_article_published_at', startTime.toISOString())
     .lte('latest_article_published_at', endTime.toISOString())
     .order('latest_article_published_at', { ascending: false })
@@ -199,6 +200,7 @@ async function getEntityBlockCandidates(article) {
     .from('stories')
     .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
+    .is('merged_into_story_id', null)  // ADO-533 P1: never attach to a merged-away tombstone
     .overlaps('top_entities', entityIds)  // GIN index accelerates this
     .limit(150);
 
@@ -254,6 +256,7 @@ async function getSlugBlockCandidates(article) {
     .from('stories')
     .select('id, primary_headline, entity_counter, top_entities, topic_slugs, last_updated_at, first_seen_at, latest_article_published_at, primary_source_domain, lifecycle_state')
     .in('lifecycle_state', ACTIVE_LIFECYCLE_STATES)
+    .is('merged_into_story_id', null)  // ADO-533 P1: never attach to a merged-away tombstone
     .contains('topic_slugs', [article.topic_slug])  // GIN index lookup
     .limit(20);
 

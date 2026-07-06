@@ -1953,8 +1953,36 @@ async function createNewStory(article) {
         .maybeSingle();
 
       if (!lookupError && existingStory) {
-        console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${existingStory.id}`);
-        return attachToStory(article, existingStory, 1.0);
+        // ADO-533 P1: the hash-matched story may be a merged-away tombstone (status='merged_into').
+        // merge_stories never clears the loser's story_hash, so attaching here would orphan the article
+        // on a dead story (invisible + never enriched). Follow merged_into_story_id to the live survivor.
+        let target = existingStory;
+        const seen = new Set([target.id]);
+        while (target && (target.status === 'merged_into' || target.merged_into_story_id)) {
+          const nextId = target.merged_into_story_id;
+          if (!nextId || seen.has(nextId)) {
+            console.error(`[ADO-533] Tombstone redirect broken (story=${target.id} -> ${nextId}); throwing.`);
+            target = null;
+            break;
+          }
+          seen.add(nextId);
+          const { data: survivor, error: hopErr } = await getSupabaseClient()
+            .from('stories')
+            .select('*')
+            .eq('id', nextId)
+            .maybeSingle();
+          if (hopErr || !survivor) {
+            console.error(`[ADO-533] Tombstone survivor lookup failed (id=${nextId}): ${hopErr?.message || 'not found'}`);
+            target = null;
+            break;
+          }
+          target = survivor;
+        }
+        if (target) {
+          console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${target.id}${target.id !== existingStory.id ? ` (redirected from tombstone ${existingStory.id})` : ''}`);
+          return attachToStory(article, target, 1.0);
+        }
+        // fall through and throw original create error if the redirect couldn't resolve a live survivor
       }
 
       console.error(
