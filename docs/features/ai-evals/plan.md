@@ -49,20 +49,26 @@ Every evaluated item produces:
 - **Runner:** replays `calculateHybridScore` + guardrail + Tier A/B cross-run cascade offline. story↔story pairs are skipped by the deterministic replay — they validate the Clustering Judge agent (ADO-533) in dry-run mode later.
 - **THE GATE:** no clustering scoring/threshold/gate change ships without a before/after gold-set run in the PR description (plan of record: `docs/features/clustering-quality/plan.md` Part 2).
 
-### Baseline (2026-07-05, 198 article↔story pairs)
+### Baseline (2026-07-05, 196 article↔story pairs — Josh-verified labels)
 
-> **Label status:** these are FIRST-PASS-LABEL baselines (Claude-labeled, slug/member-article
-> verified for uncertain cases). Josh's spot-check is the ADO-532 closure gate — priority is
-> the ~48 disagreement pairs (`--disagreements-only`), since a mislabel there moves the
-> baseline directly. Update `meta.labeled_by`/`meta.verification_status` in the gold-set file
-> once verified.
+> **Label status: VERIFIED.** Josh spot-checked all 48 disagreement pairs + calibration rows
+> (2026-07-05): 2 flips (gs-168, gs-189 — chain-of-events beats are separate stories even
+> same-day), 2 removals (gs-111, gs-113 — content out of tracker scope; ids stay sparse,
+> never renumber). Key ruling now encoded in `meta.verification_status` and binding on the
+> ADO-533 Judge prompt: action→follow-up chains stay separate; same-cycle reactions/commentary
+> on one occurrence merge.
 
 | Config | Precision | Recall | F1 | Replay-vs-live agreement |
 |--------|-----------|--------|-----|--------------------------|
-| Tier B bypass OFF (log-window config) | **100%** (0 FP) | 40.0% | 57.1% | **100%** (exact reproduction of live decisions) |
-| Tier B bypass ON (current PROD, ADO-529) | 98.1% (1 FP) | 53.0% | 68.8% | 92.9% (delta = the flag) |
+| Tier B bypass OFF (log-window config) | 95.0% (2 FP) | 39.6% | 55.9% | **100%** (exact reproduction of live decisions) |
+| Tier B bypass ON (current PROD, ADO-529) | 94.4% (3 FP) | 53.1% | 68.0% | 92.9% (delta = the flag) |
 
-Reading: the deterministic system is precision-heavy by design — false merges ~0, but it misses ~half of true same-event pairs (fragmentation). The ADO-529 Tier B bypass buys +13pp recall for 1 false merge on this set. The remaining ~47 missed merges concentrate in the near-miss band (59.3% accuracy there) — that is the Clustering Judge agent's (ADO-533) repair target.
+Reading: the deterministic system is precision-heavy — but not perfect: Josh's chain-of-events
+flips revealed 2 real live false merges (an indictment merged with its same-day court halt, a
+bill story absorbing Trump's later dismissive comment), and the Tier B bypass adds 1 more
+(gs-086) while buying +13.5pp recall. The ~45 missed merges concentrate in the near-miss band
+(60.3% accuracy there) — the Clustering Judge agent's (ADO-533) repair target. Judge criteria
+must enforce the chain-of-events distinction or auto-merge will recreate exactly these FPs.
 
 ```bash
 # Clustering baseline
