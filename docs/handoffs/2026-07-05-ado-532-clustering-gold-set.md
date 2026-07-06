@@ -27,10 +27,69 @@ Interpretation: the deterministic system is precision-heavy by design — false 
 - **Pass 1 (pattern/bugs):** clean — cascade transcription verified line-by-line against live code; baselines independently reproduced; egress rule #11 compliance verified programmatically (no embedding/content key anywhere in the gold set); eval-types.js confirmed byte-identical to the pre-deletion version modulo CRLF.
 - **Pass 2 (production readiness):** ship-ready with 2 Important items, both fixed: (1) first-pass-label caveat now on the published baselines (docs + `meta.verification_status`) with Josh spot-check as the closure gate; (2) `meta.schema_note` documents that story_story pairs are story-shaped on both sides so the ADO-533 consumer doesn't crash on `a.title`/`embed_sim`. Minor items also done: fidelity test in qa:smoke, raw extracts retained.
 
-## What Josh needs to do (closure gate)
+## Josh spot-check — DONE same session (closure gate passed)
 
-Review the spot-check page: **https://claude.ai/code/artifact/8b8c7f30-4505-407a-9a45-e408f7e767a7**
-Section 1 (48 disagreement pairs) matters most — those labels directly set the baseline. Report disagreements as "gs-NNN should be same/different"; labels live in `clustering-gold-set.json`, and `node scripts/evals/run-eval.js --type=clustering` re-runs in seconds. Then ADO-532 can close.
+Josh reviewed all 48 disagreement pairs + calibration rows via the artifact
+(https://claude.ai/code/artifact/8b8c7f30-4505-407a-9a45-e408f7e767a7). Outcome (commit `653118a`):
+
+- **2 flips** (gs-168 indictment→same-day halt, gs-189 bill→Trump's later comment): chain-of-events
+  beats are separate stories even same-day. Both were LIVE Tier A/B attaches — the verified baseline
+  now shows 2 real false merges in the live system, not 0.
+- **2 removals** (gs-111, gs-113 — content out of tracker scope; IDs stay sparse, never renumber).
+- **Borderlines annotated**, labels kept: gs-099, gs-002, gs-063, gs-102.
+- **Verified baseline (196 pairs):** PROD config P=94.4% / R=53.1% / F1=68.0; bypass-off P=95.0% / R=39.6%; replay fidelity still 100%.
+- **Binding merge-policy ruling** (encoded in gold-set `meta.verification_status`, drives the ADO-533
+  Judge prompt): same-cycle reactions/commentary on one occurrence MERGE; chain-of-events beats
+  (filing→ruling, indictment→halt, event→later comment) stay SEPARATE.
+
+ADO-532 → Ready for Prod (tooling rides the next PROD cherry-pick: scripts/evals/, scripts/tests/
+clustering-eval-fidelity.test.mjs, package.json qa scripts, 3 export keywords in hybrid-clustering.js).
+
+## Next session: ADO-533 (Clustering Judge agent)
+
+**Model: Opus 4.8** (build session — judgment criteria already encoded; Judge runtime itself is Sonnet).
+
+### Starting prompt (paste into a fresh session)
+
+```
+/start-work Start ADO-533: Clustering Judge agent (build + dry-run).
+
+Read docs/features/clustering-quality/plan.md Part 2 first — its "Implementation notes
+→ ADO-533" section is the build spec (clustering_judge_log DDL sketch, merge_stories RPC
+requirements, candidate-pair query, agent prompt shape, rollout stages). The Judge's merge
+criteria are ALREADY DECIDED: scripts/evals/clustering-gold-set.json meta.verification_status
+has Josh's binding ruling (same-cycle reactions/commentary on one occurrence merge;
+chain-of-events beats — filing→ruling, indictment→same-day halt, event→later comment — stay
+separate). Default DENY on uncertainty. Do not re-litigate these rules.
+
+This session (session 1 of 2 — build + dry-run only, NO live merges):
+1. Migration: clustering_judge_log table + stories.merged_into_story_id (tombstone/redirect,
+   never delete) + merge_stories(p_loser_id, p_survivor_id) RPC (repoint article_story
+   idempotently, recompute survivor centroid SERVER-SIDE, merge entity_counter/top_entities,
+   recount source_count) + candidate-pairs RPC (last-7-days story pairs, centroid sim >= ~0.85
+   + shared non-stopword entity, capped ~30). Gotchas: REVOKE FROM PUBLIC on SECURITY DEFINER
+   RPCs (migrations 095/096 pattern); GRANT SELECT to anon on clustering_judge_log if the
+   admin tab reads it directly (migration 046 gotcha). Apply to TEST via SQL editor/MCP.
+2. Ensure stories-active/stories-detail edge functions + frontend exclude merged-state stories.
+3. docs/features/clustering-judge/{plan.md, prompt-v1.md} mirroring the stories-claude-agent
+   structure. Prompt: fetch pairs via RPC → per pair fetch summaries + member ARTICLE titles
+   (never trust primary_headline alone) → verdict with one-sentence rationale → log EVERY
+   verdict → heartbeat row on empty runs. Dry-run mode: verdicts logged, merged=false forced.
+4. Validate the judge prompt dry-run against the gold set's 10 story_story pairs + a sample of
+   article_story pairs. GOTCHA (gold-set meta.schema_note): story_story pairs are story-shaped
+   on BOTH sides (a.headline/a.top_entities, replay.centroid_sim_* — no a.title/embed_sim).
+5. Admin "Judge" tab in admin.html — follow the Skips tab pattern exactly (vanilla JS,
+   PostgREST with select= field list + limit).
+6. Update ADO-533 as milestones complete; /end-work when done.
+
+Deferred to session 2: RemoteTrigger cron (3x/day, Sonnet), live auto-merge enablement
+(cap 10/run), 3-day monitoring window — all RemoteTrigger/bootstrap gotchas are in the
+claude-agent-patterns memory entity.
+
+Constraints: test branch, Node only (no Python), PostgREST minimal select= + limit, never
+fetch embedding/content fields client-side (centroid math stays in SQL), state cost impact
+of any new AI calls (Judge on Sonnet 3x/day is already approved).
+```
 
 ## Gotchas for the next session (ADO-533)
 
