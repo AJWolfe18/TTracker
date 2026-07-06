@@ -6,17 +6,17 @@
     "description": "Clustering gold set: labeled article-story and story-story pairs for evaluating clustering attach decisions and (later) the Clustering Judge agent. Built from PROD clustering logs (near-miss/override diagnostics) + hand-verified seeds from docs/features/clustering-quality/plan.md Part 1.",
     "labeling_principle": "same_event = the two items report/analyze the SAME discrete real-world occurrence (announcement, ruling, speech, election night, disclosure release), including same-cycle reactions, commentary, and circumstances of that occurrence (July 4th precedent: storm evacuation + speech = one occasion). different_event = separate developments even within one saga: filing vs ruling days apart, resignation vs replacement, order vs later court block, rumor vs act, two strikes in a series, recurring formats (Live Results templates, weekly punditry), and coverage separated by months (thread material, not one event).",
     "provenance": "Similarities are decision-time values from PROD run logs (embed_best) or one-time build-time centroid computation (story_story pairs). Story/article features fetched via read-only anon PostgREST at build time (2026-07-05) - current-state snapshot, may differ slightly from decision-time state. NEVER refetch embeddings at eval time (egress rule #11).",
-    "labeled_by": "Claude (Fable) first pass + slug/member-article verification for uncertain cases; Josh spot-check pending",
+    "labeled_by": "Claude (Fable) first pass; Josh spot-check completed 2026-07-05 (all 48 disagreement pairs + calibration reviewed): 2 flips (gs-168, gs-189 - chain-of-events rule), 2 removals (gs-111, gs-113 - content out of tracker scope), borderlines annotated (gs-099, gs-002, gs-063, gs-102)",
     "counts": {
-      "total": 208,
-      "same_event": 110,
-      "different_event": 98,
-      "easy": 73,
-      "hard": 135,
-      "article_story": 198,
+      "total": 206,
+      "same_event": 106,
+      "different_event": 100,
+      "easy": 72,
+      "hard": 134,
+      "article_story": 196,
       "story_story": 10,
       "by_source": {
-        "near_miss": 118,
+        "near_miss": 116,
         "generic_collision": 40,
         "tier_ab_live_attach": 40,
         "july4_fragmentation": 10
@@ -24,7 +24,7 @@
     },
     "schema_note": "pair_type=story_story entries (July 4th cluster) have BOTH sides story-shaped: a.headline/a.top_entities/a.article_titles (no a.title), and replay carries centroid_sim_raw/centroid_sim_normalized instead of embed_sim. The deterministic replay skips them; they exist for Clustering Judge (ADO-533) dry-run validation.",
     "raw_extracts": "scripts/evals/clustering-log-extracts-2026-07-05.txt.gz - the PROD log extract file this set was built from (gunzip, then build-clustering-gold-set.js --extracts=... regenerates the unlabeled draft). Labels themselves are hand-applied and live only here.",
-    "verification_status": "Baseline numbers are FIRST-PASS-LABEL baselines. Josh spot-check pending (ADO-532 closure gate) - prioritize the ~48 disagreement pairs: node scripts/evals/run-eval.js --type=clustering --disagreements-only"
+    "verification_status": "VERIFIED 2026-07-05 (Josh spot-check). Removed ids gs-111/gs-113 are intentionally sparse - never renumber. Key ruling for the Judge prompt (ADO-533): chain-of-events beats (indictment->halt, action->follow-up comment) are SEPARATE stories even within the same 24h; same-cycle reactions/commentary on one occurrence are the SAME story."
   },
   "entries": [
     {
@@ -128,7 +128,7 @@
       "label": "different_event",
       "difficulty": "hard",
       "source": "near_miss",
-      "notes": "Two beats of the Carroll payout saga: new delay attempt vs SCOTUS rejecting the appeal - separate legal developments days apart.",
+      "notes": "Two beats of the Carroll payout saga: new delay attempt vs SCOTUS rejecting the appeal - separate legal developments days apart. Josh (2026-07-05): fine either way; kept different_event since the new delay attempt is a follow-up move after the ruling.",
       "replay": {
         "embed_sim": 0.946520726586383,
         "embed_second": 0.916926952692155,
@@ -4821,7 +4821,7 @@
       "label": "different_event",
       "difficulty": "easy",
       "source": "near_miss",
-      "notes": "Different states, same election night (dt=0) - Live Results template collision; the time gate cannot help here.",
+      "notes": "Different states, same election night (dt=0) - Live Results template collision; the time gate cannot help here. Josh (2026-07-05): neither article really belongs on the tracker (relevance, ADO-69 scope) but kept as a template-collision case.",
       "replay": {
         "embed_sim": 0.89424116049761,
         "embed_second": 0.892646576727253,
@@ -7351,7 +7351,7 @@
       "label": "same_event",
       "difficulty": "hard",
       "source": "near_miss",
-      "notes": "Same congressional-review cycle of the Iran agreement: delivery + senators’ demand.",
+      "notes": "Same congressional-review cycle of the Iran agreement: delivery + senators’ demand. Josh (2026-07-05): borderline - WH delivering (action) vs Senate GOP wanting a say (reaction beat); kept same_event, revisit if the chain-of-events rule tightens.",
       "replay": {
         "embed_sim": 0.881213028539395,
         "embed_second": 0.871539109319619,
@@ -7560,7 +7560,7 @@
       "label": "same_event",
       "difficulty": "hard",
       "source": "near_miss",
-      "notes": "Same primary-night preview cycle, 5h.",
+      "notes": "Same primary-night preview cycle, 5h. Josh (2026-07-05): content arguably out of tracker scope, but fine to keep.",
       "replay": {
         "embed_sim": 0.879955105044971,
         "embed_second": 0.876888170509725,
@@ -8186,63 +8186,6 @@
       }
     },
     {
-      "id": "gs-111",
-      "pair_type": "article_story",
-      "a": {
-        "article_id": "art-f0ef9d0a-13be-4a67-82a6-1cf79e77e181",
-        "title": "This California Town Banned Fireworks. Then Came the Dogs.",
-        "entities": [
-          "LOC-CAMBRIA",
-          "LOC-CALIFORNIA",
-          "EVT-FOURTH-OF-JULY"
-        ],
-        "published_at": "2026-07-05T02:17:00+00:00",
-        "topic_slug": "CAMBRIA-FIREWORKS-BAN-DOGS"
-      },
-      "b": {
-        "story_id": 12141,
-        "headline": "Fireworks Canceled in Some Western Towns Because of Wildfire Danger",
-        "top_entities": [],
-        "article_titles": [
-          "Fireworks Canceled in Some Western Towns Because of Wildfire Danger"
-        ],
-        "date_range": "2026-07-04T19:31:20+00:00 → 2026-07-04T19:31:20+00:00"
-      },
-      "label": "same_event",
-      "difficulty": "hard",
-      "source": "near_miss",
-      "notes": "July 4th fireworks-cancellation coverage: regional roundup + town color piece.",
-      "replay": {
-        "embed_sim": 0.869229296079613,
-        "embed_second": 0.801659965811963,
-        "margin_vacuous": false,
-        "candidate_count": 200,
-        "time_diff_hours": 6.761111111111111,
-        "article": {
-          "source_domain": "rss.nytimes.com",
-          "geo": null,
-          "opinion_flag": false,
-          "artifact_urls": [],
-          "quote_hashes": []
-        },
-        "story": {
-          "entity_counter": {},
-          "topic_slugs": [
-            "FIREWORKS-CANCELED-WILDFIRE-DANGER"
-          ],
-          "lifecycle_state": "emerging",
-          "primary_source_domain": "rss.nytimes.com",
-          "first_seen_at": "2026-07-04T19:31:20+00:00",
-          "latest_article_published_at": "2026-07-04T19:31:20+00:00",
-          "last_updated_at": "2026-07-04T19:31:20+00:00"
-        },
-        "log_event_type": "CROSS_RUN_NEAR_MISS",
-        "log_tier": null,
-        "run_id": "28726828377",
-        "run_created_at": "2026-07-05T02:21:26Z"
-      }
-    },
-    {
       "id": "gs-112",
       "pair_type": "article_story",
       "a": {
@@ -8340,71 +8283,6 @@
         "log_tier": null,
         "run_id": "28626807588",
         "run_created_at": "2026-07-02T22:57:20Z"
-      }
-    },
-    {
-      "id": "gs-113",
-      "pair_type": "article_story",
-      "a": {
-        "article_id": "art-33fc4bc8-36e5-4708-a4ee-8ae08e4e3f93",
-        "title": "California elections: governor, LA mayor and Congress at stake as the state braces for turbulence",
-        "entities": [
-          "LOC-CALIFORNIA",
-          "ORG-CONGRESS",
-          "US-TRUMP",
-          "ORG-DEM"
-        ],
-        "published_at": "2026-06-02T11:36:13+00:00",
-        "topic_slug": "CALIFORNIA-PRIMARY-ELECTIONS"
-      },
-      "b": {
-        "story_id": 10431,
-        "headline": "Previewing California’s Primary Elections and High-Stakes Governor’s Race",
-        "top_entities": [
-          "LOC-CALIFORNIA",
-          "ORG-CA-STATE-GOVERNMENT"
-        ],
-        "article_titles": [
-          "Previewing California’s Primary Elections and High-Stakes Governor’s Race",
-          "Previewing California’s Primary Elections and High-Stakes Governor’s Race"
-        ],
-        "date_range": "2026-06-01T22:00:05+00:00 → 2026-06-02T15:15:12+00:00"
-      },
-      "label": "same_event",
-      "difficulty": "easy",
-      "source": "near_miss",
-      "notes": "Same California primary preview.",
-      "replay": {
-        "embed_sim": 0.864224928399215,
-        "embed_second": 0.861289042618592,
-        "margin_vacuous": false,
-        "candidate_count": 200,
-        "time_diff_hours": 13.602222222222222,
-        "article": {
-          "source_domain": "theguardian.com",
-          "geo": null,
-          "opinion_flag": false,
-          "artifact_urls": [],
-          "quote_hashes": []
-        },
-        "story": {
-          "entity_counter": {
-            "LOC-CALIFORNIA": 1,
-            "ORG-CA-STATE-GOVERNMENT": 1
-          },
-          "topic_slugs": [
-            "CALIFORNIA-PRIMARY-ELECTIONS-PREVIEW"
-          ],
-          "lifecycle_state": "emerging",
-          "primary_source_domain": "rss.nytimes.com",
-          "first_seen_at": "2026-06-01T22:00:05+00:00",
-          "latest_article_published_at": "2026-06-02T15:15:12+00:00",
-          "last_updated_at": "2026-06-02T18:04:08.297+00:00"
-        },
-        "log_event_type": "CROSS_RUN_NEAR_MISS",
-        "log_tier": null,
-        "run_id": "26824325398",
-        "run_created_at": "2026-06-02T13:52:46Z"
       }
     },
     {
@@ -12442,10 +12320,10 @@
         ],
         "date_range": "2026-07-02T22:55:54+00:00 → 2026-07-03T14:06:20+00:00"
       },
-      "label": "same_event",
+      "label": "different_event",
       "difficulty": "hard",
       "source": "tier_ab_live_attach",
-      "notes": "Indictment and same-day court halt - one continuous 24h cycle (contrast with multi-day filing-then-ruling pairs). Only Tier B attach in sample.",
+      "notes": "Josh ruling (2026-07-05 spot-check): chain of events - the indictment and the same-day court halt should stay separate stories that each stay current; story = beat, not saga. Overrides first-pass same_event. NOTE: this was a live Tier B attach, so it now counts as a false merge in the baseline.",
       "replay": {
         "embed_sim": 0.886602924657242,
         "embed_second": 0.844973492259262,
@@ -14115,10 +13993,10 @@
         ],
         "date_range": "2026-06-25T23:30:09+00:00 → 2026-06-29T20:11:00+00:00"
       },
-      "label": "same_event",
+      "label": "different_event",
       "difficulty": "hard",
       "source": "tier_ab_live_attach",
-      "notes": "Trump’s dismissive comment on the same housing-bill drama the story covers.",
+      "notes": "Josh ruling (2026-07-05 spot-check): Trump's later dismissive comment is a follow-up beat to the bill story - chain of events, separate. Overrides first-pass same_event. NOTE: was a live Tier A attach, now counts as a false merge in the baseline.",
       "replay": {
         "embed_sim": 0.918521533953494,
         "embed_second": 0.914956029435639,
