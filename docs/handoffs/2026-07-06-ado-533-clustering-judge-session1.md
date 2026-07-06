@@ -81,3 +81,46 @@ RemoteTrigger cron (Sonnet, 3x/day, `0 5,13,21 * * *`); flip `JUDGE_DRY_RUN=fals
 (cap 10/run); live candidate-recall check before enabling; hard merge cap (defense-in-depth); 3-day
 monitoring window. All RemoteTrigger/bootstrap gotchas are in the `claude-agent-patterns` memory entity +
 `docs/reference/cloud-agent-runbook.md`.
+
+---
+
+## Session 2 starting prompt (paste into `/start-work`)
+
+```
+Continue ADO-533: Clustering Judge agent — SESSION 2 (finish session-1 leftovers, then go live).
+Read docs/handoffs/2026-07-06-ado-533-clustering-judge-session1.md and
+docs/features/clustering-judge/{plan.md,prompt-v1.md} first. Session 1 (build + dry-run) shipped in
+PR #106 (Codex-clean); migration 100 is already on PROD. The Judge's merge criteria are DECIDED —
+scripts/evals/clustering-gold-set.json meta.verification_status (same-cycle reactions/commentary =>
+merge; chain-of-events beats => keep; default DENY). Do not re-litigate.
+
+Phase A — finish session 1 (TEST parity + merge):
+1. Apply migrations/100_clustering_judge.sql to TEST via Supabase SQL Editor. DECLINE the dashboard's
+   "Enable RLS" suggestion (the migration handles RLS). Run the 3 verification queries at the file
+   bottom; confirm RPC grants are anon=f/authenticated=f/service_role=t.
+2. Deploy the 4 edge functions to TEST (migration MUST be applied first):
+   npx supabase functions deploy stories-active   --project-ref wnrjrywpcadwutfykflu
+   npx supabase functions deploy stories-detail    --project-ref wnrjrywpcadwutfykflu
+   npx supabase functions deploy stories-search     --project-ref wnrjrywpcadwutfykflu
+   npx supabase functions deploy admin-judge-log    --project-ref wnrjrywpcadwutfykflu
+3. Seed + verify the admin Judge tab: node scripts/evals/judge-dryrun.js --insert (local .env => TEST),
+   then load admin.html Judge tab and confirm the 30 dry-run rows render (headlines A/B, verdicts).
+4. Merge PR #106 to test (gh pr merge --squash — merge commits are blocked on this repo).
+
+Phase B — go live (the actual session-2 work):
+5. LIVE RECALL CHECK (gate, review-flagged): run get_clustering_judge_candidates() against live PROD
+   data (read-only) and confirm it surfaces real same-event fragments at 0.83. If recall is weak,
+   lower p_min_sim default to ~0.82 (CREATE OR REPLACE the function; re-apply to TEST+PROD).
+6. Add a HARD merge cap (defense-in-depth) — a code/DB guard so a run can't exceed 10 executed merges
+   even if the LLM ignores the prompt cap.
+7. RemoteTrigger cron: Sonnet, 3x/day, 0 5,13,21 * * * (offset from RSS runs). Bootstrap MUST
+   git fetch origin main && git reset --hard origin/main (repo is cached). Set JUDGE_DRY_RUN=false ONLY
+   after the dry-run rows + recall check look right. All RemoteTrigger request-shape / bootstrap gotchas
+   are in the claude-agent-patterns memory entity + docs/reference/cloud-agent-runbook.md.
+8. 3-day PROD monitoring window (ADO-528 playbook) — watch clustering_judge_log via the admin Judge tab
+   for wrong merges (reversible via tombstone) before declaring done. Update ADO-533; /end-work.
+
+Cost: Judge on Sonnet 3x/day already approved (fraction of Stories agent's 12 runs/day). State any new
+AI-call cost. Constraints: test branch, Node only (no Python), PostgREST minimal select= + limit, never
+fetch embedding/content client-side (centroid math stays in SQL).
+```
