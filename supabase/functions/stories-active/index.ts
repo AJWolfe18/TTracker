@@ -41,6 +41,9 @@ serve(async (req: Request) => {
         summary_spicy
       `)
       .eq('status', 'active')
+      // ADO-533: merged losers get status='merged_into', so status='active' already excludes
+      // them; the explicit merged_into_story_id guard is defense-in-depth (requires migration 100).
+      .is('merged_into_story_id', null)
       .not('summary_neutral', 'is', null) // TTRC-119: Hide un-enriched stories
       .order('last_updated_at', { ascending: false })
       .order('id', { ascending: false })

@@ -1948,13 +1948,52 @@ async function createNewStory(article) {
 
       const { data: existingStory, error: lookupError } = await getSupabaseClient()
         .from('stories')
-        .select('*')
+        // ADO-533: attachToStory only reads id + lifecycle_state (it refetches centroid/reopen_count
+        // itself); the tombstone redirect needs status + merged_into_story_id. Never pull centroid
+        // vectors here (egress rule #11).
+        .select('id, status, merged_into_story_id, lifecycle_state')
         .eq('story_hash', storyHash)
         .maybeSingle();
 
       if (!lookupError && existingStory) {
-        console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${existingStory.id}`);
-        return attachToStory(article, existingStory, 1.0);
+        // ADO-533 P1: the hash-matched story may be a merged-away tombstone (status='merged_into').
+        // merge_stories never clears the loser's story_hash, so attaching here would orphan the article
+        // on a dead story (invisible + never enriched). Follow merged_into_story_id to the live survivor.
+        let target = existingStory;
+        if (existingStory.status === 'merged_into' || existingStory.merged_into_story_id) {
+          // Walk the tombstone chain with MINIMAL columns (never pull centroid vectors — egress rule #11).
+          // attachToStory only needs id + lifecycle_state, so the resolved hop row IS a sufficient target
+          // as-is — no full-row refetch of the survivor is required.
+          let hop = existingStory;
+          let nextId = existingStory.merged_into_story_id;
+          const seen = new Set([existingStory.id]);
+          while (nextId && !seen.has(nextId)) {
+            seen.add(nextId);
+            const { data: h, error: hopErr } = await getSupabaseClient()
+              .from('stories')
+              .select('id, status, merged_into_story_id, lifecycle_state')
+              .eq('id', nextId)
+              .maybeSingle();
+            if (hopErr || !h) {
+              console.error(`[ADO-533] Tombstone survivor lookup failed (id=${nextId}): ${hopErr?.message || 'not found'}`);
+              hop = null;
+              break;
+            }
+            hop = h;
+            nextId = (h.status === 'merged_into' || h.merged_into_story_id) ? h.merged_into_story_id : null;
+          }
+          if (hop && hop.status !== 'merged_into' && !hop.merged_into_story_id) {
+            target = hop;
+          } else {
+            console.error(`[ADO-533] Tombstone redirect unresolved from story ${existingStory.id}; throwing.`);
+            target = null;
+          }
+        }
+        if (target) {
+          console.warn(`[TTRC-354] Recovered: attaching article to existing story id=${target.id}${target.id !== existingStory.id ? ` (redirected from tombstone ${existingStory.id})` : ''}`);
+          return attachToStory(article, target, 1.0);
+        }
+        // fall through and throw original create error if the redirect couldn't resolve a live survivor
       }
 
       console.error(
