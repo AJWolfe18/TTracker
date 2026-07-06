@@ -1948,7 +1948,10 @@ async function createNewStory(article) {
 
       const { data: existingStory, error: lookupError } = await getSupabaseClient()
         .from('stories')
-        .select('*')
+        // ADO-533: attachToStory only reads id + lifecycle_state (it refetches centroid/reopen_count
+        // itself); the tombstone redirect needs status + merged_into_story_id. Never pull centroid
+        // vectors here (egress rule #11).
+        .select('id, status, merged_into_story_id, lifecycle_state')
         .eq('story_hash', storyHash)
         .maybeSingle();
 
@@ -1958,8 +1961,9 @@ async function createNewStory(article) {
         // on a dead story (invisible + never enriched). Follow merged_into_story_id to the live survivor.
         let target = existingStory;
         if (existingStory.status === 'merged_into' || existingStory.merged_into_story_id) {
-          // Walk the tombstone chain with MINIMAL columns (never pull centroid vectors — egress rule #11);
-          // fetch the terminal survivor's full row once, only if the chain resolves to a live story.
+          // Walk the tombstone chain with MINIMAL columns (never pull centroid vectors — egress rule #11).
+          // attachToStory only needs id + lifecycle_state, so the resolved hop row IS a sufficient target
+          // as-is — no full-row refetch of the survivor is required.
           let hop = existingStory;
           let nextId = existingStory.merged_into_story_id;
           const seen = new Set([existingStory.id]);
@@ -1967,7 +1971,7 @@ async function createNewStory(article) {
             seen.add(nextId);
             const { data: h, error: hopErr } = await getSupabaseClient()
               .from('stories')
-              .select('id, status, merged_into_story_id')
+              .select('id, status, merged_into_story_id, lifecycle_state')
               .eq('id', nextId)
               .maybeSingle();
             if (hopErr || !h) {
@@ -1979,9 +1983,7 @@ async function createNewStory(article) {
             nextId = (h.status === 'merged_into' || h.merged_into_story_id) ? h.merged_into_story_id : null;
           }
           if (hop && hop.status !== 'merged_into' && !hop.merged_into_story_id) {
-            const { data: full, error: fullErr } = await getSupabaseClient()
-              .from('stories').select('*').eq('id', hop.id).maybeSingle();
-            target = (!fullErr && full) ? full : null;
+            target = hop;
           } else {
             console.error(`[ADO-533] Tombstone redirect unresolved from story ${existingStory.id}; throwing.`);
             target = null;
