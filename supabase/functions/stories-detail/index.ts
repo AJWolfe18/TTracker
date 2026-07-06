@@ -59,8 +59,10 @@ serve(async (req: Request) => {
     if (story.merged_into_story_id) {
       redirectedFrom = String(story.id)
       const seen = new Set<string>([String(story.id)])
-      let hops = 0
-      while (story.merged_into_story_id && hops++ < 10) {
+      // Follow the chain all the way to the terminal survivor — merge chains can exceed any fixed hop
+      // cap over many Judge runs (a survivor can itself later become a loser). The visited-set bounds the
+      // loop to the number of distinct stories, so it always terminates without an arbitrary cap. (Codex P2.)
+      while (story.merged_into_story_id) {
         const nextId = String(story.merged_into_story_id)
         if (seen.has(nextId)) break // cycle guard — stop rather than loop forever
         seen.add(nextId)
@@ -82,8 +84,8 @@ serve(async (req: Request) => {
         storyId = nextId
       }
 
-      // The loop can stop on the hop cap or cycle guard while story is STILL a tombstone. Never serve a
-      // merged/intermediate row — its articles are empty/stale. Return not-found instead. (Codex P1.)
+      // The loop can still stop on the cycle guard (a broken/cyclic chain) with story STILL a tombstone.
+      // Never serve a merged/intermediate row — its articles are empty/stale. Return not-found. (Codex P1.)
       if (story.merged_into_story_id || story.status === 'merged_into') {
         console.error(
           `[ADO-533] Tombstone chain from ${redirectedFrom} did not resolve to a live survivor (stopped at ${story.id})`
