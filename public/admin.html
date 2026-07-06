@@ -5495,6 +5495,212 @@
             );
         }
 
+        // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
+        // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
+        function JudgeTab({ password, supabase }) {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [hours, setHours] = useState(168);
+            const [verdictFilter, setVerdictFilter] = useState('');
+            const [sourceFilter, setSourceFilter] = useState('');
+            const fetchTokenRef = useRef(0);
+
+            const TIME_RANGES = [
+                { label: '24h', value: 24 },
+                { label: '7d', value: 168 },
+                { label: '30d', value: 720 }
+            ];
+            const VERDICTS = ['merge', 'keep', 'uncertain'];
+            const SOURCES = ['judge-agent', 'inline'];
+
+            const VERDICT_COLOR = {
+                merge: '#f87171',      // red — a merge changes the record, worth the eye
+                keep: '#4ade80',       // green — left as-is
+                uncertain: '#fbbf24'   // amber — flagged
+            };
+
+            const fetchVerdicts = useCallback(async () => {
+                const token = ++fetchTokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const reqBody = { hours, limit: 100 };
+                    if (verdictFilter) reqBody.verdict = verdictFilter;
+                    if (sourceFilter) reqBody.source = sourceFilter;
+
+                    const { data: result, error: fnError } = await supabase.functions.invoke(
+                        'admin-judge-log',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: reqBody
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Failed to load judge verdicts');
+                    if (token !== fetchTokenRef.current) return;
+                    setData(result);
+                } catch (err) {
+                    if (token === fetchTokenRef.current) setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) setLoading(false);
+                }
+            }, [hours, verdictFilter, sourceFilter, password, supabase]);
+
+            useEffect(() => {
+                fetchVerdicts();
+            }, [fetchVerdicts]);
+
+            const clearFilters = () => {
+                setVerdictFilter('');
+                setSourceFilter('');
+            };
+
+            const formatTimestamp = (iso) => {
+                if (!iso) return '—';
+                const d = new Date(iso);
+                const now = new Date();
+                const mins = Math.floor((now.getTime() - d.getTime()) / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ago`;
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            };
+
+            const isHeartbeat = (row) => row.story_id_a == null && row.story_id_b == null;
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>Clustering Judge</span></h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {TIME_RANGES.map(r => (
+                                    <button
+                                        key={r.value}
+                                        className={`tab-btn ${hours === r.value ? 'active' : ''}`}
+                                        onClick={() => setHours(r.value)}
+                                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
+                                    >
+                                        {r.label}
+                                    </button>
+                                ))}
+                                <button onClick={fetchVerdicts} disabled={loading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    {loading ? '...' : '↻'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, note the story ids for a manual unwind.
+                            </div>
+
+                            {/* filter chips */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Verdict:</span>
+                                {VERDICTS.map(v => (
+                                    <button key={v}
+                                        onClick={() => setVerdictFilter(verdictFilter === v ? '' : v)}
+                                        style={{ background: verdictFilter === v ? (VERDICT_COLOR[v] || '#3b82f6') : '#374151', color: verdictFilter === v ? '#111827' : '#e5e7eb', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                        {v}
+                                    </button>
+                                ))}
+                                <span style={{ fontSize: '0.85rem', color: '#9ca3af', marginLeft: '0.5rem' }}>Source:</span>
+                                {SOURCES.map(s => (
+                                    <button key={s}
+                                        onClick={() => setSourceFilter(sourceFilter === s ? '' : s)}
+                                        style={{ background: sourceFilter === s ? '#3b82f6' : '#374151', color: '#e5e7eb', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                        {s}
+                                    </button>
+                                ))}
+                                {(verdictFilter || sourceFilter) && (
+                                    <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.85rem' }}>clear</button>
+                                )}
+                            </div>
+
+                            {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                            {loading && !data ? (
+                                <div className="loading"><div className="spinner"></div>Loading…</div>
+                            ) : data ? (
+                                <>
+                                    <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#9ca3af' }}>
+                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}
+                                        {data.by_verdict && (
+                                            <span style={{ marginLeft: '0.75rem' }}>
+                                                {data.by_verdict.map(v => (
+                                                    <span key={v.verdict} style={{ marginRight: '0.75rem', color: VERDICT_COLOR[v.verdict] || '#e5e7eb' }}>
+                                                        {v.verdict}: <strong>{v.count}</strong>
+                                                    </span>
+                                                ))}
+                                            </span>
+                                        )}
+                                        {data.merged_count != null && (
+                                            <span style={{ marginLeft: '0.5rem', color: '#f87171' }}>· {data.merged_count} executed merge{data.merged_count === 1 ? '' : 's'}</span>
+                                        )}
+                                    </div>
+
+                                    {(!data.rows || data.rows.length === 0) ? (
+                                        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                                            No verdicts recorded in this time range.
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                <thead>
+                                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>When</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Source</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Story A</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Story B</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Verdict</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Conf</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Sim</th>
+                                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Rationale</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {data.rows.map(row => (
+                                                        <tr key={row.id} style={{ borderBottom: '1px solid #1f2937', background: row.merged ? 'rgba(248,113,113,0.06)' : 'transparent' }}>
+                                                            <td style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatTimestamp(row.created_at)}</td>
+                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>
+                                                                {row.source}{row.dry_run ? <span style={{ color: '#6b7280' }}> (dry)</span> : null}
+                                                            </td>
+                                                            {isHeartbeat(row) ? (
+                                                                <td colSpan={2} style={{ padding: '0.5rem', color: '#6b7280', fontStyle: 'italic' }}>heartbeat — 0 candidate pairs</td>
+                                                            ) : (
+                                                                <>
+                                                                    <td style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
+                                                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{row.story_id_a}</span> {row.headline_a || '—'}
+                                                                    </td>
+                                                                    <td style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
+                                                                        <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{row.story_id_b}</span> {row.headline_b || '—'}
+                                                                    </td>
+                                                                </>
+                                                            )}
+                                                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                                {row.verdict && (
+                                                                    <span style={{ color: VERDICT_COLOR[row.verdict] || '#e5e7eb', fontWeight: 700 }}>{row.verdict}</span>
+                                                                )}
+                                                                {row.merged && <span title="merge executed" style={{ marginLeft: '0.35rem', color: '#f87171' }}>●</span>}
+                                                            </td>
+                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.confidence != null ? Number(row.confidence).toFixed(2) : '—'}</td>
+                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
+                                                            <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Main App Component
         function AdminDashboard() {
             const [activeTab, setActiveTab] = useState('home');
@@ -5835,6 +6041,7 @@
                 { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders' },
                 { id: 'feeds', label: 'Feeds', disabled: true },
+                { id: 'judge', label: 'Judge' },
                 { id: 'skips', label: 'Failures' }
             ];
 
@@ -6139,6 +6346,10 @@
                             <SkipsTab password={password} supabase={supabase} />
                         )}
 
+                        {activeTab === 'judge' && (
+                            <JudgeTab password={password} supabase={supabase} />
+                        )}
+
                         {activeTab === 'eos' && (
                             <ExecutiveOrdersTab password={password} supabase={supabase} />
                         )}
@@ -6147,7 +6358,7 @@
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
