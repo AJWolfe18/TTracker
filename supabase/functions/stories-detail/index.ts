@@ -81,8 +81,23 @@ serve(async (req: Request) => {
         story = survivor
         storyId = nextId
       }
+
+      // The loop can stop on the hop cap or cycle guard while story is STILL a tombstone. Never serve a
+      // merged/intermediate row — its articles are empty/stale. Return not-found instead. (Codex P1.)
+      if (story.merged_into_story_id || story.status === 'merged_into') {
+        console.error(
+          `[ADO-533] Tombstone chain from ${redirectedFrom} did not resolve to a live survivor (stopped at ${story.id})`
+        )
+        return new Response(
+          JSON.stringify({ error: 'Story not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        )
+      }
     }
-    
+
     // Get associated articles (changed from political_entries)
     const { data: articles, error: articlesError } = await supabase
       .from('article_story')

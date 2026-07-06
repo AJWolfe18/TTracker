@@ -20,8 +20,15 @@
 --        returned -> abort with run_merge_cap_reached. Because the whole function is one transaction, the
 --        reservation rolls back with the merge if any later step throws (no over-count on failure).
 --
+--   P1 — p_run_id is now REQUIRED. The hard cap is enforced per run_id; a caller that omitted it would
+--        bypass the cap entirely. merge_stories now returns missing_run_id (no mutation) when p_run_id is
+--        null/empty, and the cap reservation always runs. (DEFAULT NULL is kept only so a bad 2-arg call
+--        gets a clean missing_run_id reason instead of a PostgREST "no matching function" error.)
+--
 -- Everything else (P2 recency/slug recompute, reversibility snapshot, tombstone) is unchanged from 101.
--- Apply to TEST first, then PROD, before enabling the live cron.
+-- Apply to TEST first, then PROD, before enabling the live cron.  NOTE: if a prior version of THIS file
+-- was already applied to a DB, re-apply it (CREATE OR REPLACE is idempotent) so the required-run_id check
+-- is present.
 
 CREATE OR REPLACE FUNCTION public.merge_stories(
   p_loser_id    BIGINT,
@@ -49,6 +56,13 @@ BEGIN
   -- 1. Validate
   IF p_loser_id IS NULL OR p_survivor_id IS NULL OR p_loser_id = p_survivor_id THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_ids');
+  END IF;
+
+  -- p_run_id is REQUIRED (Codex P1): the DB-side hard cap is enforced per run_id, so a caller that omits
+  -- it (stale prompt, malformed run, ad-hoc service-role call) would otherwise bypass the cap entirely.
+  -- Reject before any mutation. The live agent always passes its RUN_ID.
+  IF p_run_id IS NULL OR p_run_id = '' THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'missing_run_id');
   END IF;
 
   -- 1a. Lock both story rows in ascending id order to serialize concurrent merges of the same
@@ -86,17 +100,16 @@ BEGIN
   --     ON CONFLICT ... WHERE merge_count < cap makes check-and-increment one atomic step, so concurrent
   --     same-run calls cannot collectively exceed the cap. No row returned => already at cap => abort.
   --     Rolls back with the transaction if a later merge step throws (never over-counts on failure).
-  IF p_run_id IS NOT NULL THEN
-    INSERT INTO judge_run_merge_count (run_id, merge_count, updated_at)
-    VALUES (p_run_id, 1, NOW())
-    ON CONFLICT (run_id) DO UPDATE
-      SET merge_count = judge_run_merge_count.merge_count + 1, updated_at = NOW()
-      WHERE judge_run_merge_count.merge_count < v_merge_cap
-    RETURNING merge_count INTO v_run_count;
-    IF v_run_count IS NULL THEN
-      RETURN jsonb_build_object('ok', false, 'reason', 'run_merge_cap_reached',
-                                'cap', v_merge_cap, 'run_id', p_run_id);
-    END IF;
+  -- (p_run_id is guaranteed non-null by the required-arg check above, so this always runs.)
+  INSERT INTO judge_run_merge_count (run_id, merge_count, updated_at)
+  VALUES (p_run_id, 1, NOW())
+  ON CONFLICT (run_id) DO UPDATE
+    SET merge_count = judge_run_merge_count.merge_count + 1, updated_at = NOW()
+    WHERE judge_run_merge_count.merge_count < v_merge_cap
+  RETURNING merge_count INTO v_run_count;
+  IF v_run_count IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'run_merge_cap_reached',
+                              'cap', v_merge_cap, 'run_id', p_run_id);
   END IF;
 
   -- 1c. Snapshot the loser's article membership BEFORE repointing, so a wrong merge is reversible.

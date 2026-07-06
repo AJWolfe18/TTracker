@@ -21,7 +21,7 @@ rides existing cloud-agent infra, no new secrets.
 |---|----------|-------------|--------|
 | 1.1 | `migrations/100_clustering_judge.sql` | ✅ **Already on PROD** (applied early by mistake; dormant, service_role-locked) | None — idempotent if re-run. Do NOT worry it's "ahead." |
 | 1.2 | `migrations/101_clustering_judge_hardening.sql` | ✅ TEST applied · ⬜ **PROD not applied** | Apply to PROD. Decline "Enable RLS". Run the verification queries at file bottom. |
-| 1.3 | `migrations/102_merge_stories_concurrency.sql` | ⬜ **TEST + PROD not applied** | Apply to TEST then PROD (after 101). Concurrency fixes to `merge_stories` (Codex). CREATE OR REPLACE, same signature. |
+| 1.3 | `migrations/102_merge_stories_concurrency.sql` | ⚠️ **TEST re-apply needed · PROD not applied** | `merge_stories` concurrency + required-`p_run_id` fixes (Codex). CREATE OR REPLACE — idempotent, safe to re-apply. TEST had an earlier copy; re-apply the current file to TEST, then apply to PROD. |
 
 **101 changes (why it's required before go-live):**
 - `find_similar_stories` RPC + `merge_stories` RPC replaced; new tables `judge_run_merge_count`,
