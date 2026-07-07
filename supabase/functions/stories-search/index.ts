@@ -27,7 +27,17 @@ serve(async (req: Request) => {
     // Build base query
     let query = supabase
       .from('stories')
-      .select('*')
+      // ADO-533: explicit column list (was select('*'), which dragged the ~6KB centroid_embedding_v1
+      // vector per row — egress rule #11). Mirrors the stories-active display field set.
+      .select(`
+        id, story_hash, primary_headline, primary_source, primary_source_url,
+        primary_source_domain, primary_actor, last_updated_at, first_seen_at,
+        status, severity, alarm_level, category, topic_tags, source_count,
+        has_opinion, summary_neutral, summary_spicy
+      `)
+      // ADO-533: never surface merged-away (tombstoned) stories in search, regardless of the
+      // status filter below (which is user-supplied and may be null = all statuses).
+      .neq('status', 'merged_into')
       .order('last_updated_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(limit + 1)
