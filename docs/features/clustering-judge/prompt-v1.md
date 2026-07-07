@@ -41,10 +41,15 @@ At the start of every run, read your environment variables:
 echo "SUPABASE_URL=${SUPABASE_URL}"
 echo "KEY_LENGTH=$(echo -n ${SUPABASE_SERVICE_ROLE_KEY} | wc -c)"
 echo "JUDGE_DRY_RUN=${JUDGE_DRY_RUN}"
+echo "DISCORD_WEBHOOK_SET=$([ -n "${DISCORD_WEBHOOK_URL}" ] && echo yes || echo no)"
 ```
 
 **Verify:** `SUPABASE_URL` must start with `https://` and `SUPABASE_SERVICE_ROLE_KEY` must be
 non-empty. If either is missing, log an error and stop immediately — no DB writes, no log rows.
+
+`DISCORD_WEBHOOK_URL` is **optional** — it powers the uncertain-verdict alert in Step 7. If it is unset
+or empty, the agent runs normally and Step 7 simply no-ops (never treat a missing webhook as an error).
+Never echo the webhook URL itself (it is a secret); only its presence, as above.
 
 ```
 API_BASE="${SUPABASE_URL}/rest/v1"
@@ -61,8 +66,9 @@ memory entity — session 2 wires the cron.)
 ## 2. Supabase PostgREST API Reference
 
 All database access uses PostgREST HTTP calls via `curl` in Bash. **Do NOT use WebFetch for any
-database call** — it cannot set custom headers. This agent makes no external-web calls at all; every
-read/write is PostgREST.
+database call** — it cannot set custom headers. Every read/write to the database is PostgREST. The agent
+makes exactly one non-database external call: the fire-and-forget Discord webhook POST in Step 7 (no
+response consumed, no secrets in the body, failures ignored) — there is no other external-web surface.
 
 ### Authentication Headers (required on every request)
 
@@ -240,7 +246,60 @@ contain apostrophes):
 `headline_a`/`headline_b` are **snapshots** taken now — after a merge the loser's headline still lives
 here for review, even though the story row is tombstoned.
 
-### Step 7: End of run
+### Step 7: Notify on uncertain verdicts (non-blocking Discord alert)
+
+`uncertain` is the only verdict that needs a human — `merge` and `keep` are self-resolving (a wrong
+`keep` is repaired next run; a `merge` is reversible via the tombstone). After all pairs are logged,
+post **one** Discord digest of this run's `uncertain` verdicts so a human can review + resolve them in
+the admin Judge tab.
+
+**Fail-safe / strictly non-blocking:** this step must NEVER abort the run, retry aggressively, or change
+any verdict. The durable record is already in `clustering_judge_log`; Discord is only a convenience ping.
+If `DISCORD_WEBHOOK_URL` is unset/empty, or the POST fails, log a one-line note and finish normally.
+
+1. Re-read **this run's** uncertain rows from the log you just wrote (single source of truth — guarantees
+   the ping matches the audit trail exactly):
+
+```bash
+curl -s "${API_BASE}/clustering_judge_log?run_id=eq.${RUN_ID}&verdict=eq.uncertain&select=story_id_a,story_id_b,headline_a,headline_b,confidence,centroid_sim,rationale" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" > /tmp/judge-uncertain.json
+# Guard: only proceed if the response is actually a JSON array (a PostgREST error is an object) — else N=0
+N=$(jq 'if type=="array" then length else 0 end' /tmp/judge-uncertain.json 2>/dev/null || echo 0)
+```
+
+2. If `N` is `0`, **skip silently** (no Discord message on a clean run). If `DISCORD_WEBHOOK_URL` is empty,
+   skip with a logged note. Otherwise build the payload with `jq` — `jq` handles all apostrophe/quote
+   escaping, so **never hand-build this JSON** (headlines/rationale contain apostrophes):
+
+```bash
+jq -n --slurpfile r /tmp/judge-uncertain.json --arg run "$RUN_ID" '
+  ($r[0]) as $rows |
+  ( "🟡 **Clustering Judge — " + ($rows|length|tostring) +
+    " uncertain verdict(s) need review**  (`" + $run + "`)\n" +
+    "Review + resolve in the PROD admin Judge tab (uncertain filter): https://trumpytracker.com/admin.html\n\n" +
+    ( $rows
+      | map("• #\(.story_id_a) vs #\(.story_id_b)  (conf \(.confidence), sim \(.centroid_sim))\n    A: \(.headline_a)\n    B: \(.headline_b)\n    ↳ \(.rationale)")
+      | join("\n\n") )
+  ) as $msg |
+  { content: ($msg[0:1900]) }' > /tmp/judge-discord.json
+```
+
+   (`$msg[0:1900]` keeps the message under Discord's 2000-char `content` limit; uncertain volume is
+   normally 0–2/run so truncation is rare.)
+
+3. POST it — **non-blocking**, ignore/continue on any non-2xx:
+
+```bash
+CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${DISCORD_WEBHOOK_URL}" \
+  -H "Content-Type: application/json" \
+  -d @/tmp/judge-discord.json)
+echo "discord notify http=${CODE}"
+```
+
+   Discord returns `204` on success. Any other code (or a curl failure): log
+   `"discord notify failed: <code>"` and continue — do not retry, do not fail the run.
+
+### Step 8: End of run
 
 After all pairs are processed, the run is complete. There is no per-run summary row (each pair row IS
 the record); the heartbeat row (Step 2) is only for the 0-candidate case.
@@ -301,8 +360,10 @@ sequence → keep, even if they share entities and sit minutes apart.
 ## 6. Security
 
 - Service key only; never echo it. All RPCs are `service_role`-locked (migration 100).
-- This agent has no external-web surface and writes only to `clustering_judge_log` (+ `merge_stories`
-  in live mode). It never writes editorial content, alarm levels, or `is_public`.
+- This agent writes only to `clustering_judge_log` (+ `merge_stories` in live mode). It never writes
+  editorial content, alarm levels, or `is_public`. Its only non-database network call is the
+  non-blocking Discord webhook POST in Step 7 (no response parsed, failures ignored, `DISCORD_WEBHOOK_URL`
+  never echoed).
 
 ---
 
@@ -320,6 +381,9 @@ sequence → keep, even if they share entities and sit minutes apart.
 6. 0 candidates → exactly one heartbeat row (both story ids NULL), then stop.
 7. No embeddings are ever fetched into the agent — all centroid math stays in SQL (RPC), per egress
    rule #11.
+8. The uncertain-verdict alert (Step 7) is strictly non-blocking: it never changes/creates a verdict,
+   never merges, and a missing `DISCORD_WEBHOOK_URL` or a failed POST never aborts the run. It fires only
+   for `uncertain` verdicts (0 uncertain → no message).
 
 ---
 
@@ -333,3 +397,5 @@ sequence → keep, even if they share entities and sit minutes apart.
   candidates). Candidates: `get_clustering_judge_candidates(p_min_sim, p_days, p_max_pairs)`.
 - Cadence (session 2): 3x/day, offset from RSS runs.
 - Binding merge ruling: `scripts/evals/clustering-gold-set.json` `meta.verification_status`.
+- Optional env var `DISCORD_WEBHOOK_URL`: powers the Step 7 uncertain-verdict alert (reuses the repo's
+  shared Discord webhook). Absent → Step 7 no-ops; alert is non-blocking either way.
