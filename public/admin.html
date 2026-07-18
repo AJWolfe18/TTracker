@@ -5506,13 +5506,22 @@
             const [sourceFilter, setSourceFilter] = useState('');
             const fetchTokenRef = useRef(0);
 
+            // Manual merge state (ADO-537) — human override for uncertain/missed Judge verdicts
+            const [manualSurvivor, setManualSurvivor] = useState('');
+            const [manualLoser, setManualLoser] = useState('');
+            const [manualPreview, setManualPreview] = useState(null);
+            const [manualBusy, setManualBusy] = useState(false);
+            const [manualError, setManualError] = useState(null);
+            const [manualResult, setManualResult] = useState(null);
+            const manualBusyRef = useRef(false);
+
             const TIME_RANGES = [
                 { label: '24h', value: 24 },
                 { label: '7d', value: 168 },
                 { label: '30d', value: 720 }
             ];
             const VERDICTS = ['merge', 'keep', 'uncertain'];
-            const SOURCES = ['judge-agent', 'inline'];
+            const SOURCES = ['judge-agent', 'inline', 'manual'];
 
             const VERDICT_COLOR = {
                 merge: '#f87171',      // red — a merge changes the record, worth the eye
@@ -5555,6 +5564,90 @@
                 setSourceFilter('');
             };
 
+            const parseManualIds = () => {
+                const survivor = Number(manualSurvivor);
+                const loser = Number(manualLoser);
+                if (!Number.isSafeInteger(survivor) || survivor <= 0 || !Number.isSafeInteger(loser) || loser <= 0) {
+                    return { error: 'Both story ids must be positive integers.' };
+                }
+                if (survivor === loser) {
+                    return { error: 'Survivor and loser must be different stories.' };
+                }
+                return { survivor, loser };
+            };
+
+            const callJudgeMerge = async (action) => {
+                const ids = parseManualIds();
+                if (ids.error) {
+                    setManualError(ids.error);
+                    return null;
+                }
+                manualBusyRef.current = true;
+                setManualBusy(true);
+                setManualError(null);
+                try {
+                    const { data: result, error: fnError } = await supabase.functions.invoke(
+                        'admin-judge-merge',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action, survivor_id: ids.survivor, loser_id: ids.loser }
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Request failed');
+                    return result;
+                } catch (err) {
+                    setManualError(err.message);
+                    return null;
+                } finally {
+                    manualBusyRef.current = false;
+                    setManualBusy(false);
+                }
+            };
+
+            const handleManualPreview = async () => {
+                setManualResult(null);
+                const result = await callJudgeMerge('preview');
+                if (result) setManualPreview(result);
+            };
+
+            const handleManualMerge = async () => {
+                if (manualBusyRef.current) return; // sync double-click guard (state update is async)
+                const result = await callJudgeMerge('merge');
+                if (!result) return;
+                if (result.ok && result.skipped) {
+                    // Double-submit or already-merged loser: the merge already happened — report as done, not as an error.
+                    setManualResult(`Story was already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do.`);
+                    setManualPreview(null);
+                    fetchVerdicts();
+                    return;
+                }
+                if (result.ok && !result.skipped) {
+                    setManualResult(`Merged #${result.loser_id} into #${result.survivor_id} — ${result.articles_moved} article${result.articles_moved === 1 ? '' : 's'} moved, survivor now has ${result.survivor_source_count} source${result.survivor_source_count === 1 ? '' : 's'}.${result.log_error ? ' (Warning: Judge log write failed — merge itself succeeded.)' : ''}`);
+                    setManualPreview(null);
+                    setManualSurvivor('');
+                    setManualLoser('');
+                    fetchVerdicts();
+                } else {
+                    setManualError(`Merge not executed: ${result.reason || 'unknown reason'}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
+                }
+            };
+
+            const swapManualIds = () => {
+                setManualSurvivor(manualLoser);
+                setManualLoser(manualSurvivor);
+                setManualPreview(null);
+                setManualError(null);
+            };
+
+            const prefillManual = (row) => {
+                setManualSurvivor(String(row.story_id_a));
+                setManualLoser(String(row.story_id_b));
+                setManualPreview(null);
+                setManualResult(null);
+                setManualError(null);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+
             const formatTimestamp = (iso) => {
                 if (!iso) return '—';
                 const d = new Date(iso);
@@ -5569,8 +5662,85 @@
 
             const isHeartbeat = (row) => row.story_id_a == null && row.story_id_b == null;
 
+            const manualInputStyle = { background: '#111827', border: '1px solid #374151', borderRadius: '6px', color: '#e5e7eb', padding: '0.4rem 0.6rem', width: '130px', fontSize: '0.9rem' };
+
+            const renderPreviewStory = (story, role, missingId) => (
+                <div style={{ flex: '1 1 260px', background: '#111827', border: `1px solid ${role === 'survivor' ? '#4ade80' : '#f87171'}`, borderRadius: '6px', padding: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: role === 'survivor' ? '#4ade80' : '#f87171', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                        {role === 'survivor' ? 'Survivor (keeps articles)' : 'Loser (tombstoned)'}
+                    </div>
+                    {story ? (
+                        <>
+                            <div style={{ color: '#e5e7eb', marginBottom: '0.35rem' }}>
+                                <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>#{story.id}</span> {story.primary_headline || '—'}
+                            </div>
+                            <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
+                                status: <strong style={{ color: story.status === 'active' ? '#4ade80' : '#fbbf24' }}>{story.status}</strong>
+                                {' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}
+                                {story.merged_into_story_id ? <span style={{ color: '#f87171' }}> · already merged into #{story.merged_into_story_id}</span> : null}
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ color: '#f87171' }}>Story #{missingId} not found</div>
+                    )}
+                </div>
+            );
+
             return (
                 <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    {/* Manual merge card — ADO-537: human override for uncertain/missed Judge verdicts */}
+                    <div className="card">
+                        <div className="card-header">
+                            <h2 className="card-title"><span>Manual Merge</span></h2>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                Merge two stories the Judge left separate (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> verdict you've reviewed). The loser's articles move to the survivor and the loser becomes a redirect — nothing is deleted. Use the <strong style={{ color: '#e5e7eb' }}>use</strong> button on a verdict row below to prefill, then Preview → Confirm.
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                                <label style={{ fontSize: '0.8rem', color: '#9ca3af', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    Survivor story id
+                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle}
+                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualPreview(null); setManualResult(null); }} />
+                                </label>
+                                <button onClick={swapManualIds} disabled={manualBusy} title="Swap survivor and loser" className="tab-btn" style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}>⇄</button>
+                                <label style={{ fontSize: '0.8rem', color: '#9ca3af', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    Loser story id
+                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle}
+                                        onChange={(e) => { setManualLoser(e.target.value); setManualPreview(null); setManualResult(null); }} />
+                                </label>
+                                <button onClick={handleManualPreview} disabled={manualBusy || !manualSurvivor || !manualLoser} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>
+                                    {manualBusy ? '...' : 'Preview'}
+                                </button>
+                                {manualPreview && manualPreview.ok && (
+                                    <button onClick={handleManualMerge} disabled={manualBusy}
+                                        style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                        {manualBusy ? '...' : `Confirm merge #${manualLoser} → #${manualSurvivor}`}
+                                    </button>
+                                )}
+                            </div>
+                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                            {manualResult && (
+                                <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#4ade80', fontSize: '0.9rem' }}>
+                                    {manualResult}
+                                </div>
+                            )}
+                            {manualPreview && (
+                                <>
+                                    {manualPreview.warnings && manualPreview.warnings.length > 0 && (
+                                        <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
+                                            {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                        {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
+                                        {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <h2 className="card-title"><span>Clustering Judge</span></h2>
@@ -5657,6 +5827,7 @@
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Conf</th>
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Sim</th>
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Rationale</th>
+                                                        <th style={{ padding: '0.5rem' }}></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -5687,6 +5858,15 @@
                                                             <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.confidence != null ? Number(row.confidence).toFixed(2) : '—'}</td>
                                                             <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
                                                             <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
+                                                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                                {!isHeartbeat(row) && !row.merged && (
+                                                                    <button onClick={() => prefillManual(row)}
+                                                                        title="Prefill the Manual Merge form with this pair (A = survivor, B = loser)"
+                                                                        style={{ background: '#374151', color: '#e5e7eb', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                                        use
+                                                                    </button>
+                                                                )}
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
