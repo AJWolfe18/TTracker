@@ -59,9 +59,17 @@ could re-attach to a tombstone via the ANN block or the hash-collision path).
 | 3.2 | `stories-detail` | multi-hop tombstone → survivor redirect | ⬜ | ⬜ |
 | 3.3 | `stories-search` | exclude `status='merged_into'`; narrowed select | ⬜ | ⬜ |
 | 3.4 | `admin-judge-log` | NEW — service_role backend for the admin Judge tab | ⬜ | ⬜ |
+| 3.5 | `admin-judge-merge` | NEW (ADO-537) — manual merge, password-gated | ✅ | ⬜ |
 
 Deploy: `npx supabase functions deploy <fn> --project-ref osjbulmltfpcoldydexg` (migration 100 must be
 applied first — it is, on PROD). TEST ref is `wnrjrywpcadwutfykflu`.
+
+**ADO-537 manual-merge PROD ordering (load-bearing, in this order):**
+1. Apply migration **104** (adds `'manual'` to the `clustering_judge_log` source CHECK)
+2. Deploy `admin-judge-merge` AND **redeploy `admin-judge-log`** (its `VALID_SOURCES` gained `'manual'`)
+3. Ship `admin.html`
+Violating 1→2: manual merges execute but their Judge-tab log row fails the CHECK (audit only in
+`story_merge_audit`). Violating 2→3: the tab's `manual` source filter is silently ignored (returns all sources).
 
 ---
 
