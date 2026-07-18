@@ -5677,6 +5677,7 @@
                             <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
                                 status: <strong style={{ color: story.status === 'active' ? '#4ade80' : '#fbbf24' }}>{story.status}</strong>
                                 {' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}
+                                {story.first_seen_at ? ` · first seen ${new Date(story.first_seen_at).toLocaleDateString()}` : ''}
                                 {story.merged_into_story_id ? <span style={{ color: '#f87171' }}> · already merged into #{story.merged_into_story_id}</span> : null}
                             </div>
                         </>
@@ -5712,7 +5713,7 @@
                                 <button onClick={handleManualPreview} disabled={manualBusy || !manualSurvivor || !manualLoser} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>
                                     {manualBusy ? '...' : 'Preview'}
                                 </button>
-                                {manualPreview && manualPreview.ok && (
+                                {manualPreview && manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
                                     <button onClick={handleManualMerge} disabled={manualBusy}
                                         style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
                                         {manualBusy ? '...' : `Confirm merge #${manualLoser} → #${manualSurvivor}`}

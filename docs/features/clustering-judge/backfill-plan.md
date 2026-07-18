@@ -73,7 +73,7 @@ Delta-doc: "follow prompt-v1.md with these overrides" — **the live prompt file
 ### 3. Admin visibility (needed BEFORE the dry-run eyeball — review finding #5)
 
 - `supabase/functions/admin-judge-log/index.ts:32` — add `'judge-backfill'` to `VALID_SOURCES` (today an unknown source is silently dropped → filter would show everything).
-- `public/admin.html:5515` — add `'judge-backfill'` to `SOURCES`.
+- `public/admin.html` (JudgeTab `SOURCES` const, ~line 5524 after ADO-537) — add `'judge-backfill'`.
 - Deploy the edge function to PROD before gate (b).
 
 ### 4. Cron
