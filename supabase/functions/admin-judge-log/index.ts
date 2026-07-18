@@ -7,7 +7,7 @@
 // Body (all optional):
 //   hours:   time window (24, 168=7d, 720=30d). Default 168. Clamped to [1, 720].
 //   verdict: filter by verdict ('merge' | 'keep' | 'uncertain').
-//   source:  filter by source ('judge-agent' | 'inline').
+//   source:  filter by source ('judge-agent' | 'inline' | 'manual').
 //   limit:   max rows returned. Default 100, max 500.
 //
 // Response:
@@ -29,7 +29,7 @@ const MAX_LIMIT = 500
 const DEFAULT_HOURS = 168
 const MAX_HOURS = 720 // 30 days
 const VALID_VERDICTS = new Set(['merge', 'keep', 'uncertain'])
-const VALID_SOURCES = new Set(['judge-agent', 'inline'])
+const VALID_SOURCES = new Set(['judge-agent', 'inline', 'manual'])
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

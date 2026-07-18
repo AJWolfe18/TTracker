@@ -51,7 +51,7 @@ Why DB-row config, not env var: **both crons share the PROD cloud environment** 
 - **Fresh security-lockdown block with `pronargs = 5`** (mig 100's block hardcodes 3; a new pg_proc row gets PUBLIC EXECUTE by default — review finding #4). REVOKE PUBLIC/anon/authenticated, GRANT service_role.
 - **End of migration: `NOTIFY pgrst, 'reload schema';`** (Codex P1) — PostgREST can hold a stale RPC schema cache after the arity change, which would break the LIVE judge's named-arg call ("function not found") or hide `p_anchor` from backfill. After applying (each env), verify BOTH call shapes through `/rest/v1/rpc/get_clustering_judge_candidates` — the old 3-named-arg body and the new anchored body — before any agent run.
 
-**c. Extend `clustering_judge_log` source CHECK** → `('inline','judge-agent','judge-backfill')` (drop + re-add constraint).
+**c. Extend `clustering_judge_log` source CHECK** → `('inline','judge-agent','manual','judge-backfill')` (drop + re-add constraint). ⚠️ ADO-537 (migration 104, shipped 2026-07-18) already added `'manual'` — the re-added constraint MUST keep it or admin manual-merge logging breaks.
 
 ### 2. Backfill prompt `docs/features/clustering-judge/prompt-backfill-v1.md`
 
