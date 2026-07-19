@@ -5,12 +5,17 @@
 //
 // POST /admin-judge-merge
 // Body:
-//   action:      'preview' | 'merge' (required)
+//   action:      'preview' | 'merge' | 'unmerge' (required)
 //   survivor_id: story id that keeps the articles (required, positive integer)
 //   loser_id:    story id that gets tombstoned into the survivor (required, positive integer)
 //
+// For 'unmerge' the two ids are just "the pair" — the function resolves which one is actually
+// tombstoned into the other (agent-sourced log rows don't guarantee which column was the loser)
+// and reverses that merge via the unmerge_story RPC (migration 105).
+//
 // preview response: { ok, survivor: {...}, loser: {...}, warnings: [...] }
 // merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error? }
+// unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored?, log_error? }
 //
 // The merge itself is the hardened merge_stories RPC (migrations 100/101/102): row-locked,
 // per-run hard-capped, snapshotted to story_merge_audit, loser tombstoned (never deleted).
@@ -61,8 +66,8 @@ Deno.serve(async (req) => {
     const survivorId = parseStoryId(body.survivor_id)
     const loserId = parseStoryId(body.loser_id)
 
-    if (action !== 'preview' && action !== 'merge') {
-      return jsonResponse({ error: "action must be 'preview' or 'merge'" }, 400)
+    if (action !== 'preview' && action !== 'merge' && action !== 'unmerge') {
+      return jsonResponse({ error: "action must be 'preview', 'merge' or 'unmerge'" }, 400)
     }
     if (survivorId == null || loserId == null) {
       return jsonResponse({ error: 'survivor_id and loser_id must be positive integers' }, 400)
@@ -103,6 +108,55 @@ Deno.serve(async (req) => {
         warnings.push(`Loser #${loserId} was already merged into #${loser.merged_into_story_id} — merge will be a no-op`)
       }
       return jsonResponse({ ok: !!(survivor && loser), survivor, loser, warnings })
+    }
+
+    if (action === 'unmerge') {
+      // Resolve which of the pair is actually the tombstoned loser (don't trust column order).
+      const a = survivor
+      const b = loser
+      let actualLoser = null
+      if (a && a.status === 'merged_into' && a.merged_into_story_id === b?.id) actualLoser = a
+      else if (b && b.status === 'merged_into' && b.merged_into_story_id === a?.id) actualLoser = b
+      if (!actualLoser) {
+        return jsonResponse({ ok: false, reason: 'not_merged_pair' })
+      }
+      const actualSurvivor = actualLoser === a ? b : a
+
+      const runId = `manual-admin-${Date.now()}`
+      const { data: result, error: rpcError } = await supabase.rpc('unmerge_story', {
+        p_loser_id: actualLoser.id,
+        p_run_id: runId
+      })
+      if (rpcError) {
+        console.error('unmerge_story RPC failed:', rpcError.message)
+        return jsonResponse({ error: 'Unmerge failed', detail: rpcError.message }, 500)
+      }
+      if (!result?.ok) {
+        return jsonResponse({ ...result, run_id: runId })
+      }
+
+      // Log the reversal (verdict='unmerge', migration 105). Non-fatal, same as merge logging.
+      const { error: logError } = await supabase.from('clustering_judge_log').insert({
+        source: 'manual',
+        story_id_a: actualSurvivor?.id ?? result.survivor_id,
+        story_id_b: actualLoser.id,
+        headline_a: actualSurvivor?.primary_headline ?? null,
+        headline_b: actualLoser.primary_headline,
+        verdict: 'unmerge',
+        rationale: `Manual unmerge via admin Judge tab: #${actualLoser.id} restored from #${result.survivor_id}`,
+        merged: false,
+        dry_run: false,
+        run_id: runId
+      })
+      if (logError) {
+        console.error('clustering_judge_log insert failed (unmerge already executed):', logError.message)
+      }
+
+      return jsonResponse({
+        ...result,
+        run_id: runId,
+        log_error: logError ? logError.message : undefined
+      })
     }
 
     // action === 'merge'

@@ -28,7 +28,7 @@ const DEFAULT_LIMIT = 100
 const MAX_LIMIT = 500
 const DEFAULT_HOURS = 168
 const MAX_HOURS = 720 // 30 days
-const VALID_VERDICTS = new Set(['merge', 'keep', 'uncertain'])
+const VALID_VERDICTS = new Set(['merge', 'keep', 'uncertain', 'unmerge'])
 const VALID_SOURCES = new Set(['judge-agent', 'inline', 'manual'])
 
 Deno.serve(async (req) => {
