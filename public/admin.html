@@ -5514,6 +5514,7 @@
             const [manualError, setManualError] = useState(null);
             const [manualResult, setManualResult] = useState(null);
             const [showMergeModal, setShowMergeModal] = useState(false);
+            const [unmergeRow, setUnmergeRow] = useState(null);
             const manualBusyRef = useRef(false);
 
             const TIME_RANGES = [
@@ -5521,13 +5522,14 @@
                 { label: '7d', value: 168 },
                 { label: '30d', value: 720 }
             ];
-            const VERDICTS = ['merge', 'keep', 'uncertain'];
+            const VERDICTS = ['merge', 'keep', 'uncertain', 'unmerge'];
             const SOURCES = ['judge-agent', 'inline', 'manual'];
 
             const VERDICT_COLOR = {
                 merge: '#f87171',      // red — a merge changes the record, worth the eye
                 keep: '#4ade80',       // green — left as-is
-                uncertain: '#fbbf24'   // amber — flagged
+                uncertain: '#fbbf24',  // amber — flagged
+                unmerge: '#60a5fa'     // blue — a merge was reversed
             };
 
             const fetchVerdicts = useCallback(async () => {
@@ -5669,13 +5671,34 @@
                 openMergeModal(row.story_id_a, row.story_id_b);
             };
 
-            // Escape closes the confirm popup (matches the Edit modals)
+            const handleUnmerge = async () => {
+                if (manualBusyRef.current || !unmergeRow) return;
+                const row = unmergeRow;
+                const result = await callJudgeMerge('unmerge', row.story_id_a, row.story_id_b);
+                if (!result) return; // error shown; popup stays open for cancel
+                setUnmergeRow(null);
+                if (result.ok) {
+                    setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.${result.log_error ? ' (Warning: Judge log write failed — unmerge itself succeeded.)' : ''}`);
+                    fetchVerdicts();
+                } else {
+                    const reasons = {
+                        not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
+                        no_merge_snapshot: 'No reversible snapshot exists for this merge',
+                        not_merged: 'That story is not currently merged away',
+                        snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
+                        survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
+                    };
+                    setManualError(`Unmerge not executed: ${reasons[result.reason] || result.reason || 'unknown reason'}`);
+                }
+            };
+
+            // Escape closes whichever confirm popup is open (matches the Edit modals)
             useEffect(() => {
-                if (!showMergeModal) return;
-                const onKey = (e) => { if (e.key === 'Escape') closeMergeModal(); };
+                if (!showMergeModal && !unmergeRow) return;
+                const onKey = (e) => { if (e.key === 'Escape') { closeMergeModal(); setUnmergeRow(null); } };
                 window.addEventListener('keydown', onKey);
                 return () => window.removeEventListener('keydown', onKey);
-            }, [showMergeModal]);
+            }, [showMergeModal, unmergeRow]);
 
             const formatTimestamp = (iso) => {
                 if (!iso) return '—';
@@ -5743,7 +5766,7 @@
                                     {manualBusy ? '...' : 'Review & merge…'}
                                 </button>
                             </div>
-                            {manualError && !showMergeModal && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                            {manualError && !showMergeModal && !unmergeRow && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
                             {manualResult && (
                                 <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#4ade80', fontSize: '0.9rem' }}>
                                     {manualResult}
@@ -5784,6 +5807,31 @@
                                     </div>
                                 </div>
                             )}
+                            {unmergeRow && (
+                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setUnmergeRow(null); }}>
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h3 className="modal-title">Undo this merge?</h3>
+                                            <button className="modal-close" onClick={() => setUnmergeRow(null)}>×</button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                            <div style={{ color: '#d1d5db', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                                                <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_a}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_a || '—'}</strong></div>
+                                                <div style={{ marginBottom: '0.75rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_b}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_b || '—'}</strong></div>
+                                                The absorbed story gets its articles back and becomes its own live story again. The stats of both stories are recalculated.
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button onClick={() => setUnmergeRow(null)} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                            <button onClick={handleUnmerge} disabled={manualBusy}
+                                                style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                {manualBusy ? 'Unmerging…' : 'Unmerge these stories'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -5808,7 +5856,7 @@
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, note the story ids for a manual unwind.
+                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, hit <strong style={{ color: '#60a5fa' }}>unmerge</strong> on that row to reverse it.
                             </div>
 
                             {/* filter chips */}
@@ -5905,7 +5953,14 @@
                                                             <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
                                                             <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
                                                             <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
-                                                                {!isHeartbeat(row) && !row.merged && (
+                                                                {!isHeartbeat(row) && row.merged && (
+                                                                    <button onClick={() => { setManualError(null); setManualResult(null); setUnmergeRow(row); }}
+                                                                        title="Reverse this merge — restores the absorbed story as its own story"
+                                                                        style={{ background: '#1e3a5f', color: '#60a5fa', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                                        unmerge
+                                                                    </button>
+                                                                )}
+                                                                {!isHeartbeat(row) && !row.merged && row.verdict !== 'unmerge' && (
                                                                     <button onClick={() => prefillManual(row)}
                                                                         title="Open the merge popup with this pair (A = kept, B = absorbed — swappable in the popup)"
                                                                         style={{ background: '#374151', color: '#e5e7eb', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
