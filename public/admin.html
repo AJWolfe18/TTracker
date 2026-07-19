@@ -5725,19 +5725,18 @@
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                Merge two stories the Judge left separate (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> verdict you've reviewed). <strong style={{ color: '#4ade80' }}>The survivor is KEPT</strong> — its headline stays and it gains the other story's articles; <strong style={{ color: '#f87171' }}>the loser becomes a redirect</strong> to it (nothing is deleted). The <strong style={{ color: '#e5e7eb' }}>use</strong> button on a verdict row prefills Story A as the survivor — hit <strong style={{ color: '#e5e7eb' }}>⇄</strong> if you want to keep Story B instead. A confirmation popup shows both stories before anything happens.
+                                Merge any two stories: click <strong style={{ color: '#e5e7eb' }}>use</strong> on a verdict row below (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> one you've reviewed), or type two story ids. A confirmation popup shows exactly what will happen — nothing changes until you confirm there.
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
                                 <label style={{ fontSize: '0.8rem', color: '#4ade80', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
-                                    KEEP — survivor id
-                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle}
-                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualPreview(null); setManualResult(null); }} />
+                                    Keep
+                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualResult(null); }} />
                                 </label>
-                                <button onClick={swapManualIds} disabled={manualBusy} title="Swap survivor and loser" className="tab-btn" style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}>⇄</button>
                                 <label style={{ fontSize: '0.8rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
-                                    ABSORB — loser id
-                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle}
-                                        onChange={(e) => { setManualLoser(e.target.value); setManualPreview(null); setManualResult(null); }} />
+                                    Absorb
+                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualLoser(e.target.value); setManualResult(null); }} />
                                 </label>
                                 <button onClick={() => openMergeModal(manualSurvivor, manualLoser)} disabled={manualBusy || !manualSurvivor || !manualLoser}
                                     style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: (manualBusy || !manualSurvivor || !manualLoser) ? 'not-allowed' : 'pointer', opacity: (manualBusy || !manualSurvivor || !manualLoser) ? 0.5 : 1 }}>
