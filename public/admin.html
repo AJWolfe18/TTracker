@@ -5513,6 +5513,7 @@
             const [manualBusy, setManualBusy] = useState(false);
             const [manualError, setManualError] = useState(null);
             const [manualResult, setManualResult] = useState(null);
+            const [showMergeModal, setShowMergeModal] = useState(false);
             const manualBusyRef = useRef(false);
 
             const TIME_RANGES = [
@@ -5564,9 +5565,9 @@
                 setSourceFilter('');
             };
 
-            const parseManualIds = () => {
-                const survivor = Number(manualSurvivor);
-                const loser = Number(manualLoser);
+            const validateManualIds = (survivorVal, loserVal) => {
+                const survivor = Number(survivorVal);
+                const loser = Number(loserVal);
                 if (!Number.isSafeInteger(survivor) || survivor <= 0 || !Number.isSafeInteger(loser) || loser <= 0) {
                     return { error: 'Both story ids must be positive integers.' };
                 }
@@ -5576,12 +5577,7 @@
                 return { survivor, loser };
             };
 
-            const callJudgeMerge = async (action) => {
-                const ids = parseManualIds();
-                if (ids.error) {
-                    setManualError(ids.error);
-                    return null;
-                }
+            const callJudgeMerge = async (action, survivorId, loserId) => {
                 manualBusyRef.current = true;
                 setManualBusy(true);
                 setManualError(null);
@@ -5590,7 +5586,7 @@
                         'admin-judge-merge',
                         {
                             headers: { 'x-admin-password': password },
-                            body: { action, survivor_id: ids.survivor, loser_id: ids.loser }
+                            body: { action, survivor_id: survivorId, loser_id: loserId }
                         }
                     );
                     if (fnError) throw new Error(fnError.message || 'Request failed');
@@ -5604,26 +5600,45 @@
                 }
             };
 
-            const handleManualPreview = async () => {
+            // Fetches the two stories and opens the confirm popup. survivorVal/loserVal are passed
+            // explicitly (not read from state) so prefillManual can open it in the same tick.
+            const openMergeModal = async (survivorVal, loserVal) => {
+                const ids = validateManualIds(survivorVal, loserVal);
+                if (ids.error) {
+                    setManualError(ids.error);
+                    return;
+                }
                 setManualResult(null);
-                const result = await callJudgeMerge('preview');
-                if (result) setManualPreview(result);
+                const result = await callJudgeMerge('preview', ids.survivor, ids.loser);
+                if (result) {
+                    setManualPreview(result);
+                    setShowMergeModal(true);
+                }
+            };
+
+            const closeMergeModal = () => {
+                setShowMergeModal(false);
+                setManualPreview(null);
             };
 
             const handleManualMerge = async () => {
                 if (manualBusyRef.current) return; // sync double-click guard (state update is async)
-                const result = await callJudgeMerge('merge');
-                if (!result) return;
+                const ids = validateManualIds(manualSurvivor, manualLoser);
+                if (ids.error) {
+                    setManualError(ids.error);
+                    return;
+                }
+                const result = await callJudgeMerge('merge', ids.survivor, ids.loser);
+                if (!result) return; // error already shown; keep the popup open for retry/cancel
+                closeMergeModal();
                 if (result.ok && result.skipped) {
                     // Double-submit or already-merged loser: the merge already happened — report as done, not as an error.
                     setManualResult(`Story was already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do.`);
-                    setManualPreview(null);
                     fetchVerdicts();
                     return;
                 }
                 if (result.ok && !result.skipped) {
                     setManualResult(`Merged #${result.loser_id} into #${result.survivor_id} — ${result.articles_moved} article${result.articles_moved === 1 ? '' : 's'} moved, survivor now has ${result.survivor_source_count} source${result.survivor_source_count === 1 ? '' : 's'}.${result.log_error ? ' (Warning: Judge log write failed — merge itself succeeded.)' : ''}`);
-                    setManualPreview(null);
                     setManualSurvivor('');
                     setManualLoser('');
                     fetchVerdicts();
@@ -5632,21 +5647,35 @@
                 }
             };
 
+            // Swap keep/absorb roles; if the popup is open, re-preview with the swapped roles.
             const swapManualIds = () => {
-                setManualSurvivor(manualLoser);
-                setManualLoser(manualSurvivor);
-                setManualPreview(null);
+                const s = manualSurvivor;
+                const l = manualLoser;
+                setManualSurvivor(l);
+                setManualLoser(s);
                 setManualError(null);
+                if (showMergeModal) {
+                    openMergeModal(l, s);
+                } else {
+                    setManualPreview(null);
+                }
             };
 
             const prefillManual = (row) => {
                 setManualSurvivor(String(row.story_id_a));
                 setManualLoser(String(row.story_id_b));
-                setManualPreview(null);
                 setManualResult(null);
                 setManualError(null);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                openMergeModal(row.story_id_a, row.story_id_b);
             };
+
+            // Escape closes the confirm popup (matches the Edit modals)
+            useEffect(() => {
+                if (!showMergeModal) return;
+                const onKey = (e) => { if (e.key === 'Escape') closeMergeModal(); };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [showMergeModal]);
 
             const formatTimestamp = (iso) => {
                 if (!iso) return '—';
@@ -5696,7 +5725,7 @@
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                Merge two stories the Judge left separate (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> verdict you've reviewed). <strong style={{ color: '#4ade80' }}>The survivor is KEPT</strong> — its headline stays and it gains the other story's articles; <strong style={{ color: '#f87171' }}>the loser becomes a redirect</strong> to it (nothing is deleted). The <strong style={{ color: '#e5e7eb' }}>use</strong> button on a verdict row prefills Story A as the survivor — hit <strong style={{ color: '#e5e7eb' }}>⇄</strong> if you want to keep Story B instead. Then Preview → Confirm.
+                                Merge two stories the Judge left separate (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> verdict you've reviewed). <strong style={{ color: '#4ade80' }}>The survivor is KEPT</strong> — its headline stays and it gains the other story's articles; <strong style={{ color: '#f87171' }}>the loser becomes a redirect</strong> to it (nothing is deleted). The <strong style={{ color: '#e5e7eb' }}>use</strong> button on a verdict row prefills Story A as the survivor — hit <strong style={{ color: '#e5e7eb' }}>⇄</strong> if you want to keep Story B instead. A confirmation popup shows both stories before anything happens.
                             </div>
                             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
                                 <label style={{ fontSize: '0.8rem', color: '#4ade80', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
@@ -5710,34 +5739,51 @@
                                     <input type="number" min="1" value={manualLoser} style={manualInputStyle}
                                         onChange={(e) => { setManualLoser(e.target.value); setManualPreview(null); setManualResult(null); }} />
                                 </label>
-                                <button onClick={handleManualPreview} disabled={manualBusy || !manualSurvivor || !manualLoser} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>
-                                    {manualBusy ? '...' : 'Preview'}
+                                <button onClick={() => openMergeModal(manualSurvivor, manualLoser)} disabled={manualBusy || !manualSurvivor || !manualLoser}
+                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: (manualBusy || !manualSurvivor || !manualLoser) ? 'not-allowed' : 'pointer', opacity: (manualBusy || !manualSurvivor || !manualLoser) ? 0.5 : 1 }}>
+                                    {manualBusy ? '...' : 'Review & merge…'}
                                 </button>
-                                {manualPreview && manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
-                                    <button onClick={handleManualMerge} disabled={manualBusy}
-                                        style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                        {manualBusy ? '...' : `Confirm merge #${manualLoser} → #${manualSurvivor}`}
-                                    </button>
-                                )}
                             </div>
-                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                            {manualError && !showMergeModal && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
                             {manualResult && (
                                 <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#4ade80', fontSize: '0.9rem' }}>
                                     {manualResult}
                                 </div>
                             )}
-                            {manualPreview && (
-                                <>
-                                    {manualPreview.warnings && manualPreview.warnings.length > 0 && (
-                                        <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
-                                            {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                            {showMergeModal && manualPreview && (
+                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeMergeModal(); }}>
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h3 className="modal-title">Confirm story merge</h3>
+                                            <button className="modal-close" onClick={closeMergeModal}>×</button>
                                         </div>
-                                    )}
-                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                        {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
-                                        {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
+                                        <div className="modal-body">
+                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                            {manualPreview.warnings && manualPreview.warnings.length > 0 && (
+                                                <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
+                                                    {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                                {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
+                                                {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
+                                            </div>
+                                            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#9ca3af' }}>
+                                                The <span style={{ color: '#f87171' }}>red</span> story's articles move into the <span style={{ color: '#4ade80' }}>green</span> story, and the red one becomes a redirect. There's no undo from the UI yet — double-check before confirming.
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button onClick={swapManualIds} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>⇄ Swap keep/absorb</button>
+                                            <button onClick={closeMergeModal} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                            {manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
+                                                <button onClick={handleManualMerge} disabled={manualBusy}
+                                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                    {manualBusy ? 'Merging…' : `Merge #${manualLoser} into #${manualSurvivor}`}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -5862,7 +5908,7 @@
                                                             <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
                                                                 {!isHeartbeat(row) && !row.merged && (
                                                                     <button onClick={() => prefillManual(row)}
-                                                                        title="Prefill the Manual Merge form with this pair (A = survivor, B = loser)"
+                                                                        title="Open the merge popup with this pair (A = kept, B = absorbed — swappable in the popup)"
                                                                         style={{ background: '#374151', color: '#e5e7eb', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
                                                                         use
                                                                     </button>
