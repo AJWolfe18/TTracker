@@ -161,6 +161,7 @@ Tags: [tags if any]
 [Action taken or key finding]
 
 Do NOT return full descriptions, field dumps, or raw API responses.
+```
 
 **EXCEPTION — detail mode:** If the request says "details", "full", or the ticket
 content is needed to implement work, return ALL human-relevant content cleaned of
@@ -176,8 +177,33 @@ JSON noise is discarded in the shell pipe before it enters context (~0.5-2K
 tokens for a full card):
 
 ```bash
-PAT=$(jq -r '.mcpServers["azure-devops"].env.ADO_MCP_AUTH_TOKEN' /c/Users/Josh/.claude/settings.json)
-curl -s -u ":$PAT" "https://dev.azure.com/AJWolfe92/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" \
+ADO_ORG="https://dev.azure.com/AJWolfe92"
+
+# Do NOT hardcode which file holds "the" PAT. Verified 2026-07-25: the token in
+# the TTracker entry of ~/.claude.json is DEAD (ADO answers 203) while the one in
+# global settings.json is live (200). Which is current changes whenever a token is
+# regenerated, so collect every candidate and use the first that authenticates.
+# A dead PAT does NOT return 401 — ADO returns 203 and a sign-in page, so an
+# untested token fails silently and looks like "work item not found".
+# $HOME (not /c/Users/Josh) so this survives a different machine or username.
+ado_pat() {
+  local t
+  for t in \
+    "$(jq -r '.mcpServers["azure-devops"].env.ADO_MCP_AUTH_TOKEN // empty' "$HOME/.claude/settings.json" 2>/dev/null)" \
+    $(jq -r '[.projects[]?.mcpServers?["azure-devops"]?.env.ADO_MCP_AUTH_TOKEN] | unique | .[]? // empty' "$HOME/.claude.json" 2>/dev/null)
+  do
+    [ -n "$t" ] || continue
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' -u ":$t" "$ADO_ORG/_apis/projects?api-version=7.1")" = "200" ]; then
+      printf '%s' "$t"; return 0
+    fi
+  done
+  echo "No working ADO PAT. Regenerate at $ADO_ORG → User settings → Personal access tokens," >&2
+  echo "then update BOTH ~/.claude/settings.json and the project entry in ~/.claude.json." >&2
+  return 1
+}
+
+PAT=$(ado_pat) || return 2>/dev/null || exit 1
+curl -s -u ":$PAT" "$ADO_ORG/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" \
   | jq '{id, title: .fields["System.Title"], type: .fields["System.WorkItemType"], state: .fields["System.State"], description: .fields["System.Description"], ac: .fields["Microsoft.VSTS.Common.AcceptanceCriteria"]}' \
   | sed -E 's/<[^>]+>/ /g'
 ```
@@ -185,7 +211,6 @@ curl -s -u ":$PAT" "https://dev.azure.com/AJWolfe92/TTracker/_apis/wit/workitems
 Add `/comments` endpoint (`.../workitems/<ID>/comments?api-version=7.1-preview`)
 when decision history matters. Use the subagent route for writes (create/update/
 transition) — the MCP handles field formatting rules there.
-```
 
 ---
 
