@@ -73,6 +73,13 @@ Handle ADO operations via subagent to isolate 20-30K token context cost. ADO MCP
 
 ## Instructions
 
+**Route by operation type (cheapest first):**
+- **Reads (get status / full card):** use the REST + jq shortcut below — no subagent, ~0.5-2K tokens
+- **Writes (create / update / transition / comment):** use a subagent. Spawn it ONCE per
+  session with `name: "ado-agent"`, then send subsequent operations to the SAME agent via
+  `SendMessage(to: "ado-agent")` — this reuses its context instead of paying ~45K startup
+  per operation.
+
 Launch a **Task tool (general-purpose subagent)** with the ADO operation. The subagent will:
 
 1. Execute the ADO operation using MCP tools
@@ -154,6 +161,30 @@ Tags: [tags if any]
 [Action taken or key finding]
 
 Do NOT return full descriptions, field dumps, or raw API responses.
+
+**EXCEPTION — detail mode:** If the request says "details", "full", or the ticket
+content is needed to implement work, return ALL human-relevant content cleaned of
+API noise: full description + acceptance criteria (as markdown, not HTML),
+comments containing decisions/requirements/blockers, and linked item IDs+titles.
+Still omit raw JSON, field IDs, user objects, and revision history — that's the
+bulk of the payload. If cleaned content exceeds ~3K tokens, write it to the
+scratchpad and return the file path plus a summary.
+
+**DETAIL-MODE SHORTCUT (no subagent needed):** For full-card pulls, main Claude
+can skip the subagent entirely and hit the ADO REST API with jq filtering — the
+JSON noise is discarded in the shell pipe before it enters context (~0.5-2K
+tokens for a full card):
+
+```bash
+PAT=$(jq -r '.mcpServers["azure-devops"].env.ADO_MCP_AUTH_TOKEN' /c/Users/Josh/.claude/settings.json)
+curl -s -u ":$PAT" "https://dev.azure.com/AJWolfe92/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" \
+  | jq '{id, title: .fields["System.Title"], type: .fields["System.WorkItemType"], state: .fields["System.State"], description: .fields["System.Description"], ac: .fields["Microsoft.VSTS.Common.AcceptanceCriteria"]}' \
+  | sed -E 's/<[^>]+>/ /g'
+```
+
+Add `/comments` endpoint (`.../workitems/<ID>/comments?api-version=7.1-preview`)
+when decision history matters. Use the subagent route for writes (create/update/
+transition) — the MCP handles field formatting rules there.
 ```
 
 ---
