@@ -58,42 +58,110 @@ If you rotate the PAT and only update `settings.json` / `settings.local.json`, t
 
 From bash, in the project repo root:
 
+> **Read this first — there can be MORE THAN ONE entry for the same repo.**
+> Claude Code keys projects by the literal path string it was launched with, so
+> the same repo appears under both `C:\\Users\\...\\TTracker` and
+> `C:/Users/.../TTracker`. They can hold **different tokens**. Confirmed
+> 2026-07-25: the backslash entry held a dead PAT while the forward-slash entry
+> (the live one — it has `lastSessionId`) held a working one.
+>
+> **Never use `.find()` to grab "the" entry.** It returns whichever comes first,
+> which is often the stale fossil. Earlier versions of this doc did exactly that,
+> which made the diagnostic report a dead token while MCP was working fine, and
+> made the fix write a rotated PAT into the entry Claude Code never reads.
+
+From bash, in the project repo root:
+
 ```bash
 node -e "
-const d = require('C:/Users/Josh/.claude.json');
-const key = Object.keys(d.projects).find(k => k.toLowerCase().replace(/[\\\\/]/g,'/').endsWith('github/ttracker'));
-const tok = d.projects[key].mcpServers['azure-devops'].env.ADO_MCP_AUTH_TOKEN;
-console.log('Token in ~/.claude.json (first 20):', tok.slice(0,20));
+const os=require('os'), path=require('path'), fs=require('fs');
+const d = JSON.parse(fs.readFileSync(path.join(os.homedir(),'.claude.json'),'utf8'));
+for (const [k,v] of Object.entries(d.projects||{})) {
+  const t = v.mcpServers?.['azure-devops']?.env?.ADO_MCP_AUTH_TOKEN;
+  if (!t) continue;
+  console.log((v.lastSessionId ? 'LIVE  ' : 'fossil') + '  ' + JSON.stringify(k));
+  console.log('        token ...' + t.slice(-8) + '  (fields: ' + Object.keys(v).length + ')');
+}
 "
 ```
 
-Compare to the PAT you *think* is active (the one in `settings.local.json`, or the one you just generated in the ADO portal).
+Every entry is listed, so duplicates are visible. The one marked `LIVE` (has a
+`lastSessionId`, many more fields) is the one Claude Code actually reads.
 
-- **Match?** PAT itself is the problem — generate a new one.
-- **No match?** This is the bug. Fix below.
+Now test each distinct token against the API rather than guessing — **a dead ADO
+PAT does not reliably return 401**; depending on endpoint it can answer `203`
+with a sign-in page, so an untested token fails silently and looks like "work
+item not found":
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -u ":<TOKEN>" \
+  "https://dev.azure.com/AJWolfe92/_apis/projects?api-version=7.1"
+```
+
+`200` = live. Anything else = dead.
+
+- **The LIVE entry has a working token?** MCP is fine; your problem is elsewhere.
+- **The LIVE entry has a dead token?** Rotate and apply the fix below.
 
 ## The Fix (one command, then restart)
 
 From the project repo root:
 
-```bash
-node -e "
-const fs = require('fs');
-const path = 'C:/Users/Josh/.claude.json';
+**Close Claude Code before running this.** A live session rewrites
+`~/.claude.json` when it exits and will silently undo the edit.
+
+Updates **every** entry for the repo, not just the first — that is the whole
+point. `os.homedir()` rather than a hardcoded `C:/Users/Josh` so it works on any
+machine.
+
+Save as `fix-pat.js` and run `node fix-pat.js` — **do not** paste this into
+`node -e "..."`. Bash double-quotes eat backslashes, so a regex like
+`/[\\/]+/` silently collapses to "forward slash only" and the backslash entry
+stops matching. Verified 2026-07-25: identical code matched **2** entries from a
+file and **1** from `node -e`. That is very likely how the earlier version of
+this doc ended up only ever touching one entry.
+
+The code below avoids a literal backslash entirely (`String.fromCharCode(92)`)
+so it behaves the same however it is invoked.
+
+```javascript
+const fs = require('fs'), os = require('os'), path = require('path');
+
+const SLUG = 'github/ttracker';          // repo slug, lowercase, forward slashes
 const NEW_PAT = 'PASTE_NEW_PAT_HERE';
-const d = JSON.parse(fs.readFileSync(path,'utf8'));
-const key = Object.keys(d.projects).find(k => k.toLowerCase().replace(/[\\\\/]/g,'/').endsWith('github/ttracker'));
-// backup first
-fs.copyFileSync(path, path + '.bak-' + Date.now());
-d.projects[key].mcpServers['azure-devops'].env.ADO_MCP_AUTH_TOKEN = NEW_PAT;
-fs.writeFileSync(path, JSON.stringify(d, null, 2));
-console.log('Updated. New token first 20:', NEW_PAT.slice(0,20));
-"
+
+const BS = String.fromCharCode(92);      // backslash, without writing one
+const norm = (s) => s.toLowerCase().split(BS).join('/').replace(/\/+$/, '');
+
+const p = path.join(os.homedir(), '.claude.json');
+const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+
+const keys = Object.keys(d.projects || {}).filter((k) => norm(k).endsWith(SLUG));
+if (!keys.length) throw new Error('no project entry matching ' + SLUG);
+
+fs.copyFileSync(p, p + '.bak-' + Date.now());
+let n = 0;
+for (const k of keys) {
+  const env = d.projects[k].mcpServers && d.projects[k].mcpServers['azure-devops']
+    && d.projects[k].mcpServers['azure-devops'].env;
+  if (!env) { console.log('skip (no azure-devops server): ' + k); continue; }
+  env.ADO_MCP_AUTH_TOKEN = NEW_PAT;
+  console.log('updated: ' + k);
+  n++;
+}
+fs.writeFileSync(p, JSON.stringify(d, null, 2));
+console.log('Done. ' + n + ' of ' + keys.length + ' matching entr(ies) updated.');
 ```
+
+Expect it to report **more than one** entry on this machine. If it reports only
+one, the duplicate did not match — re-check with the diagnostic above before
+assuming you are done.
 
 Then **fully close the Claude Code window** and reopen. ADO MCP now works.
 
-(Replace `github/ttracker` with the project slug if using this pattern on another repo.)
+There is also `fix-ado-pat.js` in the machine-setup bundle, which probes every
+token it finds and keeps only the one that authenticates — use that when you want
+the dead ones cleaned out rather than a specific value written in.
 
 ## Alternative Fix (Anthropic's official way)
 
