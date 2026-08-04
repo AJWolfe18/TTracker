@@ -4,7 +4,7 @@
 
 **Goal:** Get ADO-537 (admin Judge tab manual merge + unmerge) verified end-to-end on TEST and deployed to PROD in the load-bearing order, so a wrong story merge is reversible before the ADO-531 backfill runs 12k stories through the Judge.
 
-**Architecture:** No new feature code is written in this plan — all of ADO-537 is already committed on `test` and code-reviewed: the six feature commits `50b2ce6`..`dfdaf6a` **plus `5134782`** (codex round-3 foldin that added `NOTIFY pgrst` to migration 105 — Task 6 must cherry-pick all seven). What is missing is (a) migration 105 was never applied to TEST, so the unmerge path has never executed even once, and (b) nothing from ADO-537 has reached PROD. This plan applies the SQL, redeploys the two edge functions, drives a full merge→unmerge round trip through the admin UI, then promotes via a PR to `main` with a strict SQL → edge functions → frontend ordering.
+**Architecture:** No new feature code is written in this plan — all of ADO-537 is already committed on `test` and code-reviewed: the six feature commits `50b2ce6`..`dfdaf6a` **plus `5134782`** (codex round-3 foldin that added `NOTIFY pgrst` to migration 105) **plus `99ee110`** (story-id search in the Judge tab, added during TEST verification at Josh's request) — Task 6 must cherry-pick all eight. What is missing is (a) migration 105 was never applied to TEST, so the unmerge path has never executed even once, and (b) nothing from ADO-537 has reached PROD. This plan applies the SQL, redeploys the two edge functions, drives a full merge→unmerge round trip through the admin UI, then promotes via a PR to `main` with a strict SQL → edge functions → frontend ordering.
 
 **Tech Stack:** Supabase Postgres (migrations pasted by hand into the SQL Editor), Supabase Edge Functions (Deno, deployed via `npx supabase functions deploy`), vanilla-React `public/admin.html` served by Netlify, ADO for status.
 
@@ -461,7 +461,12 @@ git checkout -b deploy/ado-537-manual-merge-unmerge origin/main
 ```bash
 git cherry-pick 50b2ce6 1646366 8b19b16 96187f1 c80b83f dfdaf6a
 git cherry-pick 5134782
+git cherry-pick 99ee110
 ```
+
+`99ee110` (story-id search in the Judge tab — admin.html + admin-judge-log only, both already in
+this PR's file set, no new files) applies on top; it exists because Josh hit the "can't find an old
+merge" wall live during TEST verification.
 
 `5134782` (codex round-3 foldins) MUST ride along: it added Part F (`NOTIFY pgrst, 'reload schema'`)
 to `migrations/105_unmerge_story.sql`, and without it `main` would carry the pre-NOTIFY migration.
