@@ -55,8 +55,9 @@ didn't take, i.e. a migration didn't apply) · the dashboard failing to render a
   ```
 
 **(b) Edge functions — no CLI version rollback; rollback means redeploying older source**
-- **Before** Task 7 Step 2, snapshot the current PROD build: `npx supabase functions download
-  admin-judge-log --project-ref osjbulmltfpcoldydexg`
+- **Never run `supabase functions download` inside this repo** — it overwrites
+  `supabase/functions/admin-judge-log/index.ts` with the deployed (old) build, and the next deploy then
+  ships stale code. The older source already lives in git; use that:
 - `admin-judge-log` (pre-existing): `git checkout 93d952c -- supabase/functions/admin-judge-log/index.ts`,
   deploy, then `git checkout HEAD -- supabase/functions/admin-judge-log/index.ts` to restore the worktree.
 - `admin-judge-merge` is new to PROD, so rollback is deletion:
@@ -173,7 +174,20 @@ WHERE n.nspname = 'public' AND p.proname IN ('unmerge_story','recompute_story_fr
 Expected: the CHECK lists `'unmerge'`; both functions show `anon=f, authenticated=f, service_role=t`.
 **If anon or authenticated is `t`, STOP** — Part E of the migration didn't run; re-run just that DO block.
 
-- [ ] **Step 4: No commit** — nothing in the repo changed in this task.
+- [ ] **Step 4: Confirm PostgREST sees the new RPC (schema cache)**
+
+Migration 105 ends with `NOTIFY pgrst, 'reload schema'` (Part F) — verify it took before deploying
+anything that calls the RPC. Run (Supabase TEST MCP, non-mutating):
+```
+POST /rpc/unmerge_story  {"p_loser_id": null}
+```
+Expected: **either** `{"ok": false, "reason": "invalid_ids"}` (the key has EXECUTE) **or** a `42501`
+permission-denied (the key is anon and the Part E lockdown is working). Both outcomes prove the schema
+cache knows the function. The failure this catches is `PGRST202` / "Could not find the function" —
+if you see that, the cache is stale: Josh runs `NOTIFY pgrst, 'reload schema';` in the TEST SQL Editor
+and re-check.
+
+- [ ] **Step 5: No commit** — nothing in the repo changed in this task.
 
 ---
 
@@ -401,7 +415,7 @@ Update work item 537, set /fields/Microsoft.VSTS.Common.AcceptanceCriteria to:
 <li>AC2: Every manual merge writes a clustering_judge_log row with source='manual', verdict='merge' (migration 104), and a story_merge_audit snapshot of the loser's article ids.</li>
 <li>AC3: Admin Judge tab can unmerge a merged pair: snapshot articles return to the loser, the tombstone clears (status='active', merged_into_story_id=NULL), and both stories' centroid/entities/source_count recompute (migration 105).</li>
 <li>AC4: Unmerge writes a clustering_judge_log row with verdict='unmerge' and marks the story_merge_audit snapshot consumed (unmerged_at set), so the same merge cannot be reversed twice.</li>
-<li>AC5: Guard paths refuse rather than corrupt: a pair that is not merged returns not_merged_pair; a survivor that has itself been merged away returns survivor_moved; the confirm button is double-click guarded.</li>
+<li>AC5: Guard paths refuse rather than corrupt: a pair that is not merged returns not_merged_pair (verified live on TEST). The survivor_moved guard and the confirm-button double-click guard are present and code-reviewed but NOT staged live (staging survivor_moved needs a three-merge setup; see plan self-review).</li>
 <li>AC6: unmerge_story and recompute_story_from_members are SECURITY DEFINER, service_role-only (anon and authenticated EXECUTE revoked).</li>
 <li>AC7: Deployed to PROD in order (migration 104 then 105, then admin-judge-merge + admin-judge-log, then admin.html) and proven with one real round trip on PROD.</li>
 </ul>
@@ -410,8 +424,14 @@ Update work item 537, set /fields/Microsoft.VSTS.Common.AcceptanceCriteria to:
 - [ ] **Step 3: Mark AC1–AC6 verified**
 
 Against the actual observed output from Tasks 1–4 — AC1/AC2 from Task 4 Steps 2–3, AC3 from Task 4
-Step 5, AC4 from Task 3 Step 4 + Task 4, AC5 from Task 3 Step 5, AC6 from Task 1 Step 3. AC7 stays
-open until Task 8. **Any AC you cannot evidence stays NOT MET** — fix it or write it on the card.
+Step 5, AC4 from Task 3 Step 4 + Task 4, AC6 from Task 1 Step 3. AC7 stays open until Task 8.
+
+AC5 is deliberately split-evidence (codex P2): its live half (`not_merged_pair`) is proven by Task 3
+Step 5; its code-review half (`survivor_moved`, migration 105 lines 176–185, and the confirm-button
+double-click guard in `admin.html`) is **not** staged live. The AC text itself now says which is which,
+so marking AC5 MET against that text is honest — do not silently upgrade the code-review half to
+"verified live" in the ADO comment. **Any AC you cannot evidence stays NOT MET** — fix it or write it
+on the card.
 
 - [ ] **Step 4: No commit.**
 
@@ -586,13 +606,12 @@ Then the verification queries from each file's footer, and the grant check from 
 PROD. **`anon=f, authenticated=f, service_role=t` is a hard gate — do not proceed if either function is
 callable by anon.**
 
-- [ ] **Step 2: Snapshot the current build, then deploy the two edge functions**
+- [ ] **Step 2: Deploy the two edge functions**
 
-Rollback prep first — there is no CLI "redeploy previous version", so the only way back is older source:
-```bash
-npx supabase functions download admin-judge-log --project-ref osjbulmltfpcoldydexg
-```
-Then deploy:
+Do **NOT** run `supabase functions download` here (codex P1): it writes into this repo's
+`supabase/functions/admin-judge-log/`, overwriting the ADO-537 source with the old PROD build — so the
+very next deploy would ship the stale function (no `unmerge` in `VALID_VERDICTS`). Rollback doesn't
+need a download: the old build's source is already in git (`93d952c`, see Rollback (b)).
 ```bash
 npx supabase functions deploy admin-judge-merge --project-ref osjbulmltfpcoldydexg
 npx supabase functions deploy admin-judge-log   --project-ref osjbulmltfpcoldydexg
@@ -808,6 +827,18 @@ commit hashes and order, file list, `main`'s contents, all TEST fixtures, UI str
 Plus: `gh pr merge` ran from the wrong branch; the 104 bad-rows check could never fail where it was;
 the "load-bearing order" overstated 104→105; Task 3's coverage was oversold; `qa:smoke` isn't feature
 evidence; the manifest correction never reached `main`.
+
+**Codex round 3 (2026-08-03, post-plan) — all three findings reproduced and folded in:**
+1. [P1] Task 7 Step 2's `supabase functions download` would have overwritten the local
+   `admin-judge-log` source with the old PROD build immediately before deploying it (confirmed via CLI
+   help — download writes into the project's `supabase/functions/`). → download removed from Task 7
+   Step 2; Rollback (b) now warns against running it in-repo and relies on git (`93d952c`).
+2. [P1] Migration 105 created a new RPC + column without reloading PostgREST's schema cache, and the
+   edge function calls `unmerge_story` via `/rpc/`. → `NOTIFY pgrst, 'reload schema'` added to the
+   migration (Part F) plus a non-mutating PostgREST smoke as Task 1 Step 4 (`invalid_ids` or `42501`
+   both pass; `PGRST202` fails).
+3. [P2] Task 5 claimed AC5 verified by Task 3 Step 5, which only proves `not_merged_pair`. → AC5 text
+   and Task 5 Step 3 now state explicitly which half is live-verified and which is code-review-only.
 
 **One reviewer claim rejected:** that `article_story` has `PRIMARY KEY(article_id)`. The repo doesn't
 support it — that line is commented out in `migrations/001_rss_system_PRODUCTION_READY.sql:170` and the

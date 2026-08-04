@@ -240,6 +240,16 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- PART F: reload PostgREST schema cache
+-- ============================================================================
+-- The admin-judge-merge edge function calls unmerge_story via POST /rpc/, and verification reads
+-- select the new unmerged_at column — both need PostgREST's schema cache to know about this DDL.
+-- Hosted Supabase usually auto-reloads via the pgrst_ddl_watch event trigger, but be explicit
+-- rather than rely on it (same P1 rule as the ADO-531 backfill plan).
+
+NOTIFY pgrst, 'reload schema';
+
+-- ============================================================================
 -- VERIFICATION (run separately AFTER applying; read-only)
 -- ============================================================================
 -- 1) Column + constraint:
