@@ -456,11 +456,18 @@ git fetch origin
 git checkout -b deploy/ado-537-manual-merge-unmerge origin/main
 ```
 
-- [ ] **Step 2: Cherry-pick the six ADO-537 commits in order**
+- [ ] **Step 2: Cherry-pick the six ADO-537 commits in order, then the codex-foldin commit**
 
 ```bash
 git cherry-pick 50b2ce6 1646366 8b19b16 96187f1 c80b83f dfdaf6a
+git cherry-pick 5134782
 ```
+
+`5134782` (codex round-3 foldins) MUST ride along: it added Part F (`NOTIFY pgrst, 'reload schema'`)
+to `migrations/105_unmerge_story.sql`, and without it `main` would carry the pre-NOTIFY migration.
+It will hit the same modify/delete conflict pattern as below — it also edits this plan doc, which does
+not exist on `main`. Resolve the same way: `git rm docs/superpowers/plans/2026-08-03-ado-537-unmerge-verify-and-prod.md`
+then `git cherry-pick --continue`. The plan doc stays test-only; only the migration change ships.
 
 > ⚠️ **The first commit WILL conflict. This is expected and the resolution is counter-intuitive.**
 > Verified by dry-run against `origin/main`:
@@ -482,16 +489,17 @@ git cherry-pick 50b2ce6 1646366 8b19b16 96187f1 c80b83f dfdaf6a
 > The one-line edits being dropped are ADO-537 cross-references inside a doc that doesn't exist on
 > `main` — nothing of value is lost, and the file ships with ADO-531 when that ticket promotes.
 
-After that single conflict is resolved the remaining 5 commits apply clean and `public/admin.html`
-auto-merges (verified). Sanity-check the result before pushing:
+After the `backfill-plan.md` conflict is resolved the remaining 5 of the six apply clean and
+`public/admin.html` auto-merges (verified). Sanity-check the result before pushing:
 ```bash
 git diff --stat origin/main..HEAD
 ```
 Expected: exactly **6** files — `migrations/104_manual_merge_source.sql`,
 `migrations/105_unmerge_story.sql`, `supabase/functions/admin-judge-merge/index.ts`,
 `supabase/functions/admin-judge-log/index.ts`, `public/admin.html`,
-`docs/features/clustering-judge/prod-deployment-manifest.md`. **If `backfill-plan.md` appears, the
-conflict was resolved the wrong way — redo it.**
+`docs/features/clustering-judge/prod-deployment-manifest.md` — and `migrations/105_unmerge_story.sql`
+must contain `NOTIFY pgrst` (proves `5134782` made it). **If `backfill-plan.md` or the
+`docs/superpowers/plans/` doc appears, a conflict was resolved the wrong way — redo it.**
 
 Note: the resulting `admin.html` will differ from `test`'s by 6 unrelated lines (a "Pardons needs
 review" block that is on `test` but not `main`). That is correct and out of scope here.
