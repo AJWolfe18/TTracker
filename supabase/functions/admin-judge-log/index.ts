@@ -5,10 +5,12 @@
 //
 // POST /admin-judge-log
 // Body (all optional):
-//   hours:   time window (24, 168=7d, 720=30d). Default 168. Clamped to [1, 720].
-//   verdict: filter by verdict ('merge' | 'keep' | 'uncertain').
-//   source:  filter by source ('judge-agent' | 'inline' | 'manual').
-//   limit:   max rows returned. Default 100, max 500.
+//   hours:    time window (24, 168=7d, 720=30d). Default 168. Clamped to [1, 720].
+//   verdict:  filter by verdict ('merge' | 'keep' | 'uncertain' | 'unmerge').
+//   source:   filter by source ('judge-agent' | 'inline' | 'manual').
+//   story_id: return only verdicts touching this story (story_id_a OR story_id_b).
+//             Ignores the time window — an old merge must always be findable (ADO-537 UX).
+//   limit:    max rows returned. Default 100, max 500.
 //
 // Response:
 //   {
@@ -68,6 +70,9 @@ Deno.serve(async (req) => {
     const sourceFilter = sourceRaw && VALID_SOURCES.has(sourceRaw) ? sourceRaw : null
     const limitRaw = parseInt(pick('limit') || String(DEFAULT_LIMIT), 10)
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(MAX_LIMIT, limitRaw)) : DEFAULT_LIMIT
+    const storyIdRaw = pick('story_id')
+    const storyIdParsed = storyIdRaw != null ? parseInt(storyIdRaw, 10) : NaN
+    const storyIdFilter = Number.isSafeInteger(storyIdParsed) && storyIdParsed > 0 ? storyIdParsed : null
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -76,14 +81,17 @@ Deno.serve(async (req) => {
 
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
-    // Aggregation query (verdict + merged only, for fast counts)
+    // Aggregation query (verdict + merged only, for fast counts).
+    // A story_id search ignores the time cutoff: its whole point is finding the old merge
+    // that ate a story, and that merge may be far outside any selectable window.
     let aggQuery = supabase
       .from('clustering_judge_log')
       .select('verdict,merged')
-      .gte('created_at', cutoff)
       .order('created_at', { ascending: false })
       .limit(MAX_AGGREGATION_ROWS)
 
+    if (!storyIdFilter) aggQuery = aggQuery.gte('created_at', cutoff)
+    if (storyIdFilter) aggQuery = aggQuery.or(`story_id_a.eq.${storyIdFilter},story_id_b.eq.${storyIdFilter}`)
     if (verdictFilter) aggQuery = aggQuery.eq('verdict', verdictFilter)
     if (sourceFilter) aggQuery = aggQuery.eq('source', sourceFilter)
 
@@ -91,10 +99,11 @@ Deno.serve(async (req) => {
     let rowsQuery = supabase
       .from('clustering_judge_log')
       .select('id,source,story_id_a,story_id_b,headline_a,headline_b,verdict,confidence,rationale,centroid_sim,merged,dry_run,run_id,created_at')
-      .gte('created_at', cutoff)
       .order('created_at', { ascending: false })
       .limit(limit)
 
+    if (!storyIdFilter) rowsQuery = rowsQuery.gte('created_at', cutoff)
+    if (storyIdFilter) rowsQuery = rowsQuery.or(`story_id_a.eq.${storyIdFilter},story_id_b.eq.${storyIdFilter}`)
     if (verdictFilter) rowsQuery = rowsQuery.eq('verdict', verdictFilter)
     if (sourceFilter) rowsQuery = rowsQuery.eq('source', sourceFilter)
 
@@ -134,7 +143,7 @@ Deno.serve(async (req) => {
       total_count: aggRows.length,
       merged_count: mergedCount,
       truncated: aggRows.length >= MAX_AGGREGATION_ROWS,
-      filters: { verdict: verdictFilter, source: sourceFilter },
+      filters: { verdict: verdictFilter, source: sourceFilter, story_id: storyIdFilter },
       by_verdict: byVerdict,
       rows: rowsResult.data || [],
       timestamp: new Date().toISOString()
