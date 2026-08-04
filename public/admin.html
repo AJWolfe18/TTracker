@@ -5504,6 +5504,8 @@
             const [hours, setHours] = useState(168);
             const [verdictFilter, setVerdictFilter] = useState('');
             const [sourceFilter, setSourceFilter] = useState('');
+            const [storyInput, setStoryInput] = useState('');   // what's typed in the box
+            const [storyFilter, setStoryFilter] = useState('');  // applied on Enter — drives the fetch
             const fetchTokenRef = useRef(0);
 
             // Manual merge state (ADO-537) — human override for uncertain/missed Judge verdicts
@@ -5540,6 +5542,7 @@
                     const reqBody = { hours, limit: 100 };
                     if (verdictFilter) reqBody.verdict = verdictFilter;
                     if (sourceFilter) reqBody.source = sourceFilter;
+                    if (storyFilter) reqBody.story_id = Number(storyFilter); // server ignores the time window for story searches
 
                     const { data: result, error: fnError } = await supabase.functions.invoke(
                         'admin-judge-log',
@@ -5556,7 +5559,7 @@
                 } finally {
                     if (token === fetchTokenRef.current) setLoading(false);
                 }
-            }, [hours, verdictFilter, sourceFilter, password, supabase]);
+            }, [hours, verdictFilter, sourceFilter, storyFilter, password, supabase]);
 
             useEffect(() => {
                 fetchVerdicts();
@@ -5565,6 +5568,8 @@
             const clearFilters = () => {
                 setVerdictFilter('');
                 setSourceFilter('');
+                setStoryInput('');
+                setStoryFilter('');
             };
 
             const validateManualIds = (survivorVal, loserVal) => {
@@ -5877,7 +5882,13 @@
                                         {s}
                                     </button>
                                 ))}
-                                {(verdictFilter || sourceFilter) && (
+                                <span style={{ fontSize: '0.85rem', color: '#9ca3af', marginLeft: '0.5rem' }}>Story:</span>
+                                <input type="number" min="1" value={storyInput} placeholder="id + Enter"
+                                    title="Find every verdict touching this story id, any age (ignores the time range)"
+                                    onChange={(e) => setStoryInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setStoryFilter(e.target.value.trim()); }}
+                                    style={{ background: '#111827', border: storyFilter ? '1px solid #3b82f6' : '1px solid #374151', borderRadius: '4px', color: '#e5e7eb', padding: '0.25rem 0.5rem', width: '110px', fontSize: '0.8rem' }} />
+                                {(verdictFilter || sourceFilter || storyFilter) && (
                                     <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.85rem' }}>clear</button>
                                 )}
                             </div>
@@ -5889,7 +5900,7 @@
                             ) : data ? (
                                 <>
                                     <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#9ca3af' }}>
-                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}
+                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} {data.filters?.story_id ? <>touching story <strong style={{ color: '#e5e7eb' }}>#{data.filters.story_id}</strong> (all time)</> : <>in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}</>}
                                         {data.by_verdict && (
                                             <span style={{ marginLeft: '0.75rem' }}>
                                                 {data.by_verdict.map(v => (
@@ -5906,7 +5917,7 @@
 
                                     {(!data.rows || data.rows.length === 0) ? (
                                         <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                            No verdicts recorded in this time range.
+                                            {data.filters?.story_id ? `No verdicts touch story #${data.filters.story_id}.` : 'No verdicts recorded in this time range.'}
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto' }}>
