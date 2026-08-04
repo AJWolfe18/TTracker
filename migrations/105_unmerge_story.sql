@@ -14,6 +14,14 @@
 --   they are cosmetic and self-heal on the survivor's next enrichment. Articles attached to the
 --   survivor AFTER the merge stay on the survivor — only the snapshot articles move back.
 --
+-- KNOWN LIMITATION (codex P1 on PR #109, accepted 2026-08-03): the loser's PRE-MERGE status is
+--   not snapshotted, so unmerge always restores status='active' — a loser that was 'closed' or
+--   'archived' when merged would come back published. Zero live exposure today: story lifecycle
+--   transitions are intentionally disabled (every PROD story is 'active', Josh's 2026-07 decision),
+--   the ADO-531 backfill merges active stories only, and the merge preview shows the admin the
+--   loser's status before confirming. Revisit (snapshot loser status in story_merge_audit) if the
+--   archive lifecycle ever turns on.
+--
 -- ⚠️ DEPLOY ORDER (same rule as 104): apply THIS MIGRATION before deploying the updated
 --   admin-judge-merge edge function, or unmerge requests fail with "function not found".
 --
@@ -121,14 +129,15 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, extensions
 AS $$
 DECLARE
-  v_audit_id     BIGINT;
-  v_survivor_id  BIGINT;
-  v_article_ids  TEXT[];
-  v_loser_status TEXT;
-  v_loser_merged BIGINT;
-  v_surv_status  TEXT;
-  v_surv_merged  BIGINT;
-  v_moved        INT := 0;
+  v_audit_id        BIGINT;
+  v_survivor_id     BIGINT;
+  v_article_ids     TEXT[];
+  v_locked_survivor BIGINT;
+  v_loser_status    TEXT;
+  v_loser_merged    BIGINT;
+  v_surv_status     TEXT;
+  v_surv_merged     BIGINT;
+  v_moved           INT := 0;
 BEGIN
   IF p_loser_id IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_ids');
@@ -137,7 +146,8 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'reason', 'missing_run_id');
   END IF;
 
-  -- Latest un-consumed snapshot for this loser.
+  -- Latest un-consumed snapshot for this loser. PRE-LOCK pass: this only identifies which
+  -- survivor row to lock — the authoritative read happens again below, under the locks.
   SELECT id, survivor_id, loser_article_ids
     INTO v_audit_id, v_survivor_id, v_article_ids
     FROM story_merge_audit
@@ -150,6 +160,27 @@ BEGIN
 
   -- Lock both story rows in ascending id order (deadlock-safe, serializes vs merge_stories).
   PERFORM 1 FROM stories WHERE id IN (p_loser_id, v_survivor_id) ORDER BY id FOR UPDATE;
+
+  -- Re-read the snapshot now that we hold the locks (codex P2 on PR #109): in the pre-lock
+  -- window a concurrent unmerge could have consumed the row we selected and a re-merge written
+  -- a fresh one — acting on the stale copy would restore an outdated article set and leave the
+  -- new snapshot unconsumed. unmerge_story/merge_stories callers serialize on these story-row
+  -- locks, so this second read is authoritative.
+  v_locked_survivor := v_survivor_id;
+  SELECT id, survivor_id, loser_article_ids
+    INTO v_audit_id, v_survivor_id, v_article_ids
+    FROM story_merge_audit
+    WHERE loser_id = p_loser_id AND unmerged_at IS NULL
+    ORDER BY merged_at DESC, id DESC
+    LIMIT 1;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'no_merge_snapshot');
+  END IF;
+  IF v_survivor_id <> v_locked_survivor THEN
+    -- The pair changed while we waited for the locks — we hold locks on the wrong survivor row.
+    -- Refuse rather than proceed; the caller just retries against the current state.
+    RETURN jsonb_build_object('ok', false, 'reason', 'snapshot_changed');
+  END IF;
 
   SELECT status, merged_into_story_id
     INTO v_loser_status, v_loser_merged

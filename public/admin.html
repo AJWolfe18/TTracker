@@ -5691,6 +5691,7 @@
                         no_merge_snapshot: 'No reversible snapshot exists for this merge',
                         not_merged: 'That story is not currently merged away',
                         snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
+                        snapshot_changed: 'The merge record changed mid-request — refresh and try again',
                         survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
                     };
                     setManualError(`Unmerge not executed: ${reasons[result.reason] || result.reason || 'unknown reason'}`);
