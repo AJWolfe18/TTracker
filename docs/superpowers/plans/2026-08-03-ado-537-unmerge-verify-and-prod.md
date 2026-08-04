@@ -138,7 +138,7 @@ Already on `main` from ADO-533's go-live, do **not** redo: migrations 100/101/10
 
 **Interfaces:**
 - Produces: `story_merge_audit.unmerged_at` (TIMESTAMPTZ, nullable); `clustering_judge_log_verdict_check` allowing `'unmerge'`; `public.recompute_story_from_members(p_story_id BIGINT) RETURNS VOID`; `public.unmerge_story(p_loser_id BIGINT, p_run_id TEXT DEFAULT NULL) RETURNS JSONB`. Both functions SECURITY DEFINER, service_role-only.
-- `unmerge_story` returns on success: `{ok:true, loser_id, survivor_id, articles_restored, audit_id}`. On refusal: `{ok:false, reason}` where reason ∈ `invalid_ids | missing_run_id | no_merge_snapshot | loser_not_found | not_merged | snapshot_mismatch | survivor_not_found | survivor_moved`.
+- `unmerge_story` returns on success: `{ok:true, loser_id, survivor_id, articles_restored, audit_id}`. On refusal: `{ok:false, reason}` where reason ∈ `invalid_ids | missing_run_id | no_merge_snapshot | loser_not_found | not_merged | snapshot_mismatch | snapshot_changed | survivor_not_found | survivor_moved`.
 
 - [ ] **Step 1: Hand the migration to Josh**
 
