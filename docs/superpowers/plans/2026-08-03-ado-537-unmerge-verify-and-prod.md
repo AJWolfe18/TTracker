@@ -4,7 +4,7 @@
 
 **Goal:** Get ADO-537 (admin Judge tab manual merge + unmerge) verified end-to-end on TEST and deployed to PROD in the load-bearing order, so a wrong story merge is reversible before the ADO-531 backfill runs 12k stories through the Judge.
 
-**Architecture:** No new code is written in this plan — all of ADO-537 is already committed on `test` (6 commits, `50b2ce6`..`dfdaf6a`) and code-reviewed. What is missing is (a) migration 105 was never applied to TEST, so the unmerge path has never executed even once, and (b) nothing from ADO-537 has reached PROD. This plan applies the SQL, redeploys the two edge functions, drives a full merge→unmerge round trip through the admin UI, then promotes via a PR to `main` with a strict SQL → edge functions → frontend ordering.
+**Architecture:** No new feature code is written in this plan — all of ADO-537 is already committed on `test` and code-reviewed: the six feature commits `50b2ce6`..`dfdaf6a` **plus `5134782`** (codex round-3 foldin that added `NOTIFY pgrst` to migration 105 — Task 6 must cherry-pick all seven). What is missing is (a) migration 105 was never applied to TEST, so the unmerge path has never executed even once, and (b) nothing from ADO-537 has reached PROD. This plan applies the SQL, redeploys the two edge functions, drives a full merge→unmerge round trip through the admin UI, then promotes via a PR to `main` with a strict SQL → edge functions → frontend ordering.
 
 **Tech Stack:** Supabase Postgres (migrations pasted by hand into the SQL Editor), Supabase Edge Functions (Deno, deployed via `npx supabase functions deploy`), vanilla-React `public/admin.html` served by Netlify, ADO for status.
 
@@ -509,9 +509,17 @@ no runtime effect; they can ride a later docs PR.
 
 - [ ] **Step 3: Push and open the PR**
 
+Write the PR body to a file first (shell-agnostic — a Bash here-doc breaks if this runs under
+PowerShell, and `--body-file` works everywhere). Save the content below as
+`pr-body-ado-537.md` in the session scratchpad (or any path outside the repo), then:
+
 ```bash
 git push -u origin deploy/ado-537-manual-merge-unmerge
-gh pr create --base main --title "ADO-537: admin Judge tab manual merge + unmerge (PROD)" --body "$(cat <<'EOF'
+gh pr create --base main --title "ADO-537: admin Judge tab manual merge + unmerge (PROD)" --body-file <path-to>/pr-body-ado-537.md
+```
+
+PR body content:
+```markdown
 ## Summary
 Promotes the ADO-537 admin Judge tab manual merge + unmerge to PROD. Human override for a wrong
 Clustering Judge merge — the prerequisite safety net for the ADO-531 backfill.
@@ -534,8 +542,6 @@ tombstone cleared, both stories recomputed, snapshot marked consumed, double-unm
 $0 — no new infra, API calls, or secrets.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-EOF
-)"
 ```
 
 - [ ] **Step 4: Request the AI review**
@@ -682,6 +688,19 @@ restored L. The re-merge absorbs it so nothing is lost, but before/after members
   scheduled runs on `vars.ENABLE_PROD_SCHEDULES == 'true'`; `workflow_dispatch` still works).
 - Do the unmerge and re-merge **in one sitting, minutes apart**, and never within ~15 minutes of an even
   UTC hour or of 05/13/21 UTC.
+
+**Then confirm nothing is ALREADY mid-run — pausing schedules does not stop a job in flight:**
+```bash
+gh run list --workflow=rss-tracker-prod.yml --status=in_progress
+gh run list --workflow=rss-tracker-prod.yml --status=queued
+```
+Both must be empty. For the Judge, confirm the RemoteTrigger shows no active run (its run list /
+cloud console), and corroborate from the PROD SQL Editor — no agent activity in the last 30 minutes:
+```sql
+SELECT MAX(created_at) FROM clustering_judge_log WHERE source = 'judge-agent';
+```
+If anything is in flight, **wait for it to finish before Step 1b** — an RSS run can attach articles
+and a Judge run can merge stories in the middle of your round trip.
 
 - [ ] **Step 1b: Pick the pair and record the BEFORE state**
 
@@ -847,6 +866,16 @@ evidence; the manifest correction never reached `main`.
    both pass; `PGRST202` fails).
 3. [P2] Task 5 claimed AC5 verified by Task 3 Step 5, which only proves `not_merged_pair`. → AC5 text
    and Task 5 Step 3 now state explicitly which half is live-verified and which is code-review-only.
+
+**Codex round 4 (2026-08-03, final) — folded in:**
+1. [P1] PR-create used a Bash here-doc; workspace shell is PowerShell. Partially disputed (the plan's
+   commands run via the Git-Bash tool, where the here-doc works) but fixed anyway with the
+   shell-agnostic `--body-file` form — strictly more robust, zero cost.
+2. [P2] Pausing the schedules doesn't stop a job already in flight. → Step 1a now hard-gates on
+   `gh run list --status=in_progress/queued` empty for `rss-tracker-prod.yml` plus a no-active-Judge-run
+   check (RemoteTrigger run list + last-30-min `clustering_judge_log` corroboration; `created_at`
+   column verified present).
+3. [P3] The architecture summary still said "6 commits" after Task 6 grew to seven. → summary updated.
 
 **One reviewer claim rejected:** that `article_story` has `PRIMARY KEY(article_id)`. The repo doesn't
 support it — that line is commented out in `migrations/001_rss_system_PRODUCTION_READY.sql:170` and the
