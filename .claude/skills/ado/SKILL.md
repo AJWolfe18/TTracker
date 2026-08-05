@@ -63,6 +63,10 @@ New → Todo → Active → Review → Testing → Ready for Prod → Closed
 
 **NOTE:** We don't use "Resolved" for User Stories - go straight to "Closed" after PROD deploy.
 
+**⚠️ Bug work items use a DIFFERENT state model:** New / Active / Resolved / Closed only — the API
+rejects "Testing"/"Ready for Prod" on Bugs (verified 2026-08-05, ADO-540). Use **Resolved** for
+"fix deployed, awaiting verification", then Closed.
+
 ---
 
 ## Purpose
