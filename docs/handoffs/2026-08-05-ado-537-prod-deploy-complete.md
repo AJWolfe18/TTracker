@@ -57,6 +57,31 @@ default-DENY rationale. **Gate: gold-set eval (precision holds ≥98%) before an
 ## Loose ends (recorded, not urgent)
 
 - ADO-515 social share: still blocked on Josh setting Netlify PROD env vars.
-- Legacy GPT EO enrichment still runs daily on PROD (ADO-482 shipped the workflow cleanup but never the
-  script rewrite `dc8912d`; needs `executive_orders.description` column migration first).
+- ~~Legacy GPT EO enrichment~~ → **FIXED same night, see addendum below (ADO-540).**
 - ADO cards 447/510 sit in Testing but look like WhiskeyPal-domain items, not TrumpyTracker deploys.
+
+---
+
+## ADDENDUM — same-night second act (after the first /end-work)
+
+**ADO-540 filed AND fixed AND deployed:** Josh wanted the legacy EO GPT spend gone. Killing the
+workflow or rolling the key were both wrong (workflow = the only EO ingestion; key = PR code review).
+Shipped the surgical fix instead: Josh applied `ALTER TABLE executive_orders ADD COLUMN IF NOT EXISTS
+description TEXT` on PROD, then **PR #110** (`c3f35de`) put the tested raw-only script on main —
+file-copied from `test` (NOT a `dc8912d` cherry-pick: that commit drags 4 files and was modified twice
+since). AI review's 2 blockers verified FALSE before merge (live PROD probe: `alarm_level` exists;
+`today` defined at line 51). **540 = Resolved** (Bugs have no Testing state — New/Active/Resolved/Closed
+only, now documented in the ado skill). **Close 540 after today's 16:00 UTC
+`executive-orders-tracker.yml` run is green and writes raw rows.** `OPENAI_API_KEY`'s sole remaining
+consumer is AI PR code review.
+
+**Backlog hygiene:** 524 demoted Active→Todo; stale memory fixed (528/482 were referenced as open but
+closed weeks ago).
+
+**ARCHITECTURE.md rebuilt** (`4e8cfb2`, `18ff5cd`): was badly stale (claimed GPT story enrichment,
+"planned" pardons). Now has current-state tables — who-enriches-what, secret consumers, kill switches —
+update rows in-session when pipelines/secrets/flags change.
+
+**Commits (test):** `bc433a2` manifest+schema, `3f5219d` handoff, `4e8cfb2` ARCHITECTURE rewrite,
+`18ff5cd` ARCHITECTURE 540-row, `f89b290` ado-skill Bug states. **Main:** `6868a06` (PR #109),
+`c3f35de` (PR #110).
