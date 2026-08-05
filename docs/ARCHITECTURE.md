@@ -37,7 +37,7 @@ flowchart LR
 |--------|---------------------|------------------------|----------------|
 | Stories | `rss-tracker-supabase.js` (GitHub Actions, 2h) | **Claude Stories agent** (cloud cron, 2h) | GPT path still in repo, gated OFF by `ENABLE_LEGACY_STORY_ENRICHMENT` |
 | Story merging | inline Tier A/B clustering | **Clustering Judge agent** (3x/day) + admin manual merge/unmerge (ADO-537) | — |
-| Executive Orders | `executive-orders-tracker.yml` (daily 16:00 UTC) — **ingestion and legacy GPT enrichment are the same script** | **Claude EO agent** (cloud cron, daily) | ⚠️ ADO-540: main's script still makes GPT calls; GPT-free rewrite (`dc8912d`) on test, awaiting cherry-pick. Do NOT kill the workflow — it's the only EO ingestion. |
+| Executive Orders | `executive-orders-tracker.yml` (daily 16:00 UTC) — raw-only since PR #110 (2026-08-05), zero GPT calls | **Claude EO agent** (cloud cron, daily) | None — legacy GPT enrichment removed (ADO-540). Do NOT kill the workflow — it's the only EO ingestion. |
 | SCOTUS | `scripts/scotus/fetch-cases.js` (CourtListener, manual/periodic) | **Claude SCOTUS agent** (cloud cron, weekdays) | — |
 | Pardons | pardons workflows | **Claude Pardons agent** (cloud cron, daily) | — |
 
@@ -45,7 +45,7 @@ flowchart LR
 
 | Secret | Active consumers | Rolling it breaks |
 |--------|-----------------|-------------------|
-| `OPENAI_API_KEY` | AI PR code review (GPT-4o); legacy EO enrichment (ADO-540, dying) | PR reviews; EO ingestion runs may crash mid-script |
+| `OPENAI_API_KEY` | AI PR code review (GPT-4o) — sole remaining consumer since ADO-540 | PR reviews |
 | Anthropic (subscription) | All 5 Claude cloud agents via RemoteTrigger | All enrichment + Judge |
 | `EDGE_CRON_TOKEN(_PROD)` | Edge function auth | Edge function calls |
 | `COURTLISTENER_API_TOKEN` | SCOTUS case fetch | New SCOTUS cases |
