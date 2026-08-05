@@ -5504,20 +5504,34 @@
             const [hours, setHours] = useState(168);
             const [verdictFilter, setVerdictFilter] = useState('');
             const [sourceFilter, setSourceFilter] = useState('');
+            const [storyInput, setStoryInput] = useState('');   // what's typed in the box
+            const [storyFilter, setStoryFilter] = useState('');  // applied on Enter — drives the fetch
             const fetchTokenRef = useRef(0);
+
+            // Manual merge state (ADO-537) — human override for uncertain/missed Judge verdicts
+            const [manualSurvivor, setManualSurvivor] = useState('');
+            const [manualLoser, setManualLoser] = useState('');
+            const [manualPreview, setManualPreview] = useState(null);
+            const [manualBusy, setManualBusy] = useState(false);
+            const [manualError, setManualError] = useState(null);
+            const [manualResult, setManualResult] = useState(null);
+            const [showMergeModal, setShowMergeModal] = useState(false);
+            const [unmergeRow, setUnmergeRow] = useState(null);
+            const manualBusyRef = useRef(false);
 
             const TIME_RANGES = [
                 { label: '24h', value: 24 },
                 { label: '7d', value: 168 },
                 { label: '30d', value: 720 }
             ];
-            const VERDICTS = ['merge', 'keep', 'uncertain'];
-            const SOURCES = ['judge-agent', 'inline'];
+            const VERDICTS = ['merge', 'keep', 'uncertain', 'unmerge'];
+            const SOURCES = ['judge-agent', 'inline', 'manual'];
 
             const VERDICT_COLOR = {
                 merge: '#f87171',      // red — a merge changes the record, worth the eye
                 keep: '#4ade80',       // green — left as-is
-                uncertain: '#fbbf24'   // amber — flagged
+                uncertain: '#fbbf24',  // amber — flagged
+                unmerge: '#60a5fa'     // blue — a merge was reversed
             };
 
             const fetchVerdicts = useCallback(async () => {
@@ -5528,6 +5542,7 @@
                     const reqBody = { hours, limit: 100 };
                     if (verdictFilter) reqBody.verdict = verdictFilter;
                     if (sourceFilter) reqBody.source = sourceFilter;
+                    if (storyFilter) reqBody.story_id = Number(storyFilter); // server ignores the time window for story searches
 
                     const { data: result, error: fnError } = await supabase.functions.invoke(
                         'admin-judge-log',
@@ -5544,7 +5559,7 @@
                 } finally {
                     if (token === fetchTokenRef.current) setLoading(false);
                 }
-            }, [hours, verdictFilter, sourceFilter, password, supabase]);
+            }, [hours, verdictFilter, sourceFilter, storyFilter, password, supabase]);
 
             useEffect(() => {
                 fetchVerdicts();
@@ -5553,7 +5568,143 @@
             const clearFilters = () => {
                 setVerdictFilter('');
                 setSourceFilter('');
+                setStoryInput('');
+                setStoryFilter('');
             };
+
+            const validateManualIds = (survivorVal, loserVal) => {
+                const survivor = Number(survivorVal);
+                const loser = Number(loserVal);
+                if (!Number.isSafeInteger(survivor) || survivor <= 0 || !Number.isSafeInteger(loser) || loser <= 0) {
+                    return { error: 'Both story ids must be positive integers.' };
+                }
+                if (survivor === loser) {
+                    return { error: 'Survivor and loser must be different stories.' };
+                }
+                return { survivor, loser };
+            };
+
+            const callJudgeMerge = async (action, survivorId, loserId) => {
+                manualBusyRef.current = true;
+                setManualBusy(true);
+                setManualError(null);
+                try {
+                    const { data: result, error: fnError } = await supabase.functions.invoke(
+                        'admin-judge-merge',
+                        {
+                            headers: { 'x-admin-password': password },
+                            body: { action, survivor_id: survivorId, loser_id: loserId }
+                        }
+                    );
+                    if (fnError) throw new Error(fnError.message || 'Request failed');
+                    return result;
+                } catch (err) {
+                    setManualError(err.message);
+                    return null;
+                } finally {
+                    manualBusyRef.current = false;
+                    setManualBusy(false);
+                }
+            };
+
+            // Fetches the two stories and opens the confirm popup. survivorVal/loserVal are passed
+            // explicitly (not read from state) so prefillManual can open it in the same tick.
+            const openMergeModal = async (survivorVal, loserVal) => {
+                const ids = validateManualIds(survivorVal, loserVal);
+                if (ids.error) {
+                    setManualError(ids.error);
+                    return;
+                }
+                setManualResult(null);
+                const result = await callJudgeMerge('preview', ids.survivor, ids.loser);
+                if (result) {
+                    setManualPreview(result);
+                    setShowMergeModal(true);
+                }
+            };
+
+            const closeMergeModal = () => {
+                setShowMergeModal(false);
+                setManualPreview(null);
+            };
+
+            const handleManualMerge = async () => {
+                if (manualBusyRef.current) return; // sync double-click guard (state update is async)
+                const ids = validateManualIds(manualSurvivor, manualLoser);
+                if (ids.error) {
+                    setManualError(ids.error);
+                    return;
+                }
+                const result = await callJudgeMerge('merge', ids.survivor, ids.loser);
+                if (!result) return; // error already shown; keep the popup open for retry/cancel
+                closeMergeModal();
+                if (result.ok && result.skipped) {
+                    // Double-submit or already-merged loser: the merge already happened — report as done, not as an error.
+                    setManualResult(`Story was already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do.`);
+                    fetchVerdicts();
+                    return;
+                }
+                if (result.ok && !result.skipped) {
+                    setManualResult(`Merged #${result.loser_id} into #${result.survivor_id} — ${result.articles_moved} article${result.articles_moved === 1 ? '' : 's'} moved, survivor now has ${result.survivor_source_count} source${result.survivor_source_count === 1 ? '' : 's'}.${result.log_error ? ' (Warning: Judge log write failed — merge itself succeeded.)' : ''}`);
+                    setManualSurvivor('');
+                    setManualLoser('');
+                    fetchVerdicts();
+                } else {
+                    setManualError(`Merge not executed: ${result.reason || 'unknown reason'}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
+                }
+            };
+
+            // Swap keep/absorb roles; if the popup is open, re-preview with the swapped roles.
+            const swapManualIds = () => {
+                const s = manualSurvivor;
+                const l = manualLoser;
+                setManualSurvivor(l);
+                setManualLoser(s);
+                setManualError(null);
+                if (showMergeModal) {
+                    openMergeModal(l, s);
+                } else {
+                    setManualPreview(null);
+                }
+            };
+
+            const prefillManual = (row) => {
+                setManualSurvivor(String(row.story_id_a));
+                setManualLoser(String(row.story_id_b));
+                setManualResult(null);
+                setManualError(null);
+                openMergeModal(row.story_id_a, row.story_id_b);
+            };
+
+            const handleUnmerge = async () => {
+                if (manualBusyRef.current || !unmergeRow) return;
+                const row = unmergeRow;
+                const result = await callJudgeMerge('unmerge', row.story_id_a, row.story_id_b);
+                if (!result) return; // error shown; popup stays open for cancel
+                setUnmergeRow(null);
+                if (result.ok) {
+                    setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.${result.log_error ? ' (Warning: Judge log write failed — unmerge itself succeeded.)' : ''}`);
+                    fetchVerdicts();
+                } else {
+                    const reasons = {
+                        not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
+                        no_merge_snapshot: 'No reversible snapshot exists for this merge',
+                        not_merged: 'That story is not currently merged away',
+                        snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
+                        snapshot_changed: 'The merge record changed mid-request — refresh and try again',
+                        survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
+                    };
+                    setManualError(`Unmerge not executed: ${reasons[result.reason] || result.reason || 'unknown reason'}`);
+                }
+            };
+
+            // Escape closes whichever confirm popup is open (matches the Edit modals)
+            useEffect(() => {
+                if (!showMergeModal && !unmergeRow) return;
+                const onKey = (e) => { if (e.key === 'Escape') { closeMergeModal(); setUnmergeRow(null); } };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [showMergeModal, unmergeRow]);
 
             const formatTimestamp = (iso) => {
                 if (!iso) return '—';
@@ -5569,8 +5720,127 @@
 
             const isHeartbeat = (row) => row.story_id_a == null && row.story_id_b == null;
 
+            const manualInputStyle = { background: '#111827', border: '1px solid #374151', borderRadius: '6px', color: '#e5e7eb', padding: '0.4rem 0.6rem', width: '130px', fontSize: '0.9rem' };
+
+            const renderPreviewStory = (story, role, missingId) => (
+                <div style={{ flex: '1 1 260px', background: '#111827', border: `1px solid ${role === 'survivor' ? '#4ade80' : '#f87171'}`, borderRadius: '6px', padding: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: role === 'survivor' ? '#4ade80' : '#f87171', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                        {role === 'survivor' ? 'Survivor (keeps articles)' : 'Loser (tombstoned)'}
+                    </div>
+                    {story ? (
+                        <>
+                            <div style={{ color: '#e5e7eb', marginBottom: '0.35rem' }}>
+                                <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>#{story.id}</span> {story.primary_headline || '—'}
+                            </div>
+                            <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
+                                status: <strong style={{ color: story.status === 'active' ? '#4ade80' : '#fbbf24' }}>{story.status}</strong>
+                                {' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}
+                                {story.first_seen_at ? ` · first seen ${new Date(story.first_seen_at).toLocaleDateString()}` : ''}
+                                {story.merged_into_story_id ? <span style={{ color: '#f87171' }}> · already merged into #{story.merged_into_story_id}</span> : null}
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ color: '#f87171' }}>Story #{missingId} not found</div>
+                    )}
+                </div>
+            );
+
             return (
                 <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    {/* Manual merge card — ADO-537: human override for uncertain/missed Judge verdicts */}
+                    <div className="card">
+                        <div className="card-header">
+                            <h2 className="card-title"><span>Manual Merge</span></h2>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                Merge any two stories: click <strong style={{ color: '#e5e7eb' }}>use</strong> on a verdict row below (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> one you've reviewed), or type two story ids. A confirmation popup shows exactly what will happen — nothing changes until you confirm there.
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                                <label style={{ fontSize: '0.8rem', color: '#4ade80', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
+                                    Keep
+                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualResult(null); }} />
+                                </label>
+                                <label style={{ fontSize: '0.8rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
+                                    Absorb
+                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualLoser(e.target.value); setManualResult(null); }} />
+                                </label>
+                                <button onClick={() => openMergeModal(manualSurvivor, manualLoser)} disabled={manualBusy || !manualSurvivor || !manualLoser}
+                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: (manualBusy || !manualSurvivor || !manualLoser) ? 'not-allowed' : 'pointer', opacity: (manualBusy || !manualSurvivor || !manualLoser) ? 0.5 : 1 }}>
+                                    {manualBusy ? '...' : 'Review & merge…'}
+                                </button>
+                            </div>
+                            {manualError && !showMergeModal && !unmergeRow && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                            {manualResult && (
+                                <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#4ade80', fontSize: '0.9rem' }}>
+                                    {manualResult}
+                                </div>
+                            )}
+                            {showMergeModal && manualPreview && (
+                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeMergeModal(); }}>
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h3 className="modal-title">Confirm story merge</h3>
+                                            <button className="modal-close" onClick={closeMergeModal}>×</button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                            {manualPreview.warnings && manualPreview.warnings.length > 0 && (
+                                                <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
+                                                    {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                                </div>
+                                            )}
+                                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                                {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
+                                                {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
+                                            </div>
+                                            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#9ca3af' }}>
+                                                The <span style={{ color: '#f87171' }}>red</span> story's articles move into the <span style={{ color: '#4ade80' }}>green</span> story, and the red one becomes a redirect. There's no undo from the UI yet — double-check before confirming.
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button onClick={swapManualIds} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>⇄ Swap keep/absorb</button>
+                                            <button onClick={closeMergeModal} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                            {manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
+                                                <button onClick={handleManualMerge} disabled={manualBusy}
+                                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                    {manualBusy ? 'Merging…' : `Merge #${manualLoser} into #${manualSurvivor}`}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {unmergeRow && (
+                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setUnmergeRow(null); }}>
+                                    <div className="modal-content">
+                                        <div className="modal-header">
+                                            <h3 className="modal-title">Undo this merge?</h3>
+                                            <button className="modal-close" onClick={() => setUnmergeRow(null)}>×</button>
+                                        </div>
+                                        <div className="modal-body">
+                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                            <div style={{ color: '#d1d5db', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                                                <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_a}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_a || '—'}</strong></div>
+                                                <div style={{ marginBottom: '0.75rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_b}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_b || '—'}</strong></div>
+                                                The absorbed story gets its articles back and becomes its own live story again. The stats of both stories are recalculated.
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button onClick={() => setUnmergeRow(null)} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                            <button onClick={handleUnmerge} disabled={manualBusy}
+                                                style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                                {manualBusy ? 'Unmerging…' : 'Unmerge these stories'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <h2 className="card-title"><span>Clustering Judge</span></h2>
@@ -5592,7 +5862,7 @@
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, note the story ids for a manual unwind.
+                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, hit <strong style={{ color: '#60a5fa' }}>unmerge</strong> on that row to reverse it.
                             </div>
 
                             {/* filter chips */}
@@ -5613,7 +5883,13 @@
                                         {s}
                                     </button>
                                 ))}
-                                {(verdictFilter || sourceFilter) && (
+                                <span style={{ fontSize: '0.85rem', color: '#9ca3af', marginLeft: '0.5rem' }}>Story:</span>
+                                <input type="number" min="1" value={storyInput} placeholder="id + Enter"
+                                    title="Find every verdict touching this story id, any age (ignores the time range)"
+                                    onChange={(e) => setStoryInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') setStoryFilter(e.target.value.trim()); }}
+                                    style={{ background: '#111827', border: storyFilter ? '1px solid #3b82f6' : '1px solid #374151', borderRadius: '4px', color: '#e5e7eb', padding: '0.25rem 0.5rem', width: '110px', fontSize: '0.8rem' }} />
+                                {(verdictFilter || sourceFilter || storyFilter) && (
                                     <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.85rem' }}>clear</button>
                                 )}
                             </div>
@@ -5625,7 +5901,7 @@
                             ) : data ? (
                                 <>
                                     <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#9ca3af' }}>
-                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}
+                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} {data.filters?.story_id ? <>touching story <strong style={{ color: '#e5e7eb' }}>#{data.filters.story_id}</strong> (all time)</> : <>in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}</>}
                                         {data.by_verdict && (
                                             <span style={{ marginLeft: '0.75rem' }}>
                                                 {data.by_verdict.map(v => (
@@ -5642,7 +5918,7 @@
 
                                     {(!data.rows || data.rows.length === 0) ? (
                                         <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                            No verdicts recorded in this time range.
+                                            {data.filters?.story_id ? `No verdicts touch story #${data.filters.story_id}.` : 'No verdicts recorded in this time range.'}
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto' }}>
@@ -5657,6 +5933,7 @@
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Conf</th>
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Sim</th>
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Rationale</th>
+                                                        <th style={{ padding: '0.5rem' }}></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -5687,6 +5964,22 @@
                                                             <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.confidence != null ? Number(row.confidence).toFixed(2) : '—'}</td>
                                                             <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
                                                             <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
+                                                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                                {!isHeartbeat(row) && row.merged && (
+                                                                    <button onClick={() => { setManualError(null); setManualResult(null); setUnmergeRow(row); }}
+                                                                        title="Reverse this merge — restores the absorbed story as its own story"
+                                                                        style={{ background: '#1e3a5f', color: '#60a5fa', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                                        unmerge
+                                                                    </button>
+                                                                )}
+                                                                {!isHeartbeat(row) && !row.merged && row.verdict !== 'unmerge' && (
+                                                                    <button onClick={() => prefillManual(row)}
+                                                                        title="Open the merge popup with this pair (A = kept, B = absorbed — swappable in the popup)"
+                                                                        style={{ background: '#374151', color: '#e5e7eb', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
+                                                                        use
+                                                                    </button>
+                                                                )}
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
