@@ -20,8 +20,10 @@ rides existing cloud-agent infra, no new secrets.
 | # | Artifact | PROD status | Action |
 |---|----------|-------------|--------|
 | 1.1 | `migrations/100_clustering_judge.sql` | ✅ **Already on PROD** (applied early by mistake; dormant, service_role-locked) | None — idempotent if re-run. Do NOT worry it's "ahead." |
-| 1.2 | `migrations/101_clustering_judge_hardening.sql` | ✅ TEST applied · ⬜ **PROD not applied** | Apply to PROD. Decline "Enable RLS". Run the verification queries at file bottom. |
-| 1.3 | `migrations/102_merge_stories_concurrency.sql` | ⚠️ **TEST re-apply needed · PROD not applied** | `merge_stories` concurrency + required-`p_run_id` fixes (Codex). CREATE OR REPLACE — idempotent, safe to re-apply. TEST had an earlier copy; re-apply the current file to TEST, then apply to PROD. |
+| 1.2 | `migrations/101_clustering_judge_hardening.sql` | ✅ TEST · ✅ **PROD verified applied** (ADO-537 Task 7 Step 0, 2026-08-04: `story_merge_audit` + `judge_run_merge_count` exist, `merge_stories` is 3-arg) | None. |
+| 1.3 | `migrations/102_merge_stories_concurrency.sql` | ✅ TEST · ✅ **PROD verified applied** (same check: `has_102 = true`, FOR UPDATE present) | None. |
+| 1.4 | `migrations/104_manual_merge_source.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (source CHECK verified: `inline/judge-agent/manual`) | None. |
+| 1.5 | `migrations/105_unmerge_story.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (`unmerged_at` column, verdict CHECK gains `unmerge`, RPC grants anon=f/auth=f/service_role=t, lock fix present) | None. |
 
 **101 changes (why it's required before go-live):**
 - `find_similar_stories` RPC + `merge_stories` RPC replaced; new tables `judge_run_merge_count`,
@@ -43,8 +45,8 @@ rides existing cloud-agent infra, no new secrets.
 
 | # | File | Change | Status |
 |---|------|--------|--------|
-| 2.1 | `scripts/rss/candidate-generation.js` | Exclude merged tombstones in time/entity/slug candidate blocks (P1) | ⬜ On `main` |
-| 2.2 | `scripts/rss/hybrid-clustering.js` | story_hash-collision recovery follows tombstone → survivor redirect (P1 sibling path) | ⬜ On `main` |
+| 2.1 | `scripts/rss/candidate-generation.js` | Exclude merged tombstones in time/entity/slug candidate blocks (P1) | ✅ On `main` |
+| 2.2 | `scripts/rss/hybrid-clustering.js` | story_hash-collision recovery follows tombstone → survivor redirect (P1 sibling path) | ✅ On `main` |
 
 These two MUST be on `main` before the cron flips live, or the P1 hole stays half-open (a new article
 could re-attach to a tombstone via the ANN block or the hash-collision path).
@@ -55,11 +57,11 @@ could re-attach to a tombstone via the ANN block or the hash-collision path).
 
 | # | Function | Change | TEST | PROD |
 |---|----------|--------|------|------|
-| 3.1 | `stories-active` | exclude merged-state stories | ⬜ | ⬜ |
-| 3.2 | `stories-detail` | multi-hop tombstone → survivor redirect | ⬜ | ⬜ |
-| 3.3 | `stories-search` | exclude `status='merged_into'`; narrowed select | ⬜ | ⬜ |
-| 3.4 | `admin-judge-log` | NEW — service_role backend for the admin Judge tab | ⬜ | ⬜ |
-| 3.5 | `admin-judge-merge` | NEW (ADO-537) — manual merge, password-gated | ✅ | ⬜ |
+| 3.1 | `stories-active` | exclude merged-state stories | ✅ | ✅ deployed 2026-07-06 (v8, `functions list`) |
+| 3.2 | `stories-detail` | multi-hop tombstone → survivor redirect | ✅ | ✅ deployed 2026-07-06 (v9) |
+| 3.3 | `stories-search` | exclude `status='merged_into'`; narrowed select | ✅ | ✅ deployed 2026-07-06 (v8) |
+| 3.4 | `admin-judge-log` | service_role backend for the admin Judge tab; ADO-537 adds `unmerge` verdict + `story_id` search | ✅ | ✅ deployed 2026-08-05 (v2) |
+| 3.5 | `admin-judge-merge` | NEW (ADO-537) — manual merge + unmerge, password-gated | ✅ | ✅ deployed 2026-08-05 (v1) |
 
 Deploy: `npx supabase functions deploy <fn> --project-ref osjbulmltfpcoldydexg` (migration 100 must be
 applied first — it is, on PROD). TEST ref is `wnrjrywpcadwutfykflu`.
@@ -77,7 +79,7 @@ Violating 1→2: manual merges execute but their Judge-tab log row fails the CHE
 
 | # | File | Change | Status |
 |---|------|--------|--------|
-| 4.1 | `public/admin.html` | Judge tab (headlines A/B, verdict/source filters) | ⬜ On `main` |
+| 4.1 | `public/admin.html` | Judge tab (headlines A/B, verdict/source filters); ADO-537 adds Manual Merge card, unmerge button, story-id search | ✅ On `main` (PR #109 squash `6868a06`, 2026-08-05; live on trumpytracker.com) |
 
 ---
 
@@ -85,7 +87,7 @@ Violating 1→2: manual merges execute but their Judge-tab log row fails the CHE
 
 | # | File | Why | Status |
 |---|------|-----|--------|
-| 5.1 | `docs/features/clustering-judge/prompt-v1.md` | The Judge prompt (now passes `p_run_id` to activate the hard cap) | ⬜ On `main` |
+| 5.1 | `docs/features/clustering-judge/prompt-v1.md` | The Judge prompt (now passes `p_run_id` to activate the hard cap) | ✅ On `main` |
 | 5.2 | `scripts/evals/clustering-gold-set.json` | Binding merge ruling referenced by the prompt | ✅ already on `main` (ADO-532) — confirm |
 
 `scripts/evals/judge-dryrun.js` is a TEST seeding/eval script — **not run on PROD**; no deployment concern.
@@ -96,10 +98,15 @@ Violating 1→2: manual merges execute but their Judge-tab log row fails the CHE
 
 | # | Item | Status |
 |---|------|--------|
-| 6.1 | RemoteTrigger cron: Sonnet, `0 5,13,21 * * *` (offset from RSS), bootstrap `git fetch origin main && git reset --hard origin/main` | ⬜ |
-| 6.2 | Cron env: `SUPABASE_URL`=PROD, `SUPABASE_SERVICE_ROLE_KEY`=PROD, `JUDGE_DRY_RUN=true` first | ⬜ |
-| 6.3 | Verify one PROD dry-run's rows in admin Judge tab, then flip `JUDGE_DRY_RUN=false` | ⬜ |
-| 6.4 | 3-day PROD monitoring window (ADO-528 playbook) watching `clustering_judge_log` for wrong merges | ⬜ |
+| 6.1 | RemoteTrigger cron: Sonnet, `0 5,13,21 * * *` (offset from RSS), bootstrap `git fetch origin main && git reset --hard origin/main` | ✅ live (`trig_01DDXZkpC9PkgTzU8wDdL9QM`) |
+| 6.2 | Cron env: `SUPABASE_URL`=PROD, `SUPABASE_SERVICE_ROLE_KEY`=PROD, `JUDGE_DRY_RUN=true` first | ✅ |
+| 6.3 | Verify one PROD dry-run's rows in admin Judge tab, then flip `JUDGE_DRY_RUN=false` | ✅ live-merging since 533 go-live |
+| 6.4 | 3-day PROD monitoring window (ADO-528 playbook) watching `clustering_judge_log` for wrong merges | ✅ closed clean with ADO-533 |
+
+**ADO-537 note (2026-08-05):** during the unmerge PROD proof both jobs were paused and re-enabled same
+night (Judge cron + `ENABLE_PROD_SCHEDULES`). PROD round trip on pair 13324/13327: merge → unmerge
+(snapshot 152 consumed, article restored) → re-merge (fresh snapshot 153); end state verified identical,
+`source_count` matches actual membership on both survivors.
 
 No new secrets. Kill switch = disable the cron.
 

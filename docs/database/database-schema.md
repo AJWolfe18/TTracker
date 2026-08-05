@@ -429,6 +429,56 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 
 ---
 
+### `clustering_judge_log`
+**Purpose:** One row per Clustering Judge verdict + run heartbeats; audit trail behind the admin Judge tab (ADO-533/537)
+**Migrations:** `100_clustering_judge.sql`, widened by `104`/`105`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| created_at | TIMESTAMPTZ | Verdict time |
+| source | TEXT | CHECK: 'inline', 'judge-agent', 'manual' ('manual' added by 104 = admin Judge tab action) |
+| story_id_a / story_id_b | BIGINT | The pair; NULL on run-level heartbeat rows |
+| headline_a / headline_b | TEXT | Snapshots (survive later merges/edits) |
+| verdict | TEXT | CHECK: 'merge', 'keep', 'uncertain', 'unmerge' ('unmerge' added by 105) |
+| confidence | NUMERIC | 0–1, nullable |
+| rationale | TEXT | Judge reasoning |
+| centroid_sim | NUMERIC | Decision-time similarity |
+| merged | BOOLEAN | TRUE only when merge_stories actually ran (false on unmerge rows) |
+| dry_run | BOOLEAN | TRUE when run was dry-run |
+| run_id | TEXT | Per-run drill-down |
+
+**RLS:** enabled, no anon/authenticated grant — admin tab reads via `admin-judge-log` edge function (service_role).
+
+---
+
+### `story_merge_audit`
+**Purpose:** Pre-merge snapshot of the loser story's `article_story` membership so a wrong merge can be reversed (ADO-533; consumed by `unmerge_story`, ADO-537)
+**Migrations:** `101_clustering_judge_hardening.sql`, `105` adds `unmerged_at`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| merged_at | TIMESTAMPTZ | When the merge executed |
+| run_id | TEXT | Judge run (NULL for manual merges pre-104) |
+| loser_id / survivor_id | BIGINT | The pair |
+| loser_article_ids | TEXT[] | Snapshot of the loser's article ids (articles.id is TEXT `art-<uuid>`) |
+| unmerged_at | TIMESTAMPTZ | Non-NULL = snapshot consumed by `unmerge_story` (each snapshot reversible once) |
+
+---
+
+### `judge_run_merge_count`
+**Purpose:** DB-side hard cap for the Clustering Judge — one row per run_id counting executed merges; `merge_stories` refuses past the cap (ADO-533)
+**Migration:** `101_clustering_judge_hardening.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| run_id | TEXT | Primary key |
+| merge_count | INT | Executed merges this run |
+| updated_at | TIMESTAMPTZ | Last increment |
+
+---
+
 ### `pending_submissions`
 **Purpose:** Manual article submission queue
 
@@ -475,6 +525,9 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 | `attach_or_create_article()` | Idempotent article insertion with story matching |
 | `get_stories_needing_enrichment()` | Find unenriched stories for AI processing |
 | `increment_budget_with_limit()` | Atomic budget check + increment |
+| `merge_stories(p_loser_id, p_survivor_id, p_run_id)` | Server-side story merge: snapshot to `story_merge_audit`, repoint `article_story`, recompute survivor, tombstone loser (`status='merged_into'`). FOR UPDATE locks + per-run cap. service_role only |
+| `unmerge_story(p_loser_id, p_run_id)` | Reverse a merge from its unconsumed snapshot: restore articles still on the survivor, clear tombstone, recompute both, stamp `unmerged_at` (ADO-537). Loser always restores as `active` (pre-merge status not snapshotted — harmless while lifecycle disabled). service_role only |
+| `recompute_story_from_members(p_story_id)` | Rebuild a story's centroid/entities/`source_count` from actual `article_story` members (ADO-537). service_role only |
 
 ---
 
