@@ -33,10 +33,11 @@
 
 import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..');
+const PUBLISHED_GOLD_SET = resolve(__dirname, 'clustering-gold-set.json');
 
 // ============================================================================
 // CLI
@@ -51,6 +52,10 @@ function parseArgs() {
   }
   if (!config.extracts || !config.out) {
     console.error('Usage: node build-clustering-gold-set.js --extracts=<file> --out=<draft.json>');
+    process.exit(1);
+  }
+  if (resolve(config.out) === PUBLISHED_GOLD_SET) {
+    console.error(`--out must not be the published gold set (${PUBLISHED_GOLD_SET}) — write a draft file and merge labels by hand`);
     process.exit(1);
   }
   return config;

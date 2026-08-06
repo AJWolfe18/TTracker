@@ -189,6 +189,11 @@ export async function runEval({ runId, args = {} }) {
   const goldSet = JSON.parse(readFileSync(GOLD_SET_PATH, 'utf-8'));
   let entries = goldSet.entries;
   if (args.ids?.length) {
+    const known = new Set(entries.map(e => e.id));
+    const missing = args.ids.filter(id => !known.has(id));
+    if (missing.length) {
+      throw new Error(`Unknown gold-set id(s): ${missing.join(', ')} — check for typos or removed ids (ids are sparse, never renumbered)`);
+    }
     entries = entries.filter(e => args.ids.includes(e.id));
   }
 
