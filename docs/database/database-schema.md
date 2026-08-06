@@ -150,6 +150,170 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 
 ---
 
+## Pardons Tracker Tables
+
+### `pardons`
+**Purpose:** Track presidential pardons with corruption analysis
+**Row Count:** ~5 test records (MVP in development)
+**Migration:** `056_pardons_table.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (GENERATED ALWAYS AS IDENTITY) |
+| recipient_name | TEXT | NOT NULL - Name of pardon recipient |
+| recipient_slug | TEXT | Auto-generated URL slug |
+| nickname | TEXT | Optional nickname |
+| photo_url | TEXT | Optional photo URL |
+| recipient_type | TEXT | 'person' or 'group' (default: 'person') |
+| recipient_count | INT | For groups only - how many people |
+| recipient_criteria | TEXT | For groups only - who qualifies |
+| pardon_date | DATE | NOT NULL - When pardon was granted |
+| clemency_type | TEXT | 'pardon', 'commutation', 'pre_emptive' |
+| status | TEXT | 'confirmed' or 'reported' |
+| conviction_district | TEXT | DOJ ingestion field |
+| case_number | TEXT | DOJ ingestion field |
+| offense_raw | TEXT | Raw offense text from DOJ |
+| crime_description | TEXT | Human-readable crime description |
+| crime_category | TEXT | Enum: white_collar, obstruction, etc. |
+| original_sentence | TEXT | Original sentence |
+| conviction_date | DATE | When convicted |
+| primary_connection_type | TEXT | Enum: mar_a_lago_vip, major_donor, etc. |
+| secondary_connection_types | TEXT[] | Additional connections |
+| corruption_level | SMALLINT | 1-5 "spicy" scale |
+| research_status | TEXT | 'complete', 'in_progress', 'pending' |
+| post_pardon_status | TEXT | 'quiet', 'under_investigation', 're_offended' |
+| post_pardon_notes | TEXT | What happened after pardon |
+| trump_connection_detail | TEXT | Connection explanation |
+| donation_amount_usd | NUMERIC(14,2) | Donation amount if applicable |
+| receipts_timeline | JSONB | Array of timeline events |
+| summary_neutral | TEXT | AI: Factual summary |
+| summary_spicy | TEXT | AI: Engaging summary |
+| why_it_matters | TEXT | AI: Analysis |
+| pattern_analysis | TEXT | AI: Pattern context |
+| enriched_at | TIMESTAMPTZ | When AI enrichment ran |
+| needs_review | BOOLEAN | Flag for manual review |
+| primary_source_url | TEXT | Main source URL |
+| source_urls | JSONB | Array of source URLs |
+| source_system | TEXT | 'manual' or 'doj_opa' |
+| source_key | TEXT | DOJ registry ID (for dedupe) |
+| is_public | BOOLEAN | Publish gate (RLS filter) |
+| search_vector | TSVECTOR | GENERATED full-text index |
+| created_at | TIMESTAMPTZ | Row created |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Key Constraints:**
+- `pardons_group_fields_chk` - Groups require count + criteria
+- `pardons_donation_nonnegative` - Donation >= 0
+- `pardons_receipts_timeline_is_array` - JSONB array check
+- Partial unique: `(source_system, source_key) WHERE source_key IS NOT NULL`
+
+**Key Indexes:**
+- `idx_pardons_search` - GIN on search_vector
+- `idx_pardons_pardon_date_id_desc` - Composite pagination
+- `idx_pardons_public_pardon_date_id_desc` - Partial index for public queries
+- btree on: primary_connection_type, crime_category, corruption_level, recipient_type
+
+**RLS Policies:**
+- `pardons_anon_select` - Anon sees only `is_public = true`
+
+---
+
+### `pardon_story`
+**Purpose:** Many-to-many junction linking pardons to news stories
+
+| Column | Type | Description |
+|--------|------|-------------|
+| pardon_id | BIGINT | FK to pardons.id (CASCADE) |
+| story_id | BIGINT | FK to stories.id (CASCADE) |
+| link_type | TEXT | 'primary_coverage', 'background', 'related', 'mentioned' |
+| linked_at | TIMESTAMPTZ | When link created |
+
+**Primary Key:** `(pardon_id, story_id)`
+
+**RLS Policies:**
+- `pardon_story_anon_select` - Only show links to public pardons
+
+---
+
+## SCOTUS Tracker Tables
+
+### `scotus_cases`
+**Purpose:** Track Supreme Court decisions with AI enrichment
+**Row Count:** ~12 cases (MVP in development)
+**Migration:** `066_scotus_cases.sql`
+**Data Source:** CourtListener API
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (GENERATED ALWAYS AS IDENTITY) |
+| courtlistener_cluster_id | BIGINT | UNIQUE NOT NULL - CourtListener cluster ID |
+| courtlistener_docket_id | BIGINT | CourtListener docket ID |
+| case_name | TEXT | NOT NULL - Full case name |
+| case_name_short | TEXT | Short name (e.g., "Connelly") |
+| case_name_full | TEXT | Full case name with parties |
+| docket_number | TEXT | e.g., "No. 23-146" |
+| term | TEXT | SCOTUS term year (e.g., "2024") |
+| decided_at | TIMESTAMPTZ | Decision date |
+| argued_at | TIMESTAMPTZ | Oral argument date |
+| citation | TEXT | Best citation (e.g., "599 U.S. 123") |
+| vote_split | TEXT | "6-3" format (nullable, SCDB data sparse) |
+| majority_author | TEXT | Justice who wrote majority/plurality |
+| dissent_authors | TEXT[] | Array of dissenting justices |
+| syllabus | TEXT | Case syllabus extracted from opinion |
+| opinion_excerpt | TEXT | First ~500 chars if no syllabus |
+| issue_area | TEXT | Classification (justice_legal, voting_rights, etc.) |
+| petitioner_type | TEXT | individual, corporation, government |
+| respondent_type | TEXT | individual, corporation, government |
+| ruling_impact_level | SMALLINT | 0-5 impact scale (from enrichment) |
+| ruling_label | TEXT | Short ruling description |
+| who_wins | TEXT | Winning party description |
+| who_loses | TEXT | Losing party description |
+| summary_spicy | TEXT | AI: Engaging summary |
+| why_it_matters | TEXT | AI: Impact analysis |
+| dissent_highlights | TEXT | AI: Key dissent points |
+| evidence_anchors | TEXT[] | AI: Quote citations |
+| is_public | BOOLEAN | NOT NULL DEFAULT false - Publish gate |
+| enriched_at | TIMESTAMPTZ | When AI enrichment ran |
+| prompt_version | TEXT | Enrichment prompt version |
+| source_url | TEXT | CourtListener page URL |
+| pdf_url | TEXT | Opinion PDF URL |
+| created_at | TIMESTAMPTZ | Row created |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Key Constraints:**
+- UNIQUE on `courtlistener_cluster_id` (idempotent upserts)
+- CHECK on `ruling_impact_level` (0-5 range)
+
+**Key Indexes:**
+- `idx_scotus_cases_term` - btree on term
+- `idx_scotus_cases_decided` - btree on decided_at DESC
+- `idx_scotus_cases_impact` - btree on ruling_impact_level
+- `idx_scotus_cases_issue` - btree on issue_area
+- `idx_scotus_cases_unenriched` - Partial: unenriched public cases
+- `idx_scotus_cases_public` - Partial: public cases only
+
+**RLS Policies:**
+- `scotus_cases_anon_select` - Anon sees only `is_public = true`
+- `scotus_cases_service_all` - Service role has full access
+
+---
+
+### `scotus_sync_state`
+**Purpose:** Pagination checkpoint for CourtListener API fetching (singleton table)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INT | Primary key (always 1 - singleton) |
+| next_url | TEXT | CourtListener pagination URL |
+| last_date_filed | DATE | Most recent case date seen |
+| last_fetch_at | TIMESTAMPTZ | Last fetch timestamp |
+| total_fetched | INT | Running count of cases fetched |
+| updated_at | TIMESTAMPTZ | Row updated (trigger) |
+
+**Constraint:** `CHECK (id = 1)` ensures singleton
+
+---
+
 ## Supporting Tables
 
 ### `executive_orders`
@@ -241,6 +405,80 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 
 ---
 
+### `stories_enrichment_log`
+**Purpose:** Per-story enrichment observability for the Stories Claude Agent (ADO-528)
+**Migration:** `098_stories_enrichment_log.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (BIGSERIAL) |
+| story_id | BIGINT | FK to stories.id (ON DELETE CASCADE) — **nullable**: NULL = run-level heartbeat row on a healthy 0-candidate cycle (unlike EO's `eo_id`, which is NOT NULL — Stories runs 12x/day vs EO's 1x/day, so empty runs are common, not rare) |
+| prompt_version | TEXT | Enrichment prompt version (e.g., 'claude-v1') |
+| run_id | TEXT | Links rows from same agent run |
+| status | TEXT | 'running', 'completed', or 'failed' |
+| duration_ms | INTEGER | Enrichment time in milliseconds |
+| needs_manual_review | BOOLEAN | Default false — flagged for admin review |
+| notes | TEXT | Free-form notes (nullable) |
+| created_at | TIMESTAMPTZ | When enrichment started |
+
+**Key Indexes:**
+- `idx_stories_enrichment_log_created_at` — `created_at DESC`
+- `idx_stories_enrichment_log_story_id_created_at` — `(story_id, created_at DESC)`
+
+**RLS Policies:** RLS enabled, no SELECT policies — blocks anon/authenticated, service_role bypasses
+
+---
+
+### `clustering_judge_log`
+**Purpose:** One row per Clustering Judge verdict + run heartbeats; audit trail behind the admin Judge tab (ADO-533/537)
+**Migrations:** `100_clustering_judge.sql`, widened by `104`/`105`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| created_at | TIMESTAMPTZ | Verdict time |
+| source | TEXT | CHECK: 'inline', 'judge-agent', 'manual' ('manual' added by 104 = admin Judge tab action) |
+| story_id_a / story_id_b | BIGINT | The pair; NULL on run-level heartbeat rows |
+| headline_a / headline_b | TEXT | Snapshots (survive later merges/edits) |
+| verdict | TEXT | CHECK: 'merge', 'keep', 'uncertain', 'unmerge' ('unmerge' added by 105) |
+| confidence | NUMERIC | 0–1, nullable |
+| rationale | TEXT | Judge reasoning |
+| centroid_sim | NUMERIC | Decision-time similarity |
+| merged | BOOLEAN | TRUE only when merge_stories actually ran (false on unmerge rows) |
+| dry_run | BOOLEAN | TRUE when run was dry-run |
+| run_id | TEXT | Per-run drill-down |
+
+**RLS:** enabled, no anon/authenticated grant — admin tab reads via `admin-judge-log` edge function (service_role).
+
+---
+
+### `story_merge_audit`
+**Purpose:** Pre-merge snapshot of the loser story's `article_story` membership so a wrong merge can be reversed (ADO-533; consumed by `unmerge_story`, ADO-537)
+**Migrations:** `101_clustering_judge_hardening.sql`, `105` adds `unmerged_at`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| merged_at | TIMESTAMPTZ | When the merge executed |
+| run_id | TEXT | Judge run (NULL for manual merges pre-104) |
+| loser_id / survivor_id | BIGINT | The pair |
+| loser_article_ids | TEXT[] | Snapshot of the loser's article ids (articles.id is TEXT `art-<uuid>`) |
+| unmerged_at | TIMESTAMPTZ | Non-NULL = snapshot consumed by `unmerge_story` (each snapshot reversible once) |
+
+---
+
+### `judge_run_merge_count`
+**Purpose:** DB-side hard cap for the Clustering Judge — one row per run_id counting executed merges; `merge_stories` refuses past the cap (ADO-533)
+**Migration:** `101_clustering_judge_hardening.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| run_id | TEXT | Primary key |
+| merge_count | INT | Executed merges this run |
+| updated_at | TIMESTAMPTZ | Last increment |
+
+---
+
 ### `pending_submissions`
 **Purpose:** Manual article submission queue
 
@@ -287,6 +525,9 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 | `attach_or_create_article()` | Idempotent article insertion with story matching |
 | `get_stories_needing_enrichment()` | Find unenriched stories for AI processing |
 | `increment_budget_with_limit()` | Atomic budget check + increment |
+| `merge_stories(p_loser_id, p_survivor_id, p_run_id)` | Server-side story merge: snapshot to `story_merge_audit`, repoint `article_story`, recompute survivor, tombstone loser (`status='merged_into'`). FOR UPDATE locks + per-run cap. service_role only |
+| `unmerge_story(p_loser_id, p_run_id)` | Reverse a merge from its unconsumed snapshot: restore articles still on the survivor, clear tombstone, recompute both, stamp `unmerged_at` (ADO-537). Loser always restores as `active` (pre-merge status not snapshotted — harmless while lifecycle disabled). service_role only |
+| `recompute_story_from_members(p_story_id)` | Rebuild a story's centroid/entities/`source_count` from actual `article_story` members (ADO-537). service_role only |
 
 ---
 
@@ -342,6 +583,20 @@ LIMIT 10;
 | Media & Disinformation | `media_disinformation` |
 | Epstein & Associates | `epstein_associates` |
 | Other | `other` |
+
+---
+
+## Naming Conventions
+
+| Element | Format | Example |
+|---------|--------|---------|
+| Tables | `snake_case`, plural | `stories`, `feed_registry` |
+| Columns | `snake_case` | `created_at`, `story_id` |
+| Foreign Keys | `{table_singular}_id` | `story_id`, `article_id` |
+| Indexes | `idx_{table}_{columns}` | `idx_stories_created_at` |
+
+**Required columns:** `id`, `created_at` (timestamptz)
+**Always use:** `timestamptz` (not timestamp), `jsonb` (not json), `text` (not varchar unless constrained)
 
 ---
 

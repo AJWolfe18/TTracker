@@ -356,7 +356,7 @@ function getTitleTokenOverlapEnhanced(a, b, stopwordsSet) {
  * TTRC-355 Stage 1: Unified helper for computing both legacy and enhanced overlaps
  * Call from both OVERRIDE and NEAR_MISS paths to avoid drift
  */
-function computeTitleTokenOverlaps(articleTitle, storyTitle) {
+export function computeTitleTokenOverlaps(articleTitle, storyTitle) {
   const legacy = getTitleTokenOverlap(articleTitle, storyTitle);
   const enhanced = getTitleTokenOverlapEnhanced(articleTitle, storyTitle, TITLE_STOPWORDS);
   return {
@@ -374,7 +374,7 @@ function computeTitleTokenOverlaps(articleTitle, storyTitle) {
  * @param {string} title2 - Second title
  * @returns {number} - Count of unique shared meaningful tokens
  */
-function getTitleTokenOverlap(title1, title2) {
+export function getTitleTokenOverlap(title1, title2) {
   if (!title1 || !title2) return 0;
 
   const normalize = t => t.toLowerCase()
@@ -657,7 +657,7 @@ function hashString(str) {
  * @param {object} scoreResult - Result from calculateHybridScore
  * @returns {boolean} - Whether the article-story pair passes clustering guardrails
  */
-function passesClusteringGuardrail(article, story, scoreResult) {
+export function passesClusteringGuardrail(article, story, scoreResult) {
   const hasDecentEmbedding = scoreResult.embeddingScore >= GUARDRAIL.minEmbedding;
   const hasNonStopwordEntityOverlap = scoreResult.nonStopwordEntityOverlapCount > 0;
   const hasTitleMatch = scoreResult.titleScore >= GUARDRAIL.minTitle;
