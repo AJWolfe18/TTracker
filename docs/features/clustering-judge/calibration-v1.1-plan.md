@@ -122,7 +122,10 @@ AS $$
         AND l.story_id_a IS NOT NULL AND l.story_id_b IS NOT NULL
         AND LEAST(l.story_id_a, l.story_id_b) = a.id
         AND GREATEST(l.story_id_a, l.story_id_b) = b.id
-        AND l.created_at > COALESCE(
+        -- >= not >: on timestamp equality (same-transaction writes) the verdict must
+        -- SUPPRESS — a stuck pair reopens on the next real article; a resurfaced pair
+        -- could re-merge a human unmerge. Prefer suppression on ambiguity.
+        AND l.created_at >= COALESCE(
           (SELECT max(m.matched_at) FROM article_story m
            WHERE m.story_id = a.id OR m.story_id = b.id),
           '-infinity'::timestamptz
@@ -147,6 +150,16 @@ NOTIFY pgrst, 'reload schema';
 
 - [ ] **Step 3: Fixture test on TEST** — run these via Supabase TEST MCP, in order:
 
+**⚠️ Pair-selection guard (known TEST gotcha):** TEST's top stories are QA-concurrency fixtures
+with `source_count=10` but ZERO `article_story` rows. The reopen test (d) silently no-ops on such
+a story. Before choosing A_ID/B_ID, verify BOTH sides have membership:
+
+```sql
+-- pick a candidate pair where both sides have article_story rows
+SELECT story_id, count(*) FROM article_story
+WHERE story_id IN (<A_ID>, <B_ID>) GROUP BY 1;   -- both counts must be >= 1
+```
+
 ```sql
 -- (a) Baseline: note the top pair returned (call it A_ID/B_ID; skip test if 0 rows —
 --     then synthesize: pick any two active stories from the RPC with p_min_sim lowered, e.g. 0.75)
@@ -169,6 +182,30 @@ DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
 ```
 
 All three PASS/FAIL checks must pass. (Heartbeat rows are excluded by the `IS NOT NULL` predicate — no separate test needed, but eyeball that a heartbeat row exists on TEST and the RPC still returns rows.)
+
+- [ ] **Step 3b: Unmerge-safety fixture test (CRITICAL negative flow).** The property "the Judge
+never re-merges a human unmerge" rests on two verified facts: `merge_stories`/`unmerge_story`
+repoint `article_story.story_id` WITHOUT touching `matched_at` (migrations 102:123-126, 105:220-223),
+so after an unmerge the pair's membership timestamps are older than the unmerge log row → suppressed.
+Prove it end-to-end on TEST:
+
+```sql
+-- (h) On a disposable TEST pair (both sides with membership, per the guard above):
+--     merge via RPC, then unmerge via RPC (or the admin UI against TEST):
+SELECT merge_stories(<B_ID>, <A_ID>, 'ado-539-unmerge-fixture');
+SELECT unmerge_story(<audit_id from story_merge_audit>);   -- exact signature: check migration 105 header
+-- (i) Verify the unmerge log row carries BOTH pair ids (if story_id_a/b are NULL on
+--     manual/unmerge rows, the memory filter can't see them — that would be a FAIL requiring
+--     the admin-judge-merge edge fn to be fixed first):
+SELECT story_id_a, story_id_b, verdict, created_at FROM clustering_judge_log
+WHERE verdict = 'unmerge' ORDER BY created_at DESC LIMIT 1;
+-- (j) Re-run the candidate RPC: the (A,B) pair must NOT appear (unmerge suppresses).  → PASS/FAIL
+-- (k) Clean up fixture rows (log + audit) as in step (g).
+```
+
+**Documented limitation (accepted, do not "fix"):** because merges preserve `matched_at`, story A
+absorbing story C does NOT reopen a suppressed (A,B) pair — only a genuinely NEW article attaching
+reopens pairs. This is the conservative direction (fewer wasted re-judgments).
 
 - [ ] **Step 4: Commit**
 
@@ -296,28 +333,42 @@ git commit -m "feat: gold set gs-209..211 — Josh-verified hedge-pattern ground
 - Consumes: gs-209..211 from Task 3; v1.1 Section 4 rules from Task 2.
 - Produces: the gate evidence for the ADO card — agreement %, merge-class precision, trap audit.
 
-- [ ] **Step 1: Re-judge ALL pairs under v1.1.** The executing Claude session applies the v1.1 Section 4 criteria (read the updated prompt first) to every pair currently in VERDICTS **plus** gs-209..211, from each pair's gold evidence (article_titles + headlines + entities). Update the VERDICTS map in place. Requirements:
+The precision risk of v1.1 lives almost entirely in the gold set's **different_event** pairs — that
+is where licensed inference could bleed into chain-of-events keeps. A 33-pair sample cannot prove
+"precision ≥98%", so the gate sweeps ALL of them.
+
+- [ ] **Step 1: Core re-derivation (33 pairs).** The executing Claude session applies the v1.1 Section 4 criteria (read the updated prompt first) to every pair currently in VERDICTS **plus** gs-209..211, from each pair's gold evidence (article_titles + headlines + entities). Update the VERDICTS map in place. Requirements:
   - gs-209, gs-210: `merge` via licensed inference (one plausible referent, same cycle).
   - gs-211: `merge` via format-variant rule.
   - Every existing keep trap (gs-001, gs-002, gs-005, gs-006, gs-008, gs-009, gs-010, gs-012, gs-063, gs-168, gs-189) must independently re-derive as `keep` — if v1.1's wording makes any of them arguable, that is a FAIL: tighten the rule text in prompt-v1.md (Task 2) and re-judge. Do not "keep the old verdict without re-deriving" — the point is testing the new rules for bleed.
-  - Update the header comment: coverage is now 33 pairs, verdicts produced under `judge-v1.1`.
 
-- [ ] **Step 2: Run the scorer**
+- [ ] **Step 2: Full different_event sweep (FP hunt).** Judge EVERY `different_event` entry in the gold set under v1.1 (count from `meta.counts` — roughly 98; enumerate ids with `node -e "const g=require('./scripts/evals/clustering-gold-set.json');console.log(g.entries.filter(e=>e.label==='different_event').map(e=>e.id).join(','))"`). Add all of them to VERDICTS. Scoring rules for this sweep:
+  - `keep` OR `uncertain` = acceptable (neither merges; `uncertain` will show as a "disagreement" in the agreement metric — that is fine, agreement is NOT the gate).
+  - `merge` on ANY different_event pair = a false positive. Each FP is a rule-bleed bug: tighten the prompt wording and re-judge the affected pairs.
+  - Update the dryrun header comment: coverage ~131 pairs, verdicts produced under `judge-v1.1`.
+
+- [ ] **Step 3: Run the scorer — THE GATE**
 
 ```bash
 node scripts/evals/judge-dryrun.js
 ```
 
-Expected (GATE — all three required):
-- `Verdict agreement with gold labels: 33/33 (100.0%)`
-- `Merge-class: precision=100.0%` (≥98% is the hard floor; at 33 pairs a single FP = 95.8% = FAIL)
-- `--- DISAGREEMENTS ---` section absent.
+GATE (all required; precision is the gate, agreement is reported context):
+- `Merge-class: precision >= 98.0%` — with ~22 expected merges, ONE FP ≈ 95.7% = FAIL, so in practice the bar is **zero FPs on the different_event sweep**.
+- gs-209, gs-210, gs-211 all `merge` (the hedge patterns actually flip).
+- All 11 keep traps `keep`.
+- July 4th story_story cluster still 10/10 merged.
 
-- [ ] **Step 3: Commit**
+**Escape hatch (bounded iteration):** if a v1.1 rule still produces FPs after 2 wording iterations,
+DROP that rule from this release and ship the rest — verdict memory (Task 1) and the surviving rule
+are independently valuable. File a follow-up story for the dropped rule with the failing pair ids as
+its test cases. Do not hold the whole release hostage to one rule's wording.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add scripts/evals/judge-dryrun.js
-git commit -m "feat: judge dry-run re-scored under v1.1 — 33/33, precision gate passed (ADO-539)"
+git commit -m "feat: judge dry-run re-scored under v1.1 — full different_event sweep, precision gate passed (ADO-539)"
 ```
 
 ---
@@ -336,18 +387,59 @@ git commit -m "feat: judge dry-run re-scored under v1.1 — 33/33, precision gat
 - [ ] **Step 1: Deployment branch** — `git checkout -b deploy/ado-539-judge-v1.1 origin/main`, cherry-pick the 4 commits (migration, prompt, gold set, dryrun). Check `.claude/test-only-paths.md` (none of these files are listed as of 2026-08-06). Expect clean picks — all 4 files are now in sync on main after PR #111.
 - [ ] **Step 2: PR to main** — `gh pr create`, comment `@codex review`, wait for checks + AI review, verify blockers (if any) against actual code before acting, `gh pr merge --squash`.
 - [ ] **Step 3: Josh applies migration 106 on PROD** — SQL Editor, PROD project `osjbulmltfpcoldydexg`. Verify: `SELECT indexname FROM pg_indexes WHERE indexname='idx_judge_log_pair_live';` returns 1 row, and `SELECT proname FROM pg_proc WHERE proname='get_clustering_judge_candidates';` still 1 row. Re-run the security advisor on PROD (house rule after any SECURITY DEFINER touch).
-- [ ] **Step 4: Live verification (next 24h = 3 Judge runs).** Success criteria:
-  - The 13 known re-hedge pairs (Gaza 13257/13295, Blanche pairs, etc.) do NOT reappear in `clustering_judge_log` unless a new article attached (check: `SELECT story_id_a, story_id_b, count(*) FROM clustering_judge_log WHERE created_at > <deploy time> AND verdict='uncertain' GROUP BY 1,2 HAVING count(*) > 1;` → expect 0 rows).
-  - Uncertain-per-run drops vs the ~30-per-window baseline; Discord digests shrink.
-  - No precision incident: spot-check every `merged=true` row in the window against member titles (same discipline as the Tier A audit).
-- [ ] **Step 5: Close out** — AC verification against the card (every pattern addressed: re-judging ✓ migration 106, licensed inference ✓ prompt, format variants ✓ prompt, gate ✓ Task 4 numbers, live verify ✓ Step 4), then 539 → Closed via ado-agent with evidence. Update `docs/reference/clustering-judge.md` if it states v1 behavior for candidates (check §candidate generation). `/end-work`.
+- [ ] **Step 4: Live verification (next 24h = 3 Judge runs).** Success criteria, each with its check:
+
+**(a) POSITIVE — known re-hedge pairs stay silent.** The 13 distinct pairs from the 2026-08-05
+analysis (full list on the ADO-539 card; includes Gaza 13257/13295 and the Blanche pairs) must get
+ZERO new log rows unless an article attached after deploy. This query sees across the deploy
+boundary (the within-window `GROUP BY` alone would miss a single post-deploy re-hedge):
+
+```sql
+SELECT l.story_id_a, l.story_id_b, l.verdict, l.created_at
+FROM clustering_judge_log l
+WHERE l.created_at > '<deploy time>'
+  AND l.story_id_a IS NOT NULL
+  AND (LEAST(l.story_id_a, l.story_id_b), GREATEST(l.story_id_a, l.story_id_b))
+      IN ((13257,13295) /* , ...remaining pairs from the card */ );
+-- expect 0 rows, UNLESS article_story has a matched_at > deploy for that pair's stories
+```
+
+**(b) POSITIVE — hedge volume drops.** Uncertain-per-run vs the ~30-per-window baseline; Discord
+digests shrink.
+
+**(c) NEGATIVE — no over-suppression.** If the memory filter is too broad the Judge goes silent
+(heartbeat-only runs) and nothing alarms. After 3 consecutive heartbeat-only runs, run the
+diagnostic: execute the RPC body's pair query WITHOUT the `NOT EXISTS` memory clause (copy from
+migration 106, delete that clause, run as raw SQL). If the memoryless version returns pairs the
+live RPC doesn't, inspect whether their suppressing verdicts are legitimate (recent, live) —
+suppression by ancient/wrong-order rows = bug.
+
+**(d) NEGATIVE — no precision incident.** Spot-check EVERY `merged=true` row in the window against
+member article titles (same discipline as the Tier A audit). One wrong merge = unmerge it via the
+admin tab (the snapshot makes this one click) and treat as a v1.1 rule bug: capture the pair as a
+new gold different_event entry before fixing the wording.
+
+- [ ] **Step 5: Docs (definite, not conditional).** Update `docs/reference/clustering-judge.md`
+(candidate-generation section: add verdict memory; prompt version → judge-v1.1) and the
+`docs/ARCHITECTURE.md` current-state Judge row (same-session rule for pipeline behavior changes).
+Include both in the PROD PR or a follow-up test-branch commit.
+- [ ] **Step 6: Close out** — AC verification against the card (every pattern addressed: re-judging ✓ migration 106 + fixtures h-k, licensed inference ✓ prompt, format variants ✓ prompt, gate ✓ Task 4 numbers, live verify ✓ Step 4 a-d), then 539 → Closed via ado-agent with evidence. `/end-work`.
 
 **Rollback:** migration → re-run migration 100 Part D (old body, same signature — restores no-memory behavior; the index can stay). Prompt → `git revert` the squash commit on a new PR; the agent's bootstrap picks up the old prompt on its next run. Both are independent — either can roll back alone.
 
 ---
 
-## Self-review notes (done at plan time)
+## Self-review notes (plan time + QA pass 2026-08-06)
 
 - All three card patterns map to tasks (1=re-judging, 2=both prompt rules, 3+4=gate); live verification covers the card's "Gate" sentence.
 - Verdict-memory design decision: `dry_run=false` rows only (dry-run validation must never suppress live judging); `unmerge` rows DO suppress (human "keep separate" is authoritative); reopen trigger is `article_story.matched_at`, which the attach path stamps on every new membership.
 - Known risk: licensed-inference wording could bleed into chain-of-events keeps (gs-189 is literally "later comment on the bill" — same saga, arguably one referent). The rule's guard is "(c) exactly ONE plausible occurrence" + the chain-of-events keep block still standing above it; Task 4 Step 1 forces an independent re-derivation of gs-189 to catch bleed. If it flips, add an explicit carve-out: "a later reaction to an EARLIER beat in a chain is chain-of-events (keep), not licensed inference."
+
+**QA-pass findings folded in (2026-08-06):**
+- **VERIFIED:** `merge_stories` (102:123-126) and `unmerge_story` (105:220-223) repoint `article_story.story_id` WITHOUT stamping `matched_at` → unmerge-safety (Judge can't re-merge a human unmerge) holds structurally; Task 1 Step 3b proves it end-to-end anyway.
+- `>` changed to `>=` in the memory clause: timestamp equality must suppress, never resurface (a resurfaced pair could re-merge an unmerge; a stuck pair reopens on the next real article).
+- Fixture pair selection guards against the TEST QA-fixture gotcha (stories with source_count=10 but 0 `article_story` rows would silently no-op the reopen test).
+- Gate strengthened from a 33-pair sample to core-33 + full different_event sweep — 33 pairs cannot prove ≥98% precision, and the different_event side is exactly where rule bleed appears. Agreement is reported, precision is the gate; `uncertain` on different_event is acceptable (doesn't merge).
+- Escape hatch added (drop a rule after 2 failed wording iterations, ship the rest) so one rule's wording can't strand the whole release.
+- Documented limitation: merges preserve `matched_at`, so A absorbing C does NOT reopen (A,B) — only genuinely new articles reopen pairs. Conservative by design.
+- Over-suppression is a monitored negative flow (Task 6 Step 4c) — a too-broad filter would present as silent heartbeat-only runs, which otherwise look healthy.
