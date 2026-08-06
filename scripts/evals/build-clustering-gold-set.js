@@ -31,13 +31,23 @@
  *     --out=<path to draft json>
  */
 
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..');
-const PUBLISHED_GOLD_SET = resolve(__dirname, 'clustering-gold-set.json');
+// Canonical form for path comparison: resolve symlinks where possible, fold case on Windows
+function canonicalizePath(p) {
+  let abs;
+  try {
+    abs = realpathSync(p);
+  } catch {
+    abs = resolve(p);
+  }
+  return process.platform === 'win32' ? abs.toLowerCase() : abs;
+}
+const PUBLISHED_GOLD_SET = canonicalizePath(join(__dirname, 'clustering-gold-set.json'));
 
 // ============================================================================
 // CLI
@@ -54,7 +64,7 @@ function parseArgs() {
     console.error('Usage: node build-clustering-gold-set.js --extracts=<file> --out=<draft.json>');
     process.exit(1);
   }
-  if (resolve(config.out) === PUBLISHED_GOLD_SET) {
+  if (canonicalizePath(config.out) === PUBLISHED_GOLD_SET) {
     console.error(`--out must not be the published gold set (${PUBLISHED_GOLD_SET}) — write a draft file and merge labels by hand`);
     process.exit(1);
   }
