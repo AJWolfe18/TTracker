@@ -9,14 +9,17 @@ description: Fetch SCOTUS cases from the CourtListener API into scotus_cases via
 **Requires:** `COURTLISTENER_API_TOKEN` environment variable
 
 ```bash
+# Set once per shell (avoids repeating the secret in command history)
+export COURTLISTENER_API_TOKEN=<token>
+
 # Fetch recent cases (2024+) - limit to 20 for testing
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=20
+node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=20
 
 # Dry run (no database writes)
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=5 --dry-run
+node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=5 --dry-run
 
 # Resume from last sync state (for incremental fetches)
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --resume
+node scripts/scotus/fetch-cases.js --resume
 
 # Check cases in database
 SELECT id, case_name, term, decided_at, majority_author FROM scotus_cases ORDER BY decided_at DESC LIMIT 10;

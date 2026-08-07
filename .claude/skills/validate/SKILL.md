@@ -62,7 +62,8 @@ If ANY of these are true, **STOP and ask the user:**
 - [ ] Verify no regressions in existing functionality
 
 ### Database (if migrations/schema changes)
-- [ ] No SQL injection vulnerabilities
+- [ ] No SQL injection vulnerabilities (all SQL parameterized, no string concatenation)
+- [ ] RLS policies verified for changed tables/queries
 - [ ] Indexes exist for new query patterns
 - [ ] Migration tested on TEST database
 
