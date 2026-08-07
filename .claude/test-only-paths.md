@@ -20,6 +20,5 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `public/style-preview.html` - Style preview tool (test only)
 
 ## What DOES go to prod
-- `.claude/skills/` - All skills work in both environments
-- `.claude/commands/` - All commands work in both environments
+- `.claude/skills/` - All skills work in both environments (commands were consolidated into skills 2026-08)
 - `docs/handoffs/` - Documentation is fine everywhere

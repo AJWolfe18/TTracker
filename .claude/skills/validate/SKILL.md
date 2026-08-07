@@ -1,130 +1,93 @@
+---
+name: validate
+description: Pre-commit validation gatekeeper. Use when the user is ready to commit, push, or open a PR, or asks to validate/verify changes ("ready to commit", "let's push this", "is this good?"). Runs two-pass code review, pattern compliance, QA tests, security and cost checks, and the ADO status update before any commit.
+---
+
 # Pre-Commit Validation Skill
 
-## Description
+Run checks **directly** (no subagent — validation outputs are small). This is the gatekeeper: don't commit without it.
 
-Automatically use this skill when user is **ready to commit or wants validation**.
+**Do NOT trigger when:** user explicitly wants a quick commit ("just commit it"), just discussing validation concepts, or still actively coding.
 
-**Trigger when user says things like:**
-- "Ready to commit"
-- "Let's commit this"
-- "Done with changes"
-- "Validate before I push"
-- "Check my changes"
-- "Ready for PR"
-- "Let's push this"
-- "Verify everything is good"
-- "Run validation"
-- "Is this ready to commit?"
+## MANDATORY Before Committing
 
-**Do NOT trigger when:**
-- User explicitly wants a quick commit ("just commit it", "quick commit")
-- Just discussing validation concepts
-- Reading/exploring code without making changes
-- User is still actively coding (wait until they say they're done)
+### 1. Code Review — Two-Pass (Required unless trivial)
 
----
-
-## Purpose
-
-Comprehensive pre-commit validation to catch issues before they're committed. Run checks directly (no subagent needed - validation outputs are small).
-
----
-
-## Instructions
-
-Execute these checks **directly** (not via subagent). Report results in summary format.
-
-### 1. Code Quality
-
-Check changed files for:
-- [ ] No `console.log` in production code (ok in scripts/)
-- [ ] No large commented-out code blocks
-- [ ] Async functions have try-catch error handling
-- [ ] Error messages are user-friendly
-
-### 2. Pattern Compliance
-
-Per `/docs/code-patterns.md`:
-- [ ] Pagination uses cursor-based (`lt('id', cursor)`), NEVER OFFSET
-- [ ] Timestamps use `timestamptz` not `timestamp`
-- [ ] Migrations have `IF NOT EXISTS` for idempotency
-- [ ] Foreign keys specify `ON DELETE` behavior
-- [ ] Edge Functions have CORS headers
-
-### 3. Testing
-
-Run appropriate test suite:
-```bash
-npm run qa:smoke          # General (always run)
-npm run qa:boundaries     # If clustering changes
-npm run qa:integration    # If article/story flow changes
-npm run qa:idempotency    # If job queue changes
-npm run qa:concurrency    # If clustering concurrency changes
+**Run BOTH code reviews for ANY non-trivial change:**
+```
+Pass 1: Task(feature-dev:code-reviewer): "Review changes for bugs, security, and pattern compliance"
+Pass 2: Agent(superpowers:code-reviewer): "Review for production readiness, architecture, requirements alignment"
 ```
 
-Identify 3+ edge cases and verify they're handled.
+**Skip BOTH only for:** typo fixes, single-line changes, config tweaks
+**If issues found:** Fix Critical/Important findings before proceeding.
 
-### 4. Database (if migrations/schema changes)
+### 2. ADO Status Update (Required)
 
+**Update ADO via the `ado` skill:**
+- If work complete → move to `Testing`
+- If work in progress → keep at `Active`, add comment on progress
+- If blocked → add blocker comment, flag user
+
+**If you don't have the ADO ticket number:** Ask the user before committing.
+
+### 3. Flag User If Uncertain
+
+If ANY of these are true, **STOP and ask the user:**
+- [ ] Not sure what ADO ticket this relates to
+- [ ] Changes are larger than expected
+- [ ] Code review found issues you can't resolve
+- [ ] Not sure if this should go to PROD
+
+---
+
+## Validation Checklist
+
+### Code Quality
+- [ ] No `console.log` statements in production code (ok in scripts/)
+- [ ] No commented-out code blocks
+- [ ] All error handling uses try-catch for async operations
+- [ ] All functions have proper error messages
+
+### Patterns Compliance (see `/docs/code-patterns.md`)
+- [ ] Pagination uses cursor-based (`lt('id', cursor)`), NEVER OFFSET
+- [ ] Timestamps use `timestamptz` (not `timestamp`)
+- [ ] Migrations include `IF NOT EXISTS`
+- [ ] Foreign keys specify `ON DELETE` behavior
+- [ ] CORS headers present in Edge Functions
+
+### Testing
+- [ ] Run relevant QA suite: `npm run qa:smoke` (always) plus the specific suite if clustering/article-flow/job-queue changes (`npm run qa:*` in package.json)
+- [ ] Test edge cases manually (identify at least 2-3 scenarios)
+- [ ] Verify no regressions in existing functionality
+
+### Database (if migrations/schema changes)
 - [ ] No SQL injection vulnerabilities
 - [ ] Indexes exist for new query patterns
 - [ ] Migration tested on TEST database
 
-### 5. Cost Impact
-
-If changes involve OpenAI/AI features:
-```sql
-SELECT spent_usd FROM budgets WHERE day = CURRENT_DATE;
-```
-- Verify under $5/day limit
-- State cost impact of new features
-
-### 6. Security
-
-- [ ] No secrets/API keys in code
-- [ ] Input validation on user-facing endpoints
+### Security
+- [ ] No secrets or API keys in code
+- [ ] Proper input validation/sanitization on user-facing endpoints
 - [ ] CORS properly configured
 
-### 7. JIRA Update
-
-After validation passes, update the relevant JIRA ticket:
-- Transition status if appropriate
-- Add comment summarizing changes
+### Cost (if AI changes)
+- [ ] `SELECT spent_usd FROM budgets WHERE day = CURRENT_DATE;` — verify under $5/day limit
+- [ ] Calculate and state OpenAI API cost impact for new features
 
 ---
 
-## Response Format
+## Report Format
 
 ```
-VALIDATION RESULTS
+✅ PRE-COMMIT VALIDATION
 
-Code Quality:    ✅ Pass | ❌ Fail [details]
-Patterns:        ✅ Pass | ❌ Fail [details]
-Testing:         ✅ Pass | ❌ Fail [suite ran, edge cases tested]
-Database:        ✅ Pass | ❌ N/A | ❌ Fail [details]
-Cost Impact:     $X.XX (within budget) | ⚠️ Over budget
-Security:        ✅ Pass | ❌ Fail [details]
+Code Review: ✅ Ran feature-dev:code-reviewer + superpowers:code-reviewer (or ⏭️ Skipped - trivial change)
+ADO Update: ✅ ADO-XXX moved to Testing (or ❌ Need ticket number)
+QA Tests: ✅ npm run qa:smoke passed
+Patterns: ✅ Compliant
+Security: ✅ No issues
+Cost Impact: $X.XX (within budget) | ⚠️ Over budget | N/A
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-READY TO COMMIT: ✅ YES | ❌ NO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[If YES]
-Recommended commit message:
-feat/fix/chore(scope): description
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-
-[If NO]
-Blockers:
-1. [Issue to fix]
-2. [Issue to fix]
+READY TO COMMIT: YES / NO (reason)
 ```
-
----
-
-## Notes
-
-- This skill runs checks **directly** (not via subagent) since outputs are small
-- Always run `qa:smoke` at minimum
-- After validation, JIRA update happens via the JIRA skill if a ticket is associated

@@ -1,4 +1,9 @@
-# End Work Command
+---
+name: end-work
+description: Wrap up a development session. Use when the user says they're done, wants to wrap up/close out, or invokes /end-work — appends+curates memory per docs/memory-policy.md, updates living docs if system shape changed, runs two-pass code review and QA, verifies acceptance criteria, commits+pushes to test, and updates the ADO ticket.
+---
+
+# End Work
 
 Wrap up a development session: save state to memory, review code, commit, push, and update ADO.
 
@@ -68,7 +73,7 @@ Run relevant test suite:
 
 ### 4. AC Verification (if ADO ticket involved)
 Before any state change:
-- Fetch acceptance criteria via `/ado`
+- Fetch acceptance criteria via the `ado` skill
 - Verify EVERY AC bullet as MET/NOT MET
 - Do NOT advance with unmet AC
 

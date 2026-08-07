@@ -180,7 +180,7 @@ docs/features/
 4. **ADO Operations via `/ado` command** - Isolates 20K+ context cost
    - ADO MCP tools return full work item dumps
    - Use `/ado` command to query/update work items
-   - See `.claude/commands/ado.md` for syntax
+   - See `.claude/skills/ado/SKILL.md` for syntax
    - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
@@ -372,12 +372,7 @@ npm run qa:smoke
 ```
 
 ### Individual QA Tests
-```bash
-npm run qa:boundaries      # Clustering boundary conditions
-npm run qa:integration     # Attach-or-create integration
-npm run qa:idempotency     # Job queue idempotency
-npm run qa:concurrency     # Clustering concurrency
-```
+See the `qa:*` scripts in `package.json` for the full suite list.
 
 ### Supabase Edge Functions
 ```bash
@@ -385,13 +380,8 @@ npm run qa:concurrency     # Clustering concurrency
 # TEST:  --project-ref wnrjrywpcadwutfykflu  (TrumpyTracker-Test)
 # PROD:  --project-ref osjbulmltfpcoldydexg  (TrumpyTracker)
 
-# Deploy functions to TEST (default for development)
-supabase functions deploy stories-active --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy stories-detail --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy stories-search --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy articles-manual --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy queue-stats --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy rss-enqueue --project-ref wnrjrywpcadwutfykflu
+# Deploy pattern (function names = folders in supabase/functions/)
+supabase functions deploy <function-name> --project-ref wnrjrywpcadwutfykflu
 ```
 
 ### Database Migrations
@@ -441,32 +431,10 @@ Frontend (Vite + React app)
 ## Important Patterns
 
 ### Pagination
-**ALWAYS use cursor-based pagination. NEVER use OFFSET.**
-```javascript
-// Good
-const { data } = await supabase
-  .from('stories')
-  .select('*')
-  .lt('id', cursor)
-  .order('id', { ascending: false })
-  .limit(20);
-
-// Bad - DO NOT USE
-const { data } = await supabase
-  .from('stories')
-  .select('*')
-  .range(0, 20); // OFFSET-based, slow at scale
-```
+**ALWAYS use cursor-based pagination (`lt('id', cursor)` + `order` + `limit`). NEVER use OFFSET/`range()`.**
 
 ### Timestamps
-**All timestamps are UTC. Use TIMESTAMPTZ type.**
-```sql
--- Good
-published_at TIMESTAMPTZ DEFAULT NOW()
-
--- Bad
-published_at TIMESTAMP
-```
+**All timestamps are UTC. Use TIMESTAMPTZ type, never bare TIMESTAMP.**
 
 ### Story Lifecycle
 - **Active:** Display prominently (0-72 hours since last_updated_at)
@@ -483,18 +451,7 @@ published_at TIMESTAMP
 - Allows story reopening if new articles match
 
 ### Category Mapping
-UI labels → Database enum values (defined in `scripts/enrichment/enrich-stories-inline.js`):
-- 'Corruption & Scandals' → 'corruption_scandals'
-- 'Democracy & Elections' → 'democracy_elections'
-- 'Policy & Legislation' → 'policy_legislation'
-- 'Justice & Legal' → 'justice_legal'
-- 'Executive Actions' → 'executive_actions'
-- 'Foreign Policy' → 'foreign_policy'
-- 'Corporate & Financial' → 'corporate_financial'
-- 'Civil Liberties' → 'civil_liberties'
-- 'Media & Disinformation' → 'media_disinformation'
-- 'Epstein & Associates' → 'epstein_associates'
-- 'Other' → 'other'
+UI labels → Database enum values: see the mapping in `scripts/enrichment/enrich-stories-inline.js` (11 categories, 'Corruption & Scandals' → 'corruption_scandals' style).
 
 ### RSS Feed Compliance Rules
 **IMPORTANT:** All RSS feeds MUST have compliance rules configured in the database.
@@ -523,10 +480,7 @@ VALUES (
 3. Truncates to `max_chars` limit (5000) before database insert
 4. Falls back to 5000 if no rule exists
 
-**RSS Content Fields Priority:**
-- `content:encoded` - Full article HTML (~2K-10K chars) - **checked first**
-- `description` - Standard summary (~200-500 chars) - **fallback**
-- `summary` - Atom feed summary - **fallback for Atom feeds**
+**RSS Content Fields Priority:** see extraction order in `scripts/rss/fetch_feed.js` (`content:encoded` → `description` → `summary`).
 
 **Note:** Even with 5K RSS limit, we also scrape full articles (TTRC-258/260) for better AI summaries.
 
@@ -600,24 +554,10 @@ VALUES (
 ## Common Tasks
 
 ### Adding RSS Feeds
-```sql
-INSERT INTO feed_registry (url, source_name, topics, tier, is_active)
-VALUES (
-  'https://example.com/feed.xml',
-  'Example News',
-  ARRAY['politics', 'congress'],
-  2,  -- Tier 2: Important
-  true
-);
-```
+Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL above in RSS Feed Compliance Rules).
 
 ### Manual Article Submission
-```bash
-curl -X POST "$SUPABASE_URL/functions/v1/articles-manual" \
-  -H "Authorization: Bearer $ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/article"}'
-```
+POST a `{"url": ...}` body to the `articles-manual` edge function with the anon key (see `supabase/functions/articles-manual/`).
 
 ### Trigger RSS Fetch (TEST Environment)
 **IMPORTANT:** Use the GitHub Actions workflow, NOT the legacy `rss-enqueue` endpoint.
@@ -637,27 +577,7 @@ gh run watch
 - `curl .../rss-enqueue`
 
 ### Fetch SCOTUS Cases (CourtListener API)
-**Script:** `scripts/scotus/fetch-cases.js`
-**Requires:** `COURTLISTENER_API_TOKEN` environment variable
-
-```bash
-# Fetch recent cases (2024+) - limit to 20 for testing
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=20
-
-# Dry run (no database writes)
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --since=2024-01-01 --limit=5 --dry-run
-
-# Resume from last sync state (for incremental fetches)
-COURTLISTENER_API_TOKEN=<token> node scripts/scotus/fetch-cases.js --resume
-
-# Check cases in database
-SELECT id, case_name, term, decided_at, majority_author FROM scotus_cases ORDER BY decided_at DESC LIMIT 10;
-```
-
-**Notes:**
-- Cases start with `is_public = false` (need enrichment/review before publishing)
-- Sync state tracked in `scotus_sync_state` table (singleton)
-- API rate limit: 5000 requests/hour with exponential backoff on 429
+Use the `scotus-fetch` skill (`.claude/skills/scotus-fetch/SKILL.md`) — commands, dry-run/resume flags, and gotchas (`is_public` default, sync state, rate limits).
 
 ## Feature-Dev Plugin Usage
 
@@ -676,23 +596,10 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ## Troubleshooting
 
-### Feed Not Processing
-1. Check `SELECT * FROM feed_registry WHERE is_active = true`
-2. Verify `failure_count < 5`
-3. Check GitHub Actions run logs: `gh run list --workflow="rss-tracker-test.yml" --limit 5`
-
-### Duplicate Articles
-1. Verify `url_hash` generation
-2. Check composite unique constraint: `(url_hash, published_date)`
-3. Review `attach_or_create_article` RPC logic
-
-### Missing AI Enrichment
-1. Check OpenAI API key in environment
-2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
-3. Check GitHub Actions logs for enrichment errors
+See `docs/common-issues.md` → "RSS Pipeline Quick Checks" (feed not processing, duplicate articles, missing enrichment).
 
 ---
 
-**Last Updated:** 2026-05-30
+**Last Updated:** 2026-08-06
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`

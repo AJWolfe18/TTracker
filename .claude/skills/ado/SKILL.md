@@ -1,3 +1,8 @@
+---
+name: ado
+description: Query, create, update, search, or link Azure DevOps (ADO) work items for TTracker. Use whenever the user references an ADO/work-item number, asks to check/create/update/search ADO, or a ticket state change is needed. Reads go via REST+jq shortcut; writes via a reusable subagent to isolate 20-30K token API responses.
+---
+
 # Azure DevOps Integration Skill
 
 ## Description
@@ -18,13 +23,25 @@ Automatically use this skill when user wants to **interact** with Azure DevOps (
 **Do NOT trigger when:**
 - User just references an ADO item in passing without asking to query it
 - Discussing ADO workflow concepts without needing actual queries
-- Working with JIRA (use JIRA skill instead)
+- JIRA is retired — this project migrated to ADO (old tickets live on as `jira:TTRC-XXX` tags)
 
 **Key patterns:**
 - "ADO [number]" or "work item [number]" → Query that ADO work item
 - "create in ADO" or "add to ADO" → Create new work item
 - "search ADO" → Search work items
 - "export ADO" → Export backlog to file
+
+---
+
+## Slash Usage
+
+```
+/ado [ID] [action]              # /ado 123 get status | /ado 123 set state Active | /ado 123 add tag "clustering"
+/ado create [type] "[title]"    # /ado create story "Implement clustering" | /ado create bug "Fix duplicate articles"
+/ado search "[query]"           # /ado search "tag:jira:TTRC-123"
+/ado export | count | list stories
+/ado 123 link parent 456 | link child 789
+```
 
 ---
 

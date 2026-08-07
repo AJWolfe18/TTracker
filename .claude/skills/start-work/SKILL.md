@@ -1,4 +1,9 @@
-# Start Work Command
+---
+name: start-work
+description: Kick off a development session on a task or ADO ticket. Use at session start when the user provides a task prompt — reads memory tiers, reviews the task for gaps, sets up the full workflow TodoList (implementation → two-pass review → QA → AC verification → ADO update → /end-work), and moves the ADO ticket to Active.
+---
+
+# Start Work
 
 Kickstart development on a task with built-in review and workflow setup.
 
@@ -51,12 +56,12 @@ Create a TodoList with full workflow:
 - [ ] Run two-pass code review: `Task(feature-dev:code-reviewer)` then `Agent(superpowers:code-reviewer)`
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Commit changes
-- [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via `/ado`. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.
+- [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via the `ado` skill. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.
 - [ ] Update ADO (move to appropriate state only after AC verification passes)
 - [ ] Run `/end-work` to save session state, commit, and push
 
 ### 6. Update ADO
-Use `/ado` command to move the relevant ticket to Active state.
+Use the `ado` skill to move the relevant ticket to Active state.
 
 ### 7. Begin Development
 Start executing the todolist items sequentially.

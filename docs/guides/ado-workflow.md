@@ -71,7 +71,7 @@ Use `/ado` command for all operations:
 /ado search "clustering"     # Search work items
 ```
 
-Full syntax: `.claude/commands/ado.md`
+Full syntax: `.claude/skills/ado/SKILL.md`
 
 ---
 

@@ -649,6 +649,25 @@ When something breaks:
 
 ---
 
-_Last Updated: 2026-01-12_
+## RSS Pipeline Quick Checks (moved from CLAUDE.md)
+
+### Feed Not Processing
+1. Check `SELECT * FROM feed_registry WHERE is_active = true`
+2. Verify `failure_count < 5`
+3. Check GitHub Actions run logs: `gh run list --workflow="rss-tracker-test.yml" --limit 5`
+
+### Duplicate Articles
+1. Verify `url_hash` generation
+2. Check composite unique constraint: `(url_hash, published_date)`
+3. Review `attach_or_create_article` RPC logic
+
+### Missing AI Enrichment
+1. Check OpenAI API key in environment
+2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
+3. Check GitHub Actions logs for enrichment errors
+
+---
+
+_Last Updated: 2026-08-06_
 _Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_
