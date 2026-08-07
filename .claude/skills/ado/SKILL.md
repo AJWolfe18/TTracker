@@ -1,3 +1,8 @@
+---
+name: ado
+description: Query, create, update, search, or link Azure DevOps (ADO) work items for TTracker. Use whenever the user references an ADO/work-item number, asks to check/create/update/search ADO, or a ticket state change is needed. Reads go via REST+jq shortcut; writes via a reusable subagent to isolate 20-30K token API responses.
+---
+
 # Azure DevOps Integration Skill
 
 ## Description
@@ -18,13 +23,25 @@ Automatically use this skill when user wants to **interact** with Azure DevOps (
 **Do NOT trigger when:**
 - User just references an ADO item in passing without asking to query it
 - Discussing ADO workflow concepts without needing actual queries
-- Working with JIRA (use JIRA skill instead)
+- JIRA is retired — this project migrated to ADO (old tickets live on as `jira:TTRC-XXX` tags)
 
 **Key patterns:**
 - "ADO [number]" or "work item [number]" → Query that ADO work item
 - "create in ADO" or "add to ADO" → Create new work item
 - "search ADO" → Search work items
 - "export ADO" → Export backlog to file
+
+---
+
+## Slash Usage
+
+```
+/ado [ID] [action]              # /ado 123 get status | /ado 123 set state Active | /ado 123 add tag "clustering"
+/ado create [type] "[title]"    # /ado create story "Implement clustering" | /ado create bug "Fix duplicate articles"
+/ado search "[query]"           # /ado search "tag:jira:TTRC-123"
+/ado export | count | list stories
+/ado 123 link parent 456 | link child 789
+```
 
 ---
 
@@ -44,16 +61,28 @@ Organization: (inferred from MCP connection)
 | **Bug** | `Bug` | Something is broken |
 | **Task** | `Task` | Sub-work items (rare) |
 
-### State Mappings (JIRA → ADO)
+### State Workflow (IMPORTANT - use correct states!)
 
-| JIRA Status | ADO State |
-|-------------|-----------|
-| Backlog | New |
-| To Do | New |
-| In Progress | Active |
-| In Review | Active |
-| Ready for Test | Active |
-| Done | Closed |
+```
+New → Todo → Active → Review → Testing → Ready for Prod → Closed
+```
+
+| State | Meaning | When to Use |
+|-------|---------|-------------|
+| **New** | Just created, not prioritized | Initial creation |
+| **Todo** | Ready to work on, in backlog | Prioritized but not started |
+| **Active** | Currently being worked on | During development |
+| **Review** | Code complete, awaiting review | PR created, waiting for review |
+| **Testing** | Deployed to TEST, being verified | Code on test branch, validating |
+| **Ready for Prod** | Verified on TEST, awaiting PROD | Ready for cherry-pick to main |
+| **Closed** | Done, deployed to PROD | Fully complete |
+| **Removed** | Cancelled/deleted | Won't do |
+
+**NOTE:** We don't use "Resolved" for User Stories - go straight to "Closed" after PROD deploy.
+
+**⚠️ Bug work items use a DIFFERENT state model:** New / Active / Resolved / Closed only — the API
+rejects "Testing"/"Ready for Prod" on Bugs (verified 2026-08-05, ADO-540). Use **Resolved** for
+"fix deployed, awaiting verification", then Closed.
 
 ---
 
@@ -64,6 +93,13 @@ Handle ADO operations via subagent to isolate 20-30K token context cost. ADO MCP
 ---
 
 ## Instructions
+
+**Route by operation type (cheapest first):**
+- **Reads (get status / full card):** use the REST + jq shortcut below — no subagent, ~0.5-2K tokens
+- **Writes (create / update / transition / comment):** use a subagent. Spawn it ONCE per
+  session with `name: "ado-agent"`, then send subsequent operations to the SAME agent via
+  `SendMessage(to: "ado-agent")` — this reuses its context instead of paying ~45K startup
+  per operation.
 
 Launch a **Task tool (general-purpose subagent)** with the ADO operation. The subagent will:
 
@@ -91,14 +127,32 @@ Execute ADO operation: [DESCRIBE WHAT USER WANTS]
 **Example - Query work item:**
 mcp__azure-devops__wit_get_work_item(project="TTracker", id=123)
 
+**IMPORTANT — HTML FORMATTING FOR RICH TEXT FIELDS:**
+ADO Description and Acceptance Criteria fields are rich text (HTML). NEVER write plain text or markdown — always use HTML tags. Examples:
+- Paragraphs: `<p>Text here</p>`
+- Bold: `<b>Bold text</b>`
+- Bullet lists: `<ul><li>Item 1</li><li>Item 2</li></ul>`
+- Numbered lists: `<ol><li>Step 1</li><li>Step 2</li></ol>`
+- Line breaks: `<br>`
+- Headers: `<h3>Section</h3>`
+- Links: `<a href="url">text</a>`
+
 **Example - Create User Story:**
 mcp__azure-devops__wit_create_work_item(
   project="TTracker",
   workItemType="User Story",
   fields=[
     {"name": "System.Title", "value": "Feature title here"},
-    {"name": "System.Description", "value": "Description here"},
+    {"name": "System.Description", "value": "<p>Description here with <b>formatting</b>.</p><ul><li>Key point 1</li><li>Key point 2</li></ul>"},
     {"name": "System.Tags", "value": "jira:TTRC-XXX"}
+  ]
+)
+
+**Example - Acceptance Criteria (ALWAYS use HTML checklist format):**
+mcp__azure-devops__wit_update_work_item(
+  id=123,
+  updates=[
+    {"path": "/fields/Microsoft.VSTS.Common.AcceptanceCriteria", "value": "<ul><li>AC 1: Feature does X</li><li>AC 2: Edge case Y is handled</li><li>AC 3: Tests pass</li></ul>"}
   ]
 )
 
@@ -109,6 +163,14 @@ mcp__azure-devops__wit_update_work_item(
     {"path": "/fields/System.Description", "value": "New description"}
   ]
 )
+
+**STATE WORKFLOW (use correct state!):**
+New → Todo → Active → Review → Testing → Ready for Prod → Closed
+
+- Testing = deployed to TEST, being verified
+- Ready for Prod = verified on TEST, awaiting PROD
+- Closed = deployed to PROD, done
+- Don't use "Resolved" for stories - use "Closed"
 
 **Example - Search:**
 mcp__azure-devops__search_workitem(searchText="clustering", project=["TTracker"])
@@ -121,6 +183,55 @@ Tags: [tags if any]
 
 Do NOT return full descriptions, field dumps, or raw API responses.
 ```
+
+**EXCEPTION — detail mode:** If the request says "details", "full", or the ticket
+content is needed to implement work, return ALL human-relevant content cleaned of
+API noise: full description + acceptance criteria (as markdown, not HTML),
+comments containing decisions/requirements/blockers, and linked item IDs+titles.
+Still omit raw JSON, field IDs, user objects, and revision history — that's the
+bulk of the payload. If cleaned content exceeds ~3K tokens, write it to the
+scratchpad and return the file path plus a summary.
+
+**DETAIL-MODE SHORTCUT (no subagent needed):** For full-card pulls, main Claude
+can skip the subagent entirely and hit the ADO REST API with jq filtering — the
+JSON noise is discarded in the shell pipe before it enters context (~0.5-2K
+tokens for a full card):
+
+```bash
+ADO_ORG="https://dev.azure.com/AJWolfe92"
+
+# Do NOT hardcode which file holds "the" PAT. Verified 2026-07-25: the token in
+# the TTracker entry of ~/.claude.json is DEAD (ADO answers 203) while the one in
+# global settings.json is live (200). Which is current changes whenever a token is
+# regenerated, so collect every candidate and use the first that authenticates.
+# A dead PAT does NOT return 401 — ADO returns 203 and a sign-in page, so an
+# untested token fails silently and looks like "work item not found".
+# $HOME (not /c/Users/Josh) so this survives a different machine or username.
+ado_pat() {
+  local t
+  for t in \
+    "$(jq -r '.mcpServers["azure-devops"].env.ADO_MCP_AUTH_TOKEN // empty' "$HOME/.claude/settings.json" 2>/dev/null)" \
+    $(jq -r '[.projects[]?.mcpServers?["azure-devops"]?.env.ADO_MCP_AUTH_TOKEN] | unique | .[]? // empty' "$HOME/.claude.json" 2>/dev/null)
+  do
+    [ -n "$t" ] || continue
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' -u ":$t" "$ADO_ORG/_apis/projects?api-version=7.1")" = "200" ]; then
+      printf '%s' "$t"; return 0
+    fi
+  done
+  echo "No working ADO PAT. Regenerate at $ADO_ORG → User settings → Personal access tokens," >&2
+  echo "then update BOTH ~/.claude/settings.json and the project entry in ~/.claude.json." >&2
+  return 1
+}
+
+PAT=$(ado_pat) || return 2>/dev/null || exit 1
+curl -s -u ":$PAT" "$ADO_ORG/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" \
+  | jq '{id, title: .fields["System.Title"], type: .fields["System.WorkItemType"], state: .fields["System.State"], description: .fields["System.Description"], ac: .fields["Microsoft.VSTS.Common.AcceptanceCriteria"]}' \
+  | sed -E 's/<[^>]+>/ /g'
+```
+
+Add `/comments` endpoint (`.../workitems/<ID>/comments?api-version=7.1-preview`)
+when decision history matters. Use the subagent route for writes (create/update/
+transition) — the MCP handles field formatting rules there.
 
 ---
 
