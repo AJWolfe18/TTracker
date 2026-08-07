@@ -191,7 +191,7 @@ If conflicts occur, resolve and continue. Likely clean since these files don't e
 
 ```bash
 ls docs/features/scotus-claude-agent/prompt-v1.md
-ls .claude/commands/scotus-review.md
+ls .claude/skills/scotus-review/SKILL.md
 ls migrations/090_scotus_enrichment_log.sql
 ```
 

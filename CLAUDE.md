@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 🚀 TLDR (Read This First)
 
-**Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)  
-**Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)  
-**Budget**: <$50/month HARD LIMIT  
-**Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)  
-**Workflow**: Code → Test with subagent → Run QA → Commit → Push test → Check AI review → Auto-deploy  
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP  
+**Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)
+**Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
+**Budget**: <$50/month HARD LIMIT
+**Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
+**Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
+**Source of Truth**: ADO for status, plans for implementation details only
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -17,74 +18,94 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 📁 Quick Reference
 
 **First 3 commands every session:**
-1. `git branch --show-current` → Must be `test`
-2. Read `/docs/handoffs/[latest].md`
-3. Check if handoff references a plan → EXECUTE it (don't re-plan)
+1. Read `memory-global` + `memory-project` (HOT) → understand context. Do NOT bulk-read `memory-deep` (archive) — `search_nodes` it on demand only. Rules: `docs/memory-policy.md`
+2. `git branch --show-current` → Must be `test`
+3. Check if memory or ADO references an active plan → EXECUTE it (don't re-plan)
 
 **Key docs:**
-- `/docs/plans/` - Implementation plans (EXECUTE, don't re-plan)
+- `/docs/features/[feature]/` - PRD, plans, notes for active features
 - `/docs/handoffs/` - Session handoffs
 - `/docs/guides/ado-workflow.md` - ADO states and work item types
+- `/docs/guides/prod-deployment-checklist.md` - PROD deployment requirements
+- `/docs/guides/feature-flags.md` - Feature flag system for safe deployments
 - `/docs/database/database-schema.md` - Full schema reference
+
+**Feature folders:** Each major feature gets its own folder in `/docs/features/`:
+```
+docs/features/
+├── pardons-tracker/     # Active feature
+│   ├── prd.md
+│   └── plan.md
+└── rss-enrichment/      # System feature
+    └── spicy-prompts-guide.md
+```
 
 ---
 
 ## 🔄 Session Workflow Checklist
 
 ### ✅ Start Every Session (5 min)
-- [ ] Read latest handoff: `/docs/handoffs/[latest-date].md`
+- [ ] Read `memory-global` + `memory-project` (HOT) FIRST (search `memory-deep` only if task touches old work)
 - [ ] Verify on `test` branch: `git branch --show-current`
 - [ ] Query ADO via `/ado` command (if ticket-based work)
-- [ ] Review existing plan OR create if complex: `/docs/plans/`
+- [ ] Review existing plan in `/docs/features/[feature]/` OR create if complex
 - [ ] Read `/docs/code-patterns.md` and `/docs/common-issues.md` before implementing
-- [ ] Create TodoList with FULL workflow (code → validate → QA → commit → ADO → handoff)
+- [ ] Create TodoList with FULL workflow (code → validate → QA → `/end-work`)
 
 ### 🔨 During Work
 - [ ] Follow plan/todos linearly (don't jump around)
 - [ ] Validate with subagent BEFORE marking todos complete
 - [ ] Check MCP tools before claiming "I can't"
+- [ ] **Run two-pass code review** on any non-trivial change:
+  1. `Task(feature-dev:code-reviewer)` — pattern compliance, bugs, security
+  2. `Agent(superpowers:code-reviewer)` — production readiness, architecture, requirements alignment
+  - Fix Critical/Important findings before proceeding
+  - Skip only for: typo fixes, single-line changes, config tweaks
 
-### ✅ End Every Session (10 min)
-- [ ] Run QA tests: `npm run qa:smoke` or relevant suite
-- [ ] Commit & push to test branch
-- [ ] **MANDATORY**: Check AI code review: `bash scripts/check-code-review.sh`
-  - ⏱️ **AI reviews take 5-10 minutes** - Don't burn tokens polling repeatedly
-  - After push, inform user: "AI code review triggered, check back in ~5 min"
-  - User will ask you to check status when ready
-- [ ] Update ADO via `/ado` command (DO IT, don't just say "needs update")
+### ✅ End Every Session
+- [ ] Run `/end-work` — this handles: memory save, handoff doc, code review, QA, commit, push, ADO update
 - [ ] If schema/architecture/patterns changed → Update relevant doc in `/docs/`
-- [ ] Create handoff: `/docs/handoffs/YYYY-MM-DD-ado-XXX-topic.md`
-- [ ] Report token usage
 
-**Skip plan.md for:** Simple bugs, 1-2 file changes, well-understood patterns
-**Always create plan.md for:** New features, architecture changes, multiple approaches, cost analysis
+**Skip plan for:** Simple bugs, 1-2 file changes, well-understood patterns
+**Create feature folder for:** New features, architecture changes, cost analysis needed
 
 ---
 
 ## 📋 Working with Plans
+
+### Plans vs ADO
+
+| What | Where | Purpose |
+|------|-------|---------|
+| **Status** | ADO ticket | Current state, blockers, progress |
+| **Implementation details** | Plan doc | Technical steps, code patterns |
+| **Issues/blockers** | ADO comments | Problems encountered |
+| **Session state** | Memory MCP | Context for next session (auto-saved via `/end-work`) |
+
+**Plans are ephemeral** - they hold implementation details during active development.
+**ADO is persistent** - it tracks status across sessions.
 
 ### Decision Tree: Plan or Execute?
 
 | Situation | Action |
 |-----------|--------|
 | Handoff references existing plan | **EXECUTE** that plan (don't create new) |
-| Complex feature (3+ files, multi-phase) | **CREATE** plan in `/docs/plans/` |
+| Complex feature (3+ files, multi-phase) | **CREATE** plan in `/docs/features/[feature]/` |
 | Simple task (1-2 files, clear scope) | **JUST DO IT** (no plan needed) |
 | Bug fix with known cause | **JUST DO IT** |
 
-### EXECUTION MODE (When Plan Exists):
+### When Plan Exists:
 1. Open plan file at specified location
-2. Check STATUS → identifies current phase
-3. Execute tasks sequentially
-4. Update STATUS when phase completes
-5. Create handoff pointing to next phase
+2. Check ADO ticket for current status
+3. Execute tasks from plan sequentially
+4. Update ADO when milestones complete
+5. Run `/end-work` to save state and wrap up
 
 ### DON'T DO THIS:
-- ❌ "Let me create a session plan based on the main plan"
+- ❌ Track STATUS in plan docs (use ADO)
 - ❌ Create new plan when one already exists
-- ❌ Summarize existing plan into smaller steps
-
-**Red Flag:** If saying "Let me plan..." when plan exists → STOP → Execute existing plan.
+- ❌ Skip `/end-work` — it saves session state to memory
+- ❌ Duplicate ADO info in multiple places
 
 ---
 
@@ -102,8 +123,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. Always work on `test` branch
 2. Commit to `test` branch
 3. Push to `test` branch (`git push origin test`)
-4. **🚨 MANDATORY: Check AI code review** (`bash scripts/check-code-review.sh`)
-5. Auto-deploys to Netlify TEST site
+4. Auto-deploys to Netlify TEST site
+5. **Note:** No AI code review on direct pushes (review only runs on PRs)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -111,7 +132,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. Merge PR (auto-deploys to trumpytracker.com)
+6. **AI code review runs automatically on PR** - check with `gh pr view`
+7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
 - `git push origin main` → ❌ BLOCKED (protected branch)
@@ -126,6 +148,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [ ] Changes tested on TEST environment
 - [ ] `npm run qa:smoke` passes
 - [ ] AI code review passed
+- [ ] Security quick-check: `/docs/guides/security-checklist.md`
+- [ ] **PROD deployment checklist:** `/docs/guides/prod-deployment-checklist.md`
+  - Migrations, edge functions, workflows, secrets all accounted for
 - [ ] Check `.claude/test-only-paths.md` - skip test-only files
 
 ### Test-Only Tracking:
@@ -155,30 +180,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. **ADO Operations via `/ado` command** - Isolates 20K+ context cost
    - ADO MCP tools return full work item dumps
    - Use `/ado` command to query/update work items
-   - See `.claude/commands/ado.md` for syntax
+   - See `.claude/skills/ado/SKILL.md` for syntax
    - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
 
-6. **Handoffs to /docs/handoffs/** - Never add to project knowledge base
+6. **Session state to Memory MCP + Handoff** - Use `/end-work` to save memory snapshots AND create a handoff doc in `/docs/handoffs/` for every non-trivial session
 
 7. **State cost implications** - Always mention $ impact for new features
 
-8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR and AI review process
+8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR process
+   - **PR code review:** Comment `@codex review` on the PR (uses OpenAI Codex, included in ChatGPT Plus)
+   - Codex follows guidelines in `AGENTS.md`
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **🚨 MANDATORY: Check AI code review after EVERY push** - Run `bash scripts/check-code-review.sh` or `gh run list --workflow="ai-code-review.yml" --limit 1` - Never skip this step
+10. **AI code review only runs on PRs** - Direct pushes to test don't trigger review. When creating PRs for PROD, check review status with `gh pr view` or `bash scripts/check-code-review.sh`
 
-11. **Report token usage** - End every response with usage stats
-
-12. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
+11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB
    - **MCP queries:** Always use `select=id,field1,field2` not `select=*`
    - **Always use `limit`:** Default to `limit=10` for exploration
    - **NEVER fetch `embedding` or `content` fields** unless absolutely required (embeddings = 6KB each, content = 5KB+ each)
    - **Re-cluster/backfill scripts are EXPENSIVE:** Fetching 1800 articles with embeddings = ~5-7GB egress
    - **Before running bulk scripts:** Warn about egress cost, consider if necessary
+
+12. **🚩 FEATURE FLAGS: Use for new features deploying to PROD**
+   - New features deploy with flag OFF in `public/shared/flags-prod.json`
+   - Test on PROD with URL override: `?ff_featurename=true`
+   - Flip flag ON only after verification
+   - See `/docs/guides/feature-flags.md` for full guide
+   - **v1→v2 migrations:** Plan compatibility upfront (database, backend, frontend layers)
 
 **For session workflow, communication style, and documentation structure, see `/docs/PROJECT_INSTRUCTIONS.md`**
 
@@ -189,8 +221,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Git/Deployment
 - ❌ `git push origin main` - BLOCKED by branch protection (use PRs)
 - ❌ `git merge test` into main - WRONG (use cherry-pick from test to deployment branch)
-- ❌ Skip AI code review check - MANDATORY after every push
 - ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
+- ❌ Expecting AI review on test pushes - Review only runs on PRs (not direct pushes)
+
+### CI Workflows
+- ❌ Ignoring "Lint PROD References" failures - This workflow prevents hardcoded PROD URLs in test code
+  - If it fails: A script has a hardcoded PROD Supabase reference not in the allowlist
+  - To fix: Either remove the hardcoded ref OR add to allowlist in `.github/workflows/lint-prod-refs.yml`
+  - Allowlist is for legitimate uses (e.g., PROD detection for safety prompts, not actual connections)
+  - **Never ignore red badges** - they mean something is wrong
 
 ### Database
 - ❌ OFFSET pagination - Slow at scale (use cursor-based with `lt('id', cursor)`)
@@ -199,13 +238,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ❌ Hardcoded IDs in queries - Use parameterized queries
 - ❌ Missing `ON DELETE` behavior - Always specify CASCADE/SET NULL/RESTRICT
 
-### Database Egress (Critical - costs real money!)
-- ❌ `select=*` in MCP queries - Use `select=id,field1,field2` (only fields needed)
-- ❌ Queries without `limit` - Always add `limit=10` for exploration
-- ❌ Fetching `embedding` field - 6KB per row, use only when computing similarity
-- ❌ Fetching `content` field from articles - 5KB+ per row, use only when needed
-- ❌ Running re-cluster/backfill without warning - 1800 articles with embeddings = 5-7GB egress
-- ❌ Multiple Claude sessions doing heavy exploration - Egress accumulates across sessions
+### Database Egress (costs real money!)
+- See Critical Rule #11 above for the full egress rules — don't duplicate here.
 
 ### Code
 - ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
@@ -262,7 +296,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Total: $50/month across all services
 - Daily pipeline cap: $5/day for story enrichment
 - Supabase egress: 5GB/month free tier (overages: $0.09/GB)
-- Current spend: ~$20/month (OpenAI only)
+- Current spend: query the `budgets` table (don't trust a number hardcoded here)
 
 **Cost per Operation:**
 - Story enrichment: ~$0.003/story (GPT-4o-mini)
@@ -298,7 +332,7 @@ WHERE day = CURRENT_DATE;
 ### TEST Environment (test branch)
 - **Database:** Supabase TEST (RSS + Story Clustering schema)
 - **Deploy:** Auto-deploy to Netlify test site
-- **Status:** Active development (~2700 stories, ~3100 articles, 18 feeds)
+- **Status:** Active development (live counts: query Supabase, don't hardcode here)
 - **Marker File:** `TEST_BRANCH_MARKER.md` presence indicates TEST environment
 
 ### PROD Environment (main branch)
@@ -321,8 +355,10 @@ WHERE day = CURRENT_DATE;
 | `PERPLEXITY_API_KEY` | Perplexity (shared) |
 | `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
 | `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
+| `DISCORD_WEBHOOK_URL` | Discord alerts (shared) — used by rss-tracker-test/prod + pardons-tracker workflows; alerts are non-blocking if unset |
+| `COURTLISTENER_API_TOKEN` | SCOTUS case fetch (CourtListener API) |
 
-**Important:** Workflows use `SUPABASE_SERVICE_KEY` not `SUPABASE_SERVICE_ROLE_KEY`.
+**Important:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Development Commands
 
@@ -336,12 +372,7 @@ npm run qa:smoke
 ```
 
 ### Individual QA Tests
-```bash
-npm run qa:boundaries      # Clustering boundary conditions
-npm run qa:integration     # Attach-or-create integration
-npm run qa:idempotency     # Job queue idempotency
-npm run qa:concurrency     # Clustering concurrency
-```
+See the `qa:*` scripts in `package.json` for the full suite list.
 
 ### Supabase Edge Functions
 ```bash
@@ -349,13 +380,8 @@ npm run qa:concurrency     # Clustering concurrency
 # TEST:  --project-ref wnrjrywpcadwutfykflu  (TrumpyTracker-Test)
 # PROD:  --project-ref osjbulmltfpcoldydexg  (TrumpyTracker)
 
-# Deploy functions to TEST (default for development)
-supabase functions deploy stories-active --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy stories-detail --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy stories-search --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy articles-manual --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy queue-stats --project-ref wnrjrywpcadwutfykflu
-supabase functions deploy rss-enqueue --project-ref wnrjrywpcadwutfykflu
+# Deploy pattern (function names = folders in supabase/functions/)
+supabase functions deploy <function-name> --project-ref wnrjrywpcadwutfykflu
 ```
 
 ### Database Migrations
@@ -379,9 +405,9 @@ rss-tracker-supabase.js (inline script)
         ↓ Writes to
 Stories + Articles Tables
     ↓ Queries via
-Edge Functions (stories-active, stories-detail)
+Edge Functions (stories-active, stories-detail) + PostgREST direct reads
     ↓ Serves
-Frontend (public/index.html)
+Frontend (Vite + React app)
 ```
 
 **Trigger Methods:**
@@ -405,32 +431,10 @@ Frontend (public/index.html)
 ## Important Patterns
 
 ### Pagination
-**ALWAYS use cursor-based pagination. NEVER use OFFSET.**
-```javascript
-// Good
-const { data } = await supabase
-  .from('stories')
-  .select('*')
-  .lt('id', cursor)
-  .order('id', { ascending: false })
-  .limit(20);
-
-// Bad - DO NOT USE
-const { data } = await supabase
-  .from('stories')
-  .select('*')
-  .range(0, 20); // OFFSET-based, slow at scale
-```
+**ALWAYS use cursor-based pagination (`lt('id', cursor)` + `order` + `limit`). NEVER use OFFSET/`range()`.**
 
 ### Timestamps
-**All timestamps are UTC. Use TIMESTAMPTZ type.**
-```sql
--- Good
-published_at TIMESTAMPTZ DEFAULT NOW()
-
--- Bad
-published_at TIMESTAMP
-```
+**All timestamps are UTC. Use TIMESTAMPTZ type, never bare TIMESTAMP.**
 
 ### Story Lifecycle
 - **Active:** Display prominently (0-72 hours since last_updated_at)
@@ -447,18 +451,7 @@ published_at TIMESTAMP
 - Allows story reopening if new articles match
 
 ### Category Mapping
-UI labels → Database enum values (defined in `scripts/enrichment/enrich-stories-inline.js`):
-- 'Corruption & Scandals' → 'corruption_scandals'
-- 'Democracy & Elections' → 'democracy_elections'
-- 'Policy & Legislation' → 'policy_legislation'
-- 'Justice & Legal' → 'justice_legal'
-- 'Executive Actions' → 'executive_actions'
-- 'Foreign Policy' → 'foreign_policy'
-- 'Corporate & Financial' → 'corporate_financial'
-- 'Civil Liberties' → 'civil_liberties'
-- 'Media & Disinformation' → 'media_disinformation'
-- 'Epstein & Associates' → 'epstein_associates'
-- 'Other' → 'other'
+UI labels → Database enum values: see the mapping in `scripts/enrichment/enrich-stories-inline.js` (11 categories, 'Corruption & Scandals' → 'corruption_scandals' style).
 
 ### RSS Feed Compliance Rules
 **IMPORTANT:** All RSS feeds MUST have compliance rules configured in the database.
@@ -487,10 +480,7 @@ VALUES (
 3. Truncates to `max_chars` limit (5000) before database insert
 4. Falls back to 5000 if no rule exists
 
-**RSS Content Fields Priority:**
-- `content:encoded` - Full article HTML (~2K-10K chars) - **checked first**
-- `description` - Standard summary (~200-500 chars) - **fallback**
-- `summary` - Atom feed summary - **fallback for Atom feeds**
+**RSS Content Fields Priority:** see extraction order in `scripts/rss/fetch_feed.js` (`content:encoded` → `description` → `summary`).
 
 **Note:** Even with 5K RSS limit, we also scrape full articles (TTRC-258/260) for better AI summaries.
 
@@ -508,19 +498,41 @@ VALUES (
 **Filesystem Access:** Direct file operations in project directory
 - **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
 
+**Memory MCP (Knowledge Graph):** 3-tier knowledge graph. **Full rules live in `docs/memory-policy.md`** — this is a summary, don't duplicate the policy here.
+- **`memory-global`** — identity, preferences, cross-project context. Shared across ALL projects. Always read.
+- **`memory-project` (HOT)** — active work, conventions, pointers, reusable gotchas. Always read. Keep small.
+- **`memory-deep` (archive)** — closed-work history. **Search only** (`search_nodes`/`open_nodes`), NEVER bulk-loaded.
+- **Session start:** read Global + HOT only; search DEEP on demand
+- **Session end:** `/end-work` does append + curate (back up first — files are gitignored)
+- **STORE:** durable facts, decisions + WHY, gotchas, pointers (ADO#, doc path, commit)
+- **NEVER STORE:** status (→ADO), metrics/spend/counts (→Supabase), narrative (→handoffs), anything in git/code/CLAUDE.md
+- **Built-in auto-memory is DISABLED** — use ONLY the MCP knowledge graph servers
+- Storage: `C:\Users\Josh\.claude-memory\{global,ttracker,ttracker-archive}\`
+
+**Handoff Docs (`/docs/handoffs/`):** Full narrative context for session continuity
+- **ALWAYS create a handoff doc** at end of every non-trivial session via `/end-work`
+- **Purpose:** Complete story — what was done, why, what was reviewed, gotchas, verification steps
+- **Memory vs Handoff:** Memory = "migration 089 not applied yet" (fast recall). Handoff = "here's the full v2 implementation, both code reviews, and exactly how to verify it" (onboarding).
+- **Naming:** `YYYY-MM-DD-ado-NNN-short-description.md`
+
 ## Tech Stack
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
-- **Frontend:** Vanilla JS, HTML5, CSS3, Tailwind CSS
-- **AI:** OpenAI GPT-4o-mini for enrichment
+- **Frontend:** Vite + React + TypeScript (Tailwind CSS). Admin dashboard (`admin.html`) is standalone vanilla JS.
+- **AI:** OpenAI GPT-4o-mini (RSS/story enrichment); Claude cloud agents (SCOTUS/EO/Pardons enrichment)
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
 
+**High-level architecture + data flow:** `docs/ARCHITECTURE.md` · **Why decisions were made:** `docs/decisions/` (ADRs) · **Doc index:** `docs/README.md`
+
 ## ADO Workflow
 
-**Work Item Types:** Epic, User Story, Bug, Task
+**ADO is the source of truth for status.** Update it every session.
+
 **Project:** TTracker (`https://dev.azure.com/AJWolfe92/TTracker`)
+
+**States:** `New → Todo → Active → Testing → Ready for Prod → Closed`
 
 **Quick Rules:**
 | If the work is... | Create a... |
@@ -531,29 +543,21 @@ VALUES (
 
 **Use `/ado` command** for all operations. See `/docs/guides/ado-workflow.md` for full workflow details.
 
-**Story Sizing:** 1 Story = 1 Claude Code session (code → test → deploy → done)
+**Story Sizing:** 1 Story = 1 Claude Code session (code → review → test → deploy → done)
+
+**Where things go:**
+- Status/progress → ADO ticket state
+- Blockers/issues → ADO ticket comments
+- Plan link → ADO ticket description
+- Implementation details → Plan doc (if exists)
 
 ## Common Tasks
 
 ### Adding RSS Feeds
-```sql
-INSERT INTO feed_registry (url, source_name, topics, tier, is_active)
-VALUES (
-  'https://example.com/feed.xml',
-  'Example News',
-  ARRAY['politics', 'congress'],
-  2,  -- Tier 2: Important
-  true
-);
-```
+Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL above in RSS Feed Compliance Rules).
 
 ### Manual Article Submission
-```bash
-curl -X POST "$SUPABASE_URL/functions/v1/articles-manual" \
-  -H "Authorization: Bearer $ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/article"}'
-```
+POST a `{"url": ...}` body to the `articles-manual` edge function with the anon key (see `supabase/functions/articles-manual/`).
 
 ### Trigger RSS Fetch (TEST Environment)
 **IMPORTANT:** Use the GitHub Actions workflow, NOT the legacy `rss-enqueue` endpoint.
@@ -572,6 +576,9 @@ gh run watch
 **DO NOT USE** (legacy endpoints - creates orphaned jobs):
 - `curl .../rss-enqueue`
 
+### Fetch SCOTUS Cases (CourtListener API)
+Use the `scotus-fetch` skill (`.claude/skills/scotus-fetch/SKILL.md`) — commands, dry-run/resume flags, and gotchas (`is_public` default, sync state, rate limits).
+
 ## Feature-Dev Plugin Usage
 
 When starting work on:
@@ -589,23 +596,10 @@ Use `/feature-dev` for structured development workflow with specialist agents:
 
 ## Troubleshooting
 
-### Feed Not Processing
-1. Check `SELECT * FROM feed_registry WHERE is_active = true`
-2. Verify `failure_count < 5`
-3. Check GitHub Actions run logs: `gh run list --workflow="rss-tracker-test.yml" --limit 5`
-
-### Duplicate Articles
-1. Verify `url_hash` generation
-2. Check composite unique constraint: `(url_hash, published_date)`
-3. Review `attach_or_create_article` RPC logic
-
-### Missing AI Enrichment
-1. Check OpenAI API key in environment
-2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
-3. Check GitHub Actions logs for enrichment errors
+See `docs/common-issues.md` → "RSS Pipeline Quick Checks" (feed not processing, duplicate articles, missing enrichment).
 
 ---
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-08-06
 **Maintained by:** Josh + Claude Code
 **For Support:** See `/docs/PROJECT_INSTRUCTIONS.md`

@@ -1,6 +1,8 @@
 ---
-description: SCOTUS Enrichment Review
+name: scotus-review
+description: Review SCOTUS enrichment output for hard-field accuracy against gold truth and editorial tone alignment ("The Betrayal" voice). Use after enrichment runs, for /scotus-review <case_ids>, /scotus-review latest, or /scotus-review latest N.
 ---
+
 
 # SCOTUS Enrichment Review
 
