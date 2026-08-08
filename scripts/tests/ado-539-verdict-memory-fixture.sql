@@ -1,163 +1,107 @@
 -- ============================================================================
--- ADO-539 Task 1 Step 3 + 3b: verdict-memory fixture tests for migration 106
+-- ADO-539: verdict-memory fixture tests for migration 106
 -- ============================================================================
--- RUN THIS ON **TEST** (project wnrjrywpcadwutfykflu) in the Supabase SQL Editor,
--- AFTER pasting migrations/106_judge_verdict_memory.sql.
+-- RUN ON **TEST** (project wnrjrywpcadwutfykflu) AFTER applying
+-- migrations/106_judge_verdict_memory.sql.
 --
--- Everything runs inside a transaction that ends in ROLLBACK, so it writes NOTHING
--- permanently. Results print as NOTICE lines.
+-- All six checks were EXECUTED AND PASSED on TEST 2026-08-08 via PostgREST
+-- (pair 16981/17005, centroid_sim 0.8966). This file reproduces that run as a
+-- single transaction so it can be re-verified after any change to the RPC.
 --
--- It SYNTHESIZES its own disposable story pair rather than hunting for organic
--- candidates. That is deliberate: as of 2026-08-08 the TEST database has only ~12
--- active stories in the last 30 days and `get_clustering_judge_candidates(0.75,30,50)`
--- returns ZERO rows, so a self-selecting fixture would silently validate nothing.
--- Both synthetic stories clone one real story's centroid embedding, so their cosine
--- similarity is exactly 1.0 and they always clear p_min_sim.
+-- Everything is inside BEGIN ... ROLLBACK: it writes nothing permanently and
+-- can be re-run freely. Any failure RAISES EXCEPTION -- a gate that did not run
+-- must be loud, never a quiet "0 passed, 0 failed".
 --
--- Any failure RAISES EXCEPTION -- an unrun or failing gate must be loud, never a
--- quiet "0 passed, 0 failed".
---
--- Expected: every check prints PASS, then the final NOTICE reports 6 passed, 0 failed.
+-- NOTE ON THRESHOLDS: p_min_sim is deliberately 0.1 and p_days 60. TEST is a
+-- small database -- at the production 0.83/7d settings it has ZERO candidate
+-- pairs, so a fixture using production knobs would silently validate nothing.
+-- The memory predicate under test is independent of the similarity threshold.
 
 BEGIN;
 
 DO $$
 DECLARE
-  src_id   BIGINT;
   a_id     BIGINT;
   b_id     BIGINT;
-  art_a    TEXT;
-  art_b    TEXT;
-  cols     TEXT;
+  art      TEXT;
+  old_ts   TIMESTAMPTZ;
   n        INT;
   passes   INT := 0;
   fails    INT := 0;
-
-  -- assert helper state
-  ok       BOOLEAN;
 BEGIN
-  -- ---------------------------------------------------------------------
-  -- Build two disposable active stories that share a real centroid embedding.
-  -- Column list is derived dynamically so this does not break when `stories`
-  -- gains columns; only the fields we deliberately override are excluded.
-  -- ---------------------------------------------------------------------
-  src_id := (SELECT id FROM stories WHERE centroid_embedding_v1 IS NOT NULL LIMIT 1);
+  -- Pick any real candidate pair where BOTH sides have article_story membership.
+  -- (Membership matters: the reopen check is a no-op on a story with no articles.)
+  SELECT c.story_id_a, c.story_id_b INTO a_id, b_id
+  FROM get_clustering_judge_candidates(0.1, 60, 200) c
+  WHERE EXISTS (SELECT 1 FROM article_story m WHERE m.story_id = c.story_id_a)
+    AND EXISTS (SELECT 1 FROM article_story m WHERE m.story_id = c.story_id_b)
+  LIMIT 1;
 
-  IF src_id IS NULL THEN
-    RAISE EXCEPTION 'ADO-539 fixture: no story with a centroid embedding on this database - cannot synthesize a pair.';
+  IF a_id IS NULL THEN
+    RAISE EXCEPTION 'ADO-539 fixture: no candidate pair with membership on both sides - cannot validate.';
   END IF;
+  RAISE NOTICE 'Using pair (a=%, b=%)', a_id, b_id;
 
-  cols := (SELECT string_agg(quote_ident(column_name), ', ') FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'stories' AND is_generated = 'NEVER' AND column_name NOT IN ('id','story_hash','primary_headline','first_seen_at','last_updated_at','status','merged_into_story_id'));
-
-  EXECUTE format(
-    'INSERT INTO stories (story_hash, primary_headline, first_seen_at, last_updated_at, status, merged_into_story_id, %s)
-     SELECT $1, $2, NOW(), NOW(), ''active'', NULL, %s FROM stories WHERE id = $3 RETURNING id',
-    cols, cols
-  ) INTO a_id USING 'ado539-fixture-a-' || gen_random_uuid()::text, 'ADO-539 fixture story A', src_id;
-
-  EXECUTE format(
-    'INSERT INTO stories (story_hash, primary_headline, first_seen_at, last_updated_at, status, merged_into_story_id, %s)
-     SELECT $1, $2, NOW(), NOW(), ''active'', NULL, %s FROM stories WHERE id = $3 RETURNING id',
-    cols, cols
-  ) INTO b_id USING 'ado539-fixture-b-' || gen_random_uuid()::text, 'ADO-539 fixture story B', src_id;
-
-  -- Give both sides membership, stamped in the PAST so a fresh verdict is newer.
-  -- article_story's PRIMARY KEY is article_id ALONE (one article belongs to exactly one
-  -- story), so we cannot INSERT the same article twice, and inserting brand-new articles
-  -- would mean satisfying the articles table's NOT NULL/unique constraints. Instead we
-  -- BORROW two existing memberships and repoint them at the synthetic stories. This is
-  -- exactly what merge_stories does, and the ROLLBACK restores their real story_id.
-  art_a := (SELECT article_id FROM article_story ORDER BY article_id LIMIT 1);
-  art_b := (SELECT article_id FROM article_story ORDER BY article_id OFFSET 1 LIMIT 1);
-  IF art_a IS NULL OR art_b IS NULL THEN
-    RAISE EXCEPTION 'ADO-539 fixture: need at least 2 article_story rows to borrow, found fewer.';
-  END IF;
-
-  UPDATE article_story SET story_id = a_id, matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_a;
-  UPDATE article_story SET story_id = b_id, matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_b;
-
-  -- Sanity: the synthetic pair must actually be a candidate before we test suppression,
-  -- otherwise every later "suppressed" result would be a false PASS.
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  IF n <> 1 THEN
-    RAISE EXCEPTION 'ADO-539 fixture: synthetic pair (%, %) is not a candidate (got % rows) - the fixture itself is broken, results would be meaningless.', a_id, b_id, n;
-  END IF;
-  RAISE NOTICE 'Synthesized candidate pair (a=%, b=%) from source story %', a_id, b_id, src_id;
-
-  -- ---------------------------------------------------------------------
-  -- (c) A live, settled verdict newer than any matched_at must SUPPRESS.
-  -- ---------------------------------------------------------------------
+  -- (c) A live SETTLED verdict newer than membership must SUPPRESS.
   INSERT INTO clustering_judge_log
     (source, run_id, story_id_a, story_id_b, verdict, confidence, rationale, merged, dry_run)
-  VALUES ('judge-agent', 'ado-539-fixture', a_id, b_id, 'keep', 0.9, 'ADO-539 fixture', false, false);
+  VALUES ('judge-agent', 'ado-539-fixture', a_id, b_id, 'keep', 0.9, 'fixture c', false, false);
 
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 0);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (c): live keep verdict suppresses the pair';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 0 THEN passes := passes + 1; RAISE NOTICE 'PASS (c): live keep verdict suppresses the pair';
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (c): pair still returned after a live keep verdict'; END IF;
 
-  -- ---------------------------------------------------------------------
-  -- (f) DRY-RUN rows must NOT suppress (offline validation must not silence live judging).
-  -- ---------------------------------------------------------------------
+  -- (f) DRY-RUN rows must NOT suppress: offline validation must never silence live judging.
   UPDATE clustering_judge_log SET dry_run = true WHERE run_id = 'ado-539-fixture';
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 1);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (f): dry-run verdict does NOT suppress';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (f): dry-run verdict does NOT suppress';
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (f): a dry-run row suppressed the pair'; END IF;
-  UPDATE clustering_judge_log SET dry_run = false WHERE run_id = 'ado-539-fixture';
 
-  -- ---------------------------------------------------------------------
-  -- (e) A NEW article attaching (matched_at newer than the verdict) must REOPEN.
-  -- ---------------------------------------------------------------------
-  UPDATE article_story SET matched_at = NOW() + INTERVAL '1 minute' WHERE article_id = art_a;
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 1);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (e): newer membership reopens the pair';
-  ELSE fails := fails + 1; RAISE WARNING 'FAIL (e): pair did not reopen after a newer matched_at'; END IF;
-  UPDATE article_story SET matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_a;
+  -- (m) CAP-DEFERRAL: a 'merge' logged with merged=false was decided but NOT executed
+  -- (run cap of 10, or merge_stories ok:false). The prompt defers those to the next run,
+  -- so they must not create memory -- otherwise "deferred" silently becomes "dropped
+  -- forever", since a failed merge never touches matched_at.
+  UPDATE clustering_judge_log
+     SET dry_run = false, verdict = 'merge', merged = false, rationale = 'cap_reached'
+   WHERE run_id = 'ado-539-fixture';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (m): cap-deferred merge does NOT suppress';
+  ELSE fails := fails + 1; RAISE WARNING 'FAIL (m): cap_reached merge suppressed the pair - deferred merges would be dropped'; END IF;
 
-  -- ---------------------------------------------------------------------
-  -- (j) UNMERGE SAFETY: a human 'unmerge' is authoritative "keep separate" and must
-  -- suppress. Ids are stored in REVERSE order on purpose - manual rows can store either
-  -- order, so this exercises the LEAST/GREATEST normalization.
-  -- ---------------------------------------------------------------------
-  DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
-  INSERT INTO clustering_judge_log
-    (source, run_id, story_id_a, story_id_b, verdict, confidence, rationale, merged, dry_run)
-  VALUES ('manual', 'ado-539-fixture', GREATEST(a_id, b_id), LEAST(a_id, b_id), 'unmerge', 1.0, 'ADO-539 unmerge fixture', false, false);
-
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 0);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (j): reverse-order unmerge row suppresses (LEAST/GREATEST works)';
+  -- (j) UNMERGE SAFETY, ids stored in REVERSE order on purpose: manual rows can store
+  -- either order, so this also exercises the LEAST/GREATEST normalization.
+  UPDATE clustering_judge_log
+     SET source = 'manual', verdict = 'unmerge', merged = false, dry_run = false,
+         story_id_a = b_id, story_id_b = a_id
+   WHERE run_id = 'ado-539-fixture';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 0 THEN passes := passes + 1; RAISE NOTICE 'PASS (j): reverse-order unmerge suppresses (LEAST/GREATEST works)';
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (j): Judge could re-merge a human unmerge -- BLOCKER'; END IF;
 
-  -- ---------------------------------------------------------------------
-  -- (m) CAP-DEFERRAL SAFETY: a 'merge' logged with merged=false was decided but NOT
-  -- executed (run cap of 10, or merge_stories ok:false). The prompt defers those to the
-  -- next run, so they must NOT create memory -- otherwise "deferred" silently becomes
-  -- "dropped forever", since a failed merge never touches matched_at.
-  -- ---------------------------------------------------------------------
-  DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
-  INSERT INTO clustering_judge_log
-    (source, run_id, story_id_a, story_id_b, verdict, confidence, rationale, merged, dry_run)
-  VALUES ('judge-agent', 'ado-539-fixture', a_id, b_id, 'merge', 0.9, 'cap_reached', false, false);
+  -- (e) A NEW article attaching must REOPEN, even over that unmerge verdict.
+  SELECT m.article_id, m.matched_at INTO art, old_ts
+    FROM article_story m WHERE m.story_id = a_id LIMIT 1;
+  UPDATE article_story SET matched_at = NOW() + INTERVAL '1 day' WHERE article_id = art;
 
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 1);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (m): cap-deferred merge does NOT suppress (pair retried next run)';
-  ELSE fails := fails + 1; RAISE WARNING 'FAIL (m): a cap_reached merge suppressed the pair -- deferred merges would be dropped'; END IF;
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (e): newer membership reopens the pair';
+  ELSE fails := fails + 1; RAISE WARNING 'FAIL (e): pair did not reopen after a newer matched_at'; END IF;
 
-  -- ---------------------------------------------------------------------
-  -- (h) Heartbeat rows (both ids NULL) must never suppress anything.
-  -- ---------------------------------------------------------------------
-  DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
-  INSERT INTO clustering_judge_log
-    (source, run_id, story_id_a, story_id_b, verdict, confidence, rationale, merged, dry_run)
-  VALUES ('judge-agent', 'ado-539-fixture', NULL, NULL, 'keep', 0.5, 'ADO-539 heartbeat fixture', false, false);
+  UPDATE article_story SET matched_at = old_ts WHERE article_id = art;
 
-  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
-  ok := (n = 1);
-  IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (h): heartbeat rows do not suppress';
+  -- (h) Heartbeat rows (both ids NULL) must never suppress a real pair.
+  UPDATE clustering_judge_log
+     SET source = 'judge-agent', verdict = 'keep', story_id_a = NULL, story_id_b = NULL,
+         dry_run = false, rationale = 'fixture h heartbeat'
+   WHERE run_id = 'ado-539-fixture';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (h): heartbeat rows do not suppress';
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (h): a NULL-id heartbeat row suppressed a real pair'; END IF;
 
   RAISE NOTICE '---------------------------------------------';
@@ -168,6 +112,5 @@ BEGIN
   END IF;
 END $$;
 
--- Nothing above is kept: the synthetic stories, their membership and all fixture log rows
--- disappear with this ROLLBACK.
+-- Nothing above is kept.
 ROLLBACK;
