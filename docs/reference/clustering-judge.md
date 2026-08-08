@@ -52,6 +52,26 @@ with a **default-DENY** bias.
 
 **Embeddings never leave the database** — all similarity math runs in SQL (egress rule #11).
 
+### Verdict memory (migration 106, ADO-539)
+
+A pair is **skipped** once it already has a **live** verdict (`dry_run = false`) that is newer than the
+latest `article_story.matched_at` on either story. Without this the Judge re-judged settled pairs every
+run — one Gaza pair was marked `uncertain` six times.
+
+- **What reopens a pair:** a genuinely **new article attaching** to either side (that stamps a fresh
+  `matched_at`). Nothing else does.
+- **Dry-run rows never suppress** — offline validation must not silence live judging.
+- **`unmerge` rows DO suppress**, and they are the reason this matters most: a human unmerge is an
+  authoritative "keep these separate", so the Judge must never re-merge it. This holds structurally
+  because `merge_stories`/`unmerge_story` repoint `article_story` **without** touching `matched_at`,
+  leaving membership older than the unmerge verdict.
+- **Known limitation (deliberate):** since merges preserve `matched_at`, story A absorbing story C does
+  **not** reopen a suppressed (A,B) pair. Conservative by design — it costs a deferred re-judgment, not
+  a wrong merge.
+- **Failure mode to watch:** if the filter were ever too broad the Judge would go quiet and every run
+  would be heartbeat-only, which otherwise looks healthy. After 3 consecutive heartbeat-only runs, run
+  the candidate query with the `NOT EXISTS` clause removed and compare.
+
 ### Merge policy (Josh's binding ruling)
 
 - **merge** = the same discrete occurrence: one ruling, one speech, one announcement, one disclosure —
@@ -60,6 +80,16 @@ with a **default-DENY** bias.
 - **keep** = separate developments, *even within one saga and even the same day*: filing vs ruling,
   indictment vs the same-day action, an event vs a later comment about it, two votes/hearings in a series,
   coverage months apart (that's narrative-thread material for the future events layer, not one event).
+
+**v1.1 additions (ADO-539)** — both narrow what counts as "doubt"; the default-DENY stance is unchanged:
+
+- **Licensed inference:** analysis/explainer/op-ed/reaction pieces conventionally don't restate the
+  trigger event's specifics. Same cycle + same saga + exactly **one** plausible referent occurrence →
+  `merge`. "B lacks specifics" is never on its own a reason to hedge. Two plausible referents → still
+  `uncertain`. A reaction to an *earlier* beat in a chain remains chain-of-events (`keep`).
+- **Format variants:** previews, "how to watch" guides, WATCH clips, liveblogs and timeline recaps of a
+  **single scheduled occasion** are that occasion. This does not touch the recurring-format `keep` rule —
+  a per-state Live Results template across *different* races still stays separate.
 
 Source of truth for the policy: `scripts/evals/clustering-gold-set.json` → `meta.verification_status`.
 
