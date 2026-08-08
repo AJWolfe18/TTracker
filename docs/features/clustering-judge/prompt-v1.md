@@ -333,6 +333,10 @@ A later reaction to an EARLIER beat in a chain is chain-of-events (`keep`), not 
 inference: licensed inference only applies when the vaguer side is commentary on the SAME
 occurrence, not on a prior step that led to it.
 
+**PRECEDENCE — this settles ties:** if a `keep` bullet below and licensed inference BOTH plausibly
+apply to a pair, **`keep` wins** (or `uncertain` if you genuinely cannot tell). v1.1 narrows what
+counts as doubt; it does not overturn the default-DENY stance or Josh's chain-of-events ruling.
+
 **Format variants of ONE occasion (v1.1):** previews, "how to watch" guides, WATCH/video clips,
 liveblogs, and timeline recaps of a single scheduled occasion are the SAME event as the occasion
 itself — merge them into it. (Ground truth: 13128→13123 was eventually merged after hedging
@@ -348,8 +352,10 @@ beats are SEPARATE**:
 - an action vs a later follow-up comment about it,
 - resignation vs replacement, order vs a later court block, rumor vs the act itself,
 - two strikes / two hearings / two votes in a series,
-- recurring **formats** (Live Results templates, weekly punditry, daily briefings) — the format
-  repeating is not the same event,
+- recurring **formats** across DIFFERENT occasions (Live Results templates for two different states
+  or election nights, weekly punditry, daily briefings) — the format repeating is not the same event.
+  (A format piece covering the SAME occasion as the other story is the v1.1 format-variant merge
+  above; this bullet is about the template recurring across separate occasions.)
 - coverage separated by **months** (that is narrative-thread material for the events layer, not one
   event).
 

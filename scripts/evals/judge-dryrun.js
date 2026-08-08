@@ -250,6 +250,12 @@ function main() {
   console.log(`Pairs judged: ${ids.length}  (story_story: ${rows.filter(r => r.pair_type === 'story_story').length}, article_story: ${rows.filter(r => r.pair_type === 'article_story').length})`);
   console.log(`Verdict agreement with gold labels: ${correct}/${ids.length} (${((correct / ids.length) * 100).toFixed(1)}%)`);
   console.log(`Merge-class: precision=${(precision * 100).toFixed(1)}%  recall=${(recall * 100).toFixed(1)}%  F1=${(f1 * 100).toFixed(1)}%`);
+  // Recall/F1 here are NOT system properties. Every different_event pair is judged, so precision
+  // is measured over the full negative set — but only a sample of same_event pairs is judged, so
+  // recall is measured over that sample and will read ~100% by construction. Precision is the gate.
+  const sameEventJudged = rows.filter((r) => r.label === 'same_event').length;
+  const sameEventTotal = gold.entries.filter((e) => e.label === 'same_event').length;
+  console.log(`  ^ recall/F1 are over the ${sameEventJudged}/${sameEventTotal} same_event pairs judged here, not the whole gold set — treat precision as the gate.`);
   console.log(`Confusion (merge class): TP=${tp} FP=${fp} FN=${fn} TN=${tn}`);
 
   // July 4th recall (the flagship reason this feature exists). Scope to the july4 source so the

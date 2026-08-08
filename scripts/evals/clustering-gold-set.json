@@ -23,9 +23,9 @@
         "ado-539-ground-truth": 3
       }
     },
-    "schema_note": "pair_type=story_story entries (July 4th cluster) have BOTH sides story-shaped: a.headline/a.top_entities/a.article_titles (no a.title), and replay carries centroid_sim_raw/centroid_sim_normalized instead of embed_sim. The deterministic replay skips them; they exist for Clustering Judge (ADO-533) dry-run validation.",
+    "schema_note": "pair_type=story_story entries (July 4th cluster) have BOTH sides story-shaped: a.headline/a.top_entities/a.article_titles (no a.title), and replay carries centroid_sim_raw/centroid_sim_normalized instead of embed_sim. The deterministic replay skips them; they exist for Clustering Judge (ADO-533) dry-run validation. NOTE (ADO-539): the three gs-209..211 story_story entries have NO `replay` block at all — consumers must keep tolerating a missing replay/centroid_sim (judge-dryrun.js already does).",
     "raw_extracts": "scripts/evals/clustering-log-extracts-2026-07-05.txt.gz - the PROD log extract file this set was built from (gunzip, then build-clustering-gold-set.js --extracts=... regenerates the unlabeled draft). Labels themselves are hand-applied and live only here.",
-    "verification_status": "VERIFIED 2026-07-05 (Josh spot-check). Removed ids gs-111/gs-113 are intentionally sparse - never renumber. Key ruling for the Judge prompt (ADO-533): chain-of-events beats (indictment->halt, action->follow-up comment) are SEPARATE stories even within the same 24h; same-cycle reactions/commentary on one occurrence are the SAME story. gs-209..211 (ADO-539): Josh-verified ground truth via manual PROD merges 2026-08-05 (13324/13327, 13362/13383) and the Judge's own eventual merge of 13128->13123. Loser-side membership was reconstructed from articles.topic_slug (each reconstruction matches the tombstone's source_count exactly); survivor titles are capped at the merge moment so each entry reflects the evidence as judged. No replay.centroid_sim_raw: the live values sit in PROD clustering_judge_log (service_role only) and were not fabricated."
+    "verification_status": "VERIFIED 2026-07-05 (Josh spot-check). Removed ids gs-111/gs-113 are intentionally sparse - never renumber. Key ruling for the Judge prompt (ADO-533): chain-of-events beats (indictment->halt, action->follow-up comment) are SEPARATE stories even within the same 24h; same-cycle reactions/commentary on one occurrence are the SAME story. gs-209..211 (ADO-539) provenance, stated precisely: gs-209 (13324/13327) and gs-210 (13362/13383) are Josh-verified — he merged both manually on PROD 2026-08-05. gs-211 (13128->13123) is NOT Josh-verified: the label comes from the Judge's own eventual v1.0 merge after hedging twice, so treat it as weaker evidence than the other two (it scores the Judge partly against itself). Loser-side membership was reconstructed from articles.topic_slug because the losers are tombstoned and their article_story rows were repointed; each reconstruction matches the tombstone's source_count exactly and the two sides' slug sets are disjoint in all three pairs. article_titles and topic_slugs are decision-time values (derived from the attributed articles, capped at the merge moment), but top_entities is the CURRENT stories-row value and is therefore post-merge — merge_stories recomputes it, so a shared entity between the two sides may be a merge artifact rather than decision-time signal. replay.centroid_sim_raw is absent: the live values are in PROD clustering_judge_log (service_role only) and were not fabricated."
   },
   "entries": [
     {
@@ -15412,8 +15412,8 @@
       "label": "same_event",
       "source": "ado-539-ground-truth",
       "difficulty": "hard",
-      "verified": true,
-      "notes": "Format-variant hedge — 'How to Watch' guide vs 'WATCH LIVE' clip of the SAME Graham funeral service. Judge hedged twice on 13128 vs 13123 then merged anyway. v1.1 format-variant rule target."
+      "verified": false,
+      "notes": "Format-variant hedge — 'How to Watch' guide vs 'WATCH LIVE' clip of the SAME Graham funeral services. v1.1 format-variant rule target. PROVENANCE: label comes from the Judge's own v1.0 merge (13128->13123) after it hedged twice, NOT from a human ruling — weaker evidence than gs-209/gs-210."
     }
   ]
 }

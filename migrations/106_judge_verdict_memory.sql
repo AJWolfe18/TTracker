@@ -121,6 +121,6 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.get_clustering_judge_candidates(DOUBLE PRECISION, INT, INT) IS
-  'ADO-533/539: last-N-day active story pairs with centroid cosine >= p_min_sim, capped. Recall-first (entity/slug are context). Verdict memory (539): pairs with a live verdict newer than the latest article_story.matched_at on either side are skipped until membership changes. No embedding egress. service_role only.';
+  'ADO-533/539: last-N-day active story pairs with centroid cosine >= p_min_sim, capped. Recall-first (entity/slug are context). Verdict memory (539): a pair is skipped while a live SETTLED verdict (dry_run=false, and either not a merge or an executed one) is newer than the latest article_story.matched_at on either side; a new article attaching reopens it. Merge verdicts logged with merged=false (run cap hit / merge_stories ok:false) are deliberately NOT memory - they are deferred for retry. No embedding egress. service_role only.';
 
 NOTIFY pgrst, 'reload schema';
