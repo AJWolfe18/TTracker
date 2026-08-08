@@ -60,6 +60,11 @@ run — one Gaza pair was marked `uncertain` six times.
 
 - **What reopens a pair:** a genuinely **new article attaching** to either side (that stamps a fresh
   `matched_at`). Nothing else does.
+- **Only *settled* verdicts create memory.** A `merge` logged with `merged=false` was decided but never
+  executed — the run hit the 10-merge cap, or `merge_stories` returned `ok:false`. Those are **deferred
+  on purpose** (see the cap behavior below), so they do not suppress; the pair is retried next run.
+  Without this carve-out "deferred" would silently become "dropped", because a failed merge never
+  touches `matched_at` and nothing would reopen the pair.
 - **Dry-run rows never suppress** — offline validation must not silence live judging.
 - **`unmerge` rows DO suppress**, and they are the reason this matters most: a human unmerge is an
   authoritative "keep these separate", so the Judge must never re-merge it. This holds structurally

@@ -91,6 +91,21 @@ BEGIN
   IF n = 0 THEN passes := passes + 1; RAISE NOTICE 'PASS (j): reverse-order unmerge row suppresses (LEAST/GREATEST normalization works)';
   ELSE fails := fails + 1; RAISE NOTICE 'FAIL (j): Judge could re-merge a human unmerge -- BLOCKER'; END IF;
 
+  -- (m) CAP-DEFERRAL SAFETY: a 'merge' verdict logged with merged=false was decided but
+  -- NOT executed (run cap of 10 hit, or merge_stories returned ok:false). The prompt defers
+  -- those to the next run, so they must NOT create memory -- otherwise "deferred" silently
+  -- becomes "dropped forever", since a failed merge never touches matched_at.
+  DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
+  INSERT INTO clustering_judge_log
+    (source, run_id, story_id_a, story_id_b, verdict, confidence, rationale, merged, dry_run)
+  VALUES
+    ('judge-agent', 'ado-539-fixture', a_id, b_id, 'merge', 0.9, 'cap_reached', false, false);
+
+  SELECT count(*) INTO n FROM get_clustering_judge_candidates(0.75, 30, 50) c
+   WHERE c.story_id_a = a_id AND c.story_id_b = b_id;
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (m): cap-deferred merge does NOT suppress (pair retried next run)';
+  ELSE fails := fails + 1; RAISE NOTICE 'FAIL (m): a cap_reached merge suppressed the pair -- deferred merges would be silently dropped'; END IF;
+
   -- Heartbeat rows (both ids NULL) must never suppress anything.
   DELETE FROM clustering_judge_log WHERE run_id = 'ado-539-fixture';
   INSERT INTO clustering_judge_log

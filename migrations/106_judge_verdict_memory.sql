@@ -3,10 +3,13 @@
 -- ============================================================================
 -- Problem: the candidate RPC has no verdict memory — the Gaza pair 13257/13295 was
 -- judged uncertain 6x, Blanche pairs 6x/4x (2026-08-05 analysis on the ADO-539 card).
--- Fix: skip pairs whose latest LIVE verdict (dry_run=false; includes source='manual',
--- includes verdict='unmerge' — a human unmerge is an authoritative "keep separate")
--- is NEWER than the latest article_story.matched_at on either side. A new article
--- attaching to either story reopens the pair.
+-- Fix: skip pairs whose latest LIVE, SETTLED verdict (dry_run=false; includes
+-- source='manual', includes verdict='unmerge' — a human unmerge is an authoritative
+-- "keep separate") is NEWER than the latest article_story.matched_at on either side.
+-- A new article attaching to either story reopens the pair.
+-- "Settled" excludes merge verdicts that were decided but never executed (merged=false,
+-- e.g. the run cap of 10) — those are deferred to the next run by design and must NOT
+-- be suppressed. See the predicate comment below.
 -- Rollback: re-run migration 100 PART D (restores the previous function body).
 -- Idempotent: CREATE OR REPLACE + IF NOT EXISTS. Same arity → ACLs preserved,
 -- no re-grant needed; NOTIFY included anyway (harmless).
@@ -90,6 +93,14 @@ AS $$
         AND l.story_id_a IS NOT NULL AND l.story_id_b IS NOT NULL
         AND LEAST(l.story_id_a, l.story_id_b) = a.id
         AND GREATEST(l.story_id_a, l.story_id_b) = b.id
+        -- Only SETTLED verdicts create memory. A 'merge' logged with merged=false was
+        -- decided but NOT executed (run cap of 10 hit, or merge_stories returned ok:false)
+        -- — the prompt defers those to the next run on purpose. Suppressing them would
+        -- turn "deferred" into "silently dropped", since a failed merge leaves
+        -- article_story.matched_at untouched and so nothing would ever reopen the pair.
+        -- keep / uncertain / unmerge always settle; an executed merge tombstones the loser,
+        -- which the merged_into_story_id filter already excludes.
+        AND (l.verdict <> 'merge' OR l.merged = true)
         -- >= not >: on timestamp equality (same-transaction writes) the verdict must
         -- SUPPRESS — a stuck pair reopens on the next real article; a resurfaced pair
         -- could re-merge a human unmerge. Prefer suppression on ambiguity.
