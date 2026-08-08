@@ -8,23 +8,24 @@
     "provenance": "Similarities are decision-time values from PROD run logs (embed_best) or one-time build-time centroid computation (story_story pairs). Story/article features fetched via read-only anon PostgREST at build time (2026-07-05) - current-state snapshot, may differ slightly from decision-time state. NEVER refetch embeddings at eval time (egress rule #11).",
     "labeled_by": "Claude (Fable) first pass; Josh spot-check completed 2026-07-05 (all 48 disagreement pairs + calibration reviewed): 2 flips (gs-168, gs-189 - chain-of-events rule), 2 removals (gs-111, gs-113 - content out of tracker scope), borderlines annotated (gs-099, gs-002, gs-063, gs-102)",
     "counts": {
-      "total": 206,
-      "same_event": 106,
+      "total": 209,
+      "same_event": 109,
       "different_event": 100,
       "easy": 72,
-      "hard": 134,
+      "hard": 137,
       "article_story": 196,
-      "story_story": 10,
+      "story_story": 13,
       "by_source": {
         "near_miss": 116,
         "generic_collision": 40,
         "tier_ab_live_attach": 40,
-        "july4_fragmentation": 10
+        "july4_fragmentation": 10,
+        "ado-539-ground-truth": 3
       }
     },
     "schema_note": "pair_type=story_story entries (July 4th cluster) have BOTH sides story-shaped: a.headline/a.top_entities/a.article_titles (no a.title), and replay carries centroid_sim_raw/centroid_sim_normalized instead of embed_sim. The deterministic replay skips them; they exist for Clustering Judge (ADO-533) dry-run validation.",
     "raw_extracts": "scripts/evals/clustering-log-extracts-2026-07-05.txt.gz - the PROD log extract file this set was built from (gunzip, then build-clustering-gold-set.js --extracts=... regenerates the unlabeled draft). Labels themselves are hand-applied and live only here.",
-    "verification_status": "VERIFIED 2026-07-05 (Josh spot-check). Removed ids gs-111/gs-113 are intentionally sparse - never renumber. Key ruling for the Judge prompt (ADO-533): chain-of-events beats (indictment->halt, action->follow-up comment) are SEPARATE stories even within the same 24h; same-cycle reactions/commentary on one occurrence are the SAME story."
+    "verification_status": "VERIFIED 2026-07-05 (Josh spot-check). Removed ids gs-111/gs-113 are intentionally sparse - never renumber. Key ruling for the Judge prompt (ADO-533): chain-of-events beats (indictment->halt, action->follow-up comment) are SEPARATE stories even within the same 24h; same-cycle reactions/commentary on one occurrence are the SAME story. gs-209..211 (ADO-539): Josh-verified ground truth via manual PROD merges 2026-08-05 (13324/13327, 13362/13383) and the Judge's own eventual merge of 13128->13123. Loser-side membership was reconstructed from articles.topic_slug (each reconstruction matches the tombstone's source_count exactly); survivor titles are capped at the merge moment so each entry reflects the evidence as judged. No replay.centroid_sim_raw: the live values sit in PROD clustering_judge_log (service_role only) and were not fabricated."
   },
   "entries": [
     {
@@ -15233,6 +15234,186 @@
       },
       "difficulty": "hard",
       "notes": "July 4th 250th-celebration fragmentation cluster (plan Part 1 appendix) - occasion-level granularity: all 5 fragment stories cover the same celebration occasion."
+    },
+    {
+      "id": "gs-209",
+      "pair_type": "story_story",
+      "a": {
+        "story_id": 13324,
+        "headline": "Trump blasts Pirro after she refutes his claim that Reflecting Pool was damaged by vandals",
+        "top_entities": [
+          "US-PIRRO",
+          "US-TRUMP",
+          "ORG-DOJ"
+        ],
+        "topic_slugs": [
+          "TRUMP-BLASTS-PIRRO",
+          "TRUMP-DINGS-PIRRO-VANDALISM",
+          "PIRRO-DROPS-POOL-CASE",
+          "TRUMP-CRITICIZES-PIRRO",
+          "TRUMP-SAYS-PIRRO-CHOKED",
+          "TRUMP-REFLECTING-POOL-CHARGES",
+          "TRUMP-ACCUSES-PIRRO-FOLDING",
+          "PIRRO-MEETS-TRUMP",
+          "TRUMP-PIRRO-STRUGGLES",
+          "TRUMP-PIRRO-OVAL-OFFICE-SHOWDOWN",
+          "REFLECTING-POOL-CASE-DISCONNECT"
+        ],
+        "article_titles": [
+          "Trump blasts Pirro after she refutes his claim that Reflecting Pool was damaged by vandals",
+          "Trump dings longtime ally Jeanine Pirro for dropping Reflecting Pool vandalism case",
+          "In Dropping Reflecting Pool Case, Pirro Draws Trump’s Wrath",
+          "Trump blasts Pirro after she admitted Reflecting Pool damage was caused by botched installation and blamed Interior Dept. for not sharing information",
+          "WATCH: Trump says Jeanine Pirro 'made a mistake' and 'choked' on Reflecting Pool vandalism case reversal",
+          "Trump Says Pirro ‘Choked’ in Reflecting Pool Vandalism Case",
+          "Trump: Jeanine Pirro ‘choked’ by dropping reflecting pool charges",
+          "Trump accuses Jeanine Pirro of ‘folding’ by dropping reflecting pool charges",
+          "Pirro Meets With Trump at the White House After He Said She ‘Choked’ in Reflecting Pool Case",
+          "Jeanine Pirro struggles to give Trump the wins he craves the most",
+          "Inside the Oval Office Showdown Between Trump and Jeanine Pirro",
+          "Reflecting Pool case highlights disconnect between Trump's claims and court record"
+        ],
+        "date_range": "2026-08-01T18:34:10+00:00 → 2026-08-04T22:45:57+00:00"
+      },
+      "b": {
+        "story_id": 13327,
+        "headline": "Trump’s reflecting pool saga: a timeline of failure and finger-pointing",
+        "top_entities": [
+          "ORG-DOJ",
+          "US-HEARN",
+          "US-TRUMP"
+        ],
+        "topic_slugs": [
+          "TRUMP-REFLECTING-POOL-SAGA"
+        ],
+        "article_titles": [
+          "Trump’s reflecting pool saga: a timeline of failure and finger-pointing"
+        ],
+        "date_range": "2026-08-01T16:55:47+00:00 → 2026-08-01T16:55:47+00:00"
+      },
+      "label": "same_event",
+      "source": "ado-539-ground-truth",
+      "difficulty": "hard",
+      "verified": true,
+      "notes": "'B lacks specifics' hedge pattern — B is a timeline/analysis recap of the same Pirro reflecting-pool saga; Judge hedged, Josh manually merged 2026-08-05 (ADO-537 round-trip pair). v1.1 licensed-inference rule target."
+    },
+    {
+      "id": "gs-210",
+      "pair_type": "story_story",
+      "a": {
+        "story_id": 13362,
+        "headline": "Black voters, divided on progressives, are pivotal in Michigan Senate primary",
+        "top_entities": [
+          "ORG-DEM",
+          "LOC-MICHIGAN",
+          "US-EL-SAYED",
+          "US-STEVENS",
+          "US-SCHUMER",
+          "LOC-USA",
+          "US-ROGERS",
+          "US-ELSAYED"
+        ],
+        "topic_slugs": [
+          "MICHIGAN-SENATE-PRIMARY-DIVIDE",
+          "ABDUL-EL-SAYED-SENATE-CANDIDACY"
+        ],
+        "article_titles": [
+          "Crucial Senate race could come down to Michigan’s Black voters",
+          "5 Things to Know About Abdul El-Sayed, Democratic Senate Hopeful in Michigan"
+        ],
+        "date_range": "2026-08-03T09:00:00+00:00 → 2026-08-05T00:15:37+00:00"
+      },
+      "b": {
+        "story_id": 13383,
+        "headline": "Democrats' future is on the line as El-Sayed and Stevens make final push in Michigan primary",
+        "top_entities": [
+          "ORG-DEM",
+          "LOC-MICHIGAN",
+          "US-STEVENS",
+          "US-EL-SAYED",
+          "LOC-USA",
+          "US-ELSAYED",
+          "EVT-GOVERNMENT-SHUTDOWN"
+        ],
+        "topic_slugs": [
+          "MICHIGAN-PRIMARY-CAMPAIGN",
+          "MICHIGAN-DEM-SENATE-PRIMARY",
+          "MICHIGAN-PRIMARY-ELECTION-RESULTS",
+          "MICHIGAN-SENATE-PRIMARY",
+          "MICHIGAN-PRIMARIES-AUGUST-4",
+          "MICHIGAN-PRIMARY-ELECTIONS"
+        ],
+        "article_titles": [
+          "Democrats' future is on the line as El-Sayed and Stevens make final push in Michigan primary",
+          "Fact-checking Abdul El-Sayed and Haley Stevens' claims ahead of the Michigan Democratic Senate primary",
+          "Michigan votes in key Senate primary as Democrats battle over party’s future",
+          "Michigan Primary-Election Map: Live Results",
+          "High-profile Democratic primary in Michigan pits moderate against progressive for Senate",
+          "What to watch in the Aug. 4 primaries in Michigan and beyond",
+          "What to Watch in Michigan’s High-Stakes Primary Elections"
+        ],
+        "date_range": "2026-08-03T15:56:45+00:00 → 2026-08-04T19:15:13+00:00"
+      },
+      "label": "same_event",
+      "source": "ado-539-ground-truth",
+      "difficulty": "hard",
+      "verified": true,
+      "notes": "'B lacks specifics' hedge pattern — Josh manual merge 13383->13362 (7 articles). Licensed-inference target."
+    },
+    {
+      "id": "gs-211",
+      "pair_type": "story_story",
+      "a": {
+        "story_id": 13123,
+        "headline": "Graham to Be Honored at Funeral Services This Week. Here’s How to Watch.",
+        "top_entities": [
+          "US-GRAHAM",
+          "US-TRUMP"
+        ],
+        "topic_slugs": [
+          "GRAHAM-FUNERAL-SERVICES",
+          "GRAHAM-FUNERAL-SCHEDULE"
+        ],
+        "article_titles": [
+          "Graham to Be Honored at Funeral Services This Week. Here’s How to Watch.",
+          "Here Is the Schedule for Lindsey Graham’s Services and Funeral"
+        ],
+        "date_range": "2026-07-28T09:03:31+00:00 → 2026-07-28T14:59:41+00:00"
+      },
+      "b": {
+        "story_id": 13128,
+        "headline": "WATCH LIVE: Sen. Lindsey Graham remembered in funeral service at Washington National Cathedral",
+        "top_entities": [
+          "US-GRAHAM",
+          "US-TRUMP"
+        ],
+        "topic_slugs": [
+          "GRAHAM-FUNERAL-SERVICE",
+          "TRUMP-EULOGY-GRAHAM",
+          "TRUMP-PAYS-TRIBUTE-GRAHAM",
+          "GRAHAM-FAREWELL-POWER",
+          "GRAHAM-FUNERAL-EULOGY",
+          "GRAHAM-MEMORIAL-SERVICE",
+          "GRAHAM-RETURN-HOME-FUNERAL",
+          "GRAHAM-FUNERAL-TRIBUTES"
+        ],
+        "article_titles": [
+          "WATCH: Sen. Lindsey Graham remembered in funeral service at Washington National Cathedral",
+          "Trump recalls friendship, spats in eulogy for Lindsey Graham",
+          "WATCH: Trump pays tribute to Sen. Graham during National Cathedral funeral service",
+          "At Graham’s Farewell, a Glimpse Into Power in Trump’s Washington",
+          "Lindsey Graham’s Last Laugh",
+          "Lindsey Graham remembered for impact on South Carolina and the world",
+          "WATCH: Sen. Lindsey Graham returns home for South Carolina funeral",
+          "Tributes, and Politics Too, at Lindsey Graham’s Funeral in South Carolina"
+        ],
+        "date_range": "2026-07-28T13:21:18+00:00 → 2026-07-29T23:47:25+00:00"
+      },
+      "label": "same_event",
+      "source": "ado-539-ground-truth",
+      "difficulty": "hard",
+      "verified": true,
+      "notes": "Format-variant hedge — 'How to Watch' guide vs 'WATCH LIVE' clip of the SAME Graham funeral service. Judge hedged twice on 13128 vs 13123 then merged anyway. v1.1 format-variant rule target."
     }
   ]
 }
