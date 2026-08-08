@@ -51,14 +51,23 @@ AS $$
     ]::text[] AS words
   ),
   recent AS (
-    SELECT id, primary_headline, centroid_embedding_v1,
-           COALESCE(top_entities, ARRAY[]::text[]) AS top_entities,
-           COALESCE(topic_slugs, ARRAY[]::text[])  AS topic_slugs
-    FROM stories
-    WHERE status = 'active'
-      AND merged_into_story_id IS NULL
-      AND centroid_embedding_v1 IS NOT NULL
-      AND first_seen_at >= NOW() - (p_days || ' days')::interval
+    -- last_matched is computed ONCE PER STORY here, not per pair. The pair join below is
+    -- O(n^2), so a correlated `max(matched_at)` inside it would run n^2/2 aggregate probes
+    -- on article_story every Judge run; hoisting it makes that n.
+    SELECT s.id, s.primary_headline, s.centroid_embedding_v1,
+           COALESCE(s.top_entities, ARRAY[]::text[]) AS top_entities,
+           COALESCE(s.topic_slugs, ARRAY[]::text[])  AS topic_slugs,
+           COALESCE(lm.last_matched, '-infinity'::timestamptz) AS last_matched
+    FROM stories s
+    LEFT JOIN LATERAL (
+      SELECT max(m.matched_at) AS last_matched
+      FROM article_story m
+      WHERE m.story_id = s.id
+    ) lm ON TRUE
+    WHERE s.status = 'active'
+      AND s.merged_into_story_id IS NULL
+      AND s.centroid_embedding_v1 IS NOT NULL
+      AND s.first_seen_at >= NOW() - (p_days || ' days')::interval
   )
   -- CROSS JOIN stopwords so sw.words is a text[] COLUMN reference: `e <> ALL(sw.words)` is the
   -- array-comparison form. (`e <> ALL((SELECT words FROM stopwords))` reads the subquery as a set of
@@ -104,11 +113,8 @@ AS $$
         -- >= not >: on timestamp equality (same-transaction writes) the verdict must
         -- SUPPRESS — a stuck pair reopens on the next real article; a resurfaced pair
         -- could re-merge a human unmerge. Prefer suppression on ambiguity.
-        AND l.created_at >= COALESCE(
-          (SELECT max(m.matched_at) FROM article_story m
-           WHERE m.story_id = a.id OR m.story_id = b.id),
-          '-infinity'::timestamptz
-        )
+        -- GREATEST of the two per-story maxima == max over both stories' membership.
+        AND l.created_at >= GREATEST(a.last_matched, b.last_matched)
     )
   ORDER BY
     -- prioritise pairs that also share concrete signal, then by raw similarity
