@@ -26,7 +26,8 @@ DECLARE
   src_id   BIGINT;
   a_id     BIGINT;
   b_id     BIGINT;
-  art_id   TEXT;
+  art_a    TEXT;
+  art_b    TEXT;
   cols     TEXT;
   n        INT;
   passes   INT := 0;
@@ -60,15 +61,20 @@ BEGIN
     cols, cols
   ) INTO b_id USING 'ado539-fixture-b-' || gen_random_uuid()::text, 'ADO-539 fixture story B', src_id;
 
-  -- Give both sides real membership, stamped in the PAST so a fresh verdict is newer.
-  art_id := (SELECT article_id FROM article_story LIMIT 1);
-  IF art_id IS NULL THEN
-    RAISE EXCEPTION 'ADO-539 fixture: no article_story rows exist - cannot build membership.';
+  -- Give both sides membership, stamped in the PAST so a fresh verdict is newer.
+  -- article_story's PRIMARY KEY is article_id ALONE (one article belongs to exactly one
+  -- story), so we cannot INSERT the same article twice, and inserting brand-new articles
+  -- would mean satisfying the articles table's NOT NULL/unique constraints. Instead we
+  -- BORROW two existing memberships and repoint them at the synthetic stories. This is
+  -- exactly what merge_stories does, and the ROLLBACK restores their real story_id.
+  art_a := (SELECT article_id FROM article_story ORDER BY article_id LIMIT 1);
+  art_b := (SELECT article_id FROM article_story ORDER BY article_id OFFSET 1 LIMIT 1);
+  IF art_a IS NULL OR art_b IS NULL THEN
+    RAISE EXCEPTION 'ADO-539 fixture: need at least 2 article_story rows to borrow, found fewer.';
   END IF;
 
-  INSERT INTO article_story (story_id, article_id, matched_at, is_primary_source, similarity_score)
-  VALUES (a_id, art_id, NOW() - INTERVAL '2 hours', true, 1),
-         (b_id, art_id, NOW() - INTERVAL '2 hours', true, 1);
+  UPDATE article_story SET story_id = a_id, matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_a;
+  UPDATE article_story SET story_id = b_id, matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_b;
 
   -- Sanity: the synthetic pair must actually be a candidate before we test suppression,
   -- otherwise every later "suppressed" result would be a false PASS.
@@ -103,12 +109,12 @@ BEGIN
   -- ---------------------------------------------------------------------
   -- (e) A NEW article attaching (matched_at newer than the verdict) must REOPEN.
   -- ---------------------------------------------------------------------
-  UPDATE article_story SET matched_at = NOW() + INTERVAL '1 minute' WHERE story_id = a_id;
+  UPDATE article_story SET matched_at = NOW() + INTERVAL '1 minute' WHERE article_id = art_a;
   n := (SELECT count(*) FROM get_clustering_judge_candidates(0.75, 30, 200) c WHERE c.story_id_a = LEAST(a_id, b_id) AND c.story_id_b = GREATEST(a_id, b_id));
   ok := (n = 1);
   IF ok THEN passes := passes + 1; RAISE NOTICE 'PASS (e): newer membership reopens the pair';
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (e): pair did not reopen after a newer matched_at'; END IF;
-  UPDATE article_story SET matched_at = NOW() - INTERVAL '2 hours' WHERE story_id = a_id;
+  UPDATE article_story SET matched_at = NOW() - INTERVAL '2 hours' WHERE article_id = art_a;
 
   -- ---------------------------------------------------------------------
   -- (j) UNMERGE SAFETY: a human 'unmerge' is authoritative "keep separate" and must
