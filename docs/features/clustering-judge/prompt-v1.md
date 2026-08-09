@@ -115,7 +115,9 @@ call above, or a heartbeat row).
 ### Timestamps
 
 PostgREST does not support `NOW()` in bodies. Generate ISO 8601: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
-`clustering_judge_log.created_at` defaults server-side, so you never send it.
+`clustering_judge_log.created_at` defaults server-side, so you never send it. `evidence_as_of` you DO
+send on every pair row — it is captured in Step 3 when you read the pair's evidence (see there) and
+must NOT be regenerated at write time.
 
 ---
 
@@ -157,7 +159,20 @@ complete — stop.
 
 ### Step 3: Per pair — fetch summaries + member ARTICLE titles (BOTH sides)
 
-Process pairs **one at a time**. For each pair, do NOT judge on the two `primary_headline`s alone —
+Process pairs **one at a time**. For each pair, FIRST capture the evidence snapshot timestamp —
+**before** either fetch below:
+
+```bash
+EVIDENCE_AS_OF=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+```
+
+This value goes in the Step 6 log row as `evidence_as_of`. Verdict memory (migration 106) compares it
+against `article_story.matched_at`, so it must say when you **read** the evidence, not when you write
+the verdict — an article that attaches while you deliberate must reopen the pair, not be silently
+"covered" by a verdict that never saw it. Capturing BEFORE the fetches fails open: worst case a
+mid-fetch attach re-surfaces an already-covered pair for one redundant re-judge, never the reverse.
+
+For each pair, do NOT judge on the two `primary_headline`s alone —
 `primary_headline` is whatever the FIRST article in a story said, and is frequently misleading (a story
 about a speech can be headlined by a weather-evacuation article). Fetch, for **both** `story_id_a` and
 `story_id_b`:
@@ -239,7 +254,8 @@ contain apostrophes):
   "rationale": "<one sentence>",
   "centroid_sim": <from Step 2>,
   "merged": <true|false>,
-  "dry_run": <true|false>
+  "dry_run": <true|false>,
+  "evidence_as_of": "<EVIDENCE_AS_OF captured in Step 3 for THIS pair>"
 }
 ```
 

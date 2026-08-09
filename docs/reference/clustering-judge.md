@@ -54,9 +54,16 @@ with a **default-DENY** bias.
 
 ### Verdict memory (migration 106, ADO-539)
 
-A pair is **skipped** once it already has a **live** verdict (`dry_run = false`) that is newer than the
-latest `article_story.matched_at` on either story. Without this the Judge re-judged settled pairs every
-run — one Gaza pair was marked `uncertain` six times.
+A pair is **skipped** once it already has a **live** verdict (`dry_run = false`) whose **evidence
+snapshot** is newer than the latest `article_story.matched_at` on either story. Without this the Judge
+re-judged settled pairs every run — one Gaza pair was marked `uncertain` six times.
+
+- **The snapshot is `evidence_as_of`, not `created_at`.** The agent stamps `evidence_as_of` per pair
+  when it *reads* the evidence (prompt Step 3, before the fetches); `created_at` is the verdict insert,
+  minutes of deliberation later. Comparing against the read time means an article that attaches
+  mid-deliberation reopens the pair instead of being silently "covered" by a verdict that never saw it
+  (Codex finding on PR #113). Rows without `evidence_as_of` (manual verdicts, pre-fix rows) fall back
+  to `created_at`.
 
 - **What reopens a pair:** a genuinely **new article attaching** to either side (that stamps a fresh
   `matched_at`). Nothing else does.
