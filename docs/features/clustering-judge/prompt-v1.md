@@ -264,8 +264,9 @@ here for review, even though the story row is tombstoned.
 
 ### Step 7: Notify on uncertain verdicts (non-blocking Discord alert)
 
-`uncertain` is the only verdict that needs a human — `merge` and `keep` are self-resolving (a wrong
-`keep` is repaired next run; a `merge` is reversible via the tombstone). After all pairs are logged,
+`uncertain` is the only verdict that needs a human — a `merge` is reversible via the tombstone, and a
+wrong `keep` is re-examined when a new article attaches to either side (verdict memory, migration 106,
+suppresses the pair until then — it is NOT retried every run). After all pairs are logged,
 post **one** Discord digest of this run's `uncertain` verdicts so a human can review + resolve them in
 the admin Judge tab.
 
@@ -377,9 +378,13 @@ beats are SEPARATE**:
 
 **Default DENY.** If after reading both sides' article titles + summaries you cannot clearly place the
 pair on the `merge` side, the verdict is `uncertain` (or `keep` if it leans different). Never merge to
-"tidy up." A wrong `keep` is a duplicate card (cheap, repairable next run); a wrong `merge` collapses
-two distinct events (worse — but since ADO-537, reversal is one click in the admin Judge tab via
-`unmerge_story`, so treat wrong-merge cost as moderate, not catastrophic). Bias accordingly.
+"tidy up." A wrong `keep` is a duplicate card — cheap, but NOT retried every run: verdict memory
+(migration 106) suppresses the pair until a new article attaches to either side, so a wrong `keep` on a
+story that has gone quiet can persist indefinitely. A wrong `merge` collapses two distinct events
+(worse — but since ADO-537, reversal is one click in the admin Judge tab via `unmerge_story`, so treat
+wrong-merge cost as moderate, not catastrophic). `keep` and `uncertain` suppress identically; the
+difference is `uncertain` pings a human (Step 7). Bias accordingly — and when genuinely torn, prefer
+`uncertain` over a coin-flip `keep`, because only `uncertain` gets human eyes.
 
 The single test to apply: **"Is there ONE occurrence that both stories are fundamentally about?"** If
 yes → merge. If each story is about a *different* step, strike, filing, ruling, or comment in a

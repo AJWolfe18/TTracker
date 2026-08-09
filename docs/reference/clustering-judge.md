@@ -76,7 +76,10 @@ re-judged settled pairs every run — one Gaza pair was marked `uncertain` six t
 - **`unmerge` rows DO suppress**, and they are the reason this matters most: a human unmerge is an
   authoritative "keep these separate", so the Judge must never re-merge it. This holds structurally
   because `merge_stories`/`unmerge_story` repoint `article_story` **without** touching `matched_at`,
-  leaving membership older than the unmerge verdict.
+  leaving membership older than the unmerge verdict. Since migration 107 the `unmerge` log row is
+  written by `unmerge_story` itself, in the unmerge's own transaction — it was previously a
+  best-effort post-commit insert in `admin-judge-merge`, whose failure would have left the unmerge
+  with no memory row at all (Codex finding on PR #113).
 - **Known limitation (deliberate):** since merges preserve `matched_at`, story A absorbing story C does
   **not** reopen a suppressed (A,B) pair. Conservative by design — it costs a deferred re-judgment, not
   a wrong merge.

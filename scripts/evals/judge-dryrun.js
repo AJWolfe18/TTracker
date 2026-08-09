@@ -16,10 +16,13 @@
  * (all 100). The full different_event sweep exists because that is where v1.1's new licensed-inference
  * and format-variant rules could bleed: a 33-pair sample cannot establish >=98% merge precision.
  *
- * Gate: zero `merge` verdicts on different_event pairs. `keep` and `uncertain` are both acceptable
- * there (neither merges), so agreement % is reported context — merge-class PRECISION is the gate.
- * The keep traps that must survive v1.1 unchanged: gs-001, gs-002, gs-005, gs-006, gs-008, gs-009,
- * gs-010, gs-012, gs-063 (recurring formats) and gs-168, gs-189 (Josh's chain-of-events flips).
+ * Gates (each sets a failing exit code, not just a printed number — Codex PR #113):
+ *   1. zero `merge` verdicts on different_event pairs (`keep`/`uncertain` both acceptable there,
+ *      so agreement % is reported context — merge-class PRECISION is the primary gate);
+ *   2. the July 4th fragmentation cluster merges in full (flagship recall case);
+ *   3. the three ADO-539 hedge-pattern pairs (gs-209..211) are all `merge`;
+ *   4. every keep trap holds as `keep`: gs-001, gs-002, gs-005, gs-006, gs-008, gs-009,
+ *      gs-010, gs-012, gs-063 (recurring formats) and gs-168, gs-189 (Josh's chain-of-events flips).
  *
  * Usage:
  *   node scripts/evals/judge-dryrun.js            # score verdicts vs gold labels, print report
@@ -263,16 +266,28 @@ function main() {
   const july4 = rows.filter(r => byId.get(r.id)?.source === 'july4_fragmentation');
   const july4Merged = july4.filter(r => r.verdict === 'merge').length;
   console.log(`July 4th story_story cluster: ${july4Merged}/${july4.length} correctly merged`);
+  if (july4Merged !== july4.length || july4.length === 0) {
+    console.log('GATE FAILED — the July 4th fragmentation cluster must merge in full (the flagship recall case).');
+    process.exitCode = 1;
+  }
 
   // ADO-539 gate: the three hedge-pattern pairs must flip to merge under v1.1.
   const gate539 = rows.filter(r => byId.get(r.id)?.source === 'ado-539-ground-truth');
   const gate539Merged = gate539.filter(r => r.verdict === 'merge').length;
   console.log(`ADO-539 hedge-pattern pairs flipped to merge: ${gate539Merged}/${gate539.length}`);
+  if (gate539Merged !== gate539.length || gate539.length === 0) {
+    console.log('GATE FAILED — all ADO-539 hedge-pattern pairs (gs-209..211) must be merge verdicts.');
+    process.exitCode = 1;
+  }
 
   // The keep traps that must survive the v1.1 rule additions unchanged.
   const TRAPS = ['gs-001','gs-002','gs-005','gs-006','gs-008','gs-009','gs-010','gs-012','gs-063','gs-168','gs-189'];
   const trapsHeld = TRAPS.filter(id => VERDICTS[id]?.verdict === 'keep').length;
   console.log(`Keep traps holding as 'keep': ${trapsHeld}/${TRAPS.length}`);
+  if (trapsHeld !== TRAPS.length) {
+    console.log("GATE FAILED — every keep trap must hold as 'keep' (uncertain is a regression here too).");
+    process.exitCode = 1;
+  }
 
   const deMerges = rows.filter(r => r.label === 'different_event' && r.verdict === 'merge');
   console.log(`different_event pairs swept: ${rows.filter(r => r.label === 'different_event').length}  false merges: ${deMerges.length}`);
