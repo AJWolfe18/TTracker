@@ -58,12 +58,16 @@ A pair is **skipped** once it already has a **live** verdict (`dry_run = false`)
 snapshot** is newer than the latest `article_story.matched_at` on either story. Without this the Judge
 re-judged settled pairs every run — one Gaza pair was marked `uncertain` six times.
 
-- **The snapshot is `evidence_as_of`, not `created_at`.** The agent stamps `evidence_as_of` per pair
-  when it *reads* the evidence (prompt Step 3, before the fetches); `created_at` is the verdict insert,
-  minutes of deliberation later. Comparing against the read time means an article that attaches
-  mid-deliberation reopens the pair instead of being silently "covered" by a verdict that never saw it
-  (Codex finding on PR #113). Rows without `evidence_as_of` (manual verdicts, pre-fix rows) fall back
-  to `created_at`.
+- **The snapshot is `evidence_as_of`, not `created_at` — and it is DB-issued, not agent-generated.**
+  The candidate RPC returns `membership_seen_at` (the newest `matched_at` across both stories at fetch
+  time) and the agent echoes it verbatim into `evidence_as_of`; `created_at` is the verdict insert,
+  minutes of deliberation later. Comparing against the watermark means an article that attaches
+  mid-deliberation reopens the pair instead of being silently "covered" by a verdict that never saw it,
+  and because the comparison is `matched_at`-to-`matched_at` it stays in one clock family — an agent
+  sandbox clock running fast cannot fake coverage (Codex findings on PR #113, rounds 2–3). The
+  predicate also clamps to `created_at` (`LEAST`) so a mangled echo can never suppress past the
+  verdict's own insert time. Rows without `evidence_as_of` (manual verdicts, pre-fix rows, degraded
+  retries) fall back to `created_at`.
 
 - **What reopens a pair:** a genuinely **new article attaching** to either side (that stamps a fresh
   `matched_at`). Nothing else does.

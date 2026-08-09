@@ -16,10 +16,14 @@
  * (all 100). The full different_event sweep exists because that is where v1.1's new licensed-inference
  * and format-variant rules could bleed: a 33-pair sample cannot establish >=98% merge precision.
  *
- * Gates (each sets a failing exit code, not just a printed number — Codex PR #113):
+ * Gates (each sets a failing exit code, not just a printed number — Codex PR #113 rounds 2-3):
+ *   0. cohort COMPLETENESS, checked before scoring against pinned ID lists + the gold set:
+ *      all 100 different_event pairs, gs-199..208, gs-209..211, and the 9-pair same_event
+ *      sample must each have a verdict — deleting one fails the run instead of shrinking a
+ *      denominator (a 2/2 must never impersonate a 3/3);
  *   1. zero `merge` verdicts on different_event pairs (`keep`/`uncertain` both acceptable there,
  *      so agreement % is reported context — merge-class PRECISION is the primary gate);
- *   2. the July 4th fragmentation cluster merges in full (flagship recall case);
+ *   2. the July 4th fragmentation cluster (gs-199..208) merges in full (flagship recall case);
  *   3. the three ADO-539 hedge-pattern pairs (gs-209..211) are all `merge`;
  *   4. every keep trap holds as `keep`: gs-001, gs-002, gs-005, gs-006, gs-008, gs-009,
  *      gs-010, gs-012, gs-063 (recurring formats) and gs-168, gs-189 (Josh's chain-of-events flips).
@@ -178,6 +182,14 @@ const VERDICTS = {
   'gs-158': { verdict: 'keep', confidence: 0.85, rationale: "Signing the order vs a court blocking it 87 days later — order vs later court block." },
 };
 
+// Expected cohorts, pinned by ID (Codex PR #113 round 3): cohort membership must come from
+// these lists and the gold set, never from whatever VERDICTS happens to contain — deleting a
+// verdict must FAIL the run, not silently shrink a denominator (2/2 is not 3/3).
+const JULY4_IDS = ['gs-199','gs-200','gs-201','gs-202','gs-203','gs-204','gs-205','gs-206','gs-207','gs-208'];
+const GATE539_IDS = ['gs-209','gs-210','gs-211'];
+const SAME_EVENT_SAMPLE = ['gs-099','gs-102','gs-003','gs-007','gs-011','gs-014','gs-020','gs-024','gs-025'];
+const EXPECTED_DIFFERENT_EVENT_COUNT = 100; // full negative sweep; growing the gold set means updating this consciously
+
 function labelToExpectedVerdict(label) {
   // same_event => the Judge should merge; different_event => keep. (uncertain is never "expected".)
   return label === 'same_event' ? 'merge' : 'keep';
@@ -200,6 +212,21 @@ function main() {
   const byId = new Map(gold.entries.map((e) => [e.id, e]));
 
   const ids = Object.keys(VERDICTS);
+
+  // Cohort completeness gate — runs BEFORE scoring. Expected = every different_event pair in
+  // the gold set + the pinned story_story and same_event-sample ID lists.
+  const goldDifferentEvent = gold.entries.filter((e) => e.label === 'different_event').map((e) => e.id);
+  if (goldDifferentEvent.length !== EXPECTED_DIFFERENT_EVENT_COUNT) {
+    console.log(`GATE FAILED — gold set has ${goldDifferentEvent.length} different_event pairs, expected ${EXPECTED_DIFFERENT_EVENT_COUNT} (gold-set change requires a conscious update here).`);
+    process.exitCode = 1;
+  }
+  const expectedIds = [...new Set([...goldDifferentEvent, ...JULY4_IDS, ...GATE539_IDS, ...SAME_EVENT_SAMPLE])];
+  const missingVerdicts = expectedIds.filter((id) => !VERDICTS[id]);
+  if (missingVerdicts.length) {
+    console.log(`GATE FAILED — ${missingVerdicts.length} expected pair(s) have no verdict: ${missingVerdicts.join(', ')}`);
+    process.exitCode = 1;
+  }
+
   let correct = 0;
   const rows = [];
   const disagreements = [];
@@ -261,21 +288,19 @@ function main() {
   console.log(`  ^ recall/F1 are over the ${sameEventJudged}/${sameEventTotal} same_event pairs judged here, not the whole gold set — treat precision as the gate.`);
   console.log(`Confusion (merge class): TP=${tp} FP=${fp} FN=${fn} TN=${tn}`);
 
-  // July 4th recall (the flagship reason this feature exists). Scope to the july4 source so the
-  // ADO-539 story_story additions (gs-209..211) can't inflate this number.
-  const july4 = rows.filter(r => byId.get(r.id)?.source === 'july4_fragmentation');
-  const july4Merged = july4.filter(r => r.verdict === 'merge').length;
-  console.log(`July 4th story_story cluster: ${july4Merged}/${july4.length} correctly merged`);
-  if (july4Merged !== july4.length || july4.length === 0) {
-    console.log('GATE FAILED — the July 4th fragmentation cluster must merge in full (the flagship recall case).');
+  // July 4th recall (the flagship reason this feature exists). Pinned ID list, not a
+  // source-field filter — a missing/deleted verdict counts as a failure, never a smaller cohort.
+  const july4Merged = JULY4_IDS.filter(id => VERDICTS[id]?.verdict === 'merge').length;
+  console.log(`July 4th story_story cluster: ${july4Merged}/${JULY4_IDS.length} correctly merged`);
+  if (july4Merged !== JULY4_IDS.length) {
+    console.log('GATE FAILED — the July 4th fragmentation cluster (gs-199..208) must merge in full (the flagship recall case).');
     process.exitCode = 1;
   }
 
-  // ADO-539 gate: the three hedge-pattern pairs must flip to merge under v1.1.
-  const gate539 = rows.filter(r => byId.get(r.id)?.source === 'ado-539-ground-truth');
-  const gate539Merged = gate539.filter(r => r.verdict === 'merge').length;
-  console.log(`ADO-539 hedge-pattern pairs flipped to merge: ${gate539Merged}/${gate539.length}`);
-  if (gate539Merged !== gate539.length || gate539.length === 0) {
+  // ADO-539 gate: the three hedge-pattern pairs must flip to merge under v1.1. Pinned IDs.
+  const gate539Merged = GATE539_IDS.filter(id => VERDICTS[id]?.verdict === 'merge').length;
+  console.log(`ADO-539 hedge-pattern pairs flipped to merge: ${gate539Merged}/${GATE539_IDS.length}`);
+  if (gate539Merged !== GATE539_IDS.length) {
     console.log('GATE FAILED — all ADO-539 hedge-pattern pairs (gs-209..211) must be merge verdicts.');
     process.exitCode = 1;
   }
