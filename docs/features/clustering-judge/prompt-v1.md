@@ -117,7 +117,8 @@ call above, or a heartbeat row).
 PostgREST does not support `NOW()` in bodies. Generate ISO 8601: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
 `clustering_judge_log.created_at` defaults server-side, so you never send it. `evidence_as_of` you DO
 send on every pair row — but it is NEVER a timestamp you generate: it is the `membership_seen_at`
-value the candidate RPC returned for that pair (Step 2/3), echoed verbatim.
+value the candidate RPC returned for that pair (Step 2), echoed verbatim as a JSON string. If the
+RPC did not include it, omit `evidence_as_of` for that pair.
 
 ---
 
