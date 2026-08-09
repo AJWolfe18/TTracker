@@ -116,8 +116,8 @@ call above, or a heartbeat row).
 
 PostgREST does not support `NOW()` in bodies. Generate ISO 8601: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
 `clustering_judge_log.created_at` defaults server-side, so you never send it. `evidence_as_of` you DO
-send on every pair row — it is captured in Step 3 when you read the pair's evidence (see there) and
-must NOT be regenerated at write time.
+send on every pair row — but it is NEVER a timestamp you generate: it is the `membership_seen_at`
+value the candidate RPC returned for that pair (Step 2/3), echoed verbatim.
 
 ---
 
@@ -139,7 +139,9 @@ collide. Every log row this run writes shares this `run_id`.
 
 Call the candidate RPC (Section 2). It returns up to `p_max_pairs` (default 30) story pairs from the
 last `p_days` days with centroid cosine ≥ `p_min_sim`, each with `story_id_a`, `story_id_b`,
-`headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`.
+`headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`, and
+`membership_seen_at` (the DB's membership watermark for the pair — you will echo it back verbatim as
+`evidence_as_of` in Step 6; treat it as an opaque string, never parse or regenerate it).
 
 **Recall-first, by design:** the RPC does NOT require a shared entity or slug — the flagship July 4th
 fragments share only `US-TRUMP` (a stopword) / `LOC-DC` with no overlapping slugs, so an entity gate
@@ -159,20 +161,14 @@ complete — stop.
 
 ### Step 3: Per pair — fetch summaries + member ARTICLE titles (BOTH sides)
 
-Process pairs **one at a time**. For each pair, FIRST capture the evidence snapshot timestamp —
-**before** either fetch below:
-
-```bash
-EVIDENCE_AS_OF=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "EVIDENCE_AS_OF=${EVIDENCE_AS_OF}"   # echo so the value survives into your transcript —
-                                          # shell state does NOT persist across tool calls
-```
-
-This value goes in the Step 6 log row as `evidence_as_of`. Verdict memory (migration 106) compares it
-against `article_story.matched_at`, so it must say when you **read** the evidence, not when you write
-the verdict — an article that attaches while you deliberate must reopen the pair, not be silently
-"covered" by a verdict that never saw it. Capturing BEFORE the fetches fails open: worst case a
-mid-fetch attach re-surfaces an already-covered pair for one redundant re-judge, never the reverse.
+Process pairs **one at a time**. Each Step 2 candidate carries a `membership_seen_at` field — the
+database's own watermark of the newest article attachment across both stories at fetch time. That
+value goes in the Step 6 log row as `evidence_as_of`, **echoed exactly as the RPC returned it**
+(including a literal `"-infinity"` if that is what came back). Do NOT generate a timestamp yourself
+(`date -u` etc.) — verdict memory compares it against `article_story.matched_at`, and only the
+DB-issued value stays in the same clock family; a sandbox clock a few seconds fast would fake
+coverage of an article you never saw. If `membership_seen_at` is missing from the RPC response
+(database not yet migrated), OMIT `evidence_as_of` from the log row entirely — NULL degrades safely.
 
 For each pair, do NOT judge on the two `primary_headline`s alone —
 `primary_headline` is whatever the FIRST article in a story said, and is frequently misleading (a story
@@ -257,7 +253,7 @@ contain apostrophes):
   "centroid_sim": <from Step 2>,
   "merged": <true|false>,
   "dry_run": <true|false>,
-  "evidence_as_of": "<EVIDENCE_AS_OF captured in Step 3 for THIS pair>"
+  "evidence_as_of": "<membership_seen_at from Step 2 for THIS pair, echoed verbatim — omit the key if the RPC did not return it>"
 }
 ```
 
@@ -406,7 +402,7 @@ sequence → keep, even if they share entities and sit minutes apart.
   memory, and in live mode the merge may already be executed — an unlogged verdict is the worst
   outcome. Retry ONCE as-is. If the retry also fails, retry once more with `evidence_as_of` REMOVED
   from the body (a NULL falls back to `created_at` in the memory predicate — safe, just slightly more
-  suppressive), which recovers the case where a lost/malformed `EVIDENCE_AS_OF` value is what PostgREST
+  suppressive), which recovers the case where a mangled `membership_seen_at` echo is what PostgREST
   is rejecting (400/22007/PGRST204). If that still fails, log the error text and continue — but never
   skip the attempt.
 - Never leave a pair unlogged. Never merge in dry-run mode.
