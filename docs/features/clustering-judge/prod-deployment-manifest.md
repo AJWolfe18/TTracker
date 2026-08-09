@@ -24,6 +24,8 @@ rides existing cloud-agent infra, no new secrets.
 | 1.3 | `migrations/102_merge_stories_concurrency.sql` | ✅ TEST · ✅ **PROD verified applied** (same check: `has_102 = true`, FOR UPDATE present) | None. |
 | 1.4 | `migrations/104_manual_merge_source.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (source CHECK verified: `inline/judge-agent/manual`) | None. |
 | 1.5 | `migrations/105_unmerge_story.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (`unmerged_at` column, verdict CHECK gains `unmerge`, RPC grants anon=f/auth=f/service_role=t, lock fix present) | None. |
+| 1.6 | `migrations/106_judge_verdict_memory.sql` (ADO-539) | TEST has the PRE-Codex version (no `evidence_as_of`) — **re-apply the current file on TEST** · ❌ PROD | Apply on both. Verify: `idx_judge_log_pair_live` exists, `clustering_judge_log.evidence_as_of` column exists, `get_clustering_judge_candidates` is still 1 row. Re-run security advisor (SECURITY DEFINER house rule) + `EXPLAIN ANALYZE` the RPC on PROD (LATERAL hoist unmeasured there). |
+| 1.7 | `migrations/107_unmerge_logs_atomically.sql` (ADO-539, Codex PR #113 P1) | ❌ TEST · ❌ PROD | Apply on both, **before** redeploying `admin-judge-merge` (see §3). `unmerge_story` now writes its own `'unmerge'` judge-log row in-transaction — that row is verdict memory; losing it let the Judge re-merge a human unmerge. |
 
 **101 changes (why it's required before go-live):**
 - `find_similar_stories` RPC + `merge_stories` RPC replaced; new tables `judge_run_merge_count`,
@@ -62,6 +64,7 @@ could re-attach to a tombstone via the ANN block or the hash-collision path).
 | 3.3 | `stories-search` | exclude `status='merged_into'`; narrowed select | ✅ | ✅ deployed 2026-07-06 (v8) |
 | 3.4 | `admin-judge-log` | service_role backend for the admin Judge tab; ADO-537 adds `unmerge` verdict + `story_id` search | ✅ | ✅ deployed 2026-08-05 (v2) |
 | 3.5 | `admin-judge-merge` | NEW (ADO-537) — manual merge + unmerge, password-gated | ✅ | ✅ deployed 2026-08-05 (v1) |
+| 3.6 | `admin-judge-merge` (ADO-539 update) | Drops its best-effort unmerge log insert — `unmerge_story` logs atomically (migration 107). Deploy AFTER 107 on each env; between 107 and this deploy, unmerges double-log (harmless, cosmetic). | ❌ redeploy needed | ❌ redeploy needed |
 
 Deploy: `npx supabase functions deploy <fn> --project-ref osjbulmltfpcoldydexg` (migration 100 must be
 applied first — it is, on PROD). TEST ref is `wnrjrywpcadwutfykflu`.
