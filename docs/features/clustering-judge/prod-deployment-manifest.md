@@ -27,6 +27,15 @@ rides existing cloud-agent infra, no new secrets.
 | 1.6 | `migrations/106_judge_verdict_memory.sql` (ADO-539) | TEST has the PRE-Codex version (no `evidence_as_of`) — **re-apply the current file on TEST** · ❌ PROD | Apply on both. Verify: `idx_judge_log_pair_live` exists, `clustering_judge_log.evidence_as_of` column exists, `get_clustering_judge_candidates` is still 1 row. Re-run security advisor (SECURITY DEFINER house rule) + `EXPLAIN ANALYZE` the RPC on PROD (LATERAL hoist unmeasured there). |
 | 1.7 | `migrations/107_unmerge_logs_atomically.sql` (ADO-539, Codex PR #113 P1) | ❌ TEST · ❌ PROD | Apply on both, **before** redeploying `admin-judge-merge` (see §3). `unmerge_story` now writes its own `'unmerge'` judge-log row in-transaction — that row is verdict memory; losing it let the Judge re-merge a human unmerge. |
 
+**⚠️ ADO-539 LOAD-BEARING ORDER: apply 106 (current file) + 107 on PROD BEFORE merging PR #113 to
+`main`.** The Judge cron is LIVE off `main` (rows 6.x) and its bootstrap hard-resets to `origin/main` —
+the first run after the merge uses prompt v1.1, which sends `evidence_as_of` in every Step 6 pair row.
+If PROD lacks the column, PostgREST rejects the WHOLE row (PGRST204): executed merges go unlogged
+(invariant 1 broken), no verdict memory is written, and the Step 7 Discord digest re-reads an empty run.
+Migrations-first is safe in the other direction — old prompt rows simply leave `evidence_as_of` NULL.
+Same on TEST: re-apply current 106 (+107) before any manual TEST Judge run. If migrations can't be
+applied promptly, pause the Judge cron trigger instead.
+
 **101 changes (why it's required before go-live):**
 - `find_similar_stories` RPC + `merge_stories` RPC replaced; new tables `judge_run_merge_count`,
   `story_merge_audit`.

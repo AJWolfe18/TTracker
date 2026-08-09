@@ -133,7 +133,13 @@ AS $$
         -- against the read time means an article attaching mid-deliberation
         -- (matched_at between the two) REOPENS the pair instead of being silently
         -- covered by a verdict that never saw it. NULL (manual/legacy) → created_at.
-        AND COALESCE(l.evidence_as_of, l.created_at) >= GREATEST(a.last_matched, b.last_matched)
+        -- LEAST clamp: evidence_as_of is agent-supplied (`date -u` in an LLM prompt) —
+        -- honest values are always <= created_at, so clamping to created_at is free,
+        -- and it bounds every agent-clock pathology (hallucinated future year, zone
+        -- mislabeled Z) at the pre-fix created_at behavior instead of letting a bad
+        -- timestamp pin the pair shut indefinitely.
+        AND LEAST(COALESCE(l.evidence_as_of, l.created_at), l.created_at)
+              >= GREATEST(a.last_matched, b.last_matched)
     )
   ORDER BY
     -- prioritise pairs that also share concrete signal, then by raw similarity
