@@ -4,6 +4,10 @@
   },
   "autoMemoryEnabled": false,
   "permissions": {
+    "deny": [
+      "Agent",
+      "Task"
+    ],
     "allow": [
       "Bash(npm install *)",
       "Bash(npm run *)",
