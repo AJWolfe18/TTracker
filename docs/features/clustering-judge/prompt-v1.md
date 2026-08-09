@@ -320,6 +320,30 @@ one announcement, one ruling, one speech, one election night, one disclosure rel
   weather and the other's is about the speech. (Gold set gs-199..208: all 5 July 4th fragments =
   same_event, including the `LOC-DC` storm-evacuation story.)
 
+**Licensed inference (v1.1):** analysis, explainer, op-ed, and reaction pieces routinely do NOT
+restate the trigger event's specifics — that is a genre convention, not evidence of a different
+event. If (a) both sides sit in the same news cycle, (b) they are the same saga/subject, and
+(c) there is exactly ONE plausible occurrence in the window that the vaguer side can be about,
+then vague framing is NOT doubt: verdict `merge`. "B lacks specifics" alone is never a reason
+to hedge. (Ground truth: pairs 13324/13327 and 13362/13383 hedged this way on PROD; Josh
+manually merged both on 2026-08-05.) If there are TWO plausible referent occurrences in the
+window, that IS doubt — stay `uncertain`.
+
+A later reaction to an EARLIER beat in a chain is chain-of-events (`keep`), not licensed
+inference: licensed inference only applies when the vaguer side is commentary on the SAME
+occurrence, not on a prior step that led to it.
+
+**PRECEDENCE — this settles ties:** if a `keep` bullet below and licensed inference BOTH plausibly
+apply to a pair, **`keep` wins** (or `uncertain` if you genuinely cannot tell). v1.1 narrows what
+counts as doubt; it does not overturn the default-DENY stance or Josh's chain-of-events ruling.
+
+**Format variants of ONE occasion (v1.1):** previews, "how to watch" guides, WATCH/video clips,
+liveblogs, and timeline recaps of a single scheduled occasion are the SAME event as the occasion
+itself — merge them into it. (Ground truth: 13128→13123 was eventually merged after hedging
+twice.) Do NOT confuse this with the recurring-format `keep` rule below: a weekly segment or a
+per-state Live Results template repeating across DIFFERENT occasions stays `keep`; a preview and
+the event it previews are ONE occasion.
+
 **`keep` (different_event)** — separate developments, **even within one saga and even within the same
 24 hours**. This is the part deterministic gates get wrong. Josh's binding ruling — **chain-of-events
 beats are SEPARATE**:
@@ -328,16 +352,18 @@ beats are SEPARATE**:
 - an action vs a later follow-up comment about it,
 - resignation vs replacement, order vs a later court block, rumor vs the act itself,
 - two strikes / two hearings / two votes in a series,
-- recurring **formats** (Live Results templates, weekly punditry, daily briefings) — the format
-  repeating is not the same event,
+- recurring **formats** across DIFFERENT occasions (Live Results templates for two different states
+  or election nights, weekly punditry, daily briefings) — the format repeating is not the same event.
+  (A format piece covering the SAME occasion as the other story is the v1.1 format-variant merge
+  above; this bullet is about the template recurring across separate occasions.)
 - coverage separated by **months** (that is narrative-thread material for the events layer, not one
   event).
 
 **Default DENY.** If after reading both sides' article titles + summaries you cannot clearly place the
 pair on the `merge` side, the verdict is `uncertain` (or `keep` if it leans different). Never merge to
 "tidy up." A wrong `keep` is a duplicate card (cheap, repairable next run); a wrong `merge` collapses
-two distinct events (worse — though reversible via the tombstone, it still corrupts the record until
-someone catches it). Bias accordingly.
+two distinct events (worse — but since ADO-537, reversal is one click in the admin Judge tab via
+`unmerge_story`, so treat wrong-merge cost as moderate, not catastrophic). Bias accordingly.
 
 The single test to apply: **"Is there ONE occurrence that both stories are fundamentally about?"** If
 yes → merge. If each story is about a *different* step, strike, filing, ruling, or comment in a
@@ -389,7 +415,9 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 ## 8. Prompt Metadata
 
-- `prompt_version`: `judge-v1`
+- `prompt_version`: `judge-v1.1`
+- v1.1 (ADO-539): licensed-inference + format-variant merge rules; verdict memory moved into the
+  candidate RPC (migration 106).
 - Model: Claude Sonnet (exact model id set at cron creation, session 2).
 - Log table: `clustering_judge_log` (migration 100). Merge machinery:
   `merge_stories(p_loser_id, p_survivor_id, p_run_id)` (migration 101 added `p_run_id` + a DB-side hard

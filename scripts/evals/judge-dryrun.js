@@ -10,10 +10,16 @@
  * verdicts against the gold-set labels — it reads each label independently and compares, so it is a real
  * scorer, not a hardcoded pass.
  *
- * Coverage: all 10 story_story pairs (July 4th fragmentation cluster gs-199..208, all same_event) + a
- * 20-pair article_story sample spanning the hard cases: Josh's chain-of-events flips (gs-168, gs-189),
- * filing-vs-ruling / two-strikes / recurring-format different_event traps, and same-cycle
- * reaction/commentary same_event pairs.
+ * Coverage (re-scored under `judge-v1.1`, ADO-539): all 13 story_story pairs (July 4th fragmentation
+ * cluster gs-199..208 + the three ADO-539 ground-truth pairs gs-209..211), the 9-pair same_event
+ * article_story sample, and — as the precision gate — EVERY different_event pair in the gold set
+ * (all 100). The full different_event sweep exists because that is where v1.1's new licensed-inference
+ * and format-variant rules could bleed: a 33-pair sample cannot establish >=98% merge precision.
+ *
+ * Gate: zero `merge` verdicts on different_event pairs. `keep` and `uncertain` are both acceptable
+ * there (neither merges), so agreement % is reported context — merge-class PRECISION is the gate.
+ * The keep traps that must survive v1.1 unchanged: gs-001, gs-002, gs-005, gs-006, gs-008, gs-009,
+ * gs-010, gs-012, gs-063 (recurring formats) and gs-168, gs-189 (Josh's chain-of-events flips).
  *
  * Usage:
  *   node scripts/evals/judge-dryrun.js            # score verdicts vs gold labels, print report
@@ -70,6 +76,103 @@ const VERDICTS = {
   'gs-020': { verdict: 'merge', confidence: 0.85, rationale: "Analysis and announcement of the same US-Iran deal, hours apart — one development." },
   'gs-024': { verdict: 'merge', confidence: 0.80, rationale: "Opinion piece on the same DOJ Anti-Weaponization Fund announcement." },
   'gs-025': { verdict: 'merge', confidence: 0.75, rationale: "Expert reaction to the same Anti-Weaponization Fund announcement." },
+
+  // ── story_story: ADO-539 ground truth — the v1.1 hedge patterns that must now flip to merge ──
+  'gs-209': { verdict: 'merge', confidence: 0.80, rationale: "B is a timeline recap of the same Pirro reflecting-pool episode A reports; one plausible referent in the cycle, so vague framing is not doubt (v1.1 licensed inference)." },
+  'gs-210': { verdict: 'merge', confidence: 0.78, rationale: "A's Black-voters analysis and B's final-push/results coverage are the same Aug 4 Michigan Senate primary — one occurrence, analysis genre withholds specifics (v1.1 licensed inference)." },
+  'gs-211': { verdict: 'merge', confidence: 0.85, rationale: "A 'how to watch' guide and the 'WATCH LIVE' coverage of the same Graham funeral services are one occasion (v1.1 format variants)." },
+
+  // ── different_event sweep (ADO-539 FP hunt): every remaining different_event gold pair judged
+  //    under v1.1. None may come back `merge` — each merge here would be a precision regression. ──
+  'gs-013': { verdict: 'keep', confidence: 0.75, rationale: "Alabama redistricting signal vs the earlier Louisiana VRA ruling — two SCOTUS decisions 26 days apart." },
+  'gs-015': { verdict: 'keep', confidence: 0.85, rationale: "Judge declining to halt the UFC fight is the ruling on the lawsuit B reports being filed — filing vs ruling, chain of events." },
+  'gs-016': { verdict: 'keep', confidence: 0.80, rationale: "Declining to re-bid the pool repair is a later decision, not the earlier 'vandalism' acknowledgment." },
+  'gs-018': { verdict: 'keep', confidence: 0.85, rationale: "Imposing export controls and partially lifting them 13 days later are opposite actions — two occurrences." },
+  'gs-019': { verdict: 'keep', confidence: 0.80, rationale: "China-policy analysis vs the earlier Trump-Xi summit coverage, 24 days apart — different cycles." },
+  'gs-021': { verdict: 'keep', confidence: 0.80, rationale: "Experts doubting the vandalism claim vs a timelapse of the pool refilling — separate beats two weeks apart." },
+  'gs-022': { verdict: 'keep', confidence: 0.75, rationale: "Two Infantino-Trump relationship profiles 26 days apart — thematic twins, no shared occurrence." },
+  'gs-023': { verdict: 'keep', confidence: 0.80, rationale: "Two debt analyses pegged to different data (Treasury yields vs interest share of revenue)." },
+  'gs-026': { verdict: 'keep', confidence: 0.85, rationale: "Biden suing to block the audio vs that bid failing 23 days later — filing vs outcome." },
+  'gs-027': { verdict: 'keep', confidence: 0.85, rationale: "The judge rejecting the suit is the ruling on B's filing — chain of events." },
+  'gs-029': { verdict: 'keep', confidence: 0.90, rationale: "New Jersey vs West Virginia primaries — a Live Results template repeating across different occasions (v1.1 explicitly keeps these)." },
+  'gs-030': { verdict: 'keep', confidence: 0.75, rationale: "A human-interest birthday feature vs a Trump-centric 250th video — different angles, no single occurrence." },
+  'gs-031': { verdict: 'keep', confidence: 0.80, rationale: "The AI-meeting profit fight vs the earlier postponed AI executive order — separate developments 16 days apart." },
+  'gs-033': { verdict: 'keep', confidence: 0.85, rationale: "States suing over the Medicaid work rule vs the rule's announcement 29 days earlier — chain of events." },
+  'gs-034': { verdict: 'keep', confidence: 0.85, rationale: "The runoff and the primary that triggered it are two election occurrences." },
+  'gs-039': { verdict: 'keep', confidence: 0.85, rationale: "A pre-election polling piece vs an election-night concession 8 days later — different occurrences." },
+  'gs-040': { verdict: 'keep', confidence: 0.75, rationale: "Two AI-and-voters features — thematic twins, no shared occurrence." },
+  'gs-044': { verdict: 'keep', confidence: 0.80, rationale: "A tear-gassed protest vs a resort-scrutiny explainer 29 days earlier — separate occurrences." },
+  'gs-045': { verdict: 'keep', confidence: 0.75, rationale: "Two immigration-policy analyses a week apart with different pegs — no single occurrence." },
+  'gs-048': { verdict: 'keep', confidence: 0.65, rationale: "Same cycle and saga, but MTG's criticism targets the event itself while B is the court ruling — more than one plausible referent, so licensed inference does not apply." },
+  'gs-049': { verdict: 'keep', confidence: 0.90, rationale: "What-to-Watch previews of two different primary nights — recurring format across different occasions, not a preview of one occasion." },
+  'gs-052': { verdict: 'keep', confidence: 0.85, rationale: "The lead prosecutor withdrawing vs the second indictment 28 days earlier — separate beats." },
+  'gs-053': { verdict: 'keep', confidence: 0.80, rationale: "A rally announcement vs musicians dropping out of a different event 16 days earlier." },
+  'gs-054': { verdict: 'keep', confidence: 0.75, rationale: "Two 250th essays with different theses — no anchoring occurrence for either to be about." },
+  'gs-056': { verdict: 'keep', confidence: 0.75, rationale: "A slush-fund persistence piece three weeks after the fund's announcement — a later phase, not commentary in the announcement cycle." },
+  'gs-058': { verdict: 'keep', confidence: 0.85, rationale: "Gabbard's resignation and Pulte's appointment 10 days later — resignation vs replacement, explicitly separate." },
+  'gs-059': { verdict: 'keep', confidence: 0.75, rationale: "Two 250th partisan-politics pieces 17 days apart with different pegs." },
+  'gs-064': { verdict: 'keep', confidence: 0.70, rationale: "A private group routing legal funds vs the DOJ fund roundup — related theme, distinct subjects." },
+  'gs-065': { verdict: 'keep', confidence: 0.70, rationale: "A campaign-event remark is its own occurrence, not commentary on the peace-deal announcement — chain of events, not licensed inference." },
+  'gs-067': { verdict: 'keep', confidence: 0.75, rationale: "Two 2028-speculation pieces pegged to different remarks 17 days apart." },
+  'gs-068': { verdict: 'keep', confidence: 0.90, rationale: "Montana vs Idaho Live Results — recurring per-state template across different occasions." },
+  'gs-069': { verdict: 'keep', confidence: 0.80, rationale: "A historian remembrance vs partisan-battle reporting — thematically adjacent only." },
+  'gs-072': { verdict: 'keep', confidence: 0.80, rationale: "The July 4th celebration and the June 25 kickoff rally are two scheduled occasions 8+ days apart, not format variants of one." },
+  'gs-074': { verdict: 'keep', confidence: 0.80, rationale: "New York's funding suspension vs a Hawaii-as-warning analysis 25 days earlier — distinct developments." },
+  'gs-078': { verdict: 'keep', confidence: 0.85, rationale: "A judge blocking sign removal vs an appeal allowing it 20 days later — opposite rulings." },
+  'gs-080': { verdict: 'keep', confidence: 0.60, rationale: "Same cycle, but both sides are independent 250th essays; there is no single occurrence for either to be commentary on, so licensed inference does not apply." },
+  'gs-081': { verdict: 'keep', confidence: 0.80, rationale: "A concrete policy win vs a how-they-got-allies backgrounder 16 days earlier." },
+  'gs-082': { verdict: 'keep', confidence: 0.80, rationale: "Two cost-of-living features a week apart — thematic twins." },
+  'gs-084': { verdict: 'keep', confidence: 0.80, rationale: "The July 4th golden-age speech vs the June 25 kickoff rally — two rallies 10 days apart." },
+  'gs-085': { verdict: 'keep', confidence: 0.80, rationale: "Same hour, but a tech selloff and a quantum-stock surge are different market stories, not one occurrence." },
+  'gs-086': { verdict: 'keep', confidence: 0.80, rationale: "An agenda-stall analysis vs the Iran-deal announcement — different subjects." },
+  'gs-089': { verdict: 'keep', confidence: 0.80, rationale: "A 2028 contender ranking vs a specific Trump remark piece 20 days earlier." },
+  'gs-098': { verdict: 'keep', confidence: 0.80, rationale: "A riff essay 17 days after the recurring algae story — the algae recurrence is not one occurrence." },
+  'gs-103': { verdict: 'keep', confidence: 0.85, rationale: "A DHS statement vs a SCOTUS deportation ruling three days earlier — separate occurrences." },
+  'gs-104': { verdict: 'keep', confidence: 0.85, rationale: "Two different court-blocks-firing rulings: intelligence officers vs Fed governor Cook." },
+  'gs-106': { verdict: 'keep', confidence: 0.80, rationale: "Two 250th essays with different theses three days apart — no shared occurrence." },
+  'gs-109': { verdict: 'keep', confidence: 0.80, rationale: "A SCOTUS detention development vs 5th Circuit history — separate court developments." },
+  'gs-116': { verdict: 'keep', confidence: 0.75, rationale: "A congressional report is a new occurrence, not commentary on the earlier thematic video." },
+  'gs-117': { verdict: 'keep', confidence: 0.85, rationale: "An FBI support-network feature vs surveillance-renewal doubt — different stories." },
+  'gs-119': { verdict: 'keep', confidence: 0.80, rationale: "The challenger's messaging vs voters seeking answers 32 days earlier — separate beats." },
+  'gs-120': { verdict: 'keep', confidence: 0.90, rationale: "Different candidates in different states dropping out — template collision 65 days apart." },
+  'gs-121': { verdict: 'keep', confidence: 0.90, rationale: "Khamenei's death during the war vs a memorial prayer four months later." },
+  'gs-122': { verdict: 'keep', confidence: 0.85, rationale: "Two Trump-NATO developments three months apart." },
+  'gs-123': { verdict: 'keep', confidence: 0.85, rationale: "Different policy retreats four months apart." },
+  'gs-124': { verdict: 'keep', confidence: 0.80, rationale: "The announced curtailment vs the actual rollback 66 days later — two phases." },
+  'gs-125': { verdict: 'keep', confidence: 0.80, rationale: "The currency plan announcement vs the July 4th rollout 99 days later — one initiative, two events." },
+  'gs-126': { verdict: 'keep', confidence: 0.85, rationale: "Fed-reshaping analysis vs the Powell inquiry 161 days earlier." },
+  'gs-127': { verdict: 'keep', confidence: 0.85, rationale: "A parks-cuts feature vs a Yosemite feature 165 days earlier." },
+  'gs-128': { verdict: 'keep', confidence: 0.80, rationale: "A party-like-1976 essay vs a Trump-centric analysis 31 days earlier." },
+  'gs-129': { verdict: 'keep', confidence: 0.85, rationale: "Two losing-streak analyses 170 days apart — recurring-pattern trap." },
+  'gs-130': { verdict: 'keep', confidence: 0.85, rationale: "A mass-pardons rumor vs the actual pardons 83 days later — rumor vs the act itself." },
+  'gs-131': { verdict: 'keep', confidence: 0.85, rationale: "A district court ordering restoration vs an appeals court allowing removal 135 days later — opposite rulings." },
+  'gs-132': { verdict: 'keep', confidence: 0.80, rationale: "A still-celebrating retrospective 111 days after the ruling — thread material, not the ruling's cycle." },
+  'gs-133': { verdict: 'keep', confidence: 0.80, rationale: "The launch vs financial-advice commentary four months earlier." },
+  'gs-134': { verdict: 'keep', confidence: 0.80, rationale: "A specific pardon batch vs a pattern analysis 107 days earlier." },
+  'gs-135': { verdict: 'keep', confidence: 0.85, rationale: "A Georgia election-trust analysis vs an FBI-action explainer 154 days earlier." },
+  'gs-136': { verdict: 'keep', confidence: 0.80, rationale: "Two phases of the same FBI investigation 154 days apart — a saga, not one event." },
+  'gs-137': { verdict: 'keep', confidence: 0.85, rationale: "A July 4th speech vs an interview 105 days earlier." },
+  'gs-138': { verdict: 'keep', confidence: 0.85, rationale: "New Fed-chair friction vs the Powell inquiry 160 days earlier." },
+  'gs-139': { verdict: 'keep', confidence: 0.85, rationale: "Two Gen-Z-souring pieces 168 days apart." },
+  'gs-140': { verdict: 'keep', confidence: 0.80, rationale: "Speculative if-they-win-the-House coverage vs probes taking shape 124 days apart — two phases." },
+  'gs-141': { verdict: 'keep', confidence: 0.80, rationale: "Two separate Trump-NATO statements 92 days apart — recurring rhetoric, not one occurrence." },
+  'gs-142': { verdict: 'keep', confidence: 0.85, rationale: "Thematic diplomacy pieces 135 days apart." },
+  'gs-143': { verdict: 'keep', confidence: 0.85, rationale: "Two appeals-court ICE-detention rulings 65 days apart despite near-identical phrasing." },
+  'gs-144': { verdict: 'keep', confidence: 0.85, rationale: "A parks-content ruling vs the climate-finding reversal — different subjects." },
+  'gs-145': { verdict: 'keep', confidence: 0.85, rationale: "Two different Trump image posts 78 days apart — recurring behavior, not one occurrence." },
+  'gs-146': { verdict: 'keep', confidence: 0.85, rationale: "A judge demanding answers vs the original golfers' suit 138 days earlier." },
+  'gs-147': { verdict: 'keep', confidence: 0.80, rationale: "A later phase of the same Georgia investigation vs the initial explainer 153 days earlier." },
+  'gs-148': { verdict: 'keep', confidence: 0.85, rationale: "A European-unity piece vs a specific Meloni attack 77 days earlier." },
+  'gs-149': { verdict: 'keep', confidence: 0.85, rationale: "A legal-battles roundup vs a specific SCOTUS argument three months earlier." },
+  'gs-150': { verdict: 'keep', confidence: 0.85, rationale: "Two jobs-data cycles 174 days apart — recurring economic-data trap." },
+  'gs-151': { verdict: 'keep', confidence: 0.80, rationale: "Carlson's apology vs his third-party plan 71 days later — related but separate developments." },
+  'gs-152': { verdict: 'keep', confidence: 0.80, rationale: "A birthright-citizenship argument vs a term-wrap analysis 90 days later." },
+  'gs-153': { verdict: 'keep', confidence: 0.80, rationale: "Candidate super-PACs vs the party's $342M plan — different money stories." },
+  'gs-154': { verdict: 'keep', confidence: 0.80, rationale: "Two phases of the SAVE America Act fight 114 days apart." },
+  'gs-155': { verdict: 'keep', confidence: 0.80, rationale: "Two GOP-agenda-struggle pieces 113 days apart." },
+  'gs-156': { verdict: 'keep', confidence: 0.80, rationale: "An arrest-surge report vs a quiet-arrests feature 144 days earlier." },
+  'gs-157': { verdict: 'keep', confidence: 0.80, rationale: "A Senate vote vs a ruling analysis 102 days apart in the same subject area." },
+  'gs-158': { verdict: 'keep', confidence: 0.85, rationale: "Signing the order vs a court blocking it 87 days later — order vs later court block." },
 };
 
 function labelToExpectedVerdict(label) {
@@ -147,12 +250,37 @@ function main() {
   console.log(`Pairs judged: ${ids.length}  (story_story: ${rows.filter(r => r.pair_type === 'story_story').length}, article_story: ${rows.filter(r => r.pair_type === 'article_story').length})`);
   console.log(`Verdict agreement with gold labels: ${correct}/${ids.length} (${((correct / ids.length) * 100).toFixed(1)}%)`);
   console.log(`Merge-class: precision=${(precision * 100).toFixed(1)}%  recall=${(recall * 100).toFixed(1)}%  F1=${(f1 * 100).toFixed(1)}%`);
+  // Recall/F1 here are NOT system properties. Every different_event pair is judged, so precision
+  // is measured over the full negative set — but only a sample of same_event pairs is judged, so
+  // recall is measured over that sample and will read ~100% by construction. Precision is the gate.
+  const sameEventJudged = rows.filter((r) => r.label === 'same_event').length;
+  const sameEventTotal = gold.entries.filter((e) => e.label === 'same_event').length;
+  console.log(`  ^ recall/F1 are over the ${sameEventJudged}/${sameEventTotal} same_event pairs judged here, not the whole gold set — treat precision as the gate.`);
   console.log(`Confusion (merge class): TP=${tp} FP=${fp} FN=${fn} TN=${tn}`);
 
-  // July 4th recall (the flagship reason this feature exists)
-  const july4 = rows.filter(r => r.pair_type === 'story_story');
+  // July 4th recall (the flagship reason this feature exists). Scope to the july4 source so the
+  // ADO-539 story_story additions (gs-209..211) can't inflate this number.
+  const july4 = rows.filter(r => byId.get(r.id)?.source === 'july4_fragmentation');
   const july4Merged = july4.filter(r => r.verdict === 'merge').length;
   console.log(`July 4th story_story cluster: ${july4Merged}/${july4.length} correctly merged`);
+
+  // ADO-539 gate: the three hedge-pattern pairs must flip to merge under v1.1.
+  const gate539 = rows.filter(r => byId.get(r.id)?.source === 'ado-539-ground-truth');
+  const gate539Merged = gate539.filter(r => r.verdict === 'merge').length;
+  console.log(`ADO-539 hedge-pattern pairs flipped to merge: ${gate539Merged}/${gate539.length}`);
+
+  // The keep traps that must survive the v1.1 rule additions unchanged.
+  const TRAPS = ['gs-001','gs-002','gs-005','gs-006','gs-008','gs-009','gs-010','gs-012','gs-063','gs-168','gs-189'];
+  const trapsHeld = TRAPS.filter(id => VERDICTS[id]?.verdict === 'keep').length;
+  console.log(`Keep traps holding as 'keep': ${trapsHeld}/${TRAPS.length}`);
+
+  const deMerges = rows.filter(r => r.label === 'different_event' && r.verdict === 'merge');
+  console.log(`different_event pairs swept: ${rows.filter(r => r.label === 'different_event').length}  false merges: ${deMerges.length}`);
+  if (deMerges.length) {
+    console.log('GATE FAILED — false merges on different_event pairs:');
+    for (const d of deMerges) console.log(`  ${d.id} :: ${d.rationale}`);
+    process.exitCode = 1;
+  }
 
   if (disagreements.length) {
     console.log('\n--- DISAGREEMENTS ---');
