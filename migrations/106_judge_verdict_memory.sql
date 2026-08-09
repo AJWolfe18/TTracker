@@ -5,7 +5,8 @@
 -- judged uncertain 6x, Blanche pairs 6x/4x (2026-08-05 analysis on the ADO-539 card).
 -- Fix: skip pairs whose latest LIVE, SETTLED verdict (dry_run=false; includes
 -- source='manual', includes verdict='unmerge' — a human unmerge is an authoritative
--- "keep separate") is NEWER than the latest article_story.matched_at on either side.
+-- "keep separate") has an evidence snapshot NEWER than the latest
+-- article_story.matched_at on either side.
 -- A new article attaching to either story reopens the pair.
 -- "Settled" excludes merge verdicts that were decided but never executed (merged=false,
 -- e.g. the run cap of 10) — those are deferred to the next run by design and must NOT
@@ -13,6 +14,19 @@
 -- Rollback: re-run migration 100 PART D (restores the previous function body).
 -- Idempotent: CREATE OR REPLACE + IF NOT EXISTS. Same arity → ACLs preserved,
 -- no re-grant needed; NOTIFY included anyway (harmless).
+
+-- Evidence snapshot (Codex review, PR #113): the predicate must compare against the moment
+-- the agent READ the pair's evidence (Step 3), not the verdict INSERT time. created_at is
+-- stamped minutes later, after model deliberation — an article attaching in that window
+-- would get matched_at < created_at and look "covered" by a verdict that never saw it,
+-- wrongly suppressing the pair until yet another article attaches.
+-- Nullable on purpose: manual/legacy rows fall back to created_at via COALESCE below
+-- (a human verdict is made looking at current membership, so insert time ≈ read time).
+ALTER TABLE public.clustering_judge_log
+  ADD COLUMN IF NOT EXISTS evidence_as_of timestamptz;
+
+COMMENT ON COLUMN public.clustering_judge_log.evidence_as_of IS
+  'ADO-539: agent-stamped moment the pair''s membership/evidence was read (prompt Step 3, captured BEFORE the fetches). Verdict memory compares COALESCE(evidence_as_of, created_at) against article_story.matched_at; an article attaching after this moment reopens the pair.';
 
 -- Partial index so the NOT EXISTS probe is cheap. LEAST/GREATEST are immutable on
 -- bigint. Heartbeat rows (both ids NULL) are excluded by the predicate.
@@ -114,7 +128,12 @@ AS $$
         -- SUPPRESS — a stuck pair reopens on the next real article; a resurfaced pair
         -- could re-merge a human unmerge. Prefer suppression on ambiguity.
         -- GREATEST of the two per-story maxima == max over both stories' membership.
-        AND l.created_at >= GREATEST(a.last_matched, b.last_matched)
+        -- COALESCE: evidence_as_of is when the agent READ the evidence (Step 3);
+        -- created_at is the verdict INSERT, minutes of deliberation later. Comparing
+        -- against the read time means an article attaching mid-deliberation
+        -- (matched_at between the two) REOPENS the pair instead of being silently
+        -- covered by a verdict that never saw it. NULL (manual/legacy) → created_at.
+        AND COALESCE(l.evidence_as_of, l.created_at) >= GREATEST(a.last_matched, b.last_matched)
     )
   ORDER BY
     -- prioritise pairs that also share concrete signal, then by raw similarity
@@ -127,6 +146,6 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.get_clustering_judge_candidates(DOUBLE PRECISION, INT, INT) IS
-  'ADO-533/539: last-N-day active story pairs with centroid cosine >= p_min_sim, capped. Recall-first (entity/slug are context). Verdict memory (539): a pair is skipped while a live SETTLED verdict (dry_run=false, and either not a merge or an executed one) is newer than the latest article_story.matched_at on either side; a new article attaching reopens it. Merge verdicts logged with merged=false (run cap hit / merge_stories ok:false) are deliberately NOT memory - they are deferred for retry. No embedding egress. service_role only.';
+  'ADO-533/539: last-N-day active story pairs with centroid cosine >= p_min_sim, capped. Recall-first (entity/slug are context). Verdict memory (539): a pair is skipped while a live SETTLED verdict (dry_run=false, and either not a merge or an executed one) has an evidence snapshot (COALESCE(evidence_as_of, created_at)) newer than the latest article_story.matched_at on either side; a new article attaching reopens it. Merge verdicts logged with merged=false (run cap hit / merge_stories ok:false) are deliberately NOT memory - they are deferred for retry. No embedding egress. service_role only.';
 
 NOTIFY pgrst, 'reload schema';
