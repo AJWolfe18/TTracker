@@ -1,12 +1,16 @@
 -- ============================================================================
 -- ADO-539: verdict-memory fixture tests for migration 106
 -- ============================================================================
--- RUN ON **TEST** (project wnrjrywpcadwutfykflu) AFTER applying
--- migrations/106_judge_verdict_memory.sql.
+-- RUN ON **TEST** (project wnrjrywpcadwutfykflu) AFTER applying the CURRENT
+-- migrations/106_judge_verdict_memory.sql (the post-Codex version: it adds
+-- clustering_judge_log.evidence_as_of and the LEAST/COALESCE clamp — checks
+-- r/s/t below fail loudly on the pre-Codex version because the column is missing).
 --
--- All six checks were EXECUTED AND PASSED on TEST 2026-08-08 via PostgREST
--- (pair 16981/17005, centroid_sim 0.8966). This file reproduces that run as a
--- single transaction so it can be re-verified after any change to the RPC.
+-- The original six checks (c/f/m/j/e/h) were EXECUTED AND PASSED on TEST
+-- 2026-08-08 via PostgREST (pair 16981/17005, centroid_sim 0.8966). Checks
+-- r/s/t were added for the Codex PR #113 evidence-snapshot findings. This file
+-- runs everything as a single transaction so it can be re-verified after any
+-- change to the RPC.
 --
 -- Everything is inside BEGIN ... ROLLBACK: it writes nothing permanently and
 -- can be re-run freely. Any failure RAISES EXCEPTION -- a gate that did not run
@@ -25,6 +29,7 @@ DECLARE
   b_id     BIGINT;
   art      TEXT;
   old_ts   TIMESTAMPTZ;
+  max_mt   TIMESTAMPTZ;
   n        INT;
   passes   INT := 0;
   fails    INT := 0;
@@ -93,6 +98,48 @@ BEGIN
   ELSE fails := fails + 1; RAISE WARNING 'FAIL (e): pair did not reopen after a newer matched_at'; END IF;
 
   UPDATE article_story SET matched_at = old_ts WHERE article_id = art;
+
+  -- ── Evidence-snapshot checks (Codex PR #113 P1): memory anchors to when the agent
+  -- READ the evidence (evidence_as_of, clamped to created_at), not the insert time. ──
+
+  -- Reset the row to a plain live keep in normal id order for the next three checks.
+  UPDATE clustering_judge_log
+     SET source = 'judge-agent', verdict = 'keep', merged = false, dry_run = false,
+         story_id_a = a_id, story_id_b = b_id, rationale = 'fixture evidence_as_of'
+   WHERE run_id = 'ado-539-fixture';
+
+  max_mt := GREATEST(
+    (SELECT max(m.matched_at) FROM article_story m WHERE m.story_id = a_id),
+    (SELECT max(m.matched_at) FROM article_story m WHERE m.story_id = b_id));
+
+  -- (r) RACE: an article attached AFTER the evidence read but BEFORE the verdict insert
+  -- (evidence_as_of < matched_at < created_at) must NOT suppress -- the verdict never saw it.
+  UPDATE clustering_judge_log SET evidence_as_of = max_mt - INTERVAL '1 minute'
+   WHERE run_id = 'ado-539-fixture';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (r): membership newer than evidence_as_of reopens (mid-deliberation attach is seen)';
+  ELSE fails := fails + 1; RAISE WARNING 'FAIL (r): a verdict suppressed an article it never saw (created_at out-covered evidence_as_of)'; END IF;
+
+  -- (s) Normal agent case: evidence read AFTER the last attach suppresses.
+  UPDATE clustering_judge_log SET evidence_as_of = max_mt + INTERVAL '1 minute'
+   WHERE run_id = 'ado-539-fixture';
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 0 THEN passes := passes + 1; RAISE NOTICE 'PASS (s): evidence_as_of newer than membership suppresses';
+  ELSE fails := fails + 1; RAISE WARNING 'FAIL (s): pair returned despite evidence covering all membership'; END IF;
+
+  -- (t) CLAMP: a hallucinated FUTURE evidence_as_of must not out-cover created_at --
+  -- LEAST(evidence_as_of, created_at) bounds agent-clock pathology at pre-fix behavior.
+  UPDATE clustering_judge_log SET evidence_as_of = NOW() + INTERVAL '10 years'
+   WHERE run_id = 'ado-539-fixture';
+  UPDATE article_story SET matched_at = NOW() + INTERVAL '1 day' WHERE article_id = art;
+  n := (SELECT count(*) FROM get_clustering_judge_candidates(0.1, 60, 200) c
+         WHERE c.story_id_a = a_id AND c.story_id_b = b_id);
+  IF n = 1 THEN passes := passes + 1; RAISE NOTICE 'PASS (t): future evidence_as_of clamped to created_at; new article still reopens';
+  ELSE fails := fails + 1; RAISE WARNING 'FAIL (t): a future evidence_as_of pinned the pair shut past new evidence'; END IF;
+  UPDATE article_story SET matched_at = old_ts WHERE article_id = art;
+  UPDATE clustering_judge_log SET evidence_as_of = NULL WHERE run_id = 'ado-539-fixture';
 
   -- (h) Heartbeat rows (both ids NULL) must never suppress a real pair.
   UPDATE clustering_judge_log
