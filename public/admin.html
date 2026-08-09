@@ -5683,7 +5683,7 @@
                 if (!result) return; // error shown; popup stays open for cancel
                 setUnmergeRow(null);
                 if (result.ok) {
-                    setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.${result.log_error ? ' (Warning: Judge log write failed — unmerge itself succeeded.)' : ''}`);
+                    setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.`);
                     fetchVerdicts();
                 } else {
                     const reasons = {

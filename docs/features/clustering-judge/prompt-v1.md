@@ -164,6 +164,8 @@ Process pairs **one at a time**. For each pair, FIRST capture the evidence snaps
 
 ```bash
 EVIDENCE_AS_OF=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "EVIDENCE_AS_OF=${EVIDENCE_AS_OF}"   # echo so the value survives into your transcript —
+                                          # shell state does NOT persist across tool calls
 ```
 
 This value goes in the Step 6 log row as `evidence_as_of`. Verdict memory (migration 106) compares it
@@ -400,6 +402,13 @@ sequence → keep, even if they share entities and sit minutes apart.
   missing evidence.
 - **`merge_stories` returns `ok:false`:** never retry blindly; log `merged=false` with the returned
   reason in the rationale. The pair stays as two stories; a later run re-evaluates.
+- **The Step 6 log insert itself fails (non-2xx):** this row is both the audit trail AND verdict
+  memory, and in live mode the merge may already be executed — an unlogged verdict is the worst
+  outcome. Retry ONCE as-is. If the retry also fails, retry once more with `evidence_as_of` REMOVED
+  from the body (a NULL falls back to `created_at` in the memory predicate — safe, just slightly more
+  suppressive), which recovers the case where a lost/malformed `EVIDENCE_AS_OF` value is what PostgREST
+  is rejecting (400/22007/PGRST204). If that still fails, log the error text and continue — but never
+  skip the attempt.
 - Never leave a pair unlogged. Never merge in dry-run mode.
 
 ---
