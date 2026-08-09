@@ -115,7 +115,10 @@ call above, or a heartbeat row).
 ### Timestamps
 
 PostgREST does not support `NOW()` in bodies. Generate ISO 8601: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
-`clustering_judge_log.created_at` defaults server-side, so you never send it.
+`clustering_judge_log.created_at` defaults server-side, so you never send it. `evidence_as_of` you DO
+send on every pair row — but it is NEVER a timestamp you generate: it is the `membership_seen_at`
+value the candidate RPC returned for that pair (Step 2), echoed verbatim as a JSON string. If the
+RPC did not include it, omit `evidence_as_of` for that pair.
 
 ---
 
@@ -137,7 +140,9 @@ collide. Every log row this run writes shares this `run_id`.
 
 Call the candidate RPC (Section 2). It returns up to `p_max_pairs` (default 30) story pairs from the
 last `p_days` days with centroid cosine ≥ `p_min_sim`, each with `story_id_a`, `story_id_b`,
-`headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`.
+`headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`, and
+`membership_seen_at` (the DB's membership watermark for the pair — you will echo it back verbatim as
+`evidence_as_of` in Step 6; treat it as an opaque string, never parse or regenerate it).
 
 **Recall-first, by design:** the RPC does NOT require a shared entity or slug — the flagship July 4th
 fragments share only `US-TRUMP` (a stopword) / `LOC-DC` with no overlapping slugs, so an entity gate
@@ -157,7 +162,16 @@ complete — stop.
 
 ### Step 3: Per pair — fetch summaries + member ARTICLE titles (BOTH sides)
 
-Process pairs **one at a time**. For each pair, do NOT judge on the two `primary_headline`s alone —
+Process pairs **one at a time**. Each Step 2 candidate carries a `membership_seen_at` field — the
+database's own watermark of the newest article attachment across both stories at fetch time. That
+value goes in the Step 6 log row as `evidence_as_of`, **echoed exactly as the RPC returned it**
+(including a literal `"-infinity"` if that is what came back). Do NOT generate a timestamp yourself
+(`date -u` etc.) — verdict memory compares it against `article_story.matched_at`, and only the
+DB-issued value stays in the same clock family; a sandbox clock a few seconds fast would fake
+coverage of an article you never saw. If `membership_seen_at` is missing from the RPC response
+(database not yet migrated), OMIT `evidence_as_of` from the log row entirely — NULL degrades safely.
+
+For each pair, do NOT judge on the two `primary_headline`s alone —
 `primary_headline` is whatever the FIRST article in a story said, and is frequently misleading (a story
 about a speech can be headlined by a weather-evacuation article). Fetch, for **both** `story_id_a` and
 `story_id_b`:
@@ -239,7 +253,8 @@ contain apostrophes):
   "rationale": "<one sentence>",
   "centroid_sim": <from Step 2>,
   "merged": <true|false>,
-  "dry_run": <true|false>
+  "dry_run": <true|false>,
+  "evidence_as_of": "<membership_seen_at from Step 2 for THIS pair, echoed verbatim — omit the key if the RPC did not return it>"
 }
 ```
 
@@ -248,8 +263,9 @@ here for review, even though the story row is tombstoned.
 
 ### Step 7: Notify on uncertain verdicts (non-blocking Discord alert)
 
-`uncertain` is the only verdict that needs a human — `merge` and `keep` are self-resolving (a wrong
-`keep` is repaired next run; a `merge` is reversible via the tombstone). After all pairs are logged,
+`uncertain` is the only verdict that needs a human — a `merge` is reversible via the tombstone, and a
+wrong `keep` is re-examined when a new article attaches to either side (verdict memory, migration 106,
+suppresses the pair until then — it is NOT retried every run). After all pairs are logged,
 post **one** Discord digest of this run's `uncertain` verdicts so a human can review + resolve them in
 the admin Judge tab.
 
@@ -320,6 +336,30 @@ one announcement, one ruling, one speech, one election night, one disclosure rel
   weather and the other's is about the speech. (Gold set gs-199..208: all 5 July 4th fragments =
   same_event, including the `LOC-DC` storm-evacuation story.)
 
+**Licensed inference (v1.1):** analysis, explainer, op-ed, and reaction pieces routinely do NOT
+restate the trigger event's specifics — that is a genre convention, not evidence of a different
+event. If (a) both sides sit in the same news cycle, (b) they are the same saga/subject, and
+(c) there is exactly ONE plausible occurrence in the window that the vaguer side can be about,
+then vague framing is NOT doubt: verdict `merge`. "B lacks specifics" alone is never a reason
+to hedge. (Ground truth: pairs 13324/13327 and 13362/13383 hedged this way on PROD; Josh
+manually merged both on 2026-08-05.) If there are TWO plausible referent occurrences in the
+window, that IS doubt — stay `uncertain`.
+
+A later reaction to an EARLIER beat in a chain is chain-of-events (`keep`), not licensed
+inference: licensed inference only applies when the vaguer side is commentary on the SAME
+occurrence, not on a prior step that led to it.
+
+**PRECEDENCE — this settles ties:** if a `keep` bullet below and licensed inference BOTH plausibly
+apply to a pair, **`keep` wins** (or `uncertain` if you genuinely cannot tell). v1.1 narrows what
+counts as doubt; it does not overturn the default-DENY stance or Josh's chain-of-events ruling.
+
+**Format variants of ONE occasion (v1.1):** previews, "how to watch" guides, WATCH/video clips,
+liveblogs, and timeline recaps of a single scheduled occasion are the SAME event as the occasion
+itself — merge them into it. (Ground truth: 13128→13123 was eventually merged after hedging
+twice.) Do NOT confuse this with the recurring-format `keep` rule below: a weekly segment or a
+per-state Live Results template repeating across DIFFERENT occasions stays `keep`; a preview and
+the event it previews are ONE occasion.
+
 **`keep` (different_event)** — separate developments, **even within one saga and even within the same
 24 hours**. This is the part deterministic gates get wrong. Josh's binding ruling — **chain-of-events
 beats are SEPARATE**:
@@ -328,16 +368,22 @@ beats are SEPARATE**:
 - an action vs a later follow-up comment about it,
 - resignation vs replacement, order vs a later court block, rumor vs the act itself,
 - two strikes / two hearings / two votes in a series,
-- recurring **formats** (Live Results templates, weekly punditry, daily briefings) — the format
-  repeating is not the same event,
+- recurring **formats** across DIFFERENT occasions (Live Results templates for two different states
+  or election nights, weekly punditry, daily briefings) — the format repeating is not the same event.
+  (A format piece covering the SAME occasion as the other story is the v1.1 format-variant merge
+  above; this bullet is about the template recurring across separate occasions.)
 - coverage separated by **months** (that is narrative-thread material for the events layer, not one
   event).
 
 **Default DENY.** If after reading both sides' article titles + summaries you cannot clearly place the
 pair on the `merge` side, the verdict is `uncertain` (or `keep` if it leans different). Never merge to
-"tidy up." A wrong `keep` is a duplicate card (cheap, repairable next run); a wrong `merge` collapses
-two distinct events (worse — though reversible via the tombstone, it still corrupts the record until
-someone catches it). Bias accordingly.
+"tidy up." A wrong `keep` is a duplicate card — cheap, but NOT retried every run: verdict memory
+(migration 106) suppresses the pair until a new article attaches to either side, so a wrong `keep` on a
+story that has gone quiet can persist indefinitely. A wrong `merge` collapses two distinct events
+(worse — but since ADO-537, reversal is one click in the admin Judge tab via `unmerge_story`, so treat
+wrong-merge cost as moderate, not catastrophic). `keep` and `uncertain` suppress identically; the
+difference is `uncertain` pings a human (Step 7). Bias accordingly — and when genuinely torn, prefer
+`uncertain` over a coin-flip `keep`, because only `uncertain` gets human eyes.
 
 The single test to apply: **"Is there ONE occurrence that both stories are fundamentally about?"** If
 yes → merge. If each story is about a *different* step, strike, filing, ruling, or comment in a
@@ -353,6 +399,13 @@ sequence → keep, even if they share entities and sit minutes apart.
   missing evidence.
 - **`merge_stories` returns `ok:false`:** never retry blindly; log `merged=false` with the returned
   reason in the rationale. The pair stays as two stories; a later run re-evaluates.
+- **The Step 6 log insert itself fails (non-2xx):** this row is both the audit trail AND verdict
+  memory, and in live mode the merge may already be executed — an unlogged verdict is the worst
+  outcome. Retry ONCE as-is. If the retry also fails, retry once more with `evidence_as_of` REMOVED
+  from the body (a NULL falls back to `created_at` in the memory predicate — safe, just slightly more
+  suppressive), which recovers the case where a mangled `membership_seen_at` echo is what PostgREST
+  is rejecting (400/22007/PGRST204). If that still fails, log the error text and continue — but never
+  skip the attempt.
 - Never leave a pair unlogged. Never merge in dry-run mode.
 
 ---
@@ -389,7 +442,9 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 ## 8. Prompt Metadata
 
-- `prompt_version`: `judge-v1`
+- `prompt_version`: `judge-v1.1`
+- v1.1 (ADO-539): licensed-inference + format-variant merge rules; verdict memory moved into the
+  candidate RPC (migration 106).
 - Model: Claude Sonnet (exact model id set at cron creation, session 2).
 - Log table: `clustering_judge_log` (migration 100). Merge machinery:
   `merge_stories(p_loser_id, p_survivor_id, p_run_id)` (migration 101 added `p_run_id` + a DB-side hard

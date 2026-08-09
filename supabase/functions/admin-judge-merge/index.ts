@@ -15,7 +15,8 @@
 //
 // preview response: { ok, survivor: {...}, loser: {...}, warnings: [...] }
 // merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error? }
-// unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored?, log_error? }
+// unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored? }
+//   (the 'unmerge' judge-log row is written atomically by the unmerge_story RPC — migration 107)
 //
 // The merge itself is the hardened merge_stories RPC (migrations 100/101/102): row-locked,
 // per-run hard-capped, snapshotted to story_merge_audit, loser tombstoned (never deleted).
@@ -120,7 +121,6 @@ Deno.serve(async (req) => {
       if (!actualLoser) {
         return jsonResponse({ ok: false, reason: 'not_merged_pair' })
       }
-      const actualSurvivor = actualLoser === a ? b : a
 
       const runId = `manual-admin-${Date.now()}`
       const { data: result, error: rpcError } = await supabase.rpc('unmerge_story', {
@@ -135,28 +135,11 @@ Deno.serve(async (req) => {
         return jsonResponse({ ...result, run_id: runId })
       }
 
-      // Log the reversal (verdict='unmerge', migration 105). Non-fatal, same as merge logging.
-      const { error: logError } = await supabase.from('clustering_judge_log').insert({
-        source: 'manual',
-        story_id_a: actualSurvivor?.id ?? result.survivor_id,
-        story_id_b: actualLoser.id,
-        headline_a: actualSurvivor?.primary_headline ?? null,
-        headline_b: actualLoser.primary_headline,
-        verdict: 'unmerge',
-        rationale: `Manual unmerge via admin Judge tab: #${actualLoser.id} restored from #${result.survivor_id}`,
-        merged: false,
-        dry_run: false,
-        run_id: runId
-      })
-      if (logError) {
-        console.error('clustering_judge_log insert failed (unmerge already executed):', logError.message)
-      }
-
-      return jsonResponse({
-        ...result,
-        run_id: runId,
-        log_error: logError ? logError.message : undefined
-      })
+      // The 'unmerge' clustering_judge_log row is written by unmerge_story ITSELF, inside the
+      // unmerge transaction (migration 107). It is the Judge's verdict memory (migration 106) —
+      // a best-effort insert here could fail after commit and leave the Judge free to re-merge
+      // a human unmerge, so this function no longer writes it.
+      return jsonResponse({ ...result, run_id: runId })
     }
 
     // action === 'merge'

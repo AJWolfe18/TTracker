@@ -24,6 +24,40 @@ rides existing cloud-agent infra, no new secrets.
 | 1.3 | `migrations/102_merge_stories_concurrency.sql` | ✅ TEST · ✅ **PROD verified applied** (same check: `has_102 = true`, FOR UPDATE present) | None. |
 | 1.4 | `migrations/104_manual_merge_source.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (source CHECK verified: `inline/judge-agent/manual`) | None. |
 | 1.5 | `migrations/105_unmerge_story.sql` | ✅ TEST · ✅ **PROD applied 2026-08-05** (`unmerged_at` column, verdict CHECK gains `unmerge`, RPC grants anon=f/auth=f/service_role=t, lock fix present) | None. |
+| 1.6 | `migrations/106_judge_verdict_memory.sql` (ADO-539) | TEST has the PRE-Codex version (no `evidence_as_of`) — **re-apply the current file on TEST** · ❌ PROD | Apply on both. The RPC is DROPped and re-created (output gains `membership_seen_at`) — pasted as one SQL Editor script this is a single transaction, but avoid applying while a Judge run is in flight (a concurrent RPC call in the DROP window fails; runs are 3x/day, just don't overlap one). Verify with the SQL block below: index + column exist, the function exists as a single definition (no duplicates), and privileges are exactly anon=f / authenticated=f / service_role=t. Re-run security advisor (SECURITY DEFINER house rule) + `EXPLAIN ANALYZE` the RPC on PROD (LATERAL hoist unmeasured there). |
+| 1.7 | `migrations/107_unmerge_logs_atomically.sql` (ADO-539, Codex PR #113 P1) | ❌ TEST · ❌ PROD | Apply on both, **before** redeploying `admin-judge-merge` (see §3). `unmerge_story` now writes its own `'unmerge'` judge-log row in-transaction — that row is verdict memory; losing it let the Judge re-merge a human unmerge. |
+
+**ADO-539 verification SQL (copy/paste after applying 106 + 107):**
+
+```sql
+-- 106: index + column
+SELECT to_regclass('public.idx_judge_log_pair_live') IS NOT NULL AS idx_present;
+SELECT column_name FROM information_schema.columns
+ WHERE table_schema='public' AND table_name='clustering_judge_log' AND column_name='evidence_as_of';
+
+-- 106: single function definition, correct privileges (expect anon=f, authenticated=f, service_role=t)
+SELECT p.oid::regprocedure AS signature,
+       has_function_privilege('anon',          p.oid, 'EXECUTE') AS anon,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+       has_function_privilege('service_role',  p.oid, 'EXECUTE') AS service_role
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname='public' AND p.proname='get_clustering_judge_candidates';
+
+-- 107: unmerge_story logs atomically (expect t) and stays service_role-only
+SELECT prosrc LIKE '%clustering_judge_log%' AS logs_atomically,
+       has_function_privilege('anon', oid, 'EXECUTE') AS anon,
+       has_function_privilege('service_role', oid, 'EXECUTE') AS service_role
+FROM pg_proc WHERE proname='unmerge_story';
+```
+
+**⚠️ ADO-539 LOAD-BEARING ORDER: apply 106 (current file) + 107 on PROD BEFORE merging PR #113 to
+`main`.** The Judge cron is LIVE off `main` (rows 6.x) and its bootstrap hard-resets to `origin/main` —
+the first run after the merge uses prompt v1.1, which sends `evidence_as_of` in every Step 6 pair row.
+If PROD lacks the column, PostgREST rejects the WHOLE row (PGRST204): executed merges go unlogged
+(invariant 1 broken), no verdict memory is written, and the Step 7 Discord digest re-reads an empty run.
+Migrations-first is safe in the other direction — old prompt rows simply leave `evidence_as_of` NULL.
+Same on TEST: re-apply current 106 (+107) before any manual TEST Judge run. If migrations can't be
+applied promptly, pause the Judge cron trigger instead.
 
 **101 changes (why it's required before go-live):**
 - `find_similar_stories` RPC + `merge_stories` RPC replaced; new tables `judge_run_merge_count`,
@@ -62,6 +96,7 @@ could re-attach to a tombstone via the ANN block or the hash-collision path).
 | 3.3 | `stories-search` | exclude `status='merged_into'`; narrowed select | ✅ | ✅ deployed 2026-07-06 (v8) |
 | 3.4 | `admin-judge-log` | service_role backend for the admin Judge tab; ADO-537 adds `unmerge` verdict + `story_id` search | ✅ | ✅ deployed 2026-08-05 (v2) |
 | 3.5 | `admin-judge-merge` | NEW (ADO-537) — manual merge + unmerge, password-gated | ✅ | ✅ deployed 2026-08-05 (v1) |
+| 3.6 | `admin-judge-merge` (ADO-539 update) | Drops its best-effort unmerge log insert — `unmerge_story` logs atomically (migration 107). Deploy AFTER 107 on each env; between 107 and this deploy, unmerges double-log (harmless, cosmetic). | ❌ redeploy needed | ❌ redeploy needed |
 
 Deploy: `npx supabase functions deploy <fn> --project-ref osjbulmltfpcoldydexg` (migration 100 must be
 applied first — it is, on PROD). TEST ref is `wnrjrywpcadwutfykflu`.
