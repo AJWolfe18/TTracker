@@ -38,7 +38,17 @@ Score 4–5 = front. Score 2–3 = watchlist (visible in admin, not public). Bel
 
 A story that belongs to no front is a **loose end**. Loose ends are not a second content type; they render directly from the `stories` table in the running log. This is the single-representation rule that kills rejected-schema issue #7.
 
-**Reference cases:** The Epstein Files (flagship — 18 months, 38 developments, unresolved). Iran (flagship). The Qatar Jet (major — slow but unresolved). "Fired the BLS commissioner" (loose end — one occurrence, no accumulation).
+**Reference cases**
+
+| Case | Rubric | Verdict |
+|---|---|---|
+| **The Epstein Files** | 5/5 — 18 months, 38 developments, escalating, unresolved | Flagship front. The canonical shape: a chain of *distinct* beats. |
+| **ICE raids** | 5/5 — sustained since 2025, high stakes, unresolved, nameable | Front, but a **different shape**: dozens of near-identical recurring occurrences rather than a chain of distinct beats. See below. |
+| **Iran** | 5/5 — strikes, escalation, no congressional vote | Flagship front |
+| **The Qatar Jet** | 4/5 — slow but unresolved, only misses "accumulating" some months | Major front |
+| **"Fired the BLS commissioner"** | 1/5 — one occurrence, no accumulation | Loose end, not a front |
+
+**ICE is the case that stresses update granularity.** Epstein produces distinct beats that each deserve their own update. ICE produces forty variations of "another raid happened," and one update per raid would bury the front in noise and burn the approval queue. The drafter must therefore be able to roll similar recurring occurrences into one periodic update ("Nine raids in three states this month, two deaths") rather than emitting one per story. That is a requirement on the drafter prompt (§9), not a schema change — `event_updates` already models one update covering N stories.
 
 ---
 
@@ -354,6 +364,8 @@ Two Claude cloud agents, both following the established SCOTUS/EO/Pardons/Storie
 **Assignment agent** — runs after each clustering cycle. Input: stories with no `story_event` row from the last N days, plus the published front registry. Output: a `story_event` row, or nothing. No approval gate; assignment is reversible in admin, and a wrong assignment is cheap. Every decline writes a skip row.
 
 **Update drafter** — runs on a slower cadence. When a front accumulates unfolded stories, or a high-alarm story lands, it drafts one update covering N stories, writes it `pending`, and fires a Discord alert. Josh approves, edits or rejects. Nothing reaches the public timeline without that approval.
+
+The drafter must distinguish the two front shapes from §2. A **chain front** (Epstein) gets one update per distinct beat. A **recurring front** (ICE raids) gets one periodic update aggregating similar occurrences, because one update per raid would bury the front and flood the approval queue. Getting this wrong is the most likely way admin load blows past its 8/day alert threshold.
 
 **Deploy-order rule applies:** migrations land before any prompt referencing new columns merges to main, since bootstrap hard-resets to origin/main.
 
