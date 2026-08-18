@@ -319,6 +319,8 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 ### `executive_orders`
 **Purpose:** Presidential executive order tracking. Enriched by the EO Claude Agent (ADO-476/477/478/479).
 
+**⚠️ `id` type drift (ADO-542):** TEST = INTEGER identity; PROD = VARCHAR(50) with DB default `'eo_' || gen_random_uuid()` (migration 108). Both envs auto-generate — scripts must NEVER set `id` client-side, and code must treat EO ids as opaque strings.
+
 **Agent-writes (v1 prompt — canonical):**
 
 | Column | Type | Description |
