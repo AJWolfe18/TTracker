@@ -62,8 +62,13 @@ async function fetchFromFederalRegister() {
             startDate = '2025-01-20';
             console.log('   🚀 INITIAL IMPORT MODE - fetching all EOs since inauguration');
         } else {
-            // Daily update - last 3 days by default, override via EO_LOOKBACK_DAYS for backfills
-            const lookbackDays = Math.max(1, parseInt(process.env.EO_LOOKBACK_DAYS, 10) || 3);
+            // Daily update - last 3 days by default, override via EO_LOOKBACK_DAYS for backfills.
+            // Strict digits-only + 1-365 clamp: a malformed/huge value must not throw on
+            // toISOString (the catch below would silently fall back to a full import).
+            const rawLookback = process.env.EO_LOOKBACK_DAYS ?? '';
+            const lookbackDays = /^\d{1,3}$/.test(rawLookback)
+                ? Math.min(Math.max(parseInt(rawLookback, 10), 1), 365)
+                : 3;
             startDate = new Date(Date.now() - lookbackDays*24*60*60*1000).toISOString().split('T')[0];
             console.log(`   📅 DAILY UPDATE MODE - fetching last ${lookbackDays} days`);
         }

@@ -12,7 +12,10 @@
 -- eo_<uuid>, format-compatible (string starting with 'eo_').
 --
 -- Idempotent and env-safe: the type guard makes this a no-op on TEST,
--- where id is INTEGER and already auto-generates.
+-- where id is INTEGER and already auto-generates. PROD's column is
+-- VARCHAR(50) (see migration 091 notes), which information_schema reports
+-- as 'character varying' - guard covers both string types. 'eo_' + uuid
+-- is 39 chars, within the 50-char limit.
 
 DO $$
 BEGIN
@@ -21,7 +24,7 @@ BEGIN
     WHERE table_schema = 'public'
       AND table_name = 'executive_orders'
       AND column_name = 'id'
-      AND data_type = 'text'
+      AND data_type IN ('text', 'character varying')
   ) THEN
     ALTER TABLE public.executive_orders
       ALTER COLUMN id SET DEFAULT ('eo_' || gen_random_uuid()::text);
