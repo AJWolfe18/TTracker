@@ -3,7 +3,7 @@
 **ADO:** 530 (design) · Epic 541 (auto-proposal, deferred)
 **Status:** Draft for approval
 **Created:** 2026-08-09
-**Supersedes:** the schema half of `design.md` (Apr 2026). That doc's product vision still holds; its Schema v1 was rejected and is replaced here.
+**Supersedes:** `design.md` (Apr 2026) **entirely** (clarified 2026-08-17). What survives from it is the mission — "when someone says 'he wasn't that bad,' you point them here" — and the term-2-only scope. What does **not** survive: its vision of events *replacing* stories as the user-facing product. This PRD builds fronts as an **aggregation layer**; stories stay visible (the running log renders them directly). Its Schema v1 was rejected and is replaced by §6.
 **Mockups:** `.superpowers/brainstorm/events-homepage-v2/compare.html` (concept 4 = approved direction)
 
 ---
@@ -34,7 +34,7 @@ The consequence is that the site reproduces the flood instead of countering it. 
 
 Score 4–5 = front. Score 2–3 = watchlist (visible in admin, not public). Below 2 = it stays a story.
 
-**Tier** is separate and purely editorial — it controls display weight, not qualification.
+**Tier** is separate and purely editorial — it controls display weight, not qualification. The tiers named in the reference-case verdicts below are illustrations of likely editorial calls, not outputs of the rubric: the rubric decides front-or-not; Josh decides tier.
 
 A story that belongs to no front is a **loose end**. Loose ends are not a second content type; they render directly from the `stories` table in the running log. This is the single-representation rule that kills rejected-schema issue #7.
 
@@ -53,6 +53,8 @@ A story that belongs to no front is a **loose end**. Loose ends are not a second
 ---
 
 ## 3. Scope
+
+**Content scope: term 2 only** — everything from inauguration (Jan 20, 2025) forward. Term-1 backfill stays out (below).
 
 **In (MVP):** ~10–20 hand-curated fronts. Public homepage timeline, public front pages, admin registry, AI assignment of incoming stories, AI-drafted updates with human approval, Discord alerts to admin.
 
@@ -80,7 +82,7 @@ Absolute thresholds are marked **(baseline)** where the site has no prior compar
 |---|---|---|
 | Front open rate ★ | Sessions opening ≥1 front detail / all sessions | ≥ 25% (baseline) |
 | Timeline engagement | Sessions with any timeline interaction (scroll, arrow, filter, expand) | ≥ 40% (baseline) |
-| Front depth | Median updates viewed per front-page session | ≥ 3 |
+| Front depth | Median updates viewed per front-page session | ≥ 3 (baseline) |
 | Return rate | Front viewers returning within 14 days | ≥ 20% (baseline) |
 | Newsletter conversion | Signups attributed `signup_page='fronts'` / front sessions | ≥ existing stories page rate |
 
@@ -123,21 +125,27 @@ Not optimizing for pageviews, session duration, or clicks-per-visit. A reader wh
 
 A horizontal, evenly spaced, scrolling timeline on the homepage. Every entry is labeled — date, headline, front, alarm — alternating above and below a dotted line. Month and year markers on the line. Loads parked at today; you scroll left into history.
 
+**The inline strip shows a recent window, not the full term** (2026-08-17). Fetching every development since inauguration inline (~12K stories) would blow the egress and LCP guardrails in §4.2. The inline strip fetches the most recent ~100–150 developments with tight selects; **the full term belongs to the expand view**, which loads history incrementally (cursor pages) as you go back — never one bulk fetch. The inline caption must be honest about this ("Recent developments…"); the full-screen view owns "the whole term, all of it."
+
 Evenly spaced, not date-proportional. This is a deliberate trade: proportional spacing shows clustering but requires hover to read anything. Even spacing shows the words. Readability wins for a product whose job is "here's what he did."
 
-Fronts toggle on and off. SCOTUS, executive orders and pardons appear as filterable sources with hollow markers, so the timeline is the one place the whole operation converges.
+Fronts toggle on and off (once fronts exist — Wave 1 ships with source toggles only, and per-front chips + front attribution on entries arrive with the front layer). SCOTUS, executive orders and pardons appear as filterable sources with hollow markers, so the timeline is the one place the whole operation converges.
 
-**Expansion is required, not optional.** A control expands the timeline to full screen. MVP full-screen = the same strip broken into stacked rows so the entire term is on one page. Wave 3 makes it interactive: zoom to a month, filter combinations, and an alternate lane view (one row per front on a true date axis) for seeing where activity erupted.
+**Expansion is required, not optional.** A control expands the timeline to full screen. MVP full-screen = the same strip broken into stacked rows covering the entire term (loaded incrementally). Wave 3 makes it interactive: zoom to a month, filter combinations, and an alternate lane view (one row per front on a true date axis) for seeing where activity erupted.
 
-**Mobile:** below 720px the strip becomes a single-column vertical timeline — same entries, same order, alternation dropped, line on the left. Horizontal scrolling of dense cards on a phone is not acceptable. Tested on a Galaxy S9+ (360px); that is the floor.
+**Mobile:** below 720px the strip becomes a single-column vertical timeline — same entries, **newest first so today stays at the top**, alternation dropped, line on the left (decided 2026-08-17: preserving ascending order on a vertical list would bury today at the bottom). Horizontal scrolling of dense cards on a phone is not acceptable. Must be usable on a Galaxy S9+ (360px); that is the floor.
 
 ### 5.2 Homepage
 
-Above the fold: the timeline. Below it: open fronts ranked with headline size carrying alarm level, each with a compact activity sparkline and last-activity time. Below that: the running log — every development in reverse chronological order, fronts and loose ends together.
+Above the fold: the timeline. Below it: open fronts ranked with headline size carrying alarm level, each with a compact activity sparkline and last-activity time. Below that: the running log — developments in reverse chronological order, fronts and loose ends together.
+
+**The running log paginates** (cursor-based, per house rules — never OFFSET): an initial window renders, "Keep going" loads more. It is the record, but it is not one unbounded query.
+
+**Loose-end labeling:** entries on a front use the fronts voice (§6.6). Loose ends are stories and keep the existing story label scale (where 0 = "Win"). The two coexist in the log; a loose end never borrows front labels.
 
 ### 5.3 Front page
 
-Header (name, alarm, tier, lifecycle, counts, follow CTA), an activity arc for that front, then a vertical timeline of updates newest-first, with quiet-period gaps marked, ending at a "where it started" anchor.
+Header (name, alarm, tier, lifecycle, counts, follow CTA), an activity sparkline for that front (the same element as the homepage cards, larger), then a vertical timeline of updates newest-first, with quiet-period gaps marked, ending at a "where it started" anchor.
 
 **The follow CTA is not a subscribe system in MVP.** It opens the existing newsletter signup with `signup_page='fronts'` and the front's id as campaign attribution. This gives a real conversion metric on day one without building per-front notification infrastructure, and the real thing can replace it later without moving the button.
 
@@ -198,7 +206,7 @@ No `source_count`, no `update_count`, no `last_activity_at`, no `category`. All 
 | decided_at / decided_by | TIMESTAMPTZ / TEXT | the human gate |
 | was_edited | BOOLEAN | true if the human changed the draft before approving — **this is what makes draft quality measurable** |
 | created_by | TEXT | `agent` / `human` |
-| enrichment_meta | JSONB | model, prompt version, source story ids |
+| enrichment_meta | JSONB | model, prompt version, source story ids — **provenance only, never queried**; canonical update↔story membership lives in `story_event.event_update_id` |
 | created_at / updated_at | TIMESTAMPTZ | |
 
 ### 6.3 `story_event`
@@ -223,6 +231,8 @@ Every path where the assignment agent or drafter declines to act writes a `pipel
 ### 6.5 Derived values
 
 View `v_event_stats(event_id, story_count, source_count, update_count, last_activity_at, peak_alarm, days_since_update)` computes everything from `story_event` → `stories` → `article_story`. Nothing derived is ever stored.
+
+**Alarm precedence** (2026-08-17): a front has two alarm values and they have different jobs. `events.alarm_level` (editorial, set by Josh) is what **displays** everywhere. `v_event_stats.peak_alarm` (derived from member stories) serves the **rubric** ("Stakes: peak alarm 3+") and admin QA — e.g. flagging a front whose editorial alarm has drifted far from its derived peak. Derived peak never renders publicly.
 
 ### 6.6 Controlled vocabularies
 
@@ -292,10 +302,11 @@ Profanity at 4–5 only, per existing tone rules. **Fronts are always 3–5 in p
 
 GA4 property `G-5MDT4HFMNB`, fired through `window.TTShared.trackEvent(name, params, opts)` in `public/shared.js`. Looker Studio is the reporting layer (`docs/guides/looker-studio-setup.md`). Supabase holds the editorial-side truth. There is also a `search_gaps` table capturing zero-result searches.
 
-**Two constraints that will bite if missed:**
+**Three constraints that will bite if missed:**
 
 1. **`trackEvent` enforces a hard param allowlist** (`ALLOWED_PARAMS` in `shared.js`). Any param not on the list is dropped with a console warning — the event still fires, minus the dimension, and nobody notices for a month.
-2. **Analytics are disabled on TEST and localhost** — they log to console instead. Instrumentation is verified on TEST by reading the console, and only confirmed in GA4 after a PROD deploy.
+2. **Analytics are disabled on TEST and localhost** *in the `TTShared` layer* — they log to console instead. Instrumentation is verified on TEST by reading the console, and only confirmed in GA4 after a PROD deploy.
+3. **The homepage does not load `shared.js`** (found in QA, 2026-08-17). The fronts surfaces live in the React app (`src/`), which never includes `public/shared.js` — it calls raw `gtag()` (`index.html`, `App.tsx`), with **no TEST/localhost guard**. So the §7.2 events cannot be fired through `TTShared.trackEvent` as originally written. **W1.6 must first port an equivalent tracking utility into `src/`** (param allowlist, `schema_v`, TEST/localhost disable, `trackOncePerSession`) — either a thin module that mirrors `shared.js` semantics or a shared import — and put the TEST guard on the React gtag bootstrap while at it. The param names below stay valid: they were chosen to match the existing allowlist (verified — every param in §7.2 is already on it).
 
 ### 7.2 Front events
 
@@ -337,9 +348,10 @@ Every user-facing string in one place, so the vocabulary stays consistent across
 | Surface | String |
 |---|---|
 | Timeline section heading | The whole term |
-| Timeline sub-caption | Every development since inauguration, in order |
+| Timeline sub-caption (inline strip) | Recent developments across every tracker, in order |
 | Expand control | Expand full timeline |
 | Full-screen heading | The whole term, all of it |
+| Full-screen sub-caption | Every development since inauguration, in order |
 | Front list heading | Open fronts |
 | Running log heading | Everything, in order |
 | Running log sub-caption | Newest first · fronts and loose ends together · this is the record |
@@ -361,7 +373,7 @@ Every user-facing string in one place, so the vocabulary stays consistent across
 
 Two Claude cloud agents, both following the established SCOTUS/EO/Pardons/Stories skeleton (bootstrap hard-reset, PostgREST via curl, gold set, optimistic-PATCH concurrency, heartbeat rows on empty cycles).
 
-**Assignment agent** — runs after each clustering cycle. Input: stories with no `story_event` row from the last N days, plus the published front registry. Output: a `story_event` row, or nothing. No approval gate; assignment is reversible in admin, and a wrong assignment is cheap. Every decline writes a skip row.
+**Assignment agent** — runs after each clustering cycle. Input: stories with no `story_event` row from the last N days, plus the front registry **including drafts** — a front Josh is still curating should accumulate stories before it goes public (2026-08-17; assignment to a draft front has no public effect since `publish_state` gates visibility). Output: a `story_event` row, or nothing. No approval gate; assignment is reversible in admin, and a wrong assignment is cheap. Every decline writes a skip row.
 
 **Update drafter** — runs on a slower cadence. When a front accumulates unfolded stories, or a high-alarm story lands, it drafts one update covering N stories, writes it `pending`, and fires a Discord alert. Josh approves, edits or rejects. Nothing reaches the public timeline without that approval.
 

@@ -1,8 +1,16 @@
 # Events Tracker — Design Document
 
-**Status:** In Progress — Schema v1 rejected, rework needed  
-**Created:** 2026-04-01  
-**Owner:** Josh  
+> ## ⛔ SUPERSEDED — do not work from this document
+> **Superseded by [`prd.md`](./prd.md) in this folder (2026-08-17).** The PRD resolves all 9
+> schema issues below, owns the product vision, and is the only canonical spec. Note the PRD
+> deliberately **rejects** this doc's "events replace stories as the product" framing — fronts
+> are an aggregation layer and stories stay visible. This file is kept only as the record of
+> the rejected Schema v1 and why. Its "Next Steps" are done or obsolete; the memory entity it
+> references no longer exists (see `events-tracker` in memory-project instead).
+
+**Status:** ~~In Progress — Schema v1 rejected, rework needed~~ **SUPERSEDED by prd.md**
+**Created:** 2026-04-01
+**Owner:** Josh
 **Replaces:** `docs/research/event-based-architecture-sketch.md` (commit 3b88965, deleted)
 
 ---
