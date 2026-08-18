@@ -214,7 +214,7 @@ No `source_count`, no `update_count`, no `last_activity_at`, no `category`. All 
 | reassigned_at | TIMESTAMPTZ | null unless a human moved it |
 | reassigned_from_event_id | BIGINT | the front the agent originally chose — **this is what makes assignment precision measurable** |
 
-`story_id` as sole primary key mirrors `article_story` (whose PK is `article_id` alone) and makes assignment idempotent and race-safe by construction. It also means **a story belongs to exactly one front**. That is a real product constraint and is listed as an open question.
+`story_id` as sole primary key mirrors `article_story` (whose PK is `article_id` alone) and makes assignment idempotent and race-safe by construction. It also means **a story belongs to exactly one front**. **Decided 2026-08-17 (Josh): confirmed as a hard constraint.** When a story plausibly fits two fronts, the agent/human picks one; relaxing later is a migration.
 
 ### 6.4 Skip logging
 
@@ -388,7 +388,13 @@ Against the $50/month hard limit. Auto-proposal (Epic 541) adds ~$1–2/month wh
 
 ## 11. Rollout
 
-**Wave 1 — the shape.** Migrations, admin front registry, manual assignment, public homepage timeline (with full-screen expand), front detail pages, GA4 instrumentation and the allowlist change. No agents. Proves the UI and the model against real data, and establishes every baseline in §4.2.
+**Wave 1 — the shape.** **Resequenced 2026-08-17 (Josh): rap sheet first.** The timeline and running log render straight from `stories` (plus SCOTUS/EO/pardons sources) and work with zero fronts existing — every entry is a loose end until fronts are curated on top. So Wave 1 builds in this order:
+
+1. **Rap sheet surfaces** — public homepage timeline (with full-screen expand) + running log, rendering from existing tables. No migrations required. This is the "easy to see list of all of it" and ships first.
+2. **Front layer** — migrations, admin front registry, manual assignment, front detail pages.
+3. **Measurement** — GA4 instrumentation and the allowlist change.
+
+No agents. Proves the UI and the model against real data, and establishes every baseline in §4.2.
 
 **Wave 2 — the automation.** Assignment agent, update drafter, Discord alerts, approval queue, unassigned-stories pool, editorial metrics on the admin dashboard, KPI thresholds set from Wave 1 baselines.
 
@@ -401,11 +407,13 @@ Each wave ships behind a feature flag, off in PROD until verified, per `docs/gui
 ## 12. Open questions
 
 1. **Fronts vs Files.** Leaning Fronts. If it sticks, "Flagship front" reads as two metaphors arguing — tier labels may need to become Primary / Active / Watch.
-2. **One front per story?** Proposed as a hard constraint (PK on `story_id`). Relaxing later is a migration; tightening later is a data cleanup. Confirm before Wave 1.
+2. **One front per story?** ✅ **RESOLVED 2026-08-17 (Josh): yes — hard constraint, PK on `story_id`.** Relaxing later is a migration; that trade was accepted explicitly.
 3. **Timeline on domain pages?** Recommended no for MVP. Confirm.
 4. **How interactive does the expanded view get?** Zoom-to-month and the lane view are Wave 3 as written. Confirm MVP full-screen = stacked rows is enough to launch.
 5. **Label wording** at each alarm level not final-approved.
 6. **Front open rate target of 25%** is a guess dressed as a target. Confirm we're happy to treat Wave 1 as pure baselining rather than committing to it now.
+
+**Product framing note (2026-08-17):** Josh's gut-check — "I want a rap sheet of all the crazy shit, not just the fronts" — confirmed the timeline + running log ARE the primary product surface, with fronts as the containment layer on top. Wave 1 is resequenced accordingly (§11). One-off outrages (task force disbanded, bank account closures, ship morale stories, stock dealings) surface as loose ends on the rap sheet without needing a front.
 
 ---
 

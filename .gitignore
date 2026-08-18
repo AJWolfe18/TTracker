@@ -109,3 +109,6 @@ TEST_FILES_DO_NOT_DEPLOY.md
 
 # Superpowers brainstorming sessions (local visual companion files)
 .superpowers/
+
+# Local Netlify folder
+.netlify
