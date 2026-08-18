@@ -40,6 +40,9 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
     );
   }
 
+  // Captured post-guard so nested function declarations see the non-null type
+  const story = item;
+
   const c = alarmPalette(item.alarm, 'restrained', mode, 'midnight');
 
   const correctionSubject = `Correction: ${item.headline_neutral}`;
@@ -56,32 +59,32 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
   }
 
   function shareToX() {
-    const text = encodeURIComponent(pickHeadline(item, hmode));
+    const text = encodeURIComponent(pickHeadline(story, hmode));
     const url = encodeURIComponent(window.location.href);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToThreads() {
-    const content = encodeURIComponent(pickHeadline(item, hmode) + ' ' + window.location.href);
+    const content = encodeURIComponent(pickHeadline(story, hmode) + ' ' + window.location.href);
     window.open(`https://threads.net/intent/post?text=${content}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToFacebook() {
     const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(pickHeadline(item, hmode));
+    const text = encodeURIComponent(pickHeadline(story, hmode));
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToReddit() {
     const url = encodeURIComponent(window.location.href);
-    const title = encodeURIComponent(pickHeadline(item, hmode));
+    const title = encodeURIComponent(pickHeadline(story, hmode));
     window.open(`https://reddit.com/submit?url=${url}&title=${title}`, '_blank', 'noopener,noreferrer');
   }
 
   function handleNativeShare() {
     if (navigator.share) {
       navigator.share({
-        title: pickHeadline(item, hmode),
+        title: pickHeadline(story, hmode),
         url: window.location.href,
       }).catch(() => {});
     }
@@ -121,7 +124,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             fontSize: 'clamp(32px, 4.4vw, 52px)', lineHeight: 1.05,
             letterSpacing: type.displayTracking, textWrap: 'balance', margin: 0,
           }}>
-            {pickHeadline(item, hmode)}
+            {pickHeadline(story, hmode)}
           </h1>
 
           {item.dek && (
