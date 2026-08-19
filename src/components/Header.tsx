@@ -55,7 +55,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
         <nav aria-label="Main navigation" style={{ display: 'flex', gap: 18, fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }} className="tt-nav">
           {[
             { label: 'Home', href: '/' },
-            ...(trackerHome ? [{ label: 'Stories', href: '/stories' }] : []),
+            ...(trackerHome ? [{ label: 'News', href: '/news' }] : []),
             { label: 'Executive Orders', href: '/eos' },
             { label: 'Pardons', href: '/pardons' },
             { label: 'Supreme Court', href: '/scotus' },
@@ -137,7 +137,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
       }}>
         {[
           { label: 'Home', href: '/' },
-          ...(trackerHome ? [{ label: 'Stories', href: '/stories' }] : []),
+          ...(trackerHome ? [{ label: 'News', href: '/news' }] : []),
           { label: 'EOs', href: '/eos' },
           { label: 'Pardons', href: '/pardons' },
           { label: 'SCOTUS', href: '/scotus' },

@@ -47,13 +47,13 @@ export function Home({
   const { theme, headType, mode } = useTheme();
   const headlineMode = 'spicy';
   const showFiltered = hasActiveFilters || false;
-  // When the Tracker owns "/", the story feed is the Stories tab
+  // When the Tracker owns "/", the story feed is the News tab
   const trackerHome = useFeatureFlag('rap_sheet');
 
   const navLabel = filterConfig?.tabType === 'eos' ? 'Executive Orders'
     : filterConfig?.tabType === 'scotus' ? 'Supreme Court'
     : filterConfig?.tabType === 'pardons' ? 'Pardons'
-    : trackerHome ? 'Stories'
+    : trackerHome ? 'News'
     : 'Home';
 
   const filterBar = filterConfig && activeFilters && onFilterChange && onClearFilters ? (

@@ -64,7 +64,7 @@ export function App() {
           <Route path="/pardons">
             <TypePage tabType="pardons" onOpenItem={makeOpenHandler('pardons')} />
           </Route>
-          <Route path="/stories">
+          <Route path="/news">
             <TypePage tabType="stories" onOpenItem={makeOpenHandler('detail')} />
           </Route>
           <Route path="/">
@@ -77,7 +77,7 @@ export function App() {
 }
 
 // "/" is The Tracker when rap_sheet is on (PRD §12 Q7: the spine IS the
-// homepage; stories move to /stories), and the classic story feed when off.
+// homepage; the news feed moves to /news), and the classic story feed when off.
 // Waits for the flag file so the flag-off surface never flashes first.
 function HomeRoute({ onOpenItem }: { onOpenItem: (id: string | number) => void }) {
   const ready = useFlagsReady();
