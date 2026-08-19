@@ -134,6 +134,34 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | max_chars | INTEGER | Content char limit (default: 5000) |
 | notes | TEXT | Notes about rule |
 
+**IMPORTANT:** All RSS feeds MUST have a compliance rule configured. (Moved here from CLAUDE.md.)
+
+**Current Standard:**
+- Content limit: 5000 chars (matches article scraping limit from TTRC-258/260)
+- Full text: `allow_full_text = false` (excerpts only for fair use)
+- Enforcement: Automatic via RSS fetcher (`scripts/rss/fetch_feed.js`)
+
+**When Adding New Feeds:**
+```sql
+-- Add compliance rule (REQUIRED)
+INSERT INTO feed_compliance_rules (feed_id, max_chars, allow_full_text, source_name, notes)
+VALUES (
+  <feed_id>,
+  5000,
+  false,
+  '<Source Name>',
+  '5K char limit for RSS content - matches article scraping limit'
+);
+```
+
+**How It Works:**
+1. RSS fetcher queries `feed_compliance_rules` at fetch start
+2. Extracts content from RSS fields: `content:encoded` OR `description` OR `summary`
+3. Truncates to `max_chars` limit (5000) before database insert
+4. Falls back to 5000 if no rule exists
+
+**Note:** Even with the 5K RSS limit, full articles are also scraped (TTRC-258/260) for better AI summaries.
+
 ---
 
 ### `budgets`

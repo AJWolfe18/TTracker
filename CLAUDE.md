@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
 **Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
 **Source of Truth**: ADO for status, plans for implementation details only
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -242,7 +242,6 @@ docs/features/
 - See Critical Rule #11 above for the full egress rules — don't duplicate here.
 
 ### Code
-- ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
 - ❌ Object references in `useEffect` dependencies - Causes infinite loops
 - ❌ Missing CORS headers in Edge Functions - Breaks frontend calls
 - ❌ `console.log` in production - Remove before commit
@@ -298,30 +297,7 @@ docs/features/
 - Supabase egress: 5GB/month free tier (overages: $0.09/GB)
 - Current spend: query the `budgets` table (don't trust a number hardcoded here)
 
-**Cost per Operation:**
-- Story enrichment: ~$0.003/story (GPT-4o-mini)
-- AI code review: $0.30-$1.00/PR (GPT-4o)
-- Article scraping: Free (no API costs)
-- Database queries: Free (within Supabase free tier)
-- **Re-cluster job (1800 articles):** ~5-7GB egress ($0.18-0.63 overage)
-- **MCP query (articles with content):** ~5KB per row
-- **MCP query (articles with embeddings):** ~6KB per row
-
-**Before Making OpenAI Calls:**
-```sql
--- Check today's spend via Supabase MCP
-SELECT spent_usd, openai_calls 
-FROM budgets 
-WHERE day = CURRENT_DATE;
-
--- If spent_usd > $5.00, HALT enrichment
--- Log warning and skip enrichment job
-```
-
-**Budget Monitoring:**
-- Daily budget tracked in `budgets` table
-- Auto-enforced in `rss-tracker-supabase.js`
-- Manual check: Query budgets table before proposing new AI features
+**Per-operation costs, spend-check SQL, and monitoring:** `/docs/guides/budget-enforcement.md`. Before any OpenAI call, check today's `spent_usd` in the `budgets` table — if over $5.00, HALT enrichment.
 
 **CRITICAL RULE: Always state cost implications before proposing new features or suggesting additional AI calls.**
 
@@ -342,37 +318,15 @@ WHERE day = CURRENT_DATE;
 
 **NEVER merge test→main. Always cherry-pick tested commits.**
 
-### GitHub Secrets (EXACT names)
-| Secret | Purpose |
-|--------|---------|
-| `SUPABASE_URL` | PROD Supabase URL |
-| `SUPABASE_SERVICE_KEY` | PROD service role key |
-| `SUPABASE_ANON_KEY` | PROD anon key |
-| `SUPABASE_TEST_URL` | TEST Supabase URL |
-| `SUPABASE_TEST_SERVICE_KEY` | TEST service role key |
-| `SUPABASE_TEST_ANON_KEY` | TEST anon key |
-| `OPENAI_API_KEY` | OpenAI (shared) |
-| `PERPLEXITY_API_KEY` | Perplexity (shared) |
-| `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
-| `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
-| `DISCORD_WEBHOOK_URL` | Discord alerts (shared) — used by rss-tracker-test/prod + pardons-tracker workflows; alerts are non-blocking if unset |
-| `COURTLISTENER_API_TOKEN` | SCOTUS case fetch (CourtListener API) |
+### GitHub Secrets
+Full table of exact secret names: `/docs/guides/prod-deployment-checklist.md`.
 
-**Important:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
+**Gotcha:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Development Commands
 
-### Local Development
-```bash
-# Frontend local server
-npm run server
-
-# Run QA smoke tests
-npm run qa:smoke
-```
-
-### Individual QA Tests
-See the `qa:*` scripts in `package.json` for the full suite list.
+### QA Tests
+See the `qa:*` scripts in `package.json` for the full suite list (`npm run qa:smoke` for the smoke suite).
 
 ### Supabase Edge Functions
 ```bash
@@ -454,35 +408,7 @@ Frontend (Vite + React app)
 UI labels → Database enum values: see the mapping in `scripts/enrichment/enrich-stories-inline.js` (11 categories, 'Corruption & Scandals' → 'corruption_scandals' style).
 
 ### RSS Feed Compliance Rules
-**IMPORTANT:** All RSS feeds MUST have compliance rules configured in the database.
-
-**Current Standard:**
-- Content limit: 5000 chars (matches article scraping limit from TTRC-258/260)
-- Full text: `allow_full_text = false` (excerpts only for fair use)
-- Enforcement: Automatic via RSS fetcher (`scripts/rss/fetch_feed.js`)
-
-**When Adding New Feeds:**
-```sql
--- Add compliance rule (REQUIRED)
-INSERT INTO feed_compliance_rules (feed_id, max_chars, allow_full_text, source_name, notes)
-VALUES (
-  <feed_id>,
-  5000,
-  false,
-  '<Source Name>',
-  '5K char limit for RSS content - matches article scraping limit'
-);
-```
-
-**How It Works:**
-1. RSS fetcher queries `feed_compliance_rules` at fetch start
-2. Extracts content from RSS fields: `content:encoded` OR `description` OR `summary`
-3. Truncates to `max_chars` limit (5000) before database insert
-4. Falls back to 5000 if no rule exists
-
-**RSS Content Fields Priority:** see extraction order in `scripts/rss/fetch_feed.js` (`content:encoded` → `description` → `summary`).
-
-**Note:** Even with 5K RSS limit, we also scrape full articles (TTRC-258/260) for better AI summaries.
+**IMPORTANT:** Every RSS feed MUST have a `feed_compliance_rules` row (5K char limit, excerpts only). SQL template and mechanics: `/docs/database/database-schema.md` → `feed_compliance_rules`.
 
 ## MCP Tools Available
 
@@ -494,9 +420,6 @@ VALUES (
 - **Use `/ado` command** for all work item operations
 - See `/docs/guides/ado-workflow.md` for states, types, and workflow
 - **If ADO MCP reports "PAT expired" but the PAT is new — STOP.** Read `/docs/guides/mcp-pat-troubleshooting.md` FIRST. The MCP token lives in `~/.claude.json`, NOT `settings.json`. Updating settings files does nothing. Don't waste time on `/mcp reconnect` or restarts until you've run the 30-second diagnostic in that doc.
-
-**Filesystem Access:** Direct file operations in project directory
-- **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
 
 **Memory MCP (Knowledge Graph):** 3-tier knowledge graph. **Full rules live in `docs/memory-policy.md`** — this is a summary, don't duplicate the policy here.
 - **`memory-global`** — identity, preferences, cross-project context. Shared across ALL projects. Always read.
@@ -554,7 +477,7 @@ VALUES (
 ## Common Tasks
 
 ### Adding RSS Feeds
-Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL above in RSS Feed Compliance Rules).
+Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL template in that same doc).
 
 ### Manual Article Submission
 POST a `{"url": ...}` body to the `articles-manual` edge function with the anon key (see `supabase/functions/articles-manual/`).
@@ -578,6 +501,7 @@ gh run watch
 
 ### Fetch SCOTUS Cases (CourtListener API)
 Use the `scotus-fetch` skill (`.claude/skills/scotus-fetch/SKILL.md`) — commands, dry-run/resume flags, and gotchas (`is_public` default, sync state, rate limits).
+**Note:** `scotus-fetch`/`scotus-review` may be disabled locally via `skillOverrides` in `.claude/settings.local.json` — remove those entries to re-enable when SCOTUS work resumes (the SKILL.md is still readable as a doc either way).
 
 ## Feature-Dev Plugin Usage
 
