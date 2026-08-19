@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useTheme } from '@/hooks/useTheme';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { ErrorState } from '@/edge-states/ErrorState';
 import { alarmPalette } from '@/tokens';
 import { fmtDate } from '@/lib/date-utils';
 import {
@@ -52,7 +53,16 @@ function useIsNarrow(px: number): boolean {
 const monthLabel = (ym: string) =>
   new Date(ym + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-export function TrackerSpine() {
+interface TrackerSpineProps {
+  /**
+   * Set when the spine IS the page (TrackerHome): a total fetch failure renders
+   * the error state instead of the section quietly removing itself, which is
+   * the right behavior only when other content sits below it.
+   */
+  standalone?: boolean;
+}
+
+export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const enabled = useFeatureFlag('rap_sheet');
   const { theme, headType, mode } = useTheme();
   const [, navigate] = useLocation();
@@ -109,8 +119,10 @@ export function TrackerSpine() {
   const allErrored = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].errored);
 
   if (!enabled) return null;
-  // Every source down and nothing to show: hide the surface entirely
-  if (loaded && allErrored && entries.length === 0) return null;
+  // Every source down and nothing to show: hide the surface (or, standalone, say so)
+  if (loaded && allErrored && entries.length === 0) {
+    return standalone ? <ErrorState /> : null;
+  }
 
   const loadEarlier = () => {
     if (!pageState || loadingMore || allExhausted) return;

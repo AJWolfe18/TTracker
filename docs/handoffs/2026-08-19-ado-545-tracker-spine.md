@@ -43,6 +43,19 @@ Two-pass inline review (subagents banned) found and fixed: (1) `loadingMore` stu
 11. **Page sizes kept at W1.1's 60/25/25/25 per click.** On PROD, 4+ stories density may make "load earlier" advance only days per click — page size is one constant per source in SPECS if it needs tuning after PROD data is visible. (Tried a read-only PROD density check; permission classifier blocked non-TEST curl — respected, TEST-only session.)
 12. **Stories tag = "Loose end", other sources tagged by name** (per ticket: source/loose-end tags only until fronts land with ADO-546/548).
 
+## Follow-up same session: spine-only homepage (PR #118, Josh's morning call)
+
+Josh confirmed the rev-6 agreement was **the Tracker IS the homepage** (PRD §12 Q7 now RESOLVED: yes), delivered as a separate stacked PR per his selection:
+
+- `/` renders **TrackerHome** (tally + spine only, no Scorecard — the tally is that page's number row) when `rap_sheet` is on; classic story feed when off (PROD unchanged).
+- Story feed (Scorecard/hero/filters/cards) moved to a new **Stories** nav tab (`/stories`); nav item is flag-gated so PROD nav is unchanged; the spine no longer renders inside the stories feed page.
+- New `useFlagsReady()` hook gates the `/` route on the flag file loading, so the flag-off surface never flashes first.
+- `TrackerSpine` gained a `standalone` prop: total fetch failure renders ErrorState instead of silently removing the section (which would have left a blank homepage).
+
+Verified live: `/` = mockup rev 6 exactly; `/stories` = classic feed with Stories highlighted; `?ff_rap_sheet=false` = classic homepage with no Stories nav item; click-through from the spine homepage works; zero console errors; lint/test:ui/build/qa:smoke green.
+
+**Merge order:** #117 first, then #118 (its PR diff shrinks to just the homepage promotion once #117 lands).
+
 ## Open items / next session
 
 - **Josh:** review PR #117 + Codex findings, then merge (squash) → Netlify test deploy → UX pass on the test site (real mobile per usual).

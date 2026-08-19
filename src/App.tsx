@@ -2,6 +2,8 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { ThemeContext, useThemeProvider } from '@/hooks/useTheme';
 import { Route, Switch, useLocation } from 'wouter';
 import { Home } from '@/pages/Home';
+import { TrackerHome } from '@/pages/TrackerHome';
+import { useFeatureFlag, useFlagsReady } from '@/hooks/useFeatureFlag';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { fetchList, fetchStoryDetail, fetchEoDetail, fetchScotusDetail, fetchPardonDetail } from '@/lib/api';
 import { getFilterConfig } from '@/lib/filters';
@@ -62,13 +64,28 @@ export function App() {
           <Route path="/pardons">
             <TypePage tabType="pardons" onOpenItem={makeOpenHandler('pardons')} />
           </Route>
-          <Route path="/">
+          <Route path="/stories">
             <TypePage tabType="stories" onOpenItem={makeOpenHandler('detail')} />
+          </Route>
+          <Route path="/">
+            <HomeRoute onOpenItem={makeOpenHandler('detail')} />
           </Route>
         </Switch>
       </Suspense>
     </ThemeContext.Provider>
   );
+}
+
+// "/" is The Tracker when rap_sheet is on (PRD §12 Q7: the spine IS the
+// homepage; stories move to /stories), and the classic story feed when off.
+// Waits for the flag file so the flag-off surface never flashes first.
+function HomeRoute({ onOpenItem }: { onOpenItem: (id: string | number) => void }) {
+  const ready = useFlagsReady();
+  const trackerHome = useFeatureFlag('rap_sheet');
+
+  if (!ready) return <LoadingSkeleton />;
+  if (trackerHome) return <TrackerHome />;
+  return <TypePage tabType="stories" onOpenItem={onOpenItem} />;
 }
 
 function TypePage({
