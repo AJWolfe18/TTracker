@@ -16,6 +16,8 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { JSDOM } from 'jsdom';
 import crypto from 'crypto';
+import { pathToFileURL } from 'url';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 // ============================================================================
 // Configuration
@@ -72,13 +74,20 @@ function parseClemencyType(headerText) {
  * @returns {string} ISO date string (YYYY-MM-DD)
  */
 function parsePardonDate(headerText) {
+  // ADO-550: DOJ switched newer section headers from hyphen to en dash
+  // ("February 12, 2026 – 7 Pardons") which made every 2026+ section parse to
+  // null and get silently skipped. Normalize all unicode dash/space variants
+  // BEFORE the count-suffix regex so both markups parse.
+  const normalized = headerText
+    .replace(/[‐-―−]/g, '-') // hyphen/en/em/horizontal-bar dashes, minus sign
+    .replace(/ /g, ' ');
   // Remove count suffix patterns:
   // "- 1 Pardon"
   // "- 2 Commutations"
   // "- 16 Pardons and 6 Commutations"
   // "- 1 Commutation (Amended)"
   // "- 1 Pardon and 2 Commutations"
-  let cleaned = headerText
+  let cleaned = normalized
     .replace(/\s*-\s*\d+\s*(pardon|commutation)s?(\s*\(amended\))?(\s+and\s+\d+\s*(pardon|commutation)s?)?/gi, '')
     .trim();
 
@@ -107,30 +116,18 @@ function generateSourceKey(name, date) {
 }
 
 /**
- * Scrape and parse the DOJ clemency page
- * @returns {Promise<Array<Object>>} Array of pardon objects
+ * Parse the DOJ clemency page HTML (pure — no network, exported for tests).
+ * @param {string} html
+ * @returns {{ pardons: Array<Object>, unparsedHeaders: string[], newestPageDate: string|null }}
  */
-async function scrapeDOJPage() {
-  console.log(`📥 Fetching DOJ clemency page...`);
-
-  const response = await fetch(DOJ_URL, {
-    headers: {
-      'User-Agent': USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`DOJ fetch failed: ${response.status} ${response.statusText}`);
-  }
-
-  const html = await response.text();
+export function parseDOJHtml(html) {
   const dom = new JSDOM(html);
   const document = dom.window.document;
 
-  console.log(`✅ Page fetched, parsing HTML...`);
-
   const pardons = [];
+  // Date-looking h3 headers that failed to parse — each one means a whole
+  // section of grants is being dropped (the ADO-550 silent-failure class).
+  const unparsedHeaders = [];
   let currentDate = null;
   let currentClemencyType = 'pardon';
 
@@ -154,6 +151,12 @@ async function scrapeDOJPage() {
 
       currentDate = parsePardonDate(headerText);
       currentClemencyType = parseClemencyType(headerText);
+
+      // A header that mentions a year but didn't parse means DOJ changed the
+      // markup again and we are about to silently drop its section — track it.
+      if (!currentDate && /\b20\d{2}\b/.test(headerText)) {
+        unparsedHeaders.push(headerText);
+      }
 
       if (VERBOSE && currentDate) {
         console.log(`  📅 ${headerText} → Date: ${currentDate}, Type: ${currentClemencyType}`);
@@ -250,8 +253,41 @@ async function scrapeDOJPage() {
     }
   }
 
-  console.log(`✅ Parsed ${pardons.length} pardons from DOJ page`);
-  return pardons;
+  const newestPageDate = pardons.reduce(
+    (max, p) => (p.pardon_date && p.pardon_date > (max || '') ? p.pardon_date : max),
+    null
+  );
+
+  return { pardons, unparsedHeaders, newestPageDate };
+}
+
+/**
+ * Fetch and parse the DOJ clemency page
+ * @returns {Promise<{ pardons: Array<Object>, unparsedHeaders: string[], newestPageDate: string|null }>}
+ */
+async function scrapeDOJPage() {
+  console.log(`📥 Fetching DOJ clemency page...`);
+
+  const response = await fetch(DOJ_URL, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      'Accept': 'text/html,application/xhtml+xml'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`DOJ fetch failed: ${response.status} ${response.statusText}`);
+  }
+
+  const html = await response.text();
+  console.log(`✅ Page fetched, parsing HTML...`);
+
+  const result = parseDOJHtml(html);
+  console.log(`✅ Parsed ${result.pardons.length} pardons from DOJ page (newest date: ${result.newestPageDate || 'none'})`);
+  for (const header of result.unparsedHeaders) {
+    console.warn(`  ⚠️ Section header did not parse (its grants were NOT ingested): "${header}"`);
+  }
+  return result;
 }
 
 // ============================================================================
@@ -332,7 +368,7 @@ async function main() {
 
   try {
     // 1. Scrape DOJ page
-    const pardons = await scrapeDOJPage();
+    const { pardons, unparsedHeaders, newestPageDate } = await scrapeDOJPage();
 
     if (pardons.length === 0) {
       console.log('\n⚠️ No pardons found - page structure may have changed');
@@ -373,6 +409,52 @@ async function main() {
       console.log(`  ✅ Inserted:     ${stats.inserted}`);
       console.log(`  ⏭️ Duplicates:   ${stats.skipped_duplicate}`);
       console.log(`  ❌ Errors:       ${stats.errors}`);
+
+      // ADO-550 staleness tripwire: this scraper ran green for 6 months while
+      // silently dropping every new section. Fail loudly on either signal so
+      // the workflow goes red (and Discord-alerts) instead.
+      const tripwires = [];
+
+      if (unparsedHeaders.length > 0) {
+        tripwires.push(`${unparsedHeaders.length} date-like section header(s) failed to parse: ${unparsedHeaders.join(' | ')}`);
+        await recordSkip(supabase, {
+          pipeline: PIPELINES.PARDONS_INGEST,
+          reason: REASONS.PARSE_ERROR,
+          entity_type: 'doj_page_section',
+          metadata: { unparsed_headers: unparsedHeaders },
+        });
+      }
+
+      if (stats.inserted === 0 && newestPageDate) {
+        const { data: newestRows, error: newestErr } = await supabase
+          .from('pardons')
+          .select('pardon_date')
+          .eq('source_system', SOURCE_SYSTEM)
+          .not('pardon_date', 'is', null)
+          .order('pardon_date', { ascending: false })
+          .limit(1);
+
+        if (newestErr) {
+          console.warn(`  ⚠️ Staleness check query failed (non-blocking): ${newestErr.message}`);
+        } else {
+          const newestDbDate = newestRows?.[0]?.pardon_date || null;
+          if (!newestDbDate || newestPageDate > newestDbDate) {
+            tripwires.push(`inserted 0 but DOJ page has newer grants (page: ${newestPageDate}, db: ${newestDbDate || 'none'})`);
+            await recordSkip(supabase, {
+              pipeline: PIPELINES.PARDONS_INGEST,
+              reason: REASONS.STALENESS_TRIPWIRE,
+              entity_type: 'doj_page',
+              metadata: { newest_page_date: newestPageDate, newest_db_date: newestDbDate, inserted: stats.inserted },
+            });
+          }
+        }
+      }
+
+      if (tripwires.length > 0) {
+        console.error('\n🚨 STALENESS TRIPWIRE — failing the run:');
+        tripwires.forEach(t => console.error(`  - ${t}`));
+        process.exit(1);
+      }
     }
 
     console.log('\n✅ DOJ scraper complete!');
@@ -387,5 +469,7 @@ async function main() {
   }
 }
 
-// Run
-main();
+// Run only when executed directly (parseDOJHtml is imported by unit tests)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
