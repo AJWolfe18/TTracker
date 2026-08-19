@@ -101,7 +101,7 @@ export function extractDispositionFromSyllabus(opinionText) {
     if (judgmentIdx > 0) {
       const preceding = syllabusText.slice(Math.max(0, judgmentIdx - 200), judgmentIdx);
       if (/certiorari/i.test(preceding)) {
-        return { disposition: 'GVR', confidence: 'syllabus_deterministic', details: { line: chosen.lineText.trim(), gvr: true } };
+        return { disposition: 'gvr', confidence: 'syllabus_deterministic', details: { line: chosen.lineText.trim(), gvr: true } };
       }
     }
   }

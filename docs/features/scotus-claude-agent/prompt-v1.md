@@ -233,7 +233,7 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 
 | Field | Type | Constraints | How to determine |
 |-------|------|-------------|------------------|
-| `disposition` | text | Must be one of: `affirmed`, `reversed`, `vacated`, `remanded`, `reversed_and_remanded`, `vacated_and_remanded`, `affirmed_and_remanded`, `dismissed`, `granted`, `denied`, `GVR`, `other` | Read the judgment line (usually near the end of the syllabus or opinion) |
+| `disposition` | text | Must be one of: `affirmed`, `reversed`, `vacated`, `remanded`, `reversed_and_remanded`, `vacated_and_remanded`, `affirmed_and_remanded`, `dismissed`, `granted`, `denied`, `gvr`, `other` | Read the judgment line (usually near the end of the syllabus or opinion) |
 | `holding` | text | 1-3 sentences | The Court's central legal conclusion |
 | `vote_split` | text | Format: `N-N` (e.g., `9-0`, `5-4`) | Count majority vs dissenting justices |
 | `majority_author` | text or null | Last name only (e.g., `Jackson`, `Thomas`) | Listed at the top of the majority opinion. `null` for per curiam opinions. |
@@ -248,7 +248,7 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 - "Reversed and remanded" → `reversed_and_remanded`
 - "Vacated and remanded" → `vacated_and_remanded`
 - "Affirmed in part, reversed in part, and remanded" → `affirmed_and_remanded`
-- "Granted, vacated, and remanded" (GVR) → `GVR`
+- "Granted, vacated, and remanded" (GVR) → `gvr`
 
 **Editorial fields** (quality matters  - these calibrate against gold set examples):
 
