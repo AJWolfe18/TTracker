@@ -28,19 +28,18 @@ export interface TabFilterConfig {
   table: string;
 }
 
-const ALARM_PILLS: FilterOption[] = [
-  { label: 'All', urlValue: '', apiValue: '' },
-  { label: 'Crisis', urlValue: '5', apiValue: '5' },
-  { label: 'Severe', urlValue: '4', apiValue: '4' },
-  { label: 'Serious', urlValue: '3', apiValue: '3' },
-  { label: 'Notable', urlValue: '2', apiValue: '2' },
-  { label: 'Watch', urlValue: '1', apiValue: '1' },
-  { label: 'Win', urlValue: '0', apiValue: '0' },
-];
-
 // Per-domain pill labels: short forms of the tone-system spicy labels the
 // cards display (tone-system.ts), so the filter speaks the same voice.
-// Pardons already does this below; stories keeps the Scorecard vocabulary.
+// Pardons already does this below.
+const STORY_ALARM_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  { label: 'Dumpster Fire', urlValue: '5', apiValue: '5' },
+  { label: 'Criminal Bullshit', urlValue: '4', apiValue: '4' },
+  { label: 'Deep Swamp', urlValue: '3', apiValue: '3' },
+  { label: 'Gaslight', urlValue: '2', apiValue: '2' },
+  { label: 'Accidental Sanity', urlValue: '1', apiValue: '1' },
+  { label: 'Broken Clock', urlValue: '0', apiValue: '0' },
+];
 const EO_ALARM_PILLS: FilterOption[] = [
   { label: 'All', urlValue: '', apiValue: '' },
   { label: 'Power Grab', urlValue: '5', apiValue: '5' },
@@ -99,7 +98,7 @@ const STORIES_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: STORY_ALARM_PILLS,
     },
   ],
 };
