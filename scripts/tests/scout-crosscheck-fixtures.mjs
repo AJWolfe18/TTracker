@@ -174,7 +174,7 @@ test('4. GVR detection', () => {
     ].join('\n'),
   });
   const result = extractDispositionFromSyllabus(text);
-  assert.equal(result.disposition, 'gvr');
+  assert.equal(result.disposition, 'GVR');
   assert.equal(result.confidence, 'syllabus_deterministic');
 });
 

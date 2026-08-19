@@ -217,41 +217,6 @@ const SCOTUS_CASE_TYPES: Record<string, string> = {
   unclear: 'Unclear',
 };
 
-// Canonical disposition enum lives in the DB CHECK constraint (migration 109).
-// This is the display-label mapping for those values (ADO-551).
-const DISPOSITION_LABELS: Record<string, string> = {
-  affirmed: 'Affirmed',
-  reversed: 'Reversed',
-  vacated: 'Vacated',
-  remanded: 'Remanded',
-  reversed_and_remanded: 'Reversed & Remanded',
-  vacated_and_remanded: 'Vacated & Remanded',
-  affirmed_and_remanded: 'Affirmed & Remanded',
-  dismissed: 'Dismissed',
-  granted: 'Granted',
-  denied: 'Denied',
-  gvr: 'Granted, Vacated & Remanded (GVR)',
-  other: 'Other',
-};
-
-// granted/denied are cert-stage or emergency-application outcomes, not merits
-// dispositions — label them by stage so "Granted" never reads as a merits win.
-const DISPOSITION_LABELS_BY_CASE_TYPE: Record<string, Record<string, string>> = {
-  cert_stage: { granted: 'Cert Granted', denied: 'Cert Denied' },
-  shadow_docket: { granted: 'Application Granted', denied: 'Application Denied' },
-};
-
-export function formatDisposition(disposition: unknown, caseType?: unknown): string {
-  if (disposition == null || disposition === '') return '';
-  // Legacy rows may still carry 'GVR' until migration 109 is applied.
-  const key = String(disposition) === 'GVR' ? 'gvr' : String(disposition);
-  const contextual = DISPOSITION_LABELS_BY_CASE_TYPE[String(caseType)]?.[key];
-  if (contextual) return contextual;
-  if (DISPOSITION_LABELS[key]) return DISPOSITION_LABELS[key];
-  const humanized = key.replace(/_/g, ' ');
-  return humanized.charAt(0).toUpperCase() + humanized.slice(1);
-}
-
 export function scotusToItem(raw: Record<string, unknown>): DisplayItem {
   const sources: { label: string; url: string }[] = [];
   if (raw.source_url) sources.push({ label: 'Opinion', url: raw.source_url as string });
@@ -382,8 +347,7 @@ export function scotusDetailToItem(raw: Record<string, unknown>): DisplayItem {
   pushMeta(meta, 'Citation', raw.citation);
   pushMetaDate(meta, 'Decided', raw.decided_at);
   pushMetaDate(meta, 'Argued', raw.argued_at);
-  const dispositionLabel = formatDisposition(raw.disposition, raw.case_type);
-  if (dispositionLabel) meta.push({ label: 'Disposition', value: dispositionLabel });
+  if (raw.disposition) meta.push({ label: 'Disposition', value: String(raw.disposition).charAt(0).toUpperCase() + String(raw.disposition).slice(1) });
   pushMeta(meta, 'Vote', raw.vote_split);
   pushMeta(meta, 'Majority Opinion', raw.majority_author);
   const dissentAuthors = raw.dissent_authors;

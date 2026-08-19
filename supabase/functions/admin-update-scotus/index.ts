@@ -29,8 +29,7 @@ const ALLOWED_FIELDS = [
 const VALID_DISPOSITIONS = [
   'affirmed', 'reversed', 'vacated', 'remanded',
   'reversed_and_remanded', 'vacated_and_remanded', 'affirmed_and_remanded',
-  // 'GVR' is legacy pre-migration-109 casing — drop it once 109 is applied on PROD
-  'dismissed', 'granted', 'denied', 'gvr', 'GVR', 'other',
+  'dismissed', 'granted', 'denied', 'GVR', 'other',
 ]
 const VALID_CASE_TYPES = ['merits', 'procedural', 'shadow_docket', 'cert_stage', 'unclear']
 const VALID_PREVAILING_PARTIES = ['petitioner', 'respondent', 'partial', 'unclear']

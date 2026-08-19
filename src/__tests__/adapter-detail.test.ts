@@ -3,46 +3,7 @@ import {
   eoDetailToItem,
   scotusDetailToItem,
   pardonDetailToItem,
-  formatDisposition,
 } from '@/lib/adapter';
-
-describe('formatDisposition (ADO-551)', () => {
-  it('maps canonical enum values to display labels', () => {
-    expect(formatDisposition('affirmed')).toBe('Affirmed');
-    expect(formatDisposition('reversed_and_remanded')).toBe('Reversed & Remanded');
-    expect(formatDisposition('vacated_and_remanded')).toBe('Vacated & Remanded');
-    expect(formatDisposition('affirmed_and_remanded')).toBe('Affirmed & Remanded');
-    expect(formatDisposition('gvr')).toBe('Granted, Vacated & Remanded (GVR)');
-  });
-
-  it('accepts legacy GVR casing until migration 109 lands', () => {
-    expect(formatDisposition('GVR')).toBe('Granted, Vacated & Remanded (GVR)');
-  });
-
-  it('labels granted/denied by stage for cert and shadow docket cases', () => {
-    expect(formatDisposition('granted', 'cert_stage')).toBe('Cert Granted');
-    expect(formatDisposition('denied', 'cert_stage')).toBe('Cert Denied');
-    expect(formatDisposition('granted', 'shadow_docket')).toBe('Application Granted');
-    expect(formatDisposition('denied', 'shadow_docket')).toBe('Application Denied');
-    expect(formatDisposition('granted', 'merits')).toBe('Granted');
-    expect(formatDisposition('denied')).toBe('Denied');
-  });
-
-  it('case_type does not affect merits dispositions', () => {
-    expect(formatDisposition('reversed_and_remanded', 'merits')).toBe('Reversed & Remanded');
-    expect(formatDisposition('gvr', 'procedural')).toBe('Granted, Vacated & Remanded (GVR)');
-  });
-
-  it('humanizes unknown values instead of leaking raw snake_case', () => {
-    expect(formatDisposition('some_new_value')).toBe('Some new value');
-  });
-
-  it('returns empty string for null/empty', () => {
-    expect(formatDisposition(null)).toBe('');
-    expect(formatDisposition(undefined)).toBe('');
-    expect(formatDisposition('')).toBe('');
-  });
-});
 
 describe('eoDetailToItem', () => {
   const fullEo = {
@@ -113,7 +74,7 @@ describe('scotusDetailToItem', () => {
     case_type: 'merits',
     ruling_impact_level: 4,
     ruling_label: 'Major',
-    disposition: 'reversed_and_remanded',
+    disposition: 'Reversed',
     summary_spicy: 'A spicy SCOTUS take.',
     who_wins: 'The government',
     who_loses: 'Individual rights',
@@ -137,7 +98,6 @@ describe('scotusDetailToItem', () => {
     expect(labels).toContain('Term');
     expect(item.meta!.find(m => m.label === 'Dissenting')?.value).toBe('Sotomayor, Kagan, Jackson');
     expect(item.meta!.find(m => m.label === 'Citation')?.value).toBe('600 U.S. 100');
-    expect(item.meta!.find(m => m.label === 'Disposition')?.value).toBe('Reversed & Remanded');
   });
 
   it('skips null meta values', () => {
