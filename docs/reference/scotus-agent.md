@@ -33,7 +33,7 @@ cutover it has enriched **116/116 cases with 0 failures**.
 For each case it produces a full enrichment and writes it in one atomic update:
 
 - **Fact fields** (kept neutral and precise): `disposition` (from a fixed enum including compound forms
-  like `reversed_and_remanded` and `GVR`), `vote_split` (`N-N`), `majority_author`, `dissent_authors`,
+  like `reversed_and_remanded` and `gvr`), `vote_split` (`N-N`), `majority_author`, `dissent_authors`,
   `holding`, `case_type`, `prevailing_party`, and the merits/dissent booleans.
 - **Editorial fields** (written in "The Betrayal" voice): `summary_spicy`, `why_it_matters`,
   `who_wins` / `who_loses`, `ruling_label`, `ruling_impact_level` (0-5), `dissent_highlights`,
