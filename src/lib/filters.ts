@@ -38,6 +38,29 @@ const ALARM_PILLS: FilterOption[] = [
   { label: 'Win', urlValue: '0', apiValue: '0' },
 ];
 
+// Per-domain pill labels: short forms of the tone-system spicy labels the
+// cards display (tone-system.ts), so the filter speaks the same voice.
+// Pardons already does this below; stories keeps the Scorecard vocabulary.
+const EO_ALARM_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  { label: 'Power Grab', urlValue: '5', apiValue: '5' },
+  { label: 'Weaponized', urlValue: '4', apiValue: '4' },
+  { label: 'Giveaway', urlValue: '3', apiValue: '3' },
+  { label: 'Smoke & Mirrors', urlValue: '2', apiValue: '2' },
+  { label: 'Not Terrible', urlValue: '1', apiValue: '1' },
+  { label: 'Helpful', urlValue: '0', apiValue: '0' },
+];
+
+const SCOTUS_IMPACT_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  { label: 'Crisis', urlValue: '5', apiValue: '5' },
+  { label: 'Rubber Stamp', urlValue: '4', apiValue: '4' },
+  { label: 'Sabotage', urlValue: '3', apiValue: '3' },
+  { label: 'Sidestep', urlValue: '2', apiValue: '2' },
+  { label: 'Crumbs', urlValue: '1', apiValue: '1' },
+  { label: 'Democracy Wins', urlValue: '0', apiValue: '0' },
+];
+
 const STORIES_CONFIG: TabFilterConfig = {
   tabType: 'stories',
   table: 'stories',
@@ -117,7 +140,7 @@ const EOS_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: EO_ALARM_PILLS,
     },
   ],
 };
@@ -168,7 +191,7 @@ const SCOTUS_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'ruling_impact_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: SCOTUS_IMPACT_PILLS,
     },
   ],
 };

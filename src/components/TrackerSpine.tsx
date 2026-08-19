@@ -347,15 +347,18 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     <section aria-label="The Tracker timeline" style={{ padding: '8px 0 24px', borderBottom: `1px solid ${theme.line}` }}>
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
 
-        {/* Tally */}
+        {/* Masthead: centered tally + title + controls — this IS the homepage */}
         <div style={{
-          display: 'flex', gap: narrow ? 30 : 60, flexWrap: 'wrap',
-          padding: '30px 0 24px', borderBottom: `1px solid ${theme.line}`,
+          display: 'flex', justifyContent: 'center', gap: narrow ? 30 : 72, flexWrap: 'wrap',
+          padding: narrow ? '30px 0 22px' : '44px 0 30px', borderBottom: `1px solid ${theme.line}`,
         }}>
           {tallyTiles.map(t => (
-            <div key={t.label} style={t.bad ? { borderLeft: `4px solid ${accentOf(5)}`, paddingLeft: narrow ? 12 : 18 } : undefined}>
+            <div key={t.label} style={{
+              textAlign: 'center',
+              ...(t.bad ? { borderLeft: `4px solid ${accentOf(5)}`, paddingLeft: narrow ? 14 : 22 } : {}),
+            }}>
               <div style={{
-                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 38 : 58,
+                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 42 : 68,
                 lineHeight: 1, letterSpacing: '-0.02em',
                 color: t.bad ? accentOf(5) : theme.ink,
               }}>
@@ -372,21 +375,23 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         </div>
 
         {/* Heading */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', paddingTop: 18 }}>
+        <div style={{ textAlign: 'center', paddingTop: narrow ? 22 : 30 }}>
           <h2 style={{
-            fontFamily: headType.display, fontWeight: 600, fontSize: 22,
-            letterSpacing: '-0.01em', margin: 0, color: theme.ink,
+            fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 28 : 38,
+            letterSpacing: '-0.015em', margin: 0, color: theme.ink,
           }}>
             The Tracker
           </h2>
-          <span style={{ ...mono, fontSize: 10.5, color: theme.dim }}>{countHint}</span>
+          <p style={{ ...mono, fontSize: 10.5, color: theme.dim, margin: '10px 0 0' }}>
+            Every major development since inauguration, newest first · type size = alarm level
+          </p>
+          <p aria-live="polite" style={{ ...mono, fontSize: 10, color: theme.dim, margin: '6px 0 0' }}>
+            {countHint}
+          </p>
         </div>
-        <p style={{ ...mono, fontSize: 10.5, color: theme.dim, margin: '6px 0 0' }}>
-          Every major development since inauguration, newest first · type size = alarm level · the complete record is one filter away
-        </p>
 
         {/* Controls */}
-        <div ref={controlsRef} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '14px 0 6px', scrollMarginTop: 70 }}>
+        <div ref={controlsRef} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', padding: '18px 0 6px', scrollMarginTop: 70 }}>
           <input
             type="search"
             value={query}
