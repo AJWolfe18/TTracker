@@ -28,6 +28,7 @@ export const PIPELINES = Object.freeze({
   ENTITY_EXTRACTION:  'entity_extraction',  // scripts/enrichment/extract-article-entities-inline.js — parse/API errors
   ENTITY_AGGREGATION: 'entity_aggregation', // scripts/aggregate-story-entities.js — no entities, empty articles
   STORY_ENRICHMENT:   'story_enrichment',   // scripts/enrichment/enrich-stories-inline.js — no-articles failure
+  PARDONS_INGEST:     'pardons_ingest',     // scripts/ingest/doj-pardons-scraper.js — staleness tripwire, header parse drift
 });
 
 export const REASONS = Object.freeze({
@@ -39,6 +40,7 @@ export const REASONS = Object.freeze({
   MAX_RETRIES_EXCEEDED:  'max_retries_exceeded',  // embedding retried too many times
   PARSE_ERROR:           'parse_error',           // JSON/response parse failed
   API_ERROR:             'api_error',             // external API call errored
+  STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
 });
 
 /**
