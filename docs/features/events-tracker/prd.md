@@ -418,14 +418,24 @@ Each wave ships behind a feature flag, off in PROD until verified, per `docs/gui
 
 ## 12. Open questions
 
-1. **Fronts vs Files.** Leaning Fronts. If it sticks, "Flagship front" reads as two metaphors arguing — tier labels may need to become Primary / Active / Watch.
+1. **Fronts vs Files.** ✅ **RESOLVED 2026-08-18 (Josh): Fronts.** Tier labels become **Primary / Active / Watch** (avoids the "Flagship front" two-metaphor clash).
 2. **One front per story?** ✅ **RESOLVED 2026-08-17 (Josh): yes — hard constraint, PK on `story_id`.** Relaxing later is a migration; that trade was accepted explicitly.
-3. **Timeline on domain pages?** Recommended no for MVP. Confirm.
-4. **How interactive does the expanded view get?** Zoom-to-month and the lane view are Wave 3 as written. Confirm MVP full-screen = stacked rows is enough to launch.
+3. **Timeline on domain pages?** ✅ **RESOLVED 2026-08-18 (Josh): no for MVP.** Homepage rap sheet only; revisit after Wave 1 baselines.
+4. **How interactive does the expanded view get?** ✅ **RESOLVED 2026-08-18 (Josh): MVP full-screen = stacked rows is enough**, zoom-to-month and lane view stay Wave 3 — conditional on Josh approving a mockup of the stacked-rows expand before/with ADO-545 build.
 5. **Label wording** at each alarm level not final-approved.
-6. **Front open rate target of 25%** is a guess dressed as a target. Confirm we're happy to treat Wave 1 as pure baselining rather than committing to it now.
+6. **Front open rate target of 25%?** ✅ **RESOLVED 2026-08-18 (Josh): Wave 1 is pure baselining.** No committed targets; Wave 2 sets thresholds from measured data.
+7. **Does the rap sheet become the homepage, with stories moved to their own tab?** (Raised by Josh 2026-08-18: "the rap sheet is the actual tracker portion.") Recommendation: **keep the blend for Wave 1** — strip + tally on top, stories feed, running log — and let W1.6's GA4 baselines (timeline engagement vs. story-card engagement) decide the promotion in Wave 2. Restructuring nav now would add scope to W1.2 and invalidate the verified W1.1 build; promoting later is a cheap routing change, not a rebuild. Josh's own read supports waiting: "stories is a nice blend right now with that timeline view."
 
 **Product framing note (2026-08-17):** Josh's gut-check — "I want a rap sheet of all the crazy shit, not just the fronts" — confirmed the timeline + running log ARE the primary product surface, with fronts as the containment layer on top. Wave 1 is resequenced accordingly (§11). One-off outrages (task force disbanded, bank account closures, ship morale stories, stock dealings) surface as loose ends on the rap sheet without needing a front.
+
+**Anchor principle (2026-08-18, Josh — locked "regardless of main visual"):** The main rap sheet shows **major items, not every development**. Front openings ("Qatar offers a $400M jet"), major escalations within a front ("the East Wing is demolished", "the Epstein files are partially released"), and significant loose ends (BLS commissioner fired) make the main line; routine developments — "third carrier group deployed", "ballroom construction proceeds" — live inside their front, reached by expanding it (front detail = the complete record). The main surface needs search + filter.
+
+**Refined after rev 4/5 mockup review (2026-08-18, Josh):** the inclusion mechanism is an **alarm-level filter (default alarm ≥ 4), not an editorial anchors/everything toggle** — "All" recovers the complete record, "Only 5" is the worst-of reel. Approved visual: **vertical center-spine timeline** (bar = the timeline, dates alternating left/right, newest first, type size = alarm level). Josh: the spine is "1000% better" and should likely be **"The Tracker"** — the primary homepage surface (feeds §12 Q7).
+
+**Rev 6 refinements (2026-08-18, Josh):**
+- **Front click = navigation, not inline expansion.** Clicking a front opens a dedicated front page — the same spine visual filtered to that front's developments, complete record by default, own URL (this IS the front detail page, ADO-548).
+- **"Anchor" is not a public concept.** Nothing in the public UI is labeled anchor — main-line inclusion is alarm + curation; anchor/significance flags live in the admin layer only (rename internally if it confuses).
+- **Manual curation is required (admin):** the ability to add items to the main Tracker line (promote a below-threshold story, a major EO, a SCOTUS ruling) and remove items from it, per-item, regardless of alarm auto-filter. Lands with the admin registry work (ADO-547); needs a per-entry override field (e.g., `tracker_pin: force_show | force_hide | null`) across all four sources.
 
 ---
 
