@@ -71,3 +71,26 @@ rows (too busy), month bands + minimap (mixed axes confused), horizontal source 
 3. Open product threads: alarm label wording (iterate live on real UI); §12 Q7 formal call.
 
 Cost: everything designed this session is $0 — same table reads, no new AI calls.
+
+## Addendum: late-night PROD diagnostics (same session, after the wrap)
+
+Josh flagged three things; all diagnosed read-only (anon-key PostgREST, tight selects):
+
+1. **"All stories grey on PROD"** — not a bug. The restrained palette colors only alarm 4–5 by
+   design, and current enrichment scores honestly: of the 100 newest PROD stories, 89 are alarm
+   0–3, 9 are alarm 4, zero are 5. (All-time, 9,331 of ~13K sit at 4+ — that's legacy-GPT alarm
+   inflation, the thing the agent migrations fixed.) Optional product lever if more color is
+   wanted: color level 3, or full-intensity palette. No ticket filed.
+2. **"No new pardons"** → **ADO-550 (Bug)**. DOJ scraper runs green daily but parses only the old
+   page markup: 116 found / 116 duplicates / 0 inserted every run since Feb 5, while the live DOJ
+   page has grants through Jul 6, 2026 (Feb 12, Jun 4, Jul 3, Jul 6). Fix scope + a staleness
+   tripwire are on the card.
+3. **"SCOTUS dispositions need normalizing"** → **ADO-551 (Story, Active)**. Full audit already
+   done and posted as the ticket's newest comment — `case_type` already disambiguates
+   granted/denied; only data fix is `GVR`→`gvr` (2 rows) + TEST's stray `vacated`; the visible
+   bug is `src/lib/adapter.ts:350` rendering raw snake_case; 10 null rows are Jan-2020 backfill
+   artifacts left for Josh's hide/delete call.
+
+**Queue set by Josh: 551 → 550 → 545.** The overnight-autonomous session prompt (paste into a
+fresh session in auto-accept mode) is in the 551 workflow: work both tickets, recommended options
+only, DECISIONS LOG at the end, DDL to migration files, never touch PROD data.
