@@ -284,10 +284,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
           width: dotSize, height: dotSize, borderRadius: '50%',
           background: hollow ? theme.bg : accent,
-          // alarm-5 dots get a glow ring so the worst items read at a glance
+          // alarm 4/5 dots get a glow ring so the big items read at a glance
           boxShadow: [
             hollow ? `inset 0 0 0 3px ${accent}` : '',
-            e.alarm >= 5 ? `0 0 0 5px ${accent}33` : '',
+            e.alarm >= 5 ? `0 0 0 5px ${accent}33` : e.alarm === 4 ? `0 0 0 4px ${accent}2e` : '',
           ].filter(Boolean).join(', ') || 'none',
           border: `2px solid ${theme.bg}`,
           ...(narrow
@@ -348,17 +348,23 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
 
         {/* Tally */}
-        <div style={{ display: 'flex', gap: narrow ? 26 : 44, flexWrap: 'wrap', padding: '22px 0 8px' }}>
+        <div style={{
+          display: 'flex', gap: narrow ? 30 : 60, flexWrap: 'wrap',
+          padding: '30px 0 24px', borderBottom: `1px solid ${theme.line}`,
+        }}>
           {tallyTiles.map(t => (
-            <div key={t.label} style={t.bad ? { borderLeft: `3px solid ${accentOf(5)}`, paddingLeft: 14 } : undefined}>
+            <div key={t.label} style={t.bad ? { borderLeft: `4px solid ${accentOf(5)}`, paddingLeft: narrow ? 12 : 18 } : undefined}>
               <div style={{
-                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 30 : 40,
+                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 38 : 58,
                 lineHeight: 1, letterSpacing: '-0.02em',
                 color: t.bad ? accentOf(5) : theme.ink,
               }}>
                 {t.n}
               </div>
-              <div style={{ ...mono, fontSize: 9.5, letterSpacing: '0.11em', color: theme.dim, marginTop: 6 }}>
+              <div style={{
+                ...mono, fontSize: narrow ? 9.5 : 10.5, letterSpacing: '0.12em',
+                color: t.bad ? accentOf(5) : theme.dim, marginTop: 8,
+              }}>
                 {t.label}
               </div>
             </div>
