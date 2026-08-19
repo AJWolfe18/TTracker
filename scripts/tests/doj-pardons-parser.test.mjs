@@ -103,6 +103,22 @@ test('5. Date-like header that fails to parse lands in unparsedHeaders and its t
   assert.match(unparsedHeaders[0], /2027/);
 });
 
+test('5b. newestPageDate comes from parsed HEADERS, not rows (Codex P1 regression)', () => {
+  // Parseable August header whose table rows are malformed (3 cells): section
+  // yields zero pardons and unparsedHeaders stays empty. newestPageDate must
+  // still report 2026-08-14 so the staleness tripwire can compare against DB.
+  const html = page(`
+    <h3>January 15, 2026 - 12 Pardons</h3>
+    <table><tbody>${personRow('Old Row')}</tbody></table>
+    <h3>August 14, 2026 – 5 Pardons</h3>
+    <table><tbody><tr><td>Broken Person</td><td>District</td><td>Sentence</td></tr></tbody></table>
+  `);
+  const { pardons, unparsedHeaders, newestPageDate } = parseDOJHtml(html);
+  assert.equal(pardons.length, 1);
+  assert.equal(unparsedHeaders.length, 0);
+  assert.equal(newestPageDate, '2026-08-14');
+});
+
 test('6. Non-date h3 (no year) does not trip unparsedHeaders', () => {
   const html = page(`
     <h3>Frequently Asked Questions</h3>

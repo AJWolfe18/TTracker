@@ -128,6 +128,10 @@ export function parseDOJHtml(html) {
   // Date-looking h3 headers that failed to parse — each one means a whole
   // section of grants is being dropped (the ADO-550 silent-failure class).
   const unparsedHeaders = [];
+  // Newest date among PARSED HEADERS (not parsed rows): if DOJ keeps parseable
+  // headers but changes the table row shape, sections yield zero rows — a
+  // row-derived date would understate page freshness and mask the tripwire.
+  let newestPageDate = null;
   let currentDate = null;
   let currentClemencyType = 'pardon';
 
@@ -156,6 +160,10 @@ export function parseDOJHtml(html) {
       // markup again and we are about to silently drop its section — track it.
       if (!currentDate && /\b20\d{2}\b/.test(headerText)) {
         unparsedHeaders.push(headerText);
+      }
+
+      if (currentDate && currentDate > (newestPageDate || '')) {
+        newestPageDate = currentDate;
       }
 
       if (VERBOSE && currentDate) {
@@ -252,11 +260,6 @@ export function parseDOJHtml(html) {
       }
     }
   }
-
-  const newestPageDate = pardons.reduce(
-    (max, p) => (p.pardon_date && p.pardon_date > (max || '') ? p.pardon_date : max),
-    null
-  );
 
   return { pardons, unparsedHeaders, newestPageDate };
 }
