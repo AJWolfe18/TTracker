@@ -29,8 +29,7 @@ const ALLOWED_FIELDS = [
 const VALID_DISPOSITIONS = [
   'affirmed', 'reversed', 'vacated', 'remanded',
   'reversed_and_remanded', 'vacated_and_remanded', 'affirmed_and_remanded',
-  // 'GVR' is legacy pre-migration-109 casing — drop it once 109 is applied on PROD
-  'dismissed', 'granted', 'denied', 'gvr', 'GVR', 'other',
+  'dismissed', 'granted', 'denied', 'gvr', 'other',
 ]
 const VALID_CASE_TYPES = ['merits', 'procedural', 'shadow_docket', 'cert_stage', 'unclear']
 const VALID_PREVAILING_PARTIES = ['petitioner', 'respondent', 'partial', 'unclear']
@@ -51,6 +50,11 @@ function jsonResponse(body: unknown, status: number) {
 function validateUpdates(sanitized: Record<string, unknown>): string | null {
   // Enum: disposition
   if ('disposition' in sanitized) {
+    // Legacy clients may still send pre-migration-109 casing; normalize so the
+    // persisted value always satisfies the DB CHECK constraint (ADO-551).
+    if (sanitized.disposition === 'GVR') {
+      sanitized.disposition = 'gvr'
+    }
     const v = sanitized.disposition
     if (v !== null && !VALID_DISPOSITIONS.includes(v as string)) {
       return `Invalid disposition. Must be one of: ${VALID_DISPOSITIONS.join(', ')}`

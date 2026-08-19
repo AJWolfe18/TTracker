@@ -10,6 +10,13 @@
 -- The 10 PROD null-disposition rows (ids 1, 296-304) are deliberately NOT touched —
 -- Josh decides hide vs delete separately.
 
+-- Single transaction: the ALTER's ACCESS EXCLUSIVE lock is held until COMMIT,
+-- so no concurrent write can land between the drop and the re-add, and a
+-- failure anywhere rolls the whole swap back (table never left unconstrained).
+BEGIN;
+
+LOCK TABLE scotus_cases IN ACCESS EXCLUSIVE MODE;
+
 -- Step 1: drop the old constraint so the data update can't race it
 ALTER TABLE scotus_cases
 DROP CONSTRAINT IF EXISTS scotus_cases_disposition_check;
@@ -26,6 +33,8 @@ ADD CONSTRAINT scotus_cases_disposition_check
     'reversed_and_remanded', 'vacated_and_remanded', 'affirmed_and_remanded',
     'dismissed', 'granted', 'denied', 'gvr', 'other'
   ));
+
+COMMIT;
 
 -- Verify (expect 0):
 -- SELECT count(*) FROM scotus_cases WHERE disposition = 'GVR';

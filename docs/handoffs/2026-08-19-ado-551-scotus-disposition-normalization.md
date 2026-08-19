@@ -14,14 +14,17 @@ Built directly on the audit in ADO-551's newest comment (2026-08-19) — did NOT
    "Cert Granted/Denied" for `case_type=cert_stage` and "Application Granted/Denied" for `shadow_docket`.
    `gvr` renders "Granted, Vacated & Remanded (GVR)". Legacy `'GVR'` input still accepted until migration 109
    is applied. Unknown values humanize (underscores → spaces) instead of leaking snake_case.
-2. **`migrations/109_scotus_disposition_gvr_normalize.sql`** — NOT APPLIED (DDL is Josh's). Drops the 087
-   CHECK, `UPDATE ... SET disposition='gvr' WHERE disposition='GVR'` (PROD ids 1906, 2051; TEST has none),
-   re-adds CHECK with `gvr` replacing `GVR`. Idempotent. Apply order matters: migration BEFORE deploying
-   'gvr'-writing code to PROD (header comment spells it out).
+2. **`migrations/109_scotus_disposition_gvr_normalize.sql`** — NOT APPLIED (DDL is Josh's). Single
+   transaction with an explicit ACCESS EXCLUSIVE lock (Codex review fix): drops the 087 CHECK,
+   `UPDATE ... SET disposition='gvr' WHERE disposition='GVR'` (PROD ids 1906, 2051; TEST has none), re-adds
+   CHECK with `gvr` replacing `GVR`. Idempotent; a failure rolls the whole swap back. Apply order matters:
+   migration BEFORE deploying 'gvr'-writing code to PROD (header comment spells it out).
 3. **`public/admin.html`** — SCOTUS disposition dropdown value `GVR` → `gvr` (label unchanged).
-4. **`supabase/functions/admin-update-scotus/index.ts`** — VALID_DISPOSITIONS now has BOTH `gvr` and legacy
-   `GVR` (transition-safe; drop `GVR` after 109 is applied on PROD). **Edge function NOT redeployed** — deploy
-   to TEST with: `supabase functions deploy admin-update-scotus --project-ref wnrjrywpcadwutfykflu`.
+4. **`supabase/functions/admin-update-scotus/index.ts`** — legacy `GVR` input is NORMALIZED to `gvr` before
+   validation/persistence (Codex review fix — accepting both would have let `GVR` pass validation then fail
+   the post-109 DB CHECK); VALID_DISPOSITIONS lists only `gvr`. **Edge function NOT redeployed** — after
+   migration 109 is applied on TEST, deploy with:
+   `supabase functions deploy admin-update-scotus --project-ref wnrjrywpcadwutfykflu`.
 5. **`scripts/scotus/syllabus-extractor.js`** + its fixture test — emits `gvr` now (Scout is dormant: no
    workflow runs it, only its own test imports it).
 6. **`docs/features/scotus-claude-agent/prompt-v1.md`** (agent allow-list, lines 236/251) +
