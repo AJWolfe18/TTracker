@@ -7,7 +7,7 @@ import { Card } from '@/components/Card';
 import { Kicker } from '@/components/Kicker';
 import { FilterBar } from '@/components/FilterBar';
 import { Pagination } from '@/components/Pagination';
-import { RapSheetTimeline } from '@/components/RapSheetTimeline';
+import { TrackerSpine } from '@/components/TrackerSpine';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { ErrorState } from '@/edge-states/ErrorState';
 import { EmptyState } from '@/edge-states/EmptyState';
@@ -75,7 +75,7 @@ export function Home({
       />
       <Scorecard stats={stats} />
       <main id="main-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
-        {(!filterConfig || filterConfig.tabType === 'stories') && <RapSheetTimeline />}
+        {(!filterConfig || filterConfig.tabType === 'stories') && <TrackerSpine />}
         {children}
         {totalPages != null && totalPages > 1 && onPageChange && (
           <Pagination page={currentPage ?? 1} totalPages={totalPages} onPageChange={(p) => {

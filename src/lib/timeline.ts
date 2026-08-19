@@ -1,9 +1,13 @@
-// ── Rap sheet timeline (ADO-544) ──
+// ── The Tracker timeline (ADO-544 fetch layer, extended for ADO-545) ──
 // One flat, chronological list of developments across every tracked domain.
-// Fetches a recent window only: the inline strip must stay cheap (egress) and
-// fast (LCP guardrail). The full-term view arrives with the expand overlay (ADO-545).
+// The spine pages backwards through history with per-source keyset cursors and
+// server-side alarm predicates so the default view (alarm 4+) never bulk-fetches
+// rows it won't show (egress rule, CLAUDE.md #11).
 
 export type TimelineSource = 'stories' | 'eos' | 'scotus' | 'pardons';
+
+/** The alarm segmented filter's positions: All / 3+ / 4+ / Only 5 */
+export type AlarmMin = 0 | 3 | 4 | 5;
 
 export interface TimelineEntry {
   id: string | number;
@@ -94,38 +98,143 @@ export function mergeEntries(groups: TimelineEntry[][]): TimelineEntry[] {
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
 }
 
-interface SourceQuery {
-  path: string;
+// ── Per-source query specs ──
+
+interface SourceSpec {
+  table: string;
+  select: string;
+  /** Base row filters that always apply (published/public predicates) */
+  base: string;
+  dateCol: string;
+  limit: number;
   adapter: (raw: Raw) => TimelineEntry;
+  /**
+   * Alarm predicate in PostgREST logic-tree syntax (goes inside `and=(...)`),
+   * or null for "no filter". Null alarm columns follow each adapter's default:
+   * stories fall back to severity, EOs/SCOTUS default to 3 (so nulls pass a
+   * 3+ filter but not 4+), pardons default to 2 (nulls only pass "All").
+   */
+  alarm: (min: AlarmMin) => string | null;
 }
 
 // Tight selects on purpose — never widen these to * (egress rule, CLAUDE.md #11).
-const QUERIES: Record<TimelineSource, SourceQuery> = {
+// Key order is the chip display order (mockup rev 6).
+const SPECS: Record<TimelineSource, SourceSpec> = {
   stories: {
-    path: 'stories?select=id,primary_headline,first_seen_at,alarm_level,severity'
-      + '&status=eq.active&summary_neutral=not.is.null'
-      + '&order=first_seen_at.desc,id.desc&limit=60',
+    table: 'stories',
+    select: 'id,primary_headline,first_seen_at,alarm_level,severity',
+    base: 'status=eq.active&summary_neutral=not.is.null',
+    dateCol: 'first_seen_at',
+    limit: 60,
     adapter: storyRowToEntry,
-  },
-  eos: {
-    path: 'executive_orders?select=id,title,date,alarm_level'
-      + '&is_public=eq.true&order=date.desc,id.desc&limit=25',
-    adapter: eoRowToEntry,
+    alarm: min => {
+      if (min === 0) return null;
+      const severities = ['critical', 'severe', 'serious'].slice(0, 6 - min);
+      return `or(alarm_level.gte.${min},and(alarm_level.is.null,severity.in.(${severities.join(',')})))`;
+    },
   },
   scotus: {
-    path: 'scotus_cases?select=id,case_name,case_name_short,decided_at,ruling_impact_level'
-      + '&is_public=eq.true&decided_at=not.is.null'
-      + '&order=decided_at.desc,id.desc&limit=25',
+    table: 'scotus_cases',
+    select: 'id,case_name,case_name_short,decided_at,ruling_impact_level',
+    base: 'is_public=eq.true&decided_at=not.is.null',
+    dateCol: 'decided_at',
+    limit: 25,
     adapter: scotusRowToEntry,
+    alarm: min => {
+      if (min === 0) return null;
+      if (min === 3) return 'or(ruling_impact_level.gte.3,ruling_impact_level.is.null)';
+      return `ruling_impact_level.gte.${min}`;
+    },
+  },
+  eos: {
+    table: 'executive_orders',
+    select: 'id,title,date,alarm_level',
+    base: 'is_public=eq.true',
+    dateCol: 'date',
+    limit: 25,
+    adapter: eoRowToEntry,
+    alarm: min => {
+      if (min === 0) return null;
+      if (min === 3) return 'or(alarm_level.gte.3,alarm_level.is.null)';
+      return `alarm_level.gte.${min}`;
+    },
   },
   pardons: {
-    path: 'pardons?select=id,recipient_name,nickname,pardon_date,corruption_level'
-      + '&is_public=eq.true&order=pardon_date.desc,id.desc&limit=25',
+    table: 'pardons',
+    select: 'id,recipient_name,nickname,pardon_date,corruption_level',
+    base: 'is_public=eq.true',
+    dateCol: 'pardon_date',
+    limit: 25,
     adapter: pardonRowToEntry,
+    alarm: min => (min === 0 ? null : `corruption_level.gte.${min}`),
   },
 };
 
-export async function fetchTimelineEntries(signal?: AbortSignal): Promise<TimelineEntry[]> {
+export const TIMELINE_SOURCES = Object.keys(SPECS) as TimelineSource[];
+
+// ── Keyset cursor paging ──
+
+export interface SourceCursor {
+  /** Raw date-column value of the oldest row fetched so far */
+  date: string;
+  id: string | number;
+}
+
+export interface SourceState {
+  cursor: SourceCursor | null;
+  /** No more rows (or the source errored — degrade to "done", never block the rest) */
+  exhausted: boolean;
+  /** Last fetch failed; used to hide the surface only when everything is down */
+  errored: boolean;
+}
+
+export type TrackerState = Record<TimelineSource, SourceState>;
+
+const quoted = (v: string | number) => `"${String(v).replace(/"/g, '')}"`;
+
+/**
+ * Build the PostgREST path for one source page. Pure — unit-tested.
+ * Keyset pagination: order date desc, id desc; the next page is
+ * (date < D) OR (date = D AND id < I). Values are quoted so timestamps
+ * with `:`/`+` survive, and the whole logic tree is URL-encoded.
+ */
+export function buildSourcePath(
+  source: TimelineSource,
+  min: AlarmMin,
+  cursor: SourceCursor | null,
+): string {
+  const s = SPECS[source];
+  const conditions: string[] = [];
+  const alarmFrag = s.alarm(min);
+  if (alarmFrag) conditions.push(alarmFrag);
+  if (cursor) {
+    conditions.push(
+      `or(${s.dateCol}.lt.${quoted(cursor.date)},`
+      + `and(${s.dateCol}.eq.${quoted(cursor.date)},id.lt.${quoted(cursor.id)}))`,
+    );
+  }
+  const logic = conditions.length ? `&and=${encodeURIComponent(`(${conditions.join(',')})`)}` : '';
+  return `${s.table}?select=${s.select}&${s.base}${logic}`
+    + `&order=${s.dateCol}.desc,id.desc&limit=${s.limit}`;
+}
+
+export function initialTrackerState(): TrackerState {
+  const state = {} as TrackerState;
+  for (const src of TIMELINE_SOURCES) {
+    state[src] = { cursor: null, exhausted: false, errored: false };
+  }
+  return state;
+}
+
+/**
+ * Fetch the next page for every non-exhausted source and advance its cursor.
+ * Returns only the NEW entries (ascending); callers merge with what they hold.
+ */
+export async function fetchTrackerPage(
+  min: AlarmMin,
+  state: TrackerState | null,
+  signal?: AbortSignal,
+): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
   const { url, anonKey } = await import('./supabase');
@@ -134,21 +243,142 @@ export async function fetchTimelineEntries(signal?: AbortSignal): Promise<Timeli
     'Authorization': `Bearer ${anonKey}`,
   };
 
+  const prev = state ?? initialTrackerState();
+  const next: TrackerState = { ...prev };
+
   const groups = await Promise.all(
-    (Object.keys(QUERIES) as TimelineSource[]).map(async source => {
-      const { path, adapter } = QUERIES[source];
+    TIMELINE_SOURCES.map(async source => {
+      const st = prev[source];
+      if (st.exhausted) return [];
+      const spec = SPECS[source];
       try {
-        const res = await fetch(`${url}/rest/v1/${path}`, { headers, signal });
-        if (!res.ok) return [];
+        const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, min, st.cursor)}`, { headers, signal });
+        if (!res.ok) {
+          next[source] = { ...st, exhausted: true, errored: true };
+          return [];
+        }
         const rows: Raw[] = await res.json();
-        return rows.map(adapter);
+        const last = rows[rows.length - 1];
+        next[source] = {
+          cursor: last
+            ? { date: (last[spec.dateCol] as string) || '', id: last.id as string | number }
+            : st.cursor,
+          exhausted: rows.length < spec.limit,
+          errored: false,
+        };
+        return rows.map(spec.adapter);
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
-        // One source failing must not blank the whole rap sheet
+        // One source failing must not blank the whole Tracker
+        next[source] = { ...st, exhausted: true, errored: true };
         return [];
       }
     }),
   );
 
-  return mergeEntries(groups);
+  return { entries: mergeEntries(groups), state: next };
+}
+
+/**
+ * The oldest date at which coverage is COMPLETE across all sources: the max
+ * cursor date among sources that still have unfetched rows. Entries older than
+ * this are buffered, not shown — otherwise a sparse source (25 EOs reach back
+ * months, 60 stories reach back days) would fake gaps in the record.
+ * Null means every source is exhausted: show everything.
+ */
+export function coverageFrontier(state: TrackerState): string | null {
+  let frontier: string | null = null;
+  for (const src of TIMELINE_SOURCES) {
+    const st = state[src];
+    if (st.exhausted || !st.cursor) continue;
+    if (frontier === null || st.cursor.date > frontier) frontier = st.cursor.date;
+  }
+  return frontier;
+}
+
+export interface VisibleOptions {
+  frontier: string | null;
+  min: AlarmMin;
+  off: ReadonlySet<TimelineSource>;
+  query: string;
+}
+
+/** Apply the combined client-side filters. Returns newest-first (render order). */
+export function visibleEntries(entries: TimelineEntry[], opts: VisibleOptions): TimelineEntry[] {
+  const q = opts.query.trim().toLowerCase();
+  const out = entries.filter(e =>
+    !opts.off.has(e.source)
+    && e.alarm >= opts.min
+    && (opts.frontier === null || e.date >= opts.frontier)
+    && (!q || e.headline.toLowerCase().includes(q)),
+  );
+  out.reverse();
+  return out;
+}
+
+// ── Tally (headline numbers above the spine) ──
+
+export interface TrackerTally {
+  /** Total published developments across all four sources */
+  developments: number | null;
+  /** Alarm-5 developments in the last 30 days */
+  alarm5Last30: number | null;
+}
+
+async function countRows(
+  url: string,
+  headers: Record<string, string>,
+  path: string,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  try {
+    // HEAD + count=exact: the total arrives in Content-Range with zero body egress
+    const res = await fetch(`${url}/rest/v1/${path}`, {
+      method: 'HEAD',
+      headers: { ...headers, 'Prefer': 'count=exact' },
+      signal,
+    });
+    if (!res.ok) return null;
+    const range = res.headers.get('content-range') || '';
+    const total = Number(range.split('/')[1]);
+    return Number.isFinite(total) ? total : null;
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+    return null;
+  }
+}
+
+export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTally> {
+  const { url, anonKey } = await import('./supabase');
+  const headers = {
+    'apikey': anonKey,
+    'Authorization': `Bearer ${anonKey}`,
+  };
+
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+  const perSource = await Promise.all(
+    TIMELINE_SOURCES.map(async source => {
+      const s = SPECS[source];
+      const alarm5 = s.alarm(5)!;
+      const [total, worst] = await Promise.all([
+        countRows(url, headers, `${s.table}?select=id&${s.base}`, signal),
+        countRows(
+          url, headers,
+          `${s.table}?select=id&${s.base}&${s.dateCol}=gte.${since}`
+          + `&and=${encodeURIComponent(`(${alarm5})`)}`,
+          signal,
+        ),
+      ]);
+      return { total, worst };
+    }),
+  );
+
+  const sum = (vals: (number | null)[]) =>
+    vals.every(v => v !== null) ? vals.reduce((a: number, b) => a + (b as number), 0) : null;
+
+  return {
+    developments: sum(perSource.map(p => p.total)),
+    alarm5Last30: sum(perSource.map(p => p.worst)),
+  };
 }
