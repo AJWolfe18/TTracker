@@ -101,7 +101,7 @@ export function Footer() {
       </div>
       <div style={{ marginTop: 40, paddingTop: 20, borderTop: `1px solid ${theme.line}`, fontFamily: type.mono, fontSize: 10, color: theme.dim, display: 'flex', justifyContent: 'space-between', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
         <span>&copy; 2026 TrumpyTracker &middot; reader-supported</span>
-        <span>last updated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+        <span>last updated: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
       </div>
       <style>{`@media (max-width: 800px) { .tt-footer-grid { grid-template-columns: 1fr 1fr !important; } }`}</style>
     </footer>

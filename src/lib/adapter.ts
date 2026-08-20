@@ -307,7 +307,7 @@ function fmtMetaDate(val: unknown): string | null {
   const s = String(val);
   const d = new Date(s.includes('T') ? s : s + 'T00:00:00');
   if (isNaN(d.getTime())) return s;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function pushMeta(arr: { label: string; value: string }[], label: string, raw: unknown) {
