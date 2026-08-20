@@ -48,11 +48,11 @@ Two-pass inline review (subagents banned) found and fixed: (1) `loadingMore` stu
 Josh confirmed the rev-6 agreement was **the Tracker IS the homepage** (PRD §12 Q7 now RESOLVED: yes), delivered as a separate stacked PR per his selection:
 
 - `/` renders **TrackerHome** (tally + spine only, no Scorecard — the tally is that page's number row) when `rap_sheet` is on; classic story feed when off (PROD unchanged).
-- Story feed (Scorecard/hero/filters/cards) moved to a new **Stories** nav tab (`/stories`); nav item is flag-gated so PROD nav is unchanged; the spine no longer renders inside the stories feed page.
+- Story feed (Scorecard/hero/filters/cards) moved to a new **News** nav tab (`/news`; renamed from Stories/`/stories` during live review); nav item is flag-gated so PROD nav is unchanged; the spine no longer renders inside the stories feed page.
 - New `useFlagsReady()` hook gates the `/` route on the flag file loading, so the flag-off surface never flashes first.
 - `TrackerSpine` gained a `standalone` prop: total fetch failure renders ErrorState instead of silently removing the section (which would have left a blank homepage).
 
-Verified live: `/` = mockup rev 6 exactly; `/stories` = classic feed with Stories highlighted; `?ff_rap_sheet=false` = classic homepage with no Stories nav item; click-through from the spine homepage works; zero console errors; lint/test:ui/build/qa:smoke green.
+Verified live: `/` = mockup rev 6 exactly; `/news` = classic feed with News highlighted; `?ff_rap_sheet=false` = classic homepage with no News nav item; click-through from the spine homepage works; zero console errors; lint/test:ui/build/qa:smoke green.
 
 **Merge order:** #117 first, then #118 (its PR diff shrinks to just the homepage promotion once #117 lands).
 
