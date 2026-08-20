@@ -11,6 +11,7 @@ import {
   coverageFrontier,
   visibleEntries,
   SOURCE_ROUTES,
+  TERM_START,
   TIMELINE_SOURCES,
   type TimelineEntry,
   type TimelineSource,
@@ -44,6 +45,12 @@ describe('timeline row adapters', () => {
   it('clamps out-of-range alarm values', () => {
     expect(eoRowToEntry({ id: 'eo_1', title: 't', date: '2026-01-01', alarm_level: 99 }).alarm).toBe(5);
     expect(eoRowToEntry({ id: 'eo_1', title: 't', date: '2026-01-01', alarm_level: -3 }).alarm).toBe(0);
+  });
+
+  it('null alarm columns take the domain default, never 0 (Number(null) === 0 regression)', () => {
+    expect(eoRowToEntry({ id: 'eo_1', title: 't', date: '2026-01-01', alarm_level: null }).alarm).toBe(3);
+    expect(scotusRowToEntry({ id: 1, case_name: 'c', decided_at: '2026-01-01', ruling_impact_level: null }).alarm).toBe(3);
+    expect(pardonRowToEntry({ id: 1, recipient_name: 'p', pardon_date: '2026-01-01', corruption_level: null }).alarm).toBe(2);
   });
 
   it('keeps EO string ids intact (PROD uses varchar ids)', () => {
@@ -122,6 +129,13 @@ describe('buildSourcePath', () => {
     expect(p).toContain('limit=60');
     expect(p).toContain('status=eq.active');
     expect(p).toContain('summary_neutral=not.is.null');
+  });
+
+  it('floors every source at inauguration day - the record is term 2 only', () => {
+    expect(buildSourcePath('stories', 0, null)).toContain(`first_seen_at=gte.${TERM_START}`);
+    expect(buildSourcePath('scotus', 0, null)).toContain(`decided_at=gte.${TERM_START}`);
+    expect(buildSourcePath('eos', 0, null)).toContain(`date=gte.${TERM_START}`);
+    expect(buildSourcePath('pardons', 0, null)).toContain(`pardon_date=gte.${TERM_START}`);
   });
 
   it('builds the stories alarm predicate with severity fallback per level', () => {

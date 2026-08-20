@@ -13,6 +13,7 @@ import {
   mergeEntries,
   SOURCE_LABELS,
   SOURCE_ROUTES,
+  TERM_START,
   TIMELINE_SOURCES,
   type AlarmMin,
   type TimelineEntry,
@@ -35,7 +36,7 @@ const ALARM_STOPS: { label: string; min: AlarmMin }[] = [
   { label: 'Only 5', min: 5 },
 ];
 
-const INAUGURATION = new Date('2025-01-20T00:00:00');
+const INAUGURATION = new Date(`${TERM_START}T00:00:00`);
 
 function useIsNarrow(px: number): boolean {
   const [narrow, setNarrow] = useState(
