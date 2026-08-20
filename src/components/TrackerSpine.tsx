@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useTheme } from '@/hooks/useTheme';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { ErrorState } from '@/edge-states/ErrorState';
 import { alarmPalette } from '@/tokens';
 import { fmtDate } from '@/lib/date-utils';
 import {
@@ -12,6 +13,7 @@ import {
   mergeEntries,
   SOURCE_LABELS,
   SOURCE_ROUTES,
+  TERM_START,
   TIMELINE_SOURCES,
   type AlarmMin,
   type TimelineEntry,
@@ -34,7 +36,7 @@ const ALARM_STOPS: { label: string; min: AlarmMin }[] = [
   { label: 'Only 5', min: 5 },
 ];
 
-const INAUGURATION = new Date('2025-01-20T00:00:00');
+const INAUGURATION = new Date(`${TERM_START}T00:00:00`);
 
 function useIsNarrow(px: number): boolean {
   const [narrow, setNarrow] = useState(
@@ -52,7 +54,16 @@ function useIsNarrow(px: number): boolean {
 const monthLabel = (ym: string) =>
   new Date(ym + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-export function TrackerSpine() {
+interface TrackerSpineProps {
+  /**
+   * Set when the spine IS the page (TrackerHome): a total fetch failure renders
+   * the error state instead of the section quietly removing itself, which is
+   * the right behavior only when other content sits below it.
+   */
+  standalone?: boolean;
+}
+
+export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const enabled = useFeatureFlag('rap_sheet');
   const { theme, headType, mode } = useTheme();
   const [, navigate] = useLocation();
@@ -61,6 +72,7 @@ export function TrackerSpine() {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [pageState, setPageState] = useState<TrackerState | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [minAlarm, setMinAlarm] = useState<AlarmMin>(4);
   const [off, setOff] = useState<Set<TimelineSource>>(new Set());
@@ -68,23 +80,25 @@ export function TrackerSpine() {
   const [tally, setTally] = useState<TrackerTally | null>(null);
 
   const acRef = useRef<AbortController | null>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
 
   // First page — refetched whenever the alarm floor changes, because the
   // server-side alarm predicate is baked into every source's cursor stream.
+  // The current list stays on screen until the new one arrives: clearing it
+  // collapses the page height and scroll-anchoring yanks the viewport around.
   useEffect(() => {
     if (!enabled) return;
     const ac = new AbortController();
     acRef.current = ac;
-    setLoaded(false);
     setLoadingMore(false);
-    setEntries([]);
-    setPageState(null);
+    setRefreshing(true);
     fetchTrackerPage(minAlarm, null, ac.signal)
       .then(({ entries: page, state }) => {
         if (ac.signal.aborted) return;
         setEntries(page);
         setPageState(state);
         setLoaded(true);
+        setRefreshing(false);
       })
       .catch(() => { /* the Tracker is additive — never break the homepage */ });
     return () => ac.abort();
@@ -109,11 +123,13 @@ export function TrackerSpine() {
   const allErrored = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].errored);
 
   if (!enabled) return null;
-  // Every source down and nothing to show: hide the surface entirely
-  if (loaded && allErrored && entries.length === 0) return null;
+  // Every source down and nothing to show: hide the surface (or, standalone, say so)
+  if (loaded && allErrored && entries.length === 0) {
+    return standalone ? <ErrorState /> : null;
+  }
 
   const loadEarlier = () => {
-    if (!pageState || loadingMore || allExhausted) return;
+    if (!pageState || loadingMore || refreshing || allExhausted) return;
     const ac = acRef.current;
     setLoadingMore(true);
     fetchTrackerPage(minAlarm, pageState, ac?.signal)
@@ -125,6 +141,17 @@ export function TrackerSpine() {
       .catch(() => {})
       // unconditional: an abort mid-flight must not leave the button stuck
       .finally(() => setLoadingMore(false));
+  };
+
+  // Changing the alarm floor swaps in a list of a different length; if the
+  // reader is scrolled deep, snap back to the controls so the change is
+  // legible instead of the browser clamping scroll somewhere arbitrary.
+  const changeAlarm = (min: AlarmMin) => {
+    setMinAlarm(min);
+    const el = controlsRef.current;
+    if (el && el.getBoundingClientRect().top < 0) {
+      el.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior });
+    }
   };
 
   const toggleSource = (s: TimelineSource) => {
@@ -169,7 +196,7 @@ export function TrackerSpine() {
             key={min}
             type="button"
             aria-pressed={on}
-            onClick={() => setMinAlarm(min)}
+            onClick={() => changeAlarm(min)}
             className="tt-ts-seg"
             style={{
               ...mono, fontSize: 10, padding: '8px 14px', background: on ? theme.bg2 : 'none',
@@ -258,7 +285,11 @@ export function TrackerSpine() {
           position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
           width: dotSize, height: dotSize, borderRadius: '50%',
           background: hollow ? theme.bg : accent,
-          boxShadow: hollow ? `inset 0 0 0 3px ${accent}` : 'none',
+          // alarm 4/5 dots get a glow ring so the big items read at a glance
+          boxShadow: [
+            hollow ? `inset 0 0 0 3px ${accent}` : '',
+            e.alarm >= 5 ? `0 0 0 5px ${accent}33` : e.alarm === 4 ? `0 0 0 4px ${accent}2e` : '',
+          ].filter(Boolean).join(', ') || 'none',
           border: `2px solid ${theme.bg}`,
           ...(narrow
             ? { left: 8, transform: 'translate(-50%, 0)' }
@@ -267,7 +298,17 @@ export function TrackerSpine() {
               : { right: 0, transform: 'translate(50%, 0)' }),
         }} />
         <time style={{ ...mono, display: 'block', fontSize: 10, color: accent }}>
-          {fmtDate(e.date)} · Alarm {e.alarm}
+          {fmtDate(e.date)}
+          {e.alarm >= 5 ? (
+            <span style={{
+              background: accent, color: theme.bg, fontWeight: 600,
+              padding: '2px 7px', marginLeft: 8, letterSpacing: '0.1em',
+            }}>
+              Alarm 5
+            </span>
+          ) : (
+            <> · Alarm {e.alarm}</>
+          )}
         </time>
         <a
           href={`/${SOURCE_ROUTES[e.source]}/${encodeURIComponent(String(e.id))}`}
@@ -298,25 +339,36 @@ export function TrackerSpine() {
 
   const countHint = !loaded
     ? 'Loading the record…'
-    : `${visible.length} development${visible.length === 1 ? '' : 's'}`
-      + (minAlarm > 0 ? ` at alarm ${minAlarm}+` : ' · the complete record');
+    : refreshing
+      ? 'Updating…'
+      : `${visible.length} development${visible.length === 1 ? '' : 's'}`
+        + (minAlarm > 0 ? ` at alarm ${minAlarm}+` : ' · the complete record');
 
   return (
     <section aria-label="The Tracker timeline" style={{ padding: '8px 0 24px', borderBottom: `1px solid ${theme.line}` }}>
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
 
-        {/* Tally */}
-        <div style={{ display: 'flex', gap: narrow ? 26 : 44, flexWrap: 'wrap', padding: '22px 0 8px' }}>
+        {/* Masthead: centered tally + title + controls — this IS the homepage */}
+        <div style={{
+          display: 'flex', justifyContent: 'center', gap: narrow ? 30 : 72, flexWrap: 'wrap',
+          padding: narrow ? '30px 0 22px' : '44px 0 30px', borderBottom: `1px solid ${theme.line}`,
+        }}>
           {tallyTiles.map(t => (
-            <div key={t.label}>
+            <div key={t.label} style={{
+              textAlign: 'center',
+              ...(t.bad ? { borderLeft: `4px solid ${accentOf(5)}`, paddingLeft: narrow ? 14 : 22 } : {}),
+            }}>
               <div style={{
-                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 30 : 40,
+                fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 42 : 68,
                 lineHeight: 1, letterSpacing: '-0.02em',
                 color: t.bad ? accentOf(5) : theme.ink,
               }}>
                 {t.n}
               </div>
-              <div style={{ ...mono, fontSize: 9.5, letterSpacing: '0.11em', color: theme.dim, marginTop: 6 }}>
+              <div style={{
+                ...mono, fontSize: narrow ? 9.5 : 10.5, letterSpacing: '0.12em',
+                color: t.bad ? accentOf(5) : theme.dim, marginTop: 8,
+              }}>
                 {t.label}
               </div>
             </div>
@@ -324,21 +376,23 @@ export function TrackerSpine() {
         </div>
 
         {/* Heading */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', paddingTop: 18 }}>
+        <div style={{ textAlign: 'center', paddingTop: narrow ? 22 : 30 }}>
           <h2 style={{
-            fontFamily: headType.display, fontWeight: 600, fontSize: 22,
-            letterSpacing: '-0.01em', margin: 0, color: theme.ink,
+            fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 28 : 38,
+            letterSpacing: '-0.015em', margin: 0, color: theme.ink,
           }}>
             The Tracker
           </h2>
-          <span style={{ ...mono, fontSize: 10.5, color: theme.dim }}>{countHint}</span>
+          <p style={{ ...mono, fontSize: 10.5, color: theme.dim, margin: '10px 0 0' }}>
+            Every major development since inauguration, newest first · type size = alarm level
+          </p>
+          <p aria-live="polite" style={{ ...mono, fontSize: 10, color: theme.dim, margin: '6px 0 0' }}>
+            {countHint}
+          </p>
         </div>
-        <p style={{ ...mono, fontSize: 10.5, color: theme.dim, margin: '6px 0 0' }}>
-          Every major development since inauguration, newest first · type size = alarm level · the complete record is one filter away
-        </p>
 
         {/* Controls */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '14px 0 6px' }}>
+        <div ref={controlsRef} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', padding: '18px 0 6px', scrollMarginTop: 70 }}>
           <input
             type="search"
             value={query}
@@ -363,7 +417,7 @@ export function TrackerSpine() {
             ...(narrow ? { left: 8 } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
-          {loaded && visible.length === 0 && (
+          {loaded && !refreshing && visible.length === 0 && (
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
               {query
                 ? 'Nothing on the record matches that search at this filter.'
@@ -384,13 +438,13 @@ export function TrackerSpine() {
             <button
               type="button"
               onClick={loadEarlier}
-              disabled={loadingMore || !loaded}
+              disabled={loadingMore || refreshing || !loaded}
               className="tt-ts-more"
               style={{
                 ...mono, fontSize: 11, letterSpacing: '0.1em', color: theme.ink,
                 background: 'none', border: `1px solid ${theme.line}`, padding: '10px 18px',
-                cursor: loadingMore || !loaded ? 'default' : 'pointer',
-                opacity: loadingMore || !loaded ? 0.5 : 1,
+                cursor: loadingMore || refreshing || !loaded ? 'default' : 'pointer',
+                opacity: loadingMore || refreshing || !loaded ? 0.5 : 1,
               }}
             >
               {loadingMore ? 'Loading earlier…' : 'Keep going · load earlier ↓'}

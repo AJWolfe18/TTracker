@@ -6,6 +6,9 @@
 
 export type TimelineSource = 'stories' | 'eos' | 'scotus' | 'pardons';
 
+/** The Tracker's scope: term 2 only. Bounds paging AND the tally counts. */
+export const TERM_START = '2025-01-20';
+
 /** The alarm segmented filter's positions: All / 3+ / 4+ / Only 5 */
 export type AlarmMin = 0 | 3 | 4 | 5;
 
@@ -38,6 +41,10 @@ const SEVERITY_TO_ALARM: Record<string, number> = {
 };
 
 function clampAlarm(n: unknown, fallback: number): number {
+  // Number(null) is 0, not NaN — nulls must take the fallback, or every
+  // null-alarm EO/SCOTUS row reads as alarm 0 and the client filter drops
+  // rows the server's null-fallback predicate deliberately included
+  if (n == null) return fallback;
   const v = Number(n);
   return Number.isFinite(v) ? Math.max(0, Math.min(5, v)) : fallback;
 }
@@ -123,7 +130,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   stories: {
     table: 'stories',
     select: 'id,primary_headline,first_seen_at,alarm_level,severity',
-    base: 'status=eq.active&summary_neutral=not.is.null',
+    base: `status=eq.active&summary_neutral=not.is.null&first_seen_at=gte.${TERM_START}`,
     dateCol: 'first_seen_at',
     limit: 60,
     adapter: storyRowToEntry,
@@ -136,7 +143,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   scotus: {
     table: 'scotus_cases',
     select: 'id,case_name,case_name_short,decided_at,ruling_impact_level',
-    base: 'is_public=eq.true&decided_at=not.is.null',
+    base: `is_public=eq.true&decided_at=not.is.null&decided_at=gte.${TERM_START}`,
     dateCol: 'decided_at',
     limit: 25,
     adapter: scotusRowToEntry,
@@ -149,7 +156,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   eos: {
     table: 'executive_orders',
     select: 'id,title,date,alarm_level',
-    base: 'is_public=eq.true',
+    base: `is_public=eq.true&date=gte.${TERM_START}`,
     dateCol: 'date',
     limit: 25,
     adapter: eoRowToEntry,
@@ -162,7 +169,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   pardons: {
     table: 'pardons',
     select: 'id,recipient_name,nickname,pardon_date,corruption_level',
-    base: 'is_public=eq.true',
+    base: `is_public=eq.true&pardon_date=gte.${TERM_START}`,
     dateCol: 'pardon_date',
     limit: 25,
     adapter: pardonRowToEntry,
