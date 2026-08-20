@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/hooks/useTheme';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { subscribeNewsletter, isValidEmail } from '@/lib/newsletter';
 
 export function Footer() {
   const { theme, headType: type } = useTheme();
+  // With the Tracker as the homepage, the story feed lives at /news
+  const trackerHome = useFeatureFlag('rap_sheet');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -66,7 +69,7 @@ export function Footer() {
         </div>
         {([
           ['Tracking', [
-            { label: 'Stories', href: '/' },
+            trackerHome ? { label: 'News', href: '/news' } : { label: 'Stories', href: '/' },
             { label: 'Executive Orders', href: '/eos' },
             { label: 'SCOTUS', href: '/scotus' },
             { label: 'Pardons', href: '/pardons' },

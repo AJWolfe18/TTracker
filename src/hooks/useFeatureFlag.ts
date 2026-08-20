@@ -38,6 +38,22 @@ async function loadFlags(): Promise<Record<string, boolean>> {
   return pending;
 }
 
+/**
+ * True once the flag file has loaded (or failed and defaulted). Lets routing
+ * decisions wait instead of flashing the flag-off surface for a frame.
+ */
+export function useFlagsReady(): boolean {
+  const [ready, setReady] = useState(() => cache !== null);
+
+  useEffect(() => {
+    let alive = true;
+    loadFlags().then(() => { if (alive) setReady(true); });
+    return () => { alive = false; };
+  }, []);
+
+  return ready;
+}
+
 /** Returns false until flags load, then the flag's value. */
 export function useFeatureFlag(name: string): boolean {
   const [enabled, setEnabled] = useState(() => cache?.[name] === true);

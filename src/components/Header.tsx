@@ -1,6 +1,7 @@
 import { useTheme } from '@/hooks/useTheme';
 import { Link } from 'wouter';
 import { isTest } from '@/lib/supabase';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 
 interface HeaderProps {
   current?: string;
@@ -12,6 +13,8 @@ interface HeaderProps {
 export function Header({ current, searchPlaceholder, searchQuery, onSearchChange }: HeaderProps) {
   const { theme, headType: type, mode, toggleMode } = useTheme();
   const isLight = mode === 'light';
+  // With the Tracker as the homepage, the story feed lives on its own tab
+  const trackerHome = useFeatureFlag('rap_sheet');
 
   function handleSubscribeClick() {
     const el = document.getElementById('tt-newsletter-input');
@@ -52,6 +55,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
         <nav aria-label="Main navigation" style={{ display: 'flex', gap: 18, fontFamily: type.mono, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }} className="tt-nav">
           {[
             { label: 'Home', href: '/' },
+            ...(trackerHome ? [{ label: 'News', href: '/news' }] : []),
             { label: 'Executive Orders', href: '/eos' },
             { label: 'Pardons', href: '/pardons' },
             { label: 'Supreme Court', href: '/scotus' },
@@ -133,6 +137,7 @@ export function Header({ current, searchPlaceholder, searchQuery, onSearchChange
       }}>
         {[
           { label: 'Home', href: '/' },
+          ...(trackerHome ? [{ label: 'News', href: '/news' }] : []),
           { label: 'EOs', href: '/eos' },
           { label: 'Pardons', href: '/pardons' },
           { label: 'SCOTUS', href: '/scotus' },
