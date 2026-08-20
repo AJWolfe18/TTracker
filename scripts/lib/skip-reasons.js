@@ -29,6 +29,8 @@ export const PIPELINES = Object.freeze({
   ENTITY_AGGREGATION: 'entity_aggregation', // scripts/aggregate-story-entities.js — no entities, empty articles
   STORY_ENRICHMENT:   'story_enrichment',   // scripts/enrichment/enrich-stories-inline.js — no-articles failure
   PARDONS_INGEST:     'pardons_ingest',     // scripts/ingest/doj-pardons-scraper.js — staleness tripwire, header parse drift
+  FRONT_ASSIGNMENT:   'front_assignment',   // fronts assignment agent (ADO-546/Wave 2) — declined to assign a story to a front
+  FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
 });
 
 export const REASONS = Object.freeze({
