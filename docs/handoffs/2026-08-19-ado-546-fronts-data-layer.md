@@ -62,8 +62,37 @@ security advisor on TEST — expect no new findings.
 
 ## Next session
 
-- Add events/event_updates/story_event/v_event_stats to `docs/database/database-schema.md`
-  (111 is applied on TEST now, so the doc can describe live state).
-- Then ADO-547 (admin UI for fronts) unblocks; A1/A2 above may generate follow-ups.
-- Working-tree note: unrelated uncommitted edits to `index.html` + `src/styles/base.css`
-  existed before this session and were left untouched on `test`.
+- ~~Add the new relations to database-schema.md~~ — DONE later this session.
+- ADO-547 (admin fronts UI) is next; its card was rewritten as a full product card
+  (KPIs, scope, two added gaps: manual update-writing + tracker_pin/migration 112).
+- Working-tree note: unrelated uncommitted edits (`. claude/test-only-paths.md`,
+  `supabase/.temp/cli-latest`, untracked `.agents/`, `scripts/maintenance/`) pre-existed
+  and were left untouched on `test`.
+
+## Session continuation (same night, Josh interactive)
+
+The session kept going after the 546 build. In order:
+
+1. **Codex P1/P2 on PR #119** — both accepted; fixed as guarded ALTERs (PART H of 111):
+   same-front composite FK (additive, keeps single-column FK for ON DELETE SET NULL —
+   avoids PG15-only syntax) + state/timestamp CHECKs (published⇒published_at,
+   resolved⇒resolved_at, decided⇔decided_at+decided_by). Josh re-applied on TEST;
+   every constraint verified live with real rejected writes. P3 (stale handoff) fixed.
+2. **PR #119 squash-merged** → ADO-546 **Ready for Prod** (all 6 ACs verified).
+3. **PR #120** — site-wide month-day-year dates ("Aug 19, 2026"), Josh's live-review ask:
+   fmtDate, fmtMetaDate, Footer, Scorecard + test expectations. Merged. Codex skipped
+   per trivial-change rule.
+4. **ADO-550 pardons fix deployed to PROD** — PR #121 cherry-pick (aaf43a6 → main,
+   AI review pass), Track Pardons run triggered: **25 inserted, 0 errors**, backlog
+   recovered, tripwire live. **Closed.** Watch: 2 Perplexity validation errors
+   (receipts_timeline date null) — card it if the enrichment agent doesn't clear them.
+   New pardons render grey until the daily agent enriches (corruption_level null).
+5. **ADO cards 543-549 + 552 reformatted** — reader-standpoint titles, What/Where/
+   Technical descriptions, month-day-year dates. 547 upgraded to a full product card
+   (problem, KPIs from PRD §4.2, out-of-scope, and two scope gaps folded in: manual
+   update-writing for Wave 1 + tracker_pin overrides with a future migration 112).
+6. **544 + 545 → Ready for Prod** (Josh's live check passed). With 546, the whole
+   Tracker stack awaits one PROD deploy: cherry-picks to main + Josh applies 111 in
+   the PROD SQL Editor + rap_sheet flag flip after verify. Josh hasn't pulled the
+   trigger yet.
+7. **database-schema.md** gained the four fronts relations (this docs PR).
