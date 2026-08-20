@@ -268,6 +268,74 @@ COMMENT ON VIEW public.v_event_stats IS
 GRANT SELECT ON public.v_event_stats TO anon;
 GRANT SELECT ON public.v_event_stats TO service_role;
 
+-- ============================================================================
+-- PART H: cross-field integrity (Codex review P1/P2 on PR #119)
+-- Guarded ALTERs so this section also converges a database that applied an
+-- earlier revision of this file (TEST). No %ROWTYPE, no SELECT INTO.
+-- ============================================================================
+
+DO $$
+BEGIN
+  -- P2: a published front must carry its publish timestamp.
+  -- (Unpublishing may keep the old published_at — history is allowed.)
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'events_published_at_check'
+                   AND conrelid = 'public.events'::regclass) THEN
+    ALTER TABLE public.events
+      ADD CONSTRAINT events_published_at_check
+      CHECK (publish_state <> 'published' OR published_at IS NOT NULL);
+  END IF;
+
+  -- Same class as P2: resolved fronts must carry resolved_at (PRD §6.1
+  -- "set when lifecycle → resolved").
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'events_resolved_at_check'
+                   AND conrelid = 'public.events'::regclass) THEN
+    ALTER TABLE public.events
+      ADD CONSTRAINT events_resolved_at_check
+      CHECK (lifecycle <> 'resolved' OR resolved_at IS NOT NULL);
+  END IF;
+
+  -- P2: decision fields travel with decided states — pending rows carry no
+  -- decision provenance; approved/rejected rows must carry both (queue-latency
+  -- metric decided_at - created_at, §7.3, depends on this).
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'event_updates_decided_check'
+                   AND conrelid = 'public.event_updates'::regclass) THEN
+    ALTER TABLE public.event_updates
+      ADD CONSTRAINT event_updates_decided_check
+      CHECK (
+        (approval_state = 'pending'  AND decided_at IS NULL     AND decided_by IS NULL)
+        OR
+        (approval_state <> 'pending' AND decided_at IS NOT NULL AND decided_by IS NOT NULL)
+      );
+  END IF;
+
+  -- P1 support: unique target so a composite FK can reference (id, event_id).
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'event_updates_id_event_unique'
+                   AND conrelid = 'public.event_updates'::regclass) THEN
+    ALTER TABLE public.event_updates
+      ADD CONSTRAINT event_updates_id_event_unique UNIQUE (id, event_id);
+  END IF;
+
+  -- P1: a story's event_update_id must point at an update of the SAME front.
+  -- This composite FK exists purely for that consistency check; the original
+  -- single-column FK keeps the ON DELETE SET NULL behavior (a composite
+  -- ON DELETE SET NULL (col) form would need PG15-only syntax). On update
+  -- deletion the single-column FK nulls event_update_id first, which satisfies
+  -- this FK (MATCH SIMPLE). Reassigning a story to another front without
+  -- clearing its update link is now rejected — by design.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                 WHERE conname = 'story_event_update_same_event_fkey'
+                   AND conrelid = 'public.story_event'::regclass) THEN
+    ALTER TABLE public.story_event
+      ADD CONSTRAINT story_event_update_same_event_fkey
+      FOREIGN KEY (event_update_id, event_id)
+      REFERENCES public.event_updates (id, event_id);
+  END IF;
+END $$;
+
 -- Refresh PostgREST's schema cache so the new tables/view are immediately
 -- queryable via the REST API (the anon-read verification below depends on it).
 NOTIFY pgrst, 'reload schema';
