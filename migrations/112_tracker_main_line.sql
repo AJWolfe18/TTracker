@@ -25,9 +25,11 @@
 -- DEPENDENCIES: migration 111 (events/story_event), set_updated_at() (migration 001).
 --
 -- SECURITY: migration 046 auto-revokes anon on new tables — explicit GRANTs below.
--- Pins are public curation data by definition (a force_show row renders publicly),
--- so anon gets a plain SELECT policy. Writes stay service_role-only (no anon or
--- authenticated write policies). The view is security_invoker so anon reads
+-- Pin EXISTENCE is public curation data by definition (a force_show row renders
+-- publicly), so anon gets a SELECT policy — but only on source/entity_id/pin
+-- (column-level grant): the note column is an admin breadcrumb and stays
+-- private. Writes stay service_role-only (no anon or authenticated write
+-- policies). The view is security_invoker so anon reads
 -- through it inherit the RLS publish gates from migration 111 — an UNPUBLISHED
 -- front's members still count as loose ends for anon, which is the intended
 -- behavior (a draft front must not change the public main line).
@@ -70,8 +72,13 @@ CREATE POLICY "tracker_pin_anon_select" ON public.tracker_pin
   FOR SELECT TO anon
   USING (true);
 
-GRANT SELECT ON public.tracker_pin TO anon;
-GRANT ALL    ON public.tracker_pin TO service_role;
+-- Column-level anon grant: the frontend needs source/entity_id/pin only.
+-- `note` is an ADMIN breadcrumb (why pinned) and must not be publicly
+-- readable (AI review blocker on PR #127). REVOKE first so a re-run (or a DB
+-- that applied the earlier table-wide grant) converges to columns-only.
+REVOKE SELECT ON public.tracker_pin FROM anon;
+GRANT SELECT (source, entity_id, pin) ON public.tracker_pin TO anon;
+GRANT ALL ON public.tracker_pin TO service_role;
 
 -- ============================================================================
 -- PART B: v_tracker_stories — spine read path with server-computed main_line

@@ -344,14 +344,14 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | note | TEXT | Optional admin breadcrumb (why pinned) |
 | created_at / updated_at | TIMESTAMPTZ | updated_at via `set_updated_at()` trigger |
 
-**RLS:** anon SELECT-all policy (pins are public curation data — a force_shown row renders publicly). Writes service_role only. ADO-547 ships the admin editor.
+**RLS:** anon SELECT policy with a **column-level grant on `source`, `entity_id`, `pin` only** — pin existence is public curation data (a force_shown row renders publicly), but `note` is an admin breadcrumb and is NOT anon-readable. Writes service_role only. ADO-547 ships the admin editor.
 
 ### `v_tracker_stories` (view)
 **Purpose:** The Tracker spine's stories read path with the server-computed `main_line` rule (ADO-554, PRD §12 anchor principle)
 
 `id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, front_opening, tracker_pin, alarm_eff, main_line`
 
-**The rule:** `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff >= 4`; front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND above the front's prior peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
+**The rule:** `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff >= 4`; front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
 
 `security_invoker = true` — for anon, unpublished fronts' members count as loose ends (RLS hides the membership), by design. EO/SCOTUS/pardon rows have no front membership; the frontend applies their loose-end rule + pins client-side from `tracker_pin`.
 
