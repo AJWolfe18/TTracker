@@ -221,8 +221,10 @@ const quoted = (v: string | number) => `"${String(v).replace(/"/g, '')}"`;
  * with `:`/`+` survive, and the whole logic tree is URL-encoded.
  *
  * In the 'main' view (ADO-554) stories filter on the server-computed
- * main_line column; the other sources keep the alarm-4+ predicate (they are
- * all loose ends until fronts can contain them) with pins applied client-side.
+ * main_line column; the other sources get the loose-end bar — alarm 5 only
+ * (rule v1.1: they are all loose ends until fronts can contain them, and the
+ * 4+ bar drowned the line in severity-saturated rows) — with pins applied
+ * client-side.
  */
 export function buildSourcePath(
   source: TimelineSource,
@@ -232,7 +234,7 @@ export function buildSourcePath(
   const s = SPECS[source];
   const conditions: string[] = [];
   const alarmFrag = view === 'main'
-    ? (source === 'stories' ? 'main_line.is.true' : s.alarm(4))
+    ? (source === 'stories' ? 'main_line.is.true' : s.alarm(5))
     : s.alarm(view);
   if (alarmFrag) conditions.push(alarmFrag);
   if (cursor) {
@@ -365,7 +367,7 @@ export async function fetchTrackerPage(
   );
 
   // First page of the main line: surface force_show pins on non-stories
-  // sources. Only rows below the alarm-4 stream are merged — anything at 4+
+  // sources. Only rows below the alarm-5 stream are merged — anything at 5
   // arrives (or already arrived) through normal paging, so injecting it again
   // would duplicate the entry.
   if (isMain && state === null && pins?.size) {
@@ -381,7 +383,7 @@ export async function fetchTrackerPage(
           );
           if (!res.ok) return [];
           const rows: Raw[] = await res.json();
-          return rows.map(spec.adapter).filter(e => e.alarm < 4);
+          return rows.map(spec.adapter).filter(e => e.alarm < 5);
         } catch (err) {
           if ((err as Error).name === 'AbortError') throw err;
           return []; // pins are additive — a failed fetch must not break the page

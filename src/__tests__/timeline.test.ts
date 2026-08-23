@@ -147,11 +147,11 @@ describe('buildSourcePath', () => {
     expect(p).not.toContain('status=');
   });
 
-  it("main view: stories filter on the server-computed main_line, others keep alarm 4+", () => {
+  it("main view: stories filter on the server-computed main_line, others get the alarm-5 loose-end bar", () => {
     expect(dec(buildSourcePath('stories', 'main', null))).toContain('and=(main_line.is.true)');
-    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.4)');
-    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.4');
-    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.4');
+    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.5)');
+    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.5');
+    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.5');
   });
 
   it('floors every source at inauguration day - the record is term 2 only', () => {
@@ -375,21 +375,21 @@ describe('tracker pins (ADO-554)', () => {
           ok: true,
           json: async () => [
             { id: 'eo_bad', title: 'Hidden order', date: '2026-06-01', alarm_level: 5 },
-            { id: 'eo_kept', title: 'Visible order', date: '2026-05-01', alarm_level: 4 },
+            { id: 'eo_kept', title: 'Visible order', date: '2026-05-01', alarm_level: 5 },
           ],
         };
       }
       if (input.includes('/pardons?') && input.includes('id=in.')) {
-        // the pinned pardon is ALSO in the 4+ stream: must not be injected twice
+        // the pinned pardon is ALSO in the alarm-5 stream: must not be injected twice
         return {
           ok: true,
-          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 5 }],
         };
       }
       if (input.includes('/pardons?')) {
         return {
           ok: true,
-          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 5 }],
         };
       }
       return { ok: true, json: async () => [] }; // scotus
@@ -428,7 +428,7 @@ describe('tracker pins (ADO-554)', () => {
     expect(ids).not.toContain('eos:eo_bad');            // force_hide dropped
     expect(ids).toContain('eos:eo_kept');               // untouched stream row
     expect(ids).toContain('eos:eo_low');                // alarm 2, injected by pin
-    // pinned pardon at alarm 4 arrives via the stream — exactly once
+    // pinned pardon at alarm 5 arrives via the stream — exactly once
     expect(ids.filter(id => id === 'pardons:77')).toHaveLength(1);
   });
 
