@@ -25,6 +25,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-08-22-ado-553-pardons-legacy-reset.sql` - one-time PROD reset of the
   25 backfilled pardons that legacy GPT enriched (null-fields-first so the Claude agent re-enriches).
   Josh runs it manually in the PROD SQL Editor; skip when cherry-picking ADO-553 to main.
+- `scripts/maintenance/2026-08-23-ado-553-v1-rows-reset.sql` - one-time PROD reset of pardons
+  119-123 (re-enriched under the stale v1.0 prompt before PR #126 synced v1.1 to main).
+  Josh runs it manually in the PROD SQL Editor AFTER #126 merges; never deployed.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
