@@ -54,3 +54,15 @@ main_line(entry) =
 - Josh eyeballs the TEST site (AC7) → then Ready for Prod.
 - ADO-547 (admin UI incl. pin editor) is the next build; 548 front pages give the front tags their navigation.
 - ADO-553 cohort verify is a separate queue item (6 pardons in needs_review — Josh works those in admin).
+
+---
+
+## Addendum — live-review round (same evening)
+
+Josh reviewed TEST live; three outcomes:
+
+1. **Rule v1.1 — loose-end bar raised to alarm 5** (fronts keep opening / alarm-5 / new-peak-at-4+). WHY: measured severity saturation — PROD rates 67% of term-2 stories alarm 4+ (9,329/13,924; 1,376 at 5), TEST 61% — so the 4+ bar read as "everything". DB side applied on TEST (main line 414 → 209 = 39 front rows + 170 a5 loose ends); frontend half is **PR #128 — OPEN, Josh merges from his desktop** after the Codex thread. Codex P1 (pin-vs-frontier) answered with a full-pipeline test + kept-by-design rationale (pins surface at their date; pin-to-top = ADO-552); P2 comment fixed. d31f16c.
+2. **52 more stories bulk-filed** into the fronts via keyword sweep (79 total) so front tags read across the line.
+3. **New cards:** ADO-555 front enrichment, ADO-556 stories severity calibration (owns the "bar back to 4+?" question), ADO-557 fronts automation planning session (Josh: "covered automatically going forward"). Josh confirmed ADO-548 (front pages / expand-a-front) was never tonight's scope — it is the next reader-facing build.
+
+Branch hygiene: all merged deploy/feature branches swept locally and on origin. Kept: `ado-551-disposition-normalize` (unmerged fix) and `origin/claude/research-political-rss-feeds-uwR6a` (no PR — Josh to decide).
