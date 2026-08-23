@@ -9,6 +9,8 @@
 
 ## Phase 0: PostHog account setup (Josh, ~15 min, no code)
 
+**Status August 23, 2026: DONE except the key handoff** — US cloud project 572949 created; no payment method attached (= billing-cap equivalent; if a card is ever added, set a $0 limit that day); replay sampling 10%; input masking left at PostHog's mask-everything default (do NOT turn off — newsletter email + feedback box would show in recordings); repo-watch/GitHub integration declined. **Remaining: paste the `phc_` key into ADO-559.** Original steps kept below for re-setup reference:
+
 1. Create PostHog Cloud US account + one project ("TrumpyTracker PROD").
 2. **Set the project billing limit to $0** (Settings → Billing) — hard requirement before any script ships.
 3. Enable session replay: sample rate 10%, "mask all text inputs" ON.
@@ -91,7 +93,7 @@ Rules:
 1. Cherry-pick to a deployment branch → PR to `main` per `docs/guides/prod-deployment-checklist.md`. Deploy `feedback-submit` to PROD ref `osjbulmltfpcoldydexg`; apply migration 113 on PROD. No new secrets (feedback v1 has no Turnstile).
 2. Post-deploy verify on trumpytracker.com (analytics only work here): autocapture events arriving, each named event via real clicks, replay recording sampled + masked, GA4 still receiving.
 3. Flip the `feedback` key to `true` in `flags-prod.json` after a live test submission (the JSON key is `feedback`, NOT `ff_feedback` — see Phase 3 step 3).
-4. Confirm the $0 spend cap one more time in PostHog settings.
+4. Confirm PostHog still can't bill (no payment method, or $0 limit if a card was added) one more time in settings.
 5. Update `docs/ARCHITECTURE.md` current-state tables (new vendor, new edge function, new flag, new secret consumers) — same-session rule.
 
 ---
