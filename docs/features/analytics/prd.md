@@ -3,7 +3,17 @@
 **Status:** Draft for review
 **Owner:** Josh
 **Date:** August 23, 2026
-**ADO:** TBD (card on approval)
+**ADO:** Epic 254 → Bug 558 (GA4 gate, ships first) + Stories 559-563 (Phases 1-5)
+
+---
+
+## 0. Open Decisions (Josh — answer before/while the stories run)
+
+- [ ] **Phase 0, BLOCKS ADO-559:** create the PostHog Cloud US account, set the project billing limit to **$0**, enable session replay (10% sample, mask all inputs), and paste the `phc_` project key into ADO-559 as a comment.
+- [ ] **ADO-562:** who builds the 3 PostHog dashboards — Josh (~15 min in the PostHog UI) or a Claude session driving Chrome?
+- [ ] **Old cards:** close ADO-258 (Frontend Analytics Events — superseded by ADO-560)? Keep or fold ADO-259 (Pre-Commerce + Search Intelligence)?
+- [x] ~~Feedback scope~~ — decided August 23, 2026: simple message-only popup, React app only, no email/category/Turnstile (§5).
+- [x] ~~Perf metrics~~ — decided August 23, 2026: out of v1, first fast-follow (§9).
 
 ---
 
@@ -66,19 +76,21 @@ Autocapture covers generic clicks. These named events add the semantics autocapt
 | `search` | Search committed | `tab`, `query_length` (never the query text) |
 | `pagination` | Page changed | `tab`, `page` |
 | `newsletter_view` / `newsletter_submit` / `newsletter_success` / `newsletter_error` | Funnel steps | `surface`, `error_category` (error only) |
-| `feedback_open` / `feedback_submit` | Feedback modal opened / submitted | `category`, `page_path` |
+| `feedback_open` / `feedback_submit` | Feedback popup opened / submitted | `page_path` |
 | `correction_click` | Corrections mailto clicked | `item_type` |
 
-**Property hygiene:** no PII, no free-text user input, no email addresses in any event property. Search sends length only. To be boringly explicit about feedback: `feedback_submit` carries only `category` and `page_path` — the feedback **message and email go to Supabase only and are never sent to PostHog or GA4**.
+**Property hygiene:** no PII, no free-text user input, no email addresses in any event property. Search sends length only. To be boringly explicit about feedback: `feedback_submit` carries only `page_path` — the feedback **message goes to Supabase only and is never sent to PostHog or GA4**.
 
 ## 5. Feedback Button
 
-- Floating button (bottom corner) on the React app and on legacy pages **that remain linked/served in production** (the live-surface list confirmed in plan Phase 1 — parked/dead files are out of scope).
-- Modal: category select (`bug`, `content`, `idea`, `other`), message (required, ≤2000 chars), optional email. The email field is labeled "optional — only if you want a reply"; submitting one makes that submission non-anonymous by design (see §7).
-- Submits to new `feedback-submit` edge function → `feedback` table.
-- Abuse protection: reuse the existing `rate_limits` pattern and Turnstile integration from `newsletter-signup` (already proven on this site).
-- Each submit also fires `feedback_submit` so volume is visible in PostHog without querying the DB.
+**Deliberately minimal (Josh, August 23, 2026): "a simple popup where they can say there's an issue with the site." Nothing more in v1.**
+
+- Floating button (bottom corner) on the **React app only**.
+- Popup: one text box (required, ≤2000 chars, placeholder "What's wrong / what's missing? Don't include personal info.") + submit. No category picker, no email field.
+- Submits to new `feedback-submit` edge function → `feedback` table (message, page_path, created_at). Fires `feedback_submit` so volume shows in PostHog without querying the DB.
+- Abuse protection: hidden honeypot field + the existing `rate_limits` pattern. **No Turnstile in v1** — add it only if junk actually shows up in the table.
 - Reading feedback: Supabase dashboard for v1.
+- Explicitly deferred: email/reply loop, categories, Turnstile, legacy-page button, admin viewer.
 
 ## 6. Dashboards & KPIs
 
@@ -86,7 +98,7 @@ Three PostHog dashboards, built as part of v1 (not left as an exercise):
 
 1. **Content Engagement** — card open rate (detail views ÷ feed sessions), source click rate (source clicks ÷ detail views), cards per session, engagement by tab and by alarm level. *This dashboard answers the summary-length question.*
 2. **Newsletter Funnel** — view → submit → success conversion, error rate by category.
-3. **Feedback** — submissions over time, by category, by page.
+3. **Feedback** — submissions over time and by page.
 
 **North-star check (2 weeks post-launch):** we can state, with real numbers, (a) what % of feed sessions open at least one detail, (b) what % of detail views click a source, (c) newsletter conversion rate.
 
@@ -94,7 +106,7 @@ Three PostHog dashboards, built as part of v1 (not left as an exercise):
 
 - Session replay: 10% sample, **all text inputs masked**, no logged-in identity exists on the site.
 - IP handling: PostHog default GeoIP then discard; GA4 already anonymizes.
-- A short analytics disclosure paragraph added to the About page: usage analytics are anonymous; feedback is anonymous **unless you include an email**, in which case it's stored only to reply to you, never shared, and deleted with the feedback row (retention: feedback rows kept ≤12 months).
+- A short analytics disclosure paragraph added to the About page: usage analytics are anonymous, and feedback is anonymous too — we collect no contact info (the popup tells people not to include personal info in the message).
 - No consent banner in v1 (matches current GA4 posture; US-audience site, no accounts, no ads). Revisit only if audience or regulation changes.
 
 ## 8. Risks
@@ -104,7 +116,7 @@ Three PostHog dashboards, built as part of v1 (not left as an exercise):
 | Traffic spike exceeds free tier | $0 billing cap — PostHog stops collecting, never bills |
 | PostHog script (~60KB) slows page | Load async/deferred; measure before/after via Lighthouse manually (perf metrics are out of scope v1) |
 | Ad blockers drop PostHog events | Accepted for v1; numbers are directional. (Reverse proxy via Netlify is a known fix, deferred) |
-| Feedback spam | Turnstile + rate limits, same as newsletter |
+| Feedback spam | Honeypot + `rate_limits` pattern; junk rows are cheap and harmless (no email sending, no display). Add Turnstile only if volume demands it |
 | Instrumentation only verifiable on PROD | Feedback button behind the `feedback` feature flag (URL override `?ff_feedback=true`); events are additive and inert if PostHog key absent |
 
 ## 9. Known Gaps (documented, deliberately not in v1)
@@ -120,7 +132,7 @@ Three PostHog dashboards, built as part of v1 (not left as an exercise):
 - [ ] PostHog live on PROD, autocapture + replay (10%, masked) verified with real traffic.
 - [ ] All named events in §4 verified firing on PROD with correct properties.
 - [ ] GA4 continues receiving legacy events + new dual-fired KPI events (allowlist updated). Custom dimension registration for new properties is NOT required — GA4 is traffic reporting + raw-event backup; PostHog is the analysis layer.
-- [ ] Feedback button live on the React app + live-surface legacy pages behind the `feedback` flag (flag files store unprefixed keys; `ff_` is the URL-override prefix only); a test submission lands in the `feedback` table and fires the event.
+- [ ] Feedback popup live on the React app behind the `feedback` flag (flag files store unprefixed keys; `ff_` is the URL-override prefix only); a test submission lands in the `feedback` table and fires the event; honeypot + rate limit verified.
 - [ ] Follow-up ADO task created at deploy time, due 2 weeks post-launch, to run the §6 north-star check against the dashboards — the loop closes on a card, not on memory.
 - [ ] Newsletter funnel visible end to end in PostHog.
 - [ ] Three dashboards built and linked from the ADO card.
