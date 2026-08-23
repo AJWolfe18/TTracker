@@ -7,6 +7,7 @@ import { alarmPalette } from '@/tokens';
 import { fmtDate } from '@/lib/date-utils';
 import {
   fetchTrackerPage,
+  fetchTrackerPins,
   fetchTrackerTally,
   coverageFrontier,
   visibleEntries,
@@ -15,25 +16,28 @@ import {
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
-  type AlarmMin,
   type TimelineEntry,
   type TimelineSource,
+  type TrackerPins,
   type TrackerState,
   type TrackerTally,
+  type TrackerView,
 } from '@/lib/timeline';
 
 // The Tracker (ADO-545): the homepage rap sheet as a vertical center-spine
 // timeline, replacing the W1.1 horizontal strip. The bar is the timeline;
 // entries alternate left/right, newest first, with month markers on the bar.
-// Type and dot size follow alarm level. Main line = alarm filter (default 4+);
-// "All" recovers the complete record. Below 760px it collapses to a single
-// column with the spine on the left. Approved design: mockup rev 6.
+// Type and dot size follow alarm level. Default view = the curated main line
+// (ADO-554: PRD §12 anchor rule + tracker_pin overrides, computed server-side
+// for stories, pins client-side for the rest); "All" recovers the complete
+// record. Below 760px it collapses to a single column with the spine on the
+// left. Approved design: mockup rev 6.
 
-const ALARM_STOPS: { label: string; min: AlarmMin }[] = [
-  { label: 'All', min: 0 },
-  { label: 'Alarm 3+', min: 3 },
-  { label: 'Alarm 4+', min: 4 },
-  { label: 'Only 5', min: 5 },
+const VIEW_STOPS: { label: string; view: TrackerView }[] = [
+  { label: 'Main line', view: 'main' },
+  { label: 'All', view: 0 },
+  { label: 'Alarm 3+', view: 3 },
+  { label: 'Only 5', view: 5 },
 ];
 
 const INAUGURATION = new Date(`${TERM_START}T00:00:00`);
@@ -74,35 +78,41 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [minAlarm, setMinAlarm] = useState<AlarmMin>(4);
+  const [view, setView] = useState<TrackerView>('main');
   const [off, setOff] = useState<Set<TimelineSource>>(new Set());
   const [query, setQuery] = useState('');
   const [tally, setTally] = useState<TrackerTally | null>(null);
 
   const acRef = useRef<AbortController | null>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
+  // Pins are fetched once per mount (tiny table) and reused across view
+  // changes and paging; a failed fetch degrades to "no pins" for the session.
+  const pinsRef = useRef<TrackerPins | null>(null);
 
-  // First page — refetched whenever the alarm floor changes, because the
-  // server-side alarm predicate is baked into every source's cursor stream.
-  // The current list stays on screen until the new one arrives: clearing it
-  // collapses the page height and scroll-anchoring yanks the viewport around.
+  // First page — refetched whenever the view changes, because the server-side
+  // predicate (main_line or alarm floor) is baked into every source's cursor
+  // stream. The current list stays on screen until the new one arrives:
+  // clearing it collapses the page height and scroll-anchoring yanks the
+  // viewport around.
   useEffect(() => {
     if (!enabled) return;
     const ac = new AbortController();
     acRef.current = ac;
     setLoadingMore(false);
     setRefreshing(true);
-    fetchTrackerPage(minAlarm, null, ac.signal)
-      .then(({ entries: page, state }) => {
-        if (ac.signal.aborted) return;
-        setEntries(page);
-        setPageState(state);
-        setLoaded(true);
-        setRefreshing(false);
-      })
-      .catch(() => { /* the Tracker is additive — never break the homepage */ });
+    (async () => {
+      const pins = view === 'main'
+        ? (pinsRef.current ??= await fetchTrackerPins(ac.signal))
+        : undefined;
+      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins);
+      if (ac.signal.aborted) return;
+      setEntries(page);
+      setPageState(state);
+      setLoaded(true);
+      setRefreshing(false);
+    })().catch(() => { /* the Tracker is additive — never break the homepage */ });
     return () => ac.abort();
-  }, [enabled, minAlarm]);
+  }, [enabled, view]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -114,6 +124,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   }, [enabled]);
 
   const frontier = pageState ? coverageFrontier(pageState) : null;
+  // In the main-line view the server (plus pins) already decided inclusion —
+  // the client alarm floor must be 0 or it would drop low-alarm front
+  // openings and force_shown entries the rule deliberately included.
+  const minAlarm = view === 'main' ? 0 : view;
   const visible = useMemo(
     () => visibleEntries(entries, { frontier, min: minAlarm, off, query }),
     [entries, frontier, minAlarm, off, query],
@@ -132,7 +146,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     if (!pageState || loadingMore || refreshing || allExhausted) return;
     const ac = acRef.current;
     setLoadingMore(true);
-    fetchTrackerPage(minAlarm, pageState, ac?.signal)
+    fetchTrackerPage(view, pageState, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined)
       .then(({ entries: more, state }) => {
         if (ac?.signal.aborted) return;
         setEntries(prev => mergeEntries([prev, more]));
@@ -143,11 +157,11 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       .finally(() => setLoadingMore(false));
   };
 
-  // Changing the alarm floor swaps in a list of a different length; if the
-  // reader is scrolled deep, snap back to the controls so the change is
-  // legible instead of the browser clamping scroll somewhere arbitrary.
-  const changeAlarm = (min: AlarmMin) => {
-    setMinAlarm(min);
+  // Changing the view swaps in a list of a different length; if the reader is
+  // scrolled deep, snap back to the controls so the change is legible instead
+  // of the browser clamping scroll somewhere arbitrary.
+  const changeView = (v: TrackerView) => {
+    setView(v);
     const el = controlsRef.current;
     if (el && el.getBoundingClientRect().top < 0) {
       el.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior });
@@ -179,6 +193,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const tallyTiles: { n: string; label: string; bad?: boolean }[] = [
     { n: String(dayCount), label: 'Days into term 2' },
   ];
+  if (tally?.openFronts != null && tally.openFronts > 0) {
+    tallyTiles.push({ n: String(tally.openFronts), label: 'Open fronts' });
+  }
   if (tally?.developments != null) {
     tallyTiles.push({ n: tally.developments.toLocaleString('en-US'), label: 'Developments logged' });
   }
@@ -188,15 +205,15 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
 
   // ── Controls ──
   const seg = (
-    <span role="group" aria-label="Alarm level filter" style={{ display: 'inline-flex', border: `1px solid ${theme.line}` }}>
-      {ALARM_STOPS.map(({ label, min }) => {
-        const on = minAlarm === min;
+    <span role="group" aria-label="Timeline view filter" style={{ display: 'inline-flex', border: `1px solid ${theme.line}` }}>
+      {VIEW_STOPS.map(({ label, view: v }) => {
+        const on = view === v;
         return (
           <button
-            key={min}
+            key={String(v)}
             type="button"
             aria-pressed={on}
-            onClick={() => changeAlarm(min)}
+            onClick={() => changeView(v)}
             className="tt-ts-seg"
             style={{
               ...mono, fontSize: 10, padding: '8px 14px', background: on ? theme.bg2 : 'none',
@@ -326,12 +343,22 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           display: 'flex', gap: 8, marginTop: 7, flexWrap: 'wrap', alignItems: 'center',
           justifyContent: narrow || right ? 'flex-start' : 'flex-end',
         }}>
-          <span style={{
-            ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim,
-            border: `1px solid ${theme.line}`, padding: '2px 8px', whiteSpace: 'nowrap',
-          }}>
-            {e.source === 'stories' ? 'Loose end' : SOURCE_LABELS[e.source]}
-          </span>
+          {e.front ? (
+            // Front tag — navigation to the front's own page arrives with ADO-548
+            <span style={{
+              ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.ink, fontWeight: 600,
+              border: `1px solid ${theme.dim}`, padding: '2px 8px', whiteSpace: 'nowrap',
+            }}>
+              {e.front.name}
+            </span>
+          ) : (
+            <span style={{
+              ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim,
+              border: `1px solid ${theme.line}`, padding: '2px 8px', whiteSpace: 'nowrap',
+            }}>
+              {e.source === 'stories' ? 'Loose end' : SOURCE_LABELS[e.source]}
+            </span>
+          )}
         </div>
       </div>,
     );
@@ -342,7 +369,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     : refreshing
       ? 'Updating…'
       : `${visible.length} development${visible.length === 1 ? '' : 's'}`
-        + (minAlarm > 0 ? ` at alarm ${minAlarm}+` : ' · the complete record');
+        + (view === 'main'
+          ? ' · the main line'
+          : view > 0 ? ` at alarm ${view}+` : ' · the complete record');
 
   return (
     <section aria-label="The Tracker timeline" style={{ padding: '8px 0 24px', borderBottom: `1px solid ${theme.line}` }}>
@@ -421,7 +450,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
               {query
                 ? 'Nothing on the record matches that search at this filter.'
-                : 'Nothing at this alarm level yet · try "All" for the complete record.'}
+                : view === 'main'
+                  ? 'Nothing on the main line yet · try "All" for the complete record.'
+                  : 'Nothing at this alarm level yet · try "All" for the complete record.'}
             </div>
           )}
         </div>
