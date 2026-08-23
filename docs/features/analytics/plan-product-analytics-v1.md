@@ -83,6 +83,7 @@ Rules:
 
 1. **React funnel first:** instrument `Footer.tsx`/`newsletter.ts` with `newsletter_view` (form rendered), `newsletter_submit`, `newsletter_success`, `newsletter_error` through the `analytics.ts` wrapper. Then mirror the same four steps in the legacy `shared.js` helpers (which already have submit/success/error — add `newsletter_view`, staying on `shared.js`'s own `trackEvent`/allowlist path with the PostHog mirror from Phase 1; legacy pages never import the Vite-bundled wrapper).
 2. Build the three dashboards in PostHog (PRD §6) and paste their URLs into the ADO card.
+   - Also configure the **feedback notification**: a PostHog alert on the `feedback_submit` event that emails Josh daily when count > 0 (digest-style, not per-event). Verify the alert email arrives (trigger a TEST-flag submission on PROD post-deploy, or use PostHog's test-send).
 3. About page: analytics disclosure paragraph (PRD §7).
 
 ## Phase 5: PROD rollout + verification (part of a deploy session)
