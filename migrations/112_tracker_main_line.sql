@@ -9,7 +9,8 @@
 --   B) v_tracker_stories — the spine's stories read path, with main_line computed
 --                          server-side:
 --                            pin override            → force_show in, force_hide out
---                            no published front      → effective alarm >= 4 (loose end)
+--                            no published front      → effective alarm 5 (loose end;
+--                                                      v1.1 bar, see CASE comment)
 --                            front member            → front opening (earliest member)
 --                                                      OR alarm 5
 --                                                      OR alarm >= 4 setting a new
@@ -18,7 +19,7 @@
 --                          and live on the front's own page (ADO-548).
 --
 -- EO/SCOTUS/pardon rows have no front membership today, so their main-line rule
--- (loose end: alarm >= 4, plus pins) is applied by the frontend from the same
+-- (loose end: alarm 5, plus pins) is applied by the frontend from the same
 -- tracker_pin table — no views needed for them.
 --
 -- Apply manually via the Supabase SQL Editor (NOT apply-migrations.js).
@@ -145,8 +146,14 @@ SELECT
   CASE
     WHEN p.pin = 'force_show' THEN TRUE
     WHEN p.pin = 'force_hide' THEN FALSE
-    -- Loose end (no published front): significant = alarm 4+.
-    WHEN fm.story_id IS NULL THEN a.alarm_eff >= 4
+    -- Loose end (no published front): alarm 5 only (rule v1.1, Josh
+    -- August 23, 2026). Fronts are the organizing layer — an unfiled alarm-4
+    -- story usually means "not filed yet", not "main line". The 4+ bar drowned
+    -- the line because enrichment rates ~67% of stories 4+ (severity
+    -- saturation, same disease as the pre-agent EO pipeline); a BLS-class
+    -- alarm-4 loose end reaches the main line via filing or a force_show pin
+    -- until severity calibration lands.
+    WHEN fm.story_id IS NULL THEN a.alarm_eff >= 5
     -- Front member: opening, or escalation (alarm 5, or a new front peak at 4+).
     ELSE fm.member_seq = 1
       OR a.alarm_eff = 5
@@ -173,7 +180,7 @@ LEFT JOIN public.tracker_pin p ON p.source = 'stories' AND p.entity_id = s.id::t
 WHERE s.status = 'active' AND s.summary_neutral IS NOT NULL;
 
 COMMENT ON VIEW public.v_tracker_stories IS
-  'ADO-554: the Tracker spine''s stories read path. main_line implements PRD §12''s anchor principle: pins override, loose ends need effective alarm >= 4, front members make the main line only as the front''s opening, at alarm 5, or on a new front peak at 4+. Tight columns on purpose — never widen to content/embedding (egress rule).';
+  'ADO-554: the Tracker spine''s stories read path. main_line implements PRD §12''s anchor principle (rule v1.1): pins override, loose ends need effective alarm 5, front members make the main line only as the front''s opening, at alarm 5, or on a new front peak at 4+. Tight columns on purpose — never widen to content/embedding (egress rule).';
 
 GRANT SELECT ON public.v_tracker_stories TO anon;
 GRANT SELECT ON public.v_tracker_stories TO service_role;
