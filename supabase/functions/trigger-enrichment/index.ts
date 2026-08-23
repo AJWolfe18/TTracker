@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       .eq('day', today)
       .single()
 
-    const cost = COSTS[entity_type] || 0.003
+    const cost = COSTS[entity_type] ?? 0.003
 
     if (budget && !budgetError && budget.spent_usd + cost > budget.cap_usd) {
       return new Response(
@@ -166,7 +166,12 @@ Deno.serve(async (req) => {
           why_it_matters: null,
           pattern_analysis: null,
           source_urls: [],         // NOT NULL column - [] never null
-          research_status: 'pending'
+          research_status: 'pending',
+          // Hide while hollow: public APIs gate only on is_public, so a
+          // published row with nulled copy would serve an empty card until
+          // the agent runs. The agent republishes on enrich (ADO-527 gate).
+          is_public: false,
+          needs_review: false
         })
         .eq('id', entity_id)
         .or('prompt_version.is.null,prompt_version.neq.locked')

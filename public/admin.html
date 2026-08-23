@@ -3090,7 +3090,7 @@
                     if (data?.error) throw new Error(data.error);
                     // ADO-553: re-enrich = reset for the Claude agent's next daily run (no GPT cost).
                     // Completion is hours away, so clear the spinner now instead of polling for it.
-                    toast?.addToast('Pardon reset — Claude agent re-enriches on its next daily run', 'success');
+                    toast?.addToast('Pardon reset and unpublished — Claude agent re-enriches and republishes on its next daily run', 'success');
                     delete enrichSnapshotsRef.current[pardon.id];
                     setEnrichingIds(prev => {
                         const s = new Set(prev);
