@@ -9,9 +9,9 @@
 
 ## 0. Open Decisions (Josh — answer before/while the stories run)
 
-- [ ] **Phase 0, BLOCKS ADO-559:** ~~create the PostHog account~~ done August 23, 2026 (US cloud, project 572949; **no payment method attached = billing-cap equivalent**; replay sampling set to 10%; input masking stays at PostHog's default of mask-everything — do not turn it off, the newsletter email field and feedback box would otherwise appear in recordings). **Still open: paste the `phc_` project key into ADO-559 as a comment.** Repo-watch/GitHub integration declined — not needed for v1.
-- [ ] **ADO-562:** who builds the 3 PostHog dashboards — Josh (~15 min in the PostHog UI) or a Claude session driving Chrome?
-- [ ] **Old cards:** close ADO-258 (Frontend Analytics Events — superseded by ADO-560)? Keep or fold ADO-259 (Pre-Commerce + Search Intelligence)?
+- [x] ~~Phase 0~~ — COMPLETE August 23, 2026: PostHog US cloud project 572949; no payment method attached (= billing-cap equivalent); replay 10%, input masking at mask-everything default (do not turn off); repo-watch declined; `phc_` key posted as a comment on ADO-559. **ADO-559 is unblocked.**
+- [x] ~~ADO-562 dashboards~~ — decided August 23, 2026: a Claude session drives the PostHog UI via the Chrome extension.
+- [x] ~~ADO-258~~ — already Closed (its shared.js instrumentation shipped on legacy pages; the old plan.md status table was stale). ADO-259 (Pre-Commerce + Search Intelligence) stays open, untouched by this project.
 - [x] ~~Feedback scope~~ — decided August 23, 2026: simple message-only popup, React app only, no email/category/Turnstile (§5).
 - [x] ~~Perf metrics~~ — decided August 23, 2026: out of v1, first fast-follow (§9).
 
