@@ -39,7 +39,7 @@ flowchart LR
 | Story merging | inline Tier A/B clustering | **Clustering Judge agent** (3x/day, prompt `judge-v1.1`) + admin manual merge/unmerge (ADO-537). Candidates carry **verdict memory** since migration 106 (ADO-539): a pair with a live verdict newer than either side's latest `article_story.matched_at` is skipped until a new article attaches — so a quiet Judge run is expected, not a fault. | — |
 | Executive Orders | `executive-orders-tracker.yml` (daily 16:00 UTC) — raw-only since PR #110 (2026-08-05), zero GPT calls | **Claude EO agent** (cloud cron, daily) | None — legacy GPT enrichment removed (ADO-540). Do NOT kill the workflow — it's the only EO ingestion. |
 | SCOTUS | `scripts/scotus/fetch-cases.js` (CourtListener, manual/periodic) | **Claude SCOTUS agent** (cloud cron, weekdays) | — |
-| Pardons | pardons workflows | **Claude Pardons agent** (cloud cron, daily) | — |
+| Pardons | `pardons-tracker.yml` (daily 18:00 UTC) — raw-only since ADO-553 (2026-08-22), zero Perplexity/GPT calls | **Claude Pardons agent** (cloud cron, daily) | None — legacy Perplexity/GPT phases removed (ADO-553); standalone `research-pardons.yml` / `enrich-pardons.yml` deleted. Do NOT kill the workflow — it's the only pardons ingestion. |
 
 ## What each secret actually powers (before rolling a key)
 
