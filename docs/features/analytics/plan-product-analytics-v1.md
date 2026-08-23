@@ -1,7 +1,8 @@
 # Implementation Plan: Product Analytics v1
 
 **PRD:** `docs/features/analytics/prd.md` (read it first — this plan implements that scope, nothing more)
-**ADO:** TBD — suggest one User Story per phase below (each phase ≈ one session)
+**ADO:** Epic 254 → Bug 558 (GA4 gate, ships first) + Stories 559 (P1), 560 (P2), 561 (P3), 562 (P4), 563 (P5) — each phase ≈ one session
+**Before starting: check PRD §0 "Open Decisions" — unanswered items there block the stories they name (Phase 0 blocks ADO-559).**
 **Branch:** develop on `test` (direct commit/push in interactive sessions; autonomous/overnight sessions deliver via PR to `test` per the 2026-08-19 convention). PROD ships via cherry-picked deployment branch + PR to `main`.
 
 ---
@@ -63,18 +64,18 @@ Rules:
 
 **QA:** vitest for the wrapper (event-name typing, gtag dual-fire, no-throw on missing SDK); `npm run qa:smoke`; manual click-through on local with console stub verifying every event + props.
 
-## Phase 3: Feedback button (1 session)
+## Phase 3: Feedback popup (1 session)
 
-**Files:** new `src/components/FeedbackButton.tsx`, new `supabase/functions/feedback-submit/index.ts`, new migration, `public/shared/flags-prod.json` + `flags-test.json`, legacy pages include
+**Scope decision (Josh, August 23, 2026): deliberately minimal — "a simple popup where they can say there's an issue with the site." Message-only, React app only, no email, no category, no Turnstile, no legacy include. Deferred extras listed in PRD §5 — do NOT build them.**
 
-1. **Migration `113_feedback.sql`** (112 exists — `112_tracker_main_line.sql`; re-verify max number at build time): `CREATE TABLE IF NOT EXISTS feedback` — `id` identity, `category` text CHECK (`bug|content|idea|other`), `message` text NOT NULL (≤2000 enforced in function), `email` text NULL (stored only when the user provides it; per PRD §7 it makes the row non-anonymous, retention ≤12 months), `page_path` text, `user_agent` text, `created_at` timestamptz DEFAULT now(). **Every statement idempotent** (`IF NOT EXISTS` / guarded `DO` blocks) per AGENTS.md. RLS on, **no anon grants** (post-046 lockdown means it's invisible to anon by default — that's correct; only service_role reads/writes).
-   - **Retention enforcement (backs the ≤12-month promise in PRD §7):** the migration also schedules a `pg_cron` job — `DELETE FROM feedback WHERE created_at < now() - interval '12 months'`, monthly — inside a guarded DO block that no-ops with a NOTICE if the `pg_cron` extension isn't available. If it turns out unavailable on either project, the fallback is concrete, not aspirational: create `docs/guides/feedback-retention-runbook.md` (the DELETE statement + "run quarterly" + how to verify), link it from the ADO card, and add a recurring checklist line to the PROD deployment checklist doc. **Acceptance rule: the feature does not ship until either the cron job is verified scheduled (`SELECT * FROM cron.job`) on BOTH projects or the runbook exists and is linked from the card.** A migration that no-ops with a NOTICE does not count as done.
-2. **Edge function `feedback-submit`:** clone the `newsletter-signup` skeleton — CORS headers, Turnstile verification, `rate_limits` reuse, input validation, insert with service role. Deploy to TEST ref `wnrjrywpcadwutfykflu` first.
-3. **React component:** floating button → modal (category, message, optional email, Turnstile) → POST to function. Behind feature flag **`feedback`** — flag files store unprefixed keys (see `rap_sheet` in `flags-prod.json`); `ff_` is only the URL-override prefix (`?ff_feedback=true`), stripped by `useFeatureFlag.ts`. OFF in `flags-prod.json` at ship, ON in `flags-test.json`.
-4. **Legacy pages:** minimal vanilla include using the same endpoint (add to `shared.js` alongside the newsletter helpers, same flag).
-5. Fire `feedback_open` / `feedback_submit` via the wrapper.
+**Files:** new `src/components/FeedbackButton.tsx`, new `supabase/functions/feedback-submit/index.ts`, new migration, `public/shared/flags-prod.json` + `flags-test.json`
 
-**QA:** function unit-tested against TEST (happy path, rate-limit, Turnstile fail, 2001-char message); `npm run qa:smoke`; verify a TEST submission lands in the table.
+1. **Migration `113_feedback.sql`** (112 exists — `112_tracker_main_line.sql`; re-verify max number at build time): `CREATE TABLE IF NOT EXISTS feedback` — `id` identity, `message` text NOT NULL (≤2000 enforced in function), `page_path` text, `created_at` timestamptz DEFAULT now(). **Every statement idempotent** (`IF NOT EXISTS` / guarded `DO` blocks) per AGENTS.md. RLS on, **no anon grants** (post-046 lockdown means it's invisible to anon by default — that's correct; only service_role reads/writes). No PII columns, so no retention machinery needed; prune ad hoc if it ever grows.
+2. **Edge function `feedback-submit`:** clone the `newsletter-signup` skeleton MINUS Turnstile — CORS headers, `rate_limits` reuse, honeypot check (reject when the hidden field is filled), input validation (non-empty, ≤2000 chars), insert with service role. No new secrets. Deploy to TEST ref `wnrjrywpcadwutfykflu` first.
+3. **React component:** floating button → popup (one text box with placeholder "What's wrong / what's missing? Don't include personal info." + hidden honeypot + submit) → POST to function. Behind feature flag **`feedback`** — flag files store unprefixed keys (see `rap_sheet` in `flags-prod.json`); `ff_` is only the URL-override prefix (`?ff_feedback=true`), stripped by `useFeatureFlag.ts`. OFF in `flags-prod.json` at ship, ON in `flags-test.json`.
+4. Fire `feedback_open` / `feedback_submit` (props: `page_path` only) via the wrapper.
+
+**QA:** function unit-tested against TEST (happy path, rate-limit, honeypot filled, empty message, 2001-char message); `npm run qa:smoke`; verify a TEST submission lands in the table.
 
 ## Phase 4: Newsletter funnel + dashboards + privacy note (1 session)
 
@@ -86,7 +87,7 @@ Rules:
 
 ## Phase 5: PROD rollout + verification (part of a deploy session)
 
-1. Cherry-pick to a deployment branch → PR to `main` per `docs/guides/prod-deployment-checklist.md`. Deploy `feedback-submit` to PROD ref `osjbulmltfpcoldydexg`; apply the feedback migration on PROD; add Turnstile secret if the function needs a distinct one (check newsletter's secret names first).
+1. Cherry-pick to a deployment branch → PR to `main` per `docs/guides/prod-deployment-checklist.md`. Deploy `feedback-submit` to PROD ref `osjbulmltfpcoldydexg`; apply migration 113 on PROD. No new secrets (feedback v1 has no Turnstile).
 2. Post-deploy verify on trumpytracker.com (analytics only work here): autocapture events arriving, each named event via real clicks, replay recording sampled + masked, GA4 still receiving.
 3. Flip the `feedback` key to `true` in `flags-prod.json` after a live test submission (the JSON key is `feedback`, NOT `ff_feedback` — see Phase 3 step 3).
 4. Confirm the $0 spend cap one more time in PostHog settings.
