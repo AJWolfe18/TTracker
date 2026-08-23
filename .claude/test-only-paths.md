@@ -19,6 +19,13 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   verdict memory (suppress / dry-run / reopen / unmerge-safety / heartbeat). Runs in a transaction
   that ROLLBACKs; never run against PROD.
 
+## Manual Maintenance SQL (run by hand in SQL Editor, never deployed)
+- `scripts/maintenance/2026-08-19-db-size-cleanup.sql` - DB size reclaim (embeddings/content on
+  dead stories, log retention, VACUUM FULL). Josh runs it manually per environment; not code that ships.
+- `scripts/maintenance/2026-08-22-ado-553-pardons-legacy-reset.sql` - one-time PROD reset of the
+  25 backfilled pardons that legacy GPT enriched (null-fields-first so the Claude agent re-enriches).
+  Josh runs it manually in the PROD SQL Editor; skip when cherry-picking ADO-553 to main.
+
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
 
