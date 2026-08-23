@@ -96,6 +96,12 @@ WITH front_members AS (
   -- the same axis the spine pages on. The publish predicate is explicit for
   -- service_role parity; for anon the RLS on events/story_event already
   -- enforces it, so both roles compute identical main_line values.
+  --
+  -- The window runs over the SAME active/enriched story set the view exposes
+  -- (Codex P1 on PR #127): merge_stories leaves story_event pointing at
+  -- archived tombstones, and a hidden member must not hold member_seq 1 (the
+  -- visible first member would never flag as the opening) or feed its alarm
+  -- into front_prior_peak (suppressing real escalations).
   SELECT
     se.story_id,
     se.event_id,
@@ -117,6 +123,8 @@ WITH front_members AS (
   FROM public.story_event se
   JOIN public.events  e ON e.id = se.event_id AND e.publish_state = 'published'
   JOIN public.stories s ON s.id = se.story_id
+                       AND s.status = 'active'
+                       AND s.summary_neutral IS NOT NULL
   WINDOW w AS (PARTITION BY se.event_id ORDER BY s.first_seen_at, s.id)
 )
 SELECT
