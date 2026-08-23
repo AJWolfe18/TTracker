@@ -8,6 +8,9 @@ import {
   buildSourcePath,
   initialTrackerState,
   fetchTrackerPage,
+  fetchTrackerPins,
+  forceShowIdsBySource,
+  pinKey,
   coverageFrontier,
   visibleEntries,
   SOURCE_ROUTES,
@@ -15,6 +18,7 @@ import {
   TIMELINE_SOURCES,
   type TimelineEntry,
   type TimelineSource,
+  type TrackerPins,
   type TrackerState,
 } from '../lib/timeline';
 
@@ -138,8 +142,16 @@ describe('buildSourcePath', () => {
     expect(p).not.toContain('and=');
     expect(p).toContain('order=first_seen_at.desc,id.desc');
     expect(p).toContain('limit=60');
-    expect(p).toContain('status=eq.active');
-    expect(p).toContain('summary_neutral=not.is.null');
+    // status/enrichment predicates are baked into v_tracker_stories (ADO-554)
+    expect(p).toContain('v_tracker_stories?');
+    expect(p).not.toContain('status=');
+  });
+
+  it("main view: stories filter on the server-computed main_line, others keep alarm 4+", () => {
+    expect(dec(buildSourcePath('stories', 'main', null))).toContain('and=(main_line.is.true)');
+    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.4)');
+    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.4');
+    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.4');
   });
 
   it('floors every source at inauguration day - the record is term 2 only', () => {
@@ -270,7 +282,7 @@ describe('fetchTrackerPage', () => {
     vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
     vi.stubGlobal('fetch', vi.fn(async (input: string) => {
       calls.push(input);
-      if (input.includes('/stories?')) {
+      if (input.includes('/v_tracker_stories?')) {
         return { ok: true, json: async () => mkStoryRows(60) };
       }
       if (input.includes('/executive_orders?')) {
@@ -313,7 +325,7 @@ describe('fetchTrackerPage', () => {
     calls = [];
     await fetchTrackerPage(4, first);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain('/stories?');
+    expect(calls[0]).toContain('/v_tracker_stories?');
     expect(decodeURIComponent(calls[0])).toContain('id.lt."941"');
   });
 
@@ -324,5 +336,107 @@ describe('fetchTrackerPage', () => {
     expect(entries).toHaveLength(0);
     expect(calls).toHaveLength(0);
     expect(next).toEqual(state);
+  });
+});
+
+describe('tracker pins (ADO-554)', () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  let calls: string[];
+
+  beforeEach(() => {
+    calls = [];
+    vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      if (input.includes('/tracker_pin?')) {
+        return {
+          ok: true,
+          json: async () => [
+            { source: 'eos', entity_id: 'eo_low', pin: 'force_show' },
+            { source: 'eos', entity_id: 'eo_bad', pin: 'force_hide' },
+            { source: 'pardons', entity_id: '77', pin: 'force_show' },
+            { source: 'stories', entity_id: '5', pin: 'force_show' },
+          ],
+        };
+      }
+      if (input.includes('/v_tracker_stories?')) {
+        return { ok: true, json: async () => [] };
+      }
+      if (input.includes('/executive_orders?') && input.includes('id=in.')) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 'eo_low', title: 'Quiet but nasty order', date: '2026-03-01', alarm_level: 2 },
+          ],
+        };
+      }
+      if (input.includes('/executive_orders?')) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 'eo_bad', title: 'Hidden order', date: '2026-06-01', alarm_level: 5 },
+            { id: 'eo_kept', title: 'Visible order', date: '2026-05-01', alarm_level: 4 },
+          ],
+        };
+      }
+      if (input.includes('/pardons?') && input.includes('id=in.')) {
+        // the pinned pardon is ALSO in the 4+ stream: must not be injected twice
+        return {
+          ok: true,
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+        };
+      }
+      if (input.includes('/pardons?')) {
+        return {
+          ok: true,
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+        };
+      }
+      return { ok: true, json: async () => [] }; // scotus
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+  });
+
+  it('fetchTrackerPins maps rows and degrades to empty on failure', async () => {
+    const pins = await fetchTrackerPins();
+    expect(pins.get(pinKey('eos', 'eo_low'))).toBe('force_show');
+    expect(pins.get(pinKey('eos', 'eo_bad'))).toBe('force_hide');
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => [] })));
+    expect((await fetchTrackerPins()).size).toBe(0);
+  });
+
+  it('forceShowIdsBySource groups non-stories force_show pins only', () => {
+    const pins: TrackerPins = new Map([
+      [pinKey('eos', 'eo_low'), 'force_show'],
+      [pinKey('eos', 'eo_bad'), 'force_hide'],
+      [pinKey('pardons', 77), 'force_show'],
+      [pinKey('stories', 5), 'force_show'], // server-side, excluded here
+    ]);
+    expect(forceShowIdsBySource(pins)).toEqual({ eos: ['eo_low'], pardons: ['77'] });
+  });
+
+  it('main view drops force_hidden non-stories entries and injects force_shown ones once', async () => {
+    const pins = await fetchTrackerPins();
+    const { entries } = await fetchTrackerPage('main', null, undefined, pins);
+
+    const ids = entries.map(e => `${e.source}:${e.id}`);
+    expect(ids).not.toContain('eos:eo_bad');            // force_hide dropped
+    expect(ids).toContain('eos:eo_kept');               // untouched stream row
+    expect(ids).toContain('eos:eo_low');                // alarm 2, injected by pin
+    // pinned pardon at alarm 4 arrives via the stream — exactly once
+    expect(ids.filter(id => id === 'pardons:77')).toHaveLength(1);
+  });
+
+  it('does not re-inject force_shown rows on later pages', async () => {
+    const pins = await fetchTrackerPins();
+    const { state } = await fetchTrackerPage('main', null, undefined, pins);
+    calls = [];
+    await fetchTrackerPage('main', state, undefined, pins);
+    expect(calls.some(c => c.includes('id=in.'))).toBe(false);
   });
 });
