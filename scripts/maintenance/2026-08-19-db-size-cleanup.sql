@@ -33,7 +33,9 @@ SELECT c.relname AS table_name,
        pg_size_pretty(pg_total_relation_size(c.oid)) AS total,
        pg_size_pretty(pg_relation_size(c.oid))       AS heap,
        pg_size_pretty(pg_indexes_size(c.oid))        AS indexes,
-       pg_size_pretty(COALESCE(pg_total_relation_size(c.reltoastrelid), 0)) AS toast,
+       pg_size_pretty(CASE WHEN c.reltoastrelid <> 0
+                           THEN pg_total_relation_size(c.reltoastrelid)
+                           ELSE 0 END) AS toast,
        s.n_live_tup, s.n_dead_tup
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
