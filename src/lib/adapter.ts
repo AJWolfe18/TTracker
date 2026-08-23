@@ -286,6 +286,9 @@ const CONNECTION_LABELS: Record<string, string> = {
   jan6_defendant: 'Jan 6 Defendant',
   fake_electors: 'Fake Elector',
   celebrity: 'Celebrity',
+  cabinet_connection: 'Cabinet Connection',
+  lobbyist: 'Lobbyist',
+  wealthy_unknown: 'Wealthy Unknown',
   no_connection: 'No Known Connection',
 };
 

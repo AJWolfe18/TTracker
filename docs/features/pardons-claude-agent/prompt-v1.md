@@ -155,10 +155,11 @@ Execute these steps in order on every run.
 ### Step A: Pull Latest Prompt
 
 ```bash
-git fetch origin test && git reset --hard origin/test
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git fetch origin "$BRANCH" && git reset --hard "origin/$BRANCH"
 ```
 
-This ensures you have the latest prompt file. Read this prompt from `docs/features/pardons-claude-agent/prompt-v1.md` and follow it.
+This ensures you have the latest prompt file for the branch this run is pinned to. The trigger's bootstrap message determines the branch (TEST trigger → `test`, PROD trigger → `main`) — NEVER reset a PROD run to `origin/test`; that would bypass the reviewed main branch. Read this prompt from `docs/features/pardons-claude-agent/prompt-v1.md` and follow it.
 
 ### Step A.2: Read Tone System Rules
 
