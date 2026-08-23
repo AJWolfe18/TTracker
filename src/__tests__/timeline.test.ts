@@ -22,7 +22,7 @@ describe('timeline row adapters', () => {
   it('maps a story row, preferring alarm_level over severity', () => {
     const e = storyRowToEntry({
       id: 12, primary_headline: 'He did a thing', first_seen_at: '2026-08-01T10:00:00Z',
-      alarm_level: 4, severity: 'watch',
+      alarm_level: 4, severity: 'low',
     });
     expect(e).toEqual({
       id: 12, source: 'stories', date: '2026-08-01T10:00:00Z',
@@ -35,6 +35,17 @@ describe('timeline row adapters', () => {
       id: 1, primary_headline: 'x', first_seen_at: '2026-01-01', alarm_level: null, severity: 'critical',
     });
     expect(e.alarm).toBe(5);
+  });
+
+  it('maps every DB severity value - moderate is alarm 3, not the fallback (Codex P1)', () => {
+    const alarmFor = (severity: string) =>
+      storyRowToEntry({ id: 1, primary_headline: 'x', first_seen_at: '2026-01-01', alarm_level: null, severity }).alarm;
+    expect(alarmFor('critical')).toBe(5);
+    expect(alarmFor('severe')).toBe(4);
+    expect(alarmFor('moderate')).toBe(3);
+    expect(alarmFor('minor')).toBe(2);
+    expect(alarmFor('low')).toBe(1);
+    expect(alarmFor('positive')).toBe(0);
   });
 
   it('defaults story alarm to 2 when both fields are missing', () => {
@@ -142,7 +153,7 @@ describe('buildSourcePath', () => {
     expect(dec(buildSourcePath('stories', 4, null)))
       .toContain('or(alarm_level.gte.4,and(alarm_level.is.null,severity.in.(critical,severe)))');
     expect(dec(buildSourcePath('stories', 3, null)))
-      .toContain('severity.in.(critical,severe,serious)');
+      .toContain('severity.in.(critical,severe,moderate)');
     expect(dec(buildSourcePath('stories', 5, null)))
       .toContain('severity.in.(critical)');
   });
