@@ -194,6 +194,26 @@ GRANT ALL ON public.events        TO service_role;
 GRANT ALL ON public.event_updates TO service_role;
 GRANT ALL ON public.story_event   TO service_role;
 
+-- Identity-sequence usage for service_role. Verified 2026-08-23 that Supabase's
+-- default privileges already cover public-schema sequences for service_role on
+-- TEST (live insert succeeded; migration 046 only revoked anon/authenticated),
+-- so this is belt-and-suspenders against TEST/PROD privilege drift. Idempotent:
+-- re-granting an existing privilege is a no-op. pg_get_serial_sequence instead
+-- of hardcoded names because identity-sequence names aren't guaranteed.
+DO $$
+DECLARE
+  seq TEXT;
+BEGIN
+  FOREACH seq IN ARRAY ARRAY[
+    pg_get_serial_sequence('public.events', 'id'),
+    pg_get_serial_sequence('public.event_updates', 'id')
+  ] LOOP
+    IF seq IS NOT NULL THEN
+      EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO service_role', seq);
+    END IF;
+  END LOOP;
+END $$;
+
 -- ============================================================================
 -- PART G: v_event_stats — derived stats (PRD §6.5). Nothing derived is stored.
 -- ============================================================================
