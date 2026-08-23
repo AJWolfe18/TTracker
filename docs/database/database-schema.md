@@ -323,7 +323,7 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 
 `id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, front_opening, tracker_pin, alarm_eff, main_line`
 
-**The rule:** `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff >= 4`; front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
+**The rule (v1.1):** `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5` (raised from 4+ on August 23, 2026: fronts are the organizing layer and enrichment severity saturation rates ~67% of stories 4+, which drowned the main line); front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
 
 `security_invoker = true` — for anon, unpublished fronts' members count as loose ends (RLS hides the membership), by design. EO/SCOTUS/pardon rows have no front membership; the frontend applies their loose-end rule + pins client-side from `tracker_pin`.
 

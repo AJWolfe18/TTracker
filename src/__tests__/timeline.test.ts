@@ -147,11 +147,11 @@ describe('buildSourcePath', () => {
     expect(p).not.toContain('status=');
   });
 
-  it("main view: stories filter on the server-computed main_line, others keep alarm 4+", () => {
+  it("main view: stories filter on the server-computed main_line, others get the alarm-5 loose-end bar", () => {
     expect(dec(buildSourcePath('stories', 'main', null))).toContain('and=(main_line.is.true)');
-    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.4)');
-    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.4');
-    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.4');
+    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.5)');
+    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.5');
+    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.5');
   });
 
   it('floors every source at inauguration day - the record is term 2 only', () => {
@@ -375,21 +375,21 @@ describe('tracker pins (ADO-554)', () => {
           ok: true,
           json: async () => [
             { id: 'eo_bad', title: 'Hidden order', date: '2026-06-01', alarm_level: 5 },
-            { id: 'eo_kept', title: 'Visible order', date: '2026-05-01', alarm_level: 4 },
+            { id: 'eo_kept', title: 'Visible order', date: '2026-05-01', alarm_level: 5 },
           ],
         };
       }
       if (input.includes('/pardons?') && input.includes('id=in.')) {
-        // the pinned pardon is ALSO in the 4+ stream: must not be injected twice
+        // the pinned pardon is ALSO in the alarm-5 stream: must not be injected twice
         return {
           ok: true,
-          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 5 }],
         };
       }
       if (input.includes('/pardons?')) {
         return {
           ok: true,
-          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 4 }],
+          json: async () => [{ id: 77, recipient_name: 'Big Donor', pardon_date: '2026-04-01', corruption_level: 5 }],
         };
       }
       return { ok: true, json: async () => [] }; // scotus
@@ -428,8 +428,55 @@ describe('tracker pins (ADO-554)', () => {
     expect(ids).not.toContain('eos:eo_bad');            // force_hide dropped
     expect(ids).toContain('eos:eo_kept');               // untouched stream row
     expect(ids).toContain('eos:eo_low');                // alarm 2, injected by pin
-    // pinned pardon at alarm 4 arrives via the stream — exactly once
+    // pinned pardon at alarm 5 arrives via the stream — exactly once
     expect(ids.filter(id => id === 'pardons:77')).toHaveLength(1);
+  });
+
+  it('buffers an injected old pin behind the coverage frontier, then renders it at its date (Codex P1 on PR #128)', async () => {
+    // A pinned row surfaces AT ITS DATE, by design: the frontier must not be
+    // bypassed (that would fake completeness of an unloaded range). This pins
+    // down the full pipeline: fetchTrackerPage → coverageFrontier → visibleEntries.
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.includes('/tracker_pin?')) {
+        return { ok: true, json: async () => [{ source: 'eos', entity_id: 'eo_low', pin: 'force_show' }] };
+      }
+      if (input.includes('/executive_orders?') && input.includes('id=in.')) {
+        return {
+          ok: true,
+          json: async () => [{ id: 'eo_low', title: 'Quiet but nasty order', date: '2026-03-01', alarm_level: 4 }],
+        };
+      }
+      if (input.includes('/executive_orders?')) {
+        // A FULL page (limit 25) → eos stays non-exhausted with cursor 2026-06-01,
+        // so the frontier sits months after the injected pin's date.
+        return {
+          ok: true,
+          json: async () => Array.from({ length: 25 }, (_, i) => ({
+            id: `eo_s${i}`, title: `Order ${i}`, alarm_level: 5,
+            date: `2026-06-${String(25 - i).padStart(2, '0')}`,
+          })),
+        };
+      }
+      return { ok: true, json: async () => [] }; // stories view, scotus, pardons
+    }));
+
+    const pins = await fetchTrackerPins();
+    const { entries, state } = await fetchTrackerPage('main', null, undefined, pins);
+
+    const frontier = coverageFrontier(state);
+    expect(frontier).toBe('2026-06-01');
+
+    const opts = { min: 0 as const, off: new Set<TimelineSource>(), query: '' };
+    // While coverage stops at June, the March pin is buffered — not lost, not shown.
+    const early = visibleEntries(entries, { ...opts, frontier });
+    expect(early.some(e => e.id === 'eo_low')).toBe(false);
+    expect(entries.some(e => e.id === 'eo_low')).toBe(true);
+
+    // Once every source is exhausted (frontier null), the pin renders at its date.
+    const done = visibleEntries(entries, { ...opts, frontier: null });
+    const ids = done.map(e => e.id);
+    expect(ids).toContain('eo_low');
+    expect(ids.indexOf('eo_low')).toBe(ids.length - 1); // oldest → rendered last (newest first)
   });
 
   it('does not re-inject force_shown rows on later pages', async () => {
