@@ -7,9 +7,10 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { checkAdminPassword } from '../_shared/auth.ts'
 
 // Estimated costs per entity type (USD)
+// pardon = 0: reset-only since ADO-553 — the Claude agent (subscription) re-enriches
 const COSTS: Record<string, number> = {
   story: 0.003,
-  pardon: 0.005,
+  pardon: 0,
   article_entities: 0.0003
 }
 
@@ -82,15 +83,6 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Check for GitHub token
-    const githubToken = Deno.env.get('GITHUB_PAT')
-    if (!githubToken) {
-      return new Response(
-        JSON.stringify({ error: 'GITHUB_PAT not configured - cannot trigger enrichment' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     // Parse request body
     const body = await req.json()
     const { entity_type } = body
@@ -135,7 +127,7 @@ Deno.serve(async (req) => {
       .eq('day', today)
       .single()
 
-    const cost = COSTS[entity_type] || 0.003
+    const cost = COSTS[entity_type] ?? 0.003
 
     if (budget && !budgetError && budget.spent_usd + cost > budget.cap_usd) {
       return new Response(
@@ -149,61 +141,108 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Per-entity-type workflow config
-    const WORKFLOW_CONFIG: Record<string, {
-      file: string,
-      buildInputs: (id: number, env: string) => Record<string, string>
-    }> = {
-      story: {
-        file: 'enrich-story.yml',
-        buildInputs: (id, env) => ({ story_id: String(id), environment: env })
-      },
-      pardon: {
-        file: 'enrich-pardons.yml',
-        buildInputs: (id, env) => ({ pardon_id: String(id), limit: '1', force: 'true' })
+    // Pardons: no workflow dispatch (ADO-553). The Claude pardons agent owns
+    // enrichment (daily cloud run, candidate filter enriched_at IS NULL), so
+    // "re-enrich" = reset the row to unenriched state and let the agent pick
+    // it up. Rows with prompt_version = 'locked' (manually written, e.g. Jan 6)
+    // are protected and never reset.
+    if (entity_type === 'pardon') {
+      const { data: reset, error: resetErr } = await supabase
+        .from('pardons')
+        .update({
+          enriched_at: null,
+          prompt_version: null,
+          enrichment_meta: null,
+          crime_description: null,
+          primary_connection_type: null,
+          secondary_connection_types: null,
+          corruption_level: null,
+          corruption_reasoning: null,
+          trump_connection_detail: null,
+          donation_amount_usd: null,
+          receipts_timeline: [],   // NOT NULL column - [] never null
+          summary_neutral: null,
+          summary_spicy: null,
+          why_it_matters: null,
+          pattern_analysis: null,
+          source_urls: [],         // NOT NULL column - [] never null
+          research_status: 'pending',
+          // Hide while hollow: public APIs gate only on is_public, so a
+          // published row with nulled copy would serve an empty card until
+          // the agent runs. The agent republishes on enrich (ADO-527 gate).
+          is_public: false,
+          needs_review: false
+        })
+        .eq('id', entity_id)
+        .or('prompt_version.is.null,prompt_version.neq.locked')
+        .select('id')
+
+      if (resetErr) {
+        console.error('Pardon reset error:', resetErr)
+        return new Response(
+          JSON.stringify({ error: `Failed to reset pardon: ${resetErr.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
+      if (!reset || reset.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Pardon not found, or protected (locked) and cannot be re-enriched' }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log(`admin_action: re-enrich entity_type=pardon entity_id=${entity_id} env=${environment} (reset for Claude agent)`)
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          entity_type,
+          entity_id,
+          message: 'Pardon reset - the Claude agent re-enriches on its next daily run',
+          estimated_cost: 0
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    const config = WORKFLOW_CONFIG[entity_type]
-    if (!config) {
+    // Stories: dispatch the enrichment workflow on GitHub Actions
+    const githubToken = Deno.env.get('GITHUB_PAT')
+    if (!githubToken) {
       return new Response(
-        JSON.stringify({ error: `Re-enrichment not yet supported for ${entity_type}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'GITHUB_PAT not configured - cannot trigger enrichment' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     // Atomically check + set pending (prevents race condition between two concurrent requests)
-    if (entity_type === 'story') {
-      const { data: updated, error: updateErr } = await supabase
-        .from('stories')
-        .update({
-          enrichment_status: 'pending',
-          enrichment_failure_count: 0
-        })
-        .eq('id', entity_id)
-        .is('enrichment_status', null)
-        .select('id')
+    const { data: updated, error: updateErr } = await supabase
+      .from('stories')
+      .update({
+        enrichment_status: 'pending',
+        enrichment_failure_count: 0
+      })
+      .eq('id', entity_id)
+      .is('enrichment_status', null)
+      .select('id')
 
-      if (updateErr) {
-        console.error('Enrichment status update error:', updateErr)
-        return new Response(
-          JSON.stringify({ error: `Failed to update story: ${updateErr.message}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      if (!updated || updated.length === 0) {
-        return new Response(
-          JSON.stringify({ error: 'Enrichment already pending for this story' }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+    if (updateErr) {
+      console.error('Enrichment status update error:', updateErr)
+      return new Response(
+        JSON.stringify({ error: `Failed to update story: ${updateErr.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (!updated || updated.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Enrichment already pending for this story' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // Trigger the workflow
-    const workflowInputs = config.buildInputs(entity_id, environment)
     const result = await triggerWorkflow(
-      config.file,
-      workflowInputs,
+      'enrich-story.yml',
+      { story_id: String(entity_id), environment },
       githubToken,
       environment
     )
