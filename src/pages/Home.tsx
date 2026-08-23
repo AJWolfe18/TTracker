@@ -7,6 +7,7 @@ import { Card } from '@/components/Card';
 import { Kicker } from '@/components/Kicker';
 import { FilterBar } from '@/components/FilterBar';
 import { Pagination } from '@/components/Pagination';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { ErrorState } from '@/edge-states/ErrorState';
 import { EmptyState } from '@/edge-states/EmptyState';
@@ -46,10 +47,13 @@ export function Home({
   const { theme, headType, mode } = useTheme();
   const headlineMode = 'spicy';
   const showFiltered = hasActiveFilters || false;
+  // When the Tracker owns "/", the story feed is the News tab
+  const trackerHome = useFeatureFlag('rap_sheet');
 
   const navLabel = filterConfig?.tabType === 'eos' ? 'Executive Orders'
     : filterConfig?.tabType === 'scotus' ? 'Supreme Court'
     : filterConfig?.tabType === 'pardons' ? 'Pardons'
+    : trackerHome ? 'News'
     : 'Home';
 
   const filterBar = filterConfig && activeFilters && onFilterChange && onClearFilters ? (

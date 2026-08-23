@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/hooks/useTheme';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { subscribeNewsletter, isValidEmail } from '@/lib/newsletter';
 
 export function Footer() {
   const { theme, headType: type } = useTheme();
+  // With the Tracker as the homepage, the story feed lives at /news
+  const trackerHome = useFeatureFlag('rap_sheet');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -66,7 +69,7 @@ export function Footer() {
         </div>
         {([
           ['Tracking', [
-            { label: 'Stories', href: '/' },
+            trackerHome ? { label: 'News', href: '/news' } : { label: 'Stories', href: '/' },
             { label: 'Executive Orders', href: '/eos' },
             { label: 'SCOTUS', href: '/scotus' },
             { label: 'Pardons', href: '/pardons' },
@@ -98,7 +101,7 @@ export function Footer() {
       </div>
       <div style={{ marginTop: 40, paddingTop: 20, borderTop: `1px solid ${theme.line}`, fontFamily: type.mono, fontSize: 10, color: theme.dim, display: 'flex', justifyContent: 'space-between', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
         <span>&copy; 2026 TrumpyTracker &middot; reader-supported</span>
-        <span>last updated: {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+        <span>last updated: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
       </div>
       <style>{`@media (max-width: 800px) { .tt-footer-grid { grid-template-columns: 1fr 1fr !important; } }`}</style>
     </footer>

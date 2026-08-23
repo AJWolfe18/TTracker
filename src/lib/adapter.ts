@@ -251,6 +251,9 @@ const CONNECTION_LABELS: Record<string, string> = {
   jan6_defendant: 'Jan 6 Defendant',
   fake_electors: 'Fake Elector',
   celebrity: 'Celebrity',
+  cabinet_connection: 'Cabinet Connection',
+  lobbyist: 'Lobbyist',
+  wealthy_unknown: 'Wealthy Unknown',
   no_connection: 'No Known Connection',
 };
 
@@ -307,7 +310,7 @@ function fmtMetaDate(val: unknown): string | null {
   const s = String(val);
   const d = new Date(s.includes('T') ? s : s + 'T00:00:00');
   if (isNaN(d.getTime())) return s;
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function pushMeta(arr: { label: string; value: string }[], label: string, raw: unknown) {

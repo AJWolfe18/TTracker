@@ -41,7 +41,7 @@ describe('eoDetailToItem', () => {
     const item = eoDetailToItem(fullEo);
     expect(item.meta).toBeDefined();
     expect(item.meta!.find(m => m.label === 'Executive Order')?.value).toBe('EO 14200');
-    expect(item.meta!.find(m => m.label === 'Signed')?.value).toBe('15 Mar 2025');
+    expect(item.meta!.find(m => m.label === 'Signed')?.value).toBe('Mar 15, 2025');
   });
 
   it('body and dek are empty (content in sections)', () => {
@@ -171,7 +171,7 @@ describe('pardonDetailToItem', () => {
 
   it('includes pardon date and crime in meta', () => {
     const item = pardonDetailToItem(fullPardon);
-    expect(item.meta!.find(m => m.label === 'Pardon Date')?.value).toBe('20 Jan 2025');
+    expect(item.meta!.find(m => m.label === 'Pardon Date')?.value).toBe('Jan 20, 2025');
     expect(item.meta!.find(m => m.label === 'Crime')?.value).toBe('white_collar');
     expect(item.meta!.find(m => m.label === 'Original Sentence')?.value).toBe('5 years federal prison');
   });

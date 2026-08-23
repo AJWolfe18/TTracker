@@ -28,14 +28,36 @@ export interface TabFilterConfig {
   table: string;
 }
 
-const ALARM_PILLS: FilterOption[] = [
+// Per-domain pill labels: short forms of the tone-system spicy labels the
+// cards display (tone-system.ts), so the filter speaks the same voice.
+// Pardons already does this below.
+const STORY_ALARM_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  { label: 'Dumpster Fire', urlValue: '5', apiValue: '5' },
+  { label: 'Criminal Bullshit', urlValue: '4', apiValue: '4' },
+  { label: 'Deep Swamp', urlValue: '3', apiValue: '3' },
+  { label: 'Gaslight', urlValue: '2', apiValue: '2' },
+  { label: 'Accidental Sanity', urlValue: '1', apiValue: '1' },
+  { label: 'Broken Clock', urlValue: '0', apiValue: '0' },
+];
+const EO_ALARM_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  { label: 'Power Grab', urlValue: '5', apiValue: '5' },
+  { label: 'Weaponized', urlValue: '4', apiValue: '4' },
+  { label: 'Giveaway', urlValue: '3', apiValue: '3' },
+  { label: 'Smoke & Mirrors', urlValue: '2', apiValue: '2' },
+  { label: 'Not Terrible', urlValue: '1', apiValue: '1' },
+  { label: 'Helpful', urlValue: '0', apiValue: '0' },
+];
+
+const SCOTUS_IMPACT_PILLS: FilterOption[] = [
   { label: 'All', urlValue: '', apiValue: '' },
   { label: 'Crisis', urlValue: '5', apiValue: '5' },
-  { label: 'Severe', urlValue: '4', apiValue: '4' },
-  { label: 'Serious', urlValue: '3', apiValue: '3' },
-  { label: 'Notable', urlValue: '2', apiValue: '2' },
-  { label: 'Watch', urlValue: '1', apiValue: '1' },
-  { label: 'Win', urlValue: '0', apiValue: '0' },
+  { label: 'Rubber Stamp', urlValue: '4', apiValue: '4' },
+  { label: 'Sabotage', urlValue: '3', apiValue: '3' },
+  { label: 'Sidestep', urlValue: '2', apiValue: '2' },
+  { label: 'Crumbs', urlValue: '1', apiValue: '1' },
+  { label: 'Democracy Wins', urlValue: '0', apiValue: '0' },
 ];
 
 const STORIES_CONFIG: TabFilterConfig = {
@@ -76,7 +98,7 @@ const STORIES_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: STORY_ALARM_PILLS,
     },
   ],
 };
@@ -117,7 +139,7 @@ const EOS_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'alarm_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: EO_ALARM_PILLS,
     },
   ],
 };
@@ -168,7 +190,7 @@ const SCOTUS_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'ruling_impact_level',
       postgrestOp: 'eq',
-      options: ALARM_PILLS,
+      options: SCOTUS_IMPACT_PILLS,
     },
   ],
 };
@@ -216,6 +238,9 @@ const PARDONS_CONFIG: TabFilterConfig = {
         { label: 'Jan 6 Defendant', urlValue: 'jan6_defendant', apiValue: 'jan6_defendant' },
         { label: 'Fake Elector', urlValue: 'fake_electors', apiValue: 'fake_electors' },
         { label: 'Celebrity', urlValue: 'celebrity', apiValue: 'celebrity' },
+        { label: 'Cabinet Connection', urlValue: 'cabinet_connection', apiValue: 'cabinet_connection' },
+        { label: 'Lobbyist', urlValue: 'lobbyist', apiValue: 'lobbyist' },
+        { label: 'Wealthy Unknown', urlValue: 'wealthy_unknown', apiValue: 'wealthy_unknown' },
         { label: 'No Known Connection', urlValue: 'no_connection', apiValue: 'no_connection' },
       ],
     },

@@ -222,3 +222,22 @@ describe('adaptActiveResponse', () => {
     expect(result.hasMore).toBe(false);
   });
 });
+
+describe('pardon connection labels', () => {
+  it('labels every DB-allowed connection type - no value falls back to generic "Pardon" (Codex P2, PR #126)', async () => {
+    const { pardonToItem } = await import('@/lib/adapter');
+    const dbValues = [
+      'mar_a_lago_vip', 'major_donor', 'family', 'political_ally',
+      'campaign_staff', 'business_associate', 'jan6_defendant',
+      'fake_electors', 'celebrity', 'cabinet_connection', 'lobbyist',
+      'wealthy_unknown', 'no_connection',
+    ];
+    for (const v of dbValues) {
+      const item = pardonToItem({
+        id: 1, recipient_name: 'X', pardon_date: '2026-01-01',
+        primary_connection_type: v,
+      });
+      expect(item.category, `missing CONNECTION_LABELS entry for '${v}'`).not.toBe('Pardon');
+    }
+  });
+});

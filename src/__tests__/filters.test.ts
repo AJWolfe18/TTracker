@@ -55,6 +55,22 @@ describe('getFilterConfig', () => {
     expect(labels).toContain('Swamp');
   });
 
+  it('pardons connection dropdown covers every DB-allowed value (migration 062)', () => {
+    // Mirrors pardons_primary_connection_type_check — a value the agent can
+    // write but the dropdown can't filter renders unreachable (Codex P2, PR #126)
+    const dbValues = [
+      'mar_a_lago_vip', 'major_donor', 'family', 'political_ally',
+      'campaign_staff', 'business_associate', 'jan6_defendant',
+      'fake_electors', 'celebrity', 'cabinet_connection', 'lobbyist',
+      'wealthy_unknown', 'no_connection',
+    ];
+    const config = getFilterConfig('pardons');
+    const conn = config.dimensions.find(d => d.key === 'connection');
+    expect(conn).toBeDefined();
+    const values = conn!.options.map(o => o.apiValue);
+    for (const v of dbValues) expect(values).toContain(v);
+  });
+
   it('eos category dimension maps to correct DB column', () => {
     const config = getFilterConfig('eos');
     const cat = config.dimensions.find(d => d.key === 'category');

@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-08-19 (fronts tables, migration 111)
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -232,6 +232,77 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 
 **RLS Policies:**
 - `pardon_story_anon_select` - Only show links to public pardons
+
+---
+
+## Fronts (Events) Tables
+
+Added by migration 111 (ADO-546, applied on TEST 2026-08-19). Schema keeps the neutral
+`events` naming; public copy says "fronts". Fronts are an aggregation layer above stories —
+articles are never linked to fronts. **No stored counters:** `v_event_stats` derives everything.
+Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
+
+### `events`
+**Purpose:** One row per front (editorial storyline container)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| slug | TEXT | UNIQUE, presentation only — never a join key |
+| name | TEXT | "The Epstein Files" |
+| dek | TEXT | One-paragraph standing summary |
+| alarm_level | SMALLINT | 0-5 editorial (displays everywhere); CHECK 0-5, default 3 |
+| tier | TEXT | CHECK: 'flagship', 'major', 'standard' |
+| lifecycle | TEXT | CHECK: 'open', 'dormant', 'resolved'; resolved requires resolved_at |
+| publish_state | TEXT | CHECK: 'draft', 'review', 'published'; published requires published_at |
+| published_at / started_at / resolved_at | TIMESTAMPTZ | Editorial timestamps |
+| created_by | TEXT | CHECK: 'agent', 'human' |
+| enrichment_meta | JSONB | AI provenance |
+| created_at / updated_at | TIMESTAMPTZ | updated_at via set_updated_at() trigger |
+
+**RLS:** `events_anon_select` — anon sees `publish_state='published'` only. Writes are service_role only.
+
+### `event_updates`
+**Purpose:** One row per editorial update on a front (AI-drafted or human-written, approval-gated)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| event_id | BIGINT | FK → events (CASCADE); UNIQUE (id, event_id) backs the same-front FK |
+| headline / body | TEXT | Editorial content |
+| happened_at | TIMESTAMPTZ | When the development occurred |
+| sort_key | BIGINT | Breaks happened_at ties |
+| significance | TEXT | CHECK: 'major', 'minor' |
+| approval_state | TEXT | CHECK: 'pending', 'approved', 'rejected'; decided states require decided_at + decided_by, pending forbids them |
+| decided_at / decided_by | TIMESTAMPTZ / TEXT | The human gate; decided_by CHECK 'agent'/'human' |
+| was_edited | BOOLEAN | Human edited the draft before approving (draft-quality metric) |
+| created_by | TEXT | CHECK: 'agent', 'human' |
+| enrichment_meta | JSONB | Provenance only, never queried |
+
+**RLS:** `event_updates_anon_select` — anon sees approved updates on published fronts only.
+
+### `story_event`
+**Purpose:** Story→front membership. **PK is `story_id` ALONE — one front per story** (mirrors article_story)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| story_id | BIGINT | **PK**, FK → stories (CASCADE) |
+| event_id | BIGINT | FK → events (CASCADE) |
+| event_update_id | BIGINT | FK → event_updates (SET NULL) + composite FK (event_update_id, event_id) → event_updates (id, event_id) — an update link must belong to the same front |
+| assigned_by | TEXT | CHECK: 'agent', 'human' |
+| confidence | NUMERIC | CHECK 0-1 or NULL |
+| assigned_at / reassigned_at | TIMESTAMPTZ | |
+| reassigned_from_event_id | BIGINT | FK → events (SET NULL); makes assignment precision measurable |
+
+**RLS:** `story_event_anon_select` — anon sees memberships of published fronts only.
+**Gotcha:** `merge_stories` does NOT repoint story_event (unlike article_story) — a member story merged away leaves the front counting a tombstone. Open Wave 2 decision.
+
+### `v_event_stats` (view)
+**Purpose:** All derived front stats — nothing derived is ever stored (PRD §6.5)
+
+`event_id, story_count, source_count (article_story rows across members), update_count (approved only), last_activity_at (max member story last_updated_at), peak_alarm (COALESCE(alarm_level, severity map, 2) — rubric/admin QA only, never displays), days_since_update (whole days since last approved update's happened_at)`
+
+`security_invoker = true` — anon reads inherit table RLS. GRANT SELECT to anon on all three tables + view (migration 046 auto-revoke countered).
 
 ---
 
