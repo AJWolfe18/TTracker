@@ -310,9 +310,15 @@ export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<Timeline
  *
  * In the 'main' view, pins adjust the non-stories sources client-side:
  * force_hide entries are dropped from every page, and on the FIRST page
- * (state === null) force_show rows below the alarm-4 stream are fetched by id
+ * (state === null) force_show rows below the alarm-5 stream are fetched by id
  * and merged in at their chronological position. Stories pins are already
  * applied by v_tracker_stories on the server.
+ *
+ * Pinned rows surface AT THEIR DATE, deliberately: the Tracker is a
+ * chronological record, not a pinboard (pin-to-top is the ADO-552 hero
+ * carousel), so an injected old pin stays buffered by the coverage frontier
+ * until paging reaches its date — exempting it would fake completeness of a
+ * range that hasn't loaded. Covered by the frontier test in the pins suite.
  */
 export async function fetchTrackerPage(
   view: TrackerView,
