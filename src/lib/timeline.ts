@@ -269,8 +269,10 @@ export async function fetchTrackerPins(signal?: AbortSignal): Promise<TrackerPin
   const pins: TrackerPins = new Map();
   try {
     const { url, anonKey } = await import('./supabase');
+    // Newest-first so if curation ever outgrows the cap, the truncation is
+    // deterministic and the most recent pins win (review note on PR #127).
     const res = await fetch(
-      `${url}/rest/v1/tracker_pin?select=source,entity_id,pin&limit=1000`,
+      `${url}/rest/v1/tracker_pin?select=source,entity_id,pin&order=updated_at.desc&limit=1000`,
       { headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` }, signal },
     );
     if (!res.ok) return pins;

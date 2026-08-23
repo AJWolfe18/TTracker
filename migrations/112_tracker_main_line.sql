@@ -77,7 +77,10 @@ CREATE POLICY "tracker_pin_anon_select" ON public.tracker_pin
 -- readable (AI review blocker on PR #127). REVOKE first so a re-run (or a DB
 -- that applied the earlier table-wide grant) converges to columns-only.
 REVOKE SELECT ON public.tracker_pin FROM anon;
-GRANT SELECT (source, entity_id, pin) ON public.tracker_pin TO anon;
+-- updated_at included: the frontend orders newest-first (deterministic
+-- truncation if pins ever outgrow the fetch cap), and ORDER BY needs SELECT
+-- privilege on the column.
+GRANT SELECT (source, entity_id, pin, updated_at) ON public.tracker_pin TO anon;
 GRANT ALL ON public.tracker_pin TO service_role;
 
 -- ============================================================================
