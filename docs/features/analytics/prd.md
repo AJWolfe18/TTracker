@@ -89,7 +89,8 @@ Autocapture covers generic clicks. These named events add the semantics autocapt
 - Popup: one text box (required, ≤2000 chars, placeholder "What's wrong / what's missing? Don't include personal info.") + submit. No category picker, no email field.
 - Submits to new `feedback-submit` edge function → `feedback` table (message, page_path, created_at). Fires `feedback_submit` so volume shows in PostHog without querying the DB.
 - Abuse protection: hidden honeypot field + the existing `rate_limits` pattern. **No Turnstile in v1** — add it only if junk actually shows up in the table.
-- Reading feedback: Supabase dashboard for v1.
+- Reading feedback: Supabase dashboard for v1. **Notification:** a PostHog alert on the `feedback_submit` event emails Josh daily when there are new submissions (digest-style — a spam burst means one email saying "N new", never N emails). Zero code; configured in Phase 4 alongside the dashboards.
+- Spam posture: junk rows are inert (feedback is never displayed publicly and the function sends no email, so there's no abuse surface); honeypot + rate limits cap volume; Turnstile is the pre-agreed escalation if meaningful junk volume appears.
 - Explicitly deferred: email/reply loop, categories, Turnstile, legacy-page button, admin viewer.
 
 ## 6. Dashboards & KPIs
