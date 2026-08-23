@@ -9,7 +9,7 @@
 
 ## 0. Open Decisions (Josh — answer before/while the stories run)
 
-- [ ] **Phase 0, BLOCKS ADO-559:** create the PostHog Cloud US account, set the project billing limit to **$0**, enable session replay (10% sample, mask all inputs), and paste the `phc_` project key into ADO-559 as a comment.
+- [ ] **Phase 0, BLOCKS ADO-559:** ~~create the PostHog account~~ done August 23, 2026 (US cloud, project 572949; **no payment method attached = billing-cap equivalent**; replay sampling set to 10%; input masking stays at PostHog's default of mask-everything — do not turn it off, the newsletter email field and feedback box would otherwise appear in recordings). **Still open: paste the `phc_` project key into ADO-559 as a comment.** Repo-watch/GitHub integration declined — not needed for v1.
 - [ ] **ADO-562:** who builds the 3 PostHog dashboards — Josh (~15 min in the PostHog UI) or a Claude session driving Chrome?
 - [ ] **Old cards:** close ADO-258 (Frontend Analytics Events — superseded by ADO-560)? Keep or fold ADO-259 (Pre-Commerce + Search Intelligence)?
 - [x] ~~Feedback scope~~ — decided August 23, 2026: simple message-only popup, React app only, no email/category/Turnstile (§5).
@@ -129,7 +129,7 @@ Three PostHog dashboards, built as part of v1 (not left as an exercise):
 
 ## 10. Success Criteria (acceptance)
 
-- [ ] **Pre-ship gate:** $0 PostHog billing cap confirmed in settings BEFORE the snippet deploys to PROD, and re-confirmed post-deploy. No cap, no ship.
+- [ ] **Pre-ship gate:** PostHog cannot bill us — confirmed BEFORE the snippet deploys to PROD and re-confirmed post-deploy: either no payment method attached (current state, August 23, 2026) OR a $0 billing limit. If a card is ever added, the $0 limit becomes mandatory. No protection, no ship.
 - [ ] PostHog live on PROD, autocapture + replay (10%, masked) verified with real traffic.
 - [ ] All named events in §4 verified firing on PROD with correct properties.
 - [ ] GA4 continues receiving legacy events + new dual-fired KPI events (allowlist updated). Custom dimension registration for new properties is NOT required — GA4 is traffic reporting + raw-event backup; PostHog is the analysis layer.
