@@ -4,6 +4,8 @@
 // server-side alarm predicates so the default view (alarm 4+) never bulk-fetches
 // rows it won't show (egress rule, CLAUDE.md #11).
 
+import { SEVERITY_TO_ALARM } from './adapter';
+
 export type TimelineSource = 'stories' | 'eos' | 'scotus' | 'pardons';
 
 /** The Tracker's scope: term 2 only. Bounds paging AND the tally counts. */
@@ -34,10 +36,6 @@ export const SOURCE_ROUTES: Record<TimelineSource, string> = {
   eos: 'eos',
   scotus: 'scotus',
   pardons: 'pardons',
-};
-
-const SEVERITY_TO_ALARM: Record<string, number> = {
-  critical: 5, severe: 4, serious: 3, notable: 2, watch: 1, win: 0,
 };
 
 function clampAlarm(n: unknown, fallback: number): number {
@@ -136,7 +134,10 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
     adapter: storyRowToEntry,
     alarm: min => {
       if (min === 0) return null;
-      const severities = ['critical', 'severe', 'serious'].slice(0, 6 - min);
+      // Derived from the canonical adapter map so the server predicate can
+      // never drift from the client-side severity fallback (Codex P1 on PR #126)
+      const severities = Object.keys(SEVERITY_TO_ALARM)
+        .filter(s => SEVERITY_TO_ALARM[s] >= min);
       return `or(alarm_level.gte.${min},and(alarm_level.is.null,severity.in.(${severities.join(',')})))`;
     },
   },
