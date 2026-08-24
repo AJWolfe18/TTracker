@@ -385,14 +385,24 @@
   const ALLOWED_TRANSPORTS = new Set(['beacon', 'xhr', 'image']);
 
   /**
+   * Params kept for GA4 legacy continuity but NEVER mirrored to PostHog.
+   *
+   * Product Analytics v1 (PRD section 4) is explicit: search sends length only,
+   * and no event property may be derived from free-text user input. `term_hash`
+   * is a 32-bit hash of the search term -- low entropy and trivially reversible
+   * for a site with a bounded vocabulary, so it is not a safe anonymiser. GA4
+   * keeps receiving it so existing Looker Studio reports don't break; PostHog,
+   * the new analysis layer, starts clean.
+   */
+  const POSTHOG_EXCLUDED_PARAMS = new Set(['term_hash']);
+
+  /**
    * Track analytics event (Google Analytics) with PII protection
    * @param {string} eventName - Event name (e.g., 'outbound_click', 'detail_toggle')
    * @param {Object} eventParams - Event parameters
    * @param {Object} opts - Options (e.g., { transport_type: 'beacon' })
    */
   function trackEvent(eventName, eventParams = {}, opts = {}) {
-    if (typeof gtag !== 'function') return;
-
     // Environment gate. Single allowlist rule, shared with analytics-gate.js
     // (ADO-559). The previous check was a denylist for 'test--'/localhost,
     // which missed Netlify deploy previews and any other branch deploy.
@@ -417,15 +427,30 @@
       safeParams.transport_type = opts.transport_type;
     }
 
-    gtag('event', eventName, safeParams);
+    // The two vendors are dispatched INDEPENDENTLY. Neither a missing gtag nor
+    // a throwing one may suppress the other vendor or break the page, so there
+    // is no shared early return and no unguarded call (mirrors the React
+    // wrapper in src/lib/analytics.ts).
+    if (typeof gtag === 'function') {
+      try {
+        gtag('event', eventName, safeParams);
+      } catch (err) {
+        /* analytics must never break the page */
+      }
+    }
 
     // Mirror to PostHog through the gate's façade (ADO-559). Deliberately
-    // AFTER the allowlist filter, so the same allowlist protects both vendors.
+    // AFTER the allowlist filter, so the same allowlist protects both vendors,
+    // minus the params PostHog must never receive (see POSTHOG_EXCLUDED_PARAMS).
     // window.TTAnalytics is defined by public/analytics-gate.js and buffers
     // until posthog-js finishes loading, so this is safe to call at any time.
     if (window.TTAnalytics) {
+      const posthogParams = {};
+      for (const [key, val] of Object.entries(safeParams)) {
+        if (!POSTHOG_EXCLUDED_PARAMS.has(key)) posthogParams[key] = val;
+      }
       try {
-        window.TTAnalytics.capture(eventName, safeParams);
+        window.TTAnalytics.capture(eventName, posthogParams);
       } catch (err) {
         /* analytics must never break the page */
       }
