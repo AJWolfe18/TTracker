@@ -18,10 +18,21 @@
 (function () {
   'use strict';
 
-  var ANALYTICS_HOSTNAME = 'trumpytracker.com';
+  // If this file is ever included twice on one page, only the first run counts.
+  // A second GA4 injection would double-count pageviews -- the exact metric
+  // this gate exists to protect.
+  if (window.TT_ANALYTICS_GATE_LOADED) return;
+  window.TT_ANALYTICS_GATE_LOADED = true;
+
+  // Exact-match allowlist, never a suffix test (a suffix test would let
+  // trumpytracker.com.example.org through). www currently 301s to the apex, so
+  // only the apex is reachable today; the alias is here so that flipping
+  // Netlify's primary domain can't silently switch analytics off.
+  var ANALYTICS_HOSTNAMES = ['trumpytracker.com', 'www.trumpytracker.com'];
   var GA4_MEASUREMENT_ID = 'G-5MDT4HFMNB';
 
-  var enabled = window.location.hostname === ANALYTICS_HOSTNAME;
+  var host = (window.location.hostname || '').toLowerCase();
+  var enabled = ANALYTICS_HOSTNAMES.indexOf(host) !== -1;
 
   // Exposed so page scripts can branch without re-implementing the hostname
   // rule (public/shared.js keeps its own defensive check as well).
