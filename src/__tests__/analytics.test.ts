@@ -50,9 +50,15 @@ describe('src/lib/analytics gate', () => {
     expect(isAnalyticsEnabled()).toBe(false);
   });
 
-  it('is enabled only on the exact production hostname', () => {
-    setWindow(ANALYTICS_HOSTNAME);
-    expect(isAnalyticsEnabled()).toBe(true);
+  it('is enabled only on the production hostnames, case-insensitively', () => {
+    for (const host of [
+      ANALYTICS_HOSTNAME,
+      `www.${ANALYTICS_HOSTNAME}`,
+      'TrumpyTracker.com',
+    ]) {
+      setWindow(host);
+      expect(isAnalyticsEnabled(), `expected ${host} to be enabled`).toBe(true);
+    }
 
     for (const host of OFF_PROD_HOSTS) {
       setWindow(host);
@@ -130,9 +136,13 @@ function runGate(hostname: string) {
     c: unknown,
   ) => void;
 
-  run(win, document, { log: (...args: unknown[]) => logs.push(args) });
+  const console = { log: (...args: unknown[]) => logs.push(args) };
+  run(win, document, console);
 
-  return { win, appended, created, logs };
+  // Simulate the same file being included on the page a second time.
+  const runAgain = () => run(win, document, console);
+
+  return { win, appended, created, logs, runAgain };
 }
 
 const GA_SRC = `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`;
@@ -165,6 +175,16 @@ describe('public/analytics-gate.js', () => {
       expect(appended, `${host} must not append a script element`).toHaveLength(0);
       expect(win.dataLayer, `${host} must not create a dataLayer`).toBeUndefined();
     }
+  });
+
+  it('is inert on a second inclusion, so pageviews cannot be double-counted', () => {
+    const { win, appended, runAgain } = runGate(ANALYTICS_HOSTNAME);
+    expect(appended).toHaveLength(2);
+
+    runAgain();
+
+    expect(appended, 'a second include must not inject the vendors again').toHaveLength(2);
+    expect(win.dataLayer, 'a second include must not re-queue js/config').toHaveLength(2);
   });
 
   it('exposes console-only gtag and TTAnalytics stubs off PROD', () => {

@@ -377,7 +377,8 @@
     if (typeof window.TT_ANALYTICS_ENABLED === 'boolean') {
       return window.TT_ANALYTICS_ENABLED;
     }
-    return window.location.hostname === 'trumpytracker.com';
+    const host = (window.location.hostname || '').toLowerCase();
+    return host === 'trumpytracker.com' || host === 'www.trumpytracker.com';
   }
 
   // Allowed transport types for beacon

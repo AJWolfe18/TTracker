@@ -19,7 +19,22 @@
  * whole test file (see the `src/lib/supabase.ts` gotcha).
  */
 
+/** Canonical production hostname. */
 export const ANALYTICS_HOSTNAME = 'trumpytracker.com';
+
+/**
+ * Hosts that count as production. Exact matches only, never a suffix test --
+ * a suffix test would let `trumpytracker.com.example.org` through.
+ *
+ * `www` currently 301s to the apex, so only the apex is reachable today. The
+ * alias is here so that flipping Netlify's primary domain can't silently
+ * switch analytics off.
+ */
+export const ANALYTICS_HOSTNAMES: readonly string[] = [
+  ANALYTICS_HOSTNAME,
+  `www.${ANALYTICS_HOSTNAME}`,
+];
+
 export const GA4_MEASUREMENT_ID = 'G-5MDT4HFMNB';
 
 /**
@@ -139,7 +154,7 @@ void _schemaMatchesTypes;
 /** True only on the production hostname. */
 export function isAnalyticsEnabled(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.location.hostname === ANALYTICS_HOSTNAME;
+  return ANALYTICS_HOSTNAMES.includes((window.location.hostname || '').toLowerCase());
 }
 
 /**
