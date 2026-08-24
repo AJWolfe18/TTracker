@@ -98,21 +98,23 @@ describe('src/lib/analytics gate', () => {
  * fake DOM -- this is the direct proof of the ADO-558 acceptance criterion
  * "ZERO network requests to googletagmanager.com off PROD (script tag included)".
  */
+type FakeScript = { src?: string; async?: boolean; onload?: () => void };
+
 function runGate(hostname: string) {
-  const appended: Array<{ src?: string; async?: boolean }> = [];
-  const created: Array<{ src?: string; async?: boolean }> = [];
+  const appended: FakeScript[] = [];
+  const created: FakeScript[] = [];
   const logs: unknown[][] = [];
 
   const win: Record<string, unknown> = { location: { hostname } };
   const document = {
     createElement: (tag: string) => {
       if (tag !== 'script') throw new Error(`unexpected createElement(${tag})`);
-      const el: { src?: string; async?: boolean } = {};
+      const el: FakeScript = {};
       created.push(el);
       return el;
     },
     head: {
-      appendChild: (el: { src?: string; async?: boolean }) => {
+      appendChild: (el: FakeScript) => {
         appended.push(el);
         return el;
       },
@@ -133,16 +135,16 @@ function runGate(hostname: string) {
   return { win, appended, created, logs };
 }
 
+const GA_SRC = `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`;
+const POSTHOG_SRC = 'https://us-assets.i.posthog.com/static/array.js';
+
 describe('public/analytics-gate.js', () => {
-  it('injects the GA4 script exactly once on PROD', () => {
+  it('injects GA4 and PostHog exactly once each on PROD', () => {
     const { win, appended } = runGate(ANALYTICS_HOSTNAME);
 
     expect(win.TT_ANALYTICS_ENABLED).toBe(true);
-    expect(appended).toHaveLength(1);
-    expect(appended[0].src).toBe(
-      `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`,
-    );
-    expect(appended[0].async).toBe(true);
+    expect(appended.map((s) => s.src)).toEqual([GA_SRC, POSTHOG_SRC]);
+    expect(appended.every((s) => s.async === true)).toBe(true);
 
     // The GA4 bootstrap commands are queued for the remote script.
     const dataLayer = win.dataLayer as unknown[];
@@ -165,14 +167,103 @@ describe('public/analytics-gate.js', () => {
     }
   });
 
-  it('exposes a console-only gtag stub off PROD', () => {
+  it('exposes console-only gtag and TTAnalytics stubs off PROD', () => {
     const { win, logs, appended } = runGate('localhost');
 
     expect(typeof win.gtag).toBe('function');
     (win.gtag as (...args: unknown[]) => void)('event', 'outbound_click', { a: 1 });
 
-    expect(logs).toHaveLength(1);
-    expect(logs[0][0]).toBe('[analytics:off-prod] gtag');
+    const tt = win.TTAnalytics as { capture: (n: string, p: unknown) => void };
+    expect(typeof tt.capture).toBe('function');
+    tt.capture('card_open', { tab: 'news' });
+
+    expect(logs.map((l) => l[0])).toEqual([
+      '[analytics:off-prod] gtag',
+      '[analytics:off-prod] posthog.capture',
+    ]);
     expect(appended).toHaveLength(0);
+  });
+
+  /**
+   * posthog-js self-assigns window.posthog and its bootstrap is
+   * `if (!window.posthog || isArray(window.posthog._i))`. If the gate assigned
+   * its own object to that global, PostHog would skip init entirely and fail
+   * silently -- so the gate must leave it alone until the library loads.
+   */
+  it('never touches window.posthog before the SDK loads', () => {
+    const { win } = runGate(ANALYTICS_HOSTNAME);
+    expect(win.posthog).toBeUndefined();
+  });
+
+  it('buffers captures made before the SDK loads, then flushes them in order', () => {
+    const { win, appended } = runGate(ANALYTICS_HOSTNAME);
+    const tt = win.TTAnalytics as { capture: (n: string, p: unknown) => void };
+
+    // A user clicks before array.js has finished downloading.
+    tt.capture('card_open', { tab: 'news', feed_position: 0 });
+    tt.capture('source_click', { outlet_domain: 'apnews.com' });
+
+    const captured: Array<[string, unknown]> = [];
+    let initArgs: unknown[] = [];
+    win.posthog = {
+      init: (...args: unknown[]) => {
+        initArgs = args;
+      },
+      capture: (n: string, p: unknown) => captured.push([n, p]),
+    };
+
+    const phScript = appended.find((s) => s.src === POSTHOG_SRC);
+    phScript?.onload?.();
+
+    expect(initArgs[0]).toMatch(/^phc_/);
+    expect(initArgs[1]).toMatchObject({
+      api_host: 'https://us.i.posthog.com',
+      autocapture: true,
+      capture_pageview: 'history_change',
+      person_profiles: 'identified_only',
+      session_recording: { maskAllInputs: true },
+    });
+
+    expect(captured).toEqual([
+      ['card_open', { tab: 'news', feed_position: 0 }],
+      ['source_click', { outlet_domain: 'apnews.com' }],
+    ]);
+
+    // Post-load captures go straight through, not into the buffer.
+    tt.capture('share_click', { channel: 'copy' });
+    expect(captured).toHaveLength(3);
+  });
+
+  it('survives an SDK that fails to load or throws on init', () => {
+    const { win, appended } = runGate(ANALYTICS_HOSTNAME);
+    const tt = win.TTAnalytics as { capture: (n: string, p: unknown) => void };
+    const phScript = appended.find((s) => s.src === POSTHOG_SRC);
+
+    // array.js blocked by an ad blocker: window.posthog never appears.
+    expect(() => phScript?.onload?.()).not.toThrow();
+    expect(() => tt.capture('card_open', { tab: 'news' })).not.toThrow();
+
+    // ...or it loads but init throws.
+    win.posthog = {
+      init: () => {
+        throw new Error('boom');
+      },
+      capture: () => {},
+    };
+    expect(() => phScript?.onload?.()).not.toThrow();
+    expect(() => tt.capture('card_open', { tab: 'news' })).not.toThrow();
+  });
+
+  it('caps the pre-load buffer so a failed load cannot grow it unbounded', () => {
+    const { win, appended } = runGate(ANALYTICS_HOSTNAME);
+    const tt = win.TTAnalytics as { capture: (n: string, p: unknown) => void };
+
+    for (let i = 0; i < 200; i++) tt.capture('pagination', { page: i });
+
+    const captured: unknown[] = [];
+    win.posthog = { init: () => {}, capture: () => captured.push(1) };
+    appended.find((s) => s.src === POSTHOG_SRC)?.onload?.();
+
+    expect(captured).toHaveLength(50);
   });
 });
