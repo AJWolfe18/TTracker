@@ -26,6 +26,24 @@
    - **Fix the existing GA4 leak while here:** today the gtag snippet fires `gtag('config', ...)` unconditionally in `index.html` and every legacy page, so TEST/localhost **pageviews already pollute PROD GA4** — only `shared.js` custom events are gated. Gating the config call is not enough: the external `googletagmanager.com/gtag/js` script tag itself must not load off-PROD (the QA criterion is ZERO analytics network calls). Replace the static `<script async src>` with conditional injection — inside the hostname gate, `document.createElement('script')` for both gtag and PostHog. Same pattern in `index.html` and every live legacy page; also gate the `App.tsx` route-change `gtag('config', ...)` call. One gating convention, both vendors, script level.
    - **This GA4 gate can (and should) ship first as its own small commit/PR** ahead of the PostHog work — it immediately stops dev/TEST traffic corrupting PROD traffic numbers and carries near-zero risk.
 3. Autocapture ON (default). SPA pageviews: pin the exact option against the current posthog-js docs at implementation time (recent SDKs: `capture_pageview: 'history_change'`; older ones need a manual `$pageview` capture on route change). Do not guess — verify against the SDK version the snippet serves, and record the chosen config in this doc.
+
+   **RESOLVED (August 23, 2026, ADO-559).** Verified by fetching the CDN bundle actually served at `https://us-assets.i.posthog.com/static/array.js`: it reports `LIB_VERSION="1.418.10"` and contains the `"history_change"` branch, so the option is supported. Config shipped in `public/analytics-gate.js`:
+
+   ```js
+   posthog.init(POSTHOG_PUBLISHABLE_KEY, {
+     api_host: 'https://us.i.posthog.com',
+     autocapture: true,
+     capture_pageview: 'history_change',   // SPA route changes, no manual $pageview
+     capture_pageleave: true,
+     person_profiles: 'identified_only',   // nobody is ever identified -> no person
+                                           // profiles for anonymous traffic (free tier)
+     session_recording: { maskAllInputs: true },
+   });
+   ```
+
+   Because PostHog captures route changes itself, `trackPageView()` in `src/lib/analytics.ts` is **GA4-only** on purpose — it is not a dual-fire.
+
+   **Loader deviation, and why.** The plan said "the official PostHog snippet". We load `array.js` via `document.createElement` + `init` on `onload` instead of pasting PostHog's minified queueing stub. The stub's only job is buffering calls made before the library lands, which a readable ~10-line queue in `analytics-gate.js` does instead. The deciding reason is a real hazard: `array.js` self-assigns `window.posthog` and its bootstrap is `if (!window.posthog || isArray(window.posthog._i))`, so assigning *any* non-stub object to `window.posthog` makes PostHog **skip initialization entirely and fail silently**. The gate therefore must not touch that global before load, and both surfaces mirror through a `window.TTAnalytics.capture` façade rather than `window.posthog` directly. Covered by a regression test.
 4. `src/lib/analytics.ts`: thin typed wrapper with **per-event property maps**, not a loose Record —
    ```ts
    interface EventProps {

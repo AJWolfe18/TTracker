@@ -352,12 +352,49 @@
     'error_type', 'component',
     // merch tracking
     'method',
+    // Product Analytics v1 named events (PRD section 4, ADO-559). Legacy pages
+    // wire these in later phases; the allowlist ships first so an unlisted
+    // param can never be silently dropped mid-phase.
+    'item_type', 'alarm_level', 'feed_position', 'tab',
+    'outlet_domain', 'source_position',
+    'channel', 'filter_key', 'filter_value', 'query_length',
+    'surface', 'error_category', 'page_path',
     // schema version
     'schema_v'
   ]);
 
+  // Bumped to 2 when the Product Analytics v1 params above were added.
+  // Mirrors SCHEMA_VERSION in src/lib/analytics.ts.
+  const SCHEMA_VERSION = 2;
+
+  /**
+   * Is this the production environment? Authoritative answer comes from
+   * public/analytics-gate.js, which is the single place the hostname rule
+   * lives. The literal is only a fallback for the case where that script
+   * failed to load, and it fails CLOSED (no gate, no analytics off PROD).
+   */
+  function isAnalyticsEnvEnabled() {
+    if (typeof window.TT_ANALYTICS_ENABLED === 'boolean') {
+      return window.TT_ANALYTICS_ENABLED;
+    }
+    const host = (window.location.hostname || '').toLowerCase();
+    return host === 'trumpytracker.com' || host === 'www.trumpytracker.com';
+  }
+
   // Allowed transport types for beacon
   const ALLOWED_TRANSPORTS = new Set(['beacon', 'xhr', 'image']);
+
+  /**
+   * Params kept for GA4 legacy continuity but NEVER mirrored to PostHog.
+   *
+   * Product Analytics v1 (PRD section 4) is explicit: search sends length only,
+   * and no event property may be derived from free-text user input. `term_hash`
+   * is a 32-bit hash of the search term -- low entropy and trivially reversible
+   * for a site with a bounded vocabulary, so it is not a safe anonymiser. GA4
+   * keeps receiving it so existing Looker Studio reports don't break; PostHog,
+   * the new analysis layer, starts clean.
+   */
+  const POSTHOG_EXCLUDED_PARAMS = new Set(['term_hash']);
 
   /**
    * Track analytics event (Google Analytics) with PII protection
@@ -366,17 +403,16 @@
    * @param {Object} opts - Options (e.g., { transport_type: 'beacon' })
    */
   function trackEvent(eventName, eventParams = {}, opts = {}) {
-    if (typeof gtag !== 'function') return;
-
-    // Skip analytics on test environments
-    const hostname = window.location.hostname;
-    if (hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1') {
-      console.log('[Analytics:TEST]', eventName, eventParams);
+    // Environment gate. Single allowlist rule, shared with analytics-gate.js
+    // (ADO-559). The previous check was a denylist for 'test--'/localhost,
+    // which missed Netlify deploy previews and any other branch deploy.
+    if (!isAnalyticsEnvEnabled()) {
+      console.log('[Analytics:off-prod]', eventName, eventParams);
       return;
     }
 
     // Build safe params with allowlist
-    const safeParams = { schema_v: 1 };
+    const safeParams = { schema_v: SCHEMA_VERSION };
 
     for (const [key, val] of Object.entries(eventParams)) {
       if (ALLOWED_PARAMS.has(key) && val !== undefined && val !== null) {
@@ -391,7 +427,34 @@
       safeParams.transport_type = opts.transport_type;
     }
 
-    gtag('event', eventName, safeParams);
+    // The two vendors are dispatched INDEPENDENTLY. Neither a missing gtag nor
+    // a throwing one may suppress the other vendor or break the page, so there
+    // is no shared early return and no unguarded call (mirrors the React
+    // wrapper in src/lib/analytics.ts).
+    if (typeof gtag === 'function') {
+      try {
+        gtag('event', eventName, safeParams);
+      } catch (err) {
+        /* analytics must never break the page */
+      }
+    }
+
+    // Mirror to PostHog through the gate's façade (ADO-559). Deliberately
+    // AFTER the allowlist filter, so the same allowlist protects both vendors,
+    // minus the params PostHog must never receive (see POSTHOG_EXCLUDED_PARAMS).
+    // window.TTAnalytics is defined by public/analytics-gate.js and buffers
+    // until posthog-js finishes loading, so this is safe to call at any time.
+    if (window.TTAnalytics) {
+      const posthogParams = {};
+      for (const [key, val] of Object.entries(safeParams)) {
+        if (!POSTHOG_EXCLUDED_PARAMS.has(key)) posthogParams[key] = val;
+      }
+      try {
+        window.TTAnalytics.capture(eventName, posthogParams);
+      } catch (err) {
+        /* analytics must never break the page */
+      }
+    }
   }
 
   /**
@@ -585,10 +648,8 @@
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Set GA4 user property (skip on test environments)
-        const hostname = window.location.hostname;
-        const isTest = hostname.includes('test--') || hostname === 'localhost' || hostname === '127.0.0.1';
-        if (typeof gtag === 'function' && !isTest) {
+        // Set GA4 user property (PROD only - same gate as trackEvent)
+        if (typeof gtag === 'function' && isAnalyticsEnvEnabled()) {
           gtag('set', 'user_properties', { newsletter_subscriber: true });
         }
 
