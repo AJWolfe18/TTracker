@@ -269,7 +269,7 @@ docs/features/
 ### Cost/Budget
 - ❌ Propose features without stating cost - Always mention $ impact
 - ❌ Ignore daily budget limits - Check `budgets` table before OpenAI calls
-- ❌ Use expensive models unnecessarily - GPT-4o-mini is sufficient for enrichment
+- ❌ Use expensive models unnecessarily - GPT-4o-mini for mechanical tasks (entity extraction); editorial enrichment uses Claude agents (mini-era editorial output caused the SCOTUS/EO quality failures — see `docs/decisions/0001-claude-agents-over-gpt-pipelines.md`)
 
 ### Language/Runtime
 - ❌ **Using Python in this project** - NO PYTHON IN THIS REPO
@@ -442,7 +442,7 @@ UI labels → Database enum values: see the mapping in `scripts/enrichment/enric
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
 - **Frontend:** Vite + React + TypeScript (Tailwind CSS). Admin dashboard (`admin.html`) is standalone vanilla JS.
-- **AI:** OpenAI GPT-4o-mini (RSS/story enrichment); Claude cloud agents (SCOTUS/EO/Pardons enrichment)
+- **AI:** Claude cloud agents (Stories/SCOTUS/EO/Pardons enrichment — all editorial copy); OpenAI GPT-4o-mini (article entity extraction only, inline in RSS tracker). Legacy GPT story enrichment is OFF (`ENABLE_LEGACY_STORY_ENRICHMENT`, ADO-528).
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
