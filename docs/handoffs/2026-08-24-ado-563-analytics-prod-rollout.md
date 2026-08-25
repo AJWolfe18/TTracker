@@ -44,3 +44,9 @@ https://us.posthog.com/project/572949/dashboard/2029138 - 12 insights created th
 - ADO-561 (feedback popup, Phase 3) -> 562 -> Phase 5b deploy (feedback-submit function + migration 113).
 - ADO-557 fronts automation planning (reuse the seed regexes); ADO-548 front pages; ADO-547 admin pin editor. Josh will want Tracker changes after seeing it live - expect a curation pass.
 - ADO-564: read the two north-star numbers off dashboard 2029138 on/after September 7, 2026.
+
+## Addendum (same night)
+
+- **GPT API PR-review workflow removed** (PR #132, `e4aaf8c` on main, also on test). It was draining the OpenAI balance Josh had just topped up, and that balance also feeds RSS entity extraction - RSS Tracker PROD failed 5 runs in a row (18:27-02:51) with `429 You have no credits remaining` on embeddings. Codex (ChatGPT subscription) is the only PR reviewer now. If the next 2h RSS run still fails, that is a new session's problem.
+- Dashboard 2029138 grew to 16 tiles: weekly retention, card-open + source-click rates split by `$device_type`, and Tracker view/source toggle use (`filter_apply` on tab=tracker).
+- **Decision rules** (threshold -> action) are a comment on ADO-564. Gaps acknowledged: front-tag clicks are not instrumented until ADO-548 (add `front_open`); Newsletter + Feedback dashboards wait for Phase 5b. Looker Studio was never really used - not maintained.
