@@ -14,6 +14,7 @@
 - [x] ~~ADO-258~~ — already Closed (its shared.js instrumentation shipped on legacy pages; the old plan.md status table was stale). ADO-259 (Pre-Commerce + Search Intelligence) stays open, untouched by this project.
 - [x] ~~Feedback scope~~ — decided August 23, 2026: simple message-only popup, React app only, no email/category/Turnstile (§5).
 - [x] ~~Perf metrics~~ — decided August 23, 2026: out of v1, first fast-follow (§9).
+- [x] ~~Rollout order~~ — decided August 24, 2026: PROD rollout pulled forward. Phases 1-2 ship to PROD as **Phase 5a (ADO-563, next)** with the Content Engagement dashboard; feedback (561) and newsletter + remaining dashboards (562) follow as Phase 5b. Why: nothing is observable until PROD, and 1-2 already answer the usage question.
 
 ---
 

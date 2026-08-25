@@ -2,6 +2,7 @@
 
 **PRD:** `docs/features/analytics/prd.md` (read it first — this plan implements that scope, nothing more)
 **ADO:** Epic 254 → Bug 558 (GA4 gate, ships first) + Stories 559 (P1), 560 (P2), 561 (P3), 562 (P4), 563 (P5) — each phase ≈ one session
+**Resequenced August 24, 2026 (Josh):** PROD rollout pulled forward. Order is now P1 → P2 → **P5a (PROD rollout of what exists + Engagement dashboard)** → P3 → P4 → P5b (small follow-up deploy for feedback + newsletter). Reason: analytics are only observable on PROD, and P1+P2 already answer "how are people using the site" — feedback and the newsletter funnel are additive and should not gate the data.
 **Before starting: check PRD §0 "Open Decisions" — unanswered items there block the stories they name (Phase 0 blocks ADO-559).**
 **Branch:** develop on `test` (direct commit/push in interactive sessions; autonomous/overnight sessions deliver via PR to `test` per the 2026-08-19 convention). PROD ships via cherry-picked deployment branch + PR to `main`.
 
@@ -106,7 +107,18 @@ Rules:
    - Also configure the **feedback notification**: a PostHog alert on the `feedback_submit` event that emails Josh daily when count > 0 (digest-style, not per-event). Verify the alert email arrives (trigger a TEST-flag submission on PROD post-deploy, or use PostHog's test-send).
 3. About page: analytics disclosure paragraph (PRD §7).
 
-## Phase 5: PROD rollout + verification (part of a deploy session)
+## Phase 5a: Early PROD rollout of Phases 1-2 + Engagement dashboard (1 supervised session) — ADO-563
+
+Runs BEFORE Phases 3-4. No migrations, no edge functions, no new secrets — the PostHog key is client-side and already in the code.
+
+1. Deployment branch from `main`; cherry-pick the three analytics commits from `test`: `877c0bf` (558 GA4 gate), `ed39e72` (559 PostHog bootstrap), `70f6a92` (560 named events). `TrackerSpine.tsx` already exists on `main` behind `rap_sheet=OFF`, so the 560 hunk applies cleanly and Tracker events start flowing whenever that flag flips. If ADO-554 has passed AC7 by then, the Tracker debut can share this branch (migration 112 BEFORE code, per `docs/handoffs/2026-08-23-ado-554-tracker-main-line.md`).
+2. PR to `main` per `docs/guides/prod-deployment-checklist.md`, `@codex review`, merge. Netlify auto-deploys.
+3. **Pre-deploy gate:** confirm PostHog project 572949 still has no payment method (no cap, no ship).
+4. **Post-deploy verify on trumpytracker.com** (the only place this is observable): GA4 real-time still receiving PROD pageviews (the gate didn't break it) and TEST/localhost traffic gone; PostHog live events show `$pageview` + each named event from real clicks (`card_open`, `source_click`, `share_click`, `filter_apply`, `search`, `pagination`); session replay recording sampled + masked.
+5. Build the **Content Engagement** dashboard (PRD §6) via claude-in-chrome — opens by type/position/tab, source clicks by outlet, shares by channel, filters/search/pagination by tab. Paste its URL into ADO-563. The Newsletter and Feedback dashboards stay in Phase 4 (their events don't exist yet).
+6. Update `docs/ARCHITECTURE.md` current-state tables (new vendor). Create the 2-week north-star follow-up card (PRD §6). Close 558, 559, 560, 563.
+
+## Phase 5b: Follow-up deploy for Phases 3-4 (part of a later deploy session)
 
 1. Cherry-pick to a deployment branch → PR to `main` per `docs/guides/prod-deployment-checklist.md`. Deploy `feedback-submit` to PROD ref `osjbulmltfpcoldydexg`; apply migration 113 on PROD. No new secrets (feedback v1 has no Turnstile).
 2. Post-deploy verify on trumpytracker.com (analytics only work here): autocapture events arriving, each named event via real clicks, replay recording sampled + masked, GA4 still receiving.

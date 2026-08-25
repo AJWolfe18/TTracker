@@ -67,8 +67,20 @@ Manual: `npx vite --port 5199`, open `http://127.0.0.1:5199/?ff_rap_sheet=true`,
 
 Two-pass review done inline (no agents per Josh's token rule). One finding fixed before commit: the `analytics` import and `TRACKER_TAB` const had landed mid-import-block in `TrackerSpine.tsx`. No Codex review — this went straight to `test` as a direct push, not a PR.
 
-## Next
+## Next — resequenced August 24, 2026 (Josh)
 
-- **ADO-561 (Phase 3):** feedback button + `feedback-submit` edge function + migration 113. The wrapper already types `feedback_open`/`feedback_submit` (page_path only — the message goes to Supabase, never to a vendor).
-- Phases 4–5 unchanged: newsletter funnel + dashboards (562, dashboards via claude-in-chrome), PROD rollout + verification (563, supervised).
-- 558/559/560 close together after 563.
+PROD rollout pulled forward: **ADO-563 is now "Phase 5a: early PROD rollout of Phases 1-2 + Engagement dashboard" and runs NEXT.** Plan §"Phase 5a" + PRD §0 carry the decision. 561/562 follow, with their own small deploy (5b).
+
+### Kickoff prompt for the next session (supervised — Josh present)
+
+```
+/start-work ADO-563: Phase 5a early PROD rollout of analytics. Follow docs/features/analytics/plan-product-analytics-v1.md "Phase 5a" exactly.
+1. Pre-gate: confirm PostHog project 572949 has no payment method.
+2. Deploy branch from main; cherry-pick 877c0bf, ed39e72, 70f6a92 from test (check .claude/test-only-paths.md). If ADO-554 has passed AC7, fold in the Tracker debut (migration 112 on PROD BEFORE the code cherry-picks; seed PROD fronts; flip rap_sheet last) — ask Josh first.
+3. PR to main, @codex review, merge; Netlify deploys.
+4. Verify on trumpytracker.com with claude-in-chrome: GA4 real-time still receiving + no TEST/localhost hosts; PostHog live events show $pageview and every Phase 2 named event from real clicks; replay sampled + masked.
+5. Build the Content Engagement dashboard in PostHog via claude-in-chrome (Josh logged in); paste URL on ADO-563.
+6. Update docs/ARCHITECTURE.md current-state tables; create the 2-week north-star follow-up card; close 558/559/560/563.
+```
+
+Cost: $0. No migrations/edge functions/secrets unless the Tracker debut is folded in (then migration 112 only).
