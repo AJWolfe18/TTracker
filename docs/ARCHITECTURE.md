@@ -5,7 +5,7 @@
 ## What it is
 AI political-accountability tracker. Four content types: **Stories** (clustered news), **Executive Orders**, **SCOTUS** cases, and **Pardons** — each ingested, AI-enriched, reviewed, and published.
 
-## Pipeline flow (current state, 2026-08-05)
+## Pipeline flow (current state, 2026-08-24)
 
 ```mermaid
 flowchart LR
@@ -51,6 +51,15 @@ flowchart LR
 | `COURTLISTENER_API_TOKEN` | SCOTUS case fetch | New SCOTUS cases |
 | `ADMIN_DASHBOARD_PASSWORD` (Supabase secret) | admin edge functions (judge-log, judge-merge, etc.) | Admin dashboard actions |
 
+## Analytics vendors (client-side only, $0/month)
+
+| Vendor | Loads when | What it captures | Where configured |
+|--------|-----------|------------------|------------------|
+| GA4 | PROD hostname only (`public/analytics-gate.js`, ADO-558) | Pageviews | GA4 property (unchanged) |
+| PostHog (project 572949, US cloud, Free plan, **no payment method on file = hard $0 cap**) | PROD hostname only, same gate (ADO-559) | `$pageview`, autocapture, sampled + masked session replay, named KPI events `card_open` / `source_click` / `share_click` / `filter_apply` / `search` / `pagination` (ADO-560) | `src/lib/analytics.ts` (typed wrapper), `public/shared.js` (legacy pages); dashboards live in PostHog |
+
+Neither vendor runs on TEST or localhost, so analytics are only observable on trumpytracker.com. Feedback + newsletter events ship in Phase 5b (ADO-561/562).
+
 ## Kill switches (repo variables unless noted)
 
 | Switch | Governs | Default |
@@ -60,6 +69,7 @@ flowchart LR
 | `ENABLE_TIERB_MARGIN_BYPASS` | Tier B clustering margin bypass | `true` |
 | `JUDGE_DRY_RUN` (cloud agent env) | Judge live-merge vs dry-run (`'false'` = live) | `false` (live) |
 | Disable a RemoteTrigger cron | Any single Claude agent | — |
+| `rap_sheet` in `public/shared/flags-prod.json` | The Tracker homepage (main line, fronts) — ON since August 24, 2026 (ADO-554) | `true` |
 
 ## Components (what each owns)
 - **RSS pipeline** (`rss-tracker-supabase.js`): fetch → cluster, inline. Budget-capped ($5/day), runs every 2h on PROD via GitHub Actions.
