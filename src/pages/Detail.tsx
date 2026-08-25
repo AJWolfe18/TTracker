@@ -9,6 +9,16 @@ import { pickHeadline } from '@/lib/pick-headline';
 import type { DisplayItem, TimelineEvent } from '@/types';
 import type { ThemePalette } from '@/tokens/themes';
 import { Link } from 'wouter';
+import { track, toAnalyticsItemType } from '@/lib/analytics';
+
+/** Hostname only, so an outbound URL never lands in an analytics payload. */
+function outletDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'unknown';
+  }
+}
 
 interface DetailProps {
   item: DisplayItem | null;
@@ -49,7 +59,19 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
   const correctionBody = `Story ID: ${item.id}\n\nWhich claim is incorrect:\n\nCorrect information:\n\nSource URL:`;
   const mailtoHref = `mailto:corrections@trumpytracker.com?subject=${encodeURIComponent(correctionSubject)}&body=${encodeURIComponent(correctionBody)}`;
 
+  // Analytics: every share/source/correction event carries the item type only
+  // (never the URL or headline). A null type means an unmapped DisplayItem.type,
+  // and the event is dropped rather than tagged with a made-up category.
+  const item_type = toAnalyticsItemType(item.type);
+  const trackShare = (channel: string) => {
+    if (item_type) track('share_click', { channel, item_type });
+  };
+  const trackSource = (url: string, position: number) => {
+    if (item_type) track('source_click', { item_type, outlet_domain: outletDomain(url), source_position: position });
+  };
+
   async function handleCopyLink() {
+    trackShare('copy_link');
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
@@ -59,29 +81,34 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
   }
 
   function shareToX() {
+    trackShare('x');
     const text = encodeURIComponent(pickHeadline(story, hmode));
     const url = encodeURIComponent(window.location.href);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToThreads() {
+    trackShare('threads');
     const content = encodeURIComponent(pickHeadline(story, hmode) + ' ' + window.location.href);
     window.open(`https://threads.net/intent/post?text=${content}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToFacebook() {
+    trackShare('facebook');
     const url = encodeURIComponent(window.location.href);
     const text = encodeURIComponent(pickHeadline(story, hmode));
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'noopener,noreferrer');
   }
 
   function shareToReddit() {
+    trackShare('reddit');
     const url = encodeURIComponent(window.location.href);
     const title = encodeURIComponent(pickHeadline(story, hmode));
     window.open(`https://reddit.com/submit?url=${url}&title=${title}`, '_blank', 'noopener,noreferrer');
   }
 
   function handleNativeShare() {
+    trackShare('native');
     if (navigator.share) {
       navigator.share({
         title: pickHeadline(story, hmode),
@@ -178,7 +205,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
                       }}>
                         {s.heading}
                       </h3>
-                      <ReceiptsTimeline events={item.timelineEvents} theme={theme} type={type} />
+                      <ReceiptsTimeline events={item.timelineEvents} theme={theme} type={type} onSourceClick={trackSource} />
                     </section>
                   );
                 }
@@ -224,6 +251,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
             </button>
             <a
               href={mailtoHref}
+              onClick={() => { if (item_type) track('correction_click', { item_type }); }}
               style={{ textDecoration: 'none', fontFamily: type.mono, fontSize: 11, letterSpacing: '0.14em', padding: '10px 16px', border: `1px solid ${theme.line}`, background: 'transparent', color: theme.ink, cursor: 'pointer', borderRadius: 2, textTransform: 'uppercase', display: 'inline-block' }}>
               Report Correction
             </a>
@@ -237,7 +265,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {item.sources.map((src, i) => (
-                  <a key={i} href={src.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: theme.bg, border: `1px solid ${theme.line}`, borderRadius: 2, color: theme.ink, textDecoration: 'none', fontFamily: type.mono, fontSize: 12 }}>
+                  <a key={i} href={src.url} target="_blank" rel="noopener noreferrer" onClick={() => trackSource(src.url, i)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: theme.bg, border: `1px solid ${theme.line}`, borderRadius: 2, color: theme.ink, textDecoration: 'none', fontFamily: type.mono, fontSize: 12 }}>
                     <span style={{ color: c.accent, fontWeight: 700 }}>[{(i + 1).toString().padStart(2, '0')}]</span>
                     <span style={{ flex: 1 }}>{src.label}</span>
                     <span style={{ color: theme.dim }}>↗</span>
@@ -266,7 +294,11 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
                 {relatedItems.map(r => {
                   const rc = alarmPalette(r.alarm, 'restrained', mode, 'midnight');
                   return (
-                    <div key={r.id} onClick={() => onOpenItem(r.id)} style={{ cursor: 'pointer', padding: '16px 0', borderTop: `2px solid ${rc.accent}` }}>
+                    <div key={r.id} onClick={() => {
+                      const rt = toAnalyticsItemType(r.type);
+                      if (rt) track('card_open', { item_type: rt, alarm_level: r.alarm, feed_position: 'related', tab: 'detail' });
+                      onOpenItem(r.id);
+                    }} style={{ cursor: 'pointer', padding: '16px 0', borderTop: `2px solid ${rc.accent}` }}>
                       <div style={{ fontFamily: type.mono, fontSize: 10, color: rc.accent, letterSpacing: '0.14em', fontWeight: 700, marginBottom: 8 }}>{TONE_SYSTEM.typeLabels[r.type]}</div>
                       <div style={{ fontFamily: type.display, fontWeight: 600, fontSize: 16, lineHeight: 1.2, color: theme.ink, textWrap: 'balance' }}>{pickHeadline(r, hmode)}</div>
                     </div>
@@ -314,7 +346,13 @@ const TIMELINE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-function ReceiptsTimeline({ events, theme, type }: { events: TimelineEvent[]; theme: ThemePalette; type: { mono: string; display: string; sans: string } }) {
+function ReceiptsTimeline({ events, theme, type, onSourceClick }: {
+  events: TimelineEvent[];
+  theme: ThemePalette;
+  type: { mono: string; display: string; sans: string };
+  /** Second source_click render site (PRD section 4); position = timeline index. */
+  onSourceClick: (url: string, position: number) => void;
+}) {
   return (
     <div style={{ position: 'relative', paddingLeft: 28 }}>
       {events.map((evt, i) => {
@@ -365,6 +403,7 @@ function ReceiptsTimeline({ events, theme, type }: { events: TimelineEvent[]; th
               )}
               {evt.source_url && (
                 <a href={evt.source_url} target="_blank" rel="noopener noreferrer"
+                  onClick={() => onSourceClick(evt.source_url!, i)}
                   style={{ fontFamily: type.mono, fontSize: 12, color: '#3b82f6', marginTop: 4, display: 'inline-block' }}>
                   Source ↗
                 </a>

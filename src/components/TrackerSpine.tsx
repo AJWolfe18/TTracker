@@ -5,6 +5,7 @@ import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { ErrorState } from '@/edge-states/ErrorState';
 import { alarmPalette } from '@/tokens';
 import { fmtDate } from '@/lib/date-utils';
+import { track, toAnalyticsItemType } from '@/lib/analytics';
 import {
   fetchTrackerPage,
   fetchTrackerPins,
@@ -23,6 +24,9 @@ import {
   type TrackerTally,
   type TrackerView,
 } from '@/lib/timeline';
+
+/** Every Tracker event is tagged with this tab so it never blends into the News feed. */
+const TRACKER_TAB = 'tracker';
 
 // The Tracker (ADO-545): the homepage rap sheet as a vertical center-spine
 // timeline, replacing the W1.1 horizontal strip. The bar is the timeline;
@@ -161,6 +165,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // scrolled deep, snap back to the controls so the change is legible instead
   // of the browser clamping scroll somewhere arbitrary.
   const changeView = (v: TrackerView) => {
+    track('filter_apply', { tab: TRACKER_TAB, filter_key: 'view', filter_value: String(v) });
     setView(v);
     const el = controlsRef.current;
     if (el && el.getBoundingClientRect().top < 0) {
@@ -169,6 +174,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   };
 
   const toggleSource = (s: TimelineSource) => {
+    // filter_value records the resulting state, not the click itself.
+    track('filter_apply', { tab: TRACKER_TAB, filter_key: `source_${s}`, filter_value: off.has(s) ? 'on' : 'off' });
     setOff(prev => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s); else next.add(s);
@@ -176,7 +183,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     });
   };
 
-  const open = (e: TimelineEntry) => {
+  const open = (e: TimelineEntry, position: number) => {
+    const item_type = toAnalyticsItemType(e.source);
+    if (item_type) track('card_open', { item_type, alarm_level: e.alarm, feed_position: position, tab: TRACKER_TAB });
     navigate(`/${SOURCE_ROUTES[e.source]}/${encodeURIComponent(String(e.id))}`);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
@@ -258,7 +267,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const rows: React.ReactNode[] = [];
   let lastYM: string | null = null;
   let side = 0;
-  visible.forEach(e => {
+  visible.forEach((e, idx) => {
     const ym = e.date.slice(0, 7);
     if (ym !== lastYM) {
       rows.push(
@@ -329,7 +338,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         </time>
         <a
           href={`/${SOURCE_ROUTES[e.source]}/${encodeURIComponent(String(e.id))}`}
-          onClick={ev => { ev.preventDefault(); open(e); }}
+          onClick={ev => { ev.preventDefault(); open(e, idx); }}
           className="tt-ts-hl"
           style={{
             display: 'block', marginTop: 5, textDecoration: 'none',

@@ -16,6 +16,7 @@ import { fmtDate, relDate } from '@/lib/date-utils';
 import { pickHeadline } from '@/lib/pick-headline';
 import type { DisplayItem, DisplayStats } from '@/types';
 import type { TabFilterConfig } from '@/lib/filters';
+import { track, toAnalyticsItemType, type FeedPosition } from '@/lib/analytics';
 
 interface HomeProps {
   items: DisplayItem[];
@@ -49,6 +50,16 @@ export function Home({
   const showFiltered = hasActiveFilters || false;
   // When the Tracker owns "/", the story feed is the News tab
   const trackerHome = useFeatureFlag('rap_sheet');
+
+  // card_open lives here, not in Card: Card doesn't know its position or tab,
+  // and the hero <h1> + featured card open items without going through Card.
+  // Card's interface is unchanged; it just receives a closure per slot.
+  const tab = filterConfig?.tabType ?? 'stories';
+  const openWithTracking = (item: DisplayItem, position: FeedPosition) => {
+    const item_type = toAnalyticsItemType(item.type);
+    if (item_type) track('card_open', { item_type, alarm_level: item.alarm, feed_position: position, tab });
+    onOpenItem(item.id);
+  };
 
   const navLabel = filterConfig?.tabType === 'eos' ? 'Executive Orders'
     : filterConfig?.tabType === 'scotus' ? 'Supreme Court'
@@ -105,8 +116,8 @@ export function Home({
           gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))',
           gap: 20, padding: '24px 0 0',
         }}>
-          {items.map(it => (
-            <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
+          {items.map((it, i) => (
+            <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={() => openWithTracking(it, i)} />
           ))}
         </div>
       </>
@@ -128,7 +139,7 @@ export function Home({
       <section aria-label="Lead story" style={{ padding: '44px 0 36px', borderBottom: `1px solid ${theme.line}`, position: 'relative' }}>
         <div style={{ maxWidth: 920 }}>
           <Kicker theme={theme} type={headType} item={lead} accent={cLead.accent} />
-          <h1 onClick={() => onOpenItem(lead.id)} style={{
+          <h1 onClick={() => openWithTracking(lead, 'hero')} style={{
             fontFamily: headType.display, fontWeight: 600,
             fontSize: 'clamp(32px, 4.0vw, 52px)', lineHeight: 1.04,
             letterSpacing: '-0.02em', textWrap: 'balance',
@@ -154,14 +165,14 @@ export function Home({
       {/* FEATURED CARD */}
       {featuredSecond && (
         <div style={{ padding: '28px 0 0' }}>
-          <Card item={featuredSecond} headlineMode={headlineMode} onOpen={onOpenItem} featured />
+          <Card item={featuredSecond} headlineMode={headlineMode} onOpen={() => openWithTracking(featuredSecond, 'featured')} featured />
         </div>
       )}
 
       {/* GRID */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))', gap: 20, padding: '24px 0 0' }}>
-        {rest.map(it => (
-          <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={onOpenItem} />
+        {rest.map((it, i) => (
+          <Card key={it.id} item={it} headlineMode={headlineMode} onOpen={() => openWithTracking(it, i)} />
         ))}
       </div>
     </>
