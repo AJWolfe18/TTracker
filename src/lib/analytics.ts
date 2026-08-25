@@ -61,8 +61,12 @@ declare global {
  */
 export type AnalyticsItemType = 'story' | 'eo' | 'scotus' | 'pardon';
 
-/** Where a card sat in the feed when it was opened. */
-export type FeedPosition = number | 'hero' | 'featured';
+/**
+ * Where a card sat when it was opened: a 0-based index in a grid/spine, or one
+ * of the named slots that bypass the grid (Home hero + featured, Detail's
+ * "Keep Reading" strip).
+ */
+export type FeedPosition = number | 'hero' | 'featured' | 'related';
 
 /**
  * The property contract for every named event.
