@@ -406,10 +406,7 @@
     // Environment gate. Single allowlist rule, shared with analytics-gate.js
     // (ADO-559). The previous check was a denylist for 'test--'/localhost,
     // which missed Netlify deploy previews and any other branch deploy.
-    if (!isAnalyticsEnvEnabled()) {
-      console.log('[Analytics:off-prod]', eventName, eventParams);
-      return;
-    }
+    if (!isAnalyticsEnvEnabled()) return; // silent off PROD (no console.log in shipped code)
 
     // Build safe params with allowlist
     const safeParams = { schema_v: SCHEMA_VERSION };

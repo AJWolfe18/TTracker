@@ -110,7 +110,7 @@ describe('track() wrapper', () => {
     }
     expect(capture).not.toHaveBeenCalled();
     expect(gtag).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy, 'off-PROD path is silent (no console.log in shipped code)').not.toHaveBeenCalled();
   });
 
   it('never throws when a vendor is missing or throws', () => {

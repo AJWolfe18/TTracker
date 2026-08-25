@@ -220,10 +220,7 @@ export function track<E extends EventName>(event: E, props: EventProps[E]): void
     return;
   }
 
-  if (!isAnalyticsEnabled()) {
-    console.log('[analytics:off-prod]', event, safe);
-    return;
-  }
+  if (!isAnalyticsEnabled()) return; // silent off PROD (no console.log in shipped code)
 
   // PostHog is the analysis layer.
   try {
@@ -249,10 +246,7 @@ export function track<E extends EventName>(event: E, props: EventProps[E]): void
  * (see `public/analytics-gate.js`), so this is GA4-only on purpose.
  */
 export function trackPageView(path: string): void {
-  if (!isAnalyticsEnabled()) {
-    console.log('[analytics:off-prod] page_view', path);
-    return;
-  }
+  if (!isAnalyticsEnabled()) return; // silent off PROD
   try {
     window.gtag?.('config', GA4_MEASUREMENT_ID, { page_path: path });
   } catch {
