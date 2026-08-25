@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'wouter';
 import type { TabFilterConfig } from '@/lib/filters';
+import { track } from '@/lib/analytics';
 
 export interface UseFiltersResult {
   activeFilters: Record<string, string>;
@@ -8,7 +9,8 @@ export interface UseFiltersResult {
   searchQuery: string;
   committedSearch: string;
   setFilter: (key: string, value: string | null) => void;
-  setPage: (n: number) => void;
+  /** `silent` = automatic correction (e.g. out-of-range clamp), not a visitor action: no `pagination` event. */
+  setPage: (n: number, opts?: { silent?: boolean }) => void;
   setSearch: (q: string) => void;
   clearAll: () => void;
   hasActiveFilters: boolean;
@@ -38,7 +40,13 @@ export function useFilters(config: TabFilterConfig): UseFiltersResult {
     if (localSearch !== urlSearch) setLocalSearch(urlSearch);
   }
 
+  // Analytics fire here, at the commit point, because every tab's filter bar,
+  // search box and pager funnels through this hook. Search sends length only
+  // (PRD section 4 property hygiene), and only once the debounce settles.
+  const tab = config.tabType;
+
   const setFilter = useCallback((key: string, value: string | null) => {
+    track('filter_apply', { tab, filter_key: key, filter_value: value ?? 'clear' });
     setParams(prev => {
       if (value) {
         prev.set(key, value);
@@ -48,9 +56,12 @@ export function useFilters(config: TabFilterConfig): UseFiltersResult {
       prev.delete('page');
       return prev;
     }, { replace: true });
-  }, [setParams]);
+  }, [setParams, tab]);
 
-  const setPage = useCallback((n: number) => {
+  const setPage = useCallback((n: number, opts?: { silent?: boolean }) => {
+    // Only visitor-initiated page changes count toward the pagination KPI;
+    // App.tsx's out-of-range clamp passes { silent: true } (Codex P2, PR #131).
+    if (!opts?.silent) track('pagination', { tab, page: Math.max(1, n) });
     setParams(prev => {
       if (n <= 1) {
         prev.delete('page');
@@ -59,14 +70,15 @@ export function useFilters(config: TabFilterConfig): UseFiltersResult {
       }
       return prev;
     }, { replace: true });
-  }, [setParams]);
+  }, [setParams, tab]);
 
   const setSearch = useCallback((q: string) => {
     setLocalSearch(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      const trimmed = q.trim();
+      if (trimmed) track('search', { tab, query_length: trimmed.length });
       setParams(prev => {
-        const trimmed = q.trim();
         if (trimmed) {
           prev.set('q', trimmed);
         } else {
@@ -76,12 +88,13 @@ export function useFilters(config: TabFilterConfig): UseFiltersResult {
         return prev;
       }, { replace: true });
     }, 300);
-  }, [setParams]);
+  }, [setParams, tab]);
 
   const clearAll = useCallback(() => {
+    track('filter_apply', { tab, filter_key: 'all', filter_value: 'clear' });
     setParams({}, { replace: true });
     setLocalSearch('');
-  }, [setParams]);
+  }, [setParams, tab]);
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };

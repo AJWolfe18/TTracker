@@ -8,6 +8,7 @@ import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { fetchList, fetchStoryDetail, fetchEoDetail, fetchScotusDetail, fetchPardonDetail } from '@/lib/api';
 import { getFilterConfig } from '@/lib/filters';
 import { useFilters } from '@/hooks/useFilters';
+import { trackPageView } from '@/lib/analytics';
 import { deriveStats } from '@/types';
 import type { DisplayItem } from '@/types';
 import type { FetchOptions } from '@/lib/api';
@@ -17,18 +18,12 @@ const About = lazy(() => import('@/pages/About').then(m => ({ default: m.About }
 
 type DetailFetcher = (id: string | number, signal?: AbortSignal) => Promise<DisplayItem | null>;
 
-declare global {
-  interface Window { gtag?: (...args: unknown[]) => void; }
-}
-
 export function App() {
   const themeValue = useThemeProvider();
   const [location, navigate] = useLocation();
 
   useEffect(() => {
-    if (window.gtag) {
-      window.gtag('config', 'G-5MDT4HFMNB', { page_path: location });
-    }
+    trackPageView(location);
   }, [location]);
 
   const makeOpenHandler = (prefix: string) => (id: string | number) => {
@@ -125,7 +120,7 @@ function TypePage({
         setTotalPages(result.totalPages);
 
         if (filters.page > result.totalPages && result.totalPages > 0) {
-          filters.setPage(result.totalPages);
+          filters.setPage(result.totalPages, { silent: true });
         }
       })
       .catch(err => {

@@ -14,6 +14,13 @@ export const TERM_START = '2025-01-20';
 /** The alarm segmented filter's positions: All / 3+ / 4+ / Only 5 */
 export type AlarmMin = 0 | 3 | 4 | 5;
 
+/**
+ * The Tracker's view selector (ADO-554): 'main' is the curated main line
+ * (PRD §12 anchor principle — the default), the numbers are raw alarm floors
+ * that recover the complete record.
+ */
+export type TrackerView = AlarmMin | 'main';
+
 export interface TimelineEntry {
   id: string | number;
   source: TimelineSource;
@@ -21,6 +28,8 @@ export interface TimelineEntry {
   date: string;
   headline: string;
   alarm: number;
+  /** Published front this entry belongs to (stories only, via v_tracker_stories) */
+  front?: { name: string; slug: string };
 }
 
 export const SOURCE_LABELS: Record<TimelineSource, string> = {
@@ -60,6 +69,9 @@ export function storyRowToEntry(raw: Raw): TimelineEntry {
     date: (raw.first_seen_at as string) || '',
     headline: (raw.primary_headline as string) || '',
     alarm,
+    front: raw.front_name
+      ? { name: raw.front_name as string, slug: (raw.front_slug as string) || '' }
+      : undefined,
   };
 }
 
@@ -126,9 +138,11 @@ interface SourceSpec {
 // Key order is the chip display order (mockup rev 6).
 const SPECS: Record<TimelineSource, SourceSpec> = {
   stories: {
-    table: 'stories',
-    select: 'id,primary_headline,first_seen_at,alarm_level,severity',
-    base: `status=eq.active&summary_neutral=not.is.null&first_seen_at=gte.${TERM_START}`,
+    // v_tracker_stories (migration 112) bakes in status=active + enriched and
+    // adds front membership + the server-computed main_line column (ADO-554).
+    table: 'v_tracker_stories',
+    select: 'id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug',
+    base: `first_seen_at=gte.${TERM_START}`,
     dateCol: 'first_seen_at',
     limit: 60,
     adapter: storyRowToEntry,
@@ -205,15 +219,23 @@ const quoted = (v: string | number) => `"${String(v).replace(/"/g, '')}"`;
  * Keyset pagination: order date desc, id desc; the next page is
  * (date < D) OR (date = D AND id < I). Values are quoted so timestamps
  * with `:`/`+` survive, and the whole logic tree is URL-encoded.
+ *
+ * In the 'main' view (ADO-554) stories filter on the server-computed
+ * main_line column; the other sources get the loose-end bar — alarm 5 only
+ * (rule v1.1: they are all loose ends until fronts can contain them, and the
+ * 4+ bar drowned the line in severity-saturated rows) — with pins applied
+ * client-side.
  */
 export function buildSourcePath(
   source: TimelineSource,
-  min: AlarmMin,
+  view: TrackerView,
   cursor: SourceCursor | null,
 ): string {
   const s = SPECS[source];
   const conditions: string[] = [];
-  const alarmFrag = s.alarm(min);
+  const alarmFrag = view === 'main'
+    ? (source === 'stories' ? 'main_line.is.true' : s.alarm(5))
+    : s.alarm(view);
   if (alarmFrag) conditions.push(alarmFrag);
   if (cursor) {
     conditions.push(
@@ -234,14 +256,75 @@ export function initialTrackerState(): TrackerState {
   return state;
 }
 
+// ── Tracker pins (ADO-554) ──
+
+/** Map keyed `${source}:${entity_id}` → pin. Tiny table, fetched whole. */
+export type TrackerPins = Map<string, 'force_show' | 'force_hide'>;
+
+export const pinKey = (source: TimelineSource, id: string | number) => `${source}:${id}`;
+
+/**
+ * Fetch every pin. Failure (including the table not existing yet — code can
+ * deploy ahead of migration 112 while the flag is off) degrades to no pins.
+ */
+export async function fetchTrackerPins(signal?: AbortSignal): Promise<TrackerPins> {
+  const pins: TrackerPins = new Map();
+  try {
+    const { url, anonKey } = await import('./supabase');
+    // Newest-first so if curation ever outgrows the cap, the truncation is
+    // deterministic and the most recent pins win (review note on PR #127).
+    const res = await fetch(
+      `${url}/rest/v1/tracker_pin?select=source,entity_id,pin&order=updated_at.desc&limit=1000`,
+      { headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` }, signal },
+    );
+    if (!res.ok) return pins;
+    const rows: Raw[] = await res.json();
+    for (const r of rows) {
+      pins.set(pinKey(r.source as TimelineSource, r.entity_id as string), r.pin as 'force_show' | 'force_hide');
+    }
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err;
+  }
+  return pins;
+}
+
+/**
+ * The force_show pins for non-stories sources, grouped per source. Stories
+ * pins are resolved server-side in v_tracker_stories, so they are excluded.
+ */
+export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<TimelineSource, string[]>> {
+  const out: Partial<Record<TimelineSource, string[]>> = {};
+  for (const [key, pin] of pins) {
+    if (pin !== 'force_show') continue;
+    const sep = key.indexOf(':');
+    const source = key.slice(0, sep) as TimelineSource;
+    if (source === 'stories' || !TIMELINE_SOURCES.includes(source)) continue;
+    (out[source] ??= []).push(key.slice(sep + 1));
+  }
+  return out;
+}
+
 /**
  * Fetch the next page for every non-exhausted source and advance its cursor.
  * Returns only the NEW entries (ascending); callers merge with what they hold.
+ *
+ * In the 'main' view, pins adjust the non-stories sources client-side:
+ * force_hide entries are dropped from every page, and on the FIRST page
+ * (state === null) force_show rows below the alarm-5 stream are fetched by id
+ * and merged in at their chronological position. Stories pins are already
+ * applied by v_tracker_stories on the server.
+ *
+ * Pinned rows surface AT THEIR DATE, deliberately: the Tracker is a
+ * chronological record, not a pinboard (pin-to-top is the ADO-552 hero
+ * carousel), so an injected old pin stays buffered by the coverage frontier
+ * until paging reaches its date — exempting it would fake completeness of a
+ * range that hasn't loaded. Covered by the frontier test in the pins suite.
  */
 export async function fetchTrackerPage(
-  min: AlarmMin,
+  view: TrackerView,
   state: TrackerState | null,
   signal?: AbortSignal,
+  pins?: TrackerPins,
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
@@ -253,6 +336,7 @@ export async function fetchTrackerPage(
 
   const prev = state ?? initialTrackerState();
   const next: TrackerState = { ...prev };
+  const isMain = view === 'main';
 
   const groups = await Promise.all(
     TIMELINE_SOURCES.map(async source => {
@@ -260,7 +344,7 @@ export async function fetchTrackerPage(
       if (st.exhausted) return [];
       const spec = SPECS[source];
       try {
-        const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, min, st.cursor)}`, { headers, signal });
+        const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, view, st.cursor)}`, { headers, signal });
         if (!res.ok) {
           next[source] = { ...st, exhausted: true, errored: true };
           return [];
@@ -274,7 +358,11 @@ export async function fetchTrackerPage(
           exhausted: rows.length < spec.limit,
           errored: false,
         };
-        return rows.map(spec.adapter);
+        let entries = rows.map(spec.adapter);
+        if (isMain && source !== 'stories' && pins?.size) {
+          entries = entries.filter(e => pins.get(pinKey(source, e.id)) !== 'force_hide');
+        }
+        return entries;
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
         // One source failing must not blank the whole Tracker
@@ -283,6 +371,33 @@ export async function fetchTrackerPage(
       }
     }),
   );
+
+  // First page of the main line: surface force_show pins on non-stories
+  // sources. Only rows below the alarm-5 stream are merged — anything at 5
+  // arrives (or already arrived) through normal paging, so injecting it again
+  // would duplicate the entry.
+  if (isMain && state === null && pins?.size) {
+    const bySource = forceShowIdsBySource(pins);
+    const injected = await Promise.all(
+      (Object.keys(bySource) as TimelineSource[]).map(async source => {
+        const spec = SPECS[source];
+        const ids = bySource[source]!.map(id => quoted(id)).join(',');
+        try {
+          const res = await fetch(
+            `${url}/rest/v1/${spec.table}?select=${spec.select}&${spec.base}&id=in.(${ids})`,
+            { headers, signal },
+          );
+          if (!res.ok) return [];
+          const rows: Raw[] = await res.json();
+          return rows.map(spec.adapter).filter(e => e.alarm < 5);
+        } catch (err) {
+          if ((err as Error).name === 'AbortError') throw err;
+          return []; // pins are additive — a failed fetch must not break the page
+        }
+      }),
+    );
+    groups.push(...injected);
+  }
 
   return { entries: mergeEntries(groups), state: next };
 }
@@ -331,6 +446,8 @@ export interface TrackerTally {
   developments: number | null;
   /** Alarm-5 developments in the last 30 days */
   alarm5Last30: number | null;
+  /** Published, unresolved fronts (ADO-554); null before migration 112 or on error */
+  openFronts: number | null;
 }
 
 async function countRows(
@@ -365,8 +482,17 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
 
   const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  const perSource = await Promise.all(
-    TIMELINE_SOURCES.map(async source => {
+  // Both branches awaited in ONE Promise.all so a rejection (AbortError on
+  // navigation) from either side is observed by the caller -- Codex P1 on
+  // PR #131: the front count could otherwise reject unhandled while the
+  // per-source batch rejected first.
+  const [openFronts, perSource] = await Promise.all([
+    countRows(
+      url, headers,
+      'events?select=id&publish_state=eq.published&lifecycle=neq.resolved',
+      signal,
+    ),
+    Promise.all(TIMELINE_SOURCES.map(async source => {
       const s = SPECS[source];
       const alarm5 = s.alarm(5)!;
       const [total, worst] = await Promise.all([
@@ -379,8 +505,8 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
         ),
       ]);
       return { total, worst };
-    }),
-  );
+    })),
+  ]);
 
   const sum = (vals: (number | null)[]) =>
     vals.every(v => v !== null) ? vals.reduce((a: number, b) => a + (b as number), 0) : null;
@@ -388,5 +514,6 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
   return {
     developments: sum(perSource.map(p => p.total)),
     alarm5Last30: sum(perSource.map(p => p.worst)),
+    openFronts,
   };
 }
