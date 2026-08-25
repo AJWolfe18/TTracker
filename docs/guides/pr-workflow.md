@@ -5,7 +5,7 @@
 This document covers the complete PR workflow for TrumpyTracker:
 1. Branch protection rules
 2. Claude Code development workflow
-3. AI code review system (automated GPT-5 reviews)
+3. AI code review system (OpenAI Codex, ChatGPT subscription)
 
 ---
 
@@ -60,46 +60,45 @@ gh pr create --base main --title "feat: description"
 
 ### How It Works
 
-**Automatic Reviews** run when PRs modify risky files:
-- `scripts/**/*.js` - Backend scripts
-- `supabase/functions/**/*.js` - Edge Functions
-- `migrations/**/*.sql` - Database changes
-- `.github/workflows/**` - CI/CD
-- `.github/scripts/**` - Automation
+**OpenAI Codex** handles PR code reviews. It's included in the ChatGPT Plus subscription.
 
-**Skipped Files** (never auto-reviewed):
-- Documentation (`**/*.md`)
-- Assets (`**/*.png`, `**/*.jpg`)
-- Tests (`**/*test*`)
-
-### Manual Trigger
-
-For files not auto-reviewed (frontend, docs):
+**To trigger a review:**
 ```
-Add "ai:review" label to PR in GitHub UI
+Comment "@codex review" on the PR
 ```
 
-### Thorough Review Mode
+Codex will post a standard GitHub code review with findings categorized by priority (P0, P1, P2).
 
-For complex/critical changes:
+**Automatic reviews:** Enabled - Codex reviews all new PRs automatically.
+
+### Configuration
+
+Review guidelines are in `AGENTS.md` at the repo root. This tells Codex:
+- P0 (blockers): Security issues, exposed secrets, breaking changes
+- P1 (should fix): Missing validation, wrong patterns, missing error handling
+- P2 (nice to have): Style, refactoring opportunities
+
+### Codex Can Also Fix Issues
+
+Beyond review, you can ask Codex to fix things:
 ```
-Add BOTH labels:
-1. "ai:review" (trigger)
-2. "thorough" (deeper analysis)
+@codex fix the CI failures
+@codex update the tests for this change
 ```
+
+Codex will create a commit or PR with the fix.
 
 ---
 
-## 4. Cost Optimization
+## 4. Cost
 
-| Review Type | Effort | Tokens | Cost | When to Use |
-|-------------|--------|--------|------|-------------|
-| **Default** | low | 2000 | ~$0.30 | Normal changes |
-| **Thorough** | medium | 6000 | ~$1.00 | Complex/critical |
+**Codex reviews are included in ChatGPT Plus ($20/mo)** - no additional cost per review.
 
-**Monthly Estimate:** $1-2/month (90% savings from path filtering)
+Usage limits:
+- Plus: 30-150 tasks per 5 hours (plenty for our PR volume)
+- Reviews count as 1 task each
 
-**For unlimited analysis:** Paste PR link directly to Claude Code
+**For deeper analysis:** Paste PR link directly to Claude Code (uses Claude tokens instead)
 
 ---
 
@@ -160,7 +159,73 @@ gh pr create --title "feat(db): new schema"
 
 ---
 
-## 8. Troubleshooting
+## 8. Large Feature Deployment Strategy
+
+### Problem: Big PRs = Slow Reviews
+
+| PR Size | Files | Review Time |
+|---------|-------|-------------|
+| Small | 3-5 files | ~3-5 min |
+| Medium | 6-10 files | ~8-12 min |
+| Large | 15+ files | 15-20+ min |
+
+Large PRs (like a full feature with migrations + edge functions + frontend + scripts) can take 15-20 minutes to review, creating bottlenecks.
+
+### Solution: Split PRs by Layer
+
+**Key Insight:** Backend components can deploy to PROD before the feature is "live" because:
+- Migrations don't affect users until code uses them
+- Edge functions don't affect users until frontend calls them
+- Only the **frontend** "activates" the feature for users
+
+### Recommended Deployment Order
+
+```
+Week 1: PR #1 - Migrations (invisible)
+        └── Tables exist but nothing uses them
+
+Week 1: PR #2 - Edge Functions (invisible)
+        └── Endpoints exist but nothing calls them
+
+Week 2: PR #3 - Backend Scripts (invisible)
+        └── Scripts exist but data pipeline hasn't run
+
+Week 2: PR #4 - Frontend (ACTIVATES feature)
+        └── Nav tab appears, users can access feature
+        └── Run data pipeline after this merges
+```
+
+### Benefits
+
+| Benefit | Why |
+|---------|-----|
+| **Faster reviews** | 3-5 min each vs 15-20 min combined |
+| **Easier debugging** | If review fails, smaller scope to fix |
+| **Incremental progress** | Backend ready before frontend complete |
+| **Lower risk** | Each PR is smaller, easier to revert |
+
+### Example: Pardons Feature (What We Should Have Done)
+
+Instead of 1 PR with 17 files:
+
+| PR | Contents | Review Time | Can Deploy |
+|----|----------|-------------|------------|
+| #1 | 5 migrations | ~3 min | Day 1 |
+| #2 | 3 edge functions | ~4 min | Day 2 |
+| #3 | 4 enrichment scripts | ~4 min | Day 3 |
+| #4 | 2 frontend files + nav | ~3 min | Day 4 (LIVE) |
+
+**Total review time:** ~14 min (but spread across days, not blocking)
+
+### When NOT to Split
+
+- **Tightly coupled changes** - If migration + function must deploy together
+- **Tiny features** - <5 files, just do one PR
+- **Hotfixes** - Speed matters more than review time
+
+---
+
+## 9. Troubleshooting
 
 ### Review Not Posting
 1. Check workflow run in Actions tab
@@ -177,18 +242,19 @@ gh pr create --title "feat(db): new schema"
 
 ---
 
-## 9. Configuration
+## 10. Configuration
 
 | Item | Location |
 |------|----------|
-| Workflow | `.github/workflows/ai-code-review.yml` |
-| Script | `.github/scripts/ai_review.sh` |
-| API Key | Repository secret: `OPENAI_API_KEY` |
-| Model | GPT-5 via OpenAI Responses API |
+| Review guidelines | `AGENTS.md` (repo root) |
+| Codex setup | [codex.openai.com](https://codex.openai.com) |
+| Model | GPT-5.2-Codex (code-optimized) |
+
+**Legacy workflow** removed August 24, 2026: `.github/workflows/ai-code-review.yml` (GPT via the OpenAI API key) was deleted after Codex reviewed PR #131 end-to-end. PR reviews now run only on the ChatGPT subscription, never on API credits.
 
 ---
 
-## 10. Setup Checklist
+## 11. Setup Checklist
 
 ### GitHub
 - [ ] Branch protection on `main`

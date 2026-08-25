@@ -45,7 +45,7 @@ flowchart LR
 
 | Secret | Active consumers | Rolling it breaks |
 |--------|-----------------|-------------------|
-| `OPENAI_API_KEY` | AI PR code review (GPT-4o) — sole remaining consumer since ADO-540 | PR reviews |
+| `OPENAI_API_KEY` | GPT-4o-mini article entity extraction + embeddings inside `rss-tracker-supabase.js` (PROD every 2h). The GPT PR-review workflow was removed August 24, 2026 — Codex reviews run on the ChatGPT subscription, not this key | RSS entity extraction / clustering embeddings |
 | Anthropic (subscription) | All 5 Claude cloud agents via RemoteTrigger | All enrichment + Judge |
 | `EDGE_CRON_TOKEN(_PROD)` | Edge function auth | Edge function calls |
 | `COURTLISTENER_API_TOKEN` | SCOTUS case fetch | New SCOTUS cases |
