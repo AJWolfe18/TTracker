@@ -50,17 +50,13 @@
   window.TT_ANALYTICS_ENABLED = enabled;
 
   // ---------------------------------------------------------------------
-  // Off PROD: console only. No script tags, no dataLayer, no requests.
+  // Off PROD: silent no-op stubs. No script tags, no dataLayer, no requests,
+  // no console output (repo rule: no console.log in shipped code). To see
+  // what WOULD fire on TEST, watch TTAnalytics.capture / gtag in DevTools.
   // ---------------------------------------------------------------------
   if (!enabled) {
-    window.gtag = function () {
-      console.log('[analytics:off-prod] gtag', Array.prototype.slice.call(arguments));
-    };
-    window.TTAnalytics = {
-      capture: function (name, props) {
-        console.log('[analytics:off-prod] posthog.capture', name, props);
-      },
-    };
+    window.gtag = function () {};
+    window.TTAnalytics = { capture: function () {} };
     return;
   }
 

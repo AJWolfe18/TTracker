@@ -82,7 +82,7 @@ describe('src/lib/analytics gate', () => {
       trackPageView('/news');
     }
     expect(gtag).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy, 'off-PROD path is silent (no console.log in shipped code)').not.toHaveBeenCalled();
   });
 
   it('does not throw when gtag is missing or throws on PROD', () => {
@@ -187,7 +187,7 @@ describe('public/analytics-gate.js', () => {
     expect(win.dataLayer, 'a second include must not re-queue js/config').toHaveLength(2);
   });
 
-  it('exposes console-only gtag and TTAnalytics stubs off PROD', () => {
+  it('exposes silent no-op gtag and TTAnalytics stubs off PROD', () => {
     const { win, logs, appended } = runGate('localhost');
 
     expect(typeof win.gtag).toBe('function');
@@ -197,10 +197,7 @@ describe('public/analytics-gate.js', () => {
     expect(typeof tt.capture).toBe('function');
     tt.capture('card_open', { tab: 'news' });
 
-    expect(logs.map((l) => l[0])).toEqual([
-      '[analytics:off-prod] gtag',
-      '[analytics:off-prod] posthog.capture',
-    ]);
+    expect(logs, 'off-PROD stubs must not write to the console').toEqual([]);
     expect(appended).toHaveLength(0);
   });
 

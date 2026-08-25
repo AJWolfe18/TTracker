@@ -482,14 +482,17 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
 
   const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
-  const openFrontsPromise = countRows(
-    url, headers,
-    'events?select=id&publish_state=eq.published&lifecycle=neq.resolved',
-    signal,
-  );
-
-  const perSource = await Promise.all(
-    TIMELINE_SOURCES.map(async source => {
+  // Both branches awaited in ONE Promise.all so a rejection (AbortError on
+  // navigation) from either side is observed by the caller -- Codex P1 on
+  // PR #131: the front count could otherwise reject unhandled while the
+  // per-source batch rejected first.
+  const [openFronts, perSource] = await Promise.all([
+    countRows(
+      url, headers,
+      'events?select=id&publish_state=eq.published&lifecycle=neq.resolved',
+      signal,
+    ),
+    Promise.all(TIMELINE_SOURCES.map(async source => {
       const s = SPECS[source];
       const alarm5 = s.alarm(5)!;
       const [total, worst] = await Promise.all([
@@ -502,8 +505,8 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
         ),
       ]);
       return { total, worst };
-    }),
-  );
+    })),
+  ]);
 
   const sum = (vals: (number | null)[]) =>
     vals.every(v => v !== null) ? vals.reduce((a: number, b) => a + (b as number), 0) : null;
@@ -511,6 +514,6 @@ export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTa
   return {
     developments: sum(perSource.map(p => p.total)),
     alarm5Last30: sum(perSource.map(p => p.worst)),
-    openFronts: await openFrontsPromise,
+    openFronts,
   };
 }
