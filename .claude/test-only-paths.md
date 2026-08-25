@@ -35,3 +35,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 ## What DOES go to prod
 - `.claude/skills/` - All skills work in both environments (commands were consolidated into skills 2026-08)
 - `docs/handoffs/` - Documentation is fine everywhere
+- `scripts/maintenance/2026-08-24-ado-554-prod-fronts-seed.sql` - record of the PROD fronts seed
+  (8 fronts + keyword sweep) Josh ran by hand on August 24, 2026 (ADO-554/563). Already applied;
+  never deployed. Keep for ADO-557 to reuse the sweep regexes.
