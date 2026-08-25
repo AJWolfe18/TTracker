@@ -9,7 +9,8 @@ export interface UseFiltersResult {
   searchQuery: string;
   committedSearch: string;
   setFilter: (key: string, value: string | null) => void;
-  setPage: (n: number) => void;
+  /** `silent` = automatic correction (e.g. out-of-range clamp), not a visitor action: no `pagination` event. */
+  setPage: (n: number, opts?: { silent?: boolean }) => void;
   setSearch: (q: string) => void;
   clearAll: () => void;
   hasActiveFilters: boolean;
@@ -57,8 +58,10 @@ export function useFilters(config: TabFilterConfig): UseFiltersResult {
     }, { replace: true });
   }, [setParams, tab]);
 
-  const setPage = useCallback((n: number) => {
-    track('pagination', { tab, page: Math.max(1, n) });
+  const setPage = useCallback((n: number, opts?: { silent?: boolean }) => {
+    // Only visitor-initiated page changes count toward the pagination KPI;
+    // App.tsx's out-of-range clamp passes { silent: true } (Codex P2, PR #131).
+    if (!opts?.silent) track('pagination', { tab, page: Math.max(1, n) });
     setParams(prev => {
       if (n <= 1) {
         prev.delete('page');
