@@ -124,7 +124,7 @@ docs/features/
 2. Commit to `test` branch
 3. Push to `test` branch (`git push origin test`)
 4. Auto-deploys to Netlify TEST site
-5. **Note:** No AI code review on direct pushes (review only runs on PRs)
+5. **Note:** No Codex review on direct pushes (review only runs on PRs)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -132,7 +132,7 @@ docs/features/
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. **AI code review runs automatically on PR** - check with `gh pr view`
+6. **Codex reviews the PR automatically** (ChatGPT subscription; comment `@codex review` to re-run) - check with `gh pr view`
 7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
@@ -147,7 +147,7 @@ docs/features/
 ### Before Creating PR to Main:
 - [ ] Changes tested on TEST environment
 - [ ] `npm run qa:smoke` passes
-- [ ] AI code review passed
+- [ ] Codex review passed (P1/P2 findings addressed)
 - [ ] Security quick-check: `/docs/guides/security-checklist.md`
 - [ ] **PROD deployment checklist:** `/docs/guides/prod-deployment-checklist.md`
   - Migrations, edge functions, workflows, secrets all accounted for
@@ -195,7 +195,7 @@ docs/features/
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **AI code review only runs on PRs** - Direct pushes to test don't trigger review. When creating PRs for PROD, check review status with `gh pr view` or `bash scripts/check-code-review.sh`
+10. **Codex review only runs on PRs** - Direct pushes to test don't trigger review. Check review status with `gh pr view` (inline findings: `gh api repos/AJWolfe18/TTracker/pulls/<n>/comments`)
 
 11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB

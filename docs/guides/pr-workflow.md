@@ -5,7 +5,7 @@
 This document covers the complete PR workflow for TrumpyTracker:
 1. Branch protection rules
 2. Claude Code development workflow
-3. AI code review system (automated GPT-5 reviews)
+3. AI code review system (OpenAI Codex, ChatGPT subscription)
 
 ---
 
@@ -250,7 +250,7 @@ Instead of 1 PR with 17 files:
 | Codex setup | [codex.openai.com](https://codex.openai.com) |
 | Model | GPT-5.2-Codex (code-optimized) |
 
-**Legacy workflow** (deprecated): `.github/workflows/ai-code-review.yml` - can be deleted once Codex is confirmed working.
+**Legacy workflow** removed August 24, 2026: `.github/workflows/ai-code-review.yml` (GPT via the OpenAI API key) was deleted after Codex reviewed PR #131 end-to-end. PR reviews now run only on the ChatGPT subscription, never on API credits.
 
 ---
 
