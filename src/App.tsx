@@ -120,7 +120,7 @@ function TypePage({
         setTotalPages(result.totalPages);
 
         if (filters.page > result.totalPages && result.totalPages > 0) {
-          filters.setPage(result.totalPages);
+          filters.setPage(result.totalPages, { silent: true });
         }
       })
       .catch(err => {
