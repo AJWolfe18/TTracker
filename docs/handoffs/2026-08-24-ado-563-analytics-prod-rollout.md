@@ -55,3 +55,7 @@ https://us.posthog.com/project/572949/dashboard/2029138 - 12 insights created th
 ## Growth track opened (end of session)
 
 Josh: social automation with visuals + monetization are the must-do next tracks, driven by the new analytics. Kickoff doc: `docs/features/growth/kickoff-social-and-monetization.md` (section 0 = six open decisions for Josh). Cards: Epic 299 re-kicked with a comment + child ADO-566 (social planning session); new Epic 565 (monetization) + child ADO-567 (monetization planning session). First unblock is not code: Josh sets the Netlify PROD env vars so ADO-515 (OG tags + share UI) can ship.
+
+## Next session starts here (Josh, end of night)
+
+**Investigate + plan the OG link-preview fix before anything else.** Verified live tonight: `curl -A "Twitterbot/1.0" https://trumpytracker.com/detail/14111` returns `og:title="TrumpyTracker"` and `og:image="/og-default.png"` - every shared link shows a generic card. `netlify/edge-functions/og-tags.ts` is deployed on main and reads `SUPABASE_URL` + `SUPABASE_ANON_KEY` from Netlify env; the May 30 note (ADO-515) says those still hold TEST values. Josh had not heard of this blocker - walk him through it, confirm the actual env values (Netlify MCP / dashboard), then with his explicit OK set PROD values, redeploy, and re-run the curl until the headline appears. This is the first domino for the social track (Epic 299 / ADO-566). Alerts discussion (pipeline-failure email, PostHog spike/drop alerts) also parked for tomorrow.
