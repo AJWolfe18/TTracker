@@ -1,0 +1,61 @@
+# Handoff - ADO-563: Analytics Phase 5a PROD rollout + The Tracker debut (ADO-554)
+
+**Date:** August 24, 2026 (supervised session with Josh)
+**Tickets closed:** ADO-563, ADO-558, ADO-559, ADO-560, ADO-554. **Created:** ADO-564 (north-star check, due September 7, 2026).
+**PR:** #131 `deploy/ado-563-analytics-tracker` -> `main`, squash `3b37ad5`. Branch deleted.
+
+## What shipped to trumpytracker.com
+
+1. **Analytics Phases 1-2** (cherry-picks `877c0bf` 558, `ed39e72` 559, `70f6a92` 560): GA4 gated to the PROD hostname, PostHog bootstrap + typed wrapper, six named KPI events.
+2. **The Tracker debut** (cherry-picks `b984b1f` + `4c91566` 554): Josh's in-session call was "just send it" - AC7 (TEST eyeball) waived in favour of live PROD review; he expects to want changes later.
+   - Migration 112 applied on PROD via SQL Editor (claude-in-chrome + raw.githubusercontent fetch, the migration-111 pattern).
+   - 8 fronts seeded + published on PROD: the 7 TEST fronts plus a NEW **Election Suppression** front (Josh: "election fraud" is the pretext, suppression is the front). Assignments by keyword sweep (one front per story, most-specific first): Iran 1510, Epstein 235, Ballroom 120, Election ~67, Crypto 40, Kushner 14, Courts 10, Qatar 7. No pins. Script kept at `scripts/maintenance/2026-08-24-ado-554-prod-fronts-seed.sql` (test-only path; already applied).
+   - `rap_sheet: true` in `flags-prod.json` (same PR, after migration + seed).
+3. `docs/ARCHITECTURE.md`: new "Analytics vendors" table + `rap_sheet` row in kill switches.
+
+## Review + fixes (Codex on PR #131, all addressed and synced to `test`)
+
+- P1 `src/lib/timeline.ts`: front-count promise now inside the same `Promise.all` as the per-source tally (no unobserved AbortError).
+- P1 console logging: off-PROD gtag / TTAnalytics / track / trackPageView / shared.js trackEvent are now SILENT no-ops (repo rule: no console.log in shipped code). Tests updated to assert no console output. **Consequence:** on TEST/localhost you can no longer see "would-fire" analytics in the console - watch `window.TTAnalytics.capture` in DevTools instead.
+- P2 `useFilters.setPage(n, { silent: true })`: App.tsx's out-of-range page clamp no longer emits `pagination`.
+- The GitHub "review" check (GPT-4o reviewer) FAILS because the OpenAI key has no credits. Not a blocker (Codex is the review of record) but Josh should top up or retire it.
+
+## Verification done on trumpytracker.com
+
+- PostHog pre + post deploy: Free plan, "Add your credit card" prompt = no payment method, billing limit = free tier 1M.
+- GA4 real-time: PROD pageviews arriving (`/`, `/detail/14111`, `/news`); deploy previews / TEST / localhost blocked by the exact-hostname gate.
+- PostHog Activity: `$pageview`, autocapture, and every named event from real clicks: `card_open` (tracker tab, pos 0, alarm 5), `source_click` (fortune.com), `share_click` (copy_link), `pagination` (stories p2), `search` (len 7), `filter_apply` (Dumpster Fire pill).
+- Replay: recording, 50% sampling (project setting), `maskAllInputs: true` in code (project masking is "passwords only" - the code assertion is what protects inputs).
+- PROD Tracker: 8 open fronts, main line renders with front tags.
+
+## Content Engagement dashboard
+
+https://us.posthog.com/project/572949/dashboard/2029138 - 12 insights created through the logged-in session API (see conventions memory for the fetch pattern): card open rate (`card_open / $pageview`) and source click rate (`source_click / card_open`) as bold numbers; card opens by item type / tab / feed position / alarm level; source clicks by outlet; shares by channel; filters / searches / pagination by tab; daily pageviews. Newsletter + Feedback dashboards stay in Phase 5b.
+
+## Gotchas learned
+
+- PROD headlines != TEST headlines: copying TEST's curated headline list matched almost nothing on PROD. Keyword sweeps + `DISTINCT ON (story_id)` is the reusable pattern (`story_event.story_id` is the PK).
+- The first election sweep grabbed 175 rows because `redistrict|gerrymander` are their own topic - keep those OUT of Election Suppression.
+- Auto-mode classifier blocked write SQL runs in the Supabase editor (ctrl+Enter and Run button) but allowed read-only previews - Josh presses the key for writes. Supabase's "creates a table without RLS" popup on `WITH ... INSERT` is a false positive.
+- Screenshots on the trumpytracker.com tab timed out repeatedly (heavy renderer); `find` + ref clicks and `javascript_tool` worked fine. Refs churn on every React re-render - re-`find` before each click.
+
+## Next
+
+- ADO-561 (feedback popup, Phase 3) -> 562 -> Phase 5b deploy (feedback-submit function + migration 113).
+- ADO-557 fronts automation planning (reuse the seed regexes); ADO-548 front pages; ADO-547 admin pin editor. Josh will want Tracker changes after seeing it live - expect a curation pass.
+- ADO-564: read the two north-star numbers off dashboard 2029138 on/after September 7, 2026.
+
+## Addendum (same night)
+
+- **GPT API PR-review workflow removed** (PR #132, `e4aaf8c` on main, also on test). It was draining the OpenAI balance Josh had just topped up, and that balance also feeds RSS entity extraction - RSS Tracker PROD failed 5 runs in a row (18:27-02:51) with `429 You have no credits remaining` on embeddings. Codex (ChatGPT subscription) is the only PR reviewer now. If the next 2h RSS run still fails, that is a new session's problem.
+- Dashboard 2029138 grew to 16 tiles: weekly retention, card-open + source-click rates split by `$device_type`, and Tracker view/source toggle use (`filter_apply` on tab=tracker).
+- **Decision rules** (threshold -> action) are a comment on ADO-564. Gaps acknowledged: front-tag clicks are not instrumented until ADO-548 (add `front_open`); Newsletter + Feedback dashboards wait for Phase 5b. Looker Studio was never really used - not maintained.
+- **Owner traffic excluded** (same night): GA4 internal-traffic rule "Josh home" (`129.228.58.76/32`) + the property's "Internal Traffic" data filter flipped Testing -> Active; PostHog project filter `$ip is_not 129.228.58.76` set default-on and applied to every dashboard tile. Not retroactive; update both if the home IP changes (`curl -s https://api.ipify.org`). GA4 gets NO new events - it stays the traffic report; PostHog is the behaviour layer. Pre-August-24 GA4 history is inflated by TEST/preview traffic - baseline starts today.
+
+## Growth track opened (end of session)
+
+Josh: social automation with visuals + monetization are the must-do next tracks, driven by the new analytics. Kickoff doc: `docs/features/growth/kickoff-social-and-monetization.md` (section 0 = six open decisions for Josh). Cards: Epic 299 re-kicked with a comment + child ADO-566 (social planning session); new Epic 565 (monetization) + child ADO-567 (monetization planning session). First unblock is not code: Josh sets the Netlify PROD env vars so ADO-515 (OG tags + share UI) can ship.
+
+## Next session starts here (Josh, end of night)
+
+**Investigate + plan the OG link-preview fix before anything else.** Verified live tonight: `curl -A "Twitterbot/1.0" https://trumpytracker.com/detail/14111` returns `og:title="TrumpyTracker"` and `og:image="/og-default.png"` - every shared link shows a generic card. `netlify/edge-functions/og-tags.ts` is deployed on main and reads `SUPABASE_URL` + `SUPABASE_ANON_KEY` from Netlify env; the May 30 note (ADO-515) says those still hold TEST values. Josh had not heard of this blocker - walk him through it, confirm the actual env values (Netlify MCP / dashboard), then with his explicit OK set PROD values, redeploy, and re-run the curl until the headline appears. This is the first domino for the social track (Epic 299 / ADO-566). Alerts discussion (pipeline-failure email, PostHog spike/drop alerts) also parked for tomorrow.
