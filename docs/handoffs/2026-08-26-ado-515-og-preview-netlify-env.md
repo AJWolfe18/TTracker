@@ -41,3 +41,14 @@ Re-check command: `curl -s -A "Twitterbot/1.0" https://trumpytracker.com/detail/
 - Nit for that story: "1 sources cited" pluralization in og-tags.ts buildDescription.
 - `.agents/skills/` untracked dir (copy of `.claude/skills/`) - Josh to decide delete vs gitignore.
 - Next per Aug 24 plan: alerts (pipeline-failure email, PostHog spike/drop), then ADO-566.
+
+## Addendum (end of night) - Facebook not yet confirmed
+Josh shared an article on Facebook after the fix and saw only the black default image with
+no title (and the FB sharer hung). Re-tested server-side with `facebookexternalhit/1.1` and
+`Facebot` UAs: og:title / og:description / og:image all correct. Most likely cause is
+Facebook's per-URL scrape cache from a pre-fix share.
+
+**Tomorrow, first:** Josh pastes the URL into https://developers.facebook.com/tools/debug/
+and clicks **Scrape Again** (needs his FB login). If the title shows -> done. If not ->
+investigate FB-specific requirements (og:image:width/height, image >= 200x200, fb:app_id
+warnings) in `netlify/edge-functions/og-tags.ts` + `index.html`.
