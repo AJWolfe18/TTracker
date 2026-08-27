@@ -69,28 +69,31 @@
     ::selection { background: #2d6a8a; color: #ffffff; }
     /* Boot skeleton: paints at HTML parse, replaced when React mounts into
        #root. Named tt-boot-* so it can never collide with the app's own
-       tt-shimmer styles. */
+       tt-shimmer styles. The header bar MIRRORS Header.tsx geometry (1440px
+       container, 14px/20px padding, 20px/700 brand) so the wordmark does not
+       jump when the real header takes over. Content bars are centered to
+       match the tally/spine layout. */
     @keyframes tt-boot-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
-    .tt-boot { max-width: 1400px; margin: 0 auto; padding: 28px 20px; }
-    .tt-boot-brand { font-weight: 900; letter-spacing: 0.04em; font-size: 22px; padding-bottom: 16px; }
-    .tt-boot-bar { border-radius: 2px; height: 16px; margin-top: 12px; background: #121214; animation: tt-boot-pulse 1.6s ease-in-out infinite; }
+    .tt-boot-hd { border-bottom: 1px solid #2a2a2d; }
+    html[data-mode="light"] .tt-boot-hd { border-bottom-color: #dfe1e6; }
+    .tt-boot-hd-in { max-width: 1440px; margin: 0 auto; padding: 14px 20px; font-weight: 700; font-size: 20px; letter-spacing: 0.02em; }
+    .tt-boot-main { max-width: 1400px; margin: 0 auto; padding: 44px 20px 0; display: flex; flex-direction: column; align-items: center; }
+    .tt-boot-bar { border-radius: 2px; height: 16px; margin-top: 14px; background: #121214; animation: tt-boot-pulse 1.6s ease-in-out infinite; }
     html[data-mode="light"] .tt-boot-bar { background: #ecedf0; }
-    .tt-boot-rule { height: 1px; margin: 20px 0 8px; background: #2a2a2d; }
-    html[data-mode="light"] .tt-boot-rule { background: #dfe1e6; }
   </style>
 </head>
 <body>
   <div id="root">
     <div class="tt-boot" role="status" aria-label="Loading TrumpyTracker">
-      <div class="tt-boot-brand">TRUMPY/TRACKER</div>
-      <div class="tt-boot-rule"></div>
-      <div class="tt-boot-bar" style="width: 58%"></div>
-      <div class="tt-boot-bar" style="width: 90%; height: 34px"></div>
-      <div class="tt-boot-bar" style="width: 78%; height: 34px"></div>
-      <div class="tt-boot-bar" style="width: 46%"></div>
-      <div class="tt-boot-rule"></div>
-      <div class="tt-boot-bar" style="width: 68%"></div>
-      <div class="tt-boot-bar" style="width: 84%"></div>
+      <div class="tt-boot-hd"><div class="tt-boot-hd-in">TRUMPY / TRACKER</div></div>
+      <div class="tt-boot-main">
+        <div class="tt-boot-bar" style="width: min(620px, 86%); height: 64px"></div>
+        <div class="tt-boot-bar" style="width: min(230px, 48%); height: 30px; margin-top: 34px"></div>
+        <div class="tt-boot-bar" style="width: min(560px, 78%); height: 12px"></div>
+        <div class="tt-boot-bar" style="width: min(640px, 90%); margin-top: 30px"></div>
+        <div class="tt-boot-bar" style="width: min(480px, 68%)"></div>
+        <div class="tt-boot-bar" style="width: min(560px, 78%)"></div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.tsx"></script>
