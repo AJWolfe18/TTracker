@@ -124,7 +124,7 @@ docs/features/
 2. Commit to `test` branch
 3. Push to `test` branch (`git push origin test`)
 4. Auto-deploys to Netlify TEST site
-5. **Note:** No Codex review on direct pushes (review only runs on PRs)
+5. **Note:** Code review happens locally (two-pass review + Josh's local Codex), not on GitHub
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -132,7 +132,7 @@ docs/features/
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. **Codex reviews the PR automatically** (ChatGPT subscription; comment `@codex review` to re-run) - check with `gh pr view`
+6. **Review is done locally BEFORE the PR** (two-pass review + Josh runs Codex locally). GitHub `@codex review` was retired August 25, 2026 — do NOT comment it on PRs
 7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
@@ -147,7 +147,7 @@ docs/features/
 ### Before Creating PR to Main:
 - [ ] Changes tested on TEST environment
 - [ ] `npm run qa:smoke` passes
-- [ ] Codex review passed (P1/P2 findings addressed)
+- [ ] Local code review passed (two-pass; Critical/P1/P2 findings addressed)
 - [ ] Security quick-check: `/docs/guides/security-checklist.md`
 - [ ] **PROD deployment checklist:** `/docs/guides/prod-deployment-checklist.md`
   - Migrations, edge functions, workflows, secrets all accounted for
@@ -190,12 +190,12 @@ docs/features/
 7. **State cost implications** - Always mention $ impact for new features
 
 8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR process
-   - **PR code review:** Comment `@codex review` on the PR (uses OpenAI Codex, included in ChatGPT Plus)
-   - Codex follows guidelines in `AGENTS.md`
+   - **PR code review is LOCAL:** two-pass review in-session + Josh runs Codex locally (guidelines in `AGENTS.md`)
+   - GitHub `@codex review` comments were retired August 25, 2026 — never post them
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **Codex review only runs on PRs** - Direct pushes to test don't trigger review. Check review status with `gh pr view` (inline findings: `gh api repos/AJWolfe18/TTracker/pulls/<n>/comments`)
+10. **All code review is local** - the GPT-4o API review workflow was removed (no OpenAI credits) and GitHub `@codex review` was retired August 25, 2026. Review = in-session two-pass + Josh's local Codex. Nothing reviews PRs on GitHub anymore
 
 11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB
@@ -222,7 +222,7 @@ docs/features/
 - ❌ `git push origin main` - BLOCKED by branch protection (use PRs)
 - ❌ `git merge test` into main - WRONG (use cherry-pick from test to deployment branch)
 - ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
-- ❌ Expecting AI review on test pushes - Review only runs on PRs (not direct pushes)
+- ❌ Posting `@codex review` on PRs - Retired August 25, 2026; review happens locally before the PR
 
 ### CI Workflows
 - ❌ Ignoring "Lint PROD References" failures - This workflow prevents hardcoded PROD URLs in test code
