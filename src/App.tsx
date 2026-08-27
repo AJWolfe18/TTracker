@@ -5,6 +5,7 @@ import { Home } from '@/pages/Home';
 import { TrackerHome } from '@/pages/TrackerHome';
 import { useFeatureFlag, useFlagsReady } from '@/hooks/useFeatureFlag';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
+import { BootSkeleton } from '@/edge-states/BootSkeleton';
 import { fetchList, fetchStoryDetail, fetchEoDetail, fetchScotusDetail, fetchPardonDetail } from '@/lib/api';
 import { getFilterConfig } from '@/lib/filters';
 import { useFilters } from '@/hooks/useFilters';
@@ -78,7 +79,9 @@ function HomeRoute({ onOpenItem }: { onOpenItem: (id: string | number) => void }
   const ready = useFlagsReady();
   const trackerHome = useFeatureFlag('rap_sheet');
 
-  if (!ready) return <LoadingSkeleton />;
+  // BootSkeleton, not LoadingSkeleton: it is pixel-identical to the static
+  // skeleton in index.html, so the flag wait doesn't flash a different layout.
+  if (!ready) return <BootSkeleton />;
   if (trackerHome) return <TrackerHome />;
   return <TypePage tabType="stories" onOpenItem={onOpenItem} />;
 }
