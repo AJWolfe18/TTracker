@@ -105,8 +105,15 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     setLoadingMore(false);
     setRefreshing(true);
     (async () => {
+      // Pins and source pages fetch CONCURRENTLY (the pins promise is only
+      // awaited inside fetchTrackerPage after every page response arrives) —
+      // serializing them added a full round-trip to first paint (ADO-568).
       const pins = view === 'main'
-        ? (pinsRef.current ??= await fetchTrackerPins(ac.signal))
+        ? (pinsRef.current
+            ? Promise.resolve(pinsRef.current)
+            : fetchTrackerPins(ac.signal)
+                .then(p => (pinsRef.current = p))
+                .catch(() => undefined))
         : undefined;
       const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins);
       if (ac.signal.aborted) return;

@@ -22,13 +22,26 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Fonts load async (media swap on load): the blocking form cost ~800ms of
+       blank screen on mobile before anything painted. display=swap means text
+       renders in fallbacks until each face arrives. -->
   <link
     href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=JetBrains+Mono:wght@400;500;600;700&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
+    media="print"
+    onload="this.media='all'"
   />
+  <noscript>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400&family=JetBrains+Mono:wght@400;500;600;700&family=Archivo+Black&family=Archivo:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </noscript>
 
-  <!-- Analytics: hostname-gated loader (ADO-558). Injects GA4 only on PROD. -->
-  <script src="/analytics-gate.js"></script>
+  <!-- Analytics: hostname-gated loader (ADO-558). Injects GA4 only on PROD.
+       Deferred: it only defines window.gtag/TTAnalytics stubs consumed after
+       mount, and deferred classic scripts still run before the module bundle. -->
+  <script src="/analytics-gate.js" defer></script>
 
   <!-- FOUC prevention: set mode before any CSS/React loads -->
   <script>
@@ -47,10 +60,32 @@
     html, body { margin: 0; padding: 0; }
     body { font-family: 'Inter Tight', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     ::selection { background: #2d6a8a; color: #ffffff; }
+    /* Boot skeleton: paints at HTML parse, replaced when React mounts into
+       #root. Named tt-boot-* so it can never collide with the app's own
+       tt-shimmer styles. */
+    @keyframes tt-boot-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+    .tt-boot { max-width: 1400px; margin: 0 auto; padding: 28px 20px; }
+    .tt-boot-brand { font-weight: 900; letter-spacing: 0.04em; font-size: 22px; padding-bottom: 16px; }
+    .tt-boot-bar { border-radius: 2px; height: 16px; margin-top: 12px; background: #121214; animation: tt-boot-pulse 1.6s ease-in-out infinite; }
+    html[data-mode="light"] .tt-boot-bar { background: #ecedf0; }
+    .tt-boot-rule { height: 1px; margin: 20px 0 8px; background: #2a2a2d; }
+    html[data-mode="light"] .tt-boot-rule { background: #dfe1e6; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="tt-boot" role="status" aria-label="Loading TrumpyTracker">
+      <div class="tt-boot-brand">TRUMPY/TRACKER</div>
+      <div class="tt-boot-rule"></div>
+      <div class="tt-boot-bar" style="width: 58%"></div>
+      <div class="tt-boot-bar" style="width: 90%; height: 34px"></div>
+      <div class="tt-boot-bar" style="width: 78%; height: 34px"></div>
+      <div class="tt-boot-bar" style="width: 46%"></div>
+      <div class="tt-boot-rule"></div>
+      <div class="tt-boot-bar" style="width: 68%"></div>
+      <div class="tt-boot-bar" style="width: 84%"></div>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
