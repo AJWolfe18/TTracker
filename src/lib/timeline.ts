@@ -324,7 +324,9 @@ export async function fetchTrackerPage(
   view: TrackerView,
   state: TrackerState | null,
   signal?: AbortSignal,
-  pins?: TrackerPins,
+  // May be a promise so callers can fetch pins CONCURRENTLY with the source
+  // pages (pins are only consumed after every page response has arrived).
+  pins?: TrackerPins | Promise<TrackerPins | undefined>,
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
@@ -358,11 +360,7 @@ export async function fetchTrackerPage(
           exhausted: rows.length < spec.limit,
           errored: false,
         };
-        let entries = rows.map(spec.adapter);
-        if (isMain && source !== 'stories' && pins?.size) {
-          entries = entries.filter(e => pins.get(pinKey(source, e.id)) !== 'force_hide');
-        }
-        return entries;
+        return rows.map(spec.adapter);
       } catch (err) {
         if ((err as Error).name === 'AbortError') throw err;
         // One source failing must not blank the whole Tracker
@@ -372,12 +370,22 @@ export async function fetchTrackerPage(
     }),
   );
 
+  // Pins are applied only now that every source page has arrived, so a
+  // promise-valued `pins` never delays the fetches themselves.
+  const resolvedPins = await pins;
+  if (isMain && resolvedPins?.size) {
+    TIMELINE_SOURCES.forEach((source, i) => {
+      if (source === 'stories') return;
+      groups[i] = groups[i].filter(e => resolvedPins.get(pinKey(source, e.id)) !== 'force_hide');
+    });
+  }
+
   // First page of the main line: surface force_show pins on non-stories
   // sources. Only rows below the alarm-5 stream are merged — anything at 5
   // arrives (or already arrived) through normal paging, so injecting it again
   // would duplicate the entry.
-  if (isMain && state === null && pins?.size) {
-    const bySource = forceShowIdsBySource(pins);
+  if (isMain && state === null && resolvedPins?.size) {
+    const bySource = forceShowIdsBySource(resolvedPins);
     const injected = await Promise.all(
       (Object.keys(bySource) as TimelineSource[]).map(async source => {
         const spec = SPECS[source];
