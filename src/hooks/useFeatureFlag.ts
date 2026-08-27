@@ -39,6 +39,15 @@ async function loadFlags(): Promise<Record<string, boolean>> {
 }
 
 /**
+ * Start the flag-file fetch immediately (called from main.tsx before React
+ * mounts). The homepage cannot route until flags resolve, so waiting for the
+ * first hook effect put a whole network round-trip after mount for nothing.
+ */
+export function prefetchFlags(): void {
+  void loadFlags();
+}
+
+/**
  * True once the flag file has loaded (or failed and defaulted). Lets routing
  * decisions wait instead of flashing the flag-off surface for a frame.
  */
