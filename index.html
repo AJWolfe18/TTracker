@@ -22,6 +22,13 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Supabase preconnects (ADO-568): DNS+TLS setup overlaps the JS download
+       instead of delaying the first data fetch. Both envs listed statically —
+       the env pick happens in JS, too late to start the handshake, and the
+       unused connection just idles out. PROD ref here is deliberate; root
+       index.html is outside lint-prod-refs scan dirs. -->
+  <link rel="preconnect" href="https://osjbulmltfpcoldydexg.supabase.co" crossorigin />
+  <link rel="preconnect" href="https://wnrjrywpcadwutfykflu.supabase.co" crossorigin />
   <!-- Fonts load async (media swap on load): the blocking form cost ~800ms of
        blank screen on mobile before anything painted. display=swap means text
        renders in fallbacks until each face arrives. -->
