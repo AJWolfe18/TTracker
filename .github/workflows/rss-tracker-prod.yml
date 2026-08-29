@@ -41,6 +41,16 @@ jobs:
         run: node scripts/rss-tracker-supabase.js
         timeout-minutes: 5
 
+      # ADO-570: the homepage reads precomputed main_line + tally; refresh after
+      # every run (always(): a partial run still changed data). Never fails.
+      - name: Refresh Tracker main line + tally
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/maintenance/refresh-tracker.js
+        timeout-minutes: 2
+
       - name: Upload run logs (on failure)
         if: failure()
         uses: actions/upload-artifact@v4

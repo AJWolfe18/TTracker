@@ -69,6 +69,15 @@ jobs:
         EO_LOOKBACK_DAYS: ${{ inputs.lookback_days || '3' }}
       run: node scripts/executive-orders-tracker-supabase.js
 
+    # ADO-570: new EOs count toward the homepage tally only after this refresh.
+    - name: Refresh Tracker main line + tally
+      if: always()
+      env:
+        SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+      run: node scripts/maintenance/refresh-tracker.js
+      timeout-minutes: 2
+
     - name: Commit any changes (minimal, since data is in Supabase)
       run: |
         git config --local user.email "action@github.com"

@@ -47,6 +47,13 @@ jobs:
           set -euo pipefail
           node scripts/ingest/doj-pardons-scraper.js 2>&1 | tee logs/01-ingest.log
 
+      # ADO-570: new pardons count toward the homepage tally only after this refresh.
+      # Uses the job-level SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env (prod|test by branch).
+      - name: Refresh Tracker main line + tally
+        if: always()
+        run: node scripts/maintenance/refresh-tracker.js
+        timeout-minutes: 2
+
       - name: Upload logs on failure
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
