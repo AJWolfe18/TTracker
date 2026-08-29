@@ -1,6 +1,6 @@
 # Handoff: ADO-571 - Share card renderer + og:image swap (August 29, 2026)
 
-**Ticket:** ADO-571 (Ready for Prod) · **Epic:** 299 (social automation) · **Plan:** `docs/features/growth/plan-social-automation.md` S1 (Tasks 1-3) · **Cost:** $0/month
+**Ticket:** ADO-571 (Closed - deployed to PROD via PR #135, squash f60abf3, share_cards flag OFF) · **Epic:** 299 (social automation) · **Plan:** `docs/features/growth/plan-social-automation.md` S1 (Tasks 1-3) · **Cost:** $0/month
 
 ## What shipped (on `test`, commits 0b22fc1, 39f6c48, eede553)
 
@@ -33,7 +33,11 @@ TEST site `test--taupe-capybara-0ff2ed.netlify.app`:
 - The plan's hardcoded story labels for levels 0/1 were wrong; the test now sources every label from `tone-system.json`.
 - Edge functions cannot read `/public`, so spicy labels are mirrored by hand in `og-card-props.mjs`; the test fails on drift.
 
-## PROD deployment (when promoting)
+## PROD deployment (DONE August 29, 2026 - PR #135)
+
+Verified on trumpytracker.com after deploy: flag OFF serves og-default.png; `/detail/1?ff_share_cards=true` (crawler UA) emits the card URL; `/api/og-image/detail/1.png` = 200 image/png, CDN stored; unknown id 302. Note the edge function took ~1 minute after the static files went live to start answering - the first check returned the SPA HTML.
+
+Original steps kept for reference:
 
 1. Cherry-pick `0b22fc1`, `39f6c48`, `eede553` onto the deployment branch. No migrations, no new secrets (uses existing `SUPABASE_URL` / `SUPABASE_ANON_KEY` Netlify env vars set for ADO-515).
 2. `share_cards` is `false` in `flags-prod.json` - ship as is.
