@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-08-23 (tracker_pin + v_tracker_stories, migration 112)
+**Last Updated:** 2026-08-29 (stored main_line + tracker_stats + refresh_tracker_derived, migration 113)
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -346,12 +346,24 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 
 **RLS:** anon SELECT policy with a **column-level grant on `source`, `entity_id`, `pin` only** — pin existence is public curation data (a force_shown row renders publicly), but `note` is an admin breadcrumb and is NOT anon-readable. Writes service_role only. ADO-547 ships the admin editor.
 
+### `stories.main_line` (column, migration 113 — ADO-570)
+Stored boolean, `NOT NULL DEFAULT false`. Written ONLY by `refresh_tracker_derived()` — never by hand or by the pipeline directly. Backed by partial index `idx_stories_tracker_main_line (first_seen_at DESC, id DESC) INCLUDE (primary_headline, alarm_level, severity) WHERE main_line IS TRUE AND status = 'active' AND summary_neutral IS NOT NULL` so the spine page is an index-only scan. **Predicate is `main_line IS TRUE` on purpose** — PostgREST `is.true` emits `IS TRUE` and the planner will not match a bare-boolean partial predicate; hand-written queries must use `IS TRUE` too.
+
+### `tracker_stats` (table, migration 113)
+One row (`id = 1`, CHECK-enforced): `developments`, `alarm5_last30`, `open_fronts`, `refreshed_at`. The masthead tally; replaces 9 `HEAD count=exact` requests per page load. Counts are as of `refreshed_at`. Anon SELECT (explicit grant + RLS policy); service_role write.
+
+### `v_tracker_main_line_rule` (view, migration 113) — service_role only
+**The single definition of rule v1.1** (moved verbatim from the 112 `v_tracker_stories`). Returns `id, main_line`. NOT `security_invoker`: it carries `events.publish_state = 'published'` explicitly so the refresh (SECURITY DEFINER, bypasses RLS) scores draft-front members as loose ends exactly as anon saw them. Edit the rule here and nowhere else.
+
+### `refresh_tracker_derived()` (function, migration 113) — service_role only
+Applies the rule view to `stories.main_line` (changed rows only), clears the flag on rows that left scope, upserts `tracker_stats`. Returns `(rows_changed, took_ms)`. Called by `scripts/maintenance/refresh-tracker.js` as the `if: always()` last step of all five pipeline workflows, by the fronts seed SQL, and (required) after any admin pin/front write. Stats predicates mirror `SPECS` in `src/lib/timeline.ts` — change both in the same commit.
+
 ### `v_tracker_stories` (view)
-**Purpose:** The Tracker spine's stories read path with the server-computed `main_line` rule (ADO-554, PRD §12 anchor principle)
+**Purpose:** The Tracker spine's stories read path (ADO-554, PRD §12 anchor principle). Since migration 113 it reads the STORED `main_line` flag through a plain front join — no window function, no rule logic.
 
-`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, front_opening, tracker_pin, alarm_eff, main_line`
+`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, tracker_pin, main_line` (113 dropped `front_opening` and `alarm_eff`; nothing read them)
 
-**The rule (v1.1):** `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5` (raised from 4+ on August 23, 2026: fronts are the organizing layer and enrichment severity saturation rates ~67% of stories 4+, which drowned the main line); front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
+**The rule (v1.1)** (now evaluated by `v_tracker_main_line_rule`, applied by the refresh): `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5` (raised from 4+ on August 23, 2026: fronts are the organizing layer and enrichment severity saturation rates ~67% of stories 4+, which drowned the main line); front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
 
 `security_invoker = true` — for anon, unpublished fronts' members count as loose ends (RLS hides the membership), by design. EO/SCOTUS/pardon rows have no front membership; the frontend applies their loose-end rule + pins client-side from `tracker_pin`.
 
