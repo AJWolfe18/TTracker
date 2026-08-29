@@ -6,6 +6,6 @@
   "pardons": true,
   "executive_orders": true,
   "tone_v2": false,
-  "rap_sheet": false,
-  "share_cards": false
+  "rap_sheet": true,
+  "share_cards": true
 }
