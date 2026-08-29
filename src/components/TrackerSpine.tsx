@@ -14,6 +14,7 @@ import {
   visibleEntries,
   mergeEntries,
   SOURCE_LABELS,
+  ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
@@ -332,6 +333,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         }} />
         <time style={{ ...mono, display: 'block', fontSize: 10, color: accent }}>
           {fmtDate(e.date)}
+          {/* Entry type always visible: the front tag below replaces the source
+              tag on front members, so without this a reader can't tell a story
+              from an EO or a ruling at a glance (Josh, August 29, 2026) */}
+          <span style={{ color: theme.ink, fontWeight: 600 }}> · {ENTRY_TYPE_LABELS[e.source]}</span>
           {e.alarm >= 5 ? (
             <span style={{
               background: accent, color: theme.bg, fontWeight: 600,
@@ -367,14 +372,16 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             }}>
               {e.front.name}
             </span>
-          ) : (
+          ) : e.source === 'stories' ? (
+            // Only stories carry a loose-end tag; the other sources' type now
+            // sits in the date line, so a second source tag here was redundant
             <span style={{
               ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim,
               border: `1px solid ${theme.line}`, padding: '2px 8px', whiteSpace: 'nowrap',
             }}>
-              {e.source === 'stories' ? 'Loose end' : SOURCE_LABELS[e.source]}
+              Loose end
             </span>
-          )}
+          ) : null}
         </div>
       </div>,
     );

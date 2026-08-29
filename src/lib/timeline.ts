@@ -39,6 +39,14 @@ export const SOURCE_LABELS: Record<TimelineSource, string> = {
   pardons: 'Pardons',
 };
 
+/** Per-entry type label on the spine (what a row IS: story, EO, ruling, pardon) */
+export const ENTRY_TYPE_LABELS: Record<TimelineSource, string> = {
+  stories: 'Story',
+  scotus: 'Decision',
+  eos: 'EO',
+  pardons: 'Pardon',
+};
+
 /** Route prefix for each source's detail page */
 export const SOURCE_ROUTES: Record<TimelineSource, string> = {
   stories: 'detail',
