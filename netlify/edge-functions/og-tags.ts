@@ -138,6 +138,27 @@ async function fetchRecord(
   return rows.length > 0 ? rows[0] : null;
 }
 
+// ADO-571: per-record share card (rendered by og-image.ts) behind the share_cards flag.
+// Flag file matches the environment (PROD hostname -> flags-prod.json); ?ff_share_cards=true overrides.
+async function useShareCard(url: URL): Promise<boolean> {
+  if (url.searchParams.get('ff_share_cards') === 'true') return true;
+  const isProd = url.hostname === 'trumpytracker.com' || url.hostname === 'www.trumpytracker.com';
+  try {
+    const res = await fetch(`${url.origin}/shared/flags-${isProd ? 'prod' : 'test'}.json`);
+    if (!res.ok) return false;
+    const flags = await res.json();
+    return flags.share_cards === true;
+  } catch {
+    return false;
+  }
+}
+
+// Cache-buster for the immutable card URL: a record edit changes updated_at, which changes the URL.
+function recordVersion(record: Record<string, unknown>): number {
+  const t = new Date(String(record.last_updated_at || record.updated_at || 0)).getTime();
+  return Number.isFinite(t) && t > 0 ? Math.floor(t / 1000) : 0;
+}
+
 export default async (req: Request, context: Context) => {
   const ua = req.headers.get('user-agent') || '';
   if (!isCrawler(ua)) {
@@ -167,7 +188,9 @@ export default async (req: Request, context: Context) => {
       200,
     );
     const canonicalUrl = `${origin}/${route.type}/${route.id}`;
-    const imageUrl = `${origin}/og-default.png`;
+    const imageUrl = (await useShareCard(url))
+      ? `${origin}/api/og-image/${route.type}/${encodeURIComponent(route.id)}.png?v=${recordVersion(record)}`
+      : `${origin}/og-default.png`;
 
     const response = await context.next();
     let html = await response.text();
