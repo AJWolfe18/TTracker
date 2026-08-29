@@ -7,5 +7,5 @@
   "executive_orders": true,
   "tone_v2": false,
   "rap_sheet": true,
-  "share_cards": false
+  "share_cards": true
 }
