@@ -1,10 +1,11 @@
 {
   "_comment": "Feature flags for PROD environment - only enable verified features",
-  "_updated": "2026-08-17",
+  "_updated": "2026-08-29",
 
   "scotus": true,
   "pardons": true,
   "executive_orders": true,
   "tone_v2": false,
-  "rap_sheet": false
+  "rap_sheet": false,
+  "share_cards": false
 }

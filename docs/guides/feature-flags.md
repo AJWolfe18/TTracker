@@ -77,6 +77,15 @@ The system auto-detects environment from hostname:
 }
 ```
 
+### Current Flags
+
+| Flag | What it gates | Read by |
+|------|---------------|--------|
+| `scotus`, `pardons`, `executive_orders` | Section visibility | frontend |
+| `tone_v2` | Spicy label system | frontend |
+| `rap_sheet` | The Tracker homepage | frontend |
+| `share_cards` | Per-record og:image share card at `/api/og-image/...` (ADO-571) | `netlify/edge-functions/og-tags.ts` (server side, reads the flag JSON over HTTP; `?ff_share_cards=true` overrides) |
+
 ### URL Overrides (Testing)
 
 Override any flag via query parameter:
