@@ -146,8 +146,9 @@ interface SourceSpec {
 // Key order is the chip display order (mockup rev 6).
 const SPECS: Record<TimelineSource, SourceSpec> = {
   stories: {
-    // v_tracker_stories (migration 112) bakes in status=active + enriched and
-    // adds front membership + the server-computed main_line column (ADO-554).
+    // v_tracker_stories (migration 112, rewritten in 113) bakes in status=active
+    // + enriched and adds front membership + the main_line column (ADO-554) —
+    // a STORED flag since ADO-570, so main_line=is.true is an index-only scan.
     table: 'v_tracker_stories',
     select: 'id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug',
     base: `first_seen_at=gte.${TERM_START}`,
@@ -466,70 +467,34 @@ export interface TrackerTally {
   openFronts: number | null;
 }
 
-async function countRows(
-  url: string,
-  headers: Record<string, string>,
-  path: string,
-  signal?: AbortSignal,
-): Promise<number | null> {
+/**
+ * One GET on the precomputed tracker_stats row (migration 113, ADO-570).
+ * Replaces 9 HEAD count=exact requests, two of which scanned every active
+ * story on PROD (2s cold) and hid the tile until all of them resolved.
+ * The counts are as of refreshed_at (end of the last pipeline run). Any
+ * failure or a missing row yields nulls, which hides the tiles - never throws
+ * except on abort.
+ */
+export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTally> {
+  const empty: TrackerTally = { developments: null, alarm5Last30: null, openFronts: null };
+  const { url, anonKey } = await import('./supabase');
   try {
-    // HEAD + count=exact: the total arrives in Content-Range with zero body egress
-    const res = await fetch(`${url}/rest/v1/${path}`, {
-      method: 'HEAD',
-      headers: { ...headers, 'Prefer': 'count=exact' },
-      signal,
-    });
-    if (!res.ok) return null;
-    const range = res.headers.get('content-range') || '';
-    const total = Number(range.split('/')[1]);
-    return Number.isFinite(total) ? total : null;
+    const res = await fetch(
+      `${url}/rest/v1/tracker_stats?select=developments,alarm5_last30,open_fronts&id=eq.1&limit=1`,
+      { headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` }, signal },
+    );
+    if (!res.ok) return empty;
+    const rows: Raw[] = await res.json();
+    const row = rows[0];
+    if (!row) return empty;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    return {
+      developments: num(row.developments),
+      alarm5Last30: num(row.alarm5_last30),
+      openFronts: num(row.open_fronts),
+    };
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw err;
-    return null;
+    return empty;
   }
-}
-
-export async function fetchTrackerTally(signal?: AbortSignal): Promise<TrackerTally> {
-  const { url, anonKey } = await import('./supabase');
-  const headers = {
-    'apikey': anonKey,
-    'Authorization': `Bearer ${anonKey}`,
-  };
-
-  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-
-  // Both branches awaited in ONE Promise.all so a rejection (AbortError on
-  // navigation) from either side is observed by the caller -- Codex P1 on
-  // PR #131: the front count could otherwise reject unhandled while the
-  // per-source batch rejected first.
-  const [openFronts, perSource] = await Promise.all([
-    countRows(
-      url, headers,
-      'events?select=id&publish_state=eq.published&lifecycle=neq.resolved',
-      signal,
-    ),
-    Promise.all(TIMELINE_SOURCES.map(async source => {
-      const s = SPECS[source];
-      const alarm5 = s.alarm(5)!;
-      const [total, worst] = await Promise.all([
-        countRows(url, headers, `${s.table}?select=id&${s.base}`, signal),
-        countRows(
-          url, headers,
-          `${s.table}?select=id&${s.base}&${s.dateCol}=gte.${since}`
-          + `&and=${encodeURIComponent(`(${alarm5})`)}`,
-          signal,
-        ),
-      ]);
-      return { total, worst };
-    })),
-  ]);
-
-  const sum = (vals: (number | null)[]) =>
-    vals.every(v => v !== null) ? vals.reduce((a: number, b) => a + (b as number), 0) : null;
-
-  return {
-    developments: sum(perSource.map(p => p.total)),
-    alarm5Last30: sum(perSource.map(p => p.worst)),
-    openFronts,
-  };
 }

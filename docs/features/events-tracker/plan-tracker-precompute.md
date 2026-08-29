@@ -30,7 +30,7 @@ Non-goals: no new services, no cron, no caching layer, no frontend rule logic. $
 ### Migration 113 — `113_tracker_precompute.sql` (manual SQL editor, TEST then PROD)
 
 1. `ALTER TABLE stories ADD COLUMN main_line BOOLEAN NOT NULL DEFAULT false` (+ `COMMENT` pointing here).
-2. Partial index for the spine page: `(first_seen_at DESC, id DESC) INCLUDE (primary_headline, alarm_level, severity) WHERE main_line AND status='active' AND summary_neutral IS NOT NULL`. INCLUDE makes the 60-row page an **index-only scan**: without it every row still costs a random heap read, which on a cold nano instance is the failure mode being fixed. Front name/slug are 60 PK lookups on the 2K-row `story_event`/`events` tables.
+2. Partial index for the spine page: `(first_seen_at DESC, id DESC) INCLUDE (primary_headline, alarm_level, severity) WHERE main_line AND status='active' AND summary_neutral IS NOT NULL`. **Predicate must be `main_line IS TRUE`**, not bare `main_line`: PostgREST's `is.true` emits `IS TRUE` and the planner would not prove that against a bare-boolean partial predicate (verified on TEST: index never chosen even with `enable_seqscan=off`; with `IS TRUE` → Index Only Scan, 60 rows, no sort, 0.28ms). INCLUDE makes the 60-row page an **index-only scan**: without it every row still costs a random heap read, which on a cold nano instance is the failure mode being fixed. Front name/slug are 60 PK lookups on the 2K-row `story_event`/`events` tables.
 3. `tracker_stats` single-row table: `id smallint PK CHECK (id=1)`, `developments int`, `alarm5_last30 int`, `open_fronts int`, `refreshed_at timestamptz`. RLS on + anon SELECT policy + **explicit `GRANT SELECT TO anon`** (migration 046 auto-revokes anon on new tables); service_role write only. `alarm5_last30` is "as of refreshed_at" - acceptable at several runs/day.
 4. `v_tracker_main_line_rule` view = **the only place the rule exists** (rule v1.1 moved verbatim from the 112 CASE: pins override → loose end alarm 5 → front opening / alarm 5 / new peak ≥4). service_role-only SELECT.
    - **RLS requirement:** the refresh runs as SECURITY DEFINER and therefore bypasses the migration-111 publish gates that anon reads inherit today. The rule view MUST filter `events.publish_state = 'published'` explicitly (as the 112 CTE does) so draft-front members stay loose ends. Never rely on RLS inside this view.
@@ -72,9 +72,13 @@ Non-goals: no new services, no cron, no caching layer, no frontend rule logic. $
 
 ## 6. PROD deploy order (same shape as 112)
 
-1. Apply migration 113 on PROD (SQL editor). Old frontend keeps working: view name/columns unchanged, `main_line` column defaults false → **run `SELECT refresh_tracker_derived();` immediately after** or the spine is empty until the next pipeline run.
+1. Apply migration 113 on PROD (SQL editor), then `SELECT * FROM refresh_tracker_derived(); ANALYZE public.stories;` (new column has no planner stats until ANALYZE; on TEST the migration's own trailing refresh call covers the first refresh). Old frontend keeps working: view name/columns unchanged, `main_line` column defaults false → **run `SELECT refresh_tracker_derived();` immediately after** or the spine is empty until the next pipeline run.
 2. Cherry-pick pipeline + frontend commits to the deployment branch → PR → merge.
 3. Verify §5.3–5.4 on trumpytracker.com.
+
+## 6a. TEST apply record
+
+Applied on TEST August 29, 2026 via SQL editor. First attempt failed atomically (`42702: column reference "term" is ambiguous` — plpgsql vars now `v_`-prefixed). Verified: anon parity 209/209 ids identical, first 180 spine rows byte-identical, tally 1015 = 675+30+217+93 (old method), open_fronts 7, anon gets 401 on rule view and RPC, `refresh-tracker.js` → `rows_changed=0 took_ms=12`.
 
 ## 7. Rollback
 

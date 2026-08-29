@@ -34,3 +34,7 @@ WITH pool AS (
 INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
 SELECT b.id, e.id, 'human', 0.8 FROM best b JOIN public.events e ON e.slug = b.slug
 ON CONFLICT (story_id) DO NOTHING;
+
+-- ADO-570: the homepage reads the precomputed main line, so re-apply the rule
+-- after any front/assignment change (requires migration 113).
+SELECT * FROM public.refresh_tracker_derived();
