@@ -10,6 +10,7 @@ import type { DisplayItem, TimelineEvent } from '@/types';
 import type { ThemePalette } from '@/tokens/themes';
 import { Link } from 'wouter';
 import { track, toAnalyticsItemType } from '@/lib/analytics';
+import { facebookShareUrl } from '@/lib/facebook-share';
 
 /** Hostname only, so an outbound URL never lands in an analytics payload. */
 function outletDomain(url: string): string {
@@ -95,9 +96,7 @@ export function Detail({ item, loading, onOpenItem, relatedItems }: DetailProps)
 
   function shareToFacebook() {
     trackShare('facebook');
-    const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(pickHeadline(story, hmode));
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank', 'noopener,noreferrer');
+    window.open(facebookShareUrl(window.location.href), '_blank', 'noopener,noreferrer');
   }
 
   function shareToReddit() {

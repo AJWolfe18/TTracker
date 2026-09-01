@@ -3,6 +3,7 @@ import { toBlob } from 'html-to-image';
 import { TONE_SYSTEM, alarmPalette } from '@/tokens';
 import { useTheme } from '@/hooks/useTheme';
 import { pickHeadline } from '@/lib/pick-headline';
+import { facebookShareUrl } from '@/lib/facebook-share';
 import type { DisplayItem } from '@/types';
 
 interface ShareCardPreviewProps {
@@ -61,7 +62,7 @@ export function ShareCardPreview({ item, hmode }: ShareCardPreviewProps) {
     const text = encodeURIComponent(headline);
     const url = encodeURIComponent(pageUrl);
     const urls: Record<string, string> = {
-      Facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`,
+      Facebook: facebookShareUrl(pageUrl),
       Twitter: `https://twitter.com/intent/tweet?text=${text}&url=${url}`,
       Threads: `https://threads.net/intent/post?text=${encodeURIComponent(headline + ' ' + pageUrl)}`,
     };
