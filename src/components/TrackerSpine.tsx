@@ -14,6 +14,7 @@ import {
   visibleEntries,
   mergeEntries,
   SOURCE_LABELS,
+  ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
@@ -212,9 +213,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   if (tally?.openFronts != null && tally.openFronts > 0) {
     tallyTiles.push({ n: String(tally.openFronts), label: 'Open fronts' });
   }
-  if (tally?.developments != null) {
-    tallyTiles.push({ n: tally.developments.toLocaleString('en-US'), label: 'Developments logged' });
-  }
+  // "Developments logged" hidden for now (Josh, August 31, 2026) — may return
+  // later to show the breadth of the tracked record. tracker_stats still
+  // computes it; re-enable by uncommenting.
+  // if (tally?.developments != null) {
+  //   tallyTiles.push({ n: tally.developments.toLocaleString('en-US'), label: 'Developments logged' });
+  // }
   if (tally?.alarm5Last30 != null) {
     tallyTiles.push({ n: String(tally.alarm5Last30), label: 'At alarm 5 · last 30 days', bad: true });
   }
@@ -278,14 +282,15 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     const ym = e.date.slice(0, 7);
     if (ym !== lastYM) {
       rows.push(
+        // The month chip sits ON the spine (interrupting the line) so it reads
+        // as a segment boundary of the timeline, not a floating label.
         <div key={`m-${ym}`} aria-hidden="true" style={{
-          position: 'relative', zIndex: 2, padding: '16px 0',
+          position: 'relative', zIndex: 2, padding: '18px 0',
           textAlign: narrow ? 'left' : 'center',
-          ...(narrow ? { paddingLeft: 28 } : {}),
         }}>
           <span style={{
-            ...mono, fontSize: 10, letterSpacing: '0.12em', color: theme.ink,
-            background: theme.bg, border: `1px solid ${theme.line}`, padding: '4px 12px',
+            ...mono, fontSize: 12, fontWeight: 600, letterSpacing: '0.14em', color: theme.ink,
+            background: theme.bg2, border: `1px solid ${theme.dim}`, padding: '5px 14px',
           }}>
             {monthLabel(ym)}
           </span>
@@ -314,6 +319,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             ? { position: 'relative', width: '50%', marginLeft: '50%', padding: '12px 0 12px 34px', textAlign: 'left' }
             : { position: 'relative', width: '50%', padding: '12px 34px 12px 0', textAlign: 'right' }}
       >
+        {/* Narrow: a short tick from the spine to the entry, so each row reads
+            as attached to the timeline instead of a plain left-padded list */}
+        {narrow && (
+          <span aria-hidden="true" style={{
+            position: 'absolute', left: 8, top: e.alarm >= 5 ? 18 + dotSize / 2 - 1 : 20 + dotSize / 2 - 1,
+            width: 18, height: 2, background: theme.line, zIndex: 1,
+          }} />
+        )}
         <span aria-hidden="true" style={{
           position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
           width: dotSize, height: dotSize, borderRadius: '50%',
@@ -332,6 +345,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         }} />
         <time style={{ ...mono, display: 'block', fontSize: 10, color: accent }}>
           {fmtDate(e.date)}
+          {/* Entry type always visible: the front tag below replaces the source
+              tag on front members, so without this a reader can't tell a story
+              from an EO or a ruling at a glance (Josh, August 29, 2026) */}
+          <span style={{ color: theme.ink, fontWeight: 600 }}> · {ENTRY_TYPE_LABELS[e.source]}</span>
           {e.alarm >= 5 ? (
             <span style={{
               background: accent, color: theme.bg, fontWeight: 600,
@@ -367,14 +384,11 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             }}>
               {e.front.name}
             </span>
-          ) : (
-            <span style={{
-              ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim,
-              border: `1px solid ${theme.line}`, padding: '2px 8px', whiteSpace: 'nowrap',
-            }}>
-              {e.source === 'stories' ? 'Loose end' : SOURCE_LABELS[e.source]}
-            </span>
-          )}
+          ) : null}
+          {/* Stories with no front get NO tag: the public "Loose end" label
+              confused readers (Josh, August 31, 2026) — "loose end" stays
+              admin/PRD vocabulary only. The real fix for mis-tagged rows is
+              front assignment, not a label. */}
         </div>
       </div>,
     );
@@ -459,7 +473,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         <div style={{ position: 'relative', padding: '18px 0 34px' }}>
           <span aria-hidden="true" style={{
             position: 'absolute', top: 0, bottom: 0, width: 2, background: theme.line,
-            ...(narrow ? { left: 8 } : { left: '50%', transform: 'translateX(-50%)' }),
+            // translateX(-50%) in BOTH layouts: the dots center on x=8 (narrow)
+            // / 50% (wide), and without it the 2px line sat 1px off-center
+            ...(narrow ? { left: 8, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
           {loaded && !refreshing && visible.length === 0 && (

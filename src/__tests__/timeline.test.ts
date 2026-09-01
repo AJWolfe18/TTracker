@@ -8,6 +8,7 @@ import {
   buildSourcePath,
   initialTrackerState,
   fetchTrackerPage,
+  fetchTrackerTally,
   fetchTrackerPins,
   forceShowIdsBySource,
   pinKey,
@@ -485,5 +486,45 @@ describe('tracker pins (ADO-554)', () => {
     calls = [];
     await fetchTrackerPage('main', state, undefined, pins);
     expect(calls.some(c => c.includes('id=in.'))).toBe(false);
+  });
+});
+
+describe('fetchTrackerTally (ADO-570: one GET on tracker_stats)', () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  let calls: string[];
+
+  beforeEach(() => {
+    calls = [];
+    vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    (globalThis as { window?: unknown }).window = originalWindow;
+  });
+
+  it('reads the precomputed row with a single request', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      return { ok: true, json: async () => [{ developments: 1234, alarm5_last30: 7, open_fronts: 8 }] };
+    }));
+    const t = await fetchTrackerTally();
+    expect(t).toEqual({ developments: 1234, alarm5Last30: 7, openFronts: 8 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/rest/v1/tracker_stats?');
+    expect(calls[0]).not.toContain('v_tracker_stories');
+  });
+
+  it('yields nulls (tiles hidden, no crash) when the row is missing or the request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [] })));
+    expect(await fetchTrackerTally()).toEqual({ developments: null, alarm5Last30: null, openFronts: null });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => [] })));
+    expect(await fetchTrackerTally()).toEqual({ developments: null, alarm5Last30: null, openFronts: null });
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
+    expect(await fetchTrackerTally()).toEqual({ developments: null, alarm5Last30: null, openFronts: null });
+  });
+
+  it('rethrows AbortError so navigation cancels cleanly', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }));
+    await expect(fetchTrackerTally()).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

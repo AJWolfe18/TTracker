@@ -31,6 +31,7 @@ export const PIPELINES = Object.freeze({
   PARDONS_INGEST:     'pardons_ingest',     // scripts/ingest/doj-pardons-scraper.js — staleness tripwire, header parse drift
   FRONT_ASSIGNMENT:   'front_assignment',   // fronts assignment agent (ADO-546/Wave 2) — declined to assign a story to a front
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
+  TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
 });
 
 export const REASONS = Object.freeze({
@@ -43,6 +44,7 @@ export const REASONS = Object.freeze({
   PARSE_ERROR:           'parse_error',           // JSON/response parse failed
   API_ERROR:             'api_error',             // external API call errored
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
+  REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
 });
 
 /**
