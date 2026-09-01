@@ -279,14 +279,15 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     const ym = e.date.slice(0, 7);
     if (ym !== lastYM) {
       rows.push(
+        // The month chip sits ON the spine (interrupting the line) so it reads
+        // as a segment boundary of the timeline, not a floating label.
         <div key={`m-${ym}`} aria-hidden="true" style={{
-          position: 'relative', zIndex: 2, padding: '16px 0',
+          position: 'relative', zIndex: 2, padding: '18px 0',
           textAlign: narrow ? 'left' : 'center',
-          ...(narrow ? { paddingLeft: 28 } : {}),
         }}>
           <span style={{
-            ...mono, fontSize: 10, letterSpacing: '0.12em', color: theme.ink,
-            background: theme.bg, border: `1px solid ${theme.line}`, padding: '4px 12px',
+            ...mono, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', color: theme.ink,
+            background: theme.bg2, border: `1px solid ${theme.dim}`, padding: '5px 14px',
           }}>
             {monthLabel(ym)}
           </span>
@@ -315,6 +316,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             ? { position: 'relative', width: '50%', marginLeft: '50%', padding: '12px 0 12px 34px', textAlign: 'left' }
             : { position: 'relative', width: '50%', padding: '12px 34px 12px 0', textAlign: 'right' }}
       >
+        {/* Narrow: a short tick from the spine to the entry, so each row reads
+            as attached to the timeline instead of a plain left-padded list */}
+        {narrow && (
+          <span aria-hidden="true" style={{
+            position: 'absolute', left: 8, top: e.alarm >= 5 ? 18 + dotSize / 2 - 1 : 20 + dotSize / 2 - 1,
+            width: 18, height: 2, background: theme.line, zIndex: 1,
+          }} />
+        )}
         <span aria-hidden="true" style={{
           position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
           width: dotSize, height: dotSize, borderRadius: '50%',
@@ -466,7 +475,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         <div style={{ position: 'relative', padding: '18px 0 34px' }}>
           <span aria-hidden="true" style={{
             position: 'absolute', top: 0, bottom: 0, width: 2, background: theme.line,
-            ...(narrow ? { left: 8 } : { left: '50%', transform: 'translateX(-50%)' }),
+            // translateX(-50%) in BOTH layouts: the dots center on x=8 (narrow)
+            // / 50% (wide), and without it the 2px line sat 1px off-center
+            ...(narrow ? { left: 8, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
           {loaded && !refreshing && visible.length === 0 && (
