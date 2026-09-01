@@ -213,9 +213,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   if (tally?.openFronts != null && tally.openFronts > 0) {
     tallyTiles.push({ n: String(tally.openFronts), label: 'Open fronts' });
   }
-  if (tally?.developments != null) {
-    tallyTiles.push({ n: tally.developments.toLocaleString('en-US'), label: 'Developments logged' });
-  }
+  // "Developments logged" hidden for now (Josh, August 31, 2026) — may return
+  // later to show the breadth of the tracked record. tracker_stats still
+  // computes it; re-enable by uncommenting.
+  // if (tally?.developments != null) {
+  //   tallyTiles.push({ n: tally.developments.toLocaleString('en-US'), label: 'Developments logged' });
+  // }
   if (tally?.alarm5Last30 != null) {
     tallyTiles.push({ n: String(tally.alarm5Last30), label: 'At alarm 5 · last 30 days', bad: true });
   }
@@ -286,7 +289,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           textAlign: narrow ? 'left' : 'center',
         }}>
           <span style={{
-            ...mono, fontSize: 11, fontWeight: 600, letterSpacing: '0.14em', color: theme.ink,
+            ...mono, fontSize: 12, fontWeight: 600, letterSpacing: '0.14em', color: theme.ink,
             background: theme.bg2, border: `1px solid ${theme.dim}`, padding: '5px 14px',
           }}>
             {monthLabel(ym)}
@@ -381,16 +384,11 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             }}>
               {e.front.name}
             </span>
-          ) : e.source === 'stories' ? (
-            // Only stories carry a loose-end tag; the other sources' type now
-            // sits in the date line, so a second source tag here was redundant
-            <span style={{
-              ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim,
-              border: `1px solid ${theme.line}`, padding: '2px 8px', whiteSpace: 'nowrap',
-            }}>
-              Loose end
-            </span>
           ) : null}
+          {/* Stories with no front get NO tag: the public "Loose end" label
+              confused readers (Josh, August 31, 2026) — "loose end" stays
+              admin/PRD vocabulary only. The real fix for mis-tagged rows is
+              front assignment, not a label. */}
         </div>
       </div>,
     );
