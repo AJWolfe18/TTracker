@@ -445,7 +445,9 @@ async function processCluster(cluster) {
     case_name: (cluster.case_name || '').replace(/\s*Revisions?:\s*\d{1,2}\/\d{2}\/\d{2,4}\s*$/i, ''),
     case_name_short: cluster.case_name_short || null,
     case_name_full: cluster.case_name_full || null,
-    docket_number: docket?.docket_number || null,
+    // Normalized here (CourtListener sometimes includes a "No. " prefix) so
+    // BOTH the dedupe lookup and the update payload use the same form
+    docket_number: (docket?.docket_number || '').replace(/^No\.\s*/i, '') || null,
     term: deriveTerm(cluster.date_filed),
     decided_at: cluster.date_filed || null,
     argued_at: docket?.date_argued || null,
@@ -479,15 +481,11 @@ async function processCluster(cluster) {
     return true;
   }
 
-  // Normalize docket_number (CourtListener sometimes includes "No. " prefix)
-  if (caseRecord.docket_number) {
-    caseRecord.docket_number = caseRecord.docket_number.replace(/^No\.\s*/i, '');
-  }
-
   // Dedupe on docket_number (CourtListener creates new cluster_ids for case
   // revisions; docket_number is unique per migration 068). Existing rows get
   // ONLY the fetch-owned refresh; the full record is written on first insert.
-  // NULL docket_numbers can't conflict, so they always insert (old behavior).
+  // Docketless clusters fall back to courtlistener_cluster_id (UNIQUE per
+  // migration 066) so a re-fetch refreshes instead of erroring on the insert.
   let upsertedCase = null;
   let error = null;
   let existing = null;
@@ -496,6 +494,13 @@ async function processCluster(cluster) {
       .from('scotus_cases')
       .select('id')
       .eq('docket_number', caseRecord.docket_number)
+      .maybeSingle());
+  }
+  if (!error && !existing) {
+    ({ data: existing, error } = await supabase
+      .from('scotus_cases')
+      .select('id')
+      .eq('courtlistener_cluster_id', clusterId)
       .maybeSingle());
   }
   if (!error) {
