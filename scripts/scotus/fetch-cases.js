@@ -432,8 +432,14 @@ async function processCluster(cluster) {
   const majorityAuthor = await selectMajorityAuthor(opinions);
   const dissentAuthors = await aggregateDissents(opinions);
 
-  // Build the case record
-  const caseRecord = {
+  // Fetch-owned columns, safe to refresh on EVERY run (this is how a case
+  // that landed text-less gets its syllabus/excerpt once CourtListener has it).
+  // Enrichment- and curation-owned columns (is_public, vote_split,
+  // majority_author, dissent_authors, all agent fields) must NEVER be in the
+  // re-fetch update: CL keeps a cluster in the fetch window for days, and the
+  // daily re-upsert was flipping enriched cases back to hidden and nulling the
+  // agent's vote_split (Trump v. California, September 1, 2026).
+  const fetchOwned = {
     courtlistener_cluster_id: clusterId,
     courtlistener_docket_id: cluster.docket_id || null,
     case_name: (cluster.case_name || '').replace(/\s*Revisions?:\s*\d{1,2}\/\d{2}\/\d{2,4}\s*$/i, ''),
@@ -444,17 +450,23 @@ async function processCluster(cluster) {
     decided_at: cluster.date_filed || null,
     argued_at: docket?.date_argued || null,
     citation: selectCitation(cluster.citations),
-    vote_split: null,  // SCDB data unreliable, skip for MVP
-    majority_author: majorityAuthor,
-    dissent_authors: dissentAuthors,
     syllabus: syllabus,
     opinion_excerpt: excerpt,
     source_url: cluster.absolute_url
       ? `https://www.courtlistener.com${cluster.absolute_url}`
       : `https://www.courtlistener.com/opinion/${clusterId}/${generateSlug(cluster.case_name)}/`,
     pdf_url: primaryOpinion?.download_url || null,
-    is_public: false,  // Not public by default, needs enrichment/review
     updated_at: new Date().toISOString()
+  };
+
+  // First-insert-only seed values: CL's author heuristics as a starting hint
+  // (the agent overwrites them with real extraction) and the private-by-default
+  // publish gate. is_public lives ONLY here — see comment above.
+  const caseRecord = {
+    ...fetchOwned,
+    majority_author: majorityAuthor,
+    dissent_authors: dissentAuthors,
+    is_public: false,
   };
 
   if (dryRun) {
@@ -472,17 +484,36 @@ async function processCluster(cluster) {
     caseRecord.docket_number = caseRecord.docket_number.replace(/^No\.\s*/i, '');
   }
 
-  // Upsert to database (idempotent on docket_number to prevent revision duplicates)
-  // CourtListener creates new cluster_ids for case revisions, but docket_number is unique
-  // PREREQ: docket_number must have UNIQUE constraint (migration 068_scotus_docket_unique.sql)
-  const { data: upsertedCase, error } = await supabase
-    .from('scotus_cases')
-    .upsert(caseRecord, {
-      onConflict: 'docket_number',
-      ignoreDuplicates: false
-    })
-    .select('id')
-    .single();
+  // Dedupe on docket_number (CourtListener creates new cluster_ids for case
+  // revisions; docket_number is unique per migration 068). Existing rows get
+  // ONLY the fetch-owned refresh; the full record is written on first insert.
+  // NULL docket_numbers can't conflict, so they always insert (old behavior).
+  let upsertedCase = null;
+  let error = null;
+  let existing = null;
+  if (caseRecord.docket_number) {
+    ({ data: existing, error } = await supabase
+      .from('scotus_cases')
+      .select('id')
+      .eq('docket_number', caseRecord.docket_number)
+      .maybeSingle());
+  }
+  if (!error) {
+    if (existing) {
+      ({ data: upsertedCase, error } = await supabase
+        .from('scotus_cases')
+        .update(fetchOwned)
+        .eq('id', existing.id)
+        .select('id')
+        .single());
+    } else {
+      ({ data: upsertedCase, error } = await supabase
+        .from('scotus_cases')
+        .insert(caseRecord)
+        .select('id')
+        .single());
+    }
+  }
 
   if (error) {
     console.error(`   [ERROR] Failed to upsert cluster ${clusterId}:`, error.message);
