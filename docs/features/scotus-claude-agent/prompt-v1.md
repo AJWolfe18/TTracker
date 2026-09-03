@@ -254,7 +254,7 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 
 | Field | Type | Guidance |
 |-------|------|----------|
-| `ruling_impact_level` | smallint 0-5 | 0=no impact, 1=minimal (narrow technical), 2=moderate (one area of law), 3=significant (changes practice), 4=major (landmark), 5=transformative (constitutional crisis, affects millions). Most cases are 2-3. Reserve 4-5 for genuinely landmark cases. |
+| `ruling_impact_level` | smallint 0-5 | **VALENCE, not magnitude.** Rate how much damage the ruling does to democratic norms, civil rights, checks on executive power, or ordinary people. Do NOT rate how landmark or historic the case is. A landmark ruling that blocks an abuse of power is a 0 (Democracy Wins) even if it is the biggest case of the term; a quiet ruling that hands the executive an unchecked power can be a 5. Scale: 0 = rights protected or an abuse blocked; 1 = a narrow or fragile win with limiting language; 2 = the Court punted, sidestepped, or trimmed a right at the margins; 3 = a real loss in one area of law or practice (institutional sabotage); 4 = major expansion of state or executive power, or a major loss of rights; 5 = constitutional crisis: precedent overruled to unlock executive power, rights stripped from millions. Most cases are 2-3. Reserve 4-5 for genuine damage, never for prominence. |
 | `ruling_label` | text | 3-8 word punchy label (e.g., "VA deference on benefit-of-the-doubt", "TikTok ban upheld as national security measure") |
 | `who_wins` | text | 1-2 sentences. Name the specific parties and explain what they gain. |
 | `who_loses` | text | 1-2 sentences. Name the specific parties and explain what they lose. |
@@ -276,6 +276,8 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 This voice applies to `summary_spicy`, `why_it_matters`, `who_wins`, `who_loses`, `dissent_highlights`, and `ruling_label`. Factual fields (`disposition`, `vote_split`, `holding`, etc.) remain neutral and precise.
 
 **Tone calibration by `ruling_impact_level`:**
+
+The level is the valence of the outcome (how bad it is for democracy and rights), and the tone follows the level. A Level 0 is written as a win, whatever its historical weight.
 
 | Level | Label | Tone | Energy |
 |-------|-------|------|--------|
@@ -487,7 +489,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
 
 **Case:** Barrett v. United States, No. 24-5774 (Jan 14, 2026)
 **Type:** Compound disposition (`reversed_and_remanded`), unanimous 9-0, per Justice Jackson
-**Why selected:** Tests compound disposition detection and narrow-impact calibration
+**Why selected:** Tests compound disposition detection and Level 1 calibration (a narrow defendant win: credit where due, flag the asterisk)
 
 ```json
 {
@@ -497,7 +499,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "majority_author": "Jackson",
   "dissent_authors": [],
   "case_type": "merits",
-  "ruling_impact_level": 2,
+  "ruling_impact_level": 1,
   "ruling_label": "Double-conviction bar for single firearm act",
   "who_wins": "Dwayne Barrett, who faced dual convictions for a single act involving a firearm offense resulting in death",
   "who_loses": "Federal prosecutors, who lose the ability to stack convictions under both section 924(c)(1)(A)(i) and section 924(j) for the same conduct",
@@ -620,7 +622,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
 
 **Case:** Laboratory Corp. of America Holdings v. Davis, No. 24-304 (Jun 5, 2025)
 **Type:** Procedural case (certiorari dismissed), unusual 8-1 with Kavanaugh dissent
-**Why selected:** Tests handling of non-merits dispositions and low-confidence flagging
+**Why selected:** Tests handling of non-merits dispositions, low-confidence flagging, and Level 2 calibration (a punt is Judicial Sidestepping, not a win)
 
 ```json
 {
@@ -630,7 +632,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "majority_author": null,
   "dissent_authors": ["Kavanaugh"],
   "case_type": "procedural",
-  "ruling_impact_level": 1,
+  "ruling_impact_level": 2,
   "ruling_label": "Certiorari dismissed as improvidently granted",
   "who_wins": "No clear winner  - case dismissed without a merits ruling",
   "who_loses": "No clear loser  - the underlying circuit decision stands by default",
