@@ -32,6 +32,7 @@ export const PIPELINES = Object.freeze({
   FRONT_ASSIGNMENT:   'front_assignment',   // fronts assignment agent (ADO-546/Wave 2) — declined to assign a story to a front
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
   TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
+  SOCIAL_DRAFT:       'social_draft',       // scripts/social/draft-posts.js — candidate already has a social_posts row (ADO-572)
 });
 
 export const REASONS = Object.freeze({
@@ -45,6 +46,7 @@ export const REASONS = Object.freeze({
   API_ERROR:             'api_error',             // external API call errored
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
   REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
+  ALREADY_DRAFTED:       'already_drafted',       // social_posts UNIQUE(platform, entity_type, entity_id) hit on insert (ADO-572)
 });
 
 /**

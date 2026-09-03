@@ -19,7 +19,7 @@
     "qa:eo-admin-contracts": "node scripts/tests/admin-eo-contracts.test.mjs",
     "qa:clustering-eval": "node scripts/tests/clustering-eval-fidelity.test.mjs",
     "qa:judge-dryrun": "node scripts/evals/judge-dryrun.js",
-    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency && npm run qa:silent-skips && npm run qa:eo-admin-unit && npm run qa:pardons-parser && npm run qa:clustering-eval && npm run qa:judge-dryrun && npm run qa:og-card",
+    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency && npm run qa:silent-skips && npm run qa:eo-admin-unit && npm run qa:pardons-parser && npm run qa:clustering-eval && npm run qa:judge-dryrun && npm run qa:og-card && npm run qa:social",
     "ingest:pardons": "node scripts/ingest/doj-pardons-scraper.js",
     "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js",
     "dev": "vite",
@@ -29,7 +29,9 @@
     "lint": "tsc --noEmit",
     "build:check": "npm run lint && npm run test:ui && npm run build",
     "build:secure": "npm run build && node scripts/build-security-check.js",
-    "qa:og-card": "node scripts/tests/og-image-card.test.mjs"
+    "qa:og-card": "node scripts/tests/og-image-card.test.mjs",
+    "social:draft": "node scripts/social/draft-posts.js",
+    "qa:social": "node scripts/tests/social-copy.test.mjs && node scripts/tests/social-candidates.test.mjs && node scripts/tests/social-draft-posts.test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

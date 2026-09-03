@@ -5229,6 +5229,220 @@
             );
         }
 
+        // SocialTab Component — social draft queue: approve / reject / edit (ADO-572)
+        // Mirrors SkipsTab: password-gated edge function (admin-social, service_role); social_posts has no anon grants.
+        function SocialTab({ password, supabase }) {
+            const [queue, setQueue] = useState([]);        // draft + failed, newest first
+            const [approved, setApproved] = useState([]);  // waiting for the poster (ADO-573)
+            const [posted, setPosted] = useState([]);      // last 30 days
+            const [edits, setEdits] = useState({});        // id -> edited copy (unsaved)
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [busyId, setBusyId] = useState(null);
+            const [showPosted, setShowPosted] = useState(false);
+            const [nextBeforeId, setNextBeforeId] = useState(null);
+            const fetchTokenRef = useRef(0);
+
+            const call = useCallback(async (body) => {
+                const { data, error: fnError } = await supabase.functions.invoke('admin-social', {
+                    headers: { 'x-admin-password': password },
+                    body
+                });
+                if (fnError) {
+                    let msg = fnError.message || 'admin-social failed';
+                    try { const j = await fnError.context?.json(); if (j?.error) msg = j.error; } catch (_) { /* keep generic */ }
+                    throw new Error(msg);
+                }
+                if (data?.error) throw new Error(data.error);
+                return data;
+            }, [password, supabase]);
+
+            const load = useCallback(async () => {
+                const token = ++fetchTokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const [q, a, p] = await Promise.all([
+                        call({ action: 'list', statuses: ['draft', 'failed'], limit: 50 }),
+                        call({ action: 'list', statuses: ['approved'], limit: 50 }),
+                        call({ action: 'list', statuses: ['posted'], limit: 50, days: 30 })
+                    ]);
+                    if (token !== fetchTokenRef.current) return;
+                    setQueue(q.rows || []);
+                    setNextBeforeId(q.next_before_id || null);
+                    setApproved(a.rows || []);
+                    setPosted(p.rows || []);
+                    setEdits({});
+                } catch (err) {
+                    if (token === fetchTokenRef.current) setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) setLoading(false);
+                }
+            }, [call]);
+
+            useEffect(() => { load(); }, [load]);
+
+            const loadMore = async () => {
+                if (!nextBeforeId) return;
+                try {
+                    const q = await call({ action: 'list', statuses: ['draft', 'failed'], limit: 50, before_id: nextBeforeId });
+                    setQueue(prev => [...prev, ...(q.rows || [])]);
+                    setNextBeforeId(q.next_before_id || null);
+                } catch (err) {
+                    setError(err.message);
+                }
+            };
+
+            const act = async (row, status) => {
+                setBusyId(row.id);
+                setError(null);
+                try {
+                    const body = { action: 'update', id: row.id, status };
+                    if (edits[row.id] !== undefined && edits[row.id] !== row.copy) body.copy = edits[row.id];
+                    const { row: updated } = await call(body);
+                    const drop = (list) => list.filter(r => r.id !== row.id);
+                    setQueue(drop);
+                    setApproved(drop);
+                    if (updated.status === 'approved') setApproved(prev => [updated, ...prev]);
+                    if (updated.status === 'draft') setQueue(prev => [updated, ...prev].sort((x, y) => y.id - x.id));
+                    setEdits(prev => { const n = { ...prev }; delete n[row.id]; return n; });
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setBusyId(null);
+                }
+            };
+
+            const ago = (iso) => {
+                if (!iso) return '—';
+                const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ago`;
+                return new Date(iso).toLocaleDateString();
+            };
+
+            const TYPE_LABEL = { story: 'Story', eo: 'Exec Order', scotus: 'SCOTUS', pardon: 'Pardon', digest: 'Digest' };
+            const STATUS_STYLE = {
+                draft: { background: '#374151', color: '#e5e7eb' },
+                failed: { background: '#7f1d1d', color: '#fecaca' },
+                approved: { background: '#14532d', color: '#bbf7d0' },
+                posted: { background: '#1e3a8a', color: '#dbeafe' },
+                rejected: { background: '#1f2937', color: '#9ca3af' }
+            };
+            const chip = (status) => (
+                <span style={{ ...(STATUS_STYLE[status] || STATUS_STYLE.draft), padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' }}>{status}</span>
+            );
+            const btn = (label, onClick, { color = '#374151', disabled = false } = {}) => (
+                <button onClick={onClick} disabled={disabled} className="tab-btn" style={{ padding: '0.35rem 0.9rem', fontSize: '0.85rem', background: color, borderColor: color, opacity: disabled ? 0.6 : 1 }}>{label}</button>
+            );
+
+            const renderRow = (row, mode) => {
+                const dirty = edits[row.id] !== undefined && edits[row.id] !== row.copy;
+                const busy = busyId === row.id;
+                return (
+                    <div key={row.id} style={{ border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem', background: '#1f2937', display: 'grid', gridTemplateColumns: 'minmax(0, 260px) minmax(0, 1fr)', gap: '0.75rem' }}>
+                        <div>
+                            {row.image_url ? (
+                                <a href={row.link_url} target="_blank" rel="noopener noreferrer">
+                                    <img src={row.image_url} alt="" style={{ width: '100%', borderRadius: '4px', border: '1px solid #4b5563', display: 'block' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                </a>
+                            ) : null}
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#9ca3af', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+                                {chip(row.status)}
+                                <span style={{ color: '#e5e7eb' }}>{TYPE_LABEL[row.entity_type] || row.entity_type} #{row.entity_id}</span>
+                                <span>· {row.platform}</span>
+                                <span>· {ago(row.created_at)}</span>
+                            </div>
+                            <div style={{ marginTop: '0.35rem', fontSize: '0.8rem' }}>
+                                <a href={row.link_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>Open on site ↗</a>
+                                {row.post_url && <> · <a href={row.post_url} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa' }}>View post ↗</a></>}
+                            </div>
+                            {row.status === 'failed' && (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#fca5a5' }}>
+                                    Failed {row.attempts} time{row.attempts === 1 ? '' : 's'}: {row.error || 'no error recorded'}
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                            {mode === 'posted' ? (
+                                <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', fontSize: '0.9rem', color: '#d1d5db' }}>{row.copy}</pre>
+                            ) : (
+                                <textarea
+                                    value={edits[row.id] !== undefined ? edits[row.id] : row.copy}
+                                    onChange={(e) => setEdits(prev => ({ ...prev, [row.id]: e.target.value }))}
+                                    rows={7}
+                                    style={{ width: '100%', boxSizing: 'border-box', background: '#111827', color: '#e5e7eb', border: `1px solid ${dirty ? '#f59e0b' : '#4b5563'}`, borderRadius: '4px', padding: '0.5rem', fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.4, resize: 'vertical' }}
+                                />
+                            )}
+                            {mode !== 'posted' && (
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    {mode === 'queue' && btn(busy ? '…' : (dirty ? 'Save + Approve' : 'Approve'), () => act(row, 'approved'), { color: '#15803d', disabled: busy })}
+                                    {mode === 'queue' && btn('Reject', () => act(row, 'rejected'), { color: '#b91c1c', disabled: busy })}
+                                    {mode === 'approved' && btn(busy ? '…' : (dirty ? 'Save edit' : 'Approved ✓'), () => act(row, 'approved'), { color: '#15803d', disabled: busy || !dirty })}
+                                    {mode === 'approved' && btn('Back to draft', () => act(row, 'draft'), { disabled: busy })}
+                                    {mode === 'approved' && btn('Reject', () => act(row, 'rejected'), { color: '#b91c1c', disabled: busy })}
+                                    {dirty && <span style={{ fontSize: '0.8rem', color: '#fbbf24' }}>unsaved edit</span>}
+                                    <span style={{ fontSize: '0.8rem', color: '#6b7280', marginLeft: 'auto' }}>{(edits[row.id] !== undefined ? edits[row.id] : row.copy).length} chars</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>Social Queue</span></h2>
+                            <button onClick={load} disabled={loading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>{loading ? '...' : '↻'}</button>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every alarm-5 story, executive order and pardon gets one Facebook draft here (no AI, templated copy). Edit the text if you want, then <strong style={{ color: '#e5e7eb' }}>Approve</strong> and the poster publishes it on its next run, or <strong style={{ color: '#e5e7eb' }}>Reject</strong> and it never posts. Nothing goes out without an approval.
+                            </div>
+
+                            {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                            {loading && queue.length === 0 && approved.length === 0 ? (
+                                <div className="loading"><div className="spinner"></div>Loading…</div>
+                            ) : (
+                                <>
+                                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem', color: '#e5e7eb' }}>Waiting for you <span style={{ color: '#9ca3af', fontWeight: 400 }}>({queue.length}{nextBeforeId ? '+' : ''})</span></h3>
+                                    {queue.length === 0 ? (
+                                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>Queue is empty. 🎉</div>
+                                    ) : (
+                                        <div style={{ display: 'grid', gap: '0.75rem' }}>{queue.map(r => renderRow(r, 'queue'))}</div>
+                                    )}
+                                    {nextBeforeId && (
+                                        <div style={{ marginTop: '0.75rem' }}>{btn('Load more', loadMore)}</div>
+                                    )}
+
+                                    <h3 style={{ margin: '1.5rem 0 0.5rem', fontSize: '1rem', color: '#e5e7eb' }}>Approved, waiting for the poster <span style={{ color: '#9ca3af', fontWeight: 400 }}>({approved.length})</span></h3>
+                                    {approved.length === 0 ? (
+                                        <div style={{ padding: '1rem', color: '#6b7280', fontSize: '0.9rem' }}>Nothing approved yet.</div>
+                                    ) : (
+                                        <div style={{ display: 'grid', gap: '0.75rem' }}>{approved.map(r => renderRow(r, 'approved'))}</div>
+                                    )}
+
+                                    <h3 style={{ margin: '1.5rem 0 0.5rem', fontSize: '1rem', color: '#e5e7eb', cursor: 'pointer' }} onClick={() => setShowPosted(v => !v)}>
+                                        {showPosted ? '▾' : '▸'} Posted, last 30 days <span style={{ color: '#9ca3af', fontWeight: 400 }}>({posted.length})</span>
+                                    </h3>
+                                    {showPosted && (
+                                        posted.length === 0
+                                            ? <div style={{ padding: '1rem', color: '#6b7280', fontSize: '0.9rem' }}>Nothing posted in the last 30 days.</div>
+                                            : <div style={{ display: 'grid', gap: '0.75rem' }}>{posted.map(r => renderRow(r, 'posted'))}</div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // SkipsTab Component — Silent-skip observability (ADO-466)
         function SkipsTab({ password, supabase }) {
             const [data, setData] = useState(null);
@@ -6342,7 +6556,8 @@
                 { id: 'eos', label: 'Exec Orders' },
                 { id: 'feeds', label: 'Feeds', disabled: true },
                 { id: 'judge', label: 'Judge' },
-                { id: 'skips', label: 'Failures' }
+                { id: 'skips', label: 'Failures' },
+                { id: 'social', label: 'Social' }
             ];
 
             const budgetStatus = getBudgetStatus();
@@ -6652,6 +6867,10 @@
                             <SkipsTab password={password} supabase={supabase} />
                         )}
 
+                        {activeTab === 'social' && (
+                            <SocialTab password={password} supabase={supabase} />
+                        )}
+
                         {activeTab === 'judge' && (
                             <JudgeTab password={password} supabase={supabase} />
                         )}
@@ -6664,7 +6883,7 @@
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'social' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>

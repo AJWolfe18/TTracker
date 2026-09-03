@@ -369,6 +369,34 @@ Applies the rule view to `stories.main_line` (changed rows only), clears the fla
 
 ---
 
+### `social_posts` (table, migration 114 — ADO-572)
+**Purpose:** Social automation ledger — one row per (platform, entity) ever. `status` is the approve-then-post queue: `draft` → Josh approves in the admin Social tab → `approved` → poster (ADO-573) → `posted` / `failed`. `rejected` never posts. PRD: `docs/features/growth/prd-social-automation.md`.
+**Migration:** `114_social_posts.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT identity | PK; the queue cursor (`lt('id', cursor)`) |
+| platform | TEXT | `facebook` \| `bluesky` \| `x` \| `threads` (CHECK) |
+| entity_type | TEXT | `story` \| `eo` \| `scotus` \| `pardon` \| `digest` (CHECK) |
+| entity_id | TEXT | TEXT on purpose: EO ids are VARCHAR on PROD, INTEGER on TEST (migration 108 drift) |
+| status | TEXT | `draft` \| `approved` \| `rejected` \| `posted` \| `failed` (CHECK, default `draft`) |
+| copy | TEXT | Post text (PRD §5 template; Josh's edits are stored here; never contains em dashes) |
+| link_url | TEXT | Public URL with `utm_source=facebook&utm_medium=social&utm_campaign=auto` |
+| image_url | TEXT | `/api/og-image/<route>/<id>.png` receipt card (ADO-571) |
+| post_id / post_url | TEXT | Set by the poster on success |
+| error / attempts | TEXT / SMALLINT | Poster failure bookkeeping (stops after 3) |
+| created_at / updated_at | TIMESTAMPTZ | updated_at via `set_updated_at()` trigger |
+| approved_at / posted_at | TIMESTAMPTZ | |
+
+`UNIQUE (platform, entity_type, entity_id)` is the idempotency boundary: `scripts/social/draft-posts.js` treats 23505 as "already drafted" (recorded to `pipeline_skips` as `social_draft/already_drafted`). Index `social_posts_status_id_idx (status, id DESC)` serves the queue reads.
+
+**Access:** service_role only — RLS on, no policies, no anon grants. The admin dashboard reads/writes through the password-gated `admin-social` edge function.
+
+### `social_state` (table, migration 114 — ADO-572)
+Key/value state for social automation. Seeded keys: `draft_watermark_story`, `draft_watermark_eo`, `draft_watermark_pardon` (ISO timestamps; seeded to the migration's `now()` so history before go-live is never drafted — `draft-posts.js --since <iso>` is the deliberate backfill). service_role only.
+
+---
+
 ## SCOTUS Tracker Tables
 
 ### `scotus_cases`
