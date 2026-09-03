@@ -58,9 +58,22 @@ jobs:
           # We map PROD secrets into those names ONLY for this step.
           SUPABASE_TEST_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_TEST_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ADO-577: new-case alert
         run: |
           set -euo pipefail
           node scripts/scotus/fetch-cases.js --resume 2>&1 | tee logs/fetch.log
+
+      # ADO-577: enrichment output the agent flagged (needs_manual_review) pings Discord
+      # instead of sitting silently in the DB. Never fails the job.
+      - name: Alert flagged enrichments (Discord)
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node scripts/monitoring/alert-needs-review.js --domain scotus
+        timeout-minutes: 2
 
       # ADO-570: new rulings count toward the homepage tally only after this refresh.
       - name: Refresh Tracker main line + tally

@@ -62,9 +62,21 @@ jobs:
         SUPABASE_ANON_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
         EO_LOOKBACK_DAYS: ${{ inputs.lookback_days || '3' }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ADO-577: new-EO alert
       run: |
         echo "📦 Phase 1: Import raw data from Federal Register"
         node scripts/executive-orders-tracker-supabase.js
+
+    # ADO-577: EOs the agent flagged (needs_manual_review) ping Discord. Never fails the job.
+    - name: Alert flagged enrichments (Discord)
+      if: always()
+      continue-on-error: true
+      env:
+        SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      run: node scripts/monitoring/alert-needs-review.js --domain eo
+      timeout-minutes: 2
 
     # ADO-570: new EOs count toward the homepage tally only after this refresh.
     - name: Refresh Tracker main line + tally

@@ -24,6 +24,7 @@ jobs:
       # scripts expect SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
       SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ADO-577: new-work + flagged-enrichment alerts
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +53,13 @@ jobs:
       - name: Refresh Tracker main line + tally
         if: always()
         run: node scripts/maintenance/refresh-tracker.js
+        timeout-minutes: 2
+
+      # ADO-577: pardons the agent flagged (needs_review) ping Discord. Never fails the job.
+      - name: Alert flagged enrichments (Discord)
+        if: always()
+        continue-on-error: true
+        run: node scripts/monitoring/alert-needs-review.js --domain pardons
         timeout-minutes: 2
 
       - name: Upload logs on failure
