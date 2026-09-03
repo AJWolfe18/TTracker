@@ -165,10 +165,6 @@ This ensures you have the latest prompt file for the branch this run is pinned t
 
 Read `public/shared/tone-system.json` from the repo. The `bannedOpenings`, `bannedPhrases`, `bannedPatterns`, and `writingRules` arrays are BINDING for all editorial output. Follow them alongside the Voice DOs/DON'Ts in this prompt.
 
-### Step A.2: Read Tone System Rules
-
-Read `public/shared/tone-system.json` from the repo. The `bannedOpenings`, `bannedPhrases`, `bannedPatterns`, and `writingRules` arrays are BINDING for all editorial output. Follow them alongside the Voice DOs/DON'Ts in this prompt.
-
 ### Step 1: Log Run Start
 
 Create a log entry to mark this run as started:
