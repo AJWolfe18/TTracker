@@ -7,6 +7,7 @@
 
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
+import { postDiscord, COLORS, summarizeList } from './lib/discord.js';
 // ADO-271: Removed spicy-eo-translator import - AI analysis now done by separate enrichment workflow
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
@@ -325,6 +326,13 @@ async function saveToSupabase(orders) {
         }
         
         console.log(`✅ Successfully saved ${orders.length} executive orders`);
+
+        // ADO-577: new rows alert Discord; runs that add nothing never reach this function.
+        await postDiscord({
+            title: `EO fetch: ${orders.length} new executive order${orders.length === 1 ? '' : 's'}`,
+            description: `${summarizeList(orders.map(o => `EO ${o.order_number}: ${String(o.title || '').slice(0, 80)}`), 5)} - pending enrichment (EO agent runs daily).`,
+            color: COLORS.info,
+        });
         
         // Summary
         const highImpact = orders.filter(o => o.impact_score >= 70).length;
