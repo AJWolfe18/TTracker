@@ -81,9 +81,6 @@ Deno.serve(async (req) => {
         if (copy.length > MAX_COPY_CHARS) return json({ error: `copy exceeds ${MAX_COPY_CHARS} characters` }, 400)
         updates.copy = copy
       }
-      if (status !== 'approved' && status !== 'draft') {
-        // rejected: nothing else changes
-      }
       if (status === 'draft') {
         // re-queue a rejected/failed row: clear the failure so the poster retries cleanly
         updates.error = null

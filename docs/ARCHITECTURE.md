@@ -38,7 +38,8 @@ flowchart LR
 | Stories | `rss-tracker-supabase.js` (GitHub Actions, 2h) | **Claude Stories agent** (cloud cron, 2h) | GPT path still in repo, gated OFF by `ENABLE_LEGACY_STORY_ENRICHMENT` |
 | Story merging | inline Tier A/B clustering | **Clustering Judge agent** (3x/day, prompt `judge-v1.1`) + admin manual merge/unmerge (ADO-537). Candidates carry **verdict memory** since migration 106 (ADO-539): a pair with a live verdict newer than either side's latest `article_story.matched_at` is skipped until a new article attaches — so a quiet Judge run is expected, not a fault. | — |
 | Executive Orders | `executive-orders-tracker.yml` (daily 16:00 UTC) — raw-only since PR #110 (2026-08-05), zero GPT calls | **Claude EO agent** (cloud cron, daily) | None — legacy GPT enrichment removed (ADO-540). Do NOT kill the workflow — it's the only EO ingestion. |
-| SCOTUS | `scripts/scotus/fetch-cases.js` (CourtListener, manual/periodic) | **Claude SCOTUS agent** (cloud cron, weekdays) | — |
+| SCOTUS | `scotus-tracker.yml` (daily 18:00 UTC) running `scripts/scotus/fetch-cases.js` (CourtListener) — re-fetches refresh only fetch-owned columns (PRs #139/#140) | **Claude SCOTUS agent** (cloud cron, weekdays 16:00 UTC) | — |
+| Social posts (ADO-572, TEST) | `scripts/social/draft-posts.js` drafts one `social_posts` row per new alarm-5 story / EO / pardon (templated copy, $0) | none — Josh approves in the admin Social tab; poster is ADO-573 | — |
 | Pardons | `pardons-tracker.yml` (daily 18:00 UTC) — raw-only since ADO-553 (2026-08-22), zero Perplexity/GPT calls | **Claude Pardons agent** (cloud cron, daily) | None — legacy Perplexity/GPT phases removed (ADO-553); standalone `research-pardons.yml` / `enrich-pardons.yml` deleted. Do NOT kill the workflow — it's the only pardons ingestion. |
 
 ## What each secret actually powers (before rolling a key)
@@ -76,7 +77,8 @@ Neither vendor runs on TEST or localhost, so analytics are only observable on tr
 - **Claude cloud scheduled agents**: Stories, Judge, SCOTUS, EO, Pardons — all LIVE. Single-pass fact+editorial. $0 marginal (Anthropic subscription).
 - **Supabase**: Postgres + Edge Functions + RLS. Separate TEST and PROD projects.
 - **Frontend**: Vite/React app; PostgREST direct reads + edge functions; deployed on Netlify.
-- **Admin dashboard** (`admin.html`): review / publish / re-enrich across all four content types; Judge tab with manual merge + unmerge (ADO-537).
+- **Admin dashboard** (`admin.html`): review / publish / re-enrich across all four content types; Judge tab with manual merge + unmerge (ADO-537); Social tab (ADO-572) approves / rejects / edits social drafts through the `admin-social` edge function.
+- **Discord alerts** (ADO-577, `scripts/lib/discord.js`, secret `DISCORD_WEBHOOK_URL`): workflow failures (existing), new rows landed by the SCOTUS / pardons / EO fetchers, flagged enrichments (`scripts/monitoring/alert-needs-review.js`, last step of the three fetch workflows), social drafts waiting. Quiet runs post nothing.
 
 ## Environments
 - `test` branch → Supabase TEST → Netlify test site
