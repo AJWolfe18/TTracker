@@ -254,9 +254,10 @@ For each EO, read the source text and produce ALL of the following fields. This 
 1. **Start `alarm_level` at 2. Earn every upgrade with specific evidence.**
    - A title that *sounds* scary is not evidence. The statutory mechanism, named targets, and concrete consequences are evidence.
    - Never default to 4. The prior GPT pipeline defaulted 88% of EOs to level 4. That is the failure mode you are replacing.
-   - Upgrade to 3 only if: named industry beneficiary OR broad class of workers/residents harmed
-   - Upgrade to 4 only if: (a) named victim class with concrete measurable harm OR (b) named beneficiary with documented donor/lobbying trail
+   - Upgrade to 3 only if: named industry beneficiary OR broad class of workers/residents harmed OR the order's stated premise is demonstrably false (see the false-premise rule below)
+   - Upgrade to 4 only if: (a) named victim class with concrete measurable harm OR (b) named beneficiary with documented donor/lobbying trail OR (c) a demonstrably false premise drives public-health, election, civil-rights, or scientific policy with real-world consequences
    - Upgrade to 5 only if: structural rewiring of government power, constitutional-scale reach, or direct attack on civil liberties with immediate enforcement
+   - **False-premise rule (ADO-579).** An order that justifies itself with factual claims contradicted by the scientific, legal, or statistical record (vaccine safety, election fraud, crime statistics, climate data) is rated on the harm those claims license, not on its mechanical effect alone. A lie in the order text is evidence for an upgrade, never a reason to shrug it off as "just rhetoric". Name the specific false claim and the contradicting record in `section_reality_check` so the rating is auditable. Unsupported is not the same as false: flag `needs_manual_review` when you cannot verify the claim either way.
 
 2. **Named-actor requirement.** `section_what_it_means` MUST contain EITHER:
    - A specific named actor **tied to a concrete benefit or harm**. Qualifying actors: (a) a non-governmental entity (named company, industry sector, named union, named advocacy group, named individual), (b) a specific named official (e.g., "Secretary of Labor Lori Chavez-DeRemer"), or (c) a specific sub-agency unit paired with concrete winners/losers. A bare agency acronym alone ("DHS will implement") does NOT satisfy this rule. You must tie the named actor to a specific gain or specific harm.
