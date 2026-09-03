@@ -18,6 +18,7 @@ import { JSDOM } from 'jsdom';
 import crypto from 'crypto';
 import { pathToFileURL } from 'url';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
 
 // ============================================================================
 // Configuration
@@ -308,7 +309,8 @@ async function insertPardons(supabase, pardons) {
     total: pardons.length,
     inserted: 0,
     skipped_duplicate: 0,
-    errors: 0
+    errors: 0,
+    inserted_names: []   // ADO-577: for the Discord new-work alert
   };
 
   console.log(`\n📝 Processing ${pardons.length} pardons...`);
@@ -345,6 +347,7 @@ async function insertPardons(supabase, pardons) {
       }
 
       stats.inserted++;
+      stats.inserted_names.push(pardon.recipient_name);
       console.log(`  ✅ Inserted: ${pardon.recipient_name} (ID: ${data.id})`);
 
     } catch (err) {
@@ -412,6 +415,15 @@ async function main() {
       console.log(`  ✅ Inserted:     ${stats.inserted}`);
       console.log(`  ⏭️ Duplicates:   ${stats.skipped_duplicate}`);
       console.log(`  ❌ Errors:       ${stats.errors}`);
+
+      // ADO-577: new rows alert Discord; zero-new runs stay silent.
+      if (stats.inserted > 0) {
+        await postDiscord({
+          title: `Pardons ingest: ${stats.inserted} new pardon${stats.inserted === 1 ? '' : 's'}`,
+          description: `${summarizeList(stats.inserted_names)} - pending enrichment (pardons agent runs 20:00 UTC daily).`,
+          color: COLORS.info,
+        });
+      }
 
       // ADO-550 staleness tripwire: this scraper ran green for 6 months while
       // silently dropping every new section. Fail loudly on either signal so

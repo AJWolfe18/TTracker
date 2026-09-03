@@ -24,6 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { buildCanonicalOpinionText, upsertOpinionIfChanged } from './opinion-utils.js';
+import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
 dotenv.config();
 
 // ============================================================================
@@ -61,6 +62,10 @@ const sinceDate = args.since || '2020-01-01';  // Default: cases from 2020+
 const limitCases = args.limit ? parseInt(args.limit) : null;
 const resumeFromState = args.resume === true;
 const dryRun = args['dry-run'] === true;
+
+// ADO-577: cases INSERTED this run (not refreshed). Reported to Discord at the end so
+// a ruling landing in the DB is never only a line in a GitHub Actions log.
+const newCases = [];
 
 // Supabase client
 const supabase = createClient(
@@ -517,6 +522,9 @@ async function processCluster(cluster) {
         .insert(caseRecord)
         .select('id')
         .single());
+      if (!error && upsertedCase) {
+        newCases.push({ id: upsertedCase.id, name: caseRecord.case_name_short || caseRecord.case_name, docket: caseRecord.docket_number });
+      }
     }
   }
 
@@ -658,6 +666,17 @@ async function fetchAllCases() {
   console.log(`Errors: ${errorCount}`);
   console.log(`API requests: ${requestCount}`);
   console.log(`Max date seen: ${maxDateSeen}`);
+  console.log(`New cases: ${newCases.length}`);
+
+  // ADO-577: only NEW rows alert; quiet runs and refresh-only runs stay silent.
+  if (!dryRun && newCases.length > 0) {
+    const n = newCases.length;
+    await postDiscord({
+      title: `SCOTUS fetch: ${n} new case${n === 1 ? '' : 's'}`,
+      description: `${summarizeList(newCases.map(c => (c.docket ? `${c.name} (${c.docket})` : c.name)))} - pending enrichment (agent runs 16:00 UTC weekdays; text-less cases wait for CourtListener).`,
+      color: COLORS.info,
+    });
+  }
 
   if (!dryRun) {
     console.log('\nTo make cases public for the frontend:');
