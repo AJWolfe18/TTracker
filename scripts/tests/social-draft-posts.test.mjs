@@ -110,6 +110,15 @@ const silent = () => {};
   assert.ok(seen.some((m) => m.includes('LEVEL 5 · CRISIS')), 'dry run prints the copy');
 }
 
+// 4b) live --since backfill: rows drafted, but a NEWER stored watermark is never dragged back
+{
+  const f = fixture({ watermarks: { draft_watermark_story: '2099-01-01T00:00:00Z', draft_watermark_eo: '2026-08-01T00:00:00Z' } });
+  const r = await runDraftPosts({ env: ENV, argv: ['--since', '2026-01-01T00:00:00Z'], fetchImpl: f.fetchImpl, supabase: f.supabase, log: silent });
+  assert.equal(r.created, 2);
+  assert.deepEqual(f.calls.upserts.map((u) => [u.key, u.value]), [['draft_watermark_eo', '2026-09-01T11:00:00Z']], 'story watermark (2099) untouched, eo advanced');
+  assert.equal(r.watermarks.story, '2099-01-01T00:00:00Z');
+}
+
 // 5) no webhook configured -> still succeeds
 {
   const f = fixture();

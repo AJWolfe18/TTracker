@@ -91,21 +91,21 @@ export async function runDraftPosts({
   const sb = supabase ?? createClient(url, key, { auth: { persistSession: false } });
 
   // Watermarks (one GET). Missing key => epoch, which only happens before migration 114 seeds them.
-  // --since skips the read so a dry run works before the migration is applied.
-  const stateRows = sinceOverride ? [] : await rest.get(`/social_state?select=key,value&key=like.draft_watermark_*`);
+  // A --since dry run skips the read so it works before the migration is applied.
+  const stateRows = (sinceOverride && dryRun) ? [] : await rest.get(`/social_state?select=key,value&key=like.draft_watermark_*`);
   const stored = Object.fromEntries((stateRows || []).map((r) => [r.key, r.value]));
 
   const result = { created: 0, skipped: 0, drafts: [], watermarks: {} };
 
   for (const type of TYPES) {
     const since = sinceOverride || stored[watermarkKey(type)] || EPOCH;
-    let newest = since;
+    let newest = null;   // newest ts actually SEEN this run (never the since floor)
     const rows = await rest.get(candidateQuery(type, since));
     log(`[social] ${type}: ${rows.length} candidate${rows.length === 1 ? '' : 's'} since ${since}`);
 
     for (const raw of rows) {
       const c = normalizeCandidate(type, raw);
-      if (c.ts && c.ts > newest) newest = c.ts;
+      if (c.ts && (!newest || c.ts > newest)) newest = c.ts;
       const link = postUrl(origin, type, c.id);
       const row = {
         platform: PLATFORM,
@@ -132,8 +132,11 @@ export async function runDraftPosts({
       throw new Error(`insert social_posts ${type}/${c.id} failed: ${ins.code} ${ins.message}`);
     }
 
-    result.watermarks[type] = newest;
-    if (!dryRun && newest !== since) {
+    // Watermark only moves FORWARD: a --since backfill must not drag it back to the override.
+    const stored_wm = stored[watermarkKey(type)] || EPOCH;
+    const advance = !!newest && newest > stored_wm;
+    result.watermarks[type] = advance ? newest : stored_wm;
+    if (!dryRun && advance) {
       await rest.upsert('social_state', { key: watermarkKey(type), value: newest, updated_at: new Date().toISOString() });
     }
   }
