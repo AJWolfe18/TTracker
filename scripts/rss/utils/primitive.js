@@ -26,6 +26,11 @@ export const toStr = (v) =>
   (typeof v === 'object' && typeof v['#'] === 'string') ? v['#'] :
   (typeof v?.$?.href === 'string') ? v.$.href :
   (typeof v?.$?.url === 'string') ? v.$.url :
+  // Attribute-only element, e.g. <guid isPermaLink="false"></guid> (Democracy
+  // Docket, ADO-581): xml2js yields a null-prototype object with only `$`, and
+  // String() on it THROWS "Cannot convert object to primitive value" rather than
+  // returning "[object Object]". Any other object is not a value either.
+  typeof v === 'object' ? '' :
   String(v);
 
 /**
