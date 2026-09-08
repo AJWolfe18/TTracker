@@ -22,3 +22,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 ## What DOES go to prod
 - `.claude/skills/` - All skills work in both environments (commands were consolidated into skills 2026-08)
 - `docs/handoffs/` - Documentation is fine everywhere
+- `scripts/maintenance/2026-09-08-ado-581-prod-fronts-backfill.sql` - ADO-581 PROD runbook (migration
+  115 order, dry-run count, backfill sweep, three hand assignments, refresh). Run by hand in the PROD
+  SQL Editor; never deployed. Migration 115 itself DOES ship.

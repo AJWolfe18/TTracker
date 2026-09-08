@@ -45,6 +45,7 @@ export const REASONS = Object.freeze({
   API_ERROR:             'api_error',             // external API call errored
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
   REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
+  SWEEP_FAILED:          'sweep_failed',          // assign_fronts_sweep() RPC errored; no assignments made this cycle (ADO-581)
 });
 
 /**
