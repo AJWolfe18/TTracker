@@ -47,6 +47,7 @@ export const REASONS = Object.freeze({
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
   REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
   ALREADY_DRAFTED:       'already_drafted',       // social_posts UNIQUE(platform, entity_type, entity_id) hit on insert (ADO-572)
+  SWEEP_FAILED:          'sweep_failed',          // assign_fronts_sweep() RPC errored; no assignments made this cycle (ADO-581)
 });
 
 /**

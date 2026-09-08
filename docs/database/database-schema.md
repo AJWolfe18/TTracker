@@ -286,9 +286,16 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | published_at / started_at / resolved_at | TIMESTAMPTZ | Editorial timestamps |
 | created_by | TEXT | CHECK: 'agent', 'human' |
 | enrichment_meta | JSONB | AI provenance |
+| sweep_pattern | TEXT | (115, ADO-581) case-insensitive regex a story **headline** must match to be swept into this front; NULL = hand/agent-assigned only |
+| sweep_coword | TEXT | (115) optional second regex the headline must also match (precision anchor, e.g. an election word); also gates `sweep_summary` |
+| sweep_priority | SMALLINT | (115) lower wins when several fronts match one story; default 100 |
+| sweep_summary | BOOLEAN | (115) also try `sweep_pattern` on `summary_neutral`, but ONLY for headlines matching `sweep_coword` (ungated summary matching on "midterm" pulled in every political summary) |
+| main_line_alarm_floor | SMALLINT | (115) rule v1.2: a member with `alarm_eff >= floor` is on the main line; NULL = v1.1 unchanged. CHECK 1-5. Election Suppression = 3 |
 | created_at / updated_at | TIMESTAMPTZ | updated_at via set_updated_at() trigger |
 
 **RLS:** `events_anon_select` — anon sees `publish_state='published'` only. Writes are service_role only.
+
+**Sweep rules are data, not code** (migration 115): the eight seeded regexes (seven verbatim from the August 24 seed, election broadened) live on the rows. Tune recall with `UPDATE events SET sweep_pattern = ... WHERE slug = ...`; no migration needed.
 
 ### `event_updates`
 **Purpose:** One row per editorial update on a front (AI-drafted or human-written, approval-gated)
@@ -352,18 +359,21 @@ Stored boolean, `NOT NULL DEFAULT false`. Written ONLY by `refresh_tracker_deriv
 ### `tracker_stats` (table, migration 113)
 One row (`id = 1`, CHECK-enforced): `developments`, `alarm5_last30`, `open_fronts`, `refreshed_at`. The masthead tally; replaces 9 `HEAD count=exact` requests per page load. Counts are as of `refreshed_at`. Anon SELECT (explicit grant + RLS policy); service_role write.
 
-### `v_tracker_main_line_rule` (view, migration 113) — service_role only
-**The single definition of rule v1.1** (moved verbatim from the 112 `v_tracker_stories`). Returns `id, main_line`. NOT `security_invoker`: it carries `events.publish_state = 'published'` explicitly so the refresh (SECURITY DEFINER, bypasses RLS) scores draft-front members as loose ends exactly as anon saw them. Edit the rule here and nowhere else.
+### `v_tracker_main_line_rule` (view, migration 113, v1.2 in 115) — service_role only
+**The single definition of the rule** (moved verbatim from the 112 `v_tracker_stories`; 115 added the per-front floor clause). Returns `id, main_line`. NOT `security_invoker`: it carries `events.publish_state = 'published'` explicitly so the refresh (SECURITY DEFINER, bypasses RLS) scores draft-front members as loose ends exactly as anon saw them. Edit the rule here and nowhere else.
 
 ### `refresh_tracker_derived()` (function, migration 113) — service_role only
 Applies the rule view to `stories.main_line` (changed rows only), clears the flag on rows that left scope, upserts `tracker_stats`. Returns `(rows_changed, took_ms)`. Called by `scripts/maintenance/refresh-tracker.js` as the `if: always()` last step of all five pipeline workflows, by the fronts seed SQL, and (required) after any admin pin/front write. Stats predicates mirror `SPECS` in `src/lib/timeline.ts` — change both in the same commit.
+
+### `assign_fronts_sweep(p_since TIMESTAMPTZ)` (function, migration 115 — ADO-581) — service_role only
+Deterministic regex sweep of active stories with **no** `story_event` row into fronts, using `events.sweep_*`. One front per story (lowest `sweep_priority` wins); inserts `assigned_by='agent', confidence=0.8`; `ON CONFLICT (story_id) DO NOTHING`, so hand and agent assignments are never overwritten. Draft fronts sweep too (publish_state gates every public read). `p_since = NULL` sweeps everything (backfill); a timestamp limits the pool to stories whose `first_seen_at`, `last_updated_at` or `last_enriched_at` is at or after it. Returns `(slug, assigned)` per front that gained members plus a `_candidates` row with the pool size, so a quiet run reads "0 of N". Runner: `scripts/maintenance/assign-fronts.js` (48h lookback by default, `--all`, `--since <iso>`, `--hours N`), the `if: always()` step **before** `refresh-tracker.js` in all five pipeline workflows; an RPC error writes `pipeline_skips front_assignment/sweep_failed` and exits 0. Superseded the one-time seed `scripts/maintenance/2026-08-24-ado-554-prod-fronts-seed.sql` (closes ADO-557).
 
 ### `v_tracker_stories` (view)
 **Purpose:** The Tracker spine's stories read path (ADO-554, PRD §12 anchor principle). Since migration 113 it reads the STORED `main_line` flag through a plain front join — no window function, no rule logic.
 
 `id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, tracker_pin, main_line` (113 dropped `front_opening` and `alarm_eff`; nothing read them)
 
-**The rule (v1.1)** (now evaluated by `v_tracker_main_line_rule`, applied by the refresh): `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5` (raised from 4+ on August 23, 2026: fronts are the organizing layer and enrichment severity saturation rates ~67% of stories 4+, which drowned the main line); front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
+**The rule (v1.2, migration 115)** (evaluated by `v_tracker_main_line_rule`, applied by the refresh): `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5` (raised from 4+ on August 23, 2026: fronts are the organizing layer and enrichment severity saturation rates ~67% of stories 4+, which drowned the main line); front member → front opening (earliest member by `first_seen_at, id`) OR `alarm_eff = 5` OR **(front has `main_line_alarm_floor` AND `alarm_eff >= floor` — v1.2, ADO-581; Election Suppression = 3 so every alarm 3+ election story is on the main line)** OR (`alarm_eff >= 4` AND strictly greater than every earlier member's `alarm_eff` in that front — a tie is not a new peak). Fronts with a NULL floor behave exactly as v1.1. `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side.
 
 `security_invoker = true` — for anon, unpublished fronts' members count as loose ends (RLS hides the membership), by design. EO/SCOTUS/pardon rows have no front membership; the frontend applies their loose-end rule + pins client-side from `tracker_pin`.
 

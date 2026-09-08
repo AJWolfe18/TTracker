@@ -38,3 +38,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-08-24-ado-554-prod-fronts-seed.sql` - record of the PROD fronts seed
   (8 fronts + keyword sweep) Josh ran by hand on August 24, 2026 (ADO-554/563). Already applied;
   never deployed. Keep for ADO-557 to reuse the sweep regexes.
+- `scripts/maintenance/2026-09-08-ado-581-prod-fronts-backfill.sql` - ADO-581 PROD runbook (migration
+  115 order, dry-run count, backfill sweep, three hand assignments, refresh). Run by hand in the PROD
+  SQL Editor; never deployed. Migration 115 itself DOES ship.

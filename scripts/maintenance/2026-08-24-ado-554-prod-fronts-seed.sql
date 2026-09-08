@@ -1,5 +1,8 @@
 -- ADO-554 / ADO-563 - PROD fronts seed, run by hand in the PROD SQL Editor on August 24, 2026.
--- RECORD ONLY. Already applied; never deployed by code. Kept so ADO-557 (fronts automation)
+-- RECORD ONLY. Already applied; never deployed by code. SUPERSEDED by migration 115 (ADO-581):
+-- the sweep regexes now live on events.sweep_* and run every pipeline cycle via
+-- scripts/maintenance/assign-fronts.js. Kept so the original seed is in git; ADO-557 closed there.
+-- Originally kept so ADO-557 (fronts automation)
 -- can reuse the sweep regexes and so the Election Suppression front's definition is in git.
 --
 -- Step 1: migration 112 (tracker_pin + v_tracker_stories) was applied first.
