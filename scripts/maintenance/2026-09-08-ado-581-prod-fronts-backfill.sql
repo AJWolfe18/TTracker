@@ -68,10 +68,13 @@ SELECT * FROM public.assign_fronts_sweep(NOW() - INTERVAL '48 hours');
 --    <link> tags) - skipped. Democracy Docket's root /feed/ is an empty shell; the
 --    news-alerts category feed carries the items. Votebeat is Atom (rss-parser is fine).
 -- ============================================================================
-INSERT INTO public.feed_registry (feed_url, feed_name, source_name, topics, tier, is_active) VALUES
+-- NOT EXISTS rather than ON CONFLICT: feed_url has no unique constraint to target.
+INSERT INTO public.feed_registry (feed_url, feed_name, source_name, topics, tier, is_active)
+SELECT v.* FROM (VALUES
   ('https://www.votebeat.org/arc/outboundfeeds/rss/', 'Votebeat', 'Votebeat', ARRAY['elections','voting','politics'], 2, true),
   ('https://www.democracydocket.com/news-alerts/feed/', 'Democracy Docket News Alerts', 'Democracy Docket', ARRAY['elections','voting','courts'], 2, true)
-ON CONFLICT (feed_url) DO NOTHING;
+) AS v(feed_url, feed_name, source_name, topics, tier, is_active)
+WHERE NOT EXISTS (SELECT 1 FROM public.feed_registry f WHERE f.feed_url = v.feed_url);
 
 INSERT INTO public.feed_compliance_rules (feed_id, max_chars, allow_full_text, source_name, notes)
 SELECT f.id, 5000, false, f.source_name, 'ADO-581 election beat - 5K char excerpt cap matches article scraping limit'
