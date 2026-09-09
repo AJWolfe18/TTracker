@@ -60,3 +60,8 @@ Claude fronts-assignment agent for the election front only: candidate pool = sto
 
 ## Still owed by Josh (unchanged from September 3)
 ADO-579 numbers for EO 14420 / 14407; ADO-580 (2392 level 3 vs 4); SCOTUS routine cron `0 16,23 * * *`; ADO-564 north-star numbers (due September 7); 572 / 577 verification on TEST then PROD deploy; `.agents/` and `exec brief for blueprint.png` untracked at repo root.
+
+## Next-session prompt
+```
+/start-work ADO-581 session 1 wrap + session 2. First: confirm Josh ran migration 115 and the PROD runbook (scripts/maintenance/2026-09-08-ado-581-prod-fronts-backfill.sql) and that 14648 / 14592 / 14688 are on the PROD main line; if not, that is the first job (or run it via Chrome if PROD navigation is now allowed). Then cherry-pick 02aa28c + 096a824 onto a deployment branch from main, PR, merge (migration before code), close ADO-557. Then session 2: the Claude fronts-assignment agent for the election front only - candidate pool = unassigned stories with an election word in headline or summary, state-action rubric, one story_event row assigned_by='agent' with confidence, FRONT_ASSIGNMENT skip on decline, backfill ~500 then daily.
+```
