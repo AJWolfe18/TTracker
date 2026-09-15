@@ -98,7 +98,7 @@ Each row: `story_id, event_id, primary_headline, summary_neutral, alarm_level, c
 - **Empty array on the first call:** healthy quiet run. Print `pool=0, nothing to judge` and go to Step 7 (no refresh needed, no Discord).
 - **HTTP error or non-JSON body:** the RPC is missing or broken. Print the response and stop. Write nothing.
 
-Judge every row on the page (Step 3 and Step 4, one story at a time), then fetch the next page. Because each judged story now has a `story_event` or `pipeline_skips` row, the next call returns only unjudged stories - there is no offset to track. Stop fetching when a page comes back empty **or** the run has judged `MAX_PER_RUN` stories.
+Judge every row on the page (Step 3 and Step 4, one story at a time), then fetch the next page. Because each judged story now has a `story_event` or `pipeline_skips` row, the next call returns only unjudged stories - there is no offset to track. Stop fetching when a page comes back empty **or** the run has judged `MAX_PER_RUN` stories. The cap is exact, not per page: before each fetch set `p_limit` to the smaller of 25 and `MAX_PER_RUN - judged`, and do not fetch at all once that is 0. (The first TEST run judged 87 against a cap of 80 because it applied the cap only between full pages.)
 
 **Dry-run caveat:** in dry-run nothing is written, so the same page would come back forever. In dry-run fetch exactly ONE page with `p_limit` = `MAX_PER_RUN` and stop after it.
 
