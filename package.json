@@ -30,7 +30,7 @@
     "build:check": "npm run lint && npm run test:ui && npm run build",
     "build:secure": "npm run build && node scripts/build-security-check.js",
     "qa:og-card": "node scripts/tests/og-image-card.test.mjs",
-    "qa:fronts": "node scripts/tests/assign-fronts.test.mjs",
+    "qa:fronts": "node scripts/tests/assign-fronts.test.mjs && node scripts/tests/front-agent-prompt.test.mjs",
     "qa:rss-primitive": "node scripts/tests/rss-primitive.test.mjs",
     "qa:agent-prompts": "node scripts/tests/agent-prompt-contracts.test.mjs",
     "qa:judge-executor": "node scripts/tests/judge-executor.test.mjs",
