@@ -6,9 +6,11 @@
 --    recreated in the same statement batch). Expect "Success. No rows returned".
 --
 -- 1. Dry run - how many stories would the election rule pull in, by alarm level, and how
---    many of those are redistricting? Read this BEFORE step 2; if redistricting swamps the
---    main line, drop "|gerrymander|redistrict|congressional map|district map" from
---    events.sweep_pattern for election-suppression and re-check.
+--    many of those are redistricting? DECIDED September 14, 2026 (Josh): redistricting terms
+--    dropped from the migration 115 pattern before PROD applied it. PROD dry run with the
+--    old pattern: 398 candidates, 357 alarm 3+ of which 125 redistricting; 232 without.
+--    The redistricting column below should now read 0 (a nonzero count = a redistricting
+--    headline that also carries a real election-interference term, which is fine).
 WITH e AS (SELECT sweep_pattern, sweep_coword FROM public.events WHERE slug = 'election-suppression'),
 pool AS (
   SELECT s.id, s.primary_headline AS h, s.summary_neutral AS sm,
@@ -64,6 +66,9 @@ SELECT * FROM public.assign_fronts_sweep(NOW() - INTERVAL '48 hours');
 
 -- ============================================================================
 -- 7. Election-beat feeds (AC 4). Added on TEST September 8, 2026 as ids 197/198.
+--    PROD (September 14, 2026): the feed_registry INSERT ran; the feed_compliance_rules INSERT
+--    did NOT - PROD has no feed_compliance_rules table at all (42P01), so every PROD feed
+--    already runs on fetch_feed.js defaults (5000 chars). Schema drift, noted on ADO-581.
 --    Brennan Center publishes no RSS feed (checked /rss, /rss.xml, /feed, homepage
 --    <link> tags) - skipped. Democracy Docket's root /feed/ is an empty shell; the
 --    news-alerts category feed carries the items. Votebeat is Atom (rss-parser is fine).
