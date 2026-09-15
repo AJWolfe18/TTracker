@@ -270,15 +270,20 @@ WHERE slug = 'iran';
 
 -- Election Suppression: the seed regex BROADENED (ADO-581 card: USPS / mail
 -- ballot / polling place / voter roll / citizenship list / certification /
--- ICE at polls / election-official prosecution / redistricting), co-word is an
+-- ICE at polls / election-official prosecution), co-word is an
 -- election word in the headline, and the pattern is also tried on the summary
 -- for headlines that carry an election word. Floor = 3: every alarm 3+ member
 -- is on the main line (Josh: the most important thing to track).
+-- Redistricting (gerrymander / redistrict / congressional map / district map) is
+-- deliberately NOT in the pattern: Josh decision September 14, 2026 - the PROD dry
+-- run showed 125 of 357 alarm-3+ matches were map fights, which would swamp the
+-- main line. The session-2 Claude assignment agent handles redistricting with
+-- judgment (state action vs routine coverage), not the regex.
 UPDATE public.events SET sweep_priority = 50, sweep_summary = true, main_line_alarm_floor = 3,
   -- "rigged" needs an election noun within 20 chars ("polls are rigged" = an
   -- approval-rating story); the ICE-at-polls case is covered by "polling place".
-  sweep_pattern = '(voter roll|voter purge|purg(e|es|ed|ing) (of )?(the )?voter|voter registration|voter suppression|voter intimidation|voter (data|database|file)|mail-in|mail ballot|mail(ed)? ballots|vote[- ]by[- ]mail|absentee ballot|ballot (drop ?box|harvest|access)|early voting|hand[- ]count|election fraud|voter fraud|rigged.{0,20}(election|vote|ballot|midterm)|(election|vote|ballot|midterm).{0,20}rigged|stolen election|SAVE Act|seiz(e|es|ed|ing|ure) (of )?(the |voting |election )?(election|machines|equipment|records|ballots|files)|take over (the )?election|nationaliz\w* (the )?election|federaliz\w* (the )?election|election integrity|decertif|certif(y|ies|ied|ying|ication) (of )?(the )?(election|results|vote)|refus\w* to certify|voting rights act|proof of citizenship|citizenship (proof|check|list|verification|question)|noncitizen|non-citizen|voter id|voting machine|election (takeover|police|task force|official|officials|files|records|data|equipment)|(cancel|postpone|suspend|delay)(ing|ed|s)? (the )?(midterm|election)|polling (place|site|location|station)|poll (worker|watcher|closure|closing)|polling[- ]place|usps|postal service|gerrymander|redistrict|congressional map|district map)',
-  sweep_coword  = '(election|vote|voter|voting|ballot|midterm|poll|precinct|electoral|redistrict|gerrymander|congressional map)'
+  sweep_pattern = '(voter roll|voter purge|purg(e|es|ed|ing) (of )?(the )?voter|voter registration|voter suppression|voter intimidation|voter (data|database|file)|mail-in|mail ballot|mail(ed)? ballots|vote[- ]by[- ]mail|absentee ballot|ballot (drop ?box|harvest|access)|early voting|hand[- ]count|election fraud|voter fraud|rigged.{0,20}(election|vote|ballot|midterm)|(election|vote|ballot|midterm).{0,20}rigged|stolen election|SAVE Act|seiz(e|es|ed|ing|ure) (of )?(the |voting |election )?(election|machines|equipment|records|ballots|files)|take over (the )?election|nationaliz\w* (the )?election|federaliz\w* (the )?election|election integrity|decertif|certif(y|ies|ied|ying|ication) (of )?(the )?(election|results|vote)|refus\w* to certify|voting rights act|proof of citizenship|citizenship (proof|check|list|verification|question)|noncitizen|non-citizen|voter id|voting machine|election (takeover|police|task force|official|officials|files|records|data|equipment)|(cancel|postpone|suspend|delay)(ing|ed|s)? (the )?(midterm|election)|polling (place|site|location|station)|poll (worker|watcher|closure|closing)|polling[- ]place|usps|postal service)',
+  sweep_coword  = '(election|vote|voter|voting|ballot|midterm|poll|precinct|electoral)'
 WHERE slug = 'election-suppression';
 
 -- ============================================================================
