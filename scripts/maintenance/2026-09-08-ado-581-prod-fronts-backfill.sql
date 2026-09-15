@@ -1,4 +1,4 @@
--- ADO-581 session 1 - PROD runbook, run by hand in the PROD SQL Editor (osjbulmltfpcoldydexg).
+-- ADO-581 session 1 - PROD runbook, run by hand in the PROD SQL Editor (the PROD project).
 -- RECORD ONLY. Never deployed by code. Order matters; each step is idempotent.
 --
 -- 0. Migration 115 FIRST: paste migrations/115_front_sweep_and_alarm_floor.sql and run it
