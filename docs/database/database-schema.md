@@ -291,6 +291,7 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | sweep_priority | SMALLINT | (115) lower wins when several fronts match one story; default 100 |
 | sweep_summary | BOOLEAN | (115) also try `sweep_pattern` on `summary_neutral`, but ONLY for headlines matching `sweep_coword` (ungated summary matching on "midterm" pulled in every political summary) |
 | main_line_alarm_floor | SMALLINT | (115) rule v1.2: a member with `alarm_eff >= floor` is on the main line; NULL = v1.1 unchanged. CHECK 1-5. Election Suppression = 3 |
+| agent_pattern | TEXT | (116, ADO-582) case-insensitive regex; a story whose headline **or** `summary_neutral` matches is a candidate for the front assignment agent (`front_agent_candidates`). Broader than `sweep_pattern` on purpose (the agent judges, the regex only bounds the pool). NULL = no agent pass. Seeded for Election Suppression only |
 | created_at / updated_at | TIMESTAMPTZ | updated_at via set_updated_at() trigger |
 
 **RLS:** `events_anon_select` — anon sees `publish_state='published'` only. Writes are service_role only.
@@ -328,8 +329,9 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | confidence | NUMERIC | CHECK 0-1 or NULL |
 | assigned_at / reassigned_at | TIMESTAMPTZ | |
 | reassigned_from_event_id | BIGINT | FK → events (SET NULL); makes assignment precision measurable |
+| note | TEXT | (116, ADO-582) one-line rationale from the front assignment agent (`fronts-v1: ...`); NULL for sweep/hand rows. **Not anon-readable** |
 
-**RLS:** `story_event_anon_select` — anon sees memberships of published fronts only.
+**RLS:** `story_event_anon_select` — anon sees memberships of published fronts only. Since migration 116 the anon grant is **column-level** (every column except `note`, same treatment as `tracker_pin.note`): an anon `select=*` on this table fails by design; nothing public reads it directly (the views read `story_id`/`event_id`).
 **Gotcha:** `merge_stories` does NOT repoint story_event (unlike article_story) — a member story merged away leaves the front counting a tombstone. Open Wave 2 decision.
 
 ### `v_event_stats` (view)
@@ -367,6 +369,9 @@ Applies the rule view to `stories.main_line` (changed rows only), clears the fla
 
 ### `assign_fronts_sweep(p_since TIMESTAMPTZ)` (function, migration 115 — ADO-581) — service_role only
 Deterministic regex sweep of active stories with **no** `story_event` row into fronts, using `events.sweep_*`. One front per story (lowest `sweep_priority` wins); inserts `assigned_by='agent', confidence=0.8`; `ON CONFLICT (story_id) DO NOTHING`, so hand and agent assignments are never overwritten. Draft fronts sweep too (publish_state gates every public read). `p_since = NULL` sweeps everything (backfill); a timestamp limits the pool to stories whose `first_seen_at`, `last_updated_at` or `last_enriched_at` is at or after it. Returns `(slug, assigned)` per front that gained members plus a `_candidates` row with the pool size, so a quiet run reads "0 of N". Runner: `scripts/maintenance/assign-fronts.js` (48h lookback by default, `--all`, `--since <iso>`, `--hours N`), the `if: always()` step **before** `refresh-tracker.js` in all five pipeline workflows; an RPC error writes `pipeline_skips front_assignment/sweep_failed` and exits 0. Superseded the one-time seed `scripts/maintenance/2026-08-24-ado-554-prod-fronts-seed.sql` (closes ADO-557).
+
+### `front_agent_candidates(p_slug TEXT, p_limit INTEGER DEFAULT 25)` (function, migration 116 — ADO-582) — service_role only
+The candidate pool for the **front assignment agent** (`docs/features/fronts-claude-agent/prompt-v1.md`, a daily claude.ai routine, Election Suppression only for now). Returns active, enriched (`summary_neutral IS NOT NULL`) stories with **no** `story_event` row whose headline or `summary_neutral` matches `events.agent_pattern` for `p_slug`, **excluding** stories the agent already declined since their last update (a `pipeline_skips` row with `pipeline='front_assignment'`, `reason='agent_declined'`, `entity_type='story'`, `metadata->>'front' = p_slug`, `created_at >= last_updated_at`). Newest first; every row carries `pool_size` (total before `LIMIT`) and the front's `event_id` so the prompt never hardcodes an id. Paging is by exhaustion: each judged story leaves a `story_event` or `pipeline_skips` row, so the next call returns only what is left (no OFFSET). The agent ends its run with `refresh_tracker_derived()` so assignments reach the main line the same day. Decline rows use the exact `PIPELINES.FRONT_ASSIGNMENT` / `REASONS.AGENT_DECLINED` strings from `scripts/lib/skip-reasons.js`; `qa:fronts` asserts the prompt, the constants and this function's filter agree.
 
 ### `v_tracker_stories` (view)
 **Purpose:** The Tracker spine's stories read path (ADO-554, PRD §12 anchor principle). Since migration 113 it reads the STORED `main_line` flag through a plain front join — no window function, no rule logic.

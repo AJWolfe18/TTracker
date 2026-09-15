@@ -33,7 +33,7 @@
     "social:draft": "node scripts/social/draft-posts.js",
     "qa:social": "node scripts/tests/social-copy.test.mjs && node scripts/tests/social-candidates.test.mjs && node scripts/tests/social-draft-posts.test.mjs",
     "qa:alerts": "node scripts/tests/discord-alerts.test.mjs",
-    "qa:fronts": "node scripts/tests/assign-fronts.test.mjs",
+    "qa:fronts": "node scripts/tests/assign-fronts.test.mjs && node scripts/tests/front-agent-prompt.test.mjs",
     "qa:rss-primitive": "node scripts/tests/rss-primitive.test.mjs"
   },
   "dependencies": {
