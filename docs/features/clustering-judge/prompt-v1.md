@@ -95,13 +95,15 @@ curl -s "${API_BASE}/stories?select=id,primary_headline&id=eq.123" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 
-# POST insert (log row); Prefer: return=representation echoes the created row
+# POST insert (log rows). The body file holds a JSON ARRAY of row objects (one element for a
+# single row, e.g. an executed merge; all remaining rows for the end-of-run bulk write - Step 6).
+# Prefer: return=representation echoes the created rows.
 curl -s -X POST "${API_BASE}/clustering_judge_log" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d @/tmp/judge-log-row.json
+  -d @/tmp/judge-log-rows.json
 ```
 
 ### JSON body construction (IMPORTANT)
@@ -246,21 +248,34 @@ error — just log it and move on.
 **Chained fragments:** if you merged B into A earlier this run and later judge C a match for that same
 event, target the surviving story A as the survivor (never a story you already tombstoned this run).
 
+**Log an executed merge immediately.** As soon as `merge_stories` returns `ok:true, skipped:false`,
+and before you touch the next pair, write THAT pair's log row (a one-element array, Step 6 shape,
+`merged=true`) with its own labeled POST. The admin Judge tab's one-click unmerge is driven from the
+log row, so a merge that exists in `stories` but not in `clustering_judge_log` is a merge nobody can
+see or reverse if the run is cut off after it. Every other verdict waits for the end-of-run bulk
+write in Step 6.
+
 ### Step 6: Log EVERY verdict
 
 Regardless of mode or verdict — `merge`, `keep`, `uncertain` — write one `clustering_judge_log` row per
 pair. This is the audit trail (admin Judge tab) and gold-set training data; a pair you looked at and did
 NOT merge is exactly as important to log as one you did.
 
-**Write all rows in ONE request** (ADO-583): build a JSON **array** of row objects with `jq` (never by
-hand — headlines and rationale contain apostrophes), save it to a temp file, and POST the array once.
-PostgREST inserts an array body as a bulk insert. Do not loop 30 separate POSTs, do not wrap the insert
-in a script file, and never insert a "test" or "probe" row to check connectivity (a stray row pollutes
-verdict memory; the run's own rows are the connectivity check).
+**Two kinds of write, both small and labeled** (ADO-583). (a) Each **executed merge** gets its own
+one-row POST the moment it succeeds (Step 5). (b) **Everything else** — every `keep`, `uncertain`,
+dry-run row, cap-deferred or blocked `merge` — goes in ONE bulk POST after the last pair is judged.
+PostgREST inserts an array body as a bulk insert. Do not loop 30 separate POSTs, do not wrap the
+insert in a script file, and never insert a "test" or "probe" row to check connectivity (a stray row
+pollutes verdict memory; the run's own rows are the connectivity check).
+
+**Build the array file with the Write tool, not with `jq --arg` inside a Bash command.** Headlines
+and rationale contain apostrophes and backticks; a JSON file written by the Write tool has no shell
+quoting at all. Use `jq` only to check it (`jq length /tmp/judge-log-rows.json`) or transform it
+(the `map(del(.evidence_as_of))` retry in Section 5).
 
 ```bash
 # Clustering Judge audit log: this agent's own per-pair verdict record (append-only; admin Judge tab
-# + gold-set training data). One bulk insert for the whole run.
+# + gold-set training data). One bulk insert for all not-executed verdicts of this run.
 curl -s -o /tmp/judge-log-resp.json -w "%{http_code}" -X POST "${API_BASE}/clustering_judge_log" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -269,7 +284,7 @@ curl -s -o /tmp/judge-log-resp.json -w "%{http_code}" -X POST "${API_BASE}/clust
   -d @/tmp/judge-log-rows.json
 ```
 
-Expect `201` and an array of the same length as your verdicts. Each element of the array is:
+Expect `201` and an array of the same length as the file. Each element of the array is:
 
 ```json
 {
@@ -428,9 +443,9 @@ sequence → keep, even if they share entities and sit minutes apart.
   missing evidence.
 - **`merge_stories` returns `ok:false`:** never retry blindly; log `merged=false` with the returned
   reason in the rationale. The pair stays as two stories; a later run re-evaluates.
-- **The Step 6 bulk insert fails (non-2xx):** these rows are both the audit trail AND verdict memory,
+- **A Step 6 log POST fails (non-2xx) — the one-row write after a merge or the end-of-run bulk write:** these rows are both the audit trail AND verdict memory,
   and in live mode merges may already be executed — unlogged verdicts are the worst outcome. Retry the
-  same bulk POST ONCE as-is. If that also fails, retry once more with `evidence_as_of` REMOVED from
+  same POST ONCE as-is. If that also fails, retry once more with `evidence_as_of` REMOVED from
   every row (`jq 'map(del(.evidence_as_of))'`; a NULL falls back to `created_at` in the memory
   predicate — safe, just slightly more suppressive), which recovers the case where a mangled
   `membership_seen_at` echo is what PostgREST is rejecting (400/22007/PGRST204). A bulk insert is
@@ -462,7 +477,9 @@ sequence → keep, even if they share entities and sit minutes apart.
 ## 7. Invariants (must always hold)
 
 1. Every candidate pair produces exactly one `clustering_judge_log` row (verdict logged), success or
-   skip.
+   skip — executed merges immediately, all other verdicts in the end-of-run bulk write. The only
+   exception is the platform denying the log write itself (Section 5); then the run ends with one
+   notification and no further attempts.
 2. `merged=true` ONLY when `merge_stories` returned `ok:true, skipped:false` this run. Dry-run rows are
    always `merged=false, dry_run=true`.
 3. At most 10 executed merges per run (live mode) — prompt-capped AND DB-enforced via `p_run_id`
