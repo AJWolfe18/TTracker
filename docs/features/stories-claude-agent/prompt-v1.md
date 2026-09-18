@@ -173,24 +173,27 @@ Rows with `run_id` matching yours are leftover from a previous crashed invocatio
 
 ### Step 2: Find Stories Needing Enrichment
 
-```bash
-COOLDOWN_CUTOFF=$(date -u -d "12 hours ago" +"%Y-%m-%dT%H:%M:%SZ")
+The candidate pool comes from one RPC (migration 117, ADO-584). Call it exactly once per run:
 
-curl -s "${SUPABASE_URL}/rest/v1/stories?status=eq.active&or=(last_enriched_at.is.null,and(enrichment_meta-%3E%3Esource.eq.claude-agent,last_enriched_at.lt.${COOLDOWN_CUTOFF}))&select=id,primary_headline,last_enriched_at,enrichment_failure_count,enrichment_meta,article_story!inner(article_id)&order=last_enriched_at.asc.nullsfirst&limit=40" \
+```bash
+curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/stories_needing_enrichment" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"p_limit": 40, "p_cooldown_hours": 12, "p_max_failures": 10}'
 ```
 
-(`-%3E%3E` is URL-encoded `->>`, needed inside the `or=(...)` composite filter value.)
+Each row is `{id, primary_headline, last_enriched_at, enrichment_failure_count, enrichment_meta, new_article_count, pool_size}`. `pool_size` is the total number of eligible stories before the 40 cap (print it once — it is the run's backlog figure); `new_article_count` is how many articles attached since the story was last enriched (always `> 0` for a re-enrichment, `= total articles` for a first enrichment).
 
-This query covers exactly three cases, and deliberately excludes a fourth:
+**If the response is a JSON object instead of an array** (for example `{"code":"PGRST202", ...}` = the RPC does not exist on this database yet, or `42501` = no grant), the migration has not been applied here. **Stop immediately, write nothing** (no log rows, no heartbeat), and end the run with a one-line push notification naming the error code. Do NOT fall back to a hand-written `stories?...` query — the old filter is exactly what this RPC replaced.
+
+The RPC returns exactly two kinds of story, oldest-enriched first with never-enriched first of all, and deliberately excludes three others:
 
 1. **Truly never enriched** (`last_enriched_at IS NULL`) — first-time clustering output, always eligible.
-2. **Claude-agent-enriched, now stale** (`enrichment_meta->>source = 'claude-agent'` AND `last_enriched_at < 12h ago`) — re-enrichment as a cluster grows, scoped to the agent's own prior output only.
-3. **Claude-agent attempt failed, cooldown passed** — same branch as #2, since a failed attempt also writes the `source: claude-agent` marker (see Step 6 failure-write policy). Retries after 12h, same cadence as success-path re-enrichment.
-4. **Deliberately excluded:** any story whose `enrichment_meta` was written by the legacy GPT pipeline (`model: gpt-4o-mini`, no `source: claude-agent` key). Those stories keep their existing GPT-written content, frozen. Do not touch them, do not re-enrich them, even if `last_enriched_at` is old — that backlog is out of scope for this agent until a human explicitly nulls `last_enriched_at`/`enrichment_meta` on targeted rows (a separate, deliberate decision, not something this query should do implicitly).
-
-`article_story!inner(article_id)` excludes stories with zero linked articles — PostgREST-side inner join, not a null-filter. A story with no articles has nothing for you to enrich from anyway.
+2. **Claude-agent-enriched, and the cluster grew since** (`enrichment_meta->>source = 'claude-agent'`, `last_enriched_at` older than the 12-hour cooldown, AND at least one `article_story` row with `matched_at > last_enriched_at`). This is the ONLY reason to re-enrich a story: new evidence. A failed Claude-agent attempt also carries the `source: claude-agent` marker (Step 6 failure-write policy), so a failed story is retried the same way — when a new article attaches, not on a timer.
+3. **Excluded — unchanged stories.** A story the agent already enriched that has gained no article since is never touched again, no matter how old `last_enriched_at` is. Before migration 117 the query re-enriched every Claude-enriched story older than 12 hours; with ~15,000 active stories that never close, that meant every run's spare slots rewrote July/August stories with no new sources, forever. Never "re-freshen" old stories.
+4. **Excluded — legacy GPT output:** any story whose `enrichment_meta` was written by the retired GPT pipeline (`model: gpt-4o-mini`, no `source: claude-agent` key). Those stories keep their existing GPT-written content, frozen. That backlog is out of scope until a human explicitly nulls `last_enriched_at`/`enrichment_meta` on targeted rows.
+5. **Excluded — pathological failures:** stories at or above `p_max_failures` (10) attempts, and stories with zero linked articles (nothing to enrich from).
 
 **If 0 stories are returned:** this is common at Stories' every-2-hours cadence (overnight lulls, or right after a previous run cleared the backlog), unlike EO/SCOTUS's once-daily cadence where an empty run is rare. Because the log table is per-story only, a genuinely healthy empty run would otherwise be indistinguishable from the agent having stopped running. Insert exactly one heartbeat row before stopping:
 
@@ -229,7 +232,7 @@ curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&select=is
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-Filter out any row where `articles` is null (an orphaned join, unlikely given the `article_story!inner` filter in Step 2, but check anyway).
+Filter out any row where `articles` is null (an orphaned join, unlikely because the Step 2 RPC only returns stories with at least one `article_story` row, but check anyway).
 
 **If zero articles come back for this story:** fail gracefully — do NOT fabricate a summary. PATCH the log row to `status='failed'`, `notes='no_source_articles'`, and follow the Step 6 failure-write policy for the story itself (stamp `last_enriched_at`, increment `enrichment_failure_count`, set `last_error_category='no_source_articles'`). Continue to the next story.
 
@@ -557,6 +560,7 @@ These restate `tone-system.json`'s `writingRules` and `bannedPatterns` as direct
 |-----------|--------|
 | Env vars missing | Log error to stdout, stop. No DB writes, no log rows. |
 | PostgREST unreachable (curl error on initial GET) | Stop, no log rows created. Log error to stdout. |
+| Step 2 RPC returns an error object (`PGRST202` missing function, `42501` no grant) | Migration 117 is not applied on this database. Stop, no DB writes, no heartbeat. One push notification naming the code. Never substitute a hand-written `stories?...` query. |
 | 0 stories found (Step 2) | Healthy empty run — insert the single heartbeat row (`story_id: null`), then stop. |
 | Concurrent run detected (Step 1) | Stop immediately without creating any log rows. |
 | No source articles for a story (Step 3) | Per-story log row `status='failed'`, `notes='no_source_articles'`. Write the failure body to `stories` (Step 6). Continue to next story. |
@@ -603,6 +607,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 15. **Profanity in `summary_spicy` only at `alarm_level` 4-5** — never at 0-3, per `tone-system.json`.
 16. **Every run leaves observability evidence** — a `running` row per story processed (PATCHed to `completed`/`failed`), or exactly one `story_id: null` heartbeat row on a healthy empty run. No run completes silently.
 17. **One story at a time** — complete a story's full Step 3-7 loop (log row → fetch → enrich → validate → write → close log row) before starting the next story's Step 3A. Never front-load fetches or back-load writes across multiple stories.
+18. **Re-enrich only on new evidence** — a story is re-enriched only when an article attached after its `last_enriched_at` (enforced by the `stories_needing_enrichment` RPC, migration 117). Never query `stories` directly for candidates and never rewrite a story that has not changed.
 
 ---
 
@@ -614,7 +619,8 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 | Created | 2026-07-01 |
 | Author | Josh + Claude Code |
 | Target model | Claude Sonnet 4.6 |
-| Tables accessed | `stories` (read/write), `stories_enrichment_log` (read/write), `article_story` (read), `articles` (read, via join) |
+| Tables accessed | `stories` (read/write), `stories_enrichment_log` (read/write), `article_story` (read), `articles` (read, via join); candidates via RPC `stories_needing_enrichment` (migration 117) |
+| Changelog | 2026-09-18 (ADO-584): Step 2 moved to the RPC — re-enrich only when a new article attached since `last_enriched_at`; hard stop at 10 failed attempts. Output fields and `prompt_version` unchanged. |
 | External fetches | None — all source content is already scraped and stored by the RSS pipeline; no WebFetch step in this prompt |
 | API method | Bash/curl to PostgREST (not WebFetch) for all access |
 | Batch size | `limit=40` per run (see plan.md "Schedule" section) |
