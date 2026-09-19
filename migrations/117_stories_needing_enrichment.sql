@@ -1,13 +1,14 @@
 -- ============================================================================
 -- Migration 117: Stories agent candidate pool - re-enrich only on new evidence
--- ADO-584. September 18, 2026. v4 (September 19, after the local Codex review of PR #145).
+-- ADO-584. September 18, 2026. v5 (September 19, after two local Codex reviews of PR #145).
 -- v2: evidence watermark, merge re-qualification, failed-attempt retry. v3: the watermark
 -- also covers merge/unmerge times (v2 re-qualified every merged survivor forever), and
 -- new_article_ids names the evidence the agent must read. v4: a FAILED attempt no longer
 -- advances the watermark (prior_evidence_as_of + attempt_evidence_as_of), and
 -- new_article_ids is no longer capped at 6 - see "v4" below.
--- Idempotent via DROP IF EXISTS + CREATE. v1 and v2 were never applied on PROD; v3 was
--- (September 19) - re-apply this file on PROD BEFORE the v4 prompt reaches main.
+-- v5: a present JSON-null evidence_as_of means "nothing seen yet" (see "v5" below).
+-- Idempotent via DROP IF EXISTS + CREATE. v1 and v2 were never applied on PROD; v3 and v4
+-- were (September 19) - re-apply this file on PROD BEFORE the prompt reaches main.
 -- ============================================================================
 -- WHY: the Stories Enrichment Agent's Step 2 (docs/features/stories-claude-agent/
 -- prompt-v1.md) treated every Claude-enriched active story older than 12 hours
@@ -73,6 +74,14 @@
 --      article, so article 7+ of a burst was never offered again. The list is now
 --      complete; the prompt reads the newest 6 in full and the rest at
 --      title/source/excerpt level (excerpts are ~150 characters - egress stays small).
+--
+-- v5 (P1 review finding on v4): a story whose FIRST attempt fails has no prior watermark, so
+--   the failure write stores "evidence_as_of": null. v4's COALESCE turned that null into
+--   last_enriched_at - the failure timestamp - so an article that attached while the failed
+--   attempt was running looked "already seen" without ever being read. Now a key that is
+--   PRESENT with JSON null means "no successful enrichment has seen anything": the
+--   watermark is NULL, every article counts as new and is listed in new_article_ids. Only
+--   a MISSING key (legacy v1 writes) still falls back to last_enriched_at.
 --   reason, new_article_count and pool_size are diagnostics for the run log.
 --   service_role only. The agent's Step 6 concurrency guard still uses the
 --   returned last_enriched_at verbatim.
@@ -143,10 +152,15 @@ AS $$
       -- evidence watermark: what the last enrichment actually saw (DB-issued,
       -- echoed by the agent), falling back to the write-time stamp
       CROSS JOIN LATERAL (
-        SELECT COALESCE(
-                 CASE WHEN s.enrichment_meta->>'evidence_as_of' ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
-                      THEN (s.enrichment_meta->>'evidence_as_of')::timestamptz END,
-                 s.last_enriched_at) AS watermark
+        SELECT CASE
+                 -- key present with JSON null = a failed first attempt: nothing has been seen (v5)
+                 WHEN jsonb_typeof(s.enrichment_meta->'evidence_as_of') = 'null' THEN NULL::timestamptz
+                 -- key missing (legacy writes) or unreadable: the write-time stamp
+                 ELSE COALESCE(
+                        CASE WHEN s.enrichment_meta->>'evidence_as_of' ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
+                             THEN (s.enrichment_meta->>'evidence_as_of')::timestamptz END,
+                        s.last_enriched_at)
+               END AS watermark
       ) w
       -- what the last ATTEMPT saw: a failed attempt records the Step-2 watermark here without
       -- moving the real one (v4). GREATEST ignores NULLs; a success write drops the key.
@@ -211,7 +225,8 @@ AS $$
                     FROM public.article_story a
                    WHERE a.story_id = k.id
                      AND k.last_enriched_at IS NOT NULL
-                     AND (   a.matched_at > k.watermark
+                     AND (   k.watermark IS NULL
+                          OR a.matched_at > k.watermark
                           OR EXISTS (SELECT 1
                                        FROM public.story_merge_audit ma
                                       WHERE ma.survivor_id = k.id
@@ -226,7 +241,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) IS
-  'ADO-584: candidate pool for the Stories Enrichment Agent. never_enriched first; then Claude-agent-enriched stories past the cooldown that (a) gained an article_story row after the evidence watermark (enrichment_meta.evidence_as_of = newest attach or merge/unmerge time read by the last SUCCESSFUL enrichment, DB-issued and echoed by the agent; a failed attempt echoes prior_evidence_as_of instead and records what it saw in attempt_evidence_as_of; falls back to last_enriched_at), (b) were changed by a Judge merge/unmerge (story_merge_audit) after the watermark, or (c) failed their last attempt / still have no summary_neutral and are under p_max_failures attempts. Excludes legacy GPT output (no enrichment_meta.source marker) and stories with no linked articles. new_article_ids = ALL post-watermark evidence, newest first, which the agent must fetch. pool_size = total before LIMIT. service_role only. Prompt: docs/features/stories-claude-agent/prompt-v1.md Step 2.';
+  'ADO-584: candidate pool for the Stories Enrichment Agent. never_enriched first; then Claude-agent-enriched stories past the cooldown that (a) gained an article_story row after the evidence watermark (enrichment_meta.evidence_as_of = newest attach or merge/unmerge time read by the last SUCCESSFUL enrichment, DB-issued and echoed by the agent; a failed attempt echoes prior_evidence_as_of instead and records what it saw in attempt_evidence_as_of; a JSON-null evidence_as_of = nothing seen yet; a missing key falls back to last_enriched_at), (b) were changed by a Judge merge/unmerge (story_merge_audit) after the watermark, or (c) failed their last attempt / still have no summary_neutral and are under p_max_failures attempts. Excludes legacy GPT output (no enrichment_meta.source marker) and stories with no linked articles. new_article_ids = ALL post-watermark evidence, newest first, which the agent must fetch. pool_size = total before LIMIT. service_role only. Prompt: docs/features/stories-claude-agent/prompt-v1.md Step 2.';
 
 REVOKE ALL ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) TO service_role;
