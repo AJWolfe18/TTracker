@@ -1,0 +1,97 @@
+name: Clustering Judge Executor
+
+# ADO-583: the Judge cloud agent judges story pairs but can no longer write to the database itself
+# (the cloud auto-mode classifier denies its PROD writes since September 16, 2026). The agent pushes
+# ONE verdict file, judge-inbox/<run_id>.json, on a branch named judge-run/<env>/<run_id>; this
+# workflow performs the writes with the service key from GitHub secrets:
+# merge_stories (live runs, cap 10, no chained merges), clustering_judge_log rows, the heartbeat
+# row for an empty run and the Discord digest of uncertain verdicts.
+# Script: scripts/clustering/execute-judge-verdicts.js. Prompt: docs/features/clustering-judge/prompt-v1.md.
+#
+# The branch is deleted after a successful run. On failure it is kept so the job can be re-run from
+# the Actions UI (the script is idempotent per run_id: pairs already logged are skipped).
+
+on:
+  push:
+    branches:
+      - "judge-run/**"
+
+concurrency:
+  group: judge-executor
+  cancel-in-progress: false
+
+permissions:
+  contents: write # delete the inbox branch when done
+
+jobs:
+  execute:
+    name: Execute Judge verdicts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Kill switch: set repository variable ENABLE_JUDGE_EXECUTOR=false to park verdict files unprocessed.
+    if: vars.ENABLE_JUDGE_EXECUTOR != 'false'
+    steps:
+      - name: Checkout the inbox branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Resolve environment + verdict file from the branch name
+        id: meta
+        run: |
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME}"                       # judge-run/<env>/<run_id>
+          env_name="$(echo "$ref" | cut -d/ -f2)"
+          run_id="$(echo "$ref" | cut -d/ -f3-)"
+          case "$env_name" in
+            test|prod) ;;
+            *) echo "::error::branch must be judge-run/test/<run_id> or judge-run/prod/<run_id>, got ${ref}"; exit 1 ;;
+          esac
+          file="judge-inbox/${run_id}.json"
+          if [ ! -f "$file" ]; then echo "::error::verdict file ${file} not found on ${ref}"; exit 1; fi
+          echo "env_name=${env_name}" >> "$GITHUB_OUTPUT"
+          echo "file=${file}" >> "$GITHUB_OUTPUT"
+          echo "Environment: ${env_name}  File: ${file}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No npm ci: the executor uses Node built-ins + scripts/lib/discord.js only.
+      - name: Execute verdicts (TEST)
+        if: steps.meta.outputs.env_name == 'test'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          JUDGE_EXPECTED_ENV: test
+        run: node scripts/clustering/execute-judge-verdicts.js "${{ steps.meta.outputs.file }}"
+
+      - name: Execute verdicts (PROD)
+        if: steps.meta.outputs.env_name == 'prod'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          JUDGE_EXPECTED_ENV: prod
+        run: node scripts/clustering/execute-judge-verdicts.js "${{ steps.meta.outputs.file }}"
+
+      - name: Delete the inbox branch (processed)
+        if: success()
+        run: |
+          set -euo pipefail
+          git push origin --delete "${GITHUB_REF_NAME}" || echo "branch already gone (non-blocking)"
+
+      - name: Discord alert (on failure)
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Warning: DISCORD_WEBHOOK_URL secret not set - skipping Discord alert"
+            exit 0
+          fi
+          curl -f -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Branch\",\"value\":\"\`${{ github.ref_name }}\`\",\"inline\":true},{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "$DISCORD_WEBHOOK_URL" || echo "Discord webhook failed (non-blocking)"

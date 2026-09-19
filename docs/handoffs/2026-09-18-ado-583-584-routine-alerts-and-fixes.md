@@ -36,6 +36,15 @@ Commits: `32b09b2` on `test` (everything). PROD: PR #144 (Judge prompt + migrati
 - TEST Judge routine run `cse_014QrseZ1P9Xk4WyPZy7SSBi`: 0 candidate pairs on TEST (ingestion quiet), heartbeat insert OK, prompt loads and runs.
 - PROD Judge routine: a manual fire from this dev session was **denied by the same classifier** ("Modify Shared Resources"), so the proof is the scheduled 05:03 UTC September 19 run, or Josh pressing Run at https://claude.ai/code/routines/trig_01DDXZkpC9PkgTzU8wDdL9QM. Success = `clustering_judge_log` rows for that run_id.
 
+## Review pass (after Josh asked "did you do the PR review?")
+Two `code-review high` passes (forked skill, no Agent tool in this session) on PR #144 and #145 converged on the same gaps, all fixed in `f232a51` on `test` and rebuilt into PR #145:
+1. **Failed attempts were never retried.** The v1 rule required a new article; a transient write failure on a one-article story would hide it from the site forever. Now: `retry_failed` branch (last attempt failed or no `summary_neutral`), cooldown, cap 3 (AC 2 met literally). New-article and merge branches stay uncapped.
+2. **Judge merges never re-qualified the survivor.** `merge_stories` repoints `article_story` rows without touching `matched_at`. Now: `story_merge_audit` merge/unmerge after the watermark qualifies (`merged` reason). TEST proof: 16981 and 17024.
+3. **Mid-enrichment attach race.** `last_enriched_at` is stamped minutes after the articles were read. Now: the RPC returns a DB-issued `evidence_as_of` (max `matched_at`), the agent echoes it into `enrichment_meta` on every write, and the RPC compares against that (same pattern as Judge migration 106).
+4. **Judge bulk log was crash-fragile.** One end-of-run POST meant a cut-off run left executed merges with no log row (no admin unmerge, no memory). Now: each executed merge is logged immediately with its own one-row POST; the bulk POST covers the rest.
+5. Smaller: Section 2 examples in both prompts still taught the banned shapes; Judge invariant 1 lacked the denial carve-out; `jq --arg` in Bash reintroduced the quoting hazard (use the Write tool); one LATERAL aggregate instead of three correlated probes. Reviewer also noted the legacy name `get_stories_needing_enrichment` in the schema doc; it does not exist on TEST (PGRST202) and is unrelated.
+Migration 117 v2 changes the RPC's return type, so it starts with `DROP FUNCTION IF EXISTS` (the SQL editor shows a "destructive operation" confirm; accept it). Applied on TEST; `qa:agent-prompts` extended; still Josh's paste on PROD.
+
 ## Design calls made without Josh (say if any is wrong)
 1. **RPC instead of a client-side filter.** PostgREST cannot compare `last_enriched_at` to `article_story.matched_at`, and a jq filter over a 200-row window would miss stories deeper in the treadmill. One RPC, no new columns.
 2. **Failure cap is 10, not 3.** The new-article rule already stops timer-based retries; a failed story is retried only when a new article attaches. The hard cap only catches pathological rows (12675). AC 2 on ADO-584 reads "3+"; the delivered behavior is stricter in spirit and documented on the card.

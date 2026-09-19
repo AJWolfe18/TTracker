@@ -4,7 +4,6 @@
   },
   "autoMemoryEnabled": false,
   "permissions": {
-    "defaultMode": "acceptEdits",
     "deny": [
       "Agent",
       "Task"

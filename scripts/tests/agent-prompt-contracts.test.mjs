@@ -1,9 +1,10 @@
 // ADO-583 / ADO-584: the Stories and Judge cloud-agent prompts write raw strings
 // over PostgREST, so the contract between each prompt and its migration is text.
 // These checks fail the smoke suite if a prompt drifts back to the shapes that
-// caused the September 2026 incidents (12-hour re-enrichment treadmill; looped /
-// scripted PROD writes the cloud sandbox denies) or loses the review fixes
-// (evidence watermark, merge re-qualification, failed-attempt retry, per-merge log row).
+// caused the September 2026 incidents (12-hour re-enrichment treadmill; Judge PROD
+// writes the cloud sandbox denies) or loses the review fixes (evidence watermark,
+// merge re-qualification, failed-attempt retry) and the Judge -> executor hand-off
+// (the agent writes one verdict file, .github/workflows/judge-executor.yml writes the DB).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -49,16 +50,29 @@ for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_fai
   assert.ok(new RegExp(`^\\s+${col}\\s`, 'm').test(mig117), `RPC must return ${col}`);
 }
 
-// --- Judge agent: writes shaped for the sandbox's command screening, crash-safe ---
-assert.ok(judge.includes('# Clustering Judge merge'), 'merge curl must carry its explanatory comment');
-assert.ok(judge.includes('rpc/merge_stories'), 'merge goes through merge_stories');
-assert.ok(judge.includes('Log an executed merge immediately'), 'each executed merge must get its own log row at once');
-assert.ok(judge.includes('-d @/tmp/judge-log-rows.json'), 'audit log rows go as a JSON array from a temp file');
-assert.ok(!judge.includes('judge-log-row.json'), 'no single-object log body example left in the API reference');
-assert.ok(judge.includes('Build the array file with the Write tool'), 'array file is written with the Write tool, not jq --arg in Bash');
-assert.ok(judge.includes('never insert a "test" or "probe" row'), 'no probe rows in the audit log');
-assert.ok(judge.includes('do NOT rephrase, split, loop, or route the same write'), 'denial rule must forbid workarounds');
-assert.ok(judge.includes('rationale prefixed `blocked:`'), 'blocked merges are logged merged=false with a blocked: rationale');
-assert.ok(/The only\s+exception is the platform denying the log write/.test(judge), 'invariant 1 carries the denial carve-out');
+// --- Judge agent (v1.2, ADO-583): the agent never writes to the database; the executor does ---
+const workflow = read('../../.github/workflows/judge-executor.yml');
+const executor = read('../clustering/execute-judge-verdicts.js');
+assert.ok(!judge.includes('rpc/merge_stories'), 'the prompt must not show a merge_stories call anywhere (Section 2 examples included)');
+assert.ok(!/-X POST "\$\{API_BASE\}\/clustering_judge_log"/.test(judge), 'the prompt must not show a clustering_judge_log insert');
+assert.ok(!judge.includes('-X PATCH') && !judge.includes('-X DELETE'), 'no PATCH/DELETE shapes in the prompt');
+assert.ok(judge.includes('You do NOT call `merge_stories`'), 'Step 5 forbids the merge call outright');
+assert.ok(judge.includes('judge-inbox/<RUN_ID>.json') && judge.includes('"schema": "judge-verdicts/v1"'), 'Step 6 writes the verdict file in the executor schema');
+assert.ok(judge.includes('"survivor_id"') && judge.includes('"loser_id"'), 'merge verdicts carry survivor/loser for the executor');
+assert.ok(judge.includes('BRANCH="judge-run/${ENV_NAME}/${RUN_ID}"') && judge.includes('git push -q origin "${BRANCH}"'), 'Step 7 publishes on the judge-run/<env>/<run_id> branch the workflow listens to');
+assert.ok(judge.includes('wnrjrywpcadwutfykflu'), 'environment is derived from the TEST project ref, never a PROD ref');
+assert.ok(!judge.includes('osjbulmltfpcoldydexg'), 'no PROD project ref in the prompt');
+assert.ok(judge.includes('with the **Write tool**'), 'verdict file is written with the Write tool, not jq --arg in Bash');
+assert.ok(judge.includes('do NOT rephrase, split, loop, or route the same action'), 'denial rule must forbid workarounds');
+assert.ok(/Never fall back to writing the database\s+yourself/.test(judge), 'a failed push never turns into a direct DB write');
+assert.ok(judge.includes('`"verdicts": []`'), '0 candidates still publishes a file so the executor writes the heartbeat');
+assert.ok(judge.includes('`prompt_version`: `judge-v1.2`'), 'prompt version bumped for the executor hand-off');
+// executor + workflow implement the same contract
+assert.ok(executor.includes("SCHEMA = 'judge-verdicts/v1'"), 'executor validates the schema the prompt writes');
+assert.ok(executor.includes("'merge_stories'") && executor.includes('p_run_id: runId'), 'executor merges through merge_stories with the DB cap');
+assert.ok(executor.includes('MERGE_CAP = 10'), 'executor cap mirrors migration 101');
+assert.ok(executor.includes("'clustering_judge_log'"), 'executor writes the audit log');
+assert.ok(workflow.includes('- "judge-run/**"') && workflow.includes('scripts/clustering/execute-judge-verdicts.js'), 'workflow listens on judge-run/** and runs the executor');
+assert.ok(workflow.includes('secrets.SUPABASE_SERVICE_KEY') && workflow.includes('secrets.SUPABASE_TEST_SERVICE_KEY'), 'workflow injects both service keys from secrets');
 
 console.log('agent-prompt-contracts: all checks passed');
