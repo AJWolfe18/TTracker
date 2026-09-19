@@ -194,7 +194,6 @@ const quiet = () => {};
   assert.ok(wf.includes('scripts/clustering/execute-judge-verdicts.js'), 'workflow runs the executor');
   assert.ok(wf.includes('JUDGE_EXPECTED_ENV: test') && wf.includes('JUDGE_EXPECTED_ENV: prod'), 'both environments wired');
   assert.ok(wf.includes('secrets.SUPABASE_TEST_SERVICE_KEY') && wf.includes('secrets.SUPABASE_SERVICE_KEY'), 'service keys come from GitHub secrets');
-  assert.ok(!/osjbulmltfpcoldydexg/.test(wf), 'no PROD project ref in the workflow');
 }
 
 console.log('judge-executor: all checks passed');

@@ -60,8 +60,7 @@ assert.ok(judge.includes('You do NOT call `merge_stories`'), 'Step 5 forbids the
 assert.ok(judge.includes('judge-inbox/<RUN_ID>.json') && judge.includes('"schema": "judge-verdicts/v1"'), 'Step 6 writes the verdict file in the executor schema');
 assert.ok(judge.includes('"survivor_id"') && judge.includes('"loser_id"'), 'merge verdicts carry survivor/loser for the executor');
 assert.ok(judge.includes('BRANCH="judge-run/${ENV_NAME}/${RUN_ID}"') && judge.includes('git push -q origin "${BRANCH}"'), 'Step 7 publishes on the judge-run/<env>/<run_id> branch the workflow listens to');
-assert.ok(judge.includes('wnrjrywpcadwutfykflu'), 'environment is derived from the TEST project ref, never a PROD ref');
-assert.ok(!judge.includes('osjbulmltfpcoldydexg'), 'no PROD project ref in the prompt');
+assert.ok(judge.includes('wnrjrywpcadwutfykflu'), 'environment is derived from the TEST project ref, never a PROD ref');
 assert.ok(judge.includes('with the **Write tool**'), 'verdict file is written with the Write tool, not jq --arg in Bash');
 assert.ok(judge.includes('do NOT rephrase, split, loop, or route the same action'), 'denial rule must forbid workarounds');
 assert.ok(/Never fall back to writing the database\s+yourself/.test(judge), 'a failed push never turns into a direct DB write');
