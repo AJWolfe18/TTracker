@@ -568,6 +568,7 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 | run_id | TEXT | Per-run drill-down |
 
 **RLS:** enabled, no anon/authenticated grant — admin tab reads via `admin-judge-log` edge function (service_role).
+**Writers:** the inline pipeline (`source='inline'`), the admin Judge tab (`'manual'`), and — since prompt v1.2 (ADO-583, September 19, 2026) — the Clustering Judge **executor** (`scripts/clustering/execute-judge-verdicts.js` via `.github/workflows/judge-executor.yml`) on behalf of the Judge agent (`'judge-agent'`); the agent itself no longer writes. Rationale prefixes written by the executor are contractual: `deferred:` (cap / chained merge, retried next run), `failed:` (merge_stories `ok:false`, retried once), `escalated:` (second failure, logged as `uncertain`), `skipped:` (loser already merged).
 
 ---
 
