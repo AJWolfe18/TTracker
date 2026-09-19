@@ -5,6 +5,25 @@ Josh's prompt: `/start-work ADO-583 executor review fixes + classifier lever tes
 ## Outcome in one line
 All ten executor review findings are fixed and on PR #146; both Codex P1 findings on PR #145 are fixed, verified on TEST and on the PR; the `auto_mode_allow` lever could not be tested (this session's classifier refused to set it). Josh now owes three things, in order: re-run migration 117 (v4) on PROD, merge PR #145, merge PR #146.
 
+## 0. READ FIRST - second review round, later the same evening (supersedes parts of sections 1-4)
+Josh ran local Codex on both PRs after the fixes below and got one P0 and two P1s. All three are fixed, tested and on the PRs. **Current heads: PR #145 `28c3de0`, PR #146 `308f4b2`. Migration 117 is now v5** (PROD has v4: Josh ran it September 19 and measured the backlog: 60 new_articles, 12 retry_failed, 3 merged, 0 never_enriched = 75 stories, two scheduled runs clear it).
+
+| Finding | Fix | Proof |
+|---------|-----|-------|
+| **P0 (#146): the workflow checked out `judge-run/**` and ran the executor from that branch with the PROD key.** | `judge-executor.yml` is schedule + `workflow_dispatch` only, never push (a push run takes its YAML and code from the pushed branch). Polls at :30 after 05/13/21 UTC and again an hour later. New `scripts/clustering/process-judge-inbox.js`: `collect` copies only `judge-inbox/<run_id>.json` out of each inbox branch with `git cat-file` (no checkout, branch name shape-checked, 1 MB cap, no secrets in that step); `execute` runs the trusted checkout's own executor. PROD secrets only reach a run on `refs/heads/main`. Executor exit 2 (rejected file) parks the branch under `judge-rejected/`; exit 1 leaves it for the next poll. | TEST end to end: pushing `judge-run/test/judge-2026-09-19T23-45-04.777Z` did NOT start the executor; dispatch run 35476964013 collected the file, wrote the heartbeat, deleted the branch, skipped the PROD step. Tests pin: no push trigger, no `ref:` on checkout, no secrets in the collect step, PROD step gated on main, hostile branch names rejected. |
+| **P1 (#146): chained merge after an ambiguous response** (2->1 commits behind a 504, then 3->1 executes). | On a non-2xx/unreadable merge response both stories are marked touched at once and `story_merge_audit` is read immediately; a committed merge is logged `merged=true` right then. The end-of-run second look stays for slow commits. | Test reproduces the reviewer's case with and without the audit row: 3->1 is never sent. |
+| **P1 (#145): null prior watermark.** A first-attempt failure writes `evidence_as_of: null`; v4's COALESCE turned that into the failure timestamp, hiding an article attached during the attempt. | Migration 117 **v5**: a key present with JSON null = NULL watermark (everything is new and listed); only a missing legacy key falls back to `last_enriched_at`. Prompt: write JSON `null`, keep the key. | TEST fixture (story 16979, restored byte-identical): 15 of 15 checks. |
+
+Commits on `test`: `14fe185` (Judge), `ac4ff7c` (Stories). `npm run qa:smoke` exit 0. Trade-off of the P0 fix: merges land up to about 30 minutes after a Judge run; about 180 Actions minutes a month (repo is private, 2,000 free). Cost $0.
+
+**Correction to "Finding 7, in plain English" below:** the missing `pipeline_skips` row did not arrive with the executor. Git shows the Judge has never written one since it launched July 5, 2026; it has always relied on one `clustering_judge_log` row per pair. It surfaced now only because the logic moved from a prompt into a JS file with a visible `continue`. The exemption stands for the same reason it always implicitly has.
+
+**Two follow-ups worth tickets (not started):** (1) PROD secrets are repo-level, so a workflow pushed on any branch by anyone with write access can read them; the structural fix is a GitHub Environment restricted to `main`. (2) Nothing alerts when a routine goes silent (the September 16 Judge breakage sat two days): add a Discord alert to the 6-hourly health check when the Judge log has no row in 12 hours or the Stories log none in 6. About 30 lines, $0.
+
+**Not done:** Josh asked whether the other routines (SCOTUS, EO, Pardons, Fronts) have write denials too. The read-only check was interrupted and never run.
+
+**Josh owes, in order:** re-run migration 117 **v5** on PROD -> merge #145 -> merge #146.
+
 ## 1. Executor review fixes (ADO-583) - commit `59f3c21` on `test`, PR #146 head `b4cecf3`
 | # | Fix |
 |---|-----|
