@@ -28,18 +28,24 @@ assert.ok(successBody.includes('"evidence_as_of"'), 'success body must echo evid
 assert.ok(failureBody.includes('"evidence_as_of"'), 'failure body must echo evidence_as_of into enrichment_meta');
 assert.ok(/evidence_as_of.*verbatim/i.test(stories), 'prompt must say the watermark is echoed verbatim');
 
+// --- Stories agent: the evidence that re-qualified a story is actually read ---
+const step3 = stories.slice(stories.indexOf('### Step 3: Fetch Source Articles'), stories.indexOf('### Step 4'));
+assert.ok(step3.includes('new_article_ids') && step3.includes('article_id=in.('), 'Step 3B must fetch new_article_ids by id (top-6-by-similarity can miss them)');
+
 // --- migration 117 defines exactly what the prompt calls, with the review-fixed rules ---
 assert.ok(mig117.includes('FUNCTION public.stories_needing_enrichment('), 'migration 117 defines the RPC');
 assert.ok(mig117.includes("s.enrichment_meta->>'evidence_as_of'"), 'RPC must read the echoed watermark');
 assert.ok(/a\.matched_at > w\.watermark/.test(mig117), 'RPC must compare attaches against the watermark, not last_enriched_at');
 assert.ok(mig117.includes('story_merge_audit'), 'RPC must re-qualify survivors of Judge merges/unmerges');
+assert.ok(mig117.includes('GREATEST(m.max_matched, mc.max_change)'), 'issued watermark must cover merge/unmerge times, or merged survivors re-qualify forever');
+assert.ok(/a\.article_id = ANY \(ma\.loser_article_ids\)/.test(mig117), 'new_article_ids must include the articles a merge brought in');
 assert.ok(mig117.includes("'last_attempt_status' = 'failed'"), 'RPC must retry failed attempts under the cap');
 assert.ok(mig117.includes('s.summary_neutral IS NULL'), 'RPC must retry never-published stories under the cap');
 assert.ok(mig117.includes("s.enrichment_meta->>'source' = 'claude-agent'"), 'RPC must keep the claude-agent source discriminator');
 assert.ok(mig117.includes('ORDER BY p.last_enriched_at ASC NULLS FIRST'), 'never-enriched stories come first');
 assert.ok(mig117.includes('p_max_failures   INTEGER DEFAULT 3'), 'default failure cap is 3');
 assert.ok(mig117.includes('TO service_role'), 'RPC is service_role only');
-for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_failure_count', 'enrichment_meta', 'evidence_as_of', 'reason', 'pool_size']) {
+for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_failure_count', 'enrichment_meta', 'evidence_as_of', 'new_article_ids', 'reason', 'pool_size']) {
   assert.ok(new RegExp(`^\\s+${col}\\s`, 'm').test(mig117), `RPC must return ${col}`);
 }
 

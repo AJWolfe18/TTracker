@@ -182,11 +182,12 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/stories_needing_enrichment" \
   -d '{"p_limit": 40, "p_cooldown_hours": 12, "p_max_failures": 3}'
 ```
 
-Each row is `{id, primary_headline, last_enriched_at, enrichment_failure_count, enrichment_meta, evidence_as_of, new_article_count, reason, pool_size}`.
+Each row is `{id, primary_headline, last_enriched_at, enrichment_failure_count, enrichment_meta, evidence_as_of, new_article_count, new_article_ids, reason, pool_size}`.
 
-- `evidence_as_of` is the **DB-issued evidence watermark** (the newest `article_story.matched_at` on this story at read time). Carry it through to Step 6 and write it into `enrichment_meta.evidence_as_of` **verbatim, on success and on failure** — never regenerate it with `date`. The RPC uses it next time to decide whether anything attached after what you saw; your own `last_enriched_at` is stamped minutes later, so an article that attaches while you are deliberating would otherwise look "already seen" and be lost.
+- `evidence_as_of` is the **DB-issued evidence watermark** (the newest `article_story.matched_at` or Judge merge/unmerge time on this story at read time, whichever is later). Carry it through to Step 6 and write it into `enrichment_meta.evidence_as_of` **verbatim, on success and on failure** — never regenerate it with `date`. The RPC uses it next time to decide whether anything attached after what you saw; your own `last_enriched_at` is stamped minutes later, so an article that attaches while you are deliberating would otherwise look "already seen" and be lost.
 - `reason` is why the story is in the pool: `never_enriched`, `new_articles` (cluster grew), `merged` (a Judge merge or unmerge changed its membership), or `retry_failed` (last attempt failed, or still no `summary_neutral`, under the failure cap). Put it in the per-story log `notes` when it is not `never_enriched`.
 - `pool_size` is the total number of eligible stories before the 40 cap (print it once — it is the run's backlog figure); `new_article_count` is how many articles attached after the watermark.
+- `new_article_ids` is **the evidence that put this story back in the pool** (up to 6 `article_id`s, newest first: articles attached after the watermark, plus the articles a Judge merge brought in). Empty for `never_enriched` and `retry_failed`. Step 3B fetches these by id — the usual top-6 read is ordered by similarity and can leave a new, lower-similarity article out, and the watermark you write in Step 6 still moves past it, so an article you skip now is never offered again.
 
 **If the response is a JSON object instead of an array** (for example `{"code":"PGRST202", ...}` = the RPC does not exist on this database yet, or `42501` = no grant), the migration has not been applied here. **Stop immediately, write nothing** (no log rows, no heartbeat), and end the run with a one-line push notification naming the error code. Do NOT fall back to a hand-written `stories?...` query — the old filter is exactly what this RPC replaced.
 
@@ -236,6 +237,16 @@ curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&select=is
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
+
+**If Step 2 returned a non-empty `new_article_ids` for this story, also fetch those articles by id** (one extra GET, same select; put the ids from the array into the `in.(...)` list, each in double quotes):
+
+```bash
+curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&article_id=in.(\"art-1111\",\"art-2222\")&select=is_primary_source,similarity_score,matched_at,articles(title,source_name,content,excerpt,feed_id)&order=matched_at.desc&limit=6" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+```
+
+Combine both result sets and drop duplicates (an article can be in both). These are the reason the story is being re-enriched: read them, and make sure the rewritten summary reflects what they add. If they add nothing new, the summary may stay close to the old one — that is fine, but it must be a decision made after reading them, never because they were not fetched.
 
 Filter out any row where `articles` is null (an orphaned join, unlikely because the Step 2 RPC only returns stories with at least one `article_story` row, but check anyway).
 
@@ -616,7 +627,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 15. **Profanity in `summary_spicy` only at `alarm_level` 4-5** — never at 0-3, per `tone-system.json`.
 16. **Every run leaves observability evidence** — a `running` row per story processed (PATCHed to `completed`/`failed`), or exactly one `story_id: null` heartbeat row on a healthy empty run. No run completes silently.
 17. **One story at a time** — complete a story's full Step 3-7 loop (log row → fetch → enrich → validate → write → close log row) before starting the next story's Step 3A. Never front-load fetches or back-load writes across multiple stories.
-18. **Re-enrich only on new evidence or a failed attempt** — a successfully enriched story is re-enriched only when an article attached after its evidence watermark or a Judge merge/unmerge changed its membership; a failed attempt is retried after the cooldown while under the failure cap (all enforced by the `stories_needing_enrichment` RPC, migration 117). Never query `stories` directly for candidates and never rewrite a story that has not changed.
+18. **Re-enrich only on new evidence or a failed attempt** — a successfully enriched story is re-enriched only when an article attached after its evidence watermark or a Judge merge/unmerge changed its membership; a failed attempt is retried after the cooldown while under the failure cap (all enforced by the `stories_needing_enrichment` RPC, migration 117). Never query `stories` directly for candidates and never rewrite a story that has not changed. When Step 2 returns `new_article_ids`, Step 3B fetches and reads those articles — the watermark advances past them on this write.
 
 ---
 
@@ -629,7 +640,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 | Author | Josh + Claude Code |
 | Target model | Claude Sonnet 4.6 |
 | Tables accessed | `stories` (read/write), `stories_enrichment_log` (read/write), `article_story` (read), `articles` (read, via join); candidates via RPC `stories_needing_enrichment` (migration 117) |
-| Changelog | 2026-09-18 (ADO-584): Step 2 moved to the RPC `stories_needing_enrichment` — re-enrich only on new evidence (article attached after the DB-issued `evidence_as_of` watermark, or a Judge merge/unmerge) or to retry a failed attempt under a cap of 3; `enrichment_meta.evidence_as_of` is now required on every write. `prompt_version` unchanged. |
+| Changelog | 2026-09-18 (ADO-584): Step 2 moved to the RPC `stories_needing_enrichment` — re-enrich only on new evidence (article attached after the DB-issued `evidence_as_of` watermark, or a Judge merge/unmerge) or to retry a failed attempt under a cap of 3; `enrichment_meta.evidence_as_of` is now required on every write; the watermark covers merge/unmerge times as well as attaches, and Step 3B fetches the RPC's `new_article_ids` explicitly (Codex review). `prompt_version` unchanged. |
 | External fetches | None — all source content is already scraped and stored by the RSS pipeline; no WebFetch step in this prompt |
 | API method | Bash/curl to PostgREST (not WebFetch) for all access |
 | Batch size | `limit=40` per run (see plan.md "Schedule" section) |
