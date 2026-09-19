@@ -276,8 +276,10 @@ jq '[.verdicts[] | select(.verdict=="merge")] | length' "judge-inbox/${RUN_ID}.j
 ### Step 7: Publish the verdict file (the only "write" you make)
 
 Commit the file on its own branch and push it. The branch name is the contract: the executor workflow
-(`.github/workflows/judge-executor.yml`) runs on every push to `judge-run/**`, reads the environment
-from the second path segment and the verdict file from the third.
+(`.github/workflows/judge-executor.yml`) polls the `judge-run/**` branches on a schedule (30 and 90
+minutes after each Judge run), reads the environment from the second path segment and the verdict file
+from the third. It runs from the default branch and copies **only that JSON file** out of your branch —
+nothing else on the branch is read or executed, so adding or changing any other file achieves nothing.
 
 ```bash
 # Clustering Judge hand-off (ADO-583): one verdict file on its own branch. The executor workflow
@@ -297,7 +299,7 @@ Expect `published judge-run/...` and a zero exit. Do not open a pull request, do
 ONCE; if it fails again, stop and send ONE push notification naming the branch and the error. Never
 try to write the verdicts to the database yourself instead.
 
-You do not wait for the workflow. Its result shows in the repo's Actions tab ("Clustering Judge
+You do not wait for the workflow (it picks the branch up at its next poll, not at once). Its result shows in the repo's Actions tab ("Clustering Judge
 Executor"); `uncertain` verdicts arrive as a Discord digest, and a failed execution posts a Discord
 failure alert — both from the executor, not from you.
 

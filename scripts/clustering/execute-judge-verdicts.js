@@ -7,8 +7,10 @@
  * side. Prompt reshaping did not help, and routines cannot leave auto mode. So the agent no longer
  * writes to the database at all: it judges the pairs, writes ONE verdict file
  * (judge-inbox/<run_id>.json) and pushes it to a judge-run/<env>/<run_id> branch. The
- * "Clustering Judge Executor" GitHub Actions workflow runs this script on that push with the
- * service key from GitHub secrets and performs every write the agent used to do:
+ * "Clustering Judge Executor" GitHub Actions workflow - which runs from the DEFAULT branch on a
+ * schedule, never from the inbox branch - copies only that JSON file out of the branch and runs
+ * THIS script (the default branch's copy) with the service key from GitHub secrets. Nothing on an
+ * inbox branch is ever executed. The script performs every write the agent used to do:
  *
  *   1. merge_stories for `merge` verdicts (live runs only; older story survives - the executor
  *      re-checks first_seen_at itself and flips a swapped survivor/loser; DB-enforced cap of 10 per
@@ -32,8 +34,11 @@
  *                                             must SUPABASE_URL - a prod file never runs on TEST)
  *         DISCORD_WEBHOOK_URL                (optional; digest is a no-op without it)
  *
- * Exit codes: 0 = every verdict logged; 1 = validation / environment mismatch / a log write failed
- * after retries (the workflow's failure alert fires). A merge_stories `ok:false` is NOT an exit-1:
+ * Exit codes: 0 = every verdict logged; 1 = a runtime failure (database unreachable, a log write
+ * failed after retries) - retryable, the workflow leaves the inbox branch for its next poll;
+ * 2 = the verdict file itself was rejected (unreadable, validation, environment mismatch) -
+ * permanent, the workflow parks the branch under judge-rejected/ so it alerts once, not every
+ * poll. A merge_stories `ok:false` is NOT an exit-1:
  * it is logged as `failed:` and retried next run; a second failure escalates the pair to
  * `uncertain` so it surfaces in the admin Judge tab instead of looping forever. A transport
  * failure (non-2xx, unreadable body) is logged `transient:` and never counts toward escalation -
@@ -351,8 +356,21 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
     // would otherwise turn every merge verdict into settled `uncertain` memory.
     if (!res.ok || typeof body.ok !== 'boolean') {
       const why = res.ok ? 'unreadable_response' : `http_${res.status}`;
+      // The merge may have committed behind the lost response (a 504 after COMMIT). Until proven
+      // otherwise BOTH stories count as merged this run, or the next verdict could chain onto a
+      // survivor whose membership just changed (review P1: 2->1 behind a 504, then 3->1 executed).
+      touched.add(survivorId); touched.add(loserId);
+      const check = await client.get(auditPath);
+      const committed = check.ok && Array.isArray(check.json) && check.json.some((m) => pairKey(m.loser_id, m.survivor_id) === key);
+      if (committed) {
+        executed++; summary.merged++; summary.recovered++;
+        log(`merge ${loserId} -> ${survivorId}: response lost (${why}) but story_merge_audit shows it committed`);
+        if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, merged: true, rationale })], log))) throw new Error(`executed merge ${loserId}->${survivorId} could not be logged`);
+        summary.logged++;
+        continue;
+      }
       summary.transient++;
-      log(`merge ${loserId} -> ${survivorId} transient failure: ${why}`);
+      log(`merge ${loserId} -> ${survivorId} transient failure: ${why} (both stories held out of further merges this run)`);
       const row = buildLogRow(v, { runId, dryRun, rationale: `transient: ${why} - ${v.rationale}` });
       bulk.push(row); unconfirmed.push({ key, row, rationale });
       continue;
@@ -381,16 +399,17 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
     }
   }
 
-  // A lost response does not prove the merge did not commit. story_merge_audit is the authority:
-  // a pair found there is logged merged=true, not transient (best effort - a failed read leaves the
-  // transient rows as they are, and the next run sees the tombstone as `skipped:`).
+  // Second look at the merges that were still unconfirmed right after their call (a slow commit can
+  // land after that first check). story_merge_audit is the authority: a pair found there is logged
+  // merged=true, not transient (best effort - a failed read leaves the transient rows as they are,
+  // and the next run sees the tombstone as `skipped:`).
   if (unconfirmed.length) {
     const audit = await client.get(auditPath);
     const done = new Set(audit.ok && Array.isArray(audit.json) ? audit.json.map((m) => pairKey(m.loser_id, m.survivor_id)) : []);
     for (const u of unconfirmed) {
       if (!done.has(u.key)) continue;
       u.row.merged = true; u.row.rationale = u.rationale;
-      summary.transient--; summary.recovered++;
+      summary.transient--; summary.recovered++; summary.merged++;
       log(`pair ${u.key}: merge response was lost but story_merge_audit shows it committed - logged merged=true`);
     }
   }
@@ -416,12 +435,12 @@ async function main() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required'); process.exit(1); }
 
   let doc;
-  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`cannot read ${file}: ${e.message}`); process.exit(1); }
+  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`cannot read ${file}: ${e.message}`); process.exit(2); }
 
   const problems = validateVerdictFile(doc, { expectedEnv: JUDGE_EXPECTED_ENV, supabaseUrl: SUPABASE_URL });
   const fileRunId = file.replace(/^.*[\\/]/, '').replace(/\.json$/, '');
   if (doc && doc.run_id && fileRunId !== doc.run_id) problems.push(`file name ${fileRunId} does not match run_id ${doc.run_id}`);
-  if (problems.length) { console.error('verdict file rejected:\n - ' + problems.join('\n - ')); process.exit(1); }
+  if (problems.length) { console.error('verdict file rejected:\n - ' + problems.join('\n - ')); process.exit(2); }
 
   const client = makeClient({ supabaseUrl: SUPABASE_URL, serviceKey: SUPABASE_SERVICE_ROLE_KEY });
   console.log(`executing ${doc.verdicts.length} verdict(s) for ${doc.run_id} on ${doc.environment} (dry_run=${doc.dry_run})`);
