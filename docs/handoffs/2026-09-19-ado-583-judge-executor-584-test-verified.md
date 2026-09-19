@@ -42,6 +42,8 @@ Cost: $0 new. GitHub Actions minutes for 3 one-minute runs a day sit inside the 
 Run `cse_01QQFXRkRp6tcB5JiJhBMPev` (fired 22:26 UTC, 71 s, 12 turns, **0 permission denials**): 0 candidates on TEST, agent wrote `judge-inbox/judge-2026-09-19T22-26-53.084Z.json` with `"verdicts": []`, pushed `judge-run/test/judge-2026-09-19T22-26-53.084Z` (`published ...` printed), no notification. GitHub Actions run 35473378297 "Clustering Judge Executor" completed **success** at 22:27:19 UTC; TEST `clustering_judge_log` row 47 is the heartbeat (`source=judge-agent`, both ids NULL, `dry_run=true`) written by the executor; the branch was deleted afterwards (`git ls-remote origin 'refs/heads/judge-run/*'` is empty). The sandbox did not object to `git push`. What this run did not exercise: a non-empty verdict set through the workflow (the executor's merge/log paths are covered by the unit tests and the local dry run against TEST instead); the first PROD run after PR #146 is the proof for that.
 
 ## Code review findings - OPEN, fix in the next session before PR #146 merges
+> **Update, September 19, 2026 (evening): all ten are handled** (commit `59f3c21`, PR #146 head `b4cecf3`). See `2026-09-19-ado-583-executor-fixes-584-migration-117-v4.md`.
+
 `code-review high` on the working tree after commit `07ce1d1`. Josh stopped the session here ("write those down and have a new session review"). Nothing below is fixed yet. Triage is mine; verify each before acting.
 
 | # | File | Finding | Triage / fix |
