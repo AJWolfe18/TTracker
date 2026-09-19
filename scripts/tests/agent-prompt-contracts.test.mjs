@@ -53,6 +53,9 @@ assert.ok(mig117.includes('ORDER BY p.last_enriched_at ASC NULLS FIRST'), 'never
 assert.ok(mig117.includes('p_max_failures   INTEGER DEFAULT 3'), 'default failure cap is 3');
 assert.ok(mig117.includes('TO service_role'), 'RPC is service_role only');
 assert.ok(mig117.includes("s.enrichment_meta->>'attempt_evidence_as_of'"), 'RPC must read what a failed attempt saw');
+assert.ok(/WHEN jsonb_typeof\(s\.enrichment_meta->'evidence_as_of'\) = 'null' THEN NULL/.test(mig117), 'a present JSON-null evidence_as_of (first attempt failed) means nothing was seen - it must NOT fall back to the failure timestamp');
+assert.ok(/k\.watermark IS NULL\s+OR a\.matched_at > k\.watermark/.test(mig117), 'new_article_ids must list every article when the watermark is NULL');
+assert.ok(/JSON `null`/.test(stories), 'prompt must say a null prior watermark is written as JSON null');
 assert.ok(mig117.includes('m.fresh_cnt > 0') && mig117.includes('mc.max_change > aw.attempt_mark'), 'uncapped branches look only at evidence newer than the last attempt, so the failure cap still bites');
 assert.ok(/w\.watermark\s+AS prior_evidence_as_of/.test(mig117), 'RPC returns the watermark it used so a failure can echo it back');
 const idsSql = mig117.slice(mig117.indexOf('ARRAY_AGG(x.article_id'), mig117.indexOf('AS new_article_ids'));
