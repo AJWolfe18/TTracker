@@ -6,22 +6,37 @@ name: Clustering Judge Executor
 # workflow performs the writes with the service key from GitHub secrets:
 # merge_stories (live runs, cap 10, no chained merges), clustering_judge_log rows, the heartbeat
 # row for an empty run and the Discord digest of uncertain verdicts.
-# Script: scripts/clustering/execute-judge-verdicts.js. Prompt: docs/features/clustering-judge/prompt-v1.md.
 #
-# The branch is deleted after a successful run. On failure it is kept so the job can be re-run from
-# the Actions UI (the script is idempotent per run_id: pairs already logged are skipped).
+# TRUST BOUNDARY (review P0): an inbox branch is untrusted input - whoever can push it controls
+# every file on it, including a copy of this workflow and of the executor. So this workflow is
+# NOT triggered by the push (a push-triggered run takes its workflow file and its code from the
+# pushed branch). It runs on a schedule, which always uses the DEFAULT branch's workflow file and
+# checkout, and scripts/clustering/process-judge-inbox.js copies only the JSON verdict file out of
+# each inbox branch with git cat-file. Nothing on an inbox branch is checked out or executed.
+# PROD verdicts are only ever executed by a run on refs/heads/main.
+#
+# Scripts: scripts/clustering/process-judge-inbox.js + execute-judge-verdicts.js.
+# Prompt:  docs/features/clustering-judge/prompt-v1.md.
+#
+# Schedule: the PROD Judge routine fires at 05:00, 13:00 and 21:00 UTC; the polls below run 30 and
+# 90 minutes after each. If the routine's cron changes, change these too. A processed branch is
+# deleted; a rejected file is parked under judge-rejected/<env>/<run_id>; a runtime failure leaves
+# the branch for the next poll (the executor is idempotent per run_id).
+# TEST or an impatient human: `gh workflow run "Clustering Judge Executor"` (add `--ref test` to
+# run the test branch's code - that run can only touch TEST).
 
 on:
-  push:
-    branches:
-      - "judge-run/**"
+  schedule:
+    - cron: "30 5,13,21 * * *"
+    - cron: "30 6,14,22 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: judge-executor
   cancel-in-progress: false
 
 permissions:
-  contents: write # delete the inbox branch when done
+  contents: write # delete / park processed inbox branches
 
 jobs:
   execute:
@@ -31,78 +46,47 @@ jobs:
     # Kill switch: set repository variable ENABLE_JUDGE_EXECUTOR=false to park verdict files unprocessed.
     if: vars.ENABLE_JUDGE_EXECUTOR != 'false'
     steps:
-      - name: Checkout the inbox branch
+      # No `ref:` on purpose: a scheduled run checks out the default branch, a manual run the ref it
+      # was dispatched from. Never an inbox branch.
+      - name: Checkout trusted code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Resolve environment + verdict file from the branch name
-        id: meta
-        run: |
-          set -euo pipefail
-          ref="${GITHUB_REF_NAME}"                       # judge-run/<env>/<run_id>
-          env_name="$(echo "$ref" | cut -d/ -f2)"
-          run_id="$(echo "$ref" | cut -d/ -f3-)"
-          case "$env_name" in
-            test|prod) ;;
-            *) echo "::error::branch must be judge-run/test/<run_id> or judge-run/prod/<run_id>, got ${ref}"; exit 1 ;;
-          esac
-          # The branch name is untrusted input (refs may contain ; $ and backticks). Accept only the
-          # executor's own run_id shape; later steps receive the path through env, never by
-          # expression interpolation inside a run script.
-          if ! [[ "$run_id" =~ ^judge-[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\.[0-9]{3}Z$ ]]; then
-            echo "::error::run_id segment of the branch name is not judge-YYYY-MM-DDTHH-MM-SS.mmmZ"; exit 1
-          fi
-          file="judge-inbox/${run_id}.json"
-          if [ ! -f "$file" ]; then echo "::error::verdict file ${file} not found on ${ref}"; exit 1; fi
-          echo "env_name=${env_name}" >> "$GITHUB_OUTPUT"
-          echo "file=${file}" >> "$GITHUB_OUTPUT"
-          echo "Environment: ${env_name}  File: ${file}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # No npm ci: the executor uses Node built-ins + scripts/lib/discord.js only.
+      # No npm ci: the scripts use Node built-ins + scripts/lib/discord.js only.
+      - name: Collect verdict files from inbox branches (data only, no secrets in scope)
+        id: inbox
+        run: node scripts/clustering/process-judge-inbox.js collect "$RUNNER_TEMP/judge-inbox"
+
       - name: Execute verdicts (TEST)
-        if: steps.meta.outputs.env_name == 'test'
+        if: steps.inbox.outcome == 'success' && steps.inbox.outputs.count != '0'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          JUDGE_EXPECTED_ENV: test
-          VERDICT_FILE: ${{ steps.meta.outputs.file }}
-        run: node scripts/clustering/execute-judge-verdicts.js "$VERDICT_FILE"
+        run: node scripts/clustering/process-judge-inbox.js execute "$RUNNER_TEMP/judge-inbox" test
 
+      # PROD secrets are only handed to code from main.
       - name: Execute verdicts (PROD)
-        if: steps.meta.outputs.env_name == 'prod'
+        if: always() && steps.inbox.outcome == 'success' && steps.inbox.outputs.count != '0' && github.ref == 'refs/heads/main'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          JUDGE_EXPECTED_ENV: prod
-          VERDICT_FILE: ${{ steps.meta.outputs.file }}
-        run: node scripts/clustering/execute-judge-verdicts.js "$VERDICT_FILE"
-
-      - name: Delete the inbox branch (processed)
-        if: success()
-        run: |
-          set -euo pipefail
-          git push origin --delete "${GITHUB_REF_NAME}" || echo "branch already gone (non-blocking)"
+        run: node scripts/clustering/process-judge-inbox.js execute "$RUNNER_TEMP/judge-inbox" prod
 
       - name: Discord alert (on failure)
         if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          # Branch name goes in through the shell variable GITHUB_REF_NAME, stripped to safe
-          # characters - never by expression interpolation (it is attacker-shaped input).
-          SAFE_REF="$(printf '%s' "${GITHUB_REF_NAME}" | tr -cd 'A-Za-z0-9._/-')"
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "Warning: DISCORD_WEBHOOK_URL secret not set - skipping Discord alert"
             exit 0
           fi
           curl -f -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Branch\",\"value\":\"\`${SAFE_REF}\`\",\"inline\":true},{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
             "$DISCORD_WEBHOOK_URL" || echo "Discord webhook failed (non-blocking)"

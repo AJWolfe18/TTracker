@@ -10,6 +10,7 @@ import {
   SCHEMA, MERGE_CAP, validateVerdictFile, mergeDecision, buildLogRow, heartbeatRow,
   deferredRationale, buildDigest, envFromSupabaseUrl, executeVerdicts, chooseSurvivor, makeClient,
 } from '../clustering/execute-judge-verdicts.js';
+import { parseInboxBranch, actionForExit, MAX_FILE_BYTES } from '../clustering/process-judge-inbox.js';
 
 const RUN = 'judge-2026-09-19T21-04-44.950Z';
 const pair = (a, b, verdict, extra = {}) => ({
@@ -206,6 +207,24 @@ const quiet = () => {};
   assert.equal(s.recovered, 1); assert.equal(s.transient, 1);
 }
 
+{ // review P1: 2->1 commits behind a 504, then 3->1 must NOT execute in the same run (no chained merges)
+  const c = fakeClient({ rpcStatus: (k) => (k === '2->1' ? 504 : 200), auditAfter: [{ loser_id: 2, survivor_id: 1 }] });
+  const s = await executeVerdicts(doc([merge(1, 2), merge(1, 3), merge(5, 6)]), { client: c, env: 'prod', discord: async () => true, log: quiet });
+  assert.deepEqual(c.calls.rpc.map((r) => `${r.args.p_loser_id}->${r.args.p_survivor_id}`), ['2->1', '6->5'], '3->1 is never sent');
+  const rows = c.calls.inserts.flat();
+  const r12 = rows.find((r) => r.story_id_a === 1 && r.story_id_b === 2);
+  const r13 = rows.find((r) => r.story_id_a === 1 && r.story_id_b === 3);
+  assert.equal(r12.merged, true, 'the merge that committed behind the 504 is logged merged=true at once');
+  assert.deepEqual(c.calls.inserts[0].map((r) => [r.story_id_b, r.merged]), [[2, true]], 'logged immediately, before the next verdict is touched');
+  assert.ok(r13.rationale.startsWith('deferred: chained merge (story 1 already merged this run)'));
+  assert.equal(s.merged, 2); assert.equal(s.recovered, 1); assert.equal(s.deferred, 1); assert.equal(s.transient, 0);
+  // same when the audit table does NOT (yet) show the merge: unknown state -> both stories are held out
+  const c2 = fakeClient({ rpcStatus: (k) => (k === '2->1' ? 504 : 200) });
+  const s2 = await executeVerdicts(doc([merge(1, 2), merge(1, 3), merge(2, 9)]), { client: c2, env: 'prod', discord: async () => true, log: quiet });
+  assert.deepEqual(c2.calls.rpc.map((r) => `${r.args.p_loser_id}->${r.args.p_survivor_id}`), ['2->1'], 'neither story 1 nor story 2 is merged again this run');
+  assert.equal(s2.transient, 1); assert.equal(s2.deferred, 2);
+}
+
 { // orientation: the agent swapped survivor/loser -> the executor flips it and says so on the row (finding 4)
   const c = fakeClient({ ages: [{ id: 3, first_seen_at: '2026-09-01T00:00:00Z' }, { id: 4, first_seen_at: '2026-09-10T00:00:00Z' }] });
   const s = await executeVerdicts(doc([merge(4, 3)]), { client: c, env: 'test', discord: async () => true, log: quiet }); // agent says 4 survives; 3 is older
@@ -289,16 +308,33 @@ const quiet = () => {};
 // --- the workflow + prompt agree with the script ---------------------------------------------
 {
   const wf = readFileSync(new URL('../../.github/workflows/judge-executor.yml', import.meta.url), 'utf8');
-  assert.ok(wf.includes('- "judge-run/**"'), 'workflow fires on judge-run/** pushes');
-  assert.ok(wf.includes('scripts/clustering/execute-judge-verdicts.js'), 'workflow runs the executor');
-  assert.ok(wf.includes('JUDGE_EXPECTED_ENV: test') && wf.includes('JUDGE_EXPECTED_ENV: prod'), 'both environments wired');
+  // review P0: privileged code must come from the default branch; an inbox branch contributes ONE json file
+  const code = wf.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n'); // comments may mention "push"
+  assert.ok(!/^\s+(push|pull_request|pull_request_target|create):/m.test(code) && /^\s+schedule:/m.test(code) && /^\s+workflow_dispatch:/m.test(code), 'never push-triggered: a push run would take its workflow + code from the pushed branch');
+  assert.ok(code.includes('uses: actions/checkout@v4') && !/^\s+ref:/m.test(code), 'checkout has no ref: default branch on schedule, never an inbox branch');
+  assert.ok(!/git (checkout|switch|worktree|merge|pull)/.test(code), 'no step checks an inbox branch out');
+  const stepOf = (needle) => { const i = code.indexOf(needle); assert.ok(i > 0, `workflow has ${needle}`); const from = code.lastIndexOf('- name:', i); const to = code.indexOf('- name:', i); return code.slice(from, to < 0 ? undefined : to); };
+  assert.ok(!stepOf('process-judge-inbox.js collect').includes('secrets.'), 'the step that touches inbox branches has no secrets in scope');
+  const prodStep = stepOf('secrets.SUPABASE_SERVICE_KEY');
+  assert.ok(prodStep.includes("github.ref == 'refs/heads/main'") && prodStep.includes('execute "$RUNNER_TEMP/judge-inbox" prod'), 'PROD secrets only reach code from main');
+  const inboxSrc = readFileSync(new URL('../clustering/process-judge-inbox.js', import.meta.url), 'utf8');
+  assert.ok(inboxSrc.includes("'cat-file', 'blob'") && !/'(checkout|switch|worktree)'/.test(inboxSrc), 'verdict files are copied with git cat-file; nothing is checked out');
+  assert.ok(inboxSrc.includes("new URL('./execute-judge-verdicts.js', import.meta.url)"), 'the executor that runs is the trusted checkout\'s own copy');
   assert.ok(wf.includes('secrets.SUPABASE_TEST_SERVICE_KEY') && wf.includes('secrets.SUPABASE_SERVICE_KEY'), 'service keys come from GitHub secrets');
   // finding 6: nothing derived from the branch name is expression-interpolated into a run script
   // (env: mappings are fine - the shell never parses those; "KEY: ${{ ... }}" lines are the env form)
   const interpolated = wf.split('\n').filter((l) => /\$\{\{\s*(steps\.meta\.outputs\.file|github\.ref_name|github\.head_ref)/.test(l) && !/^\s*[A-Z_]+:\s*\$\{\{/.test(l));
   assert.deepEqual(interpolated, [], 'branch-derived values reach run scripts through env only');
-  assert.ok(wf.includes('VERDICT_FILE: ${{ steps.meta.outputs.file }}') && wf.includes('execute-judge-verdicts.js "$VERDICT_FILE"'));
-  assert.ok(wf.includes('[[ "$run_id" =~ ^judge-'), 'run_id segment is shape-checked before it becomes a path');
+  // branch names are shape-checked in trusted code before they become a path
+  assert.deepEqual(parseInboxBranch(`judge-run/prod/${RUN}`), { env: 'prod', runId: RUN });
+  assert.deepEqual(parseInboxBranch(`judge-run/test/${RUN}`), { env: 'test', runId: RUN });
+  for (const bad of [`judge-run/staging/${RUN}`, `judge-run/prod/${RUN}/x`, 'judge-run/prod/../../etc', `judge-run/prod/${RUN};rm -rf`, 'judge-run/prod/$(id)', `judge-rejected/prod/${RUN}`, '', null]) {
+    assert.equal(parseInboxBranch(bad), null, `rejects ${bad}`);
+  }
+  assert.equal(actionForExit(0), 'delete'); assert.equal(actionForExit(2), 'park'); assert.equal(actionForExit(1), 'keep'); assert.equal(actionForExit(null), 'keep');
+  assert.equal(MAX_FILE_BYTES, 1024 * 1024);
+  const execSrc = readFileSync(new URL('../clustering/execute-judge-verdicts.js', import.meta.url), 'utf8');
+  assert.ok(/verdict file rejected[^\n]*process\.exit\(2\)/.test(execSrc), 'a rejected file exits 2 (parked once), a runtime failure exits 1 (retried)');
   // finding 10: the prompt no longer points at renumbered steps or at a DB it does not write
   const prompt = readFileSync(new URL('../../docs/features/clustering-judge/prompt-v1.md', import.meta.url), 'utf8');
   assert.ok(!prompt.includes('DISCORD_WEBHOOK_SET') && !prompt.includes('pings a human (Step 7)') && !prompt.includes('no DB writes, no log rows'));
