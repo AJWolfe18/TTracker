@@ -1,10 +1,13 @@
 -- ============================================================================
 -- Migration 117: Stories agent candidate pool - re-enrich only on new evidence
--- ADO-584. September 18, 2026. v3 (same day, after review). v2: evidence watermark, merge
--- re-qualification, failed-attempt retry. v3: the watermark also covers merge/unmerge
--- times (v2 re-qualified every merged survivor forever), and new_article_ids names
--- the evidence the agent must read. Idempotent via DROP IF EXISTS + CREATE.
--- v1 and v2 were never applied on PROD.
+-- ADO-584. September 18, 2026. v4 (September 19, after the local Codex review of PR #145).
+-- v2: evidence watermark, merge re-qualification, failed-attempt retry. v3: the watermark
+-- also covers merge/unmerge times (v2 re-qualified every merged survivor forever), and
+-- new_article_ids names the evidence the agent must read. v4: a FAILED attempt no longer
+-- advances the watermark (prior_evidence_as_of + attempt_evidence_as_of), and
+-- new_article_ids is no longer capped at 6 - see "v4" below.
+-- Idempotent via DROP IF EXISTS + CREATE. v1 and v2 were never applied on PROD; v3 was
+-- (September 19) - re-apply this file on PROD BEFORE the v4 prompt reaches main.
 -- ============================================================================
 -- WHY: the Stories Enrichment Agent's Step 2 (docs/features/stories-claude-agent/
 -- prompt-v1.md) treated every Claude-enriched active story older than 12 hours
@@ -47,12 +50,29 @@
 --   the key (v1 writes, failures) fall back to last_enriched_at.
 --   Excluded: legacy GPT-enriched stories (no source marker, frozen), stories
 --   with no linked articles, and the retry_failed branch past the cap.
---   new_article_ids = the evidence that re-qualified the story (newest 6: attaches
---   after the watermark plus articles a still-standing merge brought in). The
---   agent fetches these by id on top of its usual top-6-by-similarity read, which
---   can miss a low-similarity new article while the watermark still advances past
---   it. More than 6 new articles in one cooldown = a hot story that re-qualifies
---   again on its next attach, so the cap loses nothing for long.
+--   new_article_ids = the evidence that re-qualified the story, ALL of it, newest
+--   first: attaches after the watermark plus articles a still-standing merge
+--   brought in. The agent fetches these by id on top of its usual
+--   top-6-by-similarity read, which can miss a low-similarity new article while
+--   the watermark still advances past it.
+--
+-- v4 (two P1 review findings on PR #145):
+--   1. A failed attempt used to echo evidence_as_of like a success, so the
+--      watermark moved past evidence that was never published; the retry came back
+--      as retry_failed with no new_article_ids and could publish a stale summary.
+--      Now the watermark (enrichment_meta.evidence_as_of) only ever means "what the
+--      last SUCCESSFUL enrichment saw". The RPC returns it as prior_evidence_as_of
+--      and the failure write echoes THAT into evidence_as_of, plus the Step-2
+--      evidence_as_of into attempt_evidence_as_of. Pending evidence (after the
+--      watermark) keeps feeding reason / new_article_count / new_article_ids until a
+--      success; the UNCAPPED re-qualification branches look only at evidence newer
+--      than the last attempt (GREATEST of the two), so a story that keeps failing
+--      on the same evidence is still stopped by p_max_failures and gets a new
+--      chance only when something new attaches or merges.
+--   2. new_article_ids was LIMIT 6 while the watermark advanced past every new
+--      article, so article 7+ of a burst was never offered again. The list is now
+--      complete; the prompt reads the newest 6 in full and the rest at
+--      title/source/excerpt level (excerpts are ~150 characters - egress stays small).
 --   reason, new_article_count and pool_size are diagnostics for the run log.
 --   service_role only. The agent's Step 6 concurrency guard still uses the
 --   returned last_enriched_at verbatim.
@@ -65,7 +85,7 @@
 -- and stops with no writes if it is missing (PGRST202).
 -- ============================================================================
 
--- v2/v3 changed the return type (evidence_as_of, reason, new_article_ids), which CREATE OR REPLACE cannot do (42P13).
+-- v2/v3/v4 changed the return type (evidence_as_of, reason, new_article_ids, prior_evidence_as_of), which CREATE OR REPLACE cannot do (42P13).
 DROP FUNCTION IF EXISTS public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER);
 
 CREATE OR REPLACE FUNCTION public.stories_needing_enrichment(
@@ -80,6 +100,7 @@ RETURNS TABLE (
   enrichment_failure_count INTEGER,
   enrichment_meta          JSONB,
   evidence_as_of           TIMESTAMPTZ,
+  prior_evidence_as_of     TIMESTAMPTZ,
   new_article_count        INTEGER,
   new_article_ids          TEXT[],
   reason                   TEXT,
@@ -104,6 +125,9 @@ AS $$
            COALESCE(s.enrichment_failure_count, 0)::integer AS enrichment_failure_count,
            s.enrichment_meta,
            w.watermark,
+           -- DB-issued copy of the watermark this read used: a FAILED attempt echoes it
+           -- back into enrichment_meta.evidence_as_of so the watermark does not move (v4)
+           w.watermark                                    AS prior_evidence_as_of,
            -- the watermark the agent echoes back must cover BOTH kinds of evidence:
            -- a merge newer than the newest attach would otherwise stay "after the
            -- watermark" forever and re-qualify the survivor every cooldown
@@ -124,11 +148,21 @@ AS $$
                       THEN (s.enrichment_meta->>'evidence_as_of')::timestamptz END,
                  s.last_enriched_at) AS watermark
       ) w
+      -- what the last ATTEMPT saw: a failed attempt records the Step-2 watermark here without
+      -- moving the real one (v4). GREATEST ignores NULLs; a success write drops the key.
+      CROSS JOIN LATERAL (
+        SELECT GREATEST(
+                 w.watermark,
+                 CASE WHEN s.enrichment_meta->>'attempt_evidence_as_of' ~ '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}'
+                      THEN (s.enrichment_meta->>'attempt_evidence_as_of')::timestamptz END) AS attempt_mark
+      ) aw
       -- one pass over the story's members: total, newest attach, attaches after the watermark
+      -- (pending evidence) and attaches after the last attempt (fresh evidence)
       CROSS JOIN LATERAL (
         SELECT COUNT(*)                                                     AS total,
                MAX(a.matched_at)                                            AS max_matched,
-               COUNT(*) FILTER (WHERE w.watermark IS NULL OR a.matched_at > w.watermark) AS new_cnt
+               COUNT(*) FILTER (WHERE w.watermark IS NULL OR a.matched_at > w.watermark) AS new_cnt,
+               COUNT(*) FILTER (WHERE aw.attempt_mark IS NULL OR a.matched_at > aw.attempt_mark) AS fresh_cnt
           FROM public.article_story a
          WHERE a.story_id = s.id
       ) m
@@ -141,8 +175,10 @@ AS $$
                  s.enrichment_meta->>'source' = 'claude-agent'
              AND s.last_enriched_at < NOW() - make_interval(hours => GREATEST(COALESCE(p_cooldown_hours, 12), 0))
              AND (
-                   m.new_cnt > 0
-                OR COALESCE(mc.max_change > w.watermark, FALSE)
+                   -- uncapped: evidence the last attempt (failed or not) has not seen
+                   m.fresh_cnt > 0
+                OR COALESCE(mc.max_change > aw.attempt_mark, FALSE)
+                   -- capped: retry a failed attempt (its pending evidence is still listed)
                 OR (
                        (s.enrichment_meta->>'last_attempt_status' = 'failed' OR s.summary_neutral IS NULL)
                    AND COALESCE(s.enrichment_failure_count, 0) < GREATEST(COALESCE(p_max_failures, 3), 1)
@@ -163,11 +199,13 @@ AS $$
          k.enrichment_failure_count,
          k.enrichment_meta,
          k.evidence_as_of,
+         k.prior_evidence_as_of,
          k.new_article_count,
-         -- the evidence that re-qualified the story (newest 6): attaches after the
-         -- watermark plus articles a still-standing merge brought in after it. The
-         -- agent fetches these explicitly - its top-6-by-similarity read can miss them.
-         -- Computed for the returned rows only.
+         -- the evidence that re-qualified the story, all of it, newest first: attaches
+         -- after the watermark plus articles a still-standing merge brought in after it.
+         -- The agent fetches these explicitly - its top-6-by-similarity read can miss
+         -- them. No LIMIT (v4): the watermark advances past every one of them, so every
+         -- one must be offered. Computed for the returned rows only.
          (SELECT COALESCE(ARRAY_AGG(x.article_id ORDER BY x.matched_at DESC, x.article_id), ARRAY[]::text[])
             FROM (SELECT a.article_id, a.matched_at
                     FROM public.article_story a
@@ -180,8 +218,7 @@ AS $$
                                         AND ma.unmerged_at IS NULL
                                         AND ma.merged_at > k.watermark
                                         AND a.article_id = ANY (ma.loser_article_ids)))
-                   ORDER BY a.matched_at DESC, a.article_id
-                   LIMIT 6) x)                            AS new_article_ids,
+                   ) x)                                   AS new_article_ids,
          k.reason,
          k.pool_size
     FROM picked k
@@ -189,14 +226,18 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) IS
-  'ADO-584: candidate pool for the Stories Enrichment Agent. never_enriched first; then Claude-agent-enriched stories past the cooldown that (a) gained an article_story row after the evidence watermark (enrichment_meta.evidence_as_of = newest attach or merge/unmerge time at read, DB-issued and echoed by the agent; falls back to last_enriched_at), (b) were changed by a Judge merge/unmerge (story_merge_audit) after the watermark, or (c) failed their last attempt / still have no summary_neutral and are under p_max_failures attempts. Excludes legacy GPT output (no enrichment_meta.source marker) and stories with no linked articles. new_article_ids = the post-watermark evidence (newest 6) the agent must fetch. pool_size = total before LIMIT. service_role only. Prompt: docs/features/stories-claude-agent/prompt-v1.md Step 2.';
+  'ADO-584: candidate pool for the Stories Enrichment Agent. never_enriched first; then Claude-agent-enriched stories past the cooldown that (a) gained an article_story row after the evidence watermark (enrichment_meta.evidence_as_of = newest attach or merge/unmerge time read by the last SUCCESSFUL enrichment, DB-issued and echoed by the agent; a failed attempt echoes prior_evidence_as_of instead and records what it saw in attempt_evidence_as_of; falls back to last_enriched_at), (b) were changed by a Judge merge/unmerge (story_merge_audit) after the watermark, or (c) failed their last attempt / still have no summary_neutral and are under p_max_failures attempts. Excludes legacy GPT output (no enrichment_meta.source marker) and stories with no linked articles. new_article_ids = ALL post-watermark evidence, newest first, which the agent must fetch. pool_size = total before LIMIT. service_role only. Prompt: docs/features/stories-claude-agent/prompt-v1.md Step 2.';
 
 REVOKE ALL ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER) TO service_role;
 
+NOTIFY pgrst, 'reload schema';
+
 -- Smoke check (service_role): never-enriched rows first; every other row has
 -- reason in (new_articles, merged, retry_failed). A row with reason
 -- 'new_articles' and new_article_count = 0 must never appear, and a story the
--- agent just enriched must not come back when p_cooldown_hours = 0.
--- SELECT id, reason, new_article_count, new_article_ids, enrichment_failure_count, evidence_as_of, pool_size
+-- agent just enriched must not come back when p_cooldown_hours = 0. v4: a story
+-- whose last attempt FAILED with pending evidence comes back (under the cap) with
+-- reason 'new_articles' and the same new_article_ids it had before the failure.
+-- SELECT id, reason, new_article_count, new_article_ids, enrichment_failure_count, evidence_as_of, prior_evidence_as_of, pool_size
 --   FROM public.stories_needing_enrichment(40, 12, 3);

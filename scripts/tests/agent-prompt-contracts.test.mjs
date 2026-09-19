@@ -27,10 +27,17 @@ const failureBody = stories.slice(stories.indexOf('#### Failure body'), stories.
 assert.ok(successBody.includes('"evidence_as_of"'), 'success body must echo evidence_as_of into enrichment_meta');
 assert.ok(failureBody.includes('"evidence_as_of"'), 'failure body must echo evidence_as_of into enrichment_meta');
 assert.ok(/evidence_as_of.*verbatim/i.test(stories), 'prompt must say the watermark is echoed verbatim');
+// v4 (PR #145 review, P1): a failed attempt must not move the watermark past unpublished evidence
+assert.ok(failureBody.includes('"attempt_evidence_as_of"'), 'failure body records what the failed attempt saw separately');
+assert.ok(!successBody.includes('attempt_evidence_as_of'), 'a success write drops attempt_evidence_as_of (the RPC relies on that)');
+assert.ok(failureBody.includes('prior_evidence_as_of'), 'failure body explains evidence_as_of = Step 2 prior_evidence_as_of');
+assert.ok(!/verbatim, on success and on failure/.test(stories), 'the old rule (echo the new watermark on failure) must not come back');
 
 // --- Stories agent: the evidence that re-qualified a story is actually read ---
 const step3 = stories.slice(stories.indexOf('### Step 3: Fetch Source Articles'), stories.indexOf('### Step 4'));
 assert.ok(step3.includes('new_article_ids') && step3.includes('article_id=in.('), 'Step 3B must fetch new_article_ids by id (top-6-by-similarity can miss them)');
+// v4 (PR #145 review, P1): a burst over six articles is read in full, the overflow at headline level
+assert.ok(step3.includes('every remaining id') && step3.includes('articles(title,source_name,excerpt)'), 'Step 3B reads ids 7+ at headline level instead of dropping them');
 
 // --- migration 117 defines exactly what the prompt calls, with the review-fixed rules ---
 assert.ok(mig117.includes('FUNCTION public.stories_needing_enrichment('), 'migration 117 defines the RPC');
@@ -45,7 +52,12 @@ assert.ok(mig117.includes("s.enrichment_meta->>'source' = 'claude-agent'"), 'RPC
 assert.ok(mig117.includes('ORDER BY p.last_enriched_at ASC NULLS FIRST'), 'never-enriched stories come first');
 assert.ok(mig117.includes('p_max_failures   INTEGER DEFAULT 3'), 'default failure cap is 3');
 assert.ok(mig117.includes('TO service_role'), 'RPC is service_role only');
-for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_failure_count', 'enrichment_meta', 'evidence_as_of', 'new_article_ids', 'reason', 'pool_size']) {
+assert.ok(mig117.includes("s.enrichment_meta->>'attempt_evidence_as_of'"), 'RPC must read what a failed attempt saw');
+assert.ok(mig117.includes('m.fresh_cnt > 0') && mig117.includes('mc.max_change > aw.attempt_mark'), 'uncapped branches look only at evidence newer than the last attempt, so the failure cap still bites');
+assert.ok(/w\.watermark\s+AS prior_evidence_as_of/.test(mig117), 'RPC returns the watermark it used so a failure can echo it back');
+const idsSql = mig117.slice(mig117.indexOf('ARRAY_AGG(x.article_id'), mig117.indexOf('AS new_article_ids'));
+assert.ok(idsSql.length > 0 && !/LIMIT/i.test(idsSql), 'new_article_ids must not be capped: the watermark advances past every new article');
+for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_failure_count', 'enrichment_meta', 'evidence_as_of', 'prior_evidence_as_of', 'new_article_ids', 'reason', 'pool_size']) {
   assert.ok(new RegExp(`^\\s+${col}\\s`, 'm').test(mig117), `RPC must return ${col}`);
 }
 

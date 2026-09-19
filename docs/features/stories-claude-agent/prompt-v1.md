@@ -182,12 +182,13 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/stories_needing_enrichment" \
   -d '{"p_limit": 40, "p_cooldown_hours": 12, "p_max_failures": 3}'
 ```
 
-Each row is `{id, primary_headline, last_enriched_at, enrichment_failure_count, enrichment_meta, evidence_as_of, new_article_count, new_article_ids, reason, pool_size}`.
+Each row is `{id, primary_headline, last_enriched_at, enrichment_failure_count, enrichment_meta, evidence_as_of, prior_evidence_as_of, new_article_count, new_article_ids, reason, pool_size}`.
 
-- `evidence_as_of` is the **DB-issued evidence watermark** (the newest `article_story.matched_at` or Judge merge/unmerge time on this story at read time, whichever is later). Carry it through to Step 6 and write it into `enrichment_meta.evidence_as_of` **verbatim, on success and on failure** — never regenerate it with `date`. The RPC uses it next time to decide whether anything attached after what you saw; your own `last_enriched_at` is stamped minutes later, so an article that attaches while you are deliberating would otherwise look "already seen" and be lost.
+- `evidence_as_of` is the **DB-issued evidence watermark** (the newest `article_story.matched_at` or Judge merge/unmerge time on this story at read time, whichever is later). Carry it through to Step 6 and, **on success**, write it into `enrichment_meta.evidence_as_of` verbatim — never regenerate it with `date`. The RPC uses it next time to decide whether anything attached after what you saw; your own `last_enriched_at` is stamped minutes later, so an article that attaches while you are deliberating would otherwise look "already seen" and be lost.
+- `prior_evidence_as_of` is the watermark **as it stood before this run** (what the last successful enrichment saw; `null` for a story never attempted). **On failure the watermark must not move**: a failed attempt published nothing, so the evidence that brought the story here is still unpublished. The failure write therefore puts `prior_evidence_as_of` (verbatim, `null` included) into `enrichment_meta.evidence_as_of`, and this run's `evidence_as_of` into `enrichment_meta.attempt_evidence_as_of`. The retry then comes back with the same `new_article_ids`; the failure cap still applies because the RPC only waives it for evidence newer than `attempt_evidence_as_of`.
 - `reason` is why the story is in the pool: `never_enriched`, `new_articles` (cluster grew), `merged` (a Judge merge or unmerge changed its membership), or `retry_failed` (last attempt failed, or still no `summary_neutral`, under the failure cap). Put it in the per-story log `notes` when it is not `never_enriched`.
 - `pool_size` is the total number of eligible stories before the 40 cap (print it once — it is the run's backlog figure); `new_article_count` is how many articles attached after the watermark.
-- `new_article_ids` is **the evidence that put this story back in the pool** (up to 6 `article_id`s, newest first: articles attached after the watermark, plus the articles a Judge merge brought in). Empty for `never_enriched` and `retry_failed`. Step 3B fetches these by id — the usual top-6 read is ordered by similarity and can leave a new, lower-similarity article out, and the watermark you write in Step 6 still moves past it, so an article you skip now is never offered again.
+- `new_article_ids` is **the evidence that put this story back in the pool** (**every** such `article_id`, newest first, no cap: articles attached after the watermark, plus the articles a Judge merge brought in). Empty for `never_enriched` and for a `retry_failed` story with no unpublished evidence. Step 3B fetches these by id — the usual top-6 read is ordered by similarity and can leave a new, lower-similarity article out, and the watermark you write in Step 6 still moves past it, so an article you skip now is never offered again. That is why Step 3B reads **all** of them: the newest 6 in full, the rest at headline level.
 
 **If the response is a JSON object instead of an array** (for example `{"code":"PGRST202", ...}` = the RPC does not exist on this database yet, or `42501` = no grant), the migration has not been applied here. **Stop immediately, write nothing** (no log rows, no heartbeat), and end the run with a one-line push notification naming the error code. Do NOT fall back to a hand-written `stories?...` query — the old filter is exactly what this RPC replaced.
 
@@ -196,7 +197,7 @@ The RPC returns four kinds of story, oldest-enriched first with never-enriched f
 1. **Truly never enriched** (`last_enriched_at IS NULL`) — first-time clustering output, always eligible.
 2. **Claude-agent-enriched, and the cluster grew since** (`enrichment_meta->>source = 'claude-agent'`, `last_enriched_at` older than the 12-hour cooldown, AND at least one `article_story` row attached after the evidence watermark). New evidence is the normal reason to re-enrich.
 3. **Claude-agent-enriched, and a Judge merge or unmerge changed its membership since** (`story_merge_audit` row for this survivor after the watermark). `merge_stories` repoints the loser's articles without touching their `matched_at`, so this is the only way a merge reaches the summary.
-4. **Claude-agent attempt failed, cooldown passed, under the cap** (`enrichment_meta.last_attempt_status = 'failed'` or still no `summary_neutral`, and `enrichment_failure_count < 3`). A transient write failure on a one-article story must not hide it from the site forever; the cap stops the no-source rows from being retried every 12 hours for months. The failed attempt still carries the `source: claude-agent` marker (Step 6 failure-write policy) — that marker is what lets it re-enter at all.
+4. **Claude-agent attempt failed, cooldown passed, under the cap** (`enrichment_meta.last_attempt_status = 'failed'` or still no `summary_neutral`, and `enrichment_failure_count < 3`). A failed attempt does not advance the evidence watermark, so if new articles triggered the failed attempt the retry arrives as `new_articles` with the same `new_article_ids`. A transient write failure on a one-article story must not hide it from the site forever; the cap stops the no-source rows from being retried every 12 hours for months. The failed attempt still carries the `source: claude-agent` marker (Step 6 failure-write policy) — that marker is what lets it re-enter at all.
 5. **Excluded — unchanged stories.** A successfully enriched story that gained no article and was not merged is never touched again, no matter how old `last_enriched_at` is. Before migration 117 the query re-enriched every Claude-enriched story older than 12 hours; with ~15,000 active stories that never close, that meant every run's spare slots rewrote July/August stories with no new sources, forever. Never "re-freshen" old stories.
 6. **Excluded — legacy GPT output:** any story whose `enrichment_meta` was written by the retired GPT pipeline (`model: gpt-4o-mini`, no `source: claude-agent` key). Those stories keep their existing GPT-written content, frozen. That backlog is out of scope until a human explicitly nulls `last_enriched_at`/`enrichment_meta` on targeted rows.
 7. **Excluded — pathological failures and empty clusters:** failed stories at or above 3 attempts (unless a new article attaches or a merge touches them — those branches are uncapped because they bring new evidence), and stories with zero linked articles.
@@ -238,7 +239,7 @@ curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&select=is
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-**If Step 2 returned a non-empty `new_article_ids` for this story, also fetch those articles by id** (one extra GET, same select; put the ids from the array into the `in.(...)` list, each in double quotes):
+**If Step 2 returned a non-empty `new_article_ids` for this story, also fetch those articles by id.** First the **newest 6** (the first 6 ids of the array) in full — one extra GET, same select; put the ids into the `in.(...)` list, each in double quotes:
 
 ```bash
 curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&article_id=in.(\"art-1111\",\"art-2222\")&select=is_primary_source,similarity_score,matched_at,articles(title,source_name,content,excerpt,feed_id)&order=matched_at.desc&limit=6" \
@@ -246,7 +247,17 @@ curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&article_i
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-Combine both result sets and drop duplicates (an article can be in both). These are the reason the story is being re-enriched: read them, and make sure the rewritten summary reflects what they add. If they add nothing new, the summary may stay close to the old one — that is fine, but it must be a decision made after reading them, never because they were not fetched.
+**If `new_article_ids` holds more than 6 ids**, fetch **every remaining id** at headline level — title, source and excerpt only, never `content` (excerpts are a sentence or two, so a burst of 30 articles is still a small read). At most 40 ids per GET; repeat with the next 40 until none are left:
+
+```bash
+curl -s "${SUPABASE_URL}/rest/v1/article_story?story_id=eq.${STORY_ID}&article_id=in.(\"art-3333\",\"art-4444\")&select=matched_at,articles(title,source_name,excerpt)&order=matched_at.desc&limit=40" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+```
+
+No id in `new_article_ids` may go unread: the Step 6 success write moves the watermark past all of them, so an id you did not fetch is evidence lost for good. If one of these GETs fails, retry it once; if it fails again, treat the story as a `fetch_failed` failure (Step 6 failure-write policy) — do not publish from partial evidence.
+
+Combine all result sets and drop duplicates (an article can be in more than one). These are the reason the story is being re-enriched: read them, and make sure the rewritten summary reflects what they add. If they add nothing new, the summary may stay close to the old one — that is fine, but it must be a decision made after reading them, never because they were not fetched.
 
 Filter out any row where `articles` is null (an orphaned join, unlikely because the Step 2 RPC only returns stories with at least one `article_story` row, but check anyway).
 
@@ -272,7 +283,7 @@ For each story, read its source articles (title + `content` or `excerpt`, whiche
 | `enrichment_status` | text or null | `null` on success AND `null` on failure. The `stories.enrichment_status` CHECK constraint only allows `pending`/`success`/`permanent_failure`/`NULL` — never write any other string here, and never write those three values from this agent at all; the admin dashboard's failed-stories filter keys off `enrichment_failure_count > 0`, not this column. |
 | `enrichment_failure_count` | integer | On success: `0`. On failure: `current_value + 1` — the exact value returned by the Step 2 query (or, for a Step 3 fetch failure, whatever was already on the row). Never blindly set to `1`, or a story's failure history resets every run. |
 | `last_error_category`, `last_error_message` | text or null | On success: both `null` (clears any prior failure). On failure: a short category string (e.g. `no_source_articles`, `fetch_failed`, `write_failed`, `concurrent_write_lost`) and a truncated (≤500 char) human-readable reason. Matches `enrich-single-story.js:88-94`'s existing convention. |
-| `enrichment_meta` | jsonb | `{"prompt_version": "claude-v1", "model": "claude-sonnet-4-6", "enriched_at": "<iso>", "source": "claude-agent", "evidence_as_of": "<echoed from Step 2>"}` on success. On failure, a lighter marker: `{"source": "claude-agent", "last_attempt_status": "failed", "attempted_at": "<iso>", "evidence_as_of": "<echoed from Step 2>"}`. **Both `source` and `evidence_as_of` are required on every attempt, not optional.** `source` is what Step 2's discriminator uses to recognize "this story was touched by the Claude agent"; without it a story that failed once would never re-enter the queue (it no longer matches `last_enriched_at IS NULL`, and it would not match any Claude-agent branch either). `evidence_as_of` is the RPC's watermark, echoed exactly as returned — it is how the RPC knows what you actually saw; omit it and the RPC falls back to `last_enriched_at`, which reintroduces the mid-enrichment attach race. |
+| `enrichment_meta` | jsonb | `{"prompt_version": "claude-v1", "model": "claude-sonnet-4-6", "enriched_at": "<iso>", "source": "claude-agent", "evidence_as_of": "<echoed from Step 2>"}` on success. On failure, a lighter marker: `{"source": "claude-agent", "last_attempt_status": "failed", "attempted_at": "<iso>", "evidence_as_of": <Step 2 prior_evidence_as_of, verbatim, null allowed>, "attempt_evidence_as_of": "<Step 2 evidence_as_of>"}`. **`source`, `evidence_as_of` and (on failure) `attempt_evidence_as_of` are required on every attempt, not optional.** On failure `evidence_as_of` is the **prior** watermark, never this run's: nothing was published, so the evidence that triggered this attempt must still be offered to the retry. `source` is what Step 2's discriminator uses to recognize "this story was touched by the Claude agent"; without it a story that failed once would never re-enter the queue (it no longer matches `last_enriched_at IS NULL`, and it would not match any Claude-agent branch either). `evidence_as_of` is the RPC's watermark, echoed exactly as returned — it is how the RPC knows what you actually saw; omit it and the RPC falls back to `last_enriched_at`, which reintroduces the mid-enrichment attach race. |
 
 **Do NOT, on a failure path, write** `summary_neutral`, `summary_spicy`, `category`, `alarm_level`, `severity`, `primary_actor`, `top_entities`, or `entity_counter`. Leave those columns exactly as they were (null, on a first-attempt failure) rather than writing partial or guessed content.
 
@@ -389,7 +400,8 @@ For each story, run this checklist before writing:
 - [ ] On a failure path: none of `summary_neutral`/`summary_spicy`/`category`/`alarm_level`/`severity`/`primary_actor`/`top_entities`/`entity_counter` are being written?
 - [ ] `last_enriched_at` is a fresh ISO 8601 timestamp, being written on this attempt regardless of success or failure?
 - [ ] On a failure path: `enrichment_failure_count` is `current_value + 1`, not reset to `1`?
-- [ ] `enrichment_meta` includes `"source": "claude-agent"` AND the Step 2 `evidence_as_of` echoed verbatim, on both success and failure?
+- [ ] `enrichment_meta` includes `"source": "claude-agent"` AND the watermark: on success the Step 2 `evidence_as_of` verbatim; on failure the Step 2 `prior_evidence_as_of` as `evidence_as_of` plus the Step 2 `evidence_as_of` as `attempt_evidence_as_of`?
+- [ ] Every id in `new_article_ids` was fetched (newest 6 in full, the rest at headline level) before writing a success?
 - [ ] The upcoming Step 6 PATCH filter includes the concurrency-guard condition (`last_enriched_at=is.null` or `last_enriched_at=eq.<the exact value read in Step 2>`)?
 - [ ] None of the NEVER-WRITE columns (see Step 6) appear in the PATCH body?
 
@@ -462,10 +474,13 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/stories?id=eq.${STORY_ID}&last_enriche
     "source": "claude-agent",
     "last_attempt_status": "failed",
     "attempted_at": "2026-07-01T16:31:02Z",
-    "evidence_as_of": "2026-07-01T14:02:11.417+00:00"
+    "evidence_as_of": "2026-06-29T09:12:40.002+00:00",
+    "attempt_evidence_as_of": "2026-07-01T14:02:11.417+00:00"
   }
 }
 ```
+
+(`evidence_as_of` here is Step 2's `prior_evidence_as_of` — the watermark does not move on a failure; write `null` if Step 2 returned `null`. `attempt_evidence_as_of` is Step 2's `evidence_as_of`.)
 
 Note the failure body deliberately omits `summary_neutral`, `summary_spicy`, `category`, `alarm_level`, `severity`, `primary_actor`, `top_entities`, `entity_counter`, and `enrichment_status` entirely — PostgREST PATCH only touches keys present in the body, so omitting a key leaves the existing column value untouched.
 
@@ -619,7 +634,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 7. **On failure, `enrichment_failure_count` is incremented from the current value, never reset to 1.**
 8. **On failure, never write** `summary_neutral`/`summary_spicy`/`category`/`alarm_level`/`severity`/`primary_actor`/`top_entities`/`entity_counter` — leave them as they were.
 9. **`enrichment_status` is only ever written as `null`** — both on success and on failure. Never any other string.
-10. **`enrichment_meta` always includes `"source": "claude-agent"` and the Step 2 `evidence_as_of` watermark echoed verbatim** on both success and failure — `source` is the RPC's sole discriminator between Claude-agent output and legacy GPT output; `evidence_as_of` is how the RPC knows what evidence this enrichment saw.
+10. **`enrichment_meta` always includes `"source": "claude-agent"` and the evidence watermark** — on success the Step 2 `evidence_as_of` echoed verbatim; on failure the Step 2 `prior_evidence_as_of` (the watermark never advances past evidence that was not published) plus `attempt_evidence_as_of`. `source` is the RPC's sole discriminator between Claude-agent output and legacy GPT output; `evidence_as_of` is how the RPC knows what evidence the last successful enrichment saw.
 11. **Every Step 6 PATCH includes the concurrency-guard filter** (`last_enriched_at=is.null` or `last_enriched_at=eq.<the exact value read in Step 2>`).
 12. **An empty PATCH response is never treated as success** — it's `concurrent_write_lost` or a generic write failure, always logged, never silently ignored.
 13. **One PATCH per story to `stories`** — atomic, combined success-or-failure write, no partial updates split across multiple calls.
@@ -627,7 +642,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 15. **Profanity in `summary_spicy` only at `alarm_level` 4-5** — never at 0-3, per `tone-system.json`.
 16. **Every run leaves observability evidence** — a `running` row per story processed (PATCHed to `completed`/`failed`), or exactly one `story_id: null` heartbeat row on a healthy empty run. No run completes silently.
 17. **One story at a time** — complete a story's full Step 3-7 loop (log row → fetch → enrich → validate → write → close log row) before starting the next story's Step 3A. Never front-load fetches or back-load writes across multiple stories.
-18. **Re-enrich only on new evidence or a failed attempt** — a successfully enriched story is re-enriched only when an article attached after its evidence watermark or a Judge merge/unmerge changed its membership; a failed attempt is retried after the cooldown while under the failure cap (all enforced by the `stories_needing_enrichment` RPC, migration 117). Never query `stories` directly for candidates and never rewrite a story that has not changed. When Step 2 returns `new_article_ids`, Step 3B fetches and reads those articles — the watermark advances past them on this write.
+18. **Re-enrich only on new evidence or a failed attempt** — a successfully enriched story is re-enriched only when an article attached after its evidence watermark or a Judge merge/unmerge changed its membership; a failed attempt is retried after the cooldown while under the failure cap (all enforced by the `stories_needing_enrichment` RPC, migration 117). Never query `stories` directly for candidates and never rewrite a story that has not changed. When Step 2 returns `new_article_ids`, Step 3B fetches and reads **all** of those articles (newest 6 in full, the rest at headline level) — the watermark advances past them on a successful write, and only on a successful write.
 
 ---
 
@@ -640,7 +655,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 | Author | Josh + Claude Code |
 | Target model | Claude Sonnet 4.6 |
 | Tables accessed | `stories` (read/write), `stories_enrichment_log` (read/write), `article_story` (read), `articles` (read, via join); candidates via RPC `stories_needing_enrichment` (migration 117) |
-| Changelog | 2026-09-18 (ADO-584): Step 2 moved to the RPC `stories_needing_enrichment` — re-enrich only on new evidence (article attached after the DB-issued `evidence_as_of` watermark, or a Judge merge/unmerge) or to retry a failed attempt under a cap of 3; `enrichment_meta.evidence_as_of` is now required on every write; the watermark covers merge/unmerge times as well as attaches, and Step 3B fetches the RPC's `new_article_ids` explicitly (Codex review). `prompt_version` unchanged. |
+| Changelog | 2026-09-18 (ADO-584): Step 2 moved to the RPC `stories_needing_enrichment` — re-enrich only on new evidence (article attached after the DB-issued `evidence_as_of` watermark, or a Judge merge/unmerge) or to retry a failed attempt under a cap of 3; `enrichment_meta.evidence_as_of` is now required on every write; the watermark covers merge/unmerge times as well as attaches, and Step 3B fetches the RPC's `new_article_ids` explicitly (Codex review). 2026-09-19 (ADO-584, migration 117 v4): a failed attempt no longer advances the watermark (`prior_evidence_as_of` / `attempt_evidence_as_of`), and `new_article_ids` is complete instead of capped at 6 — Step 3B reads the overflow at headline level. `prompt_version` unchanged. |
 | External fetches | None — all source content is already scraped and stored by the RSS pipeline; no WebFetch step in this prompt |
 | API method | Bash/curl to PostgREST (not WebFetch) for all access |
 | Batch size | `limit=40` per run (see plan.md "Schedule" section) |
