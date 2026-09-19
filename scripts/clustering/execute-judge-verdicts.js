@@ -10,17 +10,20 @@
  * "Clustering Judge Executor" GitHub Actions workflow runs this script on that push with the
  * service key from GitHub secrets and performs every write the agent used to do:
  *
- *   1. merge_stories for `merge` verdicts (live runs only; older story survives; DB-enforced cap
- *      of 10 per run via p_run_id; no chained merges in one run - a story already merged this run
- *      is deferred to the next run)
+ *   1. merge_stories for `merge` verdicts (live runs only; older story survives - the executor
+ *      re-checks first_seen_at itself and flips a swapped survivor/loser; DB-enforced cap of 10 per
+ *      run via p_run_id; no chained merges in one run - a story already merged this run is
+ *      deferred to the next run)
  *   2. one clustering_judge_log row per verdict (an executed merge is logged the moment it
  *      succeeds, everything else in one bulk insert) - the audit trail behind the admin Judge tab
  *      and the verdict memory of the candidate RPC (migration 106)
  *   3. the heartbeat row for a 0-candidate run
  *   4. one Discord digest of `uncertain` verdicts (non-blocking)
  *
- * Idempotent per run_id: pairs already logged for this run are skipped, so a re-run of the
- * workflow after a partial failure finishes the run instead of double-logging or re-merging.
+ * Idempotent per run_id: pairs already logged for this run are skipped, and what already MERGED
+ * this run is read back from story_merge_audit (the authoritative record, written inside
+ * merge_stories), so a re-run of the workflow after a partial failure finishes the run instead of
+ * double-logging, re-merging, chaining onto an earlier merge or losing a merged=true row.
  *
  * Usage:  node scripts/clustering/execute-judge-verdicts.js judge-inbox/<run_id>.json
  * Env:    SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (required)
@@ -32,7 +35,9 @@
  * Exit codes: 0 = every verdict logged; 1 = validation / environment mismatch / a log write failed
  * after retries (the workflow's failure alert fires). A merge_stories `ok:false` is NOT an exit-1:
  * it is logged as `failed:` and retried next run; a second failure escalates the pair to
- * `uncertain` so it surfaces in the admin Judge tab instead of looping forever.
+ * `uncertain` so it surfaces in the admin Judge tab instead of looping forever. A transport
+ * failure (non-2xx, unreadable body) is logged `transient:` and never counts toward escalation -
+ * an outage must not turn merge verdicts into settled `uncertain` memory.
  */
 
 import fs from 'node:fs';
@@ -71,6 +76,8 @@ export function validateVerdictFile(doc, { expectedEnv, supabaseUrl } = {}) {
   if (supabaseUrl && doc.environment && envFromSupabaseUrl(supabaseUrl) !== doc.environment) problems.push(`file environment "${doc.environment}" does not match the SUPABASE_URL this job received (${envFromSupabaseUrl(supabaseUrl)})`);
   if (typeof doc.dry_run !== 'boolean') problems.push('dry_run must be a boolean');
   if (!Array.isArray(doc.verdicts)) { problems.push('verdicts must be an array'); return problems; }
+  // Every candidate pair must come back with a verdict; a file cut short (context limit) is rejected whole.
+  if (!Number.isInteger(doc.candidates) || doc.candidates !== doc.verdicts.length) problems.push(`candidates (${JSON.stringify(doc.candidates)}) must be an integer equal to the number of verdicts (${doc.verdicts.length})`);
   if (doc.verdicts.length > MAX_VERDICTS) problems.push(`too many verdicts (${doc.verdicts.length} > ${MAX_VERDICTS})`);
 
   const seen = new Set();
@@ -114,6 +121,21 @@ export function mergeDecision({ dryRun, executed, cap = MERGE_CAP, touched, surv
   return { action: 'merge' };
 }
 
+/**
+ * Survivor orientation is not trusted from the agent: the older story (smaller first_seen_at, tie or
+ * unreadable timestamp -> smaller id) survives, because the survivor keeps the public URL. `rows` =
+ * [{id, first_seen_at}] for the pair. Returns null when either story is missing (merge_stories then
+ * reports loser_not_found / survivor_not_found itself).
+ */
+export function chooseSurvivor(rows, idA, idB) {
+  const a = (rows || []).find((r) => r.id === idA);
+  const b = (rows || []).find((r) => r.id === idB);
+  if (!a || !b) return null;
+  const ta = Date.parse(a.first_seen_at); const tb = Date.parse(b.first_seen_at);
+  const aOlder = Number.isNaN(ta) || Number.isNaN(tb) || ta === tb ? idA < idB : ta < tb;
+  return aOlder ? { survivorId: idA, loserId: idB } : { survivorId: idB, loserId: idA };
+}
+
 /** Shape one clustering_judge_log row (migration 100/104/105/106 columns). */
 export function buildLogRow(v, { runId, verdict = v.verdict, merged = false, dryRun, rationale = v.rationale }) {
   const row = {
@@ -139,12 +161,12 @@ export function heartbeatRow(runId, dryRun) {
 }
 
 /** Rationale prefixes are contractual: verdict memory (mig 106) ignores merge/merged=false rows, and
- *  the twice-failed escalation below looks for `failed:`. */
+ *  the twice-failed escalation below looks for `failed:` only (`transient:` never escalates).
+ *  `reason` is a mergeDecision reason: dry_run | cap_reached | chained. */
 export const deferredRationale = (reason, v, extra) => {
   if (reason === 'dry_run') return v.rationale;
   if (reason === 'cap_reached') return `deferred: run cap of ${MERGE_CAP} reached - ${v.rationale}`;
-  if (reason === 'chained') return `deferred: chained merge (story ${extra} already merged this run) - ${v.rationale}`;
-  return `deferred: ${reason} - ${v.rationale}`;
+  return `deferred: chained merge (story ${extra} already merged this run) - ${v.rationale}`;
 };
 
 export function buildDigest(uncertain, { runId, env }) {
@@ -186,7 +208,7 @@ export function makeClient({ supabaseUrl, serviceKey, fetchImpl = globalThis.fet
   return {
     get: (path) => call('GET', path),
     rpc: (name, args) => call('POST', `/rpc/${name}`, { body: args }),
-    insert: (table, rows) => call('POST', `/${table}`, { body: rows, prefer: 'return=representation' }),
+    insert: (table, rows) => call('POST', `/${table}`, { body: rows, prefer: 'return=minimal' }), // rows are never read back; still 201
   };
 }
 
@@ -220,9 +242,9 @@ async function pairFailedBefore(client, a, b, runId) {
   return r.ok && Array.isArray(r.json) && r.json.length > 0;
 }
 
-export async function executeVerdicts(doc, { client, env, discord = postDiscord, log = console.log, now = () => new Date() }) {
+export async function executeVerdicts(doc, { client, env, discord = postDiscord, log = console.log }) {
   const { run_id: runId, dry_run: dryRun, verdicts } = doc;
-  const summary = { run_id: runId, env, dry_run: dryRun, verdicts: verdicts.length, merged: 0, deferred: 0, failed: 0, escalated: 0, skipped_logged: 0, logged: 0, heartbeat: false, digest_sent: false };
+  const summary = { run_id: runId, env, dry_run: dryRun, verdicts: verdicts.length, merged: 0, deferred: 0, failed: 0, escalated: 0, transient: 0, recovered: 0, flipped: 0, skipped_logged: 0, logged: 0, heartbeat: false, digest_sent: false };
 
   // Idempotency: what did an earlier attempt of this run already log?
   const existing = await client.get(`/clustering_judge_log?select=story_id_a,story_id_b&run_id=eq.${encodeURIComponent(runId)}&limit=1000`);
@@ -243,14 +265,41 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
     return summary;
   }
 
+  // Re-run state comes from story_merge_audit, not from the log: merge_stories writes the audit row
+  // in the same transaction as the merge, so it is the authoritative record of what merged under
+  // this run_id even when the log insert that should have followed never landed.
+  const auditPath = `/story_merge_audit?select=loser_id,survivor_id&run_id=eq.${encodeURIComponent(runId)}&limit=1000`;
   const touched = new Set();
-  let executed = 0;
+  const mergedThisRun = new Set();
+  if (!dryRun) {
+    const audit = await client.get(auditPath);
+    if (!audit.ok || !Array.isArray(audit.json)) throw new Error(`could not read story_merge_audit for ${runId}: ${audit.status} ${String(audit.text).slice(0, 200)}`);
+    for (const m of audit.json) {
+      mergedThisRun.add(pairKey(m.loser_id, m.survivor_id));
+      touched.add(m.loser_id); touched.add(m.survivor_id);
+    }
+  }
+  let executed = mergedThisRun.size; // counts toward the cap, exactly as the DB counts it
   const bulk = [];
+  const unconfirmed = []; // merge calls whose response never arrived readable
   const uncertainForDigest = [];
 
   for (const v of verdicts) {
     const key = pairKey(v.story_id_a, v.story_id_b);
+    // No pipeline_skips row for this skip (exemption from the ADO-466 rule, review finding 7): the
+    // pair is skipped BECAUSE its clustering_judge_log row for this run already exists - that row is
+    // the record, so nothing goes unobserved. Deferred / failed / transient merges are not skips
+    // either: each gets its own log row with a contractual rationale prefix.
     if (alreadyLogged.has(key)) { summary.skipped_logged++; log(`pair ${key} already logged for this run - skipping`); continue; }
+
+    if (mergedThisRun.has(key)) {
+      // An earlier attempt of this run executed this merge but died before its log row landed.
+      // Write the merged=true row now - the admin tab's one-click unmerge is driven from it.
+      if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, verdict: 'merge', merged: true })], log))) throw new Error(`recovered merge ${key} could not be logged`);
+      summary.recovered++; summary.logged++;
+      log(`pair ${key} merged in an earlier attempt of this run - merged=true row written`);
+      continue;
+    }
 
     if (v.verdict !== 'merge') {
       bulk.push(buildLogRow(v, { runId, dryRun }));
@@ -266,24 +315,53 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
       continue;
     }
 
-    // Live merge. merge_stories: older story survives (the agent chose survivor/loser by
-    // first_seen_at); p_run_id lets the DB enforce the per-run cap (migration 101).
-    const res = await client.rpc('merge_stories', { p_loser_id: v.loser_id, p_survivor_id: v.survivor_id, p_run_id: runId });
+    // Live merge. Older story survives: checked here against first_seen_at, not taken from the
+    // agent - a swapped survivor_id would tombstone the older story, which owns the public URL.
+    let survivorId = v.survivor_id; let loserId = v.loser_id; let rationale = v.rationale;
+    const ages = await client.get(`/stories?select=id,first_seen_at&id=in.(${v.story_id_a},${v.story_id_b})`);
+    if (!ages.ok || !Array.isArray(ages.json)) {
+      summary.transient++;
+      log(`merge ${loserId} -> ${survivorId} not attempted: stories read failed (http_${ages.status})`);
+      bulk.push(buildLogRow(v, { runId, dryRun, rationale: `transient: http_${ages.status} reading stories - ${v.rationale}` }));
+      continue;
+    }
+    const oriented = chooseSurvivor(ages.json, v.story_id_a, v.story_id_b);
+    if (oriented && oriented.survivorId !== survivorId) {
+      ({ survivorId, loserId } = oriented);
+      summary.flipped++;
+      rationale = `${v.rationale} [executor: survivor/loser flipped - story ${survivorId} is older]`;
+      log(`orientation flipped: ${survivorId} is older than ${loserId}`);
+    }
+
+    // p_run_id lets the DB enforce the per-run cap (migration 101).
+    const res = await client.rpc('merge_stories', { p_loser_id: loserId, p_survivor_id: survivorId, p_run_id: runId });
     const body = res.json && typeof res.json === 'object' ? res.json : {};
     if (res.ok && body.ok === true && body.skipped === false) {
       executed++; summary.merged++;
-      touched.add(v.survivor_id); touched.add(v.loser_id);
-      log(`merged ${v.loser_id} -> ${v.survivor_id}`);
+      touched.add(survivorId); touched.add(loserId);
+      log(`merged ${loserId} -> ${survivorId}`);
       // Log the executed merge immediately: the admin tab's one-click unmerge is driven from this row.
-      if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, merged: true })], log))) throw new Error(`executed merge ${v.loser_id}->${v.survivor_id} could not be logged`);
+      if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, merged: true, rationale })], log))) throw new Error(`executed merge ${loserId}->${survivorId} could not be logged`);
       summary.logged++;
       continue;
     }
 
-    const reason = res.ok ? (body.reason || (body.skipped ? 'loser_already_merged' : 'unknown')) : `http_${res.status}`;
-    if (res.ok && body.ok === true && body.skipped === true) {
+    // Transport failure (non-2xx, or a 2xx whose body is not merge_stories' {ok:...} shape): nothing
+    // is known about the pair, so it must not count toward the failed-twice escalation - an outage
+    // would otherwise turn every merge verdict into settled `uncertain` memory.
+    if (!res.ok || typeof body.ok !== 'boolean') {
+      const why = res.ok ? 'unreadable_response' : `http_${res.status}`;
+      summary.transient++;
+      log(`merge ${loserId} -> ${survivorId} transient failure: ${why}`);
+      const row = buildLogRow(v, { runId, dryRun, rationale: `transient: ${why} - ${v.rationale}` });
+      bulk.push(row); unconfirmed.push({ key, row, rationale });
+      continue;
+    }
+
+    const reason = body.reason || (body.skipped ? 'loser_already_merged' : 'unknown');
+    if (body.ok === true && body.skipped === true) {
       bulk.push(buildLogRow(v, { runId, dryRun, rationale: `skipped: ${reason} - ${v.rationale}` }));
-      log(`merge ${v.loser_id} -> ${v.survivor_id} skipped: ${reason}`);
+      log(`merge ${loserId} -> ${survivorId} skipped: ${reason}`);
       continue;
     }
     if (reason === 'run_merge_cap_reached') {
@@ -292,7 +370,7 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
       continue;
     }
     summary.failed++;
-    log(`merge ${v.loser_id} -> ${v.survivor_id} failed: ${reason}`);
+    log(`merge ${loserId} -> ${survivorId} failed: ${reason}`);
     if (await pairFailedBefore(client, v.story_id_a, v.story_id_b, runId)) {
       // Second failure: stop retrying every run, hand it to a human as `uncertain` (settled memory).
       summary.escalated++;
@@ -300,6 +378,20 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
       bulk.push(row); uncertainForDigest.push({ ...v, rationale: row.rationale });
     } else {
       bulk.push(buildLogRow(v, { runId, dryRun, rationale: `failed: ${reason} - ${v.rationale}` }));
+    }
+  }
+
+  // A lost response does not prove the merge did not commit. story_merge_audit is the authority:
+  // a pair found there is logged merged=true, not transient (best effort - a failed read leaves the
+  // transient rows as they are, and the next run sees the tombstone as `skipped:`).
+  if (unconfirmed.length) {
+    const audit = await client.get(auditPath);
+    const done = new Set(audit.ok && Array.isArray(audit.json) ? audit.json.map((m) => pairKey(m.loser_id, m.survivor_id)) : []);
+    for (const u of unconfirmed) {
+      if (!done.has(u.key)) continue;
+      u.row.merged = true; u.row.rationale = u.rationale;
+      summary.transient--; summary.recovered++;
+      log(`pair ${u.key}: merge response was lost but story_merge_audit shows it committed - logged merged=true`);
     }
   }
 
