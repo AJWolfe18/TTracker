@@ -1,12 +1,14 @@
 // ADO-583: the Judge executor is the only thing that writes Judge verdicts to the database now.
 // These tests pin the contract between the agent's verdict file and the writes: strict validation,
 // survivor/loser rules, the per-run cap, no chained merges, immediate logging of executed merges,
-// idempotent re-runs, failed-twice escalation to `uncertain`, heartbeat on an empty run.
+// idempotent re-runs (state seeded from story_merge_audit), failed-twice escalation to `uncertain`
+// for deterministic failures only (transport failures are `transient:`), survivor orientation checked
+// against first_seen_at, candidates === verdicts, heartbeat on an empty run.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   SCHEMA, MERGE_CAP, validateVerdictFile, mergeDecision, buildLogRow, heartbeatRow,
-  deferredRationale, buildDigest, envFromSupabaseUrl, executeVerdicts,
+  deferredRationale, buildDigest, envFromSupabaseUrl, executeVerdicts, chooseSurvivor, makeClient,
 } from '../clustering/execute-judge-verdicts.js';
 
 const RUN = 'judge-2026-09-19T21-04-44.950Z';
@@ -15,7 +17,7 @@ const pair = (a, b, verdict, extra = {}) => ({
   rationale: `same event ${a}/${b}`, centroid_sim: 0.93, evidence_as_of: '2026-09-19T13:39:37.279+00:00', ...extra,
 });
 const merge = (survivor, loser, extra = {}) => pair(Math.min(survivor, loser), Math.max(survivor, loser), 'merge', { survivor_id: survivor, loser_id: loser, ...extra });
-const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environment: 'test', dry_run: false, verdicts, ...extra });
+const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environment: 'test', dry_run: false, candidates: verdicts.length, verdicts, ...extra });
 
 // --- validation -----------------------------------------------------------------------------
 {
@@ -38,6 +40,10 @@ const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environmen
   assert.ok(validateVerdictFile(doc([pair(1, 2, 'merge')])).some((p) => p.includes('survivor_id')));
   assert.ok(validateVerdictFile(doc([merge(1, 9, { story_id_a: 1, story_id_b: 2 })])).some((p) => p.includes('two stories of the pair')));
   assert.ok(validateVerdictFile(doc([merge(1, 1, { story_id_a: 1, story_id_b: 2 })])).some((p) => p.includes('two stories of the pair')));
+  // candidates must equal the verdict count: a run cut short is rejected whole (review finding 5)
+  assert.ok(validateVerdictFile(doc([pair(1, 2, 'keep')], { candidates: 30 })).some((p) => p.includes('candidates')));
+  assert.ok(validateVerdictFile(doc([pair(1, 2, 'keep')], { candidates: undefined })).some((p) => p.includes('candidates')));
+  assert.ok(validateVerdictFile(doc([pair(1, 2, 'keep')], { candidates: '1' })).some((p) => p.includes('candidates')));
   assert.equal(envFromSupabaseUrl('https://wnrjrywpcadwutfykflu.supabase.co'), 'test');
   assert.equal(envFromSupabaseUrl('https://something-else.supabase.co'), 'prod');
 }
@@ -51,6 +57,15 @@ const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environmen
   assert.deepEqual(mergeDecision({ dryRun: false, executed: 0, touched: t, survivorId: 1, loserId: 10 }), { action: 'log', reason: 'chained' });
   assert.deepEqual(mergeDecision({ dryRun: false, executed: 3, touched: t, survivorId: 1, loserId: 2 }), { action: 'merge' });
   assert.equal(MERGE_CAP, 10, 'cap mirrors migration 101');
+}
+
+// --- survivor orientation (review finding 4) -------------------------------------------------
+{
+  const rows = [{ id: 3, first_seen_at: '2026-09-10T00:00:00Z' }, { id: 4, first_seen_at: '2026-09-01T00:00:00Z' }];
+  assert.deepEqual(chooseSurvivor(rows, 3, 4), { survivorId: 4, loserId: 3 }, 'older first_seen_at survives even with the larger id');
+  assert.deepEqual(chooseSurvivor([{ id: 3, first_seen_at: '2026-09-01T00:00:00Z' }, { id: 4, first_seen_at: '2026-09-01T00:00:00+00:00' }], 4, 3), { survivorId: 3, loserId: 4 }, 'tie -> smaller id');
+  assert.deepEqual(chooseSurvivor([{ id: 3, first_seen_at: null }, { id: 4, first_seen_at: '2026-09-01T00:00:00Z' }], 3, 4), { survivorId: 3, loserId: 4 }, 'unreadable timestamp -> smaller id');
+  assert.equal(chooseSurvivor([{ id: 3, first_seen_at: '2026-09-01T00:00:00Z' }], 3, 4), null, 'missing story -> null, merge_stories reports it');
 }
 
 // --- row shapes -----------------------------------------------------------------------------
@@ -77,19 +92,30 @@ const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environmen
 }
 
 // --- executeVerdicts against a fake PostgREST ----------------------------------------------
-function fakeClient({ existing = [], mergeResults = {}, insertStatus = () => 201, failedBefore = () => false } = {}) {
+function fakeClient({ existing = [], audit = [], auditAfter = null, ages = null, agesStatus = 200, mergeResults = {}, rpcStatus = () => 200, insertStatus = () => 201, failedBefore = () => false } = {}) {
   const calls = { rpc: [], inserts: [], gets: [] };
   return {
     calls,
     get: async (path) => {
       calls.gets.push(path);
       if (path.includes('rationale=like.failed')) return { ok: true, status: 200, json: failedBefore(path) ? [{ id: 1 }] : [], text: '' };
+      if (path.startsWith('/story_merge_audit')) { // auditAfter = what the table holds once a merge call has been made
+        return { ok: true, status: 200, json: auditAfter && calls.rpc.length ? auditAfter : audit, text: '' };
+      }
+      if (path.startsWith('/stories')) {
+        if (agesStatus !== 200) return { ok: false, status: agesStatus, json: null, text: 'down' };
+        // default: the smaller id is the older story, which is how the merge() helper orients verdicts
+        const ids = path.match(/id=in\.\((\d+),(\d+)\)/).slice(1).map(Number);
+        return { ok: true, status: 200, json: ages || ids.map((id) => ({ id, first_seen_at: new Date(Date.UTC(2026, 0, 1) + id * 1000).toISOString() })), text: '' };
+      }
       return { ok: true, status: 200, json: existing, text: '' };
     },
     rpc: async (name, args) => {
       calls.rpc.push({ name, args });
       const key = `${args.p_loser_id}->${args.p_survivor_id}`;
-      const r = mergeResults[key] || { ok: true, skipped: false };
+      const status = rpcStatus(key);
+      if (status !== 200) return { ok: false, status, json: { message: 'upstream down' }, text: 'upstream down' };
+      const r = key in mergeResults ? mergeResults[key] : { ok: true, skipped: false };
       return { ok: true, status: 200, json: r, text: JSON.stringify(r) };
     },
     insert: async (table, rows) => {
@@ -154,6 +180,47 @@ const quiet = () => {};
   assert.equal(s.digest_sent, true, 'escalated pair goes into the uncertain digest');
 }
 
+{ // transport failures are `transient:`, never `failed:`, and never escalate - even when the pair failed before (finding 2)
+  const c = fakeClient({ rpcStatus: (k) => (k === '4->3' ? 503 : 200), mergeResults: { '6->5': 'not the merge_stories shape' }, failedBefore: () => true });
+  const s = await executeVerdicts(doc([merge(3, 4), merge(5, 6)]), { client: c, env: 'prod', discord: async () => true, log: quiet });
+  assert.equal(s.transient, 2); assert.equal(s.failed, 0); assert.equal(s.escalated, 0); assert.equal(s.digest_sent, false);
+  const rows = c.calls.inserts.flat();
+  assert.ok(rows.find((r) => r.story_id_a === 3).rationale.startsWith('transient: http_503 - '));
+  assert.ok(rows.find((r) => r.story_id_a === 5).rationale.startsWith('transient: unreadable_response - '));
+  assert.ok(rows.every((r) => r.verdict === 'merge' && r.merged === false), 'stays merge/merged=false so verdict memory retries it');
+  assert.ok(!c.calls.gets.some((g) => g.includes('rationale=like.failed')), 'the failed-before lookup is not even made for a transport failure');
+  // the stories read failing is the same class of failure: no merge attempted, transient row
+  const c2 = fakeClient({ agesStatus: 503 });
+  const s2 = await executeVerdicts(doc([merge(3, 4)]), { client: c2, env: 'prod', discord: async () => true, log: quiet });
+  assert.equal(c2.calls.rpc.length, 0); assert.equal(s2.transient, 1);
+  assert.ok(c2.calls.inserts.flat()[0].rationale.startsWith('transient: http_503 reading stories - '));
+}
+
+{ // a merge whose response was lost but which committed (audit row exists) is logged merged=true, not transient
+  const c = fakeClient({ rpcStatus: () => 504, auditAfter: [{ loser_id: 4, survivor_id: 3 }] });
+  const s = await executeVerdicts(doc([merge(3, 4), merge(5, 6)]), { client: c, env: 'prod', discord: async () => true, log: quiet });
+  const rows = c.calls.inserts.flat();
+  const r34 = rows.find((r) => r.story_id_a === 3); const r56 = rows.find((r) => r.story_id_a === 5);
+  assert.equal(r34.merged, true); assert.equal(r34.rationale, 'same event 3/4');
+  assert.equal(r56.merged, false); assert.ok(r56.rationale.startsWith('transient: http_504 - '));
+  assert.equal(s.recovered, 1); assert.equal(s.transient, 1);
+}
+
+{ // orientation: the agent swapped survivor/loser -> the executor flips it and says so on the row (finding 4)
+  const c = fakeClient({ ages: [{ id: 3, first_seen_at: '2026-09-01T00:00:00Z' }, { id: 4, first_seen_at: '2026-09-10T00:00:00Z' }] });
+  const s = await executeVerdicts(doc([merge(4, 3)]), { client: c, env: 'test', discord: async () => true, log: quiet }); // agent says 4 survives; 3 is older
+  assert.deepEqual(c.calls.rpc[0].args, { p_loser_id: 4, p_survivor_id: 3, p_run_id: RUN });
+  assert.equal(s.flipped, 1); assert.equal(s.merged, 1);
+  const row = c.calls.inserts[0][0];
+  assert.equal(row.merged, true);
+  assert.ok(row.rationale.startsWith('same event 3/4') && row.rationale.endsWith('[executor: survivor/loser flipped - story 3 is older]'));
+  // correct orientation is left alone
+  const c2 = fakeClient();
+  const s2 = await executeVerdicts(doc([merge(3, 4)]), { client: c2, env: 'test', discord: async () => true, log: quiet });
+  assert.equal(s2.flipped, 0); assert.equal(c2.calls.inserts[0][0].rationale, 'same event 3/4');
+  assert.ok(c2.calls.gets.some((g) => g === '/stories?select=id,first_seen_at&id=in.(3,4)'), 'one narrow read per merge (egress: two columns, two rows)');
+}
+
 { // DB-side cap response stops further merge attempts
   const c = fakeClient({ mergeResults: { '4->3': { ok: false, reason: 'run_merge_cap_reached', cap: 10 } } });
   const s = await executeVerdicts(doc([merge(3, 4), merge(5, 6)]), { client: c, env: 'test', discord: async () => true, log: quiet });
@@ -165,6 +232,38 @@ const quiet = () => {};
   const c = fakeClient({ existing: [{ story_id_a: 3, story_id_b: 4 }] });
   const s = await executeVerdicts(doc([merge(3, 4), pair(1, 2, 'keep')]), { client: c, env: 'test', discord: async () => true, log: quiet });
   assert.equal(c.calls.rpc.length, 0); assert.equal(s.skipped_logged, 1); assert.equal(s.logged, 1);
+}
+
+{ // re-run after "merge executed, log insert died": state is seeded from story_merge_audit (findings 1 + 3)
+  const c = fakeClient({ audit: [{ loser_id: 4, survivor_id: 3 }] }); // 4->3 merged in the first attempt, nothing logged
+  const s = await executeVerdicts(doc([merge(3, 4), merge(3, 9), merge(5, 6)]), { client: c, env: 'prod', discord: async () => true, log: quiet });
+  assert.deepEqual(c.calls.rpc.map((r) => `${r.args.p_loser_id}->${r.args.p_survivor_id}`), ['6->5'], '3<-4 is not re-merged and 3<-9 is not chained onto it');
+  assert.equal(s.recovered, 1); assert.equal(s.merged, 1); assert.equal(s.deferred, 1);
+  const rows = c.calls.inserts.flat();
+  const r34 = rows.find((r) => r.story_id_a === 3 && r.story_id_b === 4);
+  assert.equal(r34.merged, true, 'the executed merge gets its merged=true row (admin unmerge is driven from it)');
+  assert.equal(r34.verdict, 'merge');
+  assert.ok(rows.find((r) => r.story_id_b === 9).rationale.startsWith('deferred: chained merge (story 3 already merged this run)'));
+  assert.ok(c.calls.gets.some((g) => g.startsWith('/story_merge_audit?select=loser_id,survivor_id&run_id=eq.')), 'audit read is narrow and keyed by run_id');
+  // merges from an earlier attempt count toward the cap
+  const ten = Array.from({ length: 10 }, (_, i) => ({ loser_id: 1001 + i * 2, survivor_id: 1000 + i * 2 }));
+  const c2 = fakeClient({ audit: ten, existing: ten.map((m) => ({ story_id_a: m.survivor_id, story_id_b: m.loser_id })) });
+  const s2 = await executeVerdicts(doc([merge(5, 6)]), { client: c2, env: 'prod', discord: async () => true, log: quiet });
+  assert.equal(c2.calls.rpc.length, 0); assert.equal(s2.deferred, 1);
+  assert.ok(c2.calls.inserts.flat()[0].rationale.startsWith('deferred: run cap of 10 reached'));
+  // a dry run never merges, so it never reads the audit table or story ages
+  const c3 = fakeClient();
+  await executeVerdicts(doc([merge(3, 4)], { dry_run: true }), { client: c3, env: 'test', discord: async () => true, log: quiet });
+  assert.ok(!c3.calls.gets.some((g) => g.startsWith('/story_merge_audit')) && !c3.calls.gets.some((g) => g.startsWith('/stories')));
+}
+
+{ // the real client asks PostgREST not to echo inserted rows back (finding 8)
+  const seen = [];
+  const client = makeClient({ supabaseUrl: 'https://example.supabase.co/', serviceKey: 'k', fetchImpl: async (url, init) => { seen.push({ url, init }); return { status: 201, ok: true, text: async () => '' }; } });
+  const r = await client.insert('clustering_judge_log', [{ a: 1 }]);
+  assert.equal(r.status, 201);
+  assert.equal(seen[0].init.headers.Prefer, 'return=minimal');
+  assert.equal(seen[0].url, 'https://example.supabase.co/rest/v1/clustering_judge_log');
 }
 
 { // empty run -> heartbeat row once; a second attempt does not duplicate it
@@ -194,6 +293,16 @@ const quiet = () => {};
   assert.ok(wf.includes('scripts/clustering/execute-judge-verdicts.js'), 'workflow runs the executor');
   assert.ok(wf.includes('JUDGE_EXPECTED_ENV: test') && wf.includes('JUDGE_EXPECTED_ENV: prod'), 'both environments wired');
   assert.ok(wf.includes('secrets.SUPABASE_TEST_SERVICE_KEY') && wf.includes('secrets.SUPABASE_SERVICE_KEY'), 'service keys come from GitHub secrets');
+  // finding 6: nothing derived from the branch name is expression-interpolated into a run script
+  // (env: mappings are fine - the shell never parses those; "KEY: ${{ ... }}" lines are the env form)
+  const interpolated = wf.split('\n').filter((l) => /\$\{\{\s*(steps\.meta\.outputs\.file|github\.ref_name|github\.head_ref)/.test(l) && !/^\s*[A-Z_]+:\s*\$\{\{/.test(l));
+  assert.deepEqual(interpolated, [], 'branch-derived values reach run scripts through env only');
+  assert.ok(wf.includes('VERDICT_FILE: ${{ steps.meta.outputs.file }}') && wf.includes('execute-judge-verdicts.js "$VERDICT_FILE"'));
+  assert.ok(wf.includes('[[ "$run_id" =~ ^judge-'), 'run_id segment is shape-checked before it becomes a path');
+  // finding 10: the prompt no longer points at renumbered steps or at a DB it does not write
+  const prompt = readFileSync(new URL('../../docs/features/clustering-judge/prompt-v1.md', import.meta.url), 'utf8');
+  assert.ok(!prompt.includes('DISCORD_WEBHOOK_SET') && !prompt.includes('pings a human (Step 7)') && !prompt.includes('no DB writes, no log rows'));
+  assert.ok(prompt.includes('equals the number of verdicts'), 'prompt states the candidates rule the executor enforces');
 }
 
 console.log('judge-executor: all checks passed');

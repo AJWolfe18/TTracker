@@ -45,15 +45,14 @@ At the start of every run, read your environment variables:
 echo "SUPABASE_URL=${SUPABASE_URL}"
 echo "KEY_LENGTH=$(echo -n ${SUPABASE_SERVICE_ROLE_KEY} | wc -c)"
 echo "JUDGE_DRY_RUN=${JUDGE_DRY_RUN}"
-echo "DISCORD_WEBHOOK_SET=$([ -n "${DISCORD_WEBHOOK_URL}" ] && echo yes || echo no)"
 ```
 
 **Verify:** `SUPABASE_URL` must start with `https://` and `SUPABASE_SERVICE_ROLE_KEY` must be
-non-empty. If either is missing, log an error and stop immediately — no DB writes, no log rows.
+non-empty. If either is missing, log an error and stop immediately — publish nothing (no verdict file, no branch).
 
 `DISCORD_WEBHOOK_URL` is **not used by you** — the executor posts the uncertain-verdict digest from
 the repo's own secret. Its presence or absence in this environment changes nothing. Never echo the
-webhook URL itself (it is a secret); only its presence, as above.
+webhook URL (it is a secret) and do not check for it.
 
 ```
 API_BASE="${SUPABASE_URL}/rest/v1"
@@ -213,7 +212,10 @@ rules, so **order your `merge` verdicts by confidence, highest first**:
   the second;
 - a `merge_stories` failure (`survivor_is_merged`, `loser_not_found`, ...) is logged `failed:` and
   retried next run; a second failure of the same pair is escalated to `uncertain` so it reaches the
-  admin Judge tab instead of looping forever.
+  admin Judge tab instead of looping forever. A transport failure (HTTP 5xx, auth) is logged
+  `transient:` and never counts toward that escalation;
+- the executor re-checks `first_seen_at` itself and flips a swapped survivor/loser, so a mistake here
+  cannot tombstone the older story. Still get it right: the file is the audit record.
 
 Nothing else changes in your judging: default-DENY, criteria in Section 4.
 
@@ -260,6 +262,8 @@ get a failed-workflow Discord alert, never a partial run):
 - `merge` verdicts carry `survivor_id` / `loser_id` (Step 5); other verdicts omit them.
 - `confidence` is 0–1, `rationale` non-empty, headlines are **snapshots** taken now (after a merge the
   loser's headline still lives in the log for review, even though the story row is tombstoned).
+- `candidates` is an integer and **equals the number of verdicts** — a file with fewer verdicts than
+  candidates (a run cut short) is rejected, not half-executed.
 - 0 candidates → `"verdicts": []` (the executor writes the run's heartbeat row).
 
 Check it before publishing (`jq` reads only):
@@ -364,7 +368,7 @@ pair on the `merge` side, the verdict is `uncertain` (or `keep` if it leans diff
 story that has gone quiet can persist indefinitely. A wrong `merge` collapses two distinct events
 (worse — but since ADO-537, reversal is one click in the admin Judge tab via `unmerge_story`, so treat
 wrong-merge cost as moderate, not catastrophic). `keep` and `uncertain` suppress identically; the
-difference is `uncertain` pings a human (Step 7). Bias accordingly — and when genuinely torn, prefer
+difference is `uncertain` pings a human (the executor's Discord digest). Bias accordingly — and when genuinely torn, prefer
 `uncertain` over a coin-flip `keep`, because only `uncertain` gets human eyes.
 
 The single test to apply: **"Is there ONE occurrence that both stories are fundamentally about?"** If
