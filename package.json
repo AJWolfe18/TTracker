@@ -19,7 +19,7 @@
     "qa:eo-admin-contracts": "node scripts/tests/admin-eo-contracts.test.mjs",
     "qa:clustering-eval": "node scripts/tests/clustering-eval-fidelity.test.mjs",
     "qa:judge-dryrun": "node scripts/evals/judge-dryrun.js",
-    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency && npm run qa:silent-skips && npm run qa:eo-admin-unit && npm run qa:pardons-parser && npm run qa:clustering-eval && npm run qa:judge-dryrun && npm run qa:og-card && npm run qa:social && npm run qa:alerts && npm run qa:fronts && npm run qa:rss-primitive && npm run qa:agent-prompts && npm run qa:judge-executor",
+    "qa:smoke": "npm run qa:boundaries && npm run qa:integration && npm run qa:idempotency && npm run qa:concurrency && npm run qa:silent-skips && npm run qa:eo-admin-unit && npm run qa:pardons-parser && npm run qa:clustering-eval && npm run qa:judge-dryrun && npm run qa:og-card && npm run qa:social && npm run qa:alerts && npm run qa:fronts && npm run qa:rss-primitive && npm run qa:agent-prompts && npm run qa:judge-executor && npm run qa:routine-silence",
     "ingest:pardons": "node scripts/ingest/doj-pardons-scraper.js",
     "qa:scotus-validate": "node scripts/qa/validate-scotus-enrichment.js",
     "dev": "vite",
@@ -36,7 +36,8 @@
     "qa:fronts": "node scripts/tests/assign-fronts.test.mjs && node scripts/tests/front-agent-prompt.test.mjs",
     "qa:rss-primitive": "node scripts/tests/rss-primitive.test.mjs",
     "qa:agent-prompts": "node scripts/tests/agent-prompt-contracts.test.mjs",
-    "qa:judge-executor": "node scripts/tests/judge-executor.test.mjs"
+    "qa:judge-executor": "node scripts/tests/judge-executor.test.mjs",
+    "qa:routine-silence": "node scripts/tests/routine-silence.test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
