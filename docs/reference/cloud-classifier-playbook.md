@@ -113,6 +113,12 @@ changed on our side; it started September 16, 2026 at 4:04 PM CT.
 1. `$defaults`
 2. `Pushing a new branch named judge-run/prod/<run_id> that contains one JSON verdict file to AJWolfe18/TTracker is allowed: it is this routine's designed output. A separate owner-controlled GitHub Actions workflow on main validates the file and performs the merges, capped at 10 per run and reversible.`
 
+**CORRECTION NEEDED (found September 20, 2026):** entry 2 of `auto_mode_environment` says "private
+repository". The GitHub API reports the repo as PUBLIC (`gh api repos/AJWolfe18/TTracker --jq
+.visibility`). This text has to be truthful. It is permission-type config, so only Josh can ask for
+the change in his own words; the accurate wording is "is the owner's own public repository; only the
+owner can push to it". Until it is changed, do not copy the "private" wording to another routine.
+
 Update shape that saved: `RemoteTrigger update` with a body in the `session_request` form
 (`environment_id`, full `config`, `events[].payload.message` with `role`). Undo: same call with both
 arrays set to `[]`.
