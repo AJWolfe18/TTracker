@@ -11,7 +11,7 @@ GitHub Actions move from the previous handoff is not needed.
 1. Research first (Josh asked for every option). Read the Claude Code docs for auto mode, routines,
    cloud-session settings, permission modes, server-managed settings and GitHub Actions, the changelog,
    and claude-code issues #95200, #95384, #60004. Result: eight options, written down in
-   `docs/features/clustering-judge/classifier-override-options.md`.
+   `docs/reference/cloud-classifier-playbook.md`.
 2. Correction to the "regression on September 15" theory: version 2.1.268 started NAMING the blocking
    rule in denial messages, so "zero labelled denials before September 15" is partly the labels being
    new. The September 16, 4:04 PM CT cutover with nothing changed on our side is still real.
@@ -62,8 +62,17 @@ GitHub Actions move from the previous handoff is not needed.
 - The support note drafted in the earlier September 19 handoff was not sent. Lower value now that the
   Judge works; the #95384 comment covers the useful part.
 
+## Routine check (12:30 AM CT, September 20)
+Judge and Stories are proven good under the September classifier. Pardons, SCOTUS and EO show no
+denials and their log writes pass, but their queues have been empty since September 16, so the content
+PATCH is unproven. Table and what to do if one is denied: `docs/reference/cloud-classifier-playbook.md`.
+
+## Memory
+Project memory holds ONE pointer to the playbook (entity `claude-agent-patterns`) plus the `active-work`
+anchor. Four stale Judge notes were removed (backup: `~/.claude-memory/_backups/2026-09-20/`).
+
 ## Files changed (docs only, no code)
-- `docs/features/clustering-judge/classifier-override-options.md` (new)
+- `docs/reference/cloud-classifier-playbook.md` (new)
 - `docs/reference/cloud-agent-runbook.md` (new section 4)
 - `docs/ARCHITECTURE.md` (Story merging row)
 - this handoff
@@ -72,7 +81,7 @@ Code review and `qa:smoke` not run: no code, script, migration or workflow chang
 
 ## Next-session prompt
 ```
-Routine health check after the ADO-583 fix. Read docs/handoffs/2026-09-20-ado-583-closed-routine-auto-mode-fields.md first. No subagents. Do not create ADO cards or comments I did not ask for. Times in Central. (1) list_runs + get_run_log for the PROD Judge routine trig_01DDXZkpC9PkgTzU8wDdL9QM: confirm the last three scheduled runs published with permission_denials=0 and the executor merged or skipped cleanly. If any run was denied again, stop and give me one recommendation from docs/features/clustering-judge/classifier-override-options.md. (2) Check the latest SCOTUS, EO and Pardons PROD runs for classifier denials on their content PATCH; report only, change nothing. (3) Ask me what to do with ADO-586 and ADO-587.
+Routine health check after the ADO-583 fix. Read docs/handoffs/2026-09-20-ado-583-closed-routine-auto-mode-fields.md first. No subagents. Do not create ADO cards or comments I did not ask for. Times in Central. (1) list_runs + get_run_log for the PROD Judge routine trig_01DDXZkpC9PkgTzU8wDdL9QM: confirm the last three scheduled runs published with permission_denials=0 and the executor merged or skipped cleanly. If any run was denied again, stop and give me one recommendation from docs/reference/cloud-classifier-playbook.md. (2) Check the latest SCOTUS, EO and Pardons PROD runs for classifier denials on their content PATCH; report only, change nothing. (3) Ask me what to do with ADO-586 and ADO-587.
 ```
 
 ## Appendix: approved comment for claude-code issue #95384 (not yet posted)

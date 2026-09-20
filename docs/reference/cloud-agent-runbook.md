@@ -80,7 +80,7 @@ Symptom in the run log: `permission_denied Bash [classifier]: [Modify Shared Res
   routine permissions on its own, and that refusal is correct.
 - Undocumented means it can stop working. The fallback ladder (committed allow rule, GitHub Actions,
   local scheduled task) and the doc findings behind it:
-  `docs/features/clustering-judge/classifier-override-options.md`.
+  `docs/reference/cloud-classifier-playbook.md`.
 
 ## 5. Misc troubleshooting
 
