@@ -75,7 +75,7 @@ Create `.env.local` file in project root:
 ```env
 # Test Environment
 SUPABASE_URL=https://wnrjrywpcadwutfykflu.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMjA3MzcsImV4cCI6MjA3MDc5NjczN30.n-4DboHQSivt5GWx7X5wuaUsdmjsuJe0VgB18V-GxU4
+SUPABASE_ANON_KEY=<YOUR_TEST_ANON_KEY - Supabase dashboard>
 SUPABASE_SERVICE_KEY=<get from Supabase dashboard>
 ADMIN_API_KEY=<generate a secure key>
 ```
