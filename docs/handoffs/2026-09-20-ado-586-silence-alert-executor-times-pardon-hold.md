@@ -92,7 +92,14 @@ SCOTUS and EO are weekdays only (next: Monday about 11:02 AM and 11:06 AM CT). P
 
 ## Next-session prompt
 ```
-Read docs/handoffs/2026-09-20-ado-586-silence-alert-executor-times-pardon-hold.md first. No subagents. Do not create ADO cards or comments I did not ask for. Times in Central. (1) list_runs + get_run_log for the PROD Judge routine trig_01DDXZkpC9PkgTzU8wDdL9QM: confirm the 4:03 PM CT September 20 run (and any later ones) published with no permission_denied, used the corrected start-up message without complaint, and the executor merged or skipped cleanly. (2) Check the latest Pardons, SCOTUS and EO PROD runs; if one had real work, read its content PATCH for classifier denials. Report only. (3) If PR #148 is merged, find the next RSS Pipeline Health Check run on main, confirm two "[routine-silence] ... fresh" lines, and close ADO-586 after the AC check. (4) If PR #149 is merged, read the first PROD Pardons run that has real work: searches must return results and the content PATCH must pass the classifier; then resolve ADO-588 after the AC check. (5) Ship the ADO-577 needs-review Discord alert to main (Josh said yes). (6) Then ADO-587: the plan check is done (public repo, $0), start with the inventory of workflows that read a PROD secret.
+/start-work Read docs/handoffs/2026-09-20-ado-586-silence-alert-executor-times-pardon-hold.md first, including the Addendum. No subagents. Do not create ADO cards or comments I did not ask for. Times in Central.
+(1) PROD Judge routine trig_01DDXZkpC9PkgTzU8wDdL9QM: list_runs + get_run_log for the 4:03 PM CT September 20 run and any later ones. Confirm each published with no permission_denied, accepted the corrected start-up message, and the executor merged or skipped cleanly. If a run was denied, stop and give me one recommendation from docs/reference/cloud-classifier-playbook.md.
+(2) Pardons TEST run cse_0187wE5HyRcMG8xfHbtPNX8s (prompt v1.2): confirm TEST pardons_enrichment_log id 2 finished as completed and that pardons 1, 4, 5, 7, 8 were written with prompt_version v1.2 and real source_urls. Update AC 1 on ADO-588.
+(3) Tell me which of PR #147, #148, #149 are merged. For #148 merged: find the next RSS Pipeline Health Check run on main, confirm two "[routine-silence] ... fresh" lines, then close ADO-586 after the AC check. For #149 merged: read the first PROD Pardons run that has real work - searches must return results and the content PATCH must pass the classifier - then resolve ADO-588 after the AC check.
+(4) Check the latest SCOTUS and EO PROD runs. If one had real work, read its content PATCH for classifier denials. Report only.
+(5) Ship the ADO-577 needs-review Discord alert to main (I said yes).
+(6) Then start ADO-587. The plan check is done (the repo is public, so it costs $0). Begin with the inventory of workflows that read a PROD secret.
+(7) Ask me about the two open decisions: the Judge routine text that says "private" repository when the repo is public, and re-enriching the pardons that were enriched blind.
 ```
 
 ---
