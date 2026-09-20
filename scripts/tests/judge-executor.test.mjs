@@ -93,8 +93,8 @@ const doc = (verdicts, extra = {}) => ({ schema: SCHEMA, run_id: RUN, environmen
 }
 
 // --- executeVerdicts against a fake PostgREST ----------------------------------------------
-function fakeClient({ existing = [], audit = [], auditAfter = null, ages = null, agesStatus = 200, mergeResults = {}, rpcStatus = () => 200, insertStatus = () => 201, failedBefore = () => false } = {}) {
-  const calls = { rpc: [], inserts: [], gets: [] };
+function fakeClient({ existing = [], audit = [], auditAfter = null, ages = null, agesStatus = 200, mergeResults = {}, rpcStatus = () => 200, insertStatus = () => 201, failedBefore = () => false, loggedAfterInsert = null, updateStatus = 200 } = {}) {
+  const calls = { rpc: [], inserts: [], gets: [], updates: [] };
   return {
     calls,
     get: async (path) => {
@@ -109,7 +109,16 @@ function fakeClient({ existing = [], audit = [], auditAfter = null, ages = null,
         const ids = path.match(/id=in\.\((\d+),(\d+)\)/).slice(1).map(Number);
         return { ok: true, status: 200, json: ages || ids.map((id) => ({ id, first_seen_at: new Date(Date.UTC(2026, 0, 1) + id * 1000).toISOString() })), text: '' };
       }
+      // loggedAfterInsert = what the log holds once an insert has been SENT (a commit behind a lost response); 'down' = the read fails
+      if (loggedAfterInsert && calls.inserts.length) {
+        if (loggedAfterInsert === 'down') return { ok: false, status: 503, json: null, text: 'down' };
+        return { ok: true, status: 200, json: loggedAfterInsert, text: '' };
+      }
       return { ok: true, status: 200, json: existing, text: '' };
+    },
+    update: async (table, query, body) => {
+      calls.updates.push({ table, query, body });
+      return updateStatus === 200 ? { ok: true, status: 200, json: [{ id: 1 }], text: '' } : { ok: false, status: updateStatus, json: null, text: 'boom' };
     },
     rpc: async (name, args) => {
       calls.rpc.push({ name, args });
@@ -223,6 +232,50 @@ const quiet = () => {};
   const s2 = await executeVerdicts(doc([merge(1, 2), merge(1, 3), merge(2, 9)]), { client: c2, env: 'prod', discord: async () => true, log: quiet });
   assert.deepEqual(c2.calls.rpc.map((r) => `${r.args.p_loser_id}->${r.args.p_survivor_id}`), ['2->1'], 'neither story 1 nor story 2 is merged again this run');
   assert.equal(s2.transient, 1); assert.equal(s2.deferred, 2);
+  assert.equal(s2.unconfirmed, 1, 'an unresolved merge is reported so the CLI exits 1 and the next poll reconciles it');
+  assert.equal(s.unconfirmed, 0, 'a merge confirmed from the audit table is not left open');
+}
+
+{ // Codex P1: a merge that commits AFTER its `transient:` row was logged is reconciled on the next poll, not skipped
+  const c = fakeClient({ existing: [{ id: 77, story_id_a: 3, story_id_b: 4, merged: false }, { id: 78, story_id_a: 1, story_id_b: 2, merged: false }], audit: [{ loser_id: 4, survivor_id: 3 }] });
+  const s = await executeVerdicts(doc([merge(3, 4), pair(1, 2, 'keep')]), { client: c, env: 'prod', discord: async () => true, log: quiet });
+  assert.equal(c.calls.rpc.length, 0, 'never re-merged'); assert.equal(c.calls.inserts.length, 0, 'no second row for the pair');
+  assert.equal(c.calls.updates.length, 1);
+  const u = c.calls.updates[0];
+  assert.equal(u.table, 'clustering_judge_log'); assert.ok(u.query.includes('id=eq.77') && u.query.includes('merged=is.false'));
+  assert.deepEqual(u.body, { merged: true, verdict: 'merge', rationale: 'same event 3/4' }, 'the transient: prefix is replaced by the real rationale');
+  assert.equal(s.reconciled, 1); assert.equal(s.skipped_logged, 1); assert.equal(s.unconfirmed, 0);
+  // the executor flipped the orientation in the first attempt: the audit row is the authority, and the row says so
+  const cf = fakeClient({ existing: [{ id: 5, story_id_a: 3, story_id_b: 4, merged: false }], audit: [{ loser_id: 3, survivor_id: 4 }] });
+  await executeVerdicts(doc([merge(3, 4)]), { client: cf, env: 'prod', discord: async () => true, log: quiet });
+  assert.ok(cf.calls.updates[0].body.rationale.endsWith('[executor: survivor/loser flipped - story 4 is older]'));
+  // already merged=true -> plain skip, no write
+  const c2 = fakeClient({ existing: [{ id: 77, story_id_a: 3, story_id_b: 4, merged: true }], audit: [{ loser_id: 4, survivor_id: 3 }] });
+  const s2 = await executeVerdicts(doc([merge(3, 4)]), { client: c2, env: 'prod', discord: async () => true, log: quiet });
+  assert.equal(c2.calls.updates.length, 0); assert.equal(s2.skipped_logged, 1); assert.equal(s2.reconciled, 0);
+  // a failed reconcile write is a runtime failure (exit 1): the branch stays and the next poll tries again
+  const c3 = fakeClient({ existing: [{ id: 77, story_id_a: 3, story_id_b: 4, merged: false }], audit: [{ loser_id: 4, survivor_id: 3 }], updateStatus: 503 });
+  await assert.rejects(() => executeVerdicts(doc([merge(3, 4)]), { client: c3, env: 'prod', discord: async () => true, log: quiet }), /could not be reconciled/);
+}
+
+{ // Codex P1: a log insert that committed behind a lost response is not inserted again
+  const c = fakeClient({ insertStatus: (rows, n) => (n === 0 ? 504 : 201), loggedAfterInsert: [{ story_id_a: 2, story_id_b: 1 }] }); // only 1/2 landed (order-insensitive)
+  const s = await executeVerdicts(doc([pair(1, 2, 'keep'), pair(5, 6, 'keep')]), { client: c, env: 'test', discord: async () => true, log: quiet });
+  assert.equal(c.calls.inserts.length, 2);
+  assert.deepEqual(c.calls.inserts[1].map((r) => [r.story_id_a, r.story_id_b]), [[5, 6]], 'the retry carries only the rows the log does not have');
+  assert.equal(s.logged, 2);
+  // everything landed -> no retry at all
+  const c2 = fakeClient({ insertStatus: () => 504, loggedAfterInsert: [{ story_id_a: 1, story_id_b: 2 }, { story_id_a: 5, story_id_b: 6 }] });
+  await executeVerdicts(doc([pair(1, 2, 'keep'), pair(5, 6, 'keep')]), { client: c2, env: 'test', discord: async () => true, log: quiet });
+  assert.equal(c2.calls.inserts.length, 1);
+  // same for the heartbeat row
+  const c3 = fakeClient({ insertStatus: () => 504, loggedAfterInsert: [{ story_id_a: null, story_id_b: null }] });
+  const s3 = await executeVerdicts(doc([]), { client: c3, env: 'test', discord: async () => true, log: quiet });
+  assert.equal(c3.calls.inserts.length, 1); assert.equal(s3.heartbeat, true);
+  // the log cannot be read after an ambiguous response -> never retry blind; fail the run, the next poll skips what landed
+  const c4 = fakeClient({ insertStatus: () => 504, loggedAfterInsert: 'down' });
+  await assert.rejects(() => executeVerdicts(doc([pair(1, 2, 'keep')]), { client: c4, env: 'test', discord: async () => true, log: quiet }), /bulk log insert/);
+  assert.equal(c4.calls.inserts.length, 1);
 }
 
 { // orientation: the agent swapped survivor/loser -> the executor flips it and says so on the row (finding 4)
@@ -283,6 +336,11 @@ const quiet = () => {};
   assert.equal(r.status, 201);
   assert.equal(seen[0].init.headers.Prefer, 'return=minimal');
   assert.equal(seen[0].url, 'https://example.supabase.co/rest/v1/clustering_judge_log');
+  // the reconcile write is a PATCH scoped by the query string
+  await client.update('clustering_judge_log', 'id=eq.77&merged=is.false&select=id', { merged: true });
+  assert.equal(seen[1].init.method, 'PATCH');
+  assert.equal(seen[1].url, 'https://example.supabase.co/rest/v1/clustering_judge_log?id=eq.77&merged=is.false&select=id');
+  assert.equal(seen[1].init.body, JSON.stringify({ merged: true }));
 }
 
 { // empty run -> heartbeat row once; a second attempt does not duplicate it

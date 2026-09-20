@@ -34,8 +34,13 @@
  *                                             must SUPABASE_URL - a prod file never runs on TEST)
  *         DISCORD_WEBHOOK_URL                (optional; digest is a no-op without it)
  *
+ * A pair logged merged=false whose merge shows up in story_merge_audit later (a commit behind a lost
+ * response) has its row corrected to merged=true on the next poll. Log inserts are re-sent only for
+ * rows the log does not already hold, so a response lost after COMMIT never duplicates a verdict.
+ *
  * Exit codes: 0 = every verdict logged; 1 = a runtime failure (database unreachable, a log write
- * failed after retries) - retryable, the workflow leaves the inbox branch for its next poll;
+ * failed after retries, or a merge call still unconfirmed at the end of the run - everything is
+ * logged, the next poll only reconciles) - retryable, the workflow leaves the inbox branch for its next poll;
  * 2 = the verdict file itself was rejected (unreadable, validation, environment mismatch) -
  * permanent, the workflow parks the branch under judge-rejected/ so it alerts once, not every
  * poll. A merge_stories `ok:false` is NOT an exit-1:
@@ -214,6 +219,7 @@ export function makeClient({ supabaseUrl, serviceKey, fetchImpl = globalThis.fet
     get: (path) => call('GET', path),
     rpc: (name, args) => call('POST', `/rpc/${name}`, { body: args }),
     insert: (table, rows) => call('POST', `/${table}`, { body: rows, prefer: 'return=minimal' }), // rows are never read back; still 201
+    update: (table, query, body) => call('PATCH', `/${table}?${query}`, { body, prefer: 'return=representation' }),
   };
 }
 
@@ -221,23 +227,44 @@ export function makeClient({ supabaseUrl, serviceKey, fetchImpl = globalThis.fet
 // Run
 // ---------------------------------------------------------------------------------------------
 
+const HEARTBEAT_KEY = 'heartbeat';
+const rowKey = (r) => (r.story_id_a == null && r.story_id_b == null ? HEARTBEAT_KEY : pairKey(r.story_id_a, r.story_id_b));
+
 /**
- * Insert log rows with the Section-5 retry ladder: once as-is, once with evidence_as_of removed
- * (recovers a mangled watermark echo), then give up. Bulk inserts are all-or-nothing, so a retry
- * never double-inserts.
+ * After a non-201 insert response: which of `rows` does the log still lack for this run? A gateway
+ * timeout can arrive AFTER PostgreSQL committed, and only the heartbeat row has a unique index, so
+ * a blind retry would write duplicate verdict rows (review P1). Returns null when the log cannot be
+ * read - then nothing is known and the caller must not retry.
+ */
+async function rowsNotYetLogged(client, rows) {
+  const r = await client.get(`/clustering_judge_log?select=story_id_a,story_id_b&run_id=eq.${encodeURIComponent(rows[0].run_id)}&limit=1000`);
+  if (!r.ok || !Array.isArray(r.json)) return null;
+  const have = new Set(r.json.map(rowKey));
+  return rows.filter((row) => !have.has(rowKey(row)));
+}
+
+/**
+ * Insert log rows with the Section-5 retry ladder: once as-is, once more as-is, once with
+ * evidence_as_of removed (recovers a mangled watermark echo), then give up. A bulk insert is
+ * all-or-nothing, but its RESPONSE is not proof either way, so before every retry the log is read
+ * back and only the rows it does not hold are sent again. If that read fails the ladder stops:
+ * the run exits 1 and the next poll skips whatever landed (alreadyLogged).
  */
 async function insertLogRows(client, rows, log) {
-  if (!rows.length) return true;
-  let r = await client.insert('clustering_judge_log', rows);
-  if (r.status === 201) return true;
-  log(`log insert failed (${r.status}) ${String(r.text).slice(0, 300)} - retrying once as-is`);
-  r = await client.insert('clustering_judge_log', rows);
-  if (r.status === 201) return true;
-  log(`log insert failed again (${r.status}) - retrying once without evidence_as_of`);
-  r = await client.insert('clustering_judge_log', rows.map(({ evidence_as_of, ...rest }) => rest));
-  if (r.status === 201) return true;
-  log(`log insert failed (${r.status}) ${String(r.text).slice(0, 300)} - giving up`);
-  return false;
+  const shapes = [(x) => x, (x) => x, (x) => x.map(({ evidence_as_of, ...rest }) => rest)];
+  const notes = ['retrying once as-is', 'retrying once without evidence_as_of'];
+  let pending = rows;
+  for (let i = 0; i < shapes.length && pending.length; i++) {
+    const r = await client.insert('clustering_judge_log', shapes[i](pending));
+    if (r.status === 201) return true;
+    if (i === shapes.length - 1) { log(`log insert failed (${r.status}) ${String(r.text).slice(0, 300)} - giving up`); return false; }
+    const missing = await rowsNotYetLogged(client, pending);
+    if (missing === null) { log(`log insert failed (${r.status}) and the log could not be read back - not retrying blind, giving up`); return false; }
+    if (missing.length < pending.length) log(`log insert answered ${r.status} but ${pending.length - missing.length} of ${pending.length} row(s) are in the log - not sending those again`);
+    pending = missing;
+    if (pending.length) log(`log insert failed (${r.status}) ${String(r.text).slice(0, 300)} - ${notes[i]}`);
+  }
+  return true; // nothing left to send: every row is in the log
 }
 
 /** Has this pair already failed a merge before (any earlier run)? Then this failure escalates. */
@@ -249,16 +276,16 @@ async function pairFailedBefore(client, a, b, runId) {
 
 export async function executeVerdicts(doc, { client, env, discord = postDiscord, log = console.log }) {
   const { run_id: runId, dry_run: dryRun, verdicts } = doc;
-  const summary = { run_id: runId, env, dry_run: dryRun, verdicts: verdicts.length, merged: 0, deferred: 0, failed: 0, escalated: 0, transient: 0, recovered: 0, flipped: 0, skipped_logged: 0, logged: 0, heartbeat: false, digest_sent: false };
+  const summary = { run_id: runId, env, dry_run: dryRun, verdicts: verdicts.length, merged: 0, deferred: 0, failed: 0, escalated: 0, transient: 0, recovered: 0, reconciled: 0, unconfirmed: 0, flipped: 0, skipped_logged: 0, logged: 0, heartbeat: false, digest_sent: false };
 
   // Idempotency: what did an earlier attempt of this run already log?
-  const existing = await client.get(`/clustering_judge_log?select=story_id_a,story_id_b&run_id=eq.${encodeURIComponent(runId)}&limit=1000`);
+  const existing = await client.get(`/clustering_judge_log?select=id,story_id_a,story_id_b,merged&run_id=eq.${encodeURIComponent(runId)}&limit=1000`);
   if (!existing.ok || !Array.isArray(existing.json)) throw new Error(`could not read existing log rows for ${runId}: ${existing.status} ${String(existing.text).slice(0, 200)}`);
-  const alreadyLogged = new Set();
+  const alreadyLogged = new Map(); // pair key -> the row an earlier attempt wrote ({id, merged})
   let heartbeatExists = false;
   for (const r of existing.json) {
     if (r.story_id_a == null && r.story_id_b == null) heartbeatExists = true;
-    else alreadyLogged.add(pairKey(r.story_id_a, r.story_id_b));
+    else alreadyLogged.set(pairKey(r.story_id_a, r.story_id_b), r);
   }
 
   // Empty run -> heartbeat only (the ONLY row with both ids NULL; unique per run_id).
@@ -275,15 +302,18 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
   // this run_id even when the log insert that should have followed never landed.
   const auditPath = `/story_merge_audit?select=loser_id,survivor_id&run_id=eq.${encodeURIComponent(runId)}&limit=1000`;
   const touched = new Set();
-  const mergedThisRun = new Set();
+  const mergedThisRun = new Map(); // pair key -> the audit row ({loser_id, survivor_id})
   if (!dryRun) {
     const audit = await client.get(auditPath);
     if (!audit.ok || !Array.isArray(audit.json)) throw new Error(`could not read story_merge_audit for ${runId}: ${audit.status} ${String(audit.text).slice(0, 200)}`);
     for (const m of audit.json) {
-      mergedThisRun.add(pairKey(m.loser_id, m.survivor_id));
+      mergedThisRun.set(pairKey(m.loser_id, m.survivor_id), m);
       touched.add(m.loser_id); touched.add(m.survivor_id);
     }
   }
+  // The rationale of a merge recovered from the audit table: the executor may have flipped the
+  // agent's orientation in the attempt that merged it, and the audit row is what actually happened.
+  const recoveredRationale = (v, m) => (m.survivor_id === v.survivor_id ? v.rationale : `${v.rationale} [executor: survivor/loser flipped - story ${m.survivor_id} is older]`);
   let executed = mergedThisRun.size; // counts toward the cap, exactly as the DB counts it
   const bulk = [];
   const unconfirmed = []; // merge calls whose response never arrived readable
@@ -295,12 +325,23 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
     // pair is skipped BECAUSE its clustering_judge_log row for this run already exists - that row is
     // the record, so nothing goes unobserved. Deferred / failed / transient merges are not skips
     // either: each gets its own log row with a contractual rationale prefix.
-    if (alreadyLogged.has(key)) { summary.skipped_logged++; log(`pair ${key} already logged for this run - skipping`); continue; }
+    // The audit check comes BEFORE the logged-pair skip (review P1): a merge whose response was lost
+    // can commit after its `transient:` row was written. That row says merged=false, and the admin
+    // tab's one-click unmerge is driven from merged=true - so the row is corrected, not skipped.
+    const loggedRow = alreadyLogged.get(key);
+    if (loggedRow && v.verdict === 'merge' && mergedThisRun.has(key) && loggedRow.merged !== true) {
+      const u = await client.update('clustering_judge_log', `id=eq.${loggedRow.id}&merged=is.false&select=id`, { merged: true, verdict: 'merge', rationale: recoveredRationale(v, mergedThisRun.get(key)) });
+      if (!u.ok) throw new Error(`merge ${key} committed after its transient row was logged and the row could not be reconciled (${u.status})`);
+      summary.reconciled++;
+      log(`pair ${key}: logged merged=false by an earlier attempt, but story_merge_audit shows the merge committed - row ${loggedRow.id} set to merged=true`);
+      continue;
+    }
+    if (loggedRow) { summary.skipped_logged++; log(`pair ${key} already logged for this run - skipping`); continue; }
 
     if (mergedThisRun.has(key)) {
       // An earlier attempt of this run executed this merge but died before its log row landed.
       // Write the merged=true row now - the admin tab's one-click unmerge is driven from it.
-      if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, verdict: 'merge', merged: true })], log))) throw new Error(`recovered merge ${key} could not be logged`);
+      if (!(await insertLogRows(client, [buildLogRow(v, { runId, dryRun, verdict: 'merge', merged: true, rationale: recoveredRationale(v, mergedThisRun.get(key)) })], log))) throw new Error(`recovered merge ${key} could not be logged`);
       summary.recovered++; summary.logged++;
       log(`pair ${key} merged in an earlier attempt of this run - merged=true row written`);
       continue;
@@ -407,7 +448,10 @@ export async function executeVerdicts(doc, { client, env, discord = postDiscord,
     const audit = await client.get(auditPath);
     const done = new Set(audit.ok && Array.isArray(audit.json) ? audit.json.map((m) => pairKey(m.loser_id, m.survivor_id)) : []);
     for (const u of unconfirmed) {
-      if (!done.has(u.key)) continue;
+      // Still unknown: the row goes in as `transient:` and the run is reported unconfirmed, so the
+      // CLI exits 1, the inbox branch stays, and the next poll reconciles the row against the audit
+      // table (above). That poll makes no merge calls, so it ends clean and the branch is deleted.
+      if (!done.has(u.key)) { summary.unconfirmed++; continue; }
       u.row.merged = true; u.row.rationale = u.rationale;
       summary.transient--; summary.recovered++; summary.merged++;
       log(`pair ${u.key}: merge response was lost but story_merge_audit shows it committed - logged merged=true`);
@@ -445,7 +489,11 @@ async function main() {
   const client = makeClient({ supabaseUrl: SUPABASE_URL, serviceKey: SUPABASE_SERVICE_ROLE_KEY });
   console.log(`executing ${doc.verdicts.length} verdict(s) for ${doc.run_id} on ${doc.environment} (dry_run=${doc.dry_run})`);
   try {
-    await executeVerdicts(doc, { client, env: doc.environment });
+    const summary = await executeVerdicts(doc, { client, env: doc.environment });
+    if (summary.unconfirmed > 0) {
+      console.error(`${summary.unconfirmed} merge call(s) got no readable answer and story_merge_audit does not show them yet - every verdict is logged; leaving the run for the next poll to reconcile`);
+      process.exit(1);
+    }
   } catch (e) {
     console.error(`executor failed: ${e.message}`);
     process.exit(1);
