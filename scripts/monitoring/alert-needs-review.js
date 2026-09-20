@@ -14,7 +14,10 @@
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or the SUPABASE_TEST_* names),
  *        DISCORD_WEBHOOK_URL (no URL = no message), ALERT_WINDOW_HOURS (optional)
  *
- * NEVER fails the caller: any error logs one line and exits 0.
+ * A check that cannot run (missing credentials, failed query, crash) is never silent: it posts its own
+ * "could not run" Discord message and exits 0. It exits 1 only when that message could not be sent
+ * either, so the step shows red in the run. The workflow steps are continue-on-error, so the ingest
+ * job itself never fails because of this script.
  */
 
 import 'dotenv/config';
@@ -64,7 +67,11 @@ export function buildAlert(domainKey, rows, { origin = 'https://trumpytracker.co
   };
 }
 
-export async function runNeedsReviewAlert({ env = process.env, argv = process.argv.slice(2), fetchImpl = globalThis.fetch, log = console.log } = {}) {
+// Workflow logs are this script's only output channel; stdout directly, no console.log in production code.
+const out = (line) => process.stdout.write(`${line}
+`);
+
+export async function runNeedsReviewAlert({ env = process.env, argv = process.argv.slice(2), fetchImpl = globalThis.fetch, log = out } = {}) {
   const i = argv.indexOf('--domain');
   const domainKey = i >= 0 ? argv[i + 1] : null;
   if (!domainKey || !DOMAINS[domainKey]) throw new Error(`--domain must be one of ${Object.keys(DOMAINS).join('|')}`);
@@ -83,8 +90,24 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   return { flagged: rows.length, posted };
 }
 
+/** CLI wrapper. Returns the exit code: 0 normally, 1 only when the check could not run AND Discord could not be told. */
+export async function runCli({ env = process.env, argv = process.argv.slice(2), fetchImpl = globalThis.fetch, log = out, logError = console.error } = {}) {
+  try {
+    const r = await runNeedsReviewAlert({ env, argv, fetchImpl, log });
+    log(`[needs-review] done: flagged=${r.flagged} posted=${r.posted}`);
+    return 0;
+  } catch (err) {
+    logError(`[needs-review] could not run: ${err.message}`);
+    const i = argv.indexOf('--domain');
+    const told = await postDiscord({
+      title: `Needs-review check could not run (${(i >= 0 && argv[i + 1]) || 'unknown domain'})`,
+      description: `Flagged enrichments are not being reported until this is fixed.\n${String(err.message).slice(0, 300)}`,
+      color: COLORS.error,
+    }, { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl });
+    return told ? 0 : 1;
+  }
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  runNeedsReviewAlert()
-    .then((r) => { console.log(`[needs-review] done: flagged=${r.flagged} posted=${r.posted}`); process.exit(0); })
-    .catch((err) => { console.error(`[needs-review] skipped: ${err.message}`); process.exit(0); });
+  runCli().then((code) => process.exit(code));
 }
