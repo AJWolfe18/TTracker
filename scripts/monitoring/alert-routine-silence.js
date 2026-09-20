@@ -17,7 +17,10 @@
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
  *        SILENCE_HOURS_JUDGE / SILENCE_HOURS_STORIES (optional overrides)
  *
- * NEVER fails the caller: a failed read is reported to Discord and the log, and the exit is 0.
+ * Exit codes: 0 when the check RAN (fresh, silent or a failed read - each failed read posts its own
+ * Discord message). 1 when the check could not run at all (missing credentials, crash). The workflow
+ * step is continue-on-error so the health check stays green, and a follow-up step posts to Discord
+ * when this step's outcome is failure - a dead monitor must never be silent.
  */
 
 import 'dotenv/config';
@@ -77,7 +80,10 @@ export function buildSilenceAlert(routine, { newestIso, hours, now = Date.now(),
   };
 }
 
-export async function runRoutineSilenceAlert({ env = process.env, fetchImpl = globalThis.fetch, log = console.log, now = Date.now() } = {}) {
+// Workflow logs are this script's only output channel; stdout directly, no console.log in production code.
+const out = (line) => process.stdout.write(`${line}\n`);
+
+export async function runRoutineSilenceAlert({ env = process.env, fetchImpl = globalThis.fetch, log = out, now = Date.now() } = {}) {
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
@@ -106,6 +112,7 @@ export async function runRoutineSilenceAlert({ env = process.env, fetchImpl = gl
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   runRoutineSilenceAlert()
-    .then((r) => { console.log(`[routine-silence] done: ${r.map((x) => `${x.key}=${x.state}`).join(' ')}`); process.exit(0); })
-    .catch((err) => { console.error(`[routine-silence] skipped: ${err.message}`); process.exit(0); });
+    .then((r) => { out(`[routine-silence] done: ${r.map((x) => `${x.key}=${x.state}`).join(' ')}`); process.exit(0); })
+    // Could not run at all: exit 1 so the workflow's follow-up step reports the dead monitor.
+    .catch((err) => { console.error(`[routine-silence] could not run: ${err.message}`); process.exit(1); });
 }

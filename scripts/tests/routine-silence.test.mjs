@@ -1,6 +1,9 @@
 // ADO-586: the routine silence check alerts on a stale Judge or Stories log, stays quiet when
 // both are fresh, reports a failed read instead of swallowing it, and always reads a bounded query.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { buildSilenceAlert, runRoutineSilenceAlert, ROUTINES } from '../monitoring/alert-routine-silence.js';
 
 const NOW = Date.parse('2026-09-20T18:00:00Z');
@@ -118,6 +121,17 @@ function harness(tables) {
   assert.equal(seen.discord.length, 0);
   await assert.rejects(() => runRoutineSilenceAlert({ env: {}, fetchImpl, log: silent, now: NOW }), /not set/);
   assert.deepEqual(ROUTINES.map((r) => [r.key, r.hours]), [['judge', 12], ['stories', 6]]);
+}
+
+// --- CLI: a monitor that cannot run exits 1 so the workflow's follow-up step reports it ------
+{
+  const script = fileURLToPath(new URL('../monitoring/alert-routine-silence.js', import.meta.url));
+  // empty strings (not unset) so a local .env cannot fill them back in
+  const r = spawnSync(process.execPath, [script], { env: { ...process.env, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', DISCORD_WEBHOOK_URL: '' }, encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /could not run: SUPABASE_URL/);
+  // project rule: no console.log in production code
+  assert.doesNotMatch(readFileSync(script, 'utf8'), /console\.log\(/);
 }
 
 console.log('routine-silence: ok');
