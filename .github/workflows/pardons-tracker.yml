@@ -25,6 +25,8 @@ jobs:
       SUPABASE_URL: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_URL || secrets.SUPABASE_TEST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.SUPABASE_SERVICE_KEY || secrets.SUPABASE_TEST_SERVICE_KEY }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ADO-577: new-work + flagged-enrichment alerts
+      # A run on the test branch reads the TEST database: its alerts are titled [TEST] and link the TEST site.
+      ALERT_ENV: ${{ github.ref == 'refs/heads/main' && 'prod' || 'test' }}
 
     steps:
       - uses: actions/checkout@v4

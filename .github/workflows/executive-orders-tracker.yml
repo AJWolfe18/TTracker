@@ -68,6 +68,7 @@ jobs:
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
         EO_LOOKBACK_DAYS: ${{ inputs.lookback_days || '3' }}
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}   # ADO-577: new-EO alert
+        ALERT_ENV: ${{ steps.env_detect.outputs.environment == 'test' && 'test' || 'prod' }}   # TEST runs are titled [TEST]
       run: node scripts/executive-orders-tracker-supabase.js
 
     # ADO-577: EOs the agent flagged (needs_manual_review) ping Discord. Never fails the job.
@@ -78,6 +79,7 @@ jobs:
         SUPABASE_URL: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_URL || secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        ALERT_ENV: ${{ steps.env_detect.outputs.environment == 'test' && 'test' || 'prod' }}
       run: node scripts/monitoring/alert-needs-review.js --domain eo
       timeout-minutes: 2
 

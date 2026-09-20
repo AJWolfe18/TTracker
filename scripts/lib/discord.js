@@ -31,14 +31,16 @@ const MAX_DESCRIPTION = 4000; // Discord embed description cap is 4096
  * @param {object} [opts]
  * @param {string} [opts.webhookUrl]  defaults to process.env.DISCORD_WEBHOOK_URL
  * @param {typeof fetch} [opts.fetchImpl] injectable for tests
+ * @param {string} [opts.envLabel]    defaults to process.env.ALERT_ENV; 'test' prefixes the title with [TEST]
+ *                                    so a TEST-branch run can never look like a PROD alert
  * @returns {Promise<boolean>} true when Discord accepted the message
  */
-export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch } = {}) {
+export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch, envLabel = process.env.ALERT_ENV } = {}) {
   if (!webhookUrl) return false;
   if (!embed || !embed.title) return false;
   const payload = {
     embeds: [{
-      title: String(embed.title).slice(0, 256),
+      title: `${envLabel === 'test' ? '[TEST] ' : ''}${embed.title}`.slice(0, 256),
       description: embed.description ? String(embed.description).slice(0, MAX_DESCRIPTION) : undefined,
       color: embed.color ?? COLORS.info,
       fields: Array.isArray(embed.fields) ? embed.fields.slice(0, 25) : undefined,
