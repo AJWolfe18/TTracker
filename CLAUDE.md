@@ -177,11 +177,11 @@ docs/features/
 
 3. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
 
-4. **ADO Operations via `/ado` command** - Isolates 20K+ context cost
-   - ADO MCP tools return full work item dumps
-   - Use `/ado` command to query/update work items
+4. **ADO Operations via `/ado` command** - Avoids 20K+ context cost
+   - ADO MCP tools return full work item dumps (20-30K tokens each) - never call them directly for one item
+   - Use `/ado` command to query/update work items: REST + jq reads (~0.5-2K tokens) and REST JSON Patch writes (~0.1-0.5K), both in the main session
+   - No subagent: `Agent` and `Task` are denied in `.claude/settings.json`
    - See `.claude/skills/ado/SKILL.md` for syntax
-   - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
 

@@ -1,6 +1,6 @@
 ---
 name: ado
-description: Query, create, update, search, or link Azure DevOps (ADO) work items for TTracker. Use whenever the user references an ADO/work-item number, asks to check/create/update/search ADO, or a ticket state change is needed. Reads go via REST+jq shortcut; writes via a reusable subagent to isolate 20-30K token API responses.
+description: Query, create, update, search, or link Azure DevOps (ADO) work items for TTracker. Use whenever the user references an ADO/work-item number, asks to check/create/update/search ADO, or a ticket state change is needed. Reads AND writes go via the REST + jq / JSON Patch shortcuts in the main session, with no subagent (Agent and Task are denied in .claude/settings.json). Never call the ADO MCP tools directly for a single item - they return 20-30K token dumps.
 ---
 
 # Azure DevOps Integration Skill
@@ -88,7 +88,7 @@ rejects "Testing"/"Ready for Prod" on Bugs (verified 2026-08-05, ADO-540). Use *
 
 ## Purpose
 
-Handle ADO operations via subagent to isolate 20-30K token context cost. ADO MCP tools return full work item details - this skill processes internally and returns only summaries.
+Do ADO work without paying for raw API dumps. The ADO MCP tools return 20-30K tokens per work item; the REST + jq shortcuts below throw that noise away in the shell pipe, so a read costs ~0.5-2K tokens and a write ~0.1-0.5K, in the main session.
 
 ---
 
@@ -96,18 +96,21 @@ Handle ADO operations via subagent to isolate 20-30K token context cost. ADO MCP
 
 **Route by operation type (cheapest first):**
 - **Reads (get status / full card):** use the REST + jq shortcut below — no subagent, ~0.5-2K tokens
-- **Writes (create / update / transition / comment):** use a subagent. Spawn it ONCE per
-  session with `name: "ado-agent"`, then send subsequent operations to the SAME agent via
-  `SendMessage(to: "ado-agent")` — this reuses its context instead of paying ~45K startup
-  per operation.
+- **Writes (create / update / transition / comment):** use the REST WRITE SHORTCUT below — no
+  subagent, ~0.1-0.5K tokens. (Updated September 20, 2026: the old rule sent writes to a subagent,
+  which costs ~45K tokens of startup for a write that is one curl call.)
+- **Subagents are OFF in this project:** `Agent` and `Task` are in the deny list of
+  `.claude/settings.json` (Josh, August 9, 2026), so the tool does not exist in a session. The
+  subagent template below is LEGACY: use it only if Josh re-enables agents AND the job is a bulk one
+  (dozens of items), and say the token tradeoff first.
 
-Launch a **Task tool (general-purpose subagent)** with the ADO operation. The subagent will:
+**LEGACY (agents re-enabled only):** launch a **Task tool (general-purpose subagent)** with the ADO operation. The subagent will:
 
 1. Execute the ADO operation using MCP tools
 2. Process the full response internally (absorbing the 20-30K tokens)
 3. Return only a concise summary to main conversation
 
-### Subagent Prompt Template
+### Subagent Prompt Template (LEGACY - see above)
 
 ```
 Execute ADO operation: [DESCRIBE WHAT USER WANTS]
@@ -230,8 +233,38 @@ curl -s -u ":$PAT" "$ADO_ORG/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" 
 ```
 
 Add `/comments` endpoint (`.../workitems/<ID>/comments?api-version=7.1-preview`)
-when decision history matters. Use the subagent route for writes (create/update/
-transition) — the MCP handles field formatting rules there.
+when decision history matters.
+
+**WRITE SHORTCUT (no subagent; verified September 20, 2026 on ADO-586, 587, 588):** the same
+REST route handles every write with a JSON Patch body. Filter the response with jq so only the id and
+state come back (~0.1-0.5K tokens per write). Reuse `ado_pat` from the block above.
+
+```bash
+# State change + comment in one call. System.History IS the comment field.
+curl -s -u ":$PAT" -X PATCH -H "Content-Type: application/json-patch+json" \
+  -d '[{"op":"add","path":"/fields/System.State","value":"Active"},
+       {"op":"add","path":"/fields/System.History","value":"<p>September 20, 2026: why it moved.</p>"}]' \
+  "$ADO_ORG/TTracker/_apis/wit/workitems/<ID>?api-version=7.1" \
+  | jq -c '{id, state: .fields["System.State"], message}'
+
+# Create. The type goes in the URL with an escaped $: \$Bug, \$User%20Story, \$Epic, \$Task
+curl -s -u ":$PAT" -X POST -H "Content-Type: application/json-patch+json" \
+  --data-binary "@$TEMP/new-item.json" \
+  "$ADO_ORG/TTracker/_apis/wit/workitems/\$Bug?api-version=7.1" | jq -c '{id, message}'
+```
+
+Write gotchas:
+- A long or HTML body goes in a file (`cat > "$TEMP/x.json" <<'EOF'` with a QUOTED heredoc) and is sent
+  with `--data-binary "@file"`. Inline `-d` breaks on apostrophes and backticks.
+- A failed write returns HTTP 200-looking JSON with a `message` and a null `id`. Always print `message`.
+- `TF401289: The current user does not have permissions to create tags` - the PAT can apply existing
+  tags but cannot create new ones. Drop `/fields/System.Tags` (or use an existing tag) and retry.
+- Bugs: the body field is `/fields/Microsoft.VSTS.TCM.ReproSteps`, not `System.Description`. Bugs also
+  use New / Active / Resolved / Closed only (see the state note above).
+- A new item is created in `New`; move it with a second PATCH.
+- HTML formatting rules (below) apply to Description, ReproSteps, Acceptance Criteria and History.
+- Dates in card text are written out (September 20, 2026), never ISO.
+
 
 ---
 
@@ -279,11 +312,13 @@ Rare - only for sub-items of stories.
 
 For operations involving many items (export, batch create, batch update):
 
-1. Launch subagent with clear batch instructions
-2. Have subagent write results to file (e.g., `scripts/ado-export.json`)
-3. Return only count/summary to main conversation
+1. Prefer a shell pipeline: a WIQL query (`POST $ADO_ORG/TTracker/_apis/wit/wiql?api-version=7.1`) for the ids,
+   then the workitems batch endpoint, piped through jq straight into a file (e.g. `scripts/ado-export.json`).
+   Nothing but the count enters the conversation.
+2. Print only the count/summary.
+3. Batch writes: loop the WRITE SHORTCUT over the ids, printing one `{id, state, message}` line each.
 
-Example bulk export prompt:
+LEGACY bulk export prompt (agents re-enabled only):
 ```
 Export ALL work items from TTracker project to scripts/ado-export.json.
 
@@ -297,8 +332,11 @@ Return only: "Exported X items to scripts/ado-export.json"
 
 ---
 
-## Context Savings
+## Context Cost (measured September 20, 2026)
 
-Main conversation: ~100 tokens (summary only)
-Subagent absorbs: 20-30K tokens (full ADO response)
-Savings: **99.5%**
+| Route | Tokens in the main session |
+|---|---|
+| ADO MCP tool called directly | 20-30K per work item - never do this |
+| REST + jq read (full card) | ~0.5-2K |
+| REST JSON Patch write | ~0.1-0.5K |
+| Subagent (legacy) | ~100 in the main session, but ~45K of startup per agent on the usage limit, and nothing if the agent dies |
