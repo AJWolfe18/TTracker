@@ -42,8 +42,8 @@ These secrets must be set in your GitHub repository for workflows to function.
 ```bash
 # These are already in your .env file
 SUPABASE_TEST_URL=https://wnrjrywpcadwutfykflu.supabase.co
-SUPABASE_TEST_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyMjA3MzcsImV4cCI6MjA3MDc5NjczN30.n-4DboHQSivt5GWx7X5wuaUsdmjsuJe0VgB18V-GxU4
-SUPABASE_TEST_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTIyMDczNywiZXhwIjoyMDcwNzk2NzM3fQ.V3dJTwxr7XcoOXk-9P8qrY0McaQ1HfG-yjCdLx-fEuo
+SUPABASE_TEST_ANON_KEY=<YOUR_TEST_ANON_KEY - Supabase dashboard>
+SUPABASE_TEST_SERVICE_KEY=<YOUR_TEST_SERVICE_ROLE_KEY - Supabase dashboard, never commit it>
 ```
 
 ## GitHub Environments Setup (Optional but Recommended)

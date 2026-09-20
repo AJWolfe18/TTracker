@@ -20,8 +20,8 @@ ADMIN_API_KEY=my-secure-admin-key-2025
 # SUPABASE TEST ENVIRONMENT
 # ===============================================
 SUPABASE_TEST_URL=https://wnrjrywpcadwutfykflu.supabase.co
-SUPABASE_TEST_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjI4ODM0NTUsImV4cCI6MjAzODQ1OTQ1NX0.VbBpB1E3kxcSfn3PTLRudrfcQUONOjWiTlUJQqF2M9w
-SUPABASE_TEST_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyMjg4MzQ1NSwiZXhwIjoyMDM4NDU5NDU1fQ.B88ENJM5YQvMWOOvGjG9uHJLH9N3dQUngJglAk_6fac
+SUPABASE_TEST_ANON_KEY=<YOUR_TEST_ANON_KEY - Supabase dashboard>
+SUPABASE_TEST_SERVICE_KEY=<YOUR_TEST_SERVICE_ROLE_KEY - Supabase dashboard, never commit it>
 
 # TEST Edge Function Auth Token
 # This token protects Edge Functions in TEST environment
