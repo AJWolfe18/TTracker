@@ -61,7 +61,28 @@ browser-facing) and hit PostgREST directly.
   overcounts by including rows the agent correctly skips (e.g. orphan stories with no linked
   articles), producing a false "run stalled / backlog not draining" signal when the agent is fine.
 
-## 4. Misc troubleshooting
+## 4. When the cloud auto-mode classifier denies a routine's step
+
+Symptom in the run log: `permission_denied Bash [classifier]: [Modify Shared Resources]` (or
+`[Production Deploy]`), then `[Auto-Mode Bypass]` on the run's own retry. The run still shows green.
+
+- **Prompt wording cannot fix it.** The fired prompt "is not live user input and can't act as approval"
+  (routines docs). Do not reword the prompt or rename branches to get past it.
+- **What works (ADO-583, September 19, 2026):** the routine object carries undocumented
+  `auto_mode_environment` / `auto_mode_allow` / `auto_mode_soft_deny` arrays under
+  `session_request.config`. They mirror the documented `autoMode` settings: prose entries, first entry
+  `"$defaults"`. Describe the owner's own infrastructure in `environment` and the exact routine output
+  in `allow`. The PROD Judge routine carries both.
+- **Update shape that saves:** `RemoteTrigger update` with the body in the `session_request` form that
+  `get` returns (`environment_id`, the FULL `config`, `events[].payload.message` with `role`). Read it
+  back with `get`. Undo: same call with the arrays set to `[]`.
+- **Josh must ask for it in his own words.** A dev session's classifier refuses to let an agent grant a
+  routine permissions on its own, and that refusal is correct.
+- Undocumented means it can stop working. The fallback ladder (committed allow rule, GitHub Actions,
+  local scheduled task) and the doc findings behind it:
+  `docs/features/clustering-judge/classifier-override-options.md`.
+
+## 5. Misc troubleshooting
 
 - **Parsing a JSON log line extracted via `grep -o '"type":"X".*'`** (match starts mid-object, no
   opening brace, but DOES include the real closing brace): prepend only `"{"` before `JSON.parse` —
