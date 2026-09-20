@@ -13,7 +13,7 @@ The Supabase MCP server keeps getting misconfigured because:
 Run this exact command:
 
 ```bash
-claude mcp add-json supabase-test "{\"command\":\"cmd\",\"args\":[\"/c\",\"npx\",\"-y\",\"@supabase/mcp-server-postgrest\",\"--apiUrl\",\"https://wnrjrywpcadwutfykflu.supabase.co/rest/v1\",\"--schema\",\"public\"],\"env\":{\"SUPABASE_ACCESS_TOKEN\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTIyMDczNywiZXhwIjoyMDcwNzk2NzM3fQ.V3dJTwxr7XcoOXk-9P8qrY0McaQ1HfG-yjCdLx-fEuo\"}}"
+claude mcp add-json supabase-test "{\"command\":\"cmd\",\"args\":[\"/c\",\"npx\",\"-y\",\"@supabase/mcp-server-postgrest\",\"--apiUrl\",\"https://wnrjrywpcadwutfykflu.supabase.co/rest/v1\",\"--schema\",\"public\"],\"env\":{\"SUPABASE_ACCESS_TOKEN\":\"<YOUR_TEST_SERVICE_ROLE_KEY - Supabase dashboard, never commit it>\"}}"
 ```
 
 ## What This Creates
@@ -34,7 +34,7 @@ This adds to `C:\Users\Josh\.claude.json` (in the project scope):
     "public"
   ],
   "env": {
-    "SUPABASE_ACCESS_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducmpyeXdwY2Fkd3V0ZnlrZmx1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NTIyMDczNywiZXhwIjoyMDcwNzk2NzM3fQ.V3dJTwxr7XcoOXk-9P8qrY0McaQ1HfG-yjCdLx-fEuo"
+    "SUPABASE_ACCESS_TOKEN": "<YOUR_TEST_SERVICE_ROLE_KEY - Supabase dashboard, never commit it>"
   }
 }
 ```
