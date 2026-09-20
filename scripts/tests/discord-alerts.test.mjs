@@ -35,6 +35,11 @@ import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS } from '../monitoring/
   await postDiscord({ title: 'x'.repeat(300), description: 'y'.repeat(5000) }, { webhookUrl: 'https://d.test/h', fetchImpl: async (_u, init) => { capped = JSON.parse(init.body).embeds[0]; return new Response(null, { status: 204 }); } });
   assert.equal(capped.title.length, 256);
   assert.equal(capped.description.length, 4000);
+  // a TEST run can never look like a PROD alert: envLabel 'test' prefixes the title; prod / unset does not
+  const titleFor = async (envLabel) => { let t = null; await postDiscord({ title: 'T' }, { webhookUrl: 'https://d.test/h', envLabel, fetchImpl: async (_u, init) => { t = JSON.parse(init.body).embeds[0].title; return new Response(null, { status: 204 }); } }); return t; };
+  assert.equal(await titleFor('test'), '[TEST] T');
+  assert.equal(await titleFor('prod'), 'T');
+  assert.equal(await titleFor(undefined), 'T');
 }
 
 // --- summarizeList -----------------------------------------------------------
@@ -46,18 +51,27 @@ assert.equal(summarizeList(null), '');
 // --- buildAlert ----------------------------------------------------------------
 assert.equal(buildAlert('scotus', []), null);
 {
-  const a = buildAlert('scotus', [{ id: 1, case_name_short: 'Trump v. Someone', low_confidence_reason: 'vote split unclear — 6-3 or 7-2' }], { origin: 'https://t.example' });
-  assert.equal(a.title, 'SCOTUS: 1 enrichment flagged for review');
+  const NOW = Date.parse('2026-09-20T12:00:00Z');
+  const a = buildAlert('scotus', [{ id: 1, case_name_short: 'Trump v. Someone', low_confidence_reason: 'vote split unclear — 6-3 or 7-2', enriched_at: '2026-09-17T12:00:00Z' }], { origin: 'https://t.example', now: NOW });
+  assert.equal(a.title, 'SCOTUS: 1 enrichment waiting for review (0 new)');
   assert.ok(a.description.includes('• Trump v. Someone - vote split unclear - 6-3 or 7-2'), a.description);
+  // enriched inside the last 26h -> marked NEW and counted
+  const fresh = buildAlert('scotus', [{ id: 2, case_name_short: 'A v. B', enriched_at: '2026-09-20T01:00:00Z' }, { id: 1, case_name_short: 'C v. D', enriched_at: '2026-09-15T01:00:00Z' }], { now: NOW });
+  assert.equal(fresh.title, 'SCOTUS: 2 enrichments waiting for review (1 new)');
+  assert.ok(fresh.description.includes('• NEW A v. B'));
+  assert.ok(fresh.description.includes('• C v. D'));
   assert.ok(!a.description.includes('—'), 'no em dashes');
   assert.ok(a.description.includes('https://t.example/admin.html (SCOTUS tab)'));
   assert.equal(a.color, COLORS.warning);
 }
 {
-  const a = buildAlert('eo', [{ id: 'eo_1', order_number: 14999, title: 'Some Order', enrichment_meta: { review_reason: 'conflicting sections' } }]);
+  // the EO reason lives on the newest flagged LOG row (notes), embedded in the same request
+  const a = buildAlert('eo', [{ id: 'eo_1', order_number: 14999, title: 'Some Order', enrichment_meta: { review_reason: 'WRONG PLACE' }, executive_orders_enrichment_log: [{ notes: 'conflicting sections' }] }]);
   assert.ok(a.description.includes('• EO 14999: Some Order - conflicting sections'));
+  assert.ok(!a.description.includes('WRONG PLACE'));
+  assert.ok(buildAlert('eo', [{ id: 'eo_2', order_number: 15000, title: 'No Log', executive_orders_enrichment_log: [] }]).description.includes('• EO 15000: No Log\n'));
   const p = buildAlert('pardons', [{ id: 3, recipient_name: 'Someone', enrichment_meta: null }]);
-  assert.equal(p.title, 'Pardons: 1 enrichment flagged for review');
+  assert.equal(p.title, 'Pardons: 1 enrichment waiting for review (0 new)');
   assert.ok(p.description.includes('• Someone\n'));
   const many = buildAlert('pardons', Array.from({ length: 12 }, (_, i) => ({ id: i, recipient_name: `P${i}` })));
   assert.ok(many.description.includes('and 2 more'));
@@ -87,9 +101,26 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.ok(q.searchParams.get('enriched_at').startsWith('gt.'));
   assert.ok(q.searchParams.get('select') && !q.searchParams.get('select').includes('*'));
 
+  // default window = 7 days (a late or skipped run cannot lose a flag); override still honoured
+  {
+    const NOW = Date.parse('2026-09-20T12:00:00Z');
+    const { ALERT_WINDOW_HOURS: _drop, ...noWindow } = env;
+    await runNeedsReviewAlert({ env: noWindow, argv: ['--domain', 'scotus'], fetchImpl, log: silent, now: NOW });
+    assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), 'gt.2026-09-13T12:00:00.000Z');
+    await runNeedsReviewAlert({ env: { ...env, ALERT_ENV: 'test' }, argv: ['--domain', 'scotus'], fetchImpl, log: silent, now: NOW });
+    assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), 'gt.2026-09-19T10:00:00.000Z');
+    const testEmbed = seen.discord.at(-1).embeds[0];
+    assert.ok(testEmbed.title.startsWith('[TEST] SCOTUS:'), testEmbed.title);
+    assert.ok(testEmbed.description.includes('https://test--taupe-capybara-0ff2ed.netlify.app/admin.html'));
+    assert.ok(!seen.discord[0].embeds[0].title.startsWith('[TEST]'));
+    seen.queries.length = 1; seen.discord.length = 1;
+  }
+
   // quiet domain -> nothing posted
   const r2 = await runNeedsReviewAlert({ env, argv: ['--domain', 'eo'], fetchImpl, log: silent });
   assert.deepEqual(r2, { flagged: 0, posted: false });
+  assert.ok(seen.queries[1].searchParams.get('select').includes('executive_orders_enrichment_log(notes,created_at)'));
+  assert.equal(seen.queries[1].searchParams.get('executive_orders_enrichment_log.limit'), '1');
   assert.equal(seen.discord.length, 1);
 
   // pardons uses needs_review
@@ -123,6 +154,13 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
   assert.equal(await runCli({ env, argv: ['--domain', 'scotus'], fetchImpl: queryFails, log: silent, logError: silent }), 0);
   assert.match(posted[1].embeds[0].description, /query failed: 500/);
+
+  // records flagged but the alert cannot be delivered -> exit 1 (never a green step over a lost alert)
+  const flaggedRows = JSON.stringify([{ id: 7, recipient_name: 'Someone', enriched_at: new Date().toISOString() }]);
+  const flaggedDiscordDown = async (url) => (new URL(url).hostname === 'd.test' ? new Response('nope', { status: 500 }) : new Response(flaggedRows, { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  assert.equal(await runCli({ env, argv: ['--domain', 'pardons'], fetchImpl: flaggedDiscordDown, log: silent, logError: silent }), 1);
+  const flaggedNoWebhook = async () => new Response(flaggedRows, { status: 200, headers: { 'Content-Type': 'application/json' } });
+  assert.equal(await runCli({ env: { ...env, DISCORD_WEBHOOK_URL: '' }, argv: ['--domain', 'pardons'], fetchImpl: flaggedNoWebhook, log: silent, logError: silent }), 1);
 
   // healthy run -> exit 0, nothing extra posted
   const healthy = async (url, init = {}) => (new URL(url).hostname === 'd.test' ? discordUp(url, init) : new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }));
