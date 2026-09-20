@@ -276,8 +276,9 @@ jq '[.verdicts[] | select(.verdict=="merge")] | length' "judge-inbox/${RUN_ID}.j
 ### Step 7: Publish the verdict file (the only "write" you make)
 
 Commit the file on its own branch and push it. The branch name is the contract: the executor workflow
-(`.github/workflows/judge-executor.yml`) polls the `judge-run/**` branches on a schedule (30 and 90
-minutes after each Judge run), reads the environment from the second path segment and the verdict file
+(`.github/workflows/judge-executor.yml`) polls the `judge-run/**` branches on a schedule (three polls
+in the 90 minutes after each Judge run, but GitHub often starts them hours late, so never promise a
+time in a notification), reads the environment from the second path segment and the verdict file
 from the third. It runs from the default branch and copies **only that JSON file** out of your branch —
 nothing else on the branch is read or executed, so adding or changing any other file achieves nothing.
 

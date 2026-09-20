@@ -18,8 +18,11 @@ name: Clustering Judge Executor
 # Scripts: scripts/clustering/process-judge-inbox.js + execute-judge-verdicts.js.
 # Prompt:  docs/features/clustering-judge/prompt-v1.md.
 #
-# Schedule: the PROD Judge routine fires at 05:00, 13:00 and 21:00 UTC; the polls below run 30 and
-# 90 minutes after each. If the routine's cron changes, change these too. A processed branch is
+# Schedule: the PROD Judge routine fires at 05:00, 13:00 and 21:00 UTC; the polls below are set for
+# 23, 53 and 83 minutes after each. GitHub starts scheduled runs late (3 to 5 hours late for this
+# repo on September 20, 2026, worst at :00 and :30), so the minutes are off-peak and there are three
+# polls, not two. The times are a target, not a promise. If the routine's cron changes, change these
+# too. A processed branch is
 # deleted; a rejected file is parked under judge-rejected/<env>/<run_id>; a runtime failure leaves
 # the branch for the next poll (the executor is idempotent per run_id).
 # TEST or an impatient human: `gh workflow run "Clustering Judge Executor"` (add `--ref test` to
@@ -27,8 +30,8 @@ name: Clustering Judge Executor
 
 on:
   schedule:
-    - cron: "30 5,13,21 * * *"
-    - cron: "30 6,14,22 * * *"
+    - cron: "23,53 5,13,21 * * *"
+    - cron: "23 6,14,22 * * *"
   workflow_dispatch:
 
 concurrency:
