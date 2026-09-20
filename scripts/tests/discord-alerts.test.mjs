@@ -1,8 +1,10 @@
 // ADO-577: Discord helper never throws / never posts without a URL; needs-review alert
 // posts only when something is flagged and names the record + reason.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { postDiscord, summarizeList, COLORS } from '../lib/discord.js';
-import { buildAlert, runNeedsReviewAlert, DOMAINS } from '../monitoring/alert-needs-review.js';
+import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS } from '../monitoring/alert-needs-review.js';
 
 // --- postDiscord -----------------------------------------------------------
 {
@@ -96,6 +98,39 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
 
   await assert.rejects(() => runNeedsReviewAlert({ env, argv: [], fetchImpl, log: silent }), /--domain/);
   assert.deepEqual(Object.keys(DOMAINS), ['scotus', 'eo', 'pardons']);
+}
+
+// --- runCli: a check that cannot run is never silent ----------------------------
+{
+  const silent = () => {};
+  const posted = [];
+  const discordUp = async (url, init = {}) => { posted.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); };
+  const discordDown = async () => new Response('nope', { status: 500 });
+  const noCreds = { SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+
+  // cannot run + Discord reachable -> its own message, exit 0
+  assert.equal(await runCli({ env: noCreds, argv: ['--domain', 'pardons'], fetchImpl: discordUp, log: silent, logError: silent }), 0);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].embeds[0].title, /could not run \(pardons\)/);
+  assert.match(posted[0].embeds[0].description, /not set/);
+
+  // cannot run + Discord down or no webhook -> exit 1 (the step goes red)
+  assert.equal(await runCli({ env: noCreds, argv: ['--domain', 'pardons'], fetchImpl: discordDown, log: silent, logError: silent }), 1);
+  assert.equal(await runCli({ env: { ...noCreds, DISCORD_WEBHOOK_URL: '' }, argv: ['--domain', 'eo'], fetchImpl: discordUp, log: silent, logError: silent }), 1);
+
+  // a failed query is reported the same way
+  const queryFails = async (url, init = {}) => (new URL(url).hostname === 'd.test' ? discordUp(url, init) : new Response('boom', { status: 500 }));
+  const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+  assert.equal(await runCli({ env, argv: ['--domain', 'scotus'], fetchImpl: queryFails, log: silent, logError: silent }), 0);
+  assert.match(posted[1].embeds[0].description, /query failed: 500/);
+
+  // healthy run -> exit 0, nothing extra posted
+  const healthy = async (url, init = {}) => (new URL(url).hostname === 'd.test' ? discordUp(url, init) : new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  assert.equal(await runCli({ env, argv: ['--domain', 'eo'], fetchImpl: healthy, log: silent, logError: silent }), 0);
+  assert.equal(posted.length, 2);
+
+  // project rule: no console.log in production code
+  assert.doesNotMatch(readFileSync(fileURLToPath(new URL('../monitoring/alert-needs-review.js', import.meta.url)), 'utf8'), /console\.log\(/);
 }
 
 console.log('discord-alerts: ok');
