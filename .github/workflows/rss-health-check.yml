@@ -58,6 +58,8 @@ jobs:
           SILENCE_HOURS_STORIES: ${{ vars.SILENCE_HOURS_STORIES }}
         run: node scripts/monitoring/alert-routine-silence.js
 
+      # No continue-on-error here on purpose: if Discord cannot be reached either, this step exits 1
+      # and the run goes red, so GitHub's failed-run email is the last resort.
       - name: Discord alert (routine silence check could not run)
         if: always() && github.ref == 'refs/heads/main' && steps.routine_silence.outcome == 'failure'
         env:
@@ -66,8 +68,11 @@ jobs:
           echo "::error::Routine silence check could not run - the Judge and Stories routines are NOT being monitored"
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
             echo "::error::DISCORD_WEBHOOK_URL secret not set - this failure could not be sent to Discord"
-            exit 0
+            exit 1
           fi
-          curl -f -H "Content-Type: application/json" \
+          if ! curl -f -H "Content-Type: application/json" \
             -d "{\"embeds\":[{\"title\":\"Routine silence check could not run\",\"description\":\"The Judge and Stories routines are not being monitored until this is fixed (missing credentials, a crash, or npm ci failed).\",\"color\":15158332,\"fields\":[{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
-            "$DISCORD_WEBHOOK_URL" || echo "::error::Discord webhook failed"
+            "$DISCORD_WEBHOOK_URL"; then
+            echo "::error::Discord webhook failed - this failure could not be sent to Discord"
+            exit 1
+          fi
