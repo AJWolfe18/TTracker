@@ -4,6 +4,12 @@ Written September 19-20, 2026 after ADO-583 (the PROD Clustering Judge). All clo
 Read this FIRST the next time any cloud routine is blocked by the auto-mode classifier. It holds what
 we learned, every option we had, what worked, and what is a dead end. Status lives in ADO, not here.
 
+## How you find out
+The 6-hourly health check on main posts a Discord alert when the PROD Judge log has no row for 12
+hours or the PROD Stories log has no row for 6 (`scripts/monitoring/alert-routine-silence.js`,
+ADO-586). Both routines leave a row on every healthy run, so silence means the routine, or the
+executor that writes for it, is not running. SCOTUS, EO and Pardons are not covered yet.
+
 ## Triage in 5 minutes
 1. `RemoteTrigger list_runs` on the routine, then `get_run_log` on the newest run. Look for
    `permission_denied Bash [classifier]: [<label>]`. The run still shows green: a green run list means
