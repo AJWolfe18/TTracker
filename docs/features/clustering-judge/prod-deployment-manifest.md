@@ -166,3 +166,29 @@ No new secrets. Kill switch = disable the cron.
 - **Retention** on `judge_run_merge_count` / `story_merge_audit` (prune old rows). Negligible volume; optional.
 - `merge_stories` does not recompute `search_vector` on the survivor (editorial; the enrichment agent
   rebuilds it within ~12h). By design.
+
+---
+
+## 9. Executor hand-off (ADO-583, September 19, 2026)
+
+Since September 16, 2026 the cloud auto-mode classifier denies the Judge routine's own PROD database
+writes (`merge_stories`: every run; the `clustering_judge_log` insert: intermittently). Prompt
+reshaping (PR #144) did not help and routines cannot leave auto mode, so prompt **v1.2** moves every
+write out of the agent:
+
+| Piece | Where | Role |
+|-------|-------|------|
+| Verdict file | `judge-inbox/<run_id>.json` on branch `judge-run/<test\|prod>/<run_id>` | The agent's only output (schema `judge-verdicts/v1`; one entry per candidate pair; `survivor_id`/`loser_id` on merges; `dry_run` mirrors `JUDGE_DRY_RUN`) |
+| Executor workflow | `.github/workflows/judge-executor.yml` | **Never push-triggered** (a push run would take its workflow file and its code from the pushed, untrusted branch). Runs on a schedule from the default branch (30 and 90 minutes after each Judge run at 05/13/21 UTC) or by `gh workflow run "Clustering Judge Executor"`. `scripts/clustering/process-judge-inbox.js` copies only `judge-inbox/<run_id>.json` out of each `judge-run/**` branch with `git cat-file` (no checkout), picks TEST/PROD from the branch name, runs the trusted checkout's executor, deletes the branch on success, parks a rejected file under `judge-rejected/`, leaves a runtime failure for the next poll. PROD secrets only reach a run on `refs/heads/main`. Discord alert on failure. Kill switch: repo variable `ENABLE_JUDGE_EXECUTOR=false` |
+| Executor script | `scripts/clustering/execute-judge-verdicts.js` | Validates the file (environment must match branch AND `SUPABASE_URL`), executes `merge_stories` in file order (cap 10 + DB cap via `p_run_id`, no chained merges in a run, a pair that fails twice becomes `uncertain`), logs every verdict (executed merges immediately), heartbeat on an empty run, uncertain digest to Discord. Idempotent per `run_id` |
+| Tests | `scripts/tests/judge-executor.test.mjs` (`qa:judge-executor`), `qa:agent-prompts` | Contract between prompt, script and workflow |
+
+Deploy order for PROD: merge the prompt + workflow + script to `main` in one PR (the routine reads
+`main` at run time and the scheduled workflow only exists once it is on `main`).
+No migration, no new secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`SUPABASE_TEST_*`, `DISCORD_WEBHOOK_URL` already exist). The routine's bootstrap message should say
+live mode means `dry_run=false` in the file, not "execute merge_stories".
+
+Verification: a run's log shows `published judge-run/...`; the Actions tab shows a "Clustering Judge
+Executor" run for that branch; `clustering_judge_log` has one row per pair for the `run_id`, with
+`merged=true` on executed merges; the branch is gone afterwards.

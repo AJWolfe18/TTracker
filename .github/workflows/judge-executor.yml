@@ -1,0 +1,92 @@
+name: Clustering Judge Executor
+
+# ADO-583: the Judge cloud agent judges story pairs but can no longer write to the database itself
+# (the cloud auto-mode classifier denies its PROD writes since September 16, 2026). The agent pushes
+# ONE verdict file, judge-inbox/<run_id>.json, on a branch named judge-run/<env>/<run_id>; this
+# workflow performs the writes with the service key from GitHub secrets:
+# merge_stories (live runs, cap 10, no chained merges), clustering_judge_log rows, the heartbeat
+# row for an empty run and the Discord digest of uncertain verdicts.
+#
+# TRUST BOUNDARY (review P0): an inbox branch is untrusted input - whoever can push it controls
+# every file on it, including a copy of this workflow and of the executor. So this workflow is
+# NOT triggered by the push (a push-triggered run takes its workflow file and its code from the
+# pushed branch). It runs on a schedule, which always uses the DEFAULT branch's workflow file and
+# checkout, and scripts/clustering/process-judge-inbox.js copies only the JSON verdict file out of
+# each inbox branch with git cat-file. Nothing on an inbox branch is checked out or executed.
+# PROD verdicts are only ever executed by a run on refs/heads/main.
+#
+# Scripts: scripts/clustering/process-judge-inbox.js + execute-judge-verdicts.js.
+# Prompt:  docs/features/clustering-judge/prompt-v1.md.
+#
+# Schedule: the PROD Judge routine fires at 05:00, 13:00 and 21:00 UTC; the polls below run 30 and
+# 90 minutes after each. If the routine's cron changes, change these too. A processed branch is
+# deleted; a rejected file is parked under judge-rejected/<env>/<run_id>; a runtime failure leaves
+# the branch for the next poll (the executor is idempotent per run_id).
+# TEST or an impatient human: `gh workflow run "Clustering Judge Executor"` (add `--ref test` to
+# run the test branch's code - that run can only touch TEST).
+
+on:
+  schedule:
+    - cron: "30 5,13,21 * * *"
+    - cron: "30 6,14,22 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: judge-executor
+  cancel-in-progress: false
+
+permissions:
+  contents: write # delete / park processed inbox branches
+
+jobs:
+  execute:
+    name: Execute Judge verdicts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Kill switch: set repository variable ENABLE_JUDGE_EXECUTOR=false to park verdict files unprocessed.
+    if: vars.ENABLE_JUDGE_EXECUTOR != 'false'
+    steps:
+      # No `ref:` on purpose: a scheduled run checks out the default branch, a manual run the ref it
+      # was dispatched from. Never an inbox branch.
+      - name: Checkout trusted code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # No npm ci: the scripts use Node built-ins + scripts/lib/discord.js only.
+      - name: Collect verdict files from inbox branches (data only, no secrets in scope)
+        id: inbox
+        run: node scripts/clustering/process-judge-inbox.js collect "$RUNNER_TEMP/judge-inbox"
+
+      - name: Execute verdicts (TEST)
+        if: steps.inbox.outcome == 'success' && steps.inbox.outputs.count != '0'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node scripts/clustering/process-judge-inbox.js execute "$RUNNER_TEMP/judge-inbox" test
+
+      # PROD secrets are only handed to code from main.
+      - name: Execute verdicts (PROD)
+        if: always() && steps.inbox.outcome == 'success' && steps.inbox.outputs.count != '0' && github.ref == 'refs/heads/main'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node scripts/clustering/process-judge-inbox.js execute "$RUNNER_TEMP/judge-inbox" prod
+
+      - name: Discord alert (on failure)
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Warning: DISCORD_WEBHOOK_URL secret not set - skipping Discord alert"
+            exit 0
+          fi
+          curl -f -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"Pipeline Failed: ${{ github.workflow }}\",\"color\":15158332,\"fields\":[{\"name\":\"Trigger\",\"value\":\"\`${{ github.event_name }}\`\",\"inline\":true},{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "$DISCORD_WEBHOOK_URL" || echo "Discord webhook failed (non-blocking)"

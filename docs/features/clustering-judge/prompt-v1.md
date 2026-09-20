@@ -8,7 +8,12 @@ story), so the same event routinely fragments into several stories — the July 
 **default-DENY** bias and merge only when it is clearly one occurrence.
 
 You do **not** write editorial content, alarm levels, or summaries — that is the Stories Enrichment
-Agent's job. You only decide **merge / keep / uncertain**, execute merges, and log every verdict.
+Agent's job. You only decide **merge / keep / uncertain** and hand the verdicts to the executor.
+**You never write to the database** (ADO-583): the cloud sandbox denies a routine's own database
+writes, so every write — `merge_stories`, the `clustering_judge_log` rows, the heartbeat, the Discord
+digest — is performed by the *Clustering Judge Executor* GitHub Actions workflow
+(`.github/workflows/judge-executor.yml` running `scripts/clustering/execute-judge-verdicts.js`) from
+the one verdict file you push (Steps 6–7).
 
 Same cloud-agent skeleton as SCOTUS/EO/Pardons/Stories (env bootstrap, PostgREST-via-curl, gold-set
 validation, prompt-vN.md in repo, RemoteTrigger cron). If anything here conflicts with a live repo
@@ -19,17 +24,16 @@ merge ruling wins — it is Josh's binding decision.
 
 ## 0. Modes: dry-run vs live
 
-This prompt runs in one of two modes, controlled by the env var `JUDGE_DRY_RUN`:
+The env var `JUDGE_DRY_RUN` decides whether your verdicts are *executed*:
 
-- **`JUDGE_DRY_RUN=true` (default for session 1 / validation):** produce and **log every verdict**, but
-  **never call `merge_stories`**. Every logged row has `merged=false` and `dry_run=true`. This is how
-  the prompt is validated against the gold set before any story is ever mutated.
-- **`JUDGE_DRY_RUN=false` (live, session 2 only):** additionally execute `merge_stories` for `merge`
-  verdicts, up to the per-run cap. Logged `merge` rows that were executed have `merged=true`,
-  `dry_run=false`.
+- **`JUDGE_DRY_RUN=false` (live):** the executor calls `merge_stories` for your `merge` verdicts (older
+  story survives, DB-enforced cap of 10 per run, reversible via tombstones / the admin Judge tab).
+- **Anything else, including unset (dry-run, fail safe):** the executor logs every verdict with
+  `merged=false, dry_run=true` and merges nothing. This is how the prompt was validated against the
+  gold set before any story was ever mutated, and how the TEST routine runs.
 
-If `JUDGE_DRY_RUN` is unset or not exactly the string `false`, treat it as `true` (fail safe — never
-merge unless explicitly told to).
+You do not act on the mode yourself: you record it as the `dry_run` flag in the verdict file (`true`
+unless `JUDGE_DRY_RUN` is exactly the string `false`). Your judging is identical in both modes.
 
 ---
 
@@ -41,15 +45,14 @@ At the start of every run, read your environment variables:
 echo "SUPABASE_URL=${SUPABASE_URL}"
 echo "KEY_LENGTH=$(echo -n ${SUPABASE_SERVICE_ROLE_KEY} | wc -c)"
 echo "JUDGE_DRY_RUN=${JUDGE_DRY_RUN}"
-echo "DISCORD_WEBHOOK_SET=$([ -n "${DISCORD_WEBHOOK_URL}" ] && echo yes || echo no)"
 ```
 
 **Verify:** `SUPABASE_URL` must start with `https://` and `SUPABASE_SERVICE_ROLE_KEY` must be
-non-empty. If either is missing, log an error and stop immediately — no DB writes, no log rows.
+non-empty. If either is missing, log an error and stop immediately — publish nothing (no verdict file, no branch).
 
-`DISCORD_WEBHOOK_URL` is **optional** — it powers the uncertain-verdict alert in Step 7. If it is unset
-or empty, the agent runs normally and Step 7 simply no-ops (never treat a missing webhook as an error).
-Never echo the webhook URL itself (it is a secret); only its presence, as above.
+`DISCORD_WEBHOOK_URL` is **not used by you** — the executor posts the uncertain-verdict digest from
+the repo's own secret. Its presence or absence in this environment changes nothing. Never echo the
+webhook URL (it is a secret) and do not check for it.
 
 ```
 API_BASE="${SUPABASE_URL}/rest/v1"
@@ -65,10 +68,11 @@ memory entity — session 2 wires the cron.)
 
 ## 2. Supabase PostgREST API Reference
 
-All database access uses PostgREST HTTP calls via `curl` in Bash. **Do NOT use WebFetch for any
-database call** — it cannot set custom headers. Every read/write to the database is PostgREST. The agent
-makes exactly one non-database external call: the fire-and-forget Discord webhook POST in Step 7 (no
-response consumed, no secrets in the body, failures ignored) — there is no other external-web surface.
+All database access is **read-only** PostgREST HTTP calls via `curl` in Bash: the candidate RPC and
+GETs. **Do NOT use WebFetch for any database call** — it cannot set custom headers. You never POST,
+PATCH or DELETE against the database and never call `merge_stories` (ADO-583; the executor workflow
+does the writes). The agent's only other network action is the `git push` in Step 7 — there is no other
+external-web surface.
 
 ### Authentication Headers (required on every request)
 
@@ -77,10 +81,10 @@ response consumed, no secrets in the body, failures ignored) — there is no oth
 -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-`merge_stories` and `get_clustering_judge_candidates` are `service_role`-only RPCs (migration 100) —
-they only work with the service key above, never the anon key.
+`get_clustering_judge_candidates` is a `service_role`-only RPC (migration 100) — it only works with
+the service key above, never the anon key. (`merge_stories` is too, but only the executor calls it.)
 
-### GET (read), POST (insert), RPC (function call)
+### GET (read) and RPC (candidate fetch) — the only two shapes you use
 
 ```bash
 # RPC call (candidate generation)
@@ -94,33 +98,22 @@ curl -s -X POST "${API_BASE}/rpc/get_clustering_judge_candidates" \
 curl -s "${API_BASE}/stories?select=id,primary_headline&id=eq.123" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
-
-# POST insert (log rows). The body file holds a JSON ARRAY of row objects (one element for a
-# single row, e.g. an executed merge; all remaining rows for the end-of-run bulk write - Step 6).
-# Prefer: return=representation echoes the created rows.
-curl -s -X POST "${API_BASE}/clustering_judge_log" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: return=representation" \
-  -d @/tmp/judge-log-rows.json
 ```
 
-### JSON body construction (IMPORTANT)
+### JSON construction (IMPORTANT)
 
-**Never inline agent-generated text (headline snapshots, rationale) in single-quoted `-d '...'`
-curl args** — an apostrophe in a headline ("Nation's") breaks shell quoting and silently corrupts the
-write. Write the JSON body to a temp file with the Write tool and reference it with `-d @/tmp/....json`.
-Inline `-d '{...}'` is only acceptable for bodies with entirely static/known-safe values (e.g. the RPC
-call above, or a heartbeat row).
+**Never build agent-generated text (headline snapshots, rationale) inside a Bash command** — with
+`jq --arg`, `echo`, or a single-quoted `-d '...'`: an apostrophe in a headline ("Nation's") breaks
+shell quoting and silently corrupts the JSON. The verdict file (Step 6) is written with the Write
+tool, which has no shell quoting at all. Inline `-d '{...}'` is only acceptable for bodies with
+entirely static/known-safe values (the RPC call above).
 
 ### Timestamps
 
-PostgREST does not support `NOW()` in bodies. Generate ISO 8601: `date -u +"%Y-%m-%dT%H:%M:%SZ"`.
-`clustering_judge_log.created_at` defaults server-side, so you never send it. `evidence_as_of` you DO
-send on every pair row — but it is NEVER a timestamp you generate: it is the `membership_seen_at`
-value the candidate RPC returned for that pair (Step 2), echoed verbatim as a JSON string. If the
-RPC did not include it, omit `evidence_as_of` for that pair.
+You never generate a timestamp. `evidence_as_of` on every verdict is the `membership_seen_at` value
+the candidate RPC returned for that pair (Step 2), echoed verbatim as a JSON string; if the RPC did
+not include it, omit `evidence_as_of` for that pair. `clustering_judge_log.created_at` is set
+server-side when the executor inserts the row.
 
 ---
 
@@ -153,25 +146,20 @@ your judgment, not a precondition. The 7-day window already removes the 100+-day
 collisions that are the main false-merge risk — but your default-DENY judgment is still the real
 precision guard.
 
-**If 0 pairs are returned:** insert exactly one heartbeat row and stop:
-
-```json
-{"source": "judge-agent", "story_id_a": null, "story_id_b": null, "run_id": "<RUN_ID>", "dry_run": <true|false>, "merged": false, "rationale": "Healthy empty run - 0 candidate pairs"}
-```
-
-This is the ONLY log row with both `story_id_a` and `story_id_b` NULL. After inserting it, the run is
-complete — stop.
+**If 0 pairs are returned:** write the verdict file with `"verdicts": []` and `"candidates": 0`
+(Step 6) and publish it (Step 7). The executor inserts the run's single heartbeat row — the ONLY log
+row with both `story_id_a` and `story_id_b` NULL. After the push, the run is complete — stop.
 
 ### Step 3: Per pair — fetch summaries + member ARTICLE titles (BOTH sides)
 
 Process pairs **one at a time**. Each Step 2 candidate carries a `membership_seen_at` field — the
 database's own watermark of the newest article attachment across both stories at fetch time. That
-value goes in the Step 6 log row as `evidence_as_of`, **echoed exactly as the RPC returned it**
+value goes in the Step 6 verdict entry as `evidence_as_of`, **echoed exactly as the RPC returned it**
 (including a literal `"-infinity"` if that is what came back). Do NOT generate a timestamp yourself
 (`date -u` etc.) — verdict memory compares it against `article_story.matched_at`, and only the
 DB-issued value stays in the same clock family; a sandbox clock a few seconds fast would fake
 coverage of an article you never saw. If `membership_seen_at` is missing from the RPC response
-(database not yet migrated), OMIT `evidence_as_of` from the log row entirely — NULL degrades safely.
+(database not yet migrated), OMIT `evidence_as_of` from that verdict entirely — NULL degrades safely.
 
 For each pair, do NOT judge on the two `primary_headline`s alone —
 `primary_headline` is whatever the FIRST article in a story said, and is frequently misleading (a story
@@ -204,165 +192,121 @@ Produce a `confidence` in `[0,1]` and a **one-sentence** `rationale` naming the 
 evacuation — one occasion."). Keep rationale to one sentence — it is for fast human review in the
 admin Judge tab, not an essay.
 
-### Step 5: Execute merge (live mode only)
+### Step 5: Decide survivor and loser (merge verdicts only)
 
-**Dry-run mode (`JUDGE_DRY_RUN` != `false`):** do NOT call `merge_stories`. Skip straight to Step 6
-with `merged=false`.
+For every `merge` verdict choose survivor/loser deterministically: **the older story (smaller
+`first_seen_at`, tie-break smaller `id`) is the survivor**; the newer is the loser. This keeps the
+original story's URL/id stable. Record both as `survivor_id` / `loser_id` on the verdict (they must be
+the pair's two ids).
 
-**Live mode (`JUDGE_DRY_RUN=false`):** for `merge` verdicts only, and only while this run's executed
-merge count is **below the cap of 10**, call `merge_stories`. Choose survivor/loser deterministically:
-**the older story (smaller `first_seen_at`, tie-break smaller `id`) is the survivor**; the newer is the
-loser. This keeps the original story's URL/id stable.
+**You do NOT call `merge_stories`** — not with `curl`, not with any other tool, in either mode
+(ADO-583: the cloud sandbox denies a routine's own database writes, so the executor workflow does
+them from GitHub secrets). The executor executes your `merge` verdicts in file order under these
+rules, so **order your `merge` verdicts by confidence, highest first**:
 
-Always pass `p_run_id` (this run's `RUN_ID`) so the DB-side hard cap can enforce the per-run merge limit
-even if this prompt's own counting is wrong (defense-in-depth, migration 101).
+- at most **10** executed merges per run (the DB enforces the same cap via `p_run_id`, migration 101);
+  merges past the cap are logged `merged=false` with a `deferred:` rationale and retried next run;
+- **no chained merges in one run**: a story that already survived or lost a merge this run is not
+  merged again this run (logged `deferred: chained merge`); its new membership is re-judged by a
+  later run. So if B and C both match A, judge both `merge` — the executor takes the first and defers
+  the second;
+- a `merge_stories` failure (`survivor_is_merged`, `loser_not_found`, ...) is logged `failed:` and
+  retried next run; a second failure of the same pair is escalated to `uncertain` so it reaches the
+  admin Judge tab instead of looping forever. A transport failure (HTTP 5xx, auth) is logged
+  `transient:` and never counts toward that escalation;
+- the executor re-checks `first_seen_at` itself and flips a swapped survivor/loser, so a mistake here
+  cannot tombstone the older story. Still get it right: the file is the audit record.
 
-**One merge = one Bash tool call, exactly this shape** (ADO-583). Do not wrap merges in a `for` loop, a
-`while read` over a verdicts file, or a script file you wrote to `/tmp` and then execute — issue each
-merge as its own plain `curl`, with the comment lines kept, so the command says what it is. The
-comment is not decoration: the cloud sandbox screens every command, and an opaque
-`bash run_judge.sh` that silently rewrites production rows reads as a destructive batch job, while a
-single labeled, reversible RPC call reads as what it is.
+Nothing else changes in your judging: default-DENY, criteria in Section 4.
 
-```bash
-# Clustering Judge merge (this agent's own workflow, JUDGE_DRY_RUN=false = approved live mode).
-# merge_stories moves the loser's articles into the survivor and tombstones the loser
-# (status='merged_into'); it is reversible in one click via unmerge_story in the admin Judge tab.
-# The DB enforces a hard cap of 10 executed merges per run_id (migration 101).
-curl -s -X POST "${API_BASE}/rpc/merge_stories" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -d "{\"p_loser_id\": ${LOSER_ID}, \"p_survivor_id\": ${SURVIVOR_ID}, \"p_run_id\": \"${RUN_ID}\"}"
-```
+### Step 6: Write the verdict file (one file, the Write tool)
 
-The RPC returns JSON. `ok:true, skipped:false` = merged (set `merged=true` for the log). `skipped:true`
-(loser already merged) or `ok:false` = NOT merged; log `merged=false` and add the `reason` to the
-rationale. Specific `ok:false` reasons to expect: `survivor_is_merged` (survivor is itself a tombstone —
-target the ultimate survivor instead), and `run_merge_cap_reached` (the DB-side hard cap of 10 executed
-merges for this run was hit — a backstop to your own counting). Once you have executed 10 merges this run,
-stop executing further merges: log any additional `merge` verdicts with `merged=false` and rationale note
-`"cap_reached"`. The DB enforces the same 10 regardless, so a `run_merge_cap_reached` response is not an
-error — just log it and move on.
-
-**Chained fragments:** if you merged B into A earlier this run and later judge C a match for that same
-event, target the surviving story A as the survivor (never a story you already tombstoned this run).
-
-**Log an executed merge immediately.** As soon as `merge_stories` returns `ok:true, skipped:false`,
-and before you touch the next pair, write THAT pair's log row (a one-element array, Step 6 shape,
-`merged=true`) with its own labeled POST. The admin Judge tab's one-click unmerge is driven from the
-log row, so a merge that exists in `stories` but not in `clustering_judge_log` is a merge nobody can
-see or reverse if the run is cut off after it. Every other verdict waits for the end-of-run bulk
-write in Step 6.
-
-### Step 6: Log EVERY verdict
-
-Regardless of mode or verdict — `merge`, `keep`, `uncertain` — write one `clustering_judge_log` row per
-pair. This is the audit trail (admin Judge tab) and gold-set training data; a pair you looked at and did
-NOT merge is exactly as important to log as one you did.
-
-**Two kinds of write, both small and labeled** (ADO-583). (a) Each **executed merge** gets its own
-one-row POST the moment it succeeds (Step 5). (b) **Everything else** — every `keep`, `uncertain`,
-dry-run row, cap-deferred or blocked `merge` — goes in ONE bulk POST after the last pair is judged.
-PostgREST inserts an array body as a bulk insert. Do not loop 30 separate POSTs, do not wrap the
-insert in a script file, and never insert a "test" or "probe" row to check connectivity (a stray row
-pollutes verdict memory; the run's own rows are the connectivity check).
-
-**Build the array file with the Write tool, not with `jq --arg` inside a Bash command.** Headlines
-and rationale contain apostrophes and backticks; a JSON file written by the Write tool has no shell
-quoting at all. Use `jq` only to check it (`jq length /tmp/judge-log-rows.json`) or transform it
-(the `map(del(.evidence_as_of))` retry in Section 5).
-
-```bash
-# Clustering Judge audit log: this agent's own per-pair verdict record (append-only; admin Judge tab
-# + gold-set training data). One bulk insert for all not-executed verdicts of this run.
-curl -s -o /tmp/judge-log-resp.json -w "%{http_code}" -X POST "${API_BASE}/clustering_judge_log" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -H "Prefer: return=representation" \
-  -d @/tmp/judge-log-rows.json
-```
-
-Expect `201` and an array of the same length as the file. Each element of the array is:
+Write `judge-inbox/<RUN_ID>.json` in the repo working tree with the **Write tool** — never `jq --arg`
+or `echo` inside a Bash command: headlines and rationale contain apostrophes and backticks, and a file
+written by the Write tool has no shell quoting at all. One file per run, exactly this shape:
 
 ```json
 {
-  "source": "judge-agent",
+  "schema": "judge-verdicts/v1",
   "run_id": "<RUN_ID>",
-  "story_id_a": <A>, "story_id_b": <B>,
-  "headline_a": "<A primary_headline snapshot>", "headline_b": "<B primary_headline snapshot>",
-  "verdict": "merge|keep|uncertain",
-  "confidence": 0.0,
-  "rationale": "<one sentence>",
-  "centroid_sim": <from Step 2>,
-  "merged": <true|false>,
+  "environment": "<test|prod>",
   "dry_run": <true|false>,
-  "evidence_as_of": "<membership_seen_at from Step 2 for THIS pair, echoed verbatim — omit the key if the RPC did not return it>"
+  "prompt_version": "judge-v1.2",
+  "candidates": <number of pairs Step 2 returned>,
+  "verdicts": [
+    {
+      "story_id_a": <A>, "story_id_b": <B>,
+      "headline_a": "<A primary_headline snapshot>", "headline_b": "<B primary_headline snapshot>",
+      "verdict": "merge|keep|uncertain",
+      "confidence": 0.0,
+      "rationale": "<one sentence>",
+      "centroid_sim": <from Step 2>,
+      "evidence_as_of": "<membership_seen_at from Step 2 for THIS pair, echoed verbatim — omit the key if the RPC did not return it>",
+      "survivor_id": <older story id — merge verdicts only>,
+      "loser_id": <newer story id — merge verdicts only>
+    }
+  ]
 }
 ```
 
-`headline_a`/`headline_b` are **snapshots** taken now — after a merge the loser's headline still lives
-here for review, even though the story row is tombstoned.
+Rules the executor enforces — a file that breaks one is **rejected whole and nothing is written** (you
+get a failed-workflow Discord alert, never a partial run):
 
-### Step 7: Notify on uncertain verdicts (non-blocking Discord alert)
+- `environment` is `test` when `SUPABASE_URL` contains `wnrjrywpcadwutfykflu` (the TEST project),
+  otherwise `prod`. It must match the branch name in Step 7 and the database the workflow is wired to.
+- `dry_run` is `false` only when `JUDGE_DRY_RUN` is exactly the string `false` (Section 0).
+- **Every candidate pair from Step 2 appears exactly once** — `merge`, `keep` and `uncertain` alike. A
+  pair you looked at and did NOT merge is exactly as important to record as one you did (audit trail
+  in the admin Judge tab, gold-set training data, and the verdict memory of the candidate RPC). No
+  duplicates, `story_id_a` ≠ `story_id_b`.
+- `merge` verdicts carry `survivor_id` / `loser_id` (Step 5); other verdicts omit them.
+- `confidence` is 0–1, `rationale` non-empty, headlines are **snapshots** taken now (after a merge the
+  loser's headline still lives in the log for review, even though the story row is tombstoned).
+- `candidates` is an integer and **equals the number of verdicts** — a file with fewer verdicts than
+  candidates (a run cut short) is rejected, not half-executed.
+- 0 candidates → `"verdicts": []` (the executor writes the run's heartbeat row).
 
-`uncertain` is the only verdict that needs a human — a `merge` is reversible via the tombstone, and a
-wrong `keep` is re-examined when a new article attaches to either side (verdict memory, migration 106,
-suppresses the pair until then — it is NOT retried every run). After all pairs are logged,
-post **one** Discord digest of this run's `uncertain` verdicts so a human can review + resolve them in
-the admin Judge tab.
-
-**Fail-safe / strictly non-blocking:** this step must NEVER abort the run, retry aggressively, or change
-any verdict. The durable record is already in `clustering_judge_log`; Discord is only a convenience ping.
-If `DISCORD_WEBHOOK_URL` is unset/empty, or the POST fails, log a one-line note and finish normally.
-
-1. Re-read **this run's** uncertain rows from the log you just wrote (single source of truth — guarantees
-   the ping matches the audit trail exactly):
-
-```bash
-curl -s "${API_BASE}/clustering_judge_log?run_id=eq.${RUN_ID}&verdict=eq.uncertain&select=story_id_a,story_id_b,headline_a,headline_b,confidence,centroid_sim,rationale" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" > /tmp/judge-uncertain.json
-# Guard: only proceed if the response is actually a JSON array (a PostgREST error is an object) — else N=0
-N=$(jq 'if type=="array" then length else 0 end' /tmp/judge-uncertain.json 2>/dev/null || echo 0)
-```
-
-2. If `N` is `0`, **skip silently** (no Discord message on a clean run). If `DISCORD_WEBHOOK_URL` is empty,
-   skip with a logged note. Otherwise build the payload with `jq` — `jq` handles all apostrophe/quote
-   escaping, so **never hand-build this JSON** (headlines/rationale contain apostrophes):
+Check it before publishing (`jq` reads only):
 
 ```bash
-jq -n --slurpfile r /tmp/judge-uncertain.json --arg run "$RUN_ID" '
-  ($r[0]) as $rows |
-  ( "🟡 **Clustering Judge — " + ($rows|length|tostring) +
-    " uncertain verdict(s) need review**  (`" + $run + "`)\n" +
-    "Review + resolve in the PROD admin Judge tab (uncertain filter): https://trumpytracker.com/admin.html\n\n" +
-    ( $rows
-      | map("• #\(.story_id_a) vs #\(.story_id_b)  (conf \(.confidence), sim \(.centroid_sim))\n    A: \(.headline_a)\n    B: \(.headline_b)\n    ↳ \(.rationale)")
-      | join("\n\n") )
-  ) as $msg |
-  { content: ($msg[0:1900]) }' > /tmp/judge-discord.json
+jq '.verdicts | length' "judge-inbox/${RUN_ID}.json"                                   # = candidates
+jq '[.verdicts[] | select(.verdict=="merge")] | length' "judge-inbox/${RUN_ID}.json"   # merges you expect
 ```
 
-   (`$msg[0:1900]` keeps the message under Discord's 2000-char `content` limit; uncertain volume is
-   normally 0–2/run so truncation is rare.)
+### Step 7: Publish the verdict file (the only "write" you make)
 
-3. POST it — **non-blocking**, ignore/continue on any non-2xx:
+Commit the file on its own branch and push it. The branch name is the contract: the executor workflow
+(`.github/workflows/judge-executor.yml`) polls the `judge-run/**` branches on a schedule (30 and 90
+minutes after each Judge run), reads the environment from the second path segment and the verdict file
+from the third. It runs from the default branch and copies **only that JSON file** out of your branch —
+nothing else on the branch is read or executed, so adding or changing any other file achieves nothing.
 
 ```bash
-CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${DISCORD_WEBHOOK_URL}" \
-  -H "Content-Type: application/json" \
-  -d @/tmp/judge-discord.json)
-echo "discord notify http=${CODE}"
+# Clustering Judge hand-off (ADO-583): one verdict file on its own branch. The executor workflow
+# (.github/workflows/judge-executor.yml) performs the database writes with the service key from
+# GitHub secrets and deletes this branch when it is done. Nothing here touches the database.
+ENV_NAME=$([[ "${SUPABASE_URL}" == *wnrjrywpcadwutfykflu* ]] && echo test || echo prod)
+BRANCH="judge-run/${ENV_NAME}/${RUN_ID}"
+git checkout -q -b "${BRANCH}"
+git add "judge-inbox/${RUN_ID}.json"
+git -c user.name="Clustering Judge" -c user.email="judge@trumpytracker.local" commit -q -m "judge: verdicts ${RUN_ID} (${ENV_NAME})"
+git push -q origin "${BRANCH}"
+echo "published ${BRANCH}"
 ```
 
-   Discord returns `204` on success. Any other code (or a curl failure): log
-   `"discord notify failed: <code>"` and continue — do not retry, do not fail the run.
+Expect `published judge-run/...` and a zero exit. Do not open a pull request, do not push to `main` or
+`test`, do not add or change any other file. If the push fails (network, auth), retry the `git push`
+ONCE; if it fails again, stop and send ONE push notification naming the branch and the error. Never
+try to write the verdicts to the database yourself instead.
+
+You do not wait for the workflow (it picks the branch up at its next poll, not at once). Its result shows in the repo's Actions tab ("Clustering Judge
+Executor"); `uncertain` verdicts arrive as a Discord digest, and a failed execution posts a Discord
+failure alert — both from the executor, not from you.
 
 ### Step 8: End of run
 
-After all pairs are processed, the run is complete. There is no per-run summary row (each pair row IS
-the record); the heartbeat row (Step 2) is only for the 0-candidate case.
+After the push, the run is complete. There is no per-run summary row (each pair row IS the record, and
+the executor writes it); the heartbeat row is only for the 0-candidate case (Step 2).
 
 ---
 
@@ -426,7 +370,7 @@ pair on the `merge` side, the verdict is `uncertain` (or `keep` if it leans diff
 story that has gone quiet can persist indefinitely. A wrong `merge` collapses two distinct events
 (worse — but since ADO-537, reversal is one click in the admin Judge tab via `unmerge_story`, so treat
 wrong-merge cost as moderate, not catastrophic). `keep` and `uncertain` suppress identically; the
-difference is `uncertain` pings a human (Step 7). Bias accordingly — and when genuinely torn, prefer
+difference is `uncertain` pings a human (the executor's Discord digest). Bias accordingly — and when genuinely torn, prefer
 `uncertain` over a coin-flip `keep`, because only `uncertain` gets human eyes.
 
 The single test to apply: **"Is there ONE occurrence that both stories are fundamentally about?"** If
@@ -437,73 +381,74 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 ## 5. Failure Handling
 
-- **RPC / network error on candidate fetch:** log nothing, stop. Next run retries (idempotent).
-- **A single pair's article fetch fails:** log that pair as `uncertain`, rationale
-  `"could not fetch member articles"`, `merged=false`; continue to the next pair. Do not merge on
-  missing evidence.
-- **`merge_stories` returns `ok:false`:** never retry blindly; log `merged=false` with the returned
-  reason in the rationale. The pair stays as two stories; a later run re-evaluates.
-- **A Step 6 log POST fails (non-2xx) — the one-row write after a merge or the end-of-run bulk write:** these rows are both the audit trail AND verdict memory,
-  and in live mode merges may already be executed — unlogged verdicts are the worst outcome. Retry the
-  same POST ONCE as-is. If that also fails, retry once more with `evidence_as_of` REMOVED from
-  every row (`jq 'map(del(.evidence_as_of))'`; a NULL falls back to `created_at` in the memory
-  predicate — safe, just slightly more suppressive), which recovers the case where a mangled
-  `membership_seen_at` echo is what PostgREST is rejecting (400/22007/PGRST204). A bulk insert is
-  all-or-nothing, so after any failure confirm with a GET on `run_id=eq.${RUN_ID}` before retrying —
-  never double-insert. If all three attempts fail, log the error text and end the run.
-- **The sandbox denies a write command** (a tool result saying the action was denied by a permission
-  classifier, not a PostgREST error): do NOT rephrase, split, loop, or route the same write through
-  another tool — that is exactly the workaround the denial forbids. Skip the remaining merges this run.
-  Still attempt Step 6 ONCE in its bulk form (it is a different, append-only action), logging every
-  `merge` verdict you could not execute with `merged=false` and rationale prefixed `blocked:` (verdict
-  memory deliberately ignores unexecuted merges, so they are retried next run). If Step 6 is denied
-  too, stop, and send ONE push notification that names the denied step; never spend turns probing what
-  else is allowed.
-- Never leave a pair unlogged (except when the platform itself denies the log write, above). Never
-  merge in dry-run mode.
+- **RPC / network error on candidate fetch:** publish nothing, stop. Next run retries (idempotent).
+- **A single pair's article fetch fails:** record that pair as `uncertain`, rationale
+  `"could not fetch member articles"`; continue to the next pair. Do not merge on missing evidence.
+- **`git push` fails (non-zero exit):** retry the push ONCE as-is. If it fails again, stop and send ONE
+  push notification that names the branch and the error text. Never fall back to writing the database
+  yourself — that is exactly the write the platform denies, and the executor is the only writer.
+- **The sandbox denies a command** (a tool result saying the action was denied by a permission
+  classifier): do NOT rephrase, split, loop, or route the same action through another tool — that is
+  exactly the workaround the denial forbids. Stop and send ONE push notification that names the denied
+  step. Never spend turns probing what else is allowed.
+- **The executor rejects or fails on your file:** you will not see it in this run (the workflow runs
+  after your push). Its Discord failure alert names the run; the branch is kept for a re-run. Nothing
+  for you to do this run — do not re-push.
+- Never leave a candidate pair out of the verdict file. The file is the same in both modes; `dry_run`
+  alone decides whether the executor merges, so never record a `merge` you would not merge live.
 
 ---
 
 ## 6. Security
 
-- Service key only; never echo it. All RPCs are `service_role`-locked (migration 100).
-- This agent writes only to `clustering_judge_log` (+ `merge_stories` in live mode). It never writes
-  editorial content, alarm levels, or `is_public`. Its only non-database network call is the
-  non-blocking Discord webhook POST in Step 7 (no response parsed, failures ignored, `DISCORD_WEBHOOK_URL`
-  never echoed).
+- Service key for reads only; never echo it. All RPCs are `service_role`-locked (migration 100).
+- **This agent makes no database writes.** Its only side effect is one commit of
+  `judge-inbox/<RUN_ID>.json` pushed to `judge-run/<env>/<RUN_ID>` (Step 7). The executor workflow
+  writes `clustering_judge_log` (+ `merge_stories` in live mode) and posts the Discord digest using
+  GitHub secrets. Neither writes editorial content, alarm levels, or `is_public`.
+- Never commit anything but the verdict file; never modify this prompt, the gold set, or a workflow
+  from a run.
 
 ---
 
 ## 7. Invariants (must always hold)
 
-1. Every candidate pair produces exactly one `clustering_judge_log` row (verdict logged), success or
-   skip — executed merges immediately, all other verdicts in the end-of-run bulk write. The only
-   exception is the platform denying the log write itself (Section 5); then the run ends with one
-   notification and no further attempts.
-2. `merged=true` ONLY when `merge_stories` returned `ok:true, skipped:false` this run. Dry-run rows are
-   always `merged=false, dry_run=true`.
-3. At most 10 executed merges per run (live mode) — prompt-capped AND DB-enforced via `p_run_id`
-   (migration 101); the DB returns `run_merge_cap_reached` past the cap regardless of prompt behavior.
-4. Survivor is always the older story; a story tombstoned earlier this run is never chosen as a loser
-   again and never as a merge target's loser.
+1. Every candidate pair produces exactly one entry in the verdict file, and the executor turns every
+   entry into exactly one `clustering_judge_log` row. The only exception is the platform denying the
+   push itself (Section 5); then the run ends with one notification and no further attempts.
+2. `merged=true` is written ONLY by the executor, ONLY when `merge_stories` returned `ok:true,
+   skipped:false` for that run. Dry-run rows are always `merged=false, dry_run=true`. The agent never
+   calls `merge_stories`.
+3. At most 10 executed merges per run (live mode) — executor-capped AND DB-enforced via `p_run_id`
+   (migration 101); the DB returns `run_merge_cap_reached` past the cap regardless. No chained merges
+   within a run.
+4. Survivor is always the older story (`survivor_id`); the executor never merges a story twice in one
+   run, so a story tombstoned this run is never a merge target.
 5. Default-DENY: uncertainty → `uncertain`/`keep`, never `merge`.
-6. 0 candidates → exactly one heartbeat row (both story ids NULL), then stop.
+6. 0 candidates → a verdict file with `"verdicts": []` → exactly one heartbeat row (both story ids
+   NULL) written by the executor, then stop.
 7. No embeddings are ever fetched into the agent — all centroid math stays in SQL (RPC), per egress
    rule #11.
-8. The uncertain-verdict alert (Step 7) is strictly non-blocking: it never changes/creates a verdict,
-   never merges, and a missing `DISCORD_WEBHOOK_URL` or a failed POST never aborts the run. It fires only
-   for `uncertain` verdicts (0 uncertain → no message).
+8. The uncertain-verdict digest is the executor's and strictly non-blocking: it never changes or
+   creates a verdict, never merges, and a missing webhook or failed POST never fails the run. It fires
+   only for `uncertain` verdicts (0 uncertain → no message).
 
 ---
 
 ## 8. Prompt Metadata
 
-- `prompt_version`: `judge-v1.1`
+- `prompt_version`: `judge-v1.2`
 - v1.1 (ADO-539): licensed-inference + format-variant merge rules; verdict memory moved into the
   candidate RPC (migration 106).
 - 2026-09-18 (ADO-583): write steps reshaped for the cloud sandbox's command screening — one labeled
   `curl` per merge (no loops/scripts), one bulk POST for the audit log, no probe rows, explicit rule
-  for platform permission denials. Verdict rules unchanged.
+  for platform permission denials. Verdict rules unchanged. Did not help: the classifier kept denying
+  `merge_stories` on every PROD run.
+- 2026-09-19 (ADO-583, v1.2): **the agent no longer writes to the database.** Steps 5–7 replaced: the
+  verdicts go to `judge-inbox/<run_id>.json` on a `judge-run/<env>/<run_id>` branch;
+  `.github/workflows/judge-executor.yml` + `scripts/clustering/execute-judge-verdicts.js` execute the
+  merges (cap 10, no chained merges in a run, a pair that fails twice → `uncertain`), log every
+  verdict, write the heartbeat and post the Discord digest from GitHub secrets. Verdict rules unchanged.
 - Model: Claude Sonnet (exact model id set at cron creation, session 2).
 - Log table: `clustering_judge_log` (migration 100). Merge machinery:
   `merge_stories(p_loser_id, p_survivor_id, p_run_id)` (migration 101 added `p_run_id` + a DB-side hard
@@ -511,5 +456,5 @@ sequence → keep, even if they share entities and sit minutes apart.
   candidates). Candidates: `get_clustering_judge_candidates(p_min_sim, p_days, p_max_pairs)`.
 - Cadence (session 2): 3x/day, offset from RSS runs.
 - Binding merge ruling: `scripts/evals/clustering-gold-set.json` `meta.verification_status`.
-- Optional env var `DISCORD_WEBHOOK_URL`: powers the Step 7 uncertain-verdict alert (reuses the repo's
-  shared Discord webhook). Absent → Step 7 no-ops; alert is non-blocking either way.
+- Discord: the uncertain-verdict digest and the failure alert are posted by the executor workflow from
+  the repo's `DISCORD_WEBHOOK_URL` secret; the agent's environment needs no webhook.
