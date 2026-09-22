@@ -28,6 +28,11 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { resolveBackfillDate } from '../lib/eo-dates.js';
 
+// Workflow logs are this script's only output channel: stdout directly, no console.log in
+// production code (AGENTS.md P1; same pattern as scripts/monitoring/alert-routine-silence.js).
+// console.error stays for failures so they land on stderr.
+const out = (line) => process.stdout.write(`${line}\n`);
+
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const envIdx = args.indexOf('--env');
@@ -61,7 +66,7 @@ function getClient() {
     console.error('Writing to PROD requires --confirm-prod (or use --dry-run).');
     process.exit(2);
   }
-  console.log(`Target: ${ENV.toUpperCase()} (${url.replace(/^https?:\/\//, '').split('.')[0]})${DRY_RUN ? '  [DRY RUN]' : ''}`);
+  out(`Target: ${ENV.toUpperCase()} (${url.replace(/^https?:\/\//, '').split('.')[0]})${DRY_RUN ? '  [DRY RUN]' : ''}`);
   return createClient(url, key);
 }
 
@@ -128,7 +133,7 @@ async function fetchAllRows(supabase) {
 async function main() {
   const supabase = getClient();
   const rows = await fetchAllRows(supabase);
-  console.log(`Found ${rows.length} executive orders`);
+  out(`Found ${rows.length} executive orders`);
 
   const stats = { total: rows.length, updated: 0, already_correct: 0, no_document_number: 0, no_signing_date: 0, invalid_signing_date: 0, api_error: 0, write_error: 0, not_reached: 0 };
   const changes = [];
@@ -139,14 +144,14 @@ async function main() {
     const eo = rows[i];
     if (!eo.document_number) {
       stats.no_document_number++;
-      console.log(`  skip  EO ${eo.order_number}: no document_number`);
+      out(`  skip  EO ${eo.order_number}: no document_number`);
       continue;
     }
     const fr = await fetchSigningDate(eo.document_number);
     await new Promise(r => setTimeout(r, DELAY_MS));
     if (fr.error) {
       stats.api_error++;
-      console.log(`  error EO ${eo.order_number}: Federal Register ${fr.error}`);
+      out(`  error EO ${eo.order_number}: Federal Register ${fr.error}`);
       consecutiveApiFailures = fr.retryable ? consecutiveApiFailures + 1 : 0;
       if (consecutiveApiFailures >= MAX_CONSECUTIVE_API_FAILURES) {
         stats.not_reached = rows.length - (i + 1);
@@ -162,12 +167,12 @@ async function main() {
     const decision = resolveBackfillDate(eo.date, fr.signing_date);
     if (decision.action === 'missing') {
       stats.no_signing_date++;
-      console.log(`  skip  EO ${eo.order_number}: API has no signing_date (keeping ${eo.date})`);
+      out(`  skip  EO ${eo.order_number}: API has no signing_date (keeping ${eo.date})`);
       continue;
     }
     if (decision.action === 'invalid') {
       stats.invalid_signing_date++;
-      console.log(`  skip  EO ${eo.order_number}: API signing_date "${fr.signing_date}" is not a valid YYYY-MM-DD date (keeping ${eo.date})`);
+      out(`  skip  EO ${eo.order_number}: API signing_date "${fr.signing_date}" is not a valid YYYY-MM-DD date (keeping ${eo.date})`);
       continue;
     }
     if (decision.action === 'noop') {
@@ -177,22 +182,22 @@ async function main() {
     const wanted = decision.to;
     changes.push({ order_number: eo.order_number, from: eo.date, to: wanted });
     if (DRY_RUN) {
-      console.log(`  would EO ${eo.order_number}: ${eo.date} -> ${wanted}`);
+      out(`  would EO ${eo.order_number}: ${eo.date} -> ${wanted}`);
       continue;
     }
     const { error } = await supabase.from('executive_orders').update({ date: wanted }).eq('id', eo.id);
     if (error) {
       stats.write_error++;
-      console.log(`  error EO ${eo.order_number}: write failed: ${error.message}`);
+      out(`  error EO ${eo.order_number}: write failed: ${error.message}`);
       continue;
     }
     stats.updated++;
-    console.log(`  fixed EO ${eo.order_number}: ${eo.date} -> ${wanted}`);
+    out(`  fixed EO ${eo.order_number}: ${eo.date} -> ${wanted}`);
   }
 
-  console.log('\nSummary');
-  for (const [k, v] of Object.entries(stats)) console.log(`  ${k.padEnd(20)} ${v}`);
-  if (DRY_RUN) console.log(`  would_update         ${changes.length}`);
+  out('\nSummary');
+  for (const [k, v] of Object.entries(stats)) out(`  ${k.padEnd(20)} ${v}`);
+  if (DRY_RUN) out(`  would_update         ${changes.length}`);
   if (aborted) console.error(`\nABORTED: ${aborted}`);
   if (aborted || stats.api_error || stats.write_error) process.exit(1);
 }
