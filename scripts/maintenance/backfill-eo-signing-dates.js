@@ -65,12 +65,34 @@ function getClient() {
   return createClient(url, key);
 }
 
+const FETCH_TIMEOUT_MS = 15000;
+const RETRY_BACKOFF_MS = [2000, 8000]; // one-time run: two retries on 429/5xx/network is enough to ride out a rate-limit blip
+
+// Code-review finding (ADO-589): without a timeout one hung request stalls the
+// workflow step until its 10-minute limit, and without a retry a single 429
+// mid-run marks every remaining row api_error and turns the step red half-done.
 async function fetchSigningDate(documentNumber) {
   const url = `https://www.federalregister.gov/api/v1/documents/${encodeURIComponent(documentNumber)}.json?fields[]=signing_date&fields[]=publication_date`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'TrumpyTracker/1.0 (https://trumpytracker.com)', Accept: 'application/json' } });
-  if (!res.ok) return { error: `HTTP ${res.status}` };
-  const j = await res.json();
-  return { signing_date: j.signing_date ?? null, publication_date: j.publication_date ?? null };
+  let lastError = 'unknown';
+  for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_BACKOFF_MS[attempt - 1]));
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'TrumpyTracker/1.0 (https://trumpytracker.com)', Accept: 'application/json' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        return { signing_date: j.signing_date ?? null, publication_date: j.publication_date ?? null };
+      }
+      lastError = `HTTP ${res.status}`;
+      const retryable = res.status === 429 || res.status >= 500;
+      if (!retryable) return { error: lastError }; // 404 etc: retrying will not help
+    } catch (err) {
+      lastError = err.name === 'TimeoutError' ? `timeout after ${FETCH_TIMEOUT_MS}ms` : (err.message || String(err));
+    }
+  }
+  return { error: `${lastError} (after ${RETRY_BACKOFF_MS.length + 1} attempts)` };
 }
 
 // Keyset pagination on the primary key (never OFFSET). id is text on PROD
