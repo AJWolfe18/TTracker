@@ -9,6 +9,10 @@ on:
         description: 'Days to look back for EOs (default 3; raise for backfills)'
         required: false
         default: '3'
+      backfill_signing_dates:
+        description: 'ADO-589 one-time: set to true to rewrite executive_orders.date from the Federal Register signing_date'
+        required: false
+        default: 'false'
 
 # Prevents overlapping scheduled + manual runs from double-enriching
 concurrency:
@@ -68,6 +72,26 @@ jobs:
         SUPABASE_SERVICE_ROLE_KEY: ${{ steps.env_detect.outputs.environment == 'test' && secrets.SUPABASE_TEST_SERVICE_KEY || secrets.SUPABASE_SERVICE_KEY }}
         EO_LOOKBACK_DAYS: ${{ inputs.lookback_days || '3' }}
       run: node scripts/executive-orders-tracker-supabase.js
+
+    # ADO-589: one-time data fix, runs ONLY when dispatched with backfill_signing_dates=true.
+    # Rewrites executive_orders.date (the site's "Signed" date) from the Federal Register
+    # signing_date; idempotent, ~1 free API call per row. Runs before the tracker refresh
+    # so the timeline picks up the corrected dates in the same run.
+    - name: Backfill EO signing dates (ADO-589, on demand)
+      if: github.event_name == 'workflow_dispatch' && inputs.backfill_signing_dates == 'true'
+      env:
+        SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+        SUPABASE_TEST_SERVICE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      run: |
+        if [ "$TARGET_ENV" = "prod" ]; then
+          node scripts/maintenance/backfill-eo-signing-dates.js --env prod --confirm-prod
+        else
+          node scripts/maintenance/backfill-eo-signing-dates.js --env test
+        fi
+      timeout-minutes: 10
+
 
     # ADO-581: sweep stories enriched since the last cycle into fronts before the refresh. Never fails.
     - name: Assign stories to fronts
