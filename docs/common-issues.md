@@ -666,8 +666,28 @@ When something breaks:
 2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
 3. Check GitHub Actions logs for enrichment errors
 
+### Track Pardons: "Parsed 0 pardons from DOJ page" with a 200 fetch
+Seen September 21, 2026: the DOJ republished the clemency page with an EMPTY body (the `<main>`
+article held three empty layout regions), so the scraper found headers and tables nowhere and exited 1.
+Our code was fine and the daily run goes green by itself once the DOJ restores the content.
+1. Fetch the page and check the body, not just the status:
+   `curl -sSI https://www.justice.gov/pardon/clemency-grants-president-donald-j-trump-2025-present | grep -i last-modified`
+   then count tables in the body (`curl -sS <url> | grep -ci '<table'`). Zero tables plus a fresh
+   Last-Modified means a DOJ-side edit, not a parser break.
+2. Compare a sibling list (Biden pardons, clemency statistics). If those still have tables, it is page-specific.
+3. Do NOT re-run the workflow to "confirm": same code, same page, same red run and another Discord ping.
+   Wait for the next 1 PM CT run. If the page is still blank after 2 to 3 days, plan a fallback source.
+4. Known scraper quirk: its `.field-formatter--text-default` selector also matches footer blocks, so a
+   blank page reports "page structure may have changed" instead of "content div not found".
+
+### Executive orders: the "Signed" date on the site is wrong
+`executive_orders.date` is the Federal Register SIGNING date (the site labels it Signed) and is mapped by
+`scripts/lib/eo-dates.js`. The tracker once stored `publication_date` there (1 to 11 days late) and the
+guard test `npm run qa:eo-dates` fails if that regresses. To re-sync existing rows, dispatch
+**Track Executive Orders** with `backfill_signing_dates=true` (idempotent, $0, ADO-589).
+
 ---
 
-_Last Updated: 2026-08-06_
+_Last Updated: 2026-09-21_
 _Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_
