@@ -666,8 +666,16 @@ When something breaks:
 2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
 3. Check GitHub Actions logs for enrichment errors
 
+### Pardons: a pardon shows as a commutation (or the reverse)
+The DOJ can put both types in ONE table under a heading like "September 3, 2026 - 23 Pardons and
+6 Commutations". Since ADO-590 the scraper types those rows one by one: the warrant link's title
+attribute first, then the warrant PDF's Title metadata, then its download filename. A row that none of
+them types is inserted as `pardon` and logged as `clemency_type_unknown` (admin → Skips tab); check
+its warrant and fix it by hand. `npm run ingest:pardons -- --dry-run` prints the per-date type split,
+and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.
+
 ---
 
-_Last Updated: 2026-08-06_
+_Last Updated: 2026-09-23_
 _Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_
