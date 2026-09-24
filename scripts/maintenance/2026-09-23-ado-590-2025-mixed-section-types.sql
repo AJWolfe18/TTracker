@@ -11,6 +11,9 @@
 --
 -- enriched_at = NULL queues each row for the pardons agent (5 per run, daily
 -- 3 PM CT), so write-ups that call them commutations get redone. $0.
+-- is_public is deliberately left alone (same as the September 23 fix): until a
+-- row is redone its page shows the right type next to older text, which beats
+-- hiding the Chrisleys and others for up to 4 days. Manual agent runs shorten it.
 --
 -- Guard: exactly 17 rows or the whole block rolls back and nothing changes.
 
