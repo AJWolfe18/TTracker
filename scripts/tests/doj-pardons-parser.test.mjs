@@ -273,6 +273,7 @@ await test('14. Warrant resolution: PDF Title first, then the download filename;
     [u(6)]: {},
     [u(7)]: { body: '<html><body>Access denied</body></html>', filename: '2026-09-03_Pardon_Warrant_Bot.pdf' },
   });
+  const statusFetch = (status) => async () => new Response('busy', { status });
   assert.equal((await resolveWarrantClemencyType(u(1), { fetchImpl })).type, 'commutation');
   assert.equal((await resolveWarrantClemencyType(u(2), { fetchImpl })).type, 'pardon');
   assert.equal((await resolveWarrantClemencyType(u(3), { fetchImpl })).type, 'commutation');
@@ -283,15 +284,20 @@ await test('14. Warrant resolution: PDF Title first, then the download filename;
   const noType = await resolveWarrantClemencyType(u(6), { fetchImpl });
   assert.equal(noType.retryable, false, 'a readable warrant that names no type is final');
   assert.match(noType.detail, /no type in PDF Title \(none\) or filename \(none\)/);
-  // Could not read the warrant this time: retryable, never a type
+  // Temporary failures: retryable, never a type
   const thrown = await resolveWarrantClemencyType(u(5), { fetchImpl });
   assert.deepEqual([thrown.type, thrown.retryable], [null, true]);
   assert.match(thrown.detail, /socket hang up/);
-  const http = await resolveWarrantClemencyType(u(404), { fetchImpl });
-  assert.deepEqual([http.type, http.retryable], [null, true]);
-  assert.match(http.detail, /HTTP 404/);
+  for (const status of [408, 429, 500, 503]) {
+    const r = await resolveWarrantClemencyType(u(9), { fetchImpl: statusFetch(status) });
+    assert.deepEqual([r.type, r.retryable], [null, true], `HTTP ${status} should retry`);
+  }
+  // Gone for good: final, so the row is inserted as 'pardon' and flagged instead of held forever
+  const dead = await resolveWarrantClemencyType(u(404), { fetchImpl });
+  assert.deepEqual([dead.type, dead.retryable], [null, false]);
+  assert.match(dead.detail, /HTTP 404/);
   const botPage = await resolveWarrantClemencyType(u(7), { fetchImpl });
-  assert.deepEqual([botPage.type, botPage.retryable], [null, true], 'a 200 HTML page is not a warrant, even with a typed filename');
+  assert.deepEqual([botPage.type, botPage.retryable], [null, false], 'a 200 HTML page is not a warrant, even with a typed filename');
   assert.match(botPage.detail, /not a PDF/);
   const calls = [];
   const noLink = await resolveWarrantClemencyType(null, { fetchImpl: fakeFetch({}, calls) });
@@ -312,7 +318,7 @@ await test('15. Without link titles, the warrant PDFs still type September 3 as 
   assert.deepEqual(pardons.filter(p => p.clemency_type === 'commutation').map(p => p.recipient_name).sort(), [...SEPT3_COMMUTATIONS].sort());
 });
 
-await test('16. A readable warrant naming no type falls back to pardon; an unreadable one leaves the row untyped for a retry', async () => {
+await test('16. A warrant naming no type falls back to pardon; a temporary failure leaves the row untyped for a retry', async () => {
   const row = { recipient_name: 'Nobody Known', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/7/dl?inline' };
   const result = await typeRowFromWarrant(row, { fetchImpl: fakeFetch({ [row.primary_source_url]: {} }) });
   assert.equal(result.outcome, 'fallback');
