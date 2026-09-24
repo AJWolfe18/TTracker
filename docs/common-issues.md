@@ -680,6 +680,14 @@ Our code was fine and the daily run goes green by itself once the DOJ restores t
 4. Known scraper quirk: its `.field-formatter--text-default` selector also matches footer blocks, so a
    blank page reports "page structure may have changed" instead of "content div not found".
 
+### Pardons: a pardon shows as a commutation (or the reverse)
+The DOJ can put both types in ONE table under a heading like "September 3, 2026 - 23 Pardons and
+6 Commutations". Since ADO-590 the scraper types those rows one by one: the warrant link's title
+attribute first, then the warrant PDF's Title metadata, then its download filename. A row that none of
+them types is inserted as `pardon` and logged as `clemency_type_unknown` (admin → Skips tab); check
+its warrant and fix it by hand. `npm run ingest:pardons -- --dry-run` prints the per-date type split,
+and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.
+
 ### Executive orders: the "Signed" date on the site is wrong
 `executive_orders.date` is the Federal Register SIGNING date (the site labels it Signed) and is mapped by
 `scripts/lib/eo-dates.js`. The tracker once stored `publication_date` there (1 to 11 days late) and the
@@ -688,6 +696,6 @@ guard test `npm run qa:eo-dates` fails if that regresses. To re-sync existing ro
 
 ---
 
-_Last Updated: 2026-09-21_
+_Last Updated: 2026-09-23_
 _Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_

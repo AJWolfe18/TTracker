@@ -16,6 +16,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { JSDOM } from 'jsdom';
 import crypto from 'crypto';
+import zlib from 'zlib';
 import { pathToFileURL } from 'url';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
@@ -27,6 +28,10 @@ import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
 const DOJ_URL = 'https://www.justice.gov/pardon/clemency-grants-president-donald-j-trump-2025-present';
 const SOURCE_SYSTEM = 'doj_opa';
 const USER_AGENT = 'TrumpyTracker/1.0 (Political Accountability Tracker)';
+const WARRANT_FETCH_TIMEOUT_MS = 15000;
+
+// Progress lines for code added after AGENTS.md banned console.log in production code
+const out = (line) => process.stdout.write(`${line}\n`);
 
 // Parse CLI args
 const args = process.argv.slice(2);
@@ -67,6 +72,34 @@ function parseClemencyType(headerText) {
   if (lower.includes('commutation')) return 'commutation';
   if (lower.includes('pre-emptive') || lower.includes('preemptive')) return 'pre_emptive';
   return 'pardon';
+}
+
+/**
+ * ADO-590: DOJ can put both types in ONE table under a heading like
+ * "September 3, 2026 - 23 Pardons and 6 Commutations". The heading cannot
+ * type those rows; each row's warrant has to.
+ * @param {string} headerText
+ * @returns {boolean}
+ */
+function headingNamesBothTypes(headerText) {
+  return /pardon/i.test(headerText) && /commutation/i.test(headerText);
+}
+
+/**
+ * Clemency type named by a warrant label: the page link's title attribute
+ * ("2026-09-03_Commutation_Warrant_Bloom", "Pardon Warrant - Mark Bashaw_signed 5.28.25"),
+ * the PDF Title metadata ("2025-05-28 Pardon KEVIN ERIC BAISDEN") or the PDF filename.
+ * @param {string|null|undefined} text
+ * @returns {'pardon' | 'commutation' | null} null when the text names neither type or both
+ */
+export function clemencyTypeFromWarrantText(text) {
+  if (!text) return null;
+  const named = new Set();
+  // Letter lookarounds instead of \b: "_Pardon_Warrant" has underscores, which \b treats as word characters
+  for (const m of String(text).matchAll(/(?<![a-z])(pardon|commutation)(?![a-z])/gi)) {
+    named.add(m[1].toLowerCase());
+  }
+  return named.size === 1 ? [...named][0] : null;
 }
 
 /**
@@ -118,6 +151,13 @@ function generateSourceKey(name, date) {
 
 /**
  * Parse the DOJ clemency page HTML (pure — no network, exported for tests).
+ *
+ * ADO-590: a row under a heading that names both types gets its type from its
+ * warrant link's title attribute. If that does not name exactly one type, the
+ * row comes back with clemency_type = null, and the caller must resolve it with
+ * typeRowFromWarrant() before inserting. (The column is NOT NULL, so a caller
+ * that forgets gets a failed insert, never a silently wrong type.)
+ *
  * @param {string} html
  * @returns {{ pardons: Array<Object>, unparsedHeaders: string[], newestPageDate: string|null }}
  */
@@ -135,6 +175,7 @@ export function parseDOJHtml(html) {
   let newestPageDate = null;
   let currentDate = null;
   let currentClemencyType = 'pardon';
+  let currentHeadingMixed = false;
 
   // Find the main content area
   const contentDiv = document.querySelector('.field_body, .field-formatter--text-default');
@@ -156,6 +197,7 @@ export function parseDOJHtml(html) {
 
       currentDate = parsePardonDate(headerText);
       currentClemencyType = parseClemencyType(headerText);
+      currentHeadingMixed = headingNamesBothTypes(headerText);
 
       // A header that mentions a year but didn't parse means DOJ changed the
       // markup again and we are about to silently drop its section — track it.
@@ -235,11 +277,16 @@ export function parseDOJHtml(html) {
         // Skip if no name
         if (!recipientName) continue;
 
+        // ADO-590: never type a mixed section's rows from its heading
+        const clemencyType = currentHeadingMixed
+          ? clemencyTypeFromWarrantText(nameLink?.getAttribute('title'))
+          : currentClemencyType;
+
         const pardon = {
           recipient_name: recipientName,
           recipient_type: 'person',
           pardon_date: currentDate,
-          clemency_type: currentClemencyType,
+          clemency_type: clemencyType,
           conviction_district: district || null,
           original_sentence: sentenced || null,
           offense_raw: offense || null,
@@ -257,12 +304,221 @@ export function parseDOJHtml(html) {
 
         if (VERBOSE) {
           console.log(`    👤 ${recipientName} (${district?.substring(0, 20) || 'N/A'})`);
+          if (currentHeadingMixed) out(`       type: ${clemencyType || 'not in link title, read from warrant PDF'}`);
         }
       }
     }
   }
 
   return { pardons, unparsedHeaders, newestPageDate };
+}
+
+// ============================================================================
+// Warrant type resolution (ADO-590)
+// ============================================================================
+// Warrant PDFs are scans (HP Scan + Acrobat). The type sits in the document
+// Title ("2026-09-03 Commutation Warrant Molly Ann Bloom") and in the download
+// filename. Some have no Title and keep their Info dictionary inside a
+// compressed object stream, so both places are checked.
+
+/**
+ * Read the PDF string (literal or hex) that starts at s[i]. s is the file as latin1.
+ * @returns {Buffer|null}
+ */
+function readPdfString(s, i) {
+  if (s[i] === '<') {
+    const end = s.indexOf('>', i);
+    if (end < 0) return null;
+    const hex = s.slice(i + 1, end).replace(/\s+/g, '');
+    return Buffer.from(hex.length % 2 ? `${hex}0` : hex, 'hex');
+  }
+  if (s[i] !== '(') return null;
+  const escapes = { n: 10, r: 13, t: 9, b: 8, f: 12 };
+  const bytes = [];
+  let depth = 1;
+  for (let k = i + 1; k < s.length; k++) {
+    const c = s[k];
+    if (c === '\\') {
+      const n = s[++k];
+      if (n === undefined) break;
+      if (n in escapes) {
+        bytes.push(escapes[n]);
+      } else if (n >= '0' && n <= '7') {
+        let oct = n;
+        while (oct.length < 3 && s[k + 1] >= '0' && s[k + 1] <= '7') oct += s[++k];
+        bytes.push(parseInt(oct, 8) & 0xff);
+      } else if (n === '\r') {
+        if (s[k + 1] === '\n') k++; // escaped line break = continuation
+      } else if (n !== '\n') {
+        bytes.push(n.charCodeAt(0) & 0xff);
+      }
+      continue;
+    }
+    if (c === '(') depth++;
+    if (c === ')' && --depth === 0) return Buffer.from(bytes);
+    bytes.push(c.charCodeAt(0) & 0xff);
+  }
+  return null;
+}
+
+/** PDF text string bytes → JS string (UTF-16BE with BOM, UTF-8 with BOM, else PDFDocEncoding ≈ latin1). */
+function decodePdfText(buf) {
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) {
+    const body = Buffer.from(buf.subarray(2, 2 + ((buf.length - 2) & ~1)));
+    return body.swap16().toString('utf16le');
+  }
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return buf.subarray(3).toString('utf8');
+  }
+  return buf.toString('latin1');
+}
+
+/** Body of object `num` stored directly in the file; the last definition wins (incremental saves append). */
+function findDirectObject(s, num) {
+  const matches = [...s.matchAll(new RegExp(`(?:^|[^0-9])${num}\\s+\\d+\\s+obj\\b([\\s\\S]*?)endobj`, 'g'))];
+  return matches.length ? matches[matches.length - 1][1] : null;
+}
+
+/** Body of object `num` stored inside a compressed object stream (/Type /ObjStm). */
+function findInObjectStreams(buf, s, num) {
+  let from = 0;
+  for (;;) {
+    const k = s.indexOf('stream', from);
+    if (k < 0) return null;
+    from = k + 6;
+    if (s.slice(k - 3, k) === 'end') continue;
+    const dict = s.slice(s.lastIndexOf('obj', k), k);
+    if (!/\/Type\s*\/ObjStm/.test(dict)) continue;
+    let start = k + 6;
+    if (s[start] === '\r') start++;
+    if (s[start] === '\n') start++;
+    const end = s.indexOf('endstream', start);
+    if (end < 0) return null;
+    const first = Number(dict.match(/\/First\s+(\d+)/)?.[1]);
+    if (!Number.isFinite(first)) continue;
+    let body;
+    try {
+      body = zlib.inflateSync(buf.subarray(start, end)).toString('latin1');
+    } catch {
+      continue; // not Flate-compressed or damaged: this stream can't hold a readable Info
+    }
+    const header = body.slice(0, first).trim().split(/\s+/);
+    for (let h = 0; h + 1 < header.length; h += 2) {
+      if (header[h] !== String(num)) continue;
+      const next = h + 3 < header.length ? first + Number(header[h + 3]) : body.length;
+      return body.slice(first + Number(header[h + 1]), next);
+    }
+  }
+}
+
+/**
+ * Document title of a PDF: the Info dictionary's /Title, else the XMP dc:title.
+ * @param {Buffer} buf
+ * @returns {string|null}
+ */
+export function extractPdfTitle(buf) {
+  const s = buf.toString('latin1');
+  const infoRefs = [...s.matchAll(/\/Info\s+(\d+)\s+\d+\s+R/g)];
+  const infoNum = infoRefs.length ? infoRefs[infoRefs.length - 1][1] : null;
+  const info = infoNum ? (findDirectObject(s, infoNum) ?? findInObjectStreams(buf, s, infoNum)) : null;
+  if (info) {
+    const m = /\/Title\s*(?=[(<])/.exec(info);
+    const raw = m ? readPdfString(info, m.index + m[0].length) : null;
+    const title = raw ? decodePdfText(raw).trim() : '';
+    if (title) return title;
+  }
+  const xmp = s.match(/<dc:title>[\s\S]*?<rdf:li[^>]*>([\s\S]*?)<\/rdf:li>/);
+  if (xmp) {
+    const title = Buffer.from(xmp[1], 'latin1').toString('utf8')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+      .replace(/&amp;/g, '&')
+      .trim();
+    if (title) return title;
+  }
+  return null;
+}
+
+/** Filename from a Content-Disposition header (filename*= or filename=). */
+function contentDispositionFilename(header) {
+  if (!header) return null;
+  const star = header.match(/filename\*\s*=\s*(?:[\w-]+'[^']*')?([^;]+)/i);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+    } catch {
+      // malformed percent-encoding: fall through to the plain filename
+    }
+  }
+  const plain = header.match(/filename\s*=\s*(?:"([^"]*)"|([^;]+))/i);
+  return plain ? (plain[1] ?? plain[2]).trim() : null;
+}
+
+/**
+ * Clemency type named by a warrant PDF (Title metadata first, then the download filename).
+ * @param {string|null} url - warrant URL (/pardon/media/<id>/dl?inline)
+ * @param {{ fetchImpl?: typeof fetch }} [opts] - fetchImpl is injectable for tests
+ * @returns {Promise<{ type: 'pardon'|'commutation'|null, detail: string, retryable: boolean }>}
+ *   retryable = the warrant could not be read this time (network, timeout, HTTP error, not a PDF)
+ */
+export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}) {
+  if (!url) return { type: null, detail: 'row has no warrant link', retryable: false };
+
+  let res;
+  let buf;
+  try {
+    res = await fetchImpl(url, {
+      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/pdf' },
+      signal: AbortSignal.timeout(WARRANT_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return { type: null, detail: `warrant fetch HTTP ${res.status}`, retryable: true };
+    buf = Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    return { type: null, detail: `warrant fetch failed: ${err.message}`, retryable: true };
+  }
+  // A bot-check or error page served with 200 is not a warrant
+  if (buf.subarray(0, 1024).indexOf('%PDF-') < 0) {
+    return { type: null, detail: `warrant response is not a PDF (${res.headers.get('content-type') || 'no content-type'})`, retryable: true };
+  }
+
+  const filename = contentDispositionFilename(res.headers.get('content-disposition'));
+  const pdfTitle = extractPdfTitle(buf);
+  const fromTitle = clemencyTypeFromWarrantText(pdfTitle);
+  const fromFilename = clemencyTypeFromWarrantText(filename);
+  if (fromTitle && fromFilename && fromTitle !== fromFilename) {
+    return { type: null, detail: `PDF Title "${pdfTitle}" and filename "${filename}" disagree`, retryable: false };
+  }
+  if (fromTitle) return { type: fromTitle, detail: `PDF Title "${pdfTitle}"`, retryable: false };
+  if (fromFilename) return { type: fromFilename, detail: `PDF filename "${filename}"`, retryable: false };
+  return {
+    type: null,
+    detail: `no type in PDF Title (${pdfTitle ?? 'none'}) or filename (${filename ?? 'none'})`,
+    retryable: false,
+  };
+}
+
+/**
+ * Type a mixed-section row that parseDOJHtml left untyped (clemency_type null)
+ * from its warrant PDF.
+ * - 'typed': the warrant named the type.
+ * - 'fallback': the warrant was read but names no type (or has no link); the row
+ *   is set to 'pardon' and the caller must recordSkip (ADO-466).
+ * - 'retry': the warrant could not be read this run; clemency_type stays null and
+ *   the caller must NOT insert the row. Inserting a guess would be permanent,
+ *   because later runs skip existing rows at the duplicate check.
+ * @param {Object} pardon - mutated: clemency_type is set unless the outcome is 'retry'
+ * @param {{ fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ outcome: 'typed'|'fallback'|'retry', detail: string }>}
+ */
+export async function typeRowFromWarrant(pardon, opts) {
+  const { type, detail, retryable } = await resolveWarrantClemencyType(pardon.primary_source_url, opts);
+  if (type) {
+    pardon.clemency_type = type;
+    return { outcome: 'typed', detail };
+  }
+  if (retryable) return { outcome: 'retry', detail };
+  pardon.clemency_type = 'pardon';
+  return { outcome: 'fallback', detail };
 }
 
 /**
@@ -302,14 +558,17 @@ async function scrapeDOJPage() {
  * Insert pardons into database with deduplication
  * @param {Object} supabase - Supabase client
  * @param {Array} pardons - Pardon objects to insert
+ * @param {{ fetchImpl?: typeof fetch }} [opts] - warrant fetch, injectable for tests
  * @returns {Object} Stats about the operation
  */
-async function insertPardons(supabase, pardons) {
+export async function insertPardons(supabase, pardons, opts) {
   const stats = {
     total: pardons.length,
     inserted: 0,
     skipped_duplicate: 0,
     errors: 0,
+    type_fallbacks: 0,   // ADO-590: mixed-section rows inserted as 'pardon' because the warrant named no type
+    type_retries: 0,     // ADO-590: mixed-section rows held back because their warrant could not be read
     inserted_names: []   // ADO-577: for the Discord new-work alert
   };
 
@@ -333,6 +592,34 @@ async function insertPardons(supabase, pardons) {
         continue;
       }
 
+      // ADO-590: a mixed-section row its link title could not type. Only new
+      // rows get here, so existing rows never cost a warrant fetch.
+      let typeFallback = null;
+      if (pardon.clemency_type === null) {
+        const { outcome, detail } = await typeRowFromWarrant(pardon, opts);
+        if (outcome === 'retry') {
+          stats.type_retries++;
+          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (${detail})`);
+          await recordSkip(supabase, {
+            pipeline: PIPELINES.PARDONS_INGEST,
+            reason: REASONS.API_ERROR,
+            entity_type: 'pardon',
+            metadata: {
+              recipient_name: pardon.recipient_name,
+              pardon_date: pardon.pardon_date,
+              source_key: pardon.source_key,
+              warrant_url: pardon.primary_source_url,
+              detail,
+            },
+          });
+          continue;
+        }
+        if (outcome === 'fallback') {
+          typeFallback = detail;
+          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant names no clemency type, inserting as 'pardon' (${detail})`);
+        }
+      }
+
       // Insert new pardon
       const { data, error } = await supabase
         .from('pardons')
@@ -349,6 +636,23 @@ async function insertPardons(supabase, pardons) {
       stats.inserted++;
       stats.inserted_names.push(pardon.recipient_name);
       console.log(`  ✅ Inserted: ${pardon.recipient_name} (ID: ${data.id})`);
+
+      if (typeFallback) {
+        stats.type_fallbacks++;
+        await recordSkip(supabase, {
+          pipeline: PIPELINES.PARDONS_INGEST,
+          reason: REASONS.CLEMENCY_TYPE_UNKNOWN,
+          entity_type: 'pardon',
+          entity_id: data.id,
+          metadata: {
+            recipient_name: pardon.recipient_name,
+            pardon_date: pardon.pardon_date,
+            warrant_url: pardon.primary_source_url,
+            inserted_as: pardon.clemency_type,
+            detail: typeFallback,
+          },
+        });
+      }
 
     } catch (err) {
       console.error(`  ❌ Exception for ${pardon.recipient_name}:`, err.message);
@@ -381,16 +685,28 @@ async function main() {
       process.exit(1);
     }
 
-    // 2. Show summary
-    console.log('\n📊 Summary by date:');
+    // ADO-590: a dry run types every row the link titles could not, so its
+    // summary shows the real split. A normal run fetches warrants for new rows only.
+    if (DRY_RUN) {
+      for (const p of pardons.filter(row => row.clemency_type === null)) {
+        const { outcome, detail } = await typeRowFromWarrant(p);
+        if (outcome === 'fallback') out(`  ⚠️ Would insert ${p.recipient_name} as 'pardon' and flag it: ${detail}`);
+        if (outcome === 'retry') out(`  ⚠️ Would hold ${p.recipient_name} for the next run: ${detail}`);
+      }
+    }
+
+    // 2. Show summary (rows still untyped are typed from their warrant at insert)
+    out('\n📊 Summary by date:');
     const byDate = {};
     for (const p of pardons) {
-      byDate[p.pardon_date] = (byDate[p.pardon_date] || 0) + 1;
+      const types = (byDate[p.pardon_date] ||= {});
+      const type = p.clemency_type || 'untyped';
+      types[type] = (types[type] || 0) + 1;
     }
     Object.entries(byDate)
       .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([date, count]) => {
-        console.log(`  ${date}: ${count} pardons`);
+      .forEach(([date, types]) => {
+        out(`  ${date}: ${Object.entries(types).map(([type, n]) => `${n} ${type}`).join(', ')}`);
       });
 
     // 3. Insert into database (unless dry run)
@@ -415,6 +731,12 @@ async function main() {
       console.log(`  ✅ Inserted:     ${stats.inserted}`);
       console.log(`  ⏭️ Duplicates:   ${stats.skipped_duplicate}`);
       console.log(`  ❌ Errors:       ${stats.errors}`);
+      if (stats.type_fallbacks > 0) {
+        out(`  ⚠️ Typed 'pardon' by default: ${stats.type_fallbacks} (warrant named no type, see admin Skips tab)`);
+      }
+      if (stats.type_retries > 0) {
+        out(`  ⚠️ Held for next run: ${stats.type_retries} (warrant could not be read, see admin Skips tab)`);
+      }
 
       // ADO-577: new rows alert Discord; zero-new runs stay silent.
       if (stats.inserted > 0) {
