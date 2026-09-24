@@ -28,6 +28,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-08-23-ado-553-v1-rows-reset.sql` - one-time PROD reset of pardons
   119-123 (re-enriched under the stale v1.0 prompt before PR #126 synced v1.1 to main).
   Josh runs it manually in the PROD SQL Editor AFTER #126 merges; never deployed.
+- `scripts/maintenance/2026-09-23-ado-590-2025-mixed-section-types.sql` - one-time PROD fix of the
+  17 May 28-29, 2025 pardons the scraper stored as commutations (ADO-590 bug, older sections).
+  Josh runs it manually in the PROD SQL Editor; skip when cherry-picking ADO-590 to main.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
