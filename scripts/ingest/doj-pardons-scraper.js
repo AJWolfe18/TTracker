@@ -459,7 +459,8 @@ function contentDispositionFilename(header) {
  * @param {string|null} url - warrant URL (/pardon/media/<id>/dl?inline)
  * @param {{ fetchImpl?: typeof fetch }} [opts] - fetchImpl is injectable for tests
  * @returns {Promise<{ type: 'pardon'|'commutation'|null, detail: string, retryable: boolean }>}
- *   retryable = the warrant could not be read this time (network, timeout, HTTP error, not a PDF)
+ *   retryable = a temporary failure (network, timeout, HTTP 408/429/5xx) that the next run may not hit.
+ *   A dead link (other 4xx) or a non-PDF body is final: holding the row would drop the grant for good.
  */
 export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}) {
   if (!url) return { type: null, detail: 'row has no warrant link', retryable: false };
@@ -471,14 +472,17 @@ export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}
       headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/pdf' },
       signal: AbortSignal.timeout(WARRANT_FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) return { type: null, detail: `warrant fetch HTTP ${res.status}`, retryable: true };
+    if (!res.ok) {
+      const retryable = res.status === 408 || res.status === 429 || res.status >= 500;
+      return { type: null, detail: `warrant fetch HTTP ${res.status}`, retryable };
+    }
     buf = Buffer.from(await res.arrayBuffer());
   } catch (err) {
     return { type: null, detail: `warrant fetch failed: ${err.message}`, retryable: true };
   }
-  // A bot-check or error page served with 200 is not a warrant
+  // An HTML page served with 200 is not a warrant, whatever its headers say
   if (buf.subarray(0, 1024).indexOf('%PDF-') < 0) {
-    return { type: null, detail: `warrant response is not a PDF (${res.headers.get('content-type') || 'no content-type'})`, retryable: true };
+    return { type: null, detail: `warrant response is not a PDF (${res.headers.get('content-type') || 'no content-type'})`, retryable: false };
   }
 
   const filename = contentDispositionFilename(res.headers.get('content-disposition'));
@@ -501,10 +505,10 @@ export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}
  * Type a mixed-section row that parseDOJHtml left untyped (clemency_type null)
  * from its warrant PDF.
  * - 'typed': the warrant named the type.
- * - 'fallback': the warrant was read but names no type (or has no link); the row
- *   is set to 'pardon' and the caller must recordSkip (ADO-466).
- * - 'retry': the warrant could not be read this run; clemency_type stays null and
- *   the caller must NOT insert the row. Inserting a guess would be permanent,
+ * - 'fallback': the warrant names no type, or is gone for good (no link, dead
+ *   link, not a PDF); the row is set to 'pardon' and the caller must recordSkip (ADO-466).
+ * - 'retry': a temporary failure this run; clemency_type stays null and the
+ *   caller must NOT insert the row. Inserting a guess would be permanent,
  *   because later runs skip existing rows at the duplicate check.
  * @param {Object} pardon - mutated: clemency_type is set unless the outcome is 'retry'
  * @param {{ fetchImpl?: typeof fetch }} [opts]
