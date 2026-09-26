@@ -22,6 +22,7 @@ import {
   resolveWarrantClemencyType,
   typeRowFromWarrant,
   insertPardons,
+  MAX_WARRANT_HOLDS,
 } from '../ingest/doj-pardons-scraper.js';
 import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
@@ -292,12 +293,14 @@ await test('14. Warrant resolution: PDF Title first, then the download filename;
     const r = await resolveWarrantClemencyType(u(9), { fetchImpl: statusFetch(status) });
     assert.deepEqual([r.type, r.retryable], [null, true], `HTTP ${status} should retry`);
   }
-  // Gone for good: final, so the row is inserted as 'pardon' and flagged instead of held forever
-  const dead = await resolveWarrantClemencyType(u(404), { fetchImpl });
-  assert.deepEqual([dead.type, dead.retryable], [null, false]);
-  assert.match(dead.detail, /HTTP 404/);
+  // A dead link or a bot wall can clear up, so they retry too; insertPardons bounds how often (Codex P1 on #153)
+  for (const status of [403, 404]) {
+    const r = await resolveWarrantClemencyType(u(9), { fetchImpl: statusFetch(status) });
+    assert.deepEqual([r.type, r.retryable], [null, true], `HTTP ${status} should retry`);
+    assert.match(r.detail, new RegExp(`HTTP ${status}`));
+  }
   const botPage = await resolveWarrantClemencyType(u(7), { fetchImpl });
-  assert.deepEqual([botPage.type, botPage.retryable], [null, false], 'a 200 HTML page is not a warrant, even with a typed filename');
+  assert.deepEqual([botPage.type, botPage.retryable], [null, true], 'a 200 HTML page is not a warrant, even with a typed filename, and may be a bot check');
   assert.match(botPage.detail, /not a PDF/);
   const calls = [];
   const noLink = await resolveWarrantClemencyType(null, { fetchImpl: fakeFetch({}, calls) });
@@ -341,6 +344,7 @@ await test('17. insertPardons flags a fallback row, holds an unreadable-warrant 
       q.select = () => q;
       q.eq = (col, val) => { q.filters[col] = val; return q; };
       q.maybeSingle = async () => ({ data: existingKeys.has(q.filters.source_key) ? { id: 1 } : null, error: null });
+      q.limit = async () => ({ data: [], error: null }); // no earlier warrant holds
       q.insert = (row) => { writes[table].push(row); return q; };
       q.single = async () => ({ data: { id: nextId++ }, error: null });
       return q;
@@ -379,6 +383,45 @@ await test('17. insertPardons flags a fallback row, holds an unreadable-warrant 
   assert.equal(retrySkip.entity_id, null, 'held row has no id yet');
   assert.equal(retrySkip.metadata.recipient_name, 'Warrant Timed Out');
   assert.match(retrySkip.metadata.detail, /timeout/);
+});
+
+await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, then inserts it as pardon and flags it', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  // Earlier holds per source_key, as pipeline_skips api_error rows
+  const holds = { k0: 0, k2: 2, k3: MAX_WARRANT_HOLDS, kerr: 'error' };
+  const lookups = [];
+  let nextId = 700;
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async (n) => {
+        lookups.push({ table, ...q.filters, limit: n });
+        const h = holds[q.filters['metadata->>source_key']];
+        if (h === 'error') return { data: null, error: { message: 'relation unavailable' } };
+        return { data: Array.from({ length: Math.min(h, n) }, (_, i) => ({ id: i })), error: null };
+      };
+      q.insert = (row) => { writes[table].push(row); return q; };
+      q.single = async () => ({ data: { id: nextId++ }, error: null });
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = (key) => ({ recipient_name: `Row ${key}`, clemency_type: null, primary_source_url: `https://www.justice.gov/pardon/media/${key}/dl?inline`, pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: key });
+  const stats = await insertPardons(supabase, ['k0', 'k2', 'k3', 'kerr'].map(row), { fetchImpl: botWall });
+
+  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['k3', 'pardon']], 'only the row past the hold limit is inserted');
+  assert.equal(stats.type_retries, 3, 'first hold, a hold below the limit, and a failed lookup all hold');
+  assert.equal(stats.type_fallbacks, 1);
+  const lookup = lookups.find(l => l['metadata->>source_key'] === 'k3');
+  assert.deepEqual([lookup.table, lookup.pipeline, lookup.reason, lookup.limit], ['pipeline_skips', PIPELINES.PARDONS_INGEST, REASONS.API_ERROR, MAX_WARRANT_HOLDS]);
+  const flagged = writes.pipeline_skips.find(s => s.reason === REASONS.CLEMENCY_TYPE_UNKNOWN);
+  assert.equal(flagged.entity_id, '700');
+  assert.match(flagged.metadata.detail, new RegExp(`not a PDF.*still unreadable after ${MAX_WARRANT_HOLDS + 1} runs`));
+  const held = writes.pipeline_skips.filter(s => s.reason === REASONS.API_ERROR).map(s => s.metadata.source_key);
+  assert.deepEqual(held, ['k0', 'k2', 'kerr'], 'each held row writes the api_error skip the next run counts');
 });
 
 console.log(`\ndoj-pardons-parser: ${passed} passed, ${failed} failed`);
