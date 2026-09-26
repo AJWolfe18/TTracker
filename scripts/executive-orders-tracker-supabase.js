@@ -8,6 +8,7 @@
 import fetch from 'node-fetch';
 import { supabaseRequest } from '../config/supabase-config-node.js';
 import { postDiscord, COLORS, summarizeList } from './lib/discord.js';
+import { pickEoDate } from './lib/eo-dates.js';
 // ADO-271: Removed spicy-eo-translator import - AI analysis now done by separate enrichment workflow
 
 console.log('📜 EXECUTIVE ORDERS TRACKER - SUPABASE VERSION');
@@ -192,7 +193,8 @@ async function fetchFromFederalRegister() {
                     // here - the column types differ, so no script value fits both.
                     title: item.title || 'Untitled Executive Order',
                     order_number: orderNumber,
-                    date: item.publication_date || today,
+                    // ADO-589: 'date' is the SIGNING date (site labels it 'Signed'); FR publication trails it by 1-3 days.
+                    date: pickEoDate(item, today),
                     // ADO-273: Store FR abstract for frame estimation during enrichment
                     description: item.abstract || null,
                     // summary will be populated by enrichment workflow
