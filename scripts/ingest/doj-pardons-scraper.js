@@ -32,6 +32,7 @@ const WARRANT_FETCH_TIMEOUT_MS = 15000;
 // Runs a mixed-section row may be held because its warrant could not be read.
 // The run after that inserts it as 'pardon' and flags it, so a warrant that
 // stays unreadable (dead link, bot wall) cannot keep a grant off the site forever.
+// Rule and rationale: docs/common-issues.md, "Pardons: a pardon shows as a commutation".
 export const MAX_WARRANT_HOLDS = 3;
 
 // Progress lines for code added after AGENTS.md banned console.log in production code

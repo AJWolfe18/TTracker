@@ -77,6 +77,7 @@ Neither vendor runs on TEST or localhost, so analytics are only observable on tr
 - **Supabase**: Postgres + Edge Functions + RLS. Separate TEST and PROD projects.
 - **Frontend**: Vite/React app; PostgREST direct reads + edge functions; deployed on Netlify.
 - **Admin dashboard** (`admin.html`): review / publish / re-enrich across all four content types; Judge tab with manual merge + unmerge (ADO-537).
+- **Discord alerts** (ADO-577, `scripts/lib/discord.js`, secret `DISCORD_WEBHOOK_URL`): workflow failures (existing), new rows landed by the SCOTUS / pardons / EO fetchers, flagged enrichments (`scripts/monitoring/alert-needs-review.js`, last step of the three fetch workflows). Quiet runs post nothing. Full catalog and the decided rules (a lost alert is never silent; unreviewed flags never age out, older ones remind weekly): [reference/discord-alerts.md](reference/discord-alerts.md).
 
 ## Environments
 - `test` branch → Supabase TEST → Netlify test site
