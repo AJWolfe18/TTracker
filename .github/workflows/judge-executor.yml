@@ -52,12 +52,12 @@ jobs:
       # No `ref:` on purpose: a scheduled run checks out the default branch, a manual run the ref it
       # was dispatched from. Never an inbox branch.
       - name: Checkout trusted code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
 
       # No npm ci: the scripts use Node built-ins + scripts/lib/discord.js only.
       - name: Collect verdict files from inbox branches (data only, no secrets in scope)
