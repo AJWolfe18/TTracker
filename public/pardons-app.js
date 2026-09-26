@@ -1216,13 +1216,17 @@
     // Filter change handler - updates state only (URL sync handled by effect)
     const handleFilterChange = useCallback((key, value) => {
       setFilters(prev => ({ ...prev, [key]: value }));
-      trackEvent('pardons_filter_change', { filter: key, value });
+      // ADO-262: the search box also flows through here as key 'q'; its text must
+      // never be sent, so search is tracked by length in handleSearch instead.
+      if (key !== 'q') {
+        trackEvent('pardons_filter_change', { filter_key: key, filter_value: value });
+      }
     }, []);
 
     // Search handler
     const handleSearch = useCallback((query) => {
       handleFilterChange('q', query || null);
-      trackEvent('pardons_search', { query });
+      trackEvent('pardons_search', { query_length: (query || '').trim().length });
     }, [handleFilterChange]);
 
     // Clear all filters
