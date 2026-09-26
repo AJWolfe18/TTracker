@@ -1,7 +1,7 @@
 # Handoff: bug sweep, Codex fixes on PRs #151/#153, undo lockdown, dash guard (September 25, 2026)
 
 Session ran about 9:30 PM to 11:30 PM CT. Previous: `2026-09-23-ado-590-591-pardons-mixed-types-constraint.md`.
-Josh stopped the session to clear context. **The in-session code review has NOT been run on today's commits yet**; do that first (`/code-review medium` over `cdd67d5..HEAD` on test).
+Josh stopped the session to clear context, then ran /end-work: /code-review medium over cdd67d5..HEAD found no Critical/Important issues and one low one (reminder overstated older flags past 50 rows), fixed in 988e0e1 + follow-up and ported to PR #151. qa:smoke passes (exit 0) after fixing a judge-executor test that pinned checkout@v4 (a38280f).
 
 ## Josh's open steps
 1. **PROD SQL tab in Chrome** ("Untitled query", TrumpyTracker): the ADO-590 May 2025 fix is loaded. Press Ctrl+Enter. Expect 2025-05-28 = 16 pardon + 6 commutation, 2025-05-29 = 1 + 2. (Not run as of 11:25 PM CT: anon REST still shows 21 public commutations.)
@@ -28,11 +28,9 @@ Josh stopped the session to clear context. **The in-session code review has NOT 
 | (ADO only) | 278, 223 | closed as obsolete with evidence |
 | TEST DB | 591 | migration 063 applied on TEST (0 accepted, 6 rejected) |
 
-## In progress, UNCOMMITTED in the working tree (ADO-493)
-- `scripts/scotus/decided-at-guard.js` (new): checkDecidedAt + DEFAULT_SINCE_DATE '2024-10-01'.
-- `scripts/lib/skip-reasons.js`: PIPELINES.SCOTUS_FETCH, REASONS.MALFORMED_DECIDED_AT.
-- `scripts/scotus/fetch-cases.js`: default since 2024-10-01 (was 2020-01-01, the root cause of the February 23 bulk import); guard skips + recordSkip before processCluster.
-- Still to do: unit test for checkDecidedAt (+ add to qa:smoke), commit, then the cleanup DELETE (card SQL) on TEST, then PROD by Josh.
+## ADO-493 (committed 69dea16, qa:scotus-dates in qa:smoke)
+- Guard: scripts/scotus/decided-at-guard.js (checkDecidedAt, DEFAULT_SINCE_DATE 2024-10-01); fetch-cases default since was 2020-01-01, the root cause of the February 23 bulk import; skips log scotus_fetch / malformed_decided_at.
+- Still to do: the cleanup DELETE (card SQL) on TEST, then PROD by Josh.
 - Finding: the 1,220 rows are real 2020 orders, not malformed dates. **8 of the Feb 23 imports are PUBLIC 2020 merits cases on PROD** (ids 1335, 1337-1340, 1343, 1344, 1481, e.g. McKinney). The card's DELETE only targets flagged rows; ask Josh whether the 8 public ones stay.
 
 ## PROD rollout notes (for the deploy PRs)
