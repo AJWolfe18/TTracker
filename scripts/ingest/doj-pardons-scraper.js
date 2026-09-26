@@ -28,6 +28,10 @@ const DOJ_URL = 'https://www.justice.gov/pardon/clemency-grants-president-donald
 const SOURCE_SYSTEM = 'doj_opa';
 const USER_AGENT = 'TrumpyTracker/1.0 (Political Accountability Tracker)';
 const WARRANT_FETCH_TIMEOUT_MS = 15000;
+// Runs a mixed-section row may be held because its warrant could not be read.
+// The run after that inserts it as 'pardon' and flags it, so a warrant that
+// stays unreadable (dead link, bot wall) cannot keep a grant off the site forever.
+export const MAX_WARRANT_HOLDS = 3;
 
 // Progress lines for code added after AGENTS.md banned console.log in production code
 const out = (line) => process.stdout.write(`${line}\n`);
@@ -458,8 +462,9 @@ function contentDispositionFilename(header) {
  * @param {string|null} url - warrant URL (/pardon/media/<id>/dl?inline)
  * @param {{ fetchImpl?: typeof fetch }} [opts] - fetchImpl is injectable for tests
  * @returns {Promise<{ type: 'pardon'|'commutation'|null, detail: string, retryable: boolean }>}
- *   retryable = a temporary failure (network, timeout, HTTP 408/429/5xx) that the next run may not hit.
- *   A dead link (other 4xx) or a non-PDF body is final: holding the row would drop the grant for good.
+ *   retryable = the warrant could not be read (network, timeout, any HTTP error, or a non-PDF body
+ *   such as a bot check served with 200); a later run may read it. insertPardons bounds the
+ *   retries (MAX_WARRANT_HOLDS). Final = no link, or a readable PDF that names no type or disagrees.
  */
 export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}) {
   if (!url) return { type: null, detail: 'row has no warrant link', retryable: false };
@@ -472,16 +477,17 @@ export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}
       signal: AbortSignal.timeout(WARRANT_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
-      const retryable = res.status === 408 || res.status === 429 || res.status >= 500;
-      return { type: null, detail: `warrant fetch HTTP ${res.status}`, retryable };
+      // Any status: a WAF answers 403, a moved file 404, and both can clear up
+      return { type: null, detail: `warrant fetch HTTP ${res.status}`, retryable: true };
     }
     buf = Buffer.from(await res.arrayBuffer());
   } catch (err) {
     return { type: null, detail: `warrant fetch failed: ${err.message}`, retryable: true };
   }
-  // An HTML page served with 200 is not a warrant, whatever its headers say
+  // An HTML page served with 200 is not a warrant, whatever its headers say. It is
+  // usually a bot check or an error page, so the next run may get the real PDF.
   if (buf.subarray(0, 1024).indexOf('%PDF-') < 0) {
-    return { type: null, detail: `warrant response is not a PDF (${res.headers.get('content-type') || 'no content-type'})`, retryable: false };
+    return { type: null, detail: `warrant response is not a PDF (${res.headers.get('content-type') || 'no content-type'})`, retryable: true };
   }
 
   const filename = contentDispositionFilename(res.headers.get('content-disposition'));
@@ -504,11 +510,12 @@ export async function resolveWarrantClemencyType(url, { fetchImpl = fetch } = {}
  * Type a mixed-section row that parseDOJHtml left untyped (clemency_type null)
  * from its warrant PDF.
  * - 'typed': the warrant named the type.
- * - 'fallback': the warrant names no type, or is gone for good (no link, dead
- *   link, not a PDF); the row is set to 'pardon' and the caller must recordSkip (ADO-466).
- * - 'retry': a temporary failure this run; clemency_type stays null and the
- *   caller must NOT insert the row. Inserting a guess would be permanent,
- *   because later runs skip existing rows at the duplicate check.
+ * - 'fallback': the row has no warrant link, or its PDF names no type; the row
+ *   is set to 'pardon' and the caller must recordSkip (ADO-466).
+ * - 'retry': the warrant could not be read this run; clemency_type stays null and
+ *   the caller must NOT insert the row. Inserting a guess would be permanent,
+ *   because later runs skip existing rows at the duplicate check. The caller
+ *   falls back after MAX_WARRANT_HOLDS held runs.
  * @param {Object} pardon - mutated: clemency_type is set unless the outcome is 'retry'
  * @param {{ fetchImpl?: typeof fetch }} [opts]
  * @returns {Promise<{ outcome: 'typed'|'fallback'|'retry', detail: string }>}
@@ -558,6 +565,28 @@ async function scrapeDOJPage() {
 // ============================================================================
 
 /**
+ * How many earlier runs held this row back (ADO-590). Each hold wrote an api_error
+ * skip carrying the row's source_key; pipeline_skips keeps 30 days, far longer
+ * than the MAX_WARRANT_HOLDS daily runs this has to see.
+ * A failed lookup counts as 0: this run holds the row again rather than guess.
+ * @returns {Promise<number>} 0..MAX_WARRANT_HOLDS
+ */
+async function countWarrantHolds(supabase, sourceKey) {
+  const { data, error } = await supabase
+    .from('pipeline_skips')
+    .select('id')
+    .eq('pipeline', PIPELINES.PARDONS_INGEST)
+    .eq('reason', REASONS.API_ERROR)
+    .eq('metadata->>source_key', sourceKey)
+    .limit(MAX_WARRANT_HOLDS);
+  if (error) {
+    console.warn(`  ⚠️ Could not count earlier warrant holds for ${sourceKey}: ${error.message}`);
+    return 0;
+  }
+  return (data || []).length;
+}
+
+/**
  * Insert pardons into database with deduplication
  * @param {Object} supabase - Supabase client
  * @param {Array} pardons - Pardon objects to insert
@@ -599,9 +628,15 @@ export async function insertPardons(supabase, pardons, opts) {
       let typeFallback = null;
       if (pardon.clemency_type === null) {
         const { outcome, detail } = await typeRowFromWarrant(pardon, opts);
-        if (outcome === 'retry') {
+        const priorHolds = outcome === 'retry' ? await countWarrantHolds(supabase, pardon.source_key) : 0;
+        if (outcome === 'retry' && priorHolds >= MAX_WARRANT_HOLDS) {
+          // Bounded: the warrant stayed unreadable for MAX_WARRANT_HOLDS runs. Insert and flag.
+          pardon.clemency_type = 'pardon';
+          typeFallback = `${detail}; still unreadable after ${priorHolds + 1} runs`;
+          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable for ${priorHolds + 1} runs, inserting as 'pardon' (${detail})`);
+        } else if (outcome === 'retry') {
           stats.type_retries++;
-          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (${detail})`);
+          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (hold ${priorHolds + 1} of ${MAX_WARRANT_HOLDS}: ${detail})`);
           await recordSkip(supabase, {
             pipeline: PIPELINES.PARDONS_INGEST,
             reason: REASONS.API_ERROR,
