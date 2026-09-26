@@ -726,7 +726,8 @@
         setSearchTerm(value);
         setPage(1);
         if (value.trim()) {
-          trackEvent('search', { search_term: value.trim(), page: 'executive_orders' });
+          // ADO-262: length only, never the typed text (search terms can name private people)
+          trackEvent('search', { query_length: value.trim().length, page: 'executive_orders' });
         }
       }, 300);
     }, []);
