@@ -92,7 +92,11 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
   const isNew = (r) => ageHours(r, now) <= NEW_HOURS;
   const newCount = rows.filter(isNew).length;
   const recentCount = rows.filter((r) => ageHours(r, now) <= windowHours).length;
-  const olderCount = total - recentCount; // rows are newest first, so unfetched rows are older
+  // Rows come newest first, so the unfetched rows are older than the last fetched one. That makes
+  // them all "older" only when the last fetched row is already outside the window; otherwise the
+  // split is unknown and the line is left out rather than overstated (code review, September 25).
+  const lastIsOlder = rows.length > 0 && ageHours(rows[rows.length - 1], now) > windowHours;
+  const olderCount = total === rows.length || lastIsOlder ? total - recentCount : 0;
   const lines = rows.slice(0, 10).map((r) => {
     const why = d.reason(r);
     return `• ${isNew(r) ? 'NEW ' : ''}${d.name(r)}${why ? ` - ${String(why).replace(/[—–]/g, '-').slice(0, 160)}` : ''}`;

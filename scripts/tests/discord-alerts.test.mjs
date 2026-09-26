@@ -184,6 +184,13 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.equal(mixed.title, 'SCOTUS: 57 enrichments waiting for review (1 new)');
   assert.ok(mixed.description.includes('• NEW Fresh v. Case'));
   assert.ok(mixed.description.includes('56 of these have been waiting more than 7 days'));
+  // 50 recent rows fetched out of 70: the unfetched 20 may be recent too, so no older-count claim
+  scotusRows = Array.from({ length: 50 }, (_, i) => ({ id: i, case_name_short: `Recent ${i}`, enriched_at: hoursAgo(1 + i) }));
+  scotusTotal = 70;
+  await run('scotus', THU);
+  const busy = seen.discord.at(-1).embeds[0];
+  assert.equal(busy.title, 'SCOTUS: 70 enrichments waiting for review (24 new)');
+  assert.ok(!busy.description.includes('waiting more than'), 'must not claim unfetched rows are old');
   scotusTotal = null;
 
   // ALERT_WINDOW_HOURS still sets the recent window; ALERT_ENV=test titles [TEST] and links the TEST site
