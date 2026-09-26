@@ -369,7 +369,7 @@ const quiet = () => {};
   // review P0: privileged code must come from the default branch; an inbox branch contributes ONE json file
   const code = wf.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n'); // comments may mention "push"
   assert.ok(!/^\s+(push|pull_request|pull_request_target|create):/m.test(code) && /^\s+schedule:/m.test(code) && /^\s+workflow_dispatch:/m.test(code), 'never push-triggered: a push run would take its workflow + code from the pushed branch');
-  assert.ok(code.includes('uses: actions/checkout@v4') && !/^\s+ref:/m.test(code), 'checkout has no ref: default branch on schedule, never an inbox branch');
+  assert.ok(/uses: actions\/checkout@v\d+\b/.test(code) &&!/^\s+ref:/m.test(code), 'checkout has no ref: default branch on schedule, never an inbox branch');
   assert.ok(!/git (checkout|switch|worktree|merge|pull)/.test(code), 'no step checks an inbox branch out');
   const stepOf = (needle) => { const i = code.indexOf(needle); assert.ok(i > 0, `workflow has ${needle}`); const from = code.lastIndexOf('- name:', i); const to = code.indexOf('- name:', i); return code.slice(from, to < 0 ? undefined : to); };
   assert.ok(!stepOf('process-judge-inbox.js collect').includes('secrets.'), 'the step that touches inbox branches has no secrets in scope');
