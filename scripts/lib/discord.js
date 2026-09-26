@@ -31,14 +31,16 @@ const MAX_DESCRIPTION = 4000; // Discord embed description cap is 4096
  * @param {object} [opts]
  * @param {string} [opts.webhookUrl]  defaults to process.env.DISCORD_WEBHOOK_URL
  * @param {typeof fetch} [opts.fetchImpl] injectable for tests
+ * @param {string} [opts.envLabel]    defaults to process.env.ALERT_ENV; 'test' prefixes the title with [TEST]
+ *                                    so a TEST-branch run can never look like a PROD alert
  * @returns {Promise<boolean>} true when Discord accepted the message
  */
-export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch } = {}) {
+export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch, envLabel = process.env.ALERT_ENV } = {}) {
   if (!webhookUrl) return false;
   if (!embed || !embed.title) return false;
   const payload = {
     embeds: [{
-      title: String(embed.title).slice(0, 256),
+      title: `${envLabel === 'test' ? '[TEST] ' : ''}${embed.title}`.slice(0, 256),
       description: embed.description ? String(embed.description).slice(0, MAX_DESCRIPTION) : undefined,
       color: embed.color ?? COLORS.info,
       fields: Array.isArray(embed.fields) ? embed.fields.slice(0, 25) : undefined,
@@ -60,6 +62,32 @@ export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBH
     console.warn(`[discord] webhook failed: ${err.message} (non-blocking)`);
     return false;
   }
+}
+
+/**
+ * postDiscord for an alert that must not vanish: the fetchers' new-work pings (ADO-577).
+ * Same contract (never throws, never changes the caller's exit code, so a notification
+ * problem never fails an ingest that worked), but an undelivered alert is REPORTED: one
+ * stderr line and, inside GitHub Actions, an error annotation on the run, so a green run
+ * shows it. In Actions a missing DISCORD_WEBHOOK_URL counts as undelivered; outside
+ * Actions (local runs) it stays a silent no-op. Rules: docs/reference/discord-alerts.md
+ * @param {object} embed - as postDiscord
+ * @param {object} [opts] - as postDiscord, plus env / write / logError, injectable for tests
+ * @returns {Promise<boolean>} true when Discord accepted the message
+ */
+export async function postDiscordReported(embed, { env = process.env, write = (s) => process.stdout.write(s), logError = console.error, ...opts } = {}) {
+  const webhookUrl = opts.webhookUrl ?? env.DISCORD_WEBHOOK_URL;
+  const inActions = env.GITHUB_ACTIONS === 'true';
+  if (!webhookUrl && !inActions) return false;
+  const delivered = await postDiscord(embed, { ...opts, webhookUrl });
+  if (!delivered) {
+    const why = webhookUrl ? 'the webhook POST failed' : 'DISCORD_WEBHOOK_URL is not set';
+    const msg = `Discord alert NOT delivered (${why}): ${embed?.title ?? '(no title)'}`;
+    logError(`[discord] ${msg}`);
+    // Workflow command escaping: % first, then line breaks
+    if (inActions) write(`::error title=Discord alert not delivered::${msg.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}\n`);
+  }
+  return delivered;
 }
 
 /**
