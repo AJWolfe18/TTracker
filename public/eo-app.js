@@ -106,18 +106,20 @@
     return colorMap[level] || 'moderate';
   }
 
-  // EO Category labels (match database values)
+  // EO Category labels: the 10 values of the eo_category DB enum (migration 023), same labels as
+  // the React app (src/lib/adapter.ts EO_CATEGORY_LABELS). ADO-315: this map had education_science
+  // and other, which the enum does not have, so education and technology EOs read 'Uncategorized'.
   const EO_CATEGORIES = {
-    health_care: 'Health Care',
-    gov_ops_workforce: 'Government & Workforce',
-    economy_jobs_taxes: 'Economy & Jobs',
-    justice_civil_rights_voting: 'Justice & Civil Rights',
-    infra_housing_transport: 'Infrastructure',
     immigration_border: 'Immigration & Border',
     environment_energy: 'Environment & Energy',
-    natsec_foreign: 'National Security',
-    education_science: 'Education & Science',
-    other: 'Other'
+    health_care: 'Health Care',
+    education: 'Education',
+    justice_civil_rights_voting: 'Justice & Civil Rights',
+    natsec_foreign: 'National Security & Foreign',
+    economy_jobs_taxes: 'Economy, Jobs & Taxes',
+    technology_data_privacy: 'Technology & Privacy',
+    infra_housing_transport: 'Infrastructure & Housing',
+    gov_ops_workforce: 'Government Operations'
   };
 
   // Impact type labels (match database eo_impact_type values)
