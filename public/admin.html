@@ -1884,13 +1884,12 @@
                 if (!undoInfo) return;
 
                 try {
-                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
-                        p_entity_type: undoInfo.entityType,
-                        p_entity_id: undoInfo.entityId,
-                        p_changed_by: 'admin'
+                    // ADO-525: the RPC is service_role only now; the edge function checks the admin password
+                    const { data, error: fnError } = await supabase.functions.invoke('admin-undo', {
+                        headers: { 'x-admin-password': password },
+                        body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-
-                    if (rpcError) throw new Error(rpcError.message);
+                    if (fnError) throw new Error(fnError.message);
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
 
                     // Refresh the story in the list
@@ -3049,12 +3048,12 @@
             const handleUndo = async () => {
                 if (!undoInfo) return;
                 try {
-                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
-                        p_entity_type: undoInfo.entityType,
-                        p_entity_id: undoInfo.entityId,
-                        p_changed_by: 'admin'
+                    // ADO-525: the RPC is service_role only now; the edge function checks the admin password
+                    const { data, error: fnError } = await supabase.functions.invoke('admin-undo', {
+                        headers: { 'x-admin-password': password },
+                        body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-                    if (rpcError) throw new Error(rpcError.message);
+                    if (fnError) throw new Error(fnError.message);
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
                     toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
                     setUndoInfo(null);
@@ -3625,12 +3624,12 @@
             const handleUndo = async () => {
                 if (!undoInfo) return;
                 try {
-                    const { data, error: rpcError } = await supabase.rpc('undo_content_change', {
-                        p_entity_type: undoInfo.entityType,
-                        p_entity_id: undoInfo.entityId,
-                        p_changed_by: 'admin'
+                    // ADO-525: the RPC is service_role only now; the edge function checks the admin password
+                    const { data, error: fnError } = await supabase.functions.invoke('admin-undo', {
+                        headers: { 'x-admin-password': password },
+                        body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-                    if (rpcError) throw new Error(rpcError.message);
+                    if (fnError) throw new Error(fnError.message);
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
                     toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
                     setUndoInfo(null);
