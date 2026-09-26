@@ -685,7 +685,12 @@ The DOJ can put both types in ONE table under a heading like "September 3, 2026 
 6 Commutations". Since ADO-590 the scraper types those rows one by one: the warrant link's title
 attribute first, then the warrant PDF's Title metadata, then its download filename. A row that none of
 them types is inserted as `pardon` and logged as `clemency_type_unknown` (admin → Skips tab); check
-its warrant and fix it by hand. `npm run ingest:pardons -- --dry-run` prints the per-date type split,
+its warrant and fix it by hand. If the warrant cannot be READ (network error, any HTTP error, or a
+non-PDF page such as a bot check), the row is not inserted: it is held and logged as `api_error` with
+its `source_key`, and the next run tries again. After 3 held runs (`MAX_WARRANT_HOLDS`, counted from
+those skip rows) it is inserted as `pardon` with the `clemency_type_unknown` flag, so a grant can be
+held back for about 3 days but never lost, and never guessed on a single bad fetch (Codex review on
+PR #153, September 25, 2026). `npm run ingest:pardons -- --dry-run` prints the per-date type split,
 and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.
 
 ### Executive orders: the "Signed" date on the site is wrong

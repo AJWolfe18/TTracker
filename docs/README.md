@@ -21,5 +21,6 @@ Entry point for the documentation. Organized loosely by [Diátaxis](https://diat
 - Working agreements / communication → [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)
 - Memory MCP rules → [memory-policy.md](memory-policy.md)
 - Tone system (single source of truth) → `../public/shared/tone-system.json`
+- Discord alerts (what pings, when, and the decided rules) → [reference/discord-alerts.md](reference/discord-alerts.md)
 
 > **Note (2026-05-30):** `how-to/`, `reference/`, `explanation/` are being adopted going forward. Existing docs in `guides/`, `database/`, `architecture/` stay valid until a later relabeling pass. Do NOT create docs in the `/docs/` root — use a subdirectory.
