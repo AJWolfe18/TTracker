@@ -189,7 +189,7 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   scotusTotal = 70;
   await run('scotus', THU);
   const busy = seen.discord.at(-1).embeds[0];
-  assert.equal(busy.title, 'SCOTUS: 70 enrichments waiting for review (24 new)');
+  assert.equal(busy.title, 'SCOTUS: 70 enrichments waiting for review (26 new)');
   assert.ok(!busy.description.includes('waiting more than'), 'must not claim unfetched rows are old');
   scotusTotal = null;
 
