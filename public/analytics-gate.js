@@ -61,6 +61,26 @@
   }
 
   // ---------------------------------------------------------------------
+  // ADO-569: the vendor scripts (~150KB) load only after the page has loaded
+  // and the browser is idle, so they never compete with the first paint (PROD
+  // rendered ~4s slower than TEST in Lighthouse because of them). The gtag()
+  // queue and the TTAnalytics buffer below exist from the start, so calls made
+  // before then are kept and sent once the scripts arrive. The one cost: a
+  // visitor who leaves in the first second or two is not counted.
+  // ---------------------------------------------------------------------
+  function afterLoadWhenIdle(fn) {
+    var schedule = function () {
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(fn, { timeout: 3000 });
+      } else {
+        window.setTimeout(fn, 1);
+      }
+    };
+    if (document.readyState === 'complete') schedule();
+    else window.addEventListener('load', schedule, { once: true });
+  }
+
+  // ---------------------------------------------------------------------
   // GA4
   // ---------------------------------------------------------------------
   window.dataLayer = window.dataLayer || [];
@@ -70,10 +90,12 @@
   window.gtag('js', new Date());
   window.gtag('config', GA4_MEASUREMENT_ID);
 
-  var gaScript = document.createElement('script');
-  gaScript.async = true;
-  gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_MEASUREMENT_ID;
-  document.head.appendChild(gaScript);
+  afterLoadWhenIdle(function () {
+    var gaScript = document.createElement('script');
+    gaScript.async = true;
+    gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_MEASUREMENT_ID;
+    document.head.appendChild(gaScript);
+  });
 
   // ---------------------------------------------------------------------
   // PostHog
@@ -106,37 +128,39 @@
     },
   };
 
-  var phScript = document.createElement('script');
-  phScript.async = true;
-  phScript.src = POSTHOG_ASSET_HOST + '/static/array.js';
-  phScript.onload = function () {
-    if (!window.posthog || typeof window.posthog.init !== 'function') return;
-    try {
-      window.posthog.init(POSTHOG_PUBLISHABLE_KEY, {
-        api_host: POSTHOG_API_HOST,
-        // Autocapture covers generic clicks/taps for free (PRD section 2).
-        autocapture: true,
-        // SPA route changes. Pinned against posthog-js 1.418.10, which serves
-        // this option; older SDKs needed a manual $pageview on route change.
-        capture_pageview: 'history_change',
-        capture_pageleave: true,
-        // No accounts on this site, so nobody is ever identified. This keeps
-        // PostHog from creating person profiles for anonymous traffic, which
-        // is what keeps us inside the free tier (PRD section 3).
-        person_profiles: 'identified_only',
-        // Belt and suspenders with the project-level setting: replay sampling
-        // and masking are configured in the PostHog project, and we assert
-        // masking here too so a settings change can't silently unmask inputs.
-        session_recording: { maskAllInputs: true },
-      });
-      posthogReady = true;
-      for (var i = 0; i < pendingEvents.length; i++) {
-        window.posthog.capture(pendingEvents[i][0], pendingEvents[i][1]);
+  afterLoadWhenIdle(function () {
+    var phScript = document.createElement('script');
+    phScript.async = true;
+    phScript.src = POSTHOG_ASSET_HOST + '/static/array.js';
+    phScript.onload = function () {
+      if (!window.posthog || typeof window.posthog.init !== 'function') return;
+      try {
+        window.posthog.init(POSTHOG_PUBLISHABLE_KEY, {
+          api_host: POSTHOG_API_HOST,
+          // Autocapture covers generic clicks/taps for free (PRD section 2).
+          autocapture: true,
+          // SPA route changes. Pinned against posthog-js 1.418.10, which serves
+          // this option; older SDKs needed a manual $pageview on route change.
+          capture_pageview: 'history_change',
+          capture_pageleave: true,
+          // No accounts on this site, so nobody is ever identified. This keeps
+          // PostHog from creating person profiles for anonymous traffic, which
+          // is what keeps us inside the free tier (PRD section 3).
+          person_profiles: 'identified_only',
+          // Belt and suspenders with the project-level setting: replay sampling
+          // and masking are configured in the PostHog project, and we assert
+          // masking here too so a settings change can't silently unmask inputs.
+          session_recording: { maskAllInputs: true },
+        });
+        posthogReady = true;
+        for (var i = 0; i < pendingEvents.length; i++) {
+          window.posthog.capture(pendingEvents[i][0], pendingEvents[i][1]);
+        }
+        pendingEvents.length = 0;
+      } catch (err) {
+        /* analytics must never break the page */
       }
-      pendingEvents.length = 0;
-    } catch (err) {
-      /* analytics must never break the page */
-    }
-  };
-  document.head.appendChild(phScript);
+    };
+    document.head.appendChild(phScript);
+  });
 })();

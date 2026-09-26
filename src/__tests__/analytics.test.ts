@@ -106,13 +106,51 @@ describe('src/lib/analytics gate', () => {
  */
 type FakeScript = { src?: string; async?: boolean; onload?: () => void };
 
-function runGate(hostname: string) {
+/**
+ * `settle` (default true) fires the window load event and runs the idle
+ * callbacks, i.e. the moment ADO-569 defers the vendor scripts to. Pass
+ * settle: false to inspect the page before that moment.
+ * `readyState` and `idle` model a script included after load and a browser
+ * without requestIdleCallback.
+ */
+function runGate(
+  hostname: string,
+  {
+    settle = true,
+    readyState = 'loading',
+    idle = true,
+  }: { settle?: boolean; readyState?: string; idle?: boolean } = {},
+) {
   const appended: FakeScript[] = [];
   const created: FakeScript[] = [];
   const logs: unknown[][] = [];
+  const loadListeners: Array<() => void> = [];
+  const idleQueue: Array<() => void> = [];
+  const timeouts: Array<() => void> = [];
 
-  const win: Record<string, unknown> = { location: { hostname } };
+  const win: Record<string, unknown> = {
+    location: { hostname },
+    addEventListener: (event: string, fn: () => void) => {
+      if (event === 'load') loadListeners.push(fn);
+    },
+    setTimeout: (fn: () => void) => {
+      timeouts.push(fn);
+      return 0;
+    },
+  };
+  if (idle) {
+    win.requestIdleCallback = (fn: () => void) => {
+      idleQueue.push(fn);
+      return 0;
+    };
+  }
+  const fireLoad = () => loadListeners.splice(0).forEach((fn) => fn());
+  const fireIdle = () => {
+    idleQueue.splice(0).forEach((fn) => fn());
+    timeouts.splice(0).forEach((fn) => fn());
+  };
   const document = {
+    readyState,
     createElement: (tag: string) => {
       if (tag !== 'script') throw new Error(`unexpected createElement(${tag})`);
       const el: FakeScript = {};
@@ -138,11 +176,19 @@ function runGate(hostname: string) {
 
   const console = { log: (...args: unknown[]) => logs.push(args) };
   run(win, document, console);
+  if (settle) {
+    fireLoad();
+    fireIdle();
+  }
 
   // Simulate the same file being included on the page a second time.
-  const runAgain = () => run(win, document, console);
+  const runAgain = () => {
+    run(win, document, console);
+    fireLoad();
+    fireIdle();
+  };
 
-  return { win, appended, created, logs, runAgain };
+  return { win, appended, created, logs, runAgain, fireLoad, fireIdle };
 }
 
 const GA_SRC = `https://www.googletagmanager.com/gtag/js?id=${GA4_MEASUREMENT_ID}`;
@@ -164,6 +210,32 @@ describe('public/analytics-gate.js', () => {
       'config',
       GA4_MEASUREMENT_ID,
     ]);
+  });
+
+  // ADO-569: the vendor scripts must not compete with the first paint.
+  it('injects nothing until the page has loaded and the browser is idle', () => {
+    const { win, appended, fireLoad, fireIdle } = runGate(ANALYTICS_HOSTNAME, { settle: false });
+
+    // Before load: queues exist and take calls, but no script is requested.
+    expect(appended).toHaveLength(0);
+    expect(win.dataLayer).toHaveLength(2);
+    (win.TTAnalytics as { capture: (n: string, p: unknown) => void }).capture('card_open', { tab: 'news' });
+
+    fireLoad();
+    expect(appended, 'load alone must not inject; it waits for idle').toHaveLength(0);
+
+    fireIdle();
+    expect(appended.map((s) => s.src)).toEqual([GA_SRC, POSTHOG_SRC]);
+  });
+
+  it('still injects when included after load, or in a browser without requestIdleCallback', () => {
+    const late = runGate(ANALYTICS_HOSTNAME, { settle: false, readyState: 'complete' });
+    expect(late.appended).toHaveLength(0);
+    late.fireIdle();
+    expect(late.appended.map((s) => s.src)).toEqual([GA_SRC, POSTHOG_SRC]);
+
+    const noIdle = runGate(ANALYTICS_HOSTNAME, { idle: false });
+    expect(noIdle.appended.map((s) => s.src)).toEqual([GA_SRC, POSTHOG_SRC]);
   });
 
   it('creates NO script element and no dataLayer off PROD', () => {
