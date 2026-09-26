@@ -197,12 +197,8 @@ For each case, apply this **deterministic source selection policy:**
 - The Reporter of Decisions' summary. Highest information density. 1–5K chars typically.
 - If syllabus is non-null and >= 500 chars, this is sufficient. Proceed to Step 4.
 
-**Priority 2: Opinion excerpt** (from `scotus_cases.opinion_excerpt`)
-- If syllabus is null or < 500 chars, append the opinion_excerpt.
-- If combined text (syllabus + opinion_excerpt) >= 500 chars, proceed to Step 4.
-
-**Priority 3: Full opinion text** (from `scotus_opinions` table)
-- Query only if combined text from Priority 1+2 is < 500 chars:
+**Priority 2: Full opinion text** (from `scotus_opinions` table)
+- If syllabus is null or < 500 chars, read the full opinion BEFORE the excerpt. The excerpt is capped at 15,000 chars and cuts off exactly the part that names the vote and the authors (ADO-580: 2399 and 2099 came back low-confidence from the excerpt alone).
 
 ```bash
 curl -s "${SUPABASE_URL}/rest/v1/scotus_opinions?case_id=eq.{CASE_ID}&select=opinion_full_text,char_count" \
@@ -210,9 +206,16 @@ curl -s "${SUPABASE_URL}/rest/v1/scotus_opinions?case_id=eq.{CASE_ID}&select=opi
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-**30,000 character hard cap:** If `opinion_full_text` exceeds 30,000 chars minus what you already have from syllabus/excerpt, truncate from the END. SCOTUS opinions front-load the holding and rationale; procedural history and appendices appear at the end.
+**30,000 character hard cap, keep both ends:** If `opinion_full_text` is longer than 30,000 chars minus what you already have from the syllabus, read the FIRST 24,000 chars and the LAST 6,000 chars, and skip the middle. The start carries the holding and the majority's reasoning; the end carries what the start does not: on orders and per curiam opinions the vote notes ("Justice Sotomayor would deny the application") and the dissents; on merits opinions the last dissent. Never truncate only from the end.
 
 **If truncated:** Note it. You will record the actual character count read in `source_char_count`.
+
+**Priority 3: Opinion excerpt** (from `scotus_cases.opinion_excerpt`)
+- Only if there is no `scotus_opinions` row for the case: append the opinion_excerpt to the syllabus.
+
+**Before you set `fact_extraction_confidence = 'low'` for a missing vote split or author:** if a `scotus_opinions` row exists and you have not read its last 6,000 chars yet (for example, the syllabus was long enough and you stopped there), read them first. The authorship line and the vote notes are usually there.
+
+**Proceed to Step 4** once you have >= 500 chars from any of the above.
 
 **If NO text available** (no syllabus, no excerpt, no opinion): Mark this case as `enrichment_status = 'failed'` with `low_confidence_reason = 'No opinion text available'` and skip to next case.
 
