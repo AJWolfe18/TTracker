@@ -65,6 +65,32 @@ export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBH
 }
 
 /**
+ * postDiscord for an alert that must not vanish: the fetchers' new-work pings (ADO-577).
+ * Same contract (never throws, never changes the caller's exit code, so a notification
+ * problem never fails an ingest that worked), but an undelivered alert is REPORTED: one
+ * stderr line and, inside GitHub Actions, an error annotation on the run, so a green run
+ * shows it. In Actions a missing DISCORD_WEBHOOK_URL counts as undelivered; outside
+ * Actions (local runs) it stays a silent no-op. Rules: docs/reference/discord-alerts.md
+ * @param {object} embed - as postDiscord
+ * @param {object} [opts] - as postDiscord, plus env / write / logError, injectable for tests
+ * @returns {Promise<boolean>} true when Discord accepted the message
+ */
+export async function postDiscordReported(embed, { env = process.env, write = (s) => process.stdout.write(s), logError = console.error, ...opts } = {}) {
+  const webhookUrl = opts.webhookUrl ?? env.DISCORD_WEBHOOK_URL;
+  const inActions = env.GITHUB_ACTIONS === 'true';
+  if (!webhookUrl && !inActions) return false;
+  const delivered = await postDiscord(embed, { ...opts, webhookUrl });
+  if (!delivered) {
+    const why = webhookUrl ? 'the webhook POST failed' : 'DISCORD_WEBHOOK_URL is not set';
+    const msg = `Discord alert NOT delivered (${why}): ${embed?.title ?? '(no title)'}`;
+    logError(`[discord] ${msg}`);
+    // Workflow command escaping: % first, then line breaks
+    if (inActions) write(`::error title=Discord alert not delivered::${msg.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}\n`);
+  }
+  return delivered;
+}
+
+/**
  * "a, b, c and 2 more" - keeps alert bodies short when a fetch lands a batch.
  */
 export function summarizeList(items, max = 5) {

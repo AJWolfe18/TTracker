@@ -19,7 +19,7 @@ import crypto from 'crypto';
 import zlib from 'zlib';
 import { pathToFileURL } from 'url';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
-import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
+import { postDiscordReported, COLORS, summarizeList } from '../lib/discord.js';
 
 // ============================================================================
 // Configuration
@@ -779,7 +779,7 @@ async function main() {
 
       // ADO-577: new rows alert Discord; zero-new runs stay silent.
       if (stats.inserted > 0) {
-        await postDiscord({
+        await postDiscordReported({
           title: `Pardons ingest: ${stats.inserted} new pardon${stats.inserted === 1 ? '' : 's'}`,
           description: `${summarizeList(stats.inserted_names)} - pending enrichment (pardons agent runs 20:00 UTC daily).`,
           color: COLORS.info,
