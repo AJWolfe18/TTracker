@@ -32,6 +32,7 @@ export const PIPELINES = Object.freeze({
   FRONT_ASSIGNMENT:   'front_assignment',   // front assignment agent declined a candidate (ADO-582) or the sweep RPC failed (ADO-581)
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
   TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
+  SCOTUS_FETCH:       'scotus_fetch',       // scripts/scotus/fetch-cases.js — cluster skipped before processing (ADO-493)
 });
 
 export const REASONS = Object.freeze({
@@ -48,6 +49,7 @@ export const REASONS = Object.freeze({
   SWEEP_FAILED:          'sweep_failed',          // assign_fronts_sweep() RPC errored; no assignments made this cycle (ADO-581)
   AGENT_DECLINED:        'agent_declined',        // front assignment agent judged a candidate and declined; metadata.front + rationale (ADO-582)
   CLEMENCY_TYPE_UNKNOWN: 'clemency_type_unknown', // DOJ mixed pardon/commutation section row whose warrant named no type; inserted as 'pardon' (ADO-590)
+  MALFORMED_DECIDED_AT:  'malformed_decided_at',  // SCOTUS cluster date_filed missing, invalid, before the run's since date or in the future (ADO-493)
 });
 
 /**
