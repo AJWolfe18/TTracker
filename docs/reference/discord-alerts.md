@@ -10,17 +10,15 @@ workflow failure steps, which `curl` the same webhook from YAML.
 
 | Alert | Sent by | When | Color |
 |---|---|---|---|
-| Pipeline failed | `Discord alert (on failure)` step in RSS Tracker PROD + TEST, Track Pardons, Judge Executor; RSS Health Check alerts when its silence check cannot run | the job fails | red |
+| Pipeline failed | `Discord alert (on failure)` step in every scheduled workflow: RSS Tracker PROD + TEST, Track Pardons, Judge Executor, and (ADO-349, same step copied from Track Pardons) Track Executive Orders, SCOTUS Tracker, Pipeline Skips Cleanup; RSS Health Check alerts when its silence check cannot run | the job fails or is cancelled | red |
 | New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row | blue |
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
 | Routine went silent (ADO-586) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h | red |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
 | Social drafts waiting (ADO-572) | `social/draft-posts.js` | new drafts need approval in the admin Social tab | amber |
 
-A run with nothing to say posts nothing.
-
-Known gap (ADO-349): Track Executive Orders and the SCOTUS Tracker have no failure alert, so a crash
-in either is visible only in GitHub Actions.
+A run with nothing to say posts nothing. Manual-only workflows (Enrich Single Story, the manual
+article workflows, Test Secrets) have no failure alert: whoever dispatched them is watching.
 
 ## Rules (decided, do not revisit without Josh)
 

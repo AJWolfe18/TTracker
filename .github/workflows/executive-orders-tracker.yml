@@ -129,3 +129,39 @@ jobs:
         git add -A
         git diff --staged --quiet || git commit -m "Executive Orders run - $(date +%Y-%m-%d)"
         git push || echo "No changes to push"
+
+    # ADO-349: same failure alert as Track Pardons (format documented in docs/reference/discord-alerts.md)
+    - name: Discord alert on failure
+      if: failure() || cancelled()
+      continue-on-error: true
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+          echo "No DISCORD_WEBHOOK_URL; skipping"
+          exit 0
+        fi
+
+        PAYLOAD="$(jq -n \
+          --arg title "Pipeline Failed: ${{ github.workflow }}" \
+          --arg branch "${{ github.ref_name }}" \
+          --arg trigger "${{ github.event_name }}" \
+          --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+          '{
+            embeds: [{
+              title: $title,
+              color: 15158332,
+              fields: [
+                {name:"Branch", value:$branch, inline:true},
+                {name:"Trigger", value:$trigger, inline:true},
+                {name:"Run", value:("[View Logs](" + $url + ")"), inline:true}
+              ],
+              timestamp: (now | todateiso8601)
+            }]
+          }')"
+
+        curl -fsS -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL" \
+          || echo "Discord webhook failed (non-blocking)"
