@@ -24,7 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { buildCanonicalOpinionText, upsertOpinionIfChanged } from './opinion-utils.js';
-import { postDiscord, COLORS, summarizeList } from '../lib/discord.js';
+import { postDiscordReported, COLORS, summarizeList } from '../lib/discord.js';
 dotenv.config();
 
 // ============================================================================
@@ -666,12 +666,12 @@ async function fetchAllCases() {
   console.log(`Errors: ${errorCount}`);
   console.log(`API requests: ${requestCount}`);
   console.log(`Max date seen: ${maxDateSeen}`);
-  console.log(`New cases: ${newCases.length}`);
+  process.stdout.write(`New cases: ${newCases.length}\n`); // ADO-577 line: no new console.log in production code (AGENTS.md)
 
   // ADO-577: only NEW rows alert; quiet runs and refresh-only runs stay silent.
   if (!dryRun && newCases.length > 0) {
     const n = newCases.length;
-    await postDiscord({
+    await postDiscordReported({
       title: `SCOTUS fetch: ${n} new case${n === 1 ? '' : 's'}`,
       description: `${summarizeList(newCases.map(c => (c.docket ? `${c.name} (${c.docket})` : c.name)))} - pending enrichment (agent runs 16:00 UTC weekdays; text-less cases wait for CourtListener).`,
       color: COLORS.info,

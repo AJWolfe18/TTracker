@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { postDiscord, summarizeList, COLORS } from '../lib/discord.js';
-import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS } from '../monitoring/alert-needs-review.js';
+import { postDiscord, postDiscordReported, summarizeList, COLORS } from '../lib/discord.js';
+import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay } from '../monitoring/alert-needs-review.js';
 
 // --- postDiscord -----------------------------------------------------------
 {
@@ -40,6 +40,47 @@ import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS } from '../monitoring/
   assert.equal(await titleFor('test'), '[TEST] T');
   assert.equal(await titleFor('prod'), 'T');
   assert.equal(await titleFor(undefined), 'T');
+}
+
+// --- postDiscordReported: a lost new-work alert is never silent (Codex P1 on #151) ---
+{
+  const run = async ({ env, fetchImpl }) => {
+    const seen = { written: [], errors: [] };
+    const ok = await postDiscordReported({ title: 'EO fetch: 1 new executive order' }, { env, fetchImpl, write: (s) => seen.written.push(s), logError: (s) => seen.errors.push(s) });
+    return { ok, ...seen };
+  };
+  const up = async () => new Response(null, { status: 204 });
+  const down = async () => new Response('rate limited', { status: 429 });
+  const actions = { GITHUB_ACTIONS: 'true', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+
+  // delivered -> nothing reported
+  assert.deepEqual(await run({ env: actions, fetchImpl: up }), { ok: true, written: [], errors: [] });
+  // POST failed in Actions -> stderr line + error annotation on the run
+  const failed = await run({ env: actions, fetchImpl: down });
+  assert.equal(failed.ok, false);
+  assert.match(failed.errors[0], /NOT delivered \(the webhook POST failed\): EO fetch: 1 new executive order/);
+  assert.match(failed.written[0], /^::error title=Discord alert not delivered::Discord alert NOT delivered/);
+  // missing secret in Actions -> reported, not a silent no-op
+  const noSecret = await run({ env: { GITHUB_ACTIONS: 'true' }, fetchImpl: up });
+  assert.equal(noSecret.ok, false);
+  assert.match(noSecret.written[0], /DISCORD_WEBHOOK_URL is not set/);
+  // local run without the secret -> silent no-op, as postDiscord
+  assert.deepEqual(await run({ env: {}, fetchImpl: up }), { ok: false, written: [], errors: [] });
+  // local run with the secret but Discord down -> stderr only, no workflow command
+  const localDown = await run({ env: { DISCORD_WEBHOOK_URL: 'https://d.test/h' }, fetchImpl: down });
+  assert.equal(localDown.errors.length, 1);
+  assert.equal(localDown.written.length, 0);
+  // workflow-command escaping keeps a multi-line title on one annotation line
+  const nl = [];
+  await postDiscordReported({ title: '50% done\nsecond line' }, { env: actions, fetchImpl: down, write: (s) => nl.push(s), logError: () => {} });
+  assert.match(nl[0], /50%25 done%0Asecond line\n$/);
+
+  // the three fetchers use the reported variant for their new-work alert
+  for (const rel of ['../executive-orders-tracker-supabase.js', '../ingest/doj-pardons-scraper.js', '../scotus/fetch-cases.js']) {
+    const src = readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+    assert.match(src, /await postDiscordReported\(\{/, `${rel} must report an undelivered alert`);
+    assert.doesNotMatch(src, /await postDiscord\(\{/, `${rel} still calls plain postDiscord`);
+  }
 }
 
 // --- summarizeList -----------------------------------------------------------
@@ -80,52 +121,93 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
 
 // --- runNeedsReviewAlert -------------------------------------------------------
 {
-  const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h', ALERT_WINDOW_HOURS: '26' };
-  const seen = { queries: [], discord: [] };
+  // Thursday, September 24, 2026 12:00 UTC (not a reminder day) and the Monday after
+  const THU = Date.parse('2026-09-24T12:00:00Z');
+  const MON = Date.parse('2026-09-28T17:00:00Z'); // 12 PM CT
+  const hoursAgo = (h, from = THU) => new Date(from - h * 3600000).toISOString();
+  assert.equal(isReminderDay(THU), false);
+  assert.equal(isReminderDay(MON), true);
+  assert.equal(isReminderDay(Date.parse('2026-09-28T03:00:00Z')), false, 'Sunday 10 PM CT is still Sunday');
+
+  const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+  const seen = { queries: [], headers: [], discord: [] };
+  let scotusRows = [];
+  let scotusTotal = null;
   const fetchImpl = async (url, init = {}) => {
     const u = new URL(url);
     if (u.hostname === 'd.test') { seen.discord.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
     seen.queries.push(u);
+    seen.headers.push(init.headers);
     assert.equal(init.headers.apikey, 'k');
-    if (u.pathname.endsWith('/scotus_cases')) return new Response(JSON.stringify([{ id: 9, case_name_short: 'X v. Y', low_confidence_reason: 'r' }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const json = { 'Content-Type': 'application/json' };
+    if (u.pathname.endsWith('/scotus_cases')) {
+      const total = scotusTotal ?? scotusRows.length;
+      return new Response(JSON.stringify(scotusRows), { status: 200, headers: { ...json, 'Content-Range': `0-${Math.max(scotusRows.length - 1, 0)}/${total}` } });
+    }
+    return new Response('[]', { status: 200, headers: { ...json, 'Content-Range': '*/0' } });
   };
   const silent = () => {};
-  const r1 = await runNeedsReviewAlert({ env, argv: ['--domain', 'scotus'], fetchImpl, log: silent });
-  assert.deepEqual(r1, { flagged: 1, posted: true });
+  const run = (domain, now, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, ...extraEnv }, argv: ['--domain', domain], fetchImpl, log: silent, now });
+
+  // a recent flag posts on any day
+  scotusRows = [{ id: 9, case_name_short: 'X v. Y', low_confidence_reason: 'r', enriched_at: hoursAgo(3) }];
+  assert.deepEqual(await run('scotus', THU), { flagged: 1, due: true, posted: true });
   assert.equal(seen.discord.length, 1);
-  assert.ok(seen.discord[0].embeds[0].description.includes('X v. Y - r'));
+  assert.ok(seen.discord[0].embeds[0].description.includes('NEW X v. Y - r'));
   const q = seen.queries[0];
   assert.equal(q.searchParams.get('needs_manual_review'), 'eq.true');
   assert.equal(q.searchParams.get('manual_reviewed_at'), 'is.null');
-  assert.ok(q.searchParams.get('enriched_at').startsWith('gt.'));
+  assert.equal(q.searchParams.get('enriched_at'), null, 'no age filter: an unreviewed flag never ages out of the queue (Codex P1 on #151)');
+  assert.equal(seen.headers[0].Prefer, 'count=exact');
   assert.ok(q.searchParams.get('select') && !q.searchParams.get('select').includes('*'));
 
-  // default window = 7 days (a late or skipped run cannot lose a flag); override still honoured
-  {
-    const NOW = Date.parse('2026-09-20T12:00:00Z');
-    const { ALERT_WINDOW_HOURS: _drop, ...noWindow } = env;
-    await runNeedsReviewAlert({ env: noWindow, argv: ['--domain', 'scotus'], fetchImpl, log: silent, now: NOW });
-    assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), 'gt.2026-09-13T12:00:00.000Z');
-    await runNeedsReviewAlert({ env: { ...env, ALERT_ENV: 'test' }, argv: ['--domain', 'scotus'], fetchImpl, log: silent, now: NOW });
-    assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), 'gt.2026-09-19T10:00:00.000Z');
-    const testEmbed = seen.discord.at(-1).embeds[0];
-    assert.ok(testEmbed.title.startsWith('[TEST] SCOTUS:'), testEmbed.title);
-    assert.ok(testEmbed.description.includes('https://test--taupe-capybara-0ff2ed.netlify.app/admin.html'));
-    assert.ok(!seen.discord[0].embeds[0].title.startsWith('[TEST]'));
-    seen.queries.length = 1; seen.discord.length = 1;
-  }
+  // a 6-day-old flag is still "recent" (7-day default window): a late or skipped run cannot lose it
+  scotusRows = [{ id: 9, case_name_short: 'X v. Y', enriched_at: hoursAgo(6 * 24) }];
+  assert.equal((await run('scotus', THU)).due, true);
 
-  // quiet domain -> nothing posted
-  const r2 = await runNeedsReviewAlert({ env, argv: ['--domain', 'eo'], fetchImpl, log: silent });
-  assert.deepEqual(r2, { flagged: 0, posted: false });
-  assert.ok(seen.queries[1].searchParams.get('select').includes('executive_orders_enrichment_log(notes,created_at)'));
-  assert.equal(seen.queries[1].searchParams.get('executive_orders_enrichment_log.limit'), '1');
-  assert.equal(seen.discord.length, 1);
+  // older flags only: quiet midweek, reminded on Monday, with the true total from Content-Range
+  scotusRows = Array.from({ length: 50 }, (_, i) => ({ id: i, case_name_short: `Old ${i}`, enriched_at: hoursAgo(30 * 24 + i) }));
+  scotusTotal = 57;
+  const posts = seen.discord.length;
+  assert.deepEqual(await run('scotus', THU), { flagged: 57, due: false, posted: false });
+  assert.equal(seen.discord.length, posts, 'no post midweek for older flags alone');
+  assert.deepEqual(await run('scotus', MON), { flagged: 57, due: true, posted: true });
+  const monday = seen.discord.at(-1).embeds[0];
+  assert.equal(monday.title, 'SCOTUS: 57 enrichments waiting for review (0 new)');
+  assert.ok(monday.description.includes('… and 47 more'), monday.description);
+  assert.ok(monday.description.includes('57 of these have been waiting more than 7 days (reminded every Monday until reviewed).'));
 
-  // pardons uses needs_review
-  await runNeedsReviewAlert({ env, argv: ['--domain', 'pardons'], fetchImpl, log: silent });
-  assert.equal(seen.queries[2].searchParams.get('needs_review'), 'eq.true');
+  // a new flag on top of a backlog posts midweek and names the backlog
+  scotusRows = [{ id: 99, case_name_short: 'Fresh v. Case', enriched_at: hoursAgo(1) }, ...scotusRows.slice(0, 49)];
+  assert.equal((await run('scotus', THU)).due, true);
+  const mixed = seen.discord.at(-1).embeds[0];
+  assert.equal(mixed.title, 'SCOTUS: 57 enrichments waiting for review (1 new)');
+  assert.ok(mixed.description.includes('• NEW Fresh v. Case'));
+  assert.ok(mixed.description.includes('56 of these have been waiting more than 7 days'));
+  scotusTotal = null;
+
+  // ALERT_WINDOW_HOURS still sets the recent window; ALERT_ENV=test titles [TEST] and links the TEST site
+  scotusRows = [{ id: 9, case_name_short: 'X v. Y', enriched_at: hoursAgo(30) }];
+  assert.equal((await run('scotus', THU, { ALERT_WINDOW_HOURS: '26' })).due, false);
+  assert.equal((await run('scotus', THU, { ALERT_ENV: 'test' })).due, true);
+  const testEmbed = seen.discord.at(-1).embeds[0];
+  assert.ok(testEmbed.title.startsWith('[TEST] SCOTUS:'), testEmbed.title);
+  assert.ok(testEmbed.description.includes('https://test--taupe-capybara-0ff2ed.netlify.app/admin.html'));
+  assert.ok(!seen.discord[0].embeds[0].title.startsWith('[TEST]'));
+
+  // quiet domain -> nothing posted, even on Monday
+  const before = { q: seen.queries.length, d: seen.discord.length };
+  assert.deepEqual(await run('eo', MON), { flagged: 0, due: false, posted: false });
+  const eoQuery = seen.queries[before.q];
+  assert.ok(eoQuery.searchParams.get('select').includes('executive_orders_enrichment_log(notes,created_at)'));
+  assert.equal(eoQuery.searchParams.get('executive_orders_enrichment_log.limit'), '1');
+  assert.equal(eoQuery.searchParams.get('enriched_at'), null);
+  assert.equal(seen.discord.length, before.d);
+
+  // pardons uses needs_review, no age filter
+  await run('pardons', THU);
+  assert.equal(seen.queries.at(-1).searchParams.get('needs_review'), 'eq.true');
+  assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), null);
 
   await assert.rejects(() => runNeedsReviewAlert({ env, argv: [], fetchImpl, log: silent }), /--domain/);
   assert.deepEqual(Object.keys(DOMAINS), ['scotus', 'eo', 'pardons']);
