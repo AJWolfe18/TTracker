@@ -25,6 +25,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { buildCanonicalOpinionText, upsertOpinionIfChanged } from './opinion-utils.js';
 import { postDiscordReported, COLORS, summarizeList } from '../lib/discord.js';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { checkDecidedAt, DEFAULT_SINCE_DATE } from './decided-at-guard.js';
 dotenv.config();
 
 // ============================================================================
@@ -58,7 +60,7 @@ const args = process.argv.slice(2).reduce((acc, arg) => {
   return acc;
 }, {});
 
-const sinceDate = args.since || '2020-01-01';  // Default: cases from 2020+
+const sinceDate = args.since || DEFAULT_SINCE_DATE;  // ADO-493: default = start of the October 2024 term
 const limitCases = args.limit ? parseInt(args.limit) : null;
 const resumeFromState = args.resume === true;
 const dryRun = args['dry-run'] === true;
@@ -610,6 +612,21 @@ async function fetchAllCases() {
       console.log(`Found ${data.results.length} clusters on this page`);
 
       for (const cluster of data.results) {
+        // ADO-493: a missing, invalid, pre-since or future date never becomes a row or moves the checkpoint
+        const badDate = checkDecidedAt(cluster.date_filed, { floor: sinceDate });
+        if (badDate) {
+          console.warn(`   [SKIP] cluster ${cluster.id}: ${badDate}`);
+          if (!dryRun) {
+            await recordSkip(supabase, {
+              pipeline: PIPELINES.SCOTUS_FETCH,
+              reason: REASONS.MALFORMED_DECIDED_AT,
+              entity_type: 'scotus_cluster',
+              entity_id: cluster.id,
+              metadata: { case_name: cluster.case_name || null, date_filed: cluster.date_filed || null, since: sinceDate, detail: badDate },
+            });
+          }
+          continue;
+        }
         const success = await processCluster(cluster);
         totalProcessed++;
 
