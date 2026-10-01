@@ -3,6 +3,8 @@
 // RPC filter is text. These checks fail the smoke suite if any side drifts.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 const prompt = readFileSync(new URL('../../docs/features/fronts-claude-agent/prompt-v1.md', import.meta.url), 'utf8');
@@ -45,5 +47,48 @@ for (const h of ['EPA rolls back pollution rules', 'Apollo mission anniversary',
   // "votes" IS an election word by design (the agent declines the noise); only the two non-words must miss
   if (!/votes/.test(h)) assert.ok(!re.test(h), `agent_pattern should not match: ${h}`);
 }
+
+// --- October 1, 2026: all database access goes through front-agent-db.js --------
+// The PROD routine's direct curl reads were denied by the cloud classifier; one exact
+// allow rule in the committed settings is what lets the script run, so the prompt,
+// the rule and the script must agree.
+const script = readFileSync(new URL('../fronts/front-agent-db.js', import.meta.url), 'utf8');
+const settings = JSON.parse(readFileSync(new URL('../../.claude/settings.json', import.meta.url), 'utf8'));
+const RULE = 'Bash(node scripts/fronts/front-agent-db.js *)';
+assert.ok(settings.permissions.allow.includes(RULE), `.claude/settings.json must allow exactly ${RULE}`);
+assert.ok(!/curl\s+-s\s+-X\s+POST\s+"\$\{API\}/.test(prompt), 'prompt must not call PostgREST with curl');
+for (const verb of ['candidates 25', 'assign ', 'decline ', 'refresh', 'notify ']) {
+  assert.ok(prompt.includes(`node scripts/fronts/front-agent-db.js ${verb}`), `prompt must use the script's ${verb.trim()} command`);
+}
+assert.ok(script.includes("const FRONT_SLUG = 'election-suppression'"), 'script must be pinned to the election-suppression front');
+assert.ok(script.includes('PIPELINES.FRONT_ASSIGNMENT') && script.includes('REASONS.AGENT_DECLINED'), 'script must write the skip constants, not literals');
+assert.ok(script.includes("entity_type: 'story'") && script.includes('front: FRONT_SLUG'), 'decline rows must match the RPC filter');
+assert.ok(script.includes("assigned_by: 'agent'"), 'script assignments must be assigned_by=agent');
+
+// --- script behavior that needs no network: argument guards and dry-run ---------
+const scriptPath = fileURLToPath(new URL('../fronts/front-agent-db.js', import.meta.url));
+const run = (args, extraEnv = {}) => {
+  const r = spawnSync(process.execPath, [scriptPath, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', DISCORD_WEBHOOK_URL: '', FRONTS_DRY_RUN: '', ...extraEnv },
+  });
+  return { code: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop()) };
+};
+assert.equal(run(['drop-table']).code, 2, 'unknown verbs are refused');
+assert.equal(run(['constructor']).code, 2, 'inherited object keys are not commands');
+assert.equal(run(['__proto__']).code, 2, 'inherited object keys are not commands');
+assert.equal(run(['candidates', '500']).code, 2, 'candidates limit is capped at 25');
+assert.equal(run(['assign', '12abc', '0.9', 'x']).code, 2, 'story_id must be an integer');
+assert.equal(run(['assign', '12', '0.65', 'x']).code, 2, 'assign below 0.70 is refused');
+assert.equal(run(['assign', '12', '0.9', '']).code, 2, 'assign needs a rationale');
+assert.equal(run(['decline', '12', '0.8', 'run;rm', 'false', 'x']).code, 2, 'run_id is restricted to safe characters');
+assert.equal(run(['decline', '12', '0.8', 'run-1', 'maybe', 'x']).code, 2, 'uncertain must be true or false');
+assert.equal(run(['assign', '12', '0.9', 'x'], { SUPABASE_URL: 'http://plain.example' }).code, 2, 'https is required');
+for (const args of [['assign', '12', '0.9', 'why'], ['decline', '12', '0.8', 'run-1', 'true', 'why'], ['refresh']]) {
+  const r = run(args, { FRONTS_DRY_RUN: 'true' });
+  assert.equal(r.code, 0, `dry-run ${args[0]} exits 0`);
+  assert.equal(r.json.status, 'dry_run', `dry-run ${args[0]} writes nothing`);
+}
+assert.equal(run(['notify', 'hello']).json.status, 'skipped', 'notify without a webhook is a no-op');
 
 console.log('front-agent-prompt: all checks passed');
