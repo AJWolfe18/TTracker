@@ -291,7 +291,7 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | sweep_priority | SMALLINT | (115) lower wins when several fronts match one story; default 100 |
 | sweep_summary | BOOLEAN | (115) also try `sweep_pattern` on `summary_neutral`, but ONLY for headlines matching `sweep_coword` (ungated summary matching on "midterm" pulled in every political summary) |
 | main_line_alarm_floor | SMALLINT | (115) rule v1.2: a member with `alarm_eff >= floor` is on the main line; NULL = v1.1 unchanged. CHECK 1-5. Election Suppression = 3 |
-| agent_pattern | TEXT | (116, ADO-582) case-insensitive regex; a story whose headline **or** `summary_neutral` matches is a candidate for the front assignment agent (`front_agent_candidates`). Broader than `sweep_pattern` on purpose (the agent judges, the regex only bounds the pool). NULL = no agent pass. Seeded for Election Suppression only |
+| agent_pattern | TEXT | (116, ADO-582) case-insensitive regex; a story whose headline **or** `summary_neutral` matches is a candidate for the front assignment agent (`front_agent_candidates`). Broader than `sweep_pattern` on purpose (the agent judges, the regex only bounds the pool). NULL = no agent pass. Seeded for Election Suppression only; tightened September 30, 2026 (current value + rollback: `scripts/maintenance/2026-09-30-ado-582-tighten-agent-pattern.sql`). Never re-run 116 PART D, it resets the seed |
 | created_at / updated_at | TIMESTAMPTZ | updated_at via set_updated_at() trigger |
 
 **RLS:** `events_anon_select` — anon sees `publish_state='published'` only. Writes are service_role only.

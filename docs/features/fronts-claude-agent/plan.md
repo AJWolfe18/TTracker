@@ -33,6 +33,14 @@ GitHub Actions RSS run (every 2h)          claude.ai routine (daily 14:00 UTC)
 
 **Decline dedup.** A declined story would otherwise be re-judged every day while it stays active. The RPC excludes stories with a `front_assignment / agent_declined` skip row created after the story's `last_updated_at`. New articles bump `last_updated_at`, so a story that grows is judged again. `pipeline_skips` retention is 30 days; a still-active story older than that gets one more look, which is fine.
 
+**Candidate pattern (current value).** `events.agent_pattern` for `election-suppression`, tightened September 30, 2026 (TEST applied; PROD paste in `scripts/maintenance/2026-09-30-ado-582-tighten-agent-pattern.sql`, which also holds the rollback):
+
+```
+\m(voters?|voting|ballots?|precincts?|redistrict\w*|gerrymander\w*|congressional maps?|district maps?|polling (place|places|location|locations|hours|site|sites)|certif(y|ies|ied|ying|ication))\M
+```
+
+The migration 116 seed also matched `elections?`, `electoral`, `votes?`, `midterms?`, `polls?`, bare `polling` and `pollsters?`; the first PROD run judged 80 and declined 73, mostly horse race, polls and House floor votes. Rule for any future change: the new pattern must still match every story the agent has assigned (`story_event.note LIKE 'fronts-v1%'`); the maintenance file's DO block enforces it. Never re-run migration 116 PART D (it resets to the broad seed). `front-agent-prompt.test.mjs` reads the pattern from the maintenance file, so a new value = a new maintenance file + repoint the test.
+
 **Concurrency.** `story_event.story_id` is the PK, so two writers cannot both assign. The agent treats 409 as "already assigned" and moves on. It never PATCHes.
 
 ## Decisions (Josh, dated)
@@ -43,10 +51,11 @@ GitHub Actions RSS run (every 2h)          claude.ai routine (daily 14:00 UTC)
 | September 14, 2026 | Redistricting out of the regex; the agent judges map stories |
 | September 15, 2026 (Claude, on the pattern) | Agent runs as a claude.ai routine that self-refreshes the main line; not a GH Actions step (no API spend, matches the four existing agents) |
 | September 15, 2026 (Claude) | Assign threshold 0.70; borderline leans are declines with `uncertain: true` so they are queryable |
+| September 30, 2026 | PROD cron `0 14 * * *` UTC (9 AM CT) daily |
+| September 30, 2026 | Before the PROD backfill: tighten `agent_pattern` (generic election/midterm/poll/vote words out) and record a page of decisions per script call (`record <file>`) instead of one call per story |
 
 ## Open decisions (Josh)
 
-- **Cron time.** Proposed `0 14 * * *` UTC (9 am CT) daily. Blocks: PROD trigger creation.
 - **Other fronts.** Same shape works for any front with an `agent_pattern`; the prompt is single-front by design. A second front = new prompt file + `UPDATE events SET agent_pattern`. Not in 582.
 
 ## Verification
