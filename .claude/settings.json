@@ -9,6 +9,7 @@
       "Task"
     ],
     "allow": [
+      "Bash(node scripts/fronts/front-agent-db.js *)",
       "Bash(npm install *)",
       "Bash(npm run *)",
       "Bash(npm test *)",
