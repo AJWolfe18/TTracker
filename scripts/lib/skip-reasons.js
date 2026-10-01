@@ -29,7 +29,7 @@ export const PIPELINES = Object.freeze({
   ENTITY_AGGREGATION: 'entity_aggregation', // scripts/aggregate-story-entities.js — no entities, empty articles
   STORY_ENRICHMENT:   'story_enrichment',   // scripts/enrichment/enrich-stories-inline.js — no-articles failure
   PARDONS_INGEST:     'pardons_ingest',     // scripts/ingest/doj-pardons-scraper.js — staleness tripwire, header parse drift
-  FRONT_ASSIGNMENT:   'front_assignment',   // fronts assignment agent (ADO-546/Wave 2) — declined to assign a story to a front
+  FRONT_ASSIGNMENT:   'front_assignment',   // front assignment agent declined a candidate (ADO-582) or the sweep RPC failed (ADO-581)
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
   TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
 });
@@ -46,6 +46,7 @@ export const REASONS = Object.freeze({
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
   REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
   SWEEP_FAILED:          'sweep_failed',          // assign_fronts_sweep() RPC errored; no assignments made this cycle (ADO-581)
+  AGENT_DECLINED:        'agent_declined',        // front assignment agent judged a candidate and declined; metadata.front + rationale (ADO-582)
 });
 
 /**
