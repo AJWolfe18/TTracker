@@ -17,7 +17,7 @@ the **replacement** for the retired GPT-4o-mini inline pipeline, which had satur
 fix by earning every alarm-level upgrade with specific evidence.
 
 - **Cadence:** every 2 hours at :30 past (cron `30 */2 * * *`), 30 minutes offset from the RSS clustering cron
-- **Model:** Sonnet (claude-sonnet-5 on the PROD trigger) · **Cron trigger:** `trig_0182WcUVyjF7Q5o2GWJMxbo1`
+- **Model:** Sonnet (claude-sonnet-5-5 on the PROD trigger since September 30, 2026; the TEST trigger is still claude-sonnet-4-6) · **Cron trigger:** `trig_0182WcUVyjF7Q5o2GWJMxbo1`
 - **It does NOT** cluster articles, merge stories, or write `needs_review`/`is_public`. Clustering stays
   inline and GPT-free in the RSS pipeline; story merging is the separate **Clustering Judge** agent
   (see `docs/reference/clustering-judge.md`). This agent only enriches.

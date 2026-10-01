@@ -17,7 +17,7 @@ creates a *new* story), so one event — e.g. the July 4th "Salute to America 25
 fragments into several stories. The Judge stitches those back together.
 
 - **Cadence:** 3×/day — 05:00, 13:00, 21:00 UTC (offset from the RSS pipeline's :30)
-- **Model:** claude-sonnet-5 · **Cron trigger:** `trig_01DDXZkpC9PkgTzU8wDdL9QM`
+- **Model:** claude-sonnet-5-5 (PROD and TEST triggers, since September 30, 2026) · **Cron trigger:** `trig_01DDXZkpC9PkgTzU8wDdL9QM`
 - **It does NOT** write summaries, alarm levels, categories, or `is_public`. It only decides
   merge / keep / uncertain, executes merges, and logs every verdict.
 
