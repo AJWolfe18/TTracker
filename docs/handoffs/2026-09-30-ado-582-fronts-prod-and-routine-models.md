@@ -32,6 +32,12 @@ Noticed, not changed: the PROD Judge's `auto_mode_*` fields are empty now (proba
 - Still owed from September 15: PROD feed_registry 21/22 `failure_count` query.
 - Pattern to reuse: any routine hit by the classifier -> playbook option 2 (committed script + exact allow rule), now proven.
 
+## Backfill plan (decided with Josh at the end of the session; do BEFORE firing backfill runs)
+Run 1 spent ~90 tool calls on 80 stories, and 73 were declines. Two stacking fixes, then backfill:
+1. **Tighten `events.agent_pattern`** (an UPDATE on PROD that Josh pastes; never a migration). Drop the generic words that pull in noise (`elections?`, `electoral`, `midterms?`, `polls?`, `pollsters?`, bare `votes?`), keep the specific ones (`voters?`, `voting`, `ballots?`, `certif...`, `redistrict\w*`, `gerrymander\w*`, `congressional maps?`, `district maps?`, `precincts?`, `voting rights`, `polling (place|places|location|locations|hours|site|sites)`). Gate: the new pattern must still match EVERY story the agent ever assigned (TEST: September 15 run + 17194, 17185, 17198, 17204; PROD: 15902, 16020, 16058, 15921, 15893, 16128, 16035) - check on TEST first, then compare pool size before/after. Do not edit migration 116 PART D (re-running it resets the pattern to the seed); record the new pattern in a maintenance SQL file + the fronts plan doc, and update the headline cases in `front-agent-prompt.test.mjs`.
+2. **Batch decisions**: add a `record <file>` verb to `scripts/fronts/front-agent-db.js` that reads a JSON file of one page's decisions (written with the Write tool) and inserts them, returning per-story statuses; prompt judges a page of 25, writes one file, one script call. Same allow rule. Keep per-story `assign`/`decline` verbs for retries. TEST run first, PR to main.
+3. **Backfill**: fire the PROD routine back to back, one run at a time (never overlapping - two runs would read the same page), watching that Stories/Judge keep running; and/or Josh sets `FRONTS_MAX_PER_RUN=250` on the PROD environment.
+
 ## Verification
 - `npm run qa:fronts`, `qa:agent-prompts`, `qa:smoke` green on test.
 - Read-path of the script exercised against TEST locally (pool 33).
