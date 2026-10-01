@@ -1,6 +1,8 @@
 -- ADO-582 backfill prep - tighten the election front agent's candidate regex.
 -- RECORD ONLY. Run by hand in the PROD SQL Editor (the PROD project). Never deployed by code.
 -- Applied on TEST September 30, 2026 (PATCH on events, same value as below).
+-- APPLIED ON PROD September 30, 2026 (Josh pasted it): pool_before 2666, pool_after 1095,
+-- agent_assigned 7 / matching 7, named_found 7, members_outside_pattern 41.
 --
 -- WHY: the first PROD run judged 80 stories and declined 73. The seed pattern from
 -- migration 116 PART D pulls in every story that says election / midterm / poll / vote,

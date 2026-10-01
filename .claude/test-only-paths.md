@@ -44,3 +44,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-09-08-ado-581-prod-fronts-backfill.sql` - ADO-581 PROD runbook (migration
   115 order, dry-run count, backfill sweep, three hand assignments, refresh). Run by hand in the PROD
   SQL Editor; never deployed. Migration 115 itself DOES ship.
+- `scripts/maintenance/2026-09-30-ado-582-tighten-agent-pattern.sql` - the current election
+  `events.agent_pattern` + the self-checking PROD UPDATE and rollback (ADO-582). Run by hand; it
+  MUST ship because `scripts/tests/front-agent-prompt.test.mjs` reads the pattern from it.
