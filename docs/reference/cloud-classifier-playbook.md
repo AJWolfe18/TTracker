@@ -34,7 +34,7 @@ Seen September 19-20, 2026, all after Josh had said go:
 Hand Josh the exact line to type with a leading `!`. A PASTED `! command` arrives as plain text and
 does not run; the `!` has to be typed.
 
-## Routine exposure, as of September 20, 2026
+## Routine exposure, as of September 20, 2026 (election front row added October 1, 2026)
 | Routine (PROD) | Writes it makes | Under the September classifier |
 |---|---|---|
 | Clustering Judge `trig_01DDXZkpC9PkgTzU8wDdL9QM` | pushes one verdict branch | Denied September 16-19; passes since the `auto_mode_*` fields were set (hand-fired + scheduled run, both clean) |
@@ -42,6 +42,7 @@ does not run; the `!` has to be typed.
 | Pardons `trig_018LUznaUWwijFhMZLp8kYE2` | log POST/PATCH, content PATCH | Log writes pass. Content PATCH UNPROVEN: queue empty on every run since September 16 |
 | SCOTUS `trig_019eD3JTVeSajL4qTJJSC6tq` (weekdays) | log rows, content PATCH | Same: no denials, content PATCH UNPROVEN (empty queue) |
 | EO `trig_01McAzRLMuu8cawTzbskQkmJ` (weekdays) | log rows, content PATCH | Same: no denials, content PATCH UNPROVEN (empty queue) |
+| Election front `trig_01KiZVrHE8RdC7Nuw66HJd7j` (daily, created October 1, 2026) | `story_event` / `pipeline_skips` inserts, refresh RPC | Direct `curl` reads denied twice ("Production Reads") even with `auto_mode_*` set; passes since every call goes through `scripts/fronts/front-agent-db.js` under one exact allow rule (option 2) |
 
 Most likely next incident: the first non-empty SCOTUS / EO / Pardons run. Their content PATCH is the
 same shape as Stories (single-row update), which passes, so the odds are good. If one is denied, use
@@ -88,7 +89,7 @@ changed on our side; it started September 16, 2026 at 4:04 PM CT.
 | # | Option | Cost | Effort | Certainty | Notes |
 |---|--------|------|--------|-----------|-------|
 | 1 | Routine `auto_mode_environment` + `auto_mode_allow` fields, truthful text, fire once | $0 | 15 min | **WORKED September 19, 2026** | Run `cse_01DvQn375oXmTV51A8zoApAD` (fired 11:44 PM CT) published `judge-run/prod/judge-2026-09-20T04-46-07.913Z` at about 11:55 PM CT (branch verified on GitHub, commit `407d0a8`): 8 merge / 17 keep / 5 uncertain. Same prompt, same Step 7, same environment as the two denied runs an hour earlier; the only change was these two fields. Undocumented, so it can stop working without notice: if denials return, go to option 2. Reversible: set both back to `[]`. |
-| 2 | Committed publish script + one exact `permissions.allow` rule on main, by PR + Codex | $0 | ~1 hour | Likely | Owner declaring the push approved through the documented mechanism. Risk: auto mode may suspend a rule that launches `node`. TEST cannot prove it (TEST already passes); only a PROD run does. |
+| 2 | Committed script + one exact `permissions.allow` rule on main, by PR + Codex | $0 | ~1 hour | **WORKED October 1, 2026** | Owner declaring the job approved through the documented mechanism. Proven on the PROD election front routine (`trig_01KiZVrHE8RdC7Nuw66HJd7j`), where option 1 did NOT clear a "Production Reads" denial: `scripts/fronts/front-agent-db.js` + `Bash(node scripts/fronts/front-agent-db.js *)` on main (PR #155), run `cse_01Q3CjsudFKjYbPn3MinCCAp` made 80+ script calls with 0 denials. The rule DOES survive auto mode for a `node <exact script path> *` prefix. Every prompt call must begin with the exact prefix: no `cd`, `VAR=` prefix, pipes or `&&` chains, or it no longer matches. Main's allow list has no `Bash(*)` (test's `Bash(*)` is suspended in auto mode anyway). |
 | 3 | Move the Judge into GitHub Actions (headless Claude Code, `claude setup-token` subscription token, permissions via `claude_args` / `settings`), executor in the same job | $0 cash; ~1,080 Actions minutes a month at 3 runs a day vs 2,000 free | 1 session | Certain | No cloud classifier involved. Deletes the `judge-run/**` branch polling. Check minutes used first: `gh auth refresh -h github.com -s user`. |
 | 4 | Run the Judge locally as a Desktop scheduled task | $0 | ~1 hour | Certain | `~/.claude/settings.json` is a documented `autoMode` scope. PC must be on at 12:00 AM, 8:00 AM, 4:00 PM CT. |
 | 5 | Approve each run by hand in claude.ai (type the exact push) | $0 | 3x a day forever | Shaky | #95200 reports direct orders still denied after earlier denials in the same session. Stopgap only. |
