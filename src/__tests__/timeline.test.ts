@@ -24,6 +24,8 @@ import {
   olderFrontier,
   behindSources,
   trackerProgress,
+  countScope,
+  coverageGaps,
   CATCH_UP_MAX_PAGES,
   FRONTIER_PENDING,
   holdFrontier,
@@ -917,6 +919,52 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
     expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind: ['stories', 'pardons'] }).button)
       .toBe('Load earlier · catching up Stories, Pardons ↓');
     expect(trackerProgress({ refreshing: true, loadingMore: false, failed: false, behind: [] }).updating).toBe(true);
+  });
+
+  it('cap hit before the target: the gap is marked on the spine and the count never says "the complete record" (Codex P1 on #158)', async () => {
+    const { entries, state } = await storiesOffAndPagedBack();
+    const shown = displayedFrontier(state, STORIES_OFF, undefined);
+    const caught = await catchUpSource(0, state, 'stories', shown, { maxPages: 2 });
+    const after = displayedFrontier(caught.state, NONE_OFF, shown);
+    const behind = behindSources(caught.state, NONE_OFF, after);
+    const visible = visibleEntries(mergeEntries([entries, caught.entries]), { frontier: after, min: 0, off: NONE_OFF, query: '' });
+
+    const gaps = coverageGaps(visible, caught.state, behind);
+    const reached = caught.state.stories.cursor!.date;
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({ source: 'stories', from: reached });
+    // Everything above the marker is at or after the date Stories reached; below it, only older rows
+    expect(visible.slice(0, gaps[0].index).every(e => e.date >= reached)).toBe(true);
+    expect(visible.slice(gaps[0].index).every(e => e.date < reached && e.source !== 'stories')).toBe(true);
+    expect(gaps[0].index).toBeLessThan(visible.length); // pardons carry on below it
+
+    expect(countScope(0, behind)).toBe(' · catching up Stories');
+    expect(countScope('main', behind)).toBe(' · the main line · catching up Stories');
+    expect(countScope(3, behind)).toBe(' at alarm 3+ · catching up Stories');
+    expect(countScope(0, [])).toBe(' · the complete record');
+
+    // Caught up all the way: no marker
+    const done = await catchUpSource(0, caught.state, 'stories', shown);
+    expect(coverageGaps(visible, done.state, behindSources(done.state, NONE_OFF, after))).toEqual([]);
+  });
+
+  it('coverage gap placement: nothing loaded goes on top, past the last row goes at the end', () => {
+    const st = (over: Partial<TrackerState[keyof TrackerState]>) =>
+      ({ cursor: null, exhausted: false, errored: false, ...over });
+    const state: TrackerState = {
+      stories: st({ cursor: { date: '2026-01-01', id: 1 } }),
+      eos: st({}),
+      scotus: st({ exhausted: true }),
+      pardons: st({ cursor: { date: '2026-05-01', id: 1 } }),
+    };
+    const row = (date: string): TimelineEntry =>
+      ({ source: 'pardons', id: date, date, headline: date, alarm: 3 });
+    const visible = [row('2026-06-01'), row('2026-05-01')];
+    expect(coverageGaps(visible, state, ['eos', 'stories'])).toEqual([
+      { source: 'eos', from: null, index: 0 },
+      { source: 'stories', from: '2026-01-01', index: 2 },
+    ]);
+    expect(coverageGaps(visible, state, [])).toEqual([]);
   });
 
   it('a never-fetched source catches up from its first page', async () => {
