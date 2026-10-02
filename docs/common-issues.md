@@ -690,10 +690,11 @@ non-PDF page such as a bot check), the row is not inserted: it is held and logge
 its `source_key`, and the next run tries again. After 3 held runs (`MAX_WARRANT_HOLDS`, counted from
 those skip rows) it is inserted as `pardon` with the `clemency_type_unknown` flag, so a grant can be
 held back for about 3 days but never lost, and never guessed on a single bad fetch (Codex review on
-PR #153, September 25, 2026). If those skip rows cannot be counted (the lookup fails), the row is
-inserted and flagged the same way, so a broken lookup cannot hold it forever. A run that inserts nothing
-because the newest DOJ date's rows are held does not trip the staleness check: it logs "held for a warrant retry" and stays
-green (code review on PR #161, October 1, 2026). `npm run ingest:pardons -- --dry-run` prints the per-date type split,
+PR #153, September 25, 2026). If those skip rows cannot be counted (the lookup fails), or a
+hold's own skip row cannot be written, the row is inserted and flagged the same way, so a broken
+lookup or write cannot hold it forever. A run that inserts nothing does not trip the staleness check
+only when no insert failed and every row on the newest DOJ date was held or is already in the DB: it
+logs "held for a warrant retry" and stays green (code review on PRs #161 and #163, October 1, 2026). `npm run ingest:pardons -- --dry-run` prints the per-date type split,
 and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.
 
 ### Executive orders: the "Signed" date on the site is wrong

@@ -25,7 +25,7 @@ import {
   MAX_WARRANT_HOLDS,
   stalenessVerdict,
 } from '../ingest/doj-pardons-scraper.js';
-import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { PIPELINES, REASONS, recordSkip } from '../lib/skip-reasons.js';
 
 let passed = 0;
 let failed = 0;
@@ -445,7 +445,7 @@ await test('19. A failed hold-count lookup inserts the row as pardon and flags i
   assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['kerr', 'pardon']]);
   assert.equal(stats.type_retries, 0, 'an unknown hold count must not hold the row again');
   assert.equal(stats.type_fallbacks, 1);
-  assert.equal(stats.held_newest_date, null);
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 0, duplicate: 0 });
   assert.deepEqual(writes.pipeline_skips.map(s => s.reason), [REASONS.CLEMENCY_TYPE_UNKNOWN]);
   assert.equal(writes.pipeline_skips[0].entity_id, '710');
   assert.match(writes.pipeline_skips[0].metadata.detail, /not a PDF.*earlier holds could not be counted \(relation unavailable\)/);
@@ -469,14 +469,63 @@ await test('20. Held rows on the newest DOJ date keep the staleness tripwire qui
   const stats = await insertPardons(supabase, [row('a', '2026-09-02'), row('b', '2026-09-03'), row('c', '2026-09-01')], { fetchImpl: botWall });
   assert.equal(stats.inserted, 0);
   assert.equal(stats.type_retries, 3);
-  assert.equal(stats.held_newest_date, '2026-09-03');
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 1, duplicate: 0 });
 
   const page = '2026-09-03';
-  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: stats.held_newest_date }), 'held');
-  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: null, heldNewestDate: stats.held_newest_date }), 'held');
-  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: '2026-09-02' }), 'stale', 'held rows on an older date do not cover a newer section');
-  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: null }), 'stale');
-  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: page, heldNewestDate: null }), 'fresh');
+  const day = (d) => ({ errors: 0, by_date: { [page]: d } });
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: null, stats }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 3, held: 2, duplicate: 1 }) }), 'held', 'held or already in the DB');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: { ...stats, errors: 2 } }), 'stale', 'one held row must not hide failed inserts');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 3, held: 1, duplicate: 0 }) }), 'stale', 'rows on the newest date that were neither held nor in the DB');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: { errors: 0, by_date: { '2026-09-02': { total: 1, held: 1, duplicate: 0 } } } }), 'stale', 'held rows on an older date do not cover a newer section');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 0, held: 0, duplicate: 0 }) }), 'stale');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: page, stats: day({ total: 1, held: 0, duplicate: 1 }) }), 'fresh');
+});
+
+await test('21. A hold whose skip row could not be written inserts the row as pardon and flags it, so the run cannot stay green while the grant never lands', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  let apiErrorWrites = 0;
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: [], error: null });
+      q.insert = (row) => {
+        if (table === 'pipeline_skips' && row.reason === REASONS.API_ERROR) {
+          apiErrorWrites++;
+          return { then: (resolve) => resolve({ error: { message: 'insert denied' } }) };
+        }
+        writes[table].push(row);
+        return q;
+      };
+      q.single = async () => ({ data: { id: 720 }, error: null });
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = { recipient_name: 'Row nohold', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/nohold/dl?inline', pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'nohold' };
+  const stats = await insertPardons(supabase, [row], { fetchImpl: botWall });
+
+  assert.equal(apiErrorWrites, 1, 'the hold was attempted');
+  assert.equal(stats.type_retries, 0, 'an unrecorded hold is not a hold');
+  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['nohold', 'pardon']]);
+  assert.equal(stats.type_fallbacks, 1);
+  assert.equal(writes.pipeline_skips[0].reason, REASONS.CLEMENCY_TYPE_UNKNOWN);
+  assert.match(writes.pipeline_skips[0].metadata.detail, /the hold could not be recorded/);
+  assert.equal(stalenessVerdict({ newestPageDate: '2026-09-03', newestDbDate: '2026-08-20', stats: { ...stats, inserted: 0 } }), 'stale');
+
+  // recordSkip reports whether the row was written
+  const ok = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const denied = { from: () => ({ insert: async () => ({ error: { message: 'denied' } }) }) };
+  const throws = { from: () => ({ insert: async () => { throw new Error('network'); } }) };
+  const skip = { pipeline: PIPELINES.PARDONS_INGEST, reason: REASONS.API_ERROR };
+  assert.equal(await recordSkip(ok, skip), true);
+  assert.equal(await recordSkip(denied, skip), false);
+  assert.equal(await recordSkip(throws, skip), false);
+  assert.equal(await recordSkip(null, skip), false);
 });
 
 console.log(`\ndoj-pardons-parser: ${passed} passed, ${failed} failed`);
