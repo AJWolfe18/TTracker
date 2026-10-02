@@ -113,10 +113,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // The view pageState was fetched for, so a chip switched back on is never
   // paged with a stale view's cursors while the new view loads.
   const pageViewRef = useRef<TrackerView | null>(null);
-  // The frontier on screen and the view it belongs to: within a view it never
-  // moves newer (undefined = nothing displayed yet for this view)
+  // The frontier on screen: it never moves newer until the next first-page
+  // load, which clears it (undefined = nothing displayed yet for this load)
   const displayedRef = useRef<string | null | undefined>(undefined);
-  const displayedViewRef = useRef<TrackerView | null>(null);
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -146,6 +145,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       setEntries(page);
       setPageState(state);
       pageViewRef.current = view;
+      // Every completed first page starts the frontier afresh, even for the
+      // same view (main → All → main before All lands, or the flag toggling)
+      displayedRef.current = undefined;
       setLoaded(true);
       setRefreshing(false);
     })().catch(() => { /* the Tracker is additive — never break the homepage */ });
@@ -217,17 +219,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
 
   // The frontier on screen only moves older within a view (a chip switched
   // back on, a capped catch-up or a retry from an old cursor would otherwise
-  // pull rows out from under the reader); a new view starts afresh.
-  if (displayedViewRef.current !== pageViewRef.current) {
-    displayedRef.current = undefined;
-    displayedViewRef.current = pageViewRef.current;
-  }
+  // pull rows out from under the reader); every first-page load starts afresh.
   const frontier = pageState ? displayedFrontier(pageState, off, displayedRef.current) : null;
   if (pageState) displayedRef.current = rememberFrontier(pageState, off, displayedRef.current, frontier);
   // Sources switched on that are short of that frontier: "load earlier" pages
   // them first; the count line says "Updating…" only while one is loading
   const behind = pageState ? behindSources(pageState, off, frontier) : [];
-  const catchingUp = behind.length > 0;
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
   // openings and force_shown entries the rule deliberately included.
@@ -591,7 +588,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             ...(narrow ? { left: 8, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
-          {loaded && !refreshing && !catchingUp && visible.length === 0 && (
+          {loaded && !progress.busy && visible.length === 0 && (
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
               {onSourcesFailed
                 ? 'Couldn’t load the sources switched on · switch on another source or try again later.'
