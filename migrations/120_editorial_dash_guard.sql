@@ -9,8 +9,8 @@
 --   any other en dash                           -> ' - '
 --   Only spaces and tabs next to the dash are absorbed; line breaks are kept.
 --   ' - ' is the form the compliant agent outputs already use.
---   URLs are never rewritten (see A): URL tokens inside text, and jsonb strings under a
---   url / href / link key.
+--   URLs are never rewritten (see A): URLs inside text, and jsonb strings under a
+--   url / href / link key. A dash touching a URL from outside is still rewritten.
 -- Verbatim quote fields (scotus_cases.evidence_quotes / evidence_anchors) are NOT touched:
 -- they must match the source text.
 -- October 1, 2026 (reviews): added scotus_cases.ruling_label and substantive_winner, URLs are
@@ -43,41 +43,58 @@ AS $$
   END
 $$;
 
--- strip_dashes(text): the rule everywhere except inside URL tokens (any run of non-space
--- characters containing "://"). A URL may legitimately contain a Unicode dash, and rewriting
--- it would break the link for good; the prose around it is still cleaned.
+-- strip_dashes(text): the rule everywhere except inside URLs. A URL may legitimately contain
+-- an en dash (a slug like /c–d), and rewriting it would break the link for good; the prose
+-- around it is still cleaned. A URL here:
+--   starts with a scheme ("https://", "http://", ...) at the start of the text or right after
+--   whitespace, ( [ " ' or a dash;
+--   stops before whitespace, ) ] " ' < > , and any em dash; an en dash stays in the URL only
+--   when more URL follows it ("/c–d"), so "x.gov/b– more" still loses its dash.
+-- So "(https://x.gov/a)—which" -> "(https://x.gov/a) - which",
+-- "here—https://x.gov/b" -> "here - https://x.gov/b", and "https://x.gov/c–d" is kept.
+-- Mechanics: mark each URL with two private-use characters, split on them, clean the odd
+-- (non-URL) pieces. Text that already holds those characters is cleaned whole (never seen
+-- in editorial copy).
 CREATE OR REPLACE FUNCTION public.strip_dashes(p text)
 RETURNS text
 LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
 SET search_path = pg_catalog, public
 AS $$
 DECLARE
+  c_open  constant text := chr(57344);  -- U+E000
+  c_close constant text := chr(57345);  -- U+E001
+  c_url   constant text := '[^][:space:])"''<>,—–]';
+  v_parts text[];
   v_out text := '';
-  v_cursor int := 1;
-  v_pos int;
-  v_url text;
 BEGIN
   IF p IS NULL OR p !~ '[—–]' THEN
     RETURN p;
   END IF;
-  IF strpos(p, '://') = 0 THEN
+  IF strpos(p, '://') = 0 OR strpos(p, c_open) > 0 OR strpos(p, c_close) > 0 THEN
     RETURN public.strip_dashes_plain(p);
   END IF;
 
-  -- URL tokens come back left to right and never overlap, so each one is the first occurrence
-  -- of its text at or after the cursor.
-  FOR v_url IN SELECT m[1] FROM regexp_matches(p, '(\S*://\S*)', 'g') AS m LOOP
-    v_pos := v_cursor - 1 + strpos(substr(p, v_cursor), v_url);
-    v_out := v_out || public.strip_dashes_plain(substr(p, v_cursor, v_pos - v_cursor)) || v_url;
-    v_cursor := v_pos + length(v_url);
+  v_parts := regexp_split_to_array(
+    regexp_replace(p,
+      '(^|[[:space:](["''—–])([A-Za-z][A-Za-z0-9+.-]*://(?:' || c_url || '|–(?=' || c_url || '))+)',
+      '\1' || c_open || '\2' || c_close, 'g'),
+    '[' || c_open || c_close || ']');
+
+  -- Pieces alternate: text, URL, text, URL, ..., text
+  FOR i IN 1 .. coalesce(array_length(v_parts, 1), 0) LOOP
+    IF i % 2 = 1 THEN
+      v_out := v_out || public.strip_dashes_plain(v_parts[i]);
+    ELSE
+      v_out := v_out || v_parts[i];
+    END IF;
   END LOOP;
 
-  RETURN v_out || public.strip_dashes_plain(substr(p, v_cursor));
+  RETURN v_out;
 END
 $$;
 
--- jsonb: walk the document and rewrite strings with strip_dashes(text), so URL tokens inside
--- prose are kept and a string that is only a URL is kept whole. Keys, numbers and the structure
+-- jsonb: walk the document and rewrite strings with strip_dashes(text), so URLs inside prose
+-- (or a string that is just a URL) are kept as above. Keys, numbers and the structure
 -- are untouched. A string under a key that is or ends with url / href / link (plural too:
 -- source_urls, links) is skipped entirely. Array elements inherit the key of their array.
 CREATE OR REPLACE FUNCTION public.strip_dashes_json_walk(p jsonb, p_key text)
