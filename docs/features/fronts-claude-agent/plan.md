@@ -53,10 +53,41 @@ The migration 116 seed also matched `elections?`, `electoral`, `votes?`, `midter
 | September 15, 2026 (Claude) | Assign threshold 0.70; borderline leans are declines with `uncertain: true` so they are queryable |
 | September 30, 2026 | PROD cron `0 14 * * *` UTC (9 AM CT) daily |
 | September 30, 2026 | Before the PROD backfill: tighten `agent_pattern` (generic election/midterm/poll/vote words out) and record a page of decisions per script call (`record <file>`) instead of one call per story |
+| September 30, 2026 | Every front gets the agent: ONE agent picks the best front or none for each story (ADO-592), not one agent per front |
 
 ## Open decisions (Josh)
 
-- **Other fronts.** Same shape works for any front with an `agent_pattern`; the prompt is single-front by design. A second front = new prompt file + `UPDATE events SET agent_pattern`. Not in 582.
+- **Other fronts.** Decided September 30, 2026 (row above): one all-fronts agent, ADO-592. Draft patterns for the other 7 fronts are in the next section; their own open decisions are listed there.
+
+## ADO-592 groundwork: agent patterns for the other 7 fronts (October 1, 2026)
+
+**File:** `scripts/maintenance/2026-10-01-ado-592-agent-patterns.sql`. **Not applied anywhere.** It runs by hand as part of the ADO-592 build (TEST first, PROD before the all-fronts routine goes live there). Nothing reads these values today (`front-agent-db.js` is hardcoded to `election-suppression`). The file has a read-only pre-check, a guarded `UPDATE`, a result query and the rollback.
+
+**How each draft was built.** Start from the front's `sweep_pattern` (migration 115), apply it to `summary_neutral` as well (most sweeps read the headline only), and add the obvious synonyms the sweep misses. The pattern only bounds the pool; the agent does the judging, so a few off-topic matches are fine. Word-bounded with `\m ... \M`, like the election pattern.
+
+**Gate (stricter than ADO-582).** Every current member of the front (sweep, hand or agent) must match the new pattern on headline or summary. The 582 gate only checked agent-assigned members, and none of these 7 fronts has any yet. The DO block refuses (nothing changes) and lists the ids if any member falls outside, and it never overwrites a different non-NULL pattern.
+
+**How it was measured (TEST, October 1, 2026).** Through PostgREST only (no SQL access from this lane), read-only, ids only, no `content` or `embedding`. PostgREST `imatch` is the same `~*` operator the RPC uses. The pool replicates `front_agent_candidates()`: `status = 'active'`, headline and summary not null, headline OR summary matches, and no `story_event` row (an embedded anti-join). The decline exclusion is 0 for these fronts because no front other than election has decline rows yet (checked). Member misses were queried as "neither column matches, NULL counted as no match", the same as the 582 gate's `COALESCE`; that query does return the 2 sweep members outside the election pattern (15099, 17394), so it is not vacuous. The SQL file itself was also run end to end in an in-memory PGlite with migration 116's function: it applies, re-runs cleanly, refuses when a member falls outside, and refuses to overwrite a different pattern. TEST has 645 active, enriched, unassigned stories.
+
+| Front | Draft pattern (summary) | TEST pool | Current members | Members matched | Notes |
+|---|---|---|---|---|---|
+| epstein-files | epstein*, ghislaine, giuffre, birthday book, client list | 0 | 181 | 181 / 181 | The headline sweep already caught every Epstein story. Bare "maxwell" was dropped: on TEST it only pulled in an unrelated Paxton story (17226). |
+| iran | iran*, tehran, hormuz, khamenei, irgc, ayatollah, fordow, natanz, isfahan, war powers | 10 | 43 | 43 / 43 | Pool: Hormuz mine clearing, the UK and the blockade, war-powers votes, plus stories that mention Iran only in the summary (16923 on inflation, 16899 on the 25th Amendment). |
+| trump-crypto | crypto*, memecoin, meme coin, stablecoin, bitcoin, binance, world liberty, wlfi, usd1, digital assets, tokens, nfts, digital trading cards | 2 | 6 | 6 / 6 | Pool: Melania NFT earnings (17045), and 16999. The sweep needed a Trump co-word; the agent judges that instead. |
+| qatar-jet | qatar*, 747, jumbo jet, boeing, new/gifted/qatari/luxury/replacement air force one | 1 | 1 | 1 / 1 | Bare "air force one" was dropped on purpose: on PROD, "aboard Air Force One" press-gaggle stories would flood the pool. |
+| selling-the-white-house | ballroom, east wing, donors, donations, fundraising, incognito, pay to play, fine arts commission, capital planning commission | 2 | 13 | 13 / 13 | Pool: a Democratic AI PAC (17215) and the campaign-spending ruling (17022), both likely declines. "donors" may pull in more campaign-finance stories on PROD; watch the PROD pool in the result query. |
+| the-courts | judges, judiciary, judicial, contempt, injunctions, restraining orders, court orders, appeals/circuit/district courts, appellate, unconstitutional, struck down, defy/defiance, impeach*, boasberg, block/blocked/blocking | 50 | 9 | 9 / 9 | The largest pool, and mostly real candidates (judges ordering the Pentagon, ICE and FEMA; Guard deployments; Comey). Noise is "blocks" and "defiance" in tariff stories. See decision 1 for the wider variant (98). |
+| kushners-deals | kushner*, affinity partners, jared, public investment fund, pif, sovereign wealth, electronic arts, saudi*, emirat*, abu dhabi, gulf money/states/investors/investment/royals | 4 | 0 | 0 / 0 | No members on TEST. The Gulf terms bring in the MBS visit and Khashoggi stories (3 of the 4). See decision 2. |
+
+**Union of the 7 pools on TEST:** 69 stories (10.7% of the 645 unassigned); no story is in two pools. The election pool is 0 right now (the RPC returns no rows: everything is judged). **PROD will be much larger:** the election pool was 1,095 on PROD against 38 on TEST. The result query in the SQL file reports the real PROD pools per front, read from the RPC's own `pool_size`. These pools are counted before any ADO-594 "coverage" filter; if the 594 design is approved (PR #160, decision D7), the pool shrinks further and the patterns do not change.
+
+**Cost:** $0. The SQL is a one-row-per-front `UPDATE` plus counts; the agent runs on plan usage.
+
+### Open Decisions (Josh)
+
+1. **The Courts: tight or wide pattern?** Tight (the draft): 50 on TEST. Wide adds `supreme court`, `justices`, `ruled`, `ruling(s)`: 98 on TEST, mostly Supreme Court news and generic "ruling" stories. *Recommended: tight.* Supreme Court rulings already have their own tracker source, and the tight set still catches the judge-versus-administration fights the front is about. Blocks: applying the SQL for the-courts.
+2. **Kushner's Deals: keep the Gulf terms?** With `saudi`, `emirati`, `abu dhabi` and `gulf money`, the pool catches Gulf deals whose summary does not name Kushner, at the cost of state-visit stories the agent will decline (3 of 4 on TEST). *Recommended: keep them.* The front's description is "Gulf money", and a decline costs nothing but a little plan usage. Blocks: applying the SQL for kushners-deals.
+3. **When to apply the file.** *Recommended: as part of the ADO-592 build, not before.* Applying early does nothing (no routine reads these fronts yet) and would only need re-checking if members change in the meantime. The DO block re-checks the gate at apply time either way.
 
 ## Verification
 

@@ -31,6 +31,11 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-09-23-ado-590-2025-mixed-section-types.sql` - one-time PROD fix of the
   17 May 28-29, 2025 pardons the scraper stored as commutations (ADO-590 bug, older sections).
   Josh runs it manually in the PROD SQL Editor; skip when cherry-picking ADO-590 to main.
+- `scripts/maintenance/2026-10-01-ado-592-agent-patterns.sql` - DRAFT `events.agent_pattern` for the
+  7 non-election fronts, with a self-checking UPDATE (refuses if any current front member falls
+  outside its pattern) and rollback. Not applied anywhere; run by hand on TEST, then PROD, as part of
+  the ADO-592 build. If that build adds a test that reads this file, move this entry to "What DOES
+  go to prod" (same reason as the ADO-582 file).
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
