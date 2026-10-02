@@ -605,6 +605,8 @@ export async function insertPardons(supabase, pardons, opts) {
     type_fallbacks: 0,   // ADO-590: mixed-section rows inserted as 'pardon' because the warrant named no type
     type_retries: 0,     // ADO-590: mixed-section rows held back because their warrant could not be read
     by_date: {},         // ADO-590: { [pardon_date]: { total, held, duplicate } } for stalenessVerdict
+    hold_count_unknown: [], // ADO-590: rows held while the hold-count lookup failed (fails the run)
+    unflagged: [],       // ADO-590: rows inserted as a guessed type whose review flag could not be written (fails the run)
     inserted_names: []   // ADO-577: for the Discord new-work alert
   };
 
@@ -638,12 +640,7 @@ export async function insertPardons(supabase, pardons, opts) {
         const { outcome, detail } = await typeRowFromWarrant(pardon, opts);
         const holds = outcome === 'retry' ? await countWarrantHolds(supabase, pardon.source_key) : { count: 0 };
         const priorHolds = holds.count;
-        if (outcome === 'retry' && priorHolds === null) {
-          // The hold count is unknown, so the MAX_WARRANT_HOLDS bound cannot be checked. Insert and flag.
-          pardon.clemency_type = 'pardon';
-          typeFallback = `${detail}; earlier holds could not be counted (${holds.error})`;
-          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable and earlier holds could not be counted, inserting as 'pardon' (${detail})`);
-        } else if (outcome === 'retry' && priorHolds >= MAX_WARRANT_HOLDS) {
+        if (outcome === 'retry' && priorHolds !== null && priorHolds >= MAX_WARRANT_HOLDS) {
           // Bounded: the warrant stayed unreadable for MAX_WARRANT_HOLDS runs. Insert and flag.
           pardon.clemency_type = 'pardon';
           typeFallback = `${detail}; still unreadable after ${priorHolds + 1} runs`;
@@ -651,6 +648,8 @@ export async function insertPardons(supabase, pardons, opts) {
         } else if (outcome === 'retry') {
           // The skip row IS the hold: the next run counts it. A hold that could not be
           // recorded would never reach MAX_WARRANT_HOLDS, so it falls through to insert and flag.
+          // An unknown hold count (lookup failed) still holds, so one bad fetch is never
+          // guessed, but fails the run: the bound cannot be enforced while the lookup is down.
           const recorded = await recordSkip(supabase, {
             pipeline: PIPELINES.PARDONS_INGEST,
             reason: REASONS.API_ERROR,
@@ -663,6 +662,12 @@ export async function insertPardons(supabase, pardons, opts) {
               detail,
             },
           });
+          if (recorded && priorHolds === null) {
+            stats.type_retries++;
+            stats.hold_count_unknown.push(pardon.recipient_name);
+            console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (earlier holds could not be counted: ${holds.error}; ${detail})`);
+            continue;
+          }
           if (recorded) {
             stats.type_retries++;
             day.held++;
@@ -670,7 +675,9 @@ export async function insertPardons(supabase, pardons, opts) {
             continue;
           }
           pardon.clemency_type = 'pardon';
-          typeFallback = `${detail}; the hold could not be recorded`;
+          typeFallback = priorHolds === null
+            ? `${detail}; earlier holds could not be counted (${holds.error}) and the hold could not be recorded`
+            : `${detail}; the hold could not be recorded`;
           console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable and the hold could not be recorded, inserting as 'pardon' (${detail})`);
         }
         if (outcome === 'fallback') {
@@ -698,7 +705,7 @@ export async function insertPardons(supabase, pardons, opts) {
 
       if (typeFallback) {
         stats.type_fallbacks++;
-        await recordSkip(supabase, {
+        const flagged = await recordSkip(supabase, {
           pipeline: PIPELINES.PARDONS_INGEST,
           reason: REASONS.CLEMENCY_TYPE_UNKNOWN,
           entity_type: 'pardon',
@@ -711,6 +718,12 @@ export async function insertPardons(supabase, pardons, opts) {
             detail: typeFallback,
           },
         });
+        if (!flagged) {
+          // A guessed type with no review flag anywhere: count it as an error and fail the run.
+          stats.errors++;
+          stats.unflagged.push(pardon.recipient_name);
+          console.error(`  ❌ ${pardon.recipient_name} (ID: ${data.id}) was inserted as '${pardon.clemency_type}' but its review flag could not be written; check its warrant by hand`);
+        }
       }
 
     } catch (err) {
@@ -737,6 +750,23 @@ export function stalenessVerdict({ newestPageDate, newestDbDate, stats }) {
   const day = stats?.by_date?.[newestPageDate];
   if (stats?.errors === 0 && day && day.held > 0 && day.held + day.duplicate === day.total) return 'held';
   return 'stale';
+}
+
+/**
+ * ADO-590: run-failing conditions from insertPardons when pipeline_skips misbehaves.
+ * A guessed type whose review flag was not written would be published with no flag
+ * anywhere; a hold whose earlier holds cannot be counted cannot enforce MAX_WARRANT_HOLDS.
+ * @returns {string[]} tripwire messages (empty when the run is fine)
+ */
+export function ingestTripwires(stats) {
+  const msgs = [];
+  if (stats.unflagged?.length) {
+    msgs.push(`${stats.unflagged.length} row(s) inserted as a guessed type without their review flag (pipeline_skips write failed): ${stats.unflagged.join(', ')}`);
+  }
+  if (stats.hold_count_unknown?.length) {
+    msgs.push(`${stats.hold_count_unknown.length} row(s) held while earlier holds could not be counted (pipeline_skips lookup failed), so the ${MAX_WARRANT_HOLDS}-run limit is not enforced: ${stats.hold_count_unknown.join(', ')}`);
+  }
+  return msgs;
 }
 
 // ============================================================================
@@ -866,8 +896,11 @@ async function main() {
         }
       }
 
+      // ADO-590: pipeline_skips problems that would otherwise hide a guessed type or an unbounded hold.
+      tripwires.push(...ingestTripwires(stats));
+
       if (tripwires.length > 0) {
-        console.error('\n🚨 STALENESS TRIPWIRE — failing the run:');
+        console.error('\n🚨 TRIPWIRE: failing the run:');
         tripwires.forEach(t => console.error(`  - ${t}`));
         process.exit(1);
       }
