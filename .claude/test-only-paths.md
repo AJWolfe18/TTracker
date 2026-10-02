@@ -40,6 +40,14 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
   SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
   SQL Editor AFTER PR #165 merges and migration 120 is applied; never deployed.
+- `scripts/maintenance/2026-10-01-ado-592-agent-patterns.sql` - DRAFT `events.agent_pattern` for the
+  7 non-election fronts, with a self-checking per-front UPDATE (a front is skipped with a NOTICE if a
+  current member falls outside its pattern) and rollback. Not applied anywhere; run by hand on TEST, then PROD, as part of
+  the ADO-592 build. If that build adds a test that reads this file, move this entry to "What DOES
+  go to prod" (same reason as the ADO-582 file).
+- `scripts/maintenance/2026-10-01-ado-592-hegseth-pentagon-front.sql` - new front "Hegseth's Pentagon"
+  (events row with sweep and agent patterns, targeted sweep, refresh, rollback). Applied on TEST
+  October 1, 2026; Josh pastes it in the PROD SQL Editor. Never deployed by code.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
