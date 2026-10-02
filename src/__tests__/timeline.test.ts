@@ -300,15 +300,27 @@ describe('coverageFrontier', () => {
     };
     expect(holdFrontier(loading, storiesBackOn, null)).toBe('2026-03-01');
 
-    // Every source already on is exhausted (the held value was a genuine null):
-    // still hold at their newest cursor rather than show everything
+    // Exhausted and errored sources are skipped exactly as coverageFrontier
+    // skips them: their newer cursors must not tighten the hold
+    const mixed: TrackerState = {
+      stories: st({}),
+      eos: st({ exhausted: true, errored: true, cursor: { date: '2026-08-01', id: 'eo_1' } }),
+      scotus: st({ exhausted: true, cursor: { date: '2026-07-01', id: 2 } }),
+      pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
+    };
+    expect(holdFrontier(mixed, new Set(), null)).toBe('2026-03-01');
+    expect(holdFrontier(mixed, new Set(), null))
+      .toBe(coverageFrontier(mixed, new Set<TimelineSource>(['stories'])));
+
+    // Every loaded source on is exhausted (the held value was a genuine null):
+    // nothing is known about the pending one, so show nothing, never everything
     const doneOn: TrackerState = {
       stories: st({}),
       eos: st({ exhausted: true, cursor: { date: '2025-02-01', id: 'eo_1' } }),
       scotus: st({ exhausted: true }),
       pardons: st({ exhausted: true, cursor: { date: '2025-03-15', id: 1 } }),
     };
-    expect(holdFrontier(doneOn, new Set(), null)).toBe('2025-03-15');
+    expect(holdFrontier(doneOn, new Set(), null)).toBe(FRONTIER_PENDING);
 
     // No source on has loaded anything: show nothing, never everything
     const empty: TrackerState = { stories: st({}), eos: st({}), scotus: st({ exhausted: true }), pardons: st({ exhausted: true }) };
