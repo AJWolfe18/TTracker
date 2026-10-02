@@ -12,7 +12,10 @@ import {
   fetchTrackerTally,
   coverageFrontier,
   visibleEntries,
+  allOnExhausted,
+  allOnErrored,
   mergeEntries,
+  FRONTIER_PENDING,
   SOURCE_LABELS,
   ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
@@ -179,14 +182,16 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     [entries, frontier, minAlarm, off, query],
   );
 
-  // Only the sources switched on decide whether there is anything left to load
-  const allExhausted = pageState !== null
-    && TIMELINE_SOURCES.every(s => off.has(s) || pageState[s].exhausted);
-  const allErrored = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].errored);
+  // A chip switched back on is waiting for its first page: say "Updating…",
+  // not "nothing at this alarm level"
+  const waitingOnChip = frontier === FRONTIER_PENDING;
+  // Only the sources switched on count (off sources are never fetched)
+  const allExhausted = pageState !== null && allOnExhausted(pageState, off);
+  const allErrored = pageState !== null && allOnErrored(pageState, off);
 
   if (!enabled) return null;
   // Every source down and nothing to show: hide the surface (or, standalone, say so)
-  if (loaded && allErrored && entries.length === 0) {
+  if (loaded && allErrored && visible.length === 0) {
     return standalone ? <ErrorState /> : null;
   }
 
@@ -422,7 +427,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
 
   const countHint = !loaded
     ? 'Loading the record…'
-    : refreshing
+    : refreshing || waitingOnChip
       ? 'Updating…'
       : `${visible.length} development${visible.length === 1 ? '' : 's'}`
         + (view === 'main'
@@ -504,7 +509,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             ...(narrow ? { left: 8, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
-          {loaded && !refreshing && visible.length === 0 && (
+          {loaded && !refreshing && !waitingOnChip && visible.length === 0 && (
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
               {query
                 ? 'Nothing on the record matches that search at this filter.'

@@ -14,6 +14,9 @@ import {
   pinKey,
   coverageFrontier,
   visibleEntries,
+  allOnExhausted,
+  allOnErrored,
+  FRONTIER_PENDING,
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
@@ -239,6 +242,59 @@ describe('coverageFrontier', () => {
     expect(coverageFrontier(state, new Set<TimelineSource>(['stories']))).toBe('2026-06-01');
     expect(coverageFrontier(state, new Set<TimelineSource>(['stories', 'eos']))).toBe('2026-03-01');
     expect(coverageFrontier(state, new Set<TimelineSource>(TIMELINE_SOURCES))).toBeNull();
+  });
+
+  it('holds everything back while a chip switched back on waits for its first page (ADO-593 review)', () => {
+    // Pardons reach back to March; stories were off for the load, so no cursor yet
+    const state: TrackerState = {
+      stories: st({}),
+      eos: st({ exhausted: true }),
+      scotus: st({ exhausted: true }),
+      pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
+    };
+    const pardonsOnly = new Set<TimelineSource>(['stories', 'eos', 'scotus']);
+    expect(coverageFrontier(state, pardonsOnly)).toBe('2026-03-01');
+
+    // Stories back on: nothing is known complete until its first page lands, so
+    // March pardons must not show for one round trip and then vanish
+    const frontier = coverageFrontier(state, new Set<TimelineSource>(['eos', 'scotus']));
+    expect(frontier).toBe(FRONTIER_PENDING);
+    const entries: TimelineEntry[] = [
+      { id: 1, source: 'pardons', date: '2026-03-01', headline: 'p', alarm: 5 },
+      { id: 2, source: 'pardons', date: '2026-09-30T23:59:59+00:00', headline: 'p2', alarm: 5 },
+    ];
+    expect(visibleEntries(entries, { frontier, min: 0, off: new Set(), query: '' })).toHaveLength(0);
+
+    // Once the first page lands, the stories cursor sets the frontier as usual
+    state.stories = st({ cursor: { date: '2026-08-07', id: 9 } });
+    expect(coverageFrontier(state, new Set<TimelineSource>(['eos', 'scotus']))).toBe('2026-08-07');
+  });
+});
+
+describe('allOnExhausted / allOnErrored (only switched-on sources count)', () => {
+  const st = (over: Partial<TrackerState[keyof TrackerState]>) =>
+    ({ cursor: null, exhausted: false, errored: false, ...over });
+  const failed = st({ exhausted: true, errored: true });
+
+  it('every switched-on source failed counts as an outage, even though off sources were never fetched', () => {
+    const state: TrackerState = { stories: st({}), eos: st({}), scotus: failed, pardons: failed };
+    const off = new Set<TimelineSource>(['stories', 'eos']);
+    expect(allOnErrored(state, off)).toBe(true);
+    expect(allOnExhausted(state, off)).toBe(true);
+    expect(allOnErrored(state, new Set())).toBe(false);
+  });
+
+  it('one switched-on source still up is not an outage', () => {
+    const state: TrackerState = { stories: st({ cursor: { date: '2026-08-07', id: 1 } }), eos: failed, scotus: failed, pardons: failed };
+    expect(allOnErrored(state, new Set())).toBe(false);
+    expect(allOnExhausted(state, new Set())).toBe(false);
+  });
+
+  it('every chip switched off is a choice, not an outage, and leaves nothing to load', () => {
+    const state: TrackerState = { stories: failed, eos: failed, scotus: failed, pardons: failed };
+    const allOff = new Set<TimelineSource>(TIMELINE_SOURCES);
+    expect(allOnErrored(state, allOff)).toBe(false);
+    expect(allOnExhausted(state, allOff)).toBe(true);
   });
 });
 
