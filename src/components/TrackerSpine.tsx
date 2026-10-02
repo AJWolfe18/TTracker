@@ -10,9 +10,20 @@ import {
   fetchTrackerPage,
   fetchTrackerPins,
   fetchTrackerTally,
-  coverageFrontier,
+  displayedFrontier,
+  rememberFrontier,
+  behindSources,
   visibleEntries,
+  allOnExhausted,
+  allOnErrored,
+  anyOnErrored,
+  retryErrored,
+  catchUpSource,
+  countScope,
+  coverageGaps,
+  trackerProgress,
   mergeEntries,
+  FRONTIER_PENDING,
   SOURCE_LABELS,
   ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
@@ -87,12 +98,26 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const [off, setOff] = useState<Set<TimelineSource>>(new Set());
   const [query, setQuery] = useState('');
   const [tally, setTally] = useState<TrackerTally | null>(null);
+  // Chips switched back on that are paging to catch up with the frontier that
+  // was on screen when they went on; the first one's target is held meanwhile
+  const [catchUps, setCatchUps] = useState<{ id: number; source: TimelineSource; target: string }[]>([]);
+  const catchUpIdRef = useRef(0);
 
   const acRef = useRef<AbortController | null>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   // Pins are fetched once per mount (tiny table) and reused across view
   // changes and paging; a failed fetch degrades to "no pins" for the session.
   const pinsRef = useRef<TrackerPins | null>(null);
+  // Switched-off sources are not fetched (ADO-593). The first-page effect reads
+  // the chips through a ref so toggling one never refetches the whole view.
+  const offRef = useRef(off);
+  offRef.current = off;
+  // The view pageState was fetched for, so a chip switched back on is never
+  // paged with a stale view's cursors while the new view loads.
+  const pageViewRef = useRef<TrackerView | null>(null);
+  // The frontier on screen: it never moves newer until the next first-page
+  // load, which clears it (undefined = nothing displayed yet for this load)
+  const displayedRef = useRef<string | null | undefined>(undefined);
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -104,6 +129,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     const ac = new AbortController();
     acRef.current = ac;
     setLoadingMore(false);
+    setCatchUps([]); // a view change aborts any catch-up (its cursors belong to the old view)
     setRefreshing(true);
     (async () => {
       // Pins and source pages fetch CONCURRENTLY (the pins promise is only
@@ -116,10 +142,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 .then(p => (pinsRef.current = p))
                 .catch(() => undefined))
         : undefined;
-      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins);
+      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins, offRef.current);
       if (ac.signal.aborted) return;
       setEntries(page);
       setPageState(state);
+      pageViewRef.current = view;
+      // Every completed first page starts the frontier afresh, even for the
+      // same view (main → All → main before All lands, or the flag toggling)
+      displayedRef.current = undefined;
       setLoaded(true);
       setRefreshing(false);
     })().catch(() => { /* the Tracker is additive — never break the homepage */ });
@@ -135,7 +165,70 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     return () => ac.abort();
   }, [enabled]);
 
-  const frontier = pageState ? coverageFrontier(pageState) : null;
+  // One more page for every source not in `skip`, merged into what is held.
+  // Shared by "load earlier" and a chip switched back on.
+  const fetchMore = (state: TrackerState, skip: ReadonlySet<TimelineSource>) => {
+    const ac = acRef.current;
+    setLoadingMore(true);
+    fetchTrackerPage(view, state, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined, skip)
+      .then(({ entries: more, state: next }) => {
+        if (ac?.signal.aborted) return;
+        setEntries(prev => mergeEntries([prev, more]));
+        setPageState(next);
+      })
+      .catch(() => {})
+      // unconditional: an abort mid-flight must not leave the button stuck
+      .finally(() => setLoadingMore(false));
+  };
+
+  // Chips switched back on, one fetch at a time (one effect, so two fetches
+  // never race on pageState):
+  // - a queued catch-up pages only its source until it reaches the frontier
+  //   that was on screen (capped; "load earlier" carries on after the cap).
+  //   The displayed frontier never moves newer, so nothing on screen
+  //   disappears either way.
+  // - otherwise a source switched on that was never fetched (it was off when
+  //   the view loaded, and no catch-up was queued) gets its first page.
+  useEffect(() => {
+    // An aborted load (flag switched off mid-session) must not retry on a dead signal forever
+    if (!enabled || acRef.current?.signal.aborted) return;
+    if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
+    const pins = view === 'main' ? pinsRef.current ?? undefined : undefined;
+    if (catchUps.length > 0) {
+      const { id, source, target } = catchUps[0];
+      const ac = acRef.current;
+      setLoadingMore(true);
+      catchUpSource(view, pageState, source, target, {
+        signal: ac?.signal,
+        pins,
+        stillOn: () => !offRef.current.has(source),
+      })
+        .then(({ entries: more, state: next }) => {
+          if (ac?.signal.aborted) return;
+          setEntries(prev => mergeEntries([prev, more]));
+          setPageState(next);
+        })
+        .catch(() => {})
+        .finally(() => {
+          // Only the entry that ran: an off-then-on toggle mid-run queued a fresh one
+          if (!ac?.signal.aborted) setCatchUps(q => q.filter(c => c.id !== id));
+          setLoadingMore(false);
+        });
+      return;
+    }
+    const unfetched = TIMELINE_SOURCES.filter(s => !off.has(s) && !pageState[s].exhausted && !pageState[s].cursor);
+    if (unfetched.length === 0) return;
+    fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
+  }, [enabled, pageState, off, refreshing, loadingMore, view, catchUps]);
+
+  // The frontier on screen only moves older within a view (a chip switched
+  // back on, a capped catch-up or a retry from an old cursor would otherwise
+  // pull rows out from under the reader); every first-page load starts afresh.
+  const frontier = pageState ? displayedFrontier(pageState, off, displayedRef.current) : null;
+  if (pageState) displayedRef.current = rememberFrontier(pageState, off, displayedRef.current, frontier);
+  // Sources switched on that are short of that frontier: "load earlier" pages
+  // them first; the count line says "Updating…" only while one is loading
+  const behind = pageState ? behindSources(pageState, off, frontier) : [];
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
   // openings and force_shown entries the rule deliberately included.
@@ -145,8 +238,18 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     [entries, frontier, minAlarm, off, query],
   );
 
-  const allExhausted = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].exhausted);
-  const allErrored = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].errored);
+  // "Load earlier" pages from here: a source that failed (on any page) is
+  // reopened at its last good cursor, so the same button retries it
+  const pageFrom = pageState ? retryErrored(pageState, off) : null;
+  // Only the sources switched on count (off sources are never fetched), and a
+  // failed source is never "the whole record"
+  const allExhausted = pageFrom !== null && allOnExhausted(pageFrom, off);
+  const someOnFailed = pageState !== null && anyOnErrored(pageState, off);
+  // Every source switched on failed: an inline message under the chips, so the
+  // reader can switch another source on
+  const onSourcesFailed = pageState !== null && allOnErrored(pageState, off);
+  // All four sources failed, whatever the chips say
+  const allErrored = pageState !== null && allOnErrored(pageState, new Set());
 
   if (!enabled) return null;
   // Every source down and nothing to show: hide the surface (or, standalone, say so)
@@ -155,18 +258,11 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   }
 
   const loadEarlier = () => {
-    if (!pageState || loadingMore || refreshing || allExhausted) return;
-    const ac = acRef.current;
-    setLoadingMore(true);
-    fetchTrackerPage(view, pageState, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined)
-      .then(({ entries: more, state }) => {
-        if (ac?.signal.aborted) return;
-        setEntries(prev => mergeEntries([prev, more]));
-        setPageState(state);
-      })
-      .catch(() => {})
-      // unconditional: an abort mid-flight must not leave the button stuck
-      .finally(() => setLoadingMore(false));
+    if (!pageFrom || loadingMore || refreshing || allExhausted) return;
+    // Sources behind the frontier on screen (including a retried one) catch
+    // up before the others advance
+    const first = behindSources(pageFrom, off, frontier);
+    fetchMore(pageFrom, first.length ? new Set(TIMELINE_SOURCES.filter(s => !first.includes(s))) : off);
   };
 
   // Changing the view swaps in a list of a different length; if the reader is
@@ -184,6 +280,23 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const toggleSource = (s: TimelineSource) => {
     // filter_value records the resulting state, not the click itself.
     track('filter_apply', { tab: TRACKER_TAB, filter_key: `source_${s}`, filter_value: off.has(s) ? 'on' : 'off' });
+    if (!off.has(s)) {
+      // Switched off: drop any catch-up for it (a running one stops before its next page)
+      setCatchUps(q => q.filter(c => c.source !== s));
+    } else {
+      // Switched on but behind the frontier on screen (never fetched, or its
+      // cursor is newer than that frontier): catch it up to that frontier.
+      // With everything showing (null) there is nothing to catch up to;
+      // "load earlier" catches it up instead.
+      const st = pageState?.[s];
+      if (st && !st.exhausted && !refreshing && pageViewRef.current === view
+        && frontier !== null && frontier !== FRONTIER_PENDING
+        && (!st.cursor || st.cursor.date > frontier)) {
+        const target = frontier;
+        const id = ++catchUpIdRef.current;
+        setCatchUps(q => (q.some(c => c.source === s) ? q : [...q, { id, source: s, target }]));
+      }
+    }
     setOff(prev => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s); else next.add(s);
@@ -275,10 +388,27 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   });
 
   // ── Spine rows ──
+  // Where a source that is behind stops: marked on the spine, so its missing
+  // stretch never reads as part of a continuous record (Codex P1 on PR #158)
+  const gaps = pageState ? coverageGaps(visible, pageState, behind) : [];
+  const gapMarker = (g: (typeof gaps)[number]) => (
+    <div key={`gap-${g.source}`} role="note" style={{
+      position: 'relative', zIndex: 2, padding: narrow ? '14px 0 14px 28px' : '14px 0',
+      textAlign: narrow ? 'left' : 'center',
+    }}>
+      <span style={{
+        ...mono, fontSize: 10, color: theme.dim, background: theme.bg,
+        border: `1px dashed ${theme.dim}`, padding: '5px 12px', display: 'inline-block',
+      }}>
+        {SOURCE_LABELS[g.source]}{g.from === null ? '' : ` before ${fmtDate(g.from)}`} not loaded yet · load earlier ↓
+      </span>
+    </div>
+  );
   const rows: React.ReactNode[] = [];
   let lastYM: string | null = null;
   let side = 0;
   visible.forEach((e, idx) => {
+    for (const g of gaps) if (g.index === idx) rows.push(gapMarker(g));
     const ym = e.date.slice(0, 7);
     if (ym !== lastYM) {
       rows.push(
@@ -393,15 +523,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       </div>,
     );
   });
+  for (const g of gaps) if (g.index >= visible.length) rows.push(gapMarker(g));
 
+  const progress = trackerProgress({ refreshing, loadingMore, failed: someOnFailed, behind });
   const countHint = !loaded
     ? 'Loading the record…'
-    : refreshing
+    : progress.updating
       ? 'Updating…'
-      : `${visible.length} development${visible.length === 1 ? '' : 's'}`
-        + (view === 'main'
-          ? ' · the main line'
-          : view > 0 ? ` at alarm ${view}+` : ' · the complete record');
+      : `${visible.length} development${visible.length === 1 ? '' : 's'}` + countScope(view, behind);
 
   return (
     <section aria-label="The Tracker timeline" style={{ padding: '8px 0 24px', borderBottom: `1px solid ${theme.line}` }}>
@@ -478,21 +607,30 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             ...(narrow ? { left: 8, transform: 'translateX(-50%)' } : { left: '50%', transform: 'translateX(-50%)' }),
           }} />
           {rows}
-          {loaded && !refreshing && visible.length === 0 && (
+          {loaded && !progress.busy && visible.length === 0 && (
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
-              {query
-                ? 'Nothing on the record matches that search at this filter.'
-                : view === 'main'
-                  ? 'Nothing on the main line yet · try "All" for the complete record.'
-                  : 'Nothing at this alarm level yet · try "All" for the complete record.'}
+              {onSourcesFailed
+                ? 'Couldn’t load the sources switched on · switch on another source or try again later.'
+                : query
+                  ? 'Nothing on the record matches that search at this filter.'
+                  : view === 'main'
+                    ? 'Nothing on the main line yet · try "All" for the complete record.'
+                    : 'Nothing at this alarm level yet · try "All" for the complete record.'}
             </div>
           )}
         </div>
 
         {/* Load earlier */}
         <div style={{ textAlign: 'center', padding: '6px 0 0' }}>
+          {/* Skipped when the empty-list message above already says it */}
+          {someOnFailed && !loadingMore && !(onSourcesFailed && visible.length === 0) && (
+            <p role="status" style={{ ...mono, fontSize: 10, color: theme.dim, margin: '0 0 10px' }}>
+              Part of the record didn’t load · try again below
+            </p>
+          )}
           {allExhausted ? (
-            entries.length > 0 && (
+            // visible, not entries: with every chip off, nothing is "the whole record"
+            visible.length > 0 && (
               <span style={{ ...mono, fontSize: 10, color: theme.dim }}>
                 That's the whole record · back to day one
               </span>
@@ -510,7 +648,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 opacity: loadingMore || refreshing || !loaded ? 0.5 : 1,
               }}
             >
-              {loadingMore ? 'Loading earlier…' : 'Keep going · load earlier ↓'}
+              {progress.button}
             </button>
           )}
         </div>
