@@ -899,14 +899,16 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
     const behind = behindSources(caught.state, NONE_OFF, displayedFrontier(caught.state, NONE_OFF, shown));
     expect(behind).toEqual(['stories']);
 
-    // Idle (nothing in flight): no "Updating…", and the button explains itself
+    // Idle (nothing in flight): no "Updating…", the button explains itself, and
+    // not busy, so an empty search still gets its "nothing matches" message
     expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind }))
-      .toEqual({ updating: false, button: 'Load earlier · catching up Stories ↓' });
+      .toEqual({ updating: false, busy: false, button: 'Load earlier · catching up Stories ↓' });
     // A catch-up page in flight: "Updating…"
     expect(trackerProgress({ refreshing: false, loadingMore: true, failed: false, behind }))
-      .toEqual({ updating: true, button: 'Loading earlier…' });
-    // Plain "load earlier" with nothing behind keeps the count line
-    expect(trackerProgress({ refreshing: false, loadingMore: true, failed: false, behind: [] }).updating).toBe(false);
+      .toEqual({ updating: true, busy: true, button: 'Loading earlier…' });
+    // Plain "load earlier" with nothing behind keeps the count line, but is busy
+    expect(trackerProgress({ refreshing: false, loadingMore: true, failed: false, behind: [] }))
+      .toMatchObject({ updating: false, busy: true });
     expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind: [] }).button)
       .toBe('Keep going · load earlier ↓');
     // A failure wins: retry first
