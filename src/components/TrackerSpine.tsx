@@ -93,6 +93,13 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // Pins are fetched once per mount (tiny table) and reused across view
   // changes and paging; a failed fetch degrades to "no pins" for the session.
   const pinsRef = useRef<TrackerPins | null>(null);
+  // Switched-off sources are not fetched (ADO-593). The first-page effect reads
+  // the chips through a ref so toggling one never refetches the whole view.
+  const offRef = useRef(off);
+  offRef.current = off;
+  // The view pageState was fetched for, so a chip switched back on is never
+  // paged with a stale view's cursors while the new view loads.
+  const pageViewRef = useRef<TrackerView | null>(null);
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -116,10 +123,11 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 .then(p => (pinsRef.current = p))
                 .catch(() => undefined))
         : undefined;
-      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins);
+      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins, offRef.current);
       if (ac.signal.aborted) return;
       setEntries(page);
       setPageState(state);
+      pageViewRef.current = view;
       setLoaded(true);
       setRefreshing(false);
     })().catch(() => { /* the Tracker is additive — never break the homepage */ });
@@ -135,7 +143,33 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     return () => ac.abort();
   }, [enabled]);
 
-  const frontier = pageState ? coverageFrontier(pageState) : null;
+  // One more page for every source not in `skip`, merged into what is held.
+  // Shared by "load earlier" and a chip switched back on.
+  const fetchMore = (state: TrackerState, skip: ReadonlySet<TimelineSource>) => {
+    const ac = acRef.current;
+    setLoadingMore(true);
+    fetchTrackerPage(view, state, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined, skip)
+      .then(({ entries: more, state: next }) => {
+        if (ac?.signal.aborted) return;
+        setEntries(prev => mergeEntries([prev, more]));
+        setPageState(next);
+      })
+      .catch(() => {})
+      // unconditional: an abort mid-flight must not leave the button stuck
+      .finally(() => setLoadingMore(false));
+  };
+
+  // A chip switched back on whose source was never fetched (it was off when
+  // the view loaded) gets its first page now, and only that source is fetched.
+  // A source fetched before keeps its cursor and resumes on "load earlier".
+  useEffect(() => {
+    if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
+    const unfetched = TIMELINE_SOURCES.filter(s => !off.has(s) && !pageState[s].exhausted && !pageState[s].cursor);
+    if (unfetched.length === 0) return;
+    fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
+  }, [pageState, off, refreshing, loadingMore, view]);
+
+  const frontier = pageState ? coverageFrontier(pageState, off) : null;
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
   // openings and force_shown entries the rule deliberately included.
@@ -145,7 +179,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     [entries, frontier, minAlarm, off, query],
   );
 
-  const allExhausted = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].exhausted);
+  // Only the sources switched on decide whether there is anything left to load
+  const allExhausted = pageState !== null
+    && TIMELINE_SOURCES.every(s => off.has(s) || pageState[s].exhausted);
   const allErrored = pageState !== null && TIMELINE_SOURCES.every(s => pageState[s].errored);
 
   if (!enabled) return null;
@@ -156,17 +192,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
 
   const loadEarlier = () => {
     if (!pageState || loadingMore || refreshing || allExhausted) return;
-    const ac = acRef.current;
-    setLoadingMore(true);
-    fetchTrackerPage(view, pageState, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined)
-      .then(({ entries: more, state }) => {
-        if (ac?.signal.aborted) return;
-        setEntries(prev => mergeEntries([prev, more]));
-        setPageState(state);
-      })
-      .catch(() => {})
-      // unconditional: an abort mid-flight must not leave the button stuck
-      .finally(() => setLoadingMore(false));
+    fetchMore(pageState, off);
   };
 
   // Changing the view swaps in a list of a different length; if the reader is
@@ -492,7 +518,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         {/* Load earlier */}
         <div style={{ textAlign: 'center', padding: '6px 0 0' }}>
           {allExhausted ? (
-            entries.length > 0 && (
+            // visible, not entries: with every chip off, nothing is "the whole record"
+            visible.length > 0 && (
               <span style={{ ...mono, fontSize: 10, color: theme.dim }}>
                 That's the whole record · back to day one
               </span>

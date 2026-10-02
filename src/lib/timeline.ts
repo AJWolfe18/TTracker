@@ -317,11 +317,15 @@ export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<Timeline
  * Fetch the next page for every non-exhausted source and advance its cursor.
  * Returns only the NEW entries (ascending); callers merge with what they hold.
  *
+ * Sources in `off` (switched-off chips, ADO-593) are not fetched at all and
+ * keep their state, so switching the chip back on resumes where it stopped,
+ * or starts at its first page if it was never fetched.
+ *
  * In the 'main' view, pins adjust the non-stories sources client-side:
- * force_hide entries are dropped from every page, and on the FIRST page
- * (state === null) force_show rows below the alarm-5 stream are fetched by id
- * and merged in at their chronological position. Stories pins are already
- * applied by v_tracker_stories on the server.
+ * force_hide entries are dropped from every page, and on a source's FIRST
+ * page (no cursor yet) force_show rows below the alarm-5 stream are fetched
+ * by id and merged in at their chronological position. Stories pins are
+ * already applied by v_tracker_stories on the server.
  *
  * Pinned rows surface AT THEIR DATE, deliberately: the Tracker is a
  * chronological record, not a pinboard (pin-to-top is the ADO-552 hero
@@ -336,6 +340,7 @@ export async function fetchTrackerPage(
   // May be a promise so callers can fetch pins CONCURRENTLY with the source
   // pages (pins are only consumed after every page response has arrived).
   pins?: TrackerPins | Promise<TrackerPins | undefined>,
+  off: ReadonlySet<TimelineSource> = new Set(),
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
@@ -348,11 +353,13 @@ export async function fetchTrackerPage(
   const prev = state ?? initialTrackerState();
   const next: TrackerState = { ...prev };
   const isMain = view === 'main';
+  const firstPage = new Set<TimelineSource>();
 
   const groups = await Promise.all(
     TIMELINE_SOURCES.map(async source => {
       const st = prev[source];
-      if (st.exhausted) return [];
+      if (st.exhausted || off.has(source)) return [];
+      if (!st.cursor) firstPage.add(source);
       const spec = SPECS[source];
       try {
         const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, view, st.cursor)}`, { headers, signal });
@@ -389,14 +396,15 @@ export async function fetchTrackerPage(
     });
   }
 
-  // First page of the main line: surface force_show pins on non-stories
-  // sources. Only rows below the alarm-5 stream are merged — anything at 5
-  // arrives (or already arrived) through normal paging, so injecting it again
-  // would duplicate the entry.
-  if (isMain && state === null && resolvedPins?.size) {
+  // A source's first page on the main line (the first load, or its chip
+  // switched back on after a load that skipped it): surface force_show pins
+  // on non-stories sources. Only rows below the alarm-5 stream are merged —
+  // anything at 5 arrives (or already arrived) through normal paging, so
+  // injecting it again would duplicate the entry.
+  if (isMain && firstPage.size && resolvedPins?.size) {
     const bySource = forceShowIdsBySource(resolvedPins);
     const injected = await Promise.all(
-      (Object.keys(bySource) as TimelineSource[]).map(async source => {
+      (Object.keys(bySource) as TimelineSource[]).filter(s => firstPage.has(s)).map(async source => {
         const spec = SPECS[source];
         const ids = bySource[source]!.map(id => quoted(id)).join(',');
         try {
@@ -424,13 +432,18 @@ export async function fetchTrackerPage(
  * cursor date among sources that still have unfetched rows. Entries older than
  * this are buffered, not shown — otherwise a sparse source (25 EOs reach back
  * months, 60 stories reach back days) would fake gaps in the record.
- * Null means every source is exhausted: show everything.
+ * Sources in `off` are skipped (ADO-593): a switched-off chip must not hold
+ * back the sources still on. Null means every source still counted is
+ * exhausted: show everything.
  */
-export function coverageFrontier(state: TrackerState): string | null {
+export function coverageFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource> = new Set(),
+): string | null {
   let frontier: string | null = null;
   for (const src of TIMELINE_SOURCES) {
     const st = state[src];
-    if (st.exhausted || !st.cursor) continue;
+    if (st.exhausted || !st.cursor || off.has(src)) continue;
     if (frontier === null || st.cursor.date > frontier) frontier = st.cursor.date;
   }
   return frontier;
