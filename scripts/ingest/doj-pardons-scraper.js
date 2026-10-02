@@ -570,8 +570,9 @@ async function scrapeDOJPage() {
  * How many earlier runs held this row back (ADO-590). Each hold wrote an api_error
  * skip carrying the row's source_key; pipeline_skips keeps 30 days, far longer
  * than the MAX_WARRANT_HOLDS daily runs this has to see.
- * A failed lookup returns { count: null, error }: the caller inserts and flags the
- * row, because a lookup that keeps failing would otherwise hold it forever.
+ * A failed lookup returns { count: null, error }: the caller still holds the row (one
+ * bad fetch is never guessed) and fails the run via ingestTripwires, because the
+ * MAX_WARRANT_HOLDS bound cannot be enforced while the lookup is down.
  * @returns {Promise<{ count: number|null, error?: string }>} count 0..MAX_WARRANT_HOLDS
  */
 async function countWarrantHolds(supabase, sourceKey) {
