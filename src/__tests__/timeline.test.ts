@@ -20,6 +20,7 @@ import {
   retryErrored,
   catchUpSource,
   displayedFrontier,
+  rememberFrontier,
   olderFrontier,
   behindSources,
   trackerProgress,
@@ -714,6 +715,8 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
 
   const STORIES_OFF = new Set<TimelineSource>(['stories']);
   const NONE_OFF = new Set<TimelineSource>();
+  // Only pardons on (eos and scotus are empty in this mock anyway)
+  const STORIES_OFF_AND_EMPTY = new Set<TimelineSource>(['stories', 'eos', 'scotus']);
   const key = (e: TimelineEntry) => `${e.source}:${e.id}`;
 
   /** Everything on, then Stories off and "load earlier" once: pardons reach back to February. */
@@ -845,6 +848,48 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
     expect(displayedFrontier(state, NONE_OFF, undefined)).toBe('2026-08-07');
     expect(olderFrontier('2026-03-01', FRONTIER_PENDING)).toBe('2026-03-01');
     expect(olderFrontier(null, '2026-03-01')).toBeNull();
+  });
+
+  it('a null frontier from "no switched-on source can constrain" never sticks (ADO-593 review, HIGH)', async () => {
+    const ALL_OFF = new Set<TimelineSource>(TIMELINE_SOURCES);
+
+    // 1. View loaded with every chip off: nothing to show, nothing remembered
+    const empty = await fetchTrackerPage(0, null, undefined, undefined, ALL_OFF);
+    let prev: string | null | undefined = undefined;
+    let shown = displayedFrontier(empty.state, ALL_OFF, prev);
+    expect(shown).toBeNull();
+    prev = rememberFrontier(empty.state, ALL_OFF, prev, shown);
+    expect(prev).toBeUndefined();
+    // Pardons on: its first page sets a real frontier, and nothing is "behind"
+    const pardonsOn = await fetchTrackerPage(0, empty.state, undefined, undefined, STORIES_OFF_AND_EMPTY);
+    shown = displayedFrontier(pardonsOn.state, STORIES_OFF_AND_EMPTY, prev);
+    expect(shown).toBe(pardonAt(24).pardon_date);
+    expect(behindSources(pardonsOn.state, STORIES_OFF_AND_EMPTY, shown)).toEqual([]);
+    prev = rememberFrontier(pardonsOn.state, STORIES_OFF_AND_EMPTY, prev, shown);
+
+    // 2. Every chip switched off: the frontier on screen is kept, not nulled
+    expect(displayedFrontier(pardonsOn.state, ALL_OFF, prev)).toBe(prev);
+    expect(rememberFrontier(pardonsOn.state, ALL_OFF, prev, shown)).toBe(prev);
+
+    // 3. Every switched-on source failed: also kept, so a later success is not stuck at null
+    const failed: TrackerState = { ...pardonsOn.state, pardons: { ...pardonsOn.state.pardons, exhausted: true, errored: true } };
+    expect(coverageFrontier(failed, STORIES_OFF_AND_EMPTY)).toBeNull();
+    expect(displayedFrontier(failed, STORIES_OFF_AND_EMPTY, prev)).toBe(prev);
+    expect(rememberFrontier(failed, STORIES_OFF_AND_EMPTY, prev, shown)).toBe(prev);
+
+    // 4. Real "everything loaded" (sources on, exhausted, with rows) may be null
+    const done: TrackerState = { ...pardonsOn.state, pardons: { ...pardonsOn.state.pardons, exhausted: true } };
+    expect(displayedFrontier(done, STORIES_OFF_AND_EMPTY, prev)).toBeNull();
+    expect(rememberFrontier(done, STORIES_OFF_AND_EMPTY, prev, null)).toBeNull();
+  });
+
+  it('a null target means no catch-up: nothing is fetched', async () => {
+    const { state } = await storiesOffAndPagedBack();
+    calls = [];
+    const caught = await catchUpSource(0, state, 'stories', null);
+    expect(calls).toHaveLength(0);
+    expect(caught.pages).toBe(0);
+    expect(caught.state).toEqual(state);
   });
 
   it('idle but behind: normal count line, button says which source is catching up', async () => {

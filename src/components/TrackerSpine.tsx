@@ -11,6 +11,7 @@ import {
   fetchTrackerPins,
   fetchTrackerTally,
   displayedFrontier,
+  rememberFrontier,
   behindSources,
   visibleEntries,
   allOnExhausted,
@@ -97,7 +98,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const [tally, setTally] = useState<TrackerTally | null>(null);
   // Chips switched back on that are paging to catch up with the frontier that
   // was on screen when they went on; the first one's target is held meanwhile
-  const [catchUps, setCatchUps] = useState<{ source: TimelineSource; target: string | null }[]>([]);
+  const [catchUps, setCatchUps] = useState<{ id: number; source: TimelineSource; target: string }[]>([]);
+  const catchUpIdRef = useRef(0);
 
   const acRef = useRef<AbortController | null>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -187,7 +189,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
     const pins = view === 'main' ? pinsRef.current ?? undefined : undefined;
     if (catchUps.length > 0) {
-      const { source, target } = catchUps[0];
+      const { id, source, target } = catchUps[0];
       const ac = acRef.current;
       setLoadingMore(true);
       catchUpSource(view, pageState, source, target, {
@@ -202,7 +204,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         })
         .catch(() => {})
         .finally(() => {
-          if (!ac?.signal.aborted) setCatchUps(q => q.filter(c => c.source !== source));
+          // Only the entry that ran: an off-then-on toggle mid-run queued a fresh one
+          if (!ac?.signal.aborted) setCatchUps(q => q.filter(c => c.id !== id));
           setLoadingMore(false);
         });
       return;
@@ -220,7 +223,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     displayedViewRef.current = pageViewRef.current;
   }
   const frontier = pageState ? displayedFrontier(pageState, off, displayedRef.current) : null;
-  if (pageState) displayedRef.current = frontier;
+  if (pageState) displayedRef.current = rememberFrontier(pageState, off, displayedRef.current, frontier);
   // Sources switched on that are short of that frontier: "load earlier" pages
   // them first; the count line says "Updating…" only while one is loading
   const behind = pageState ? behindSources(pageState, off, frontier) : [];
@@ -281,12 +284,16 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       setCatchUps(q => q.filter(c => c.source !== s));
     } else {
       // Switched on but behind the frontier on screen (never fetched, or its
-      // cursor is newer than that frontier): catch it up to that frontier
-      // instead of letting the frontier jump forward to its cursor
+      // cursor is newer than that frontier): catch it up to that frontier.
+      // With everything showing (null) there is nothing to catch up to;
+      // "load earlier" catches it up instead.
       const st = pageState?.[s];
-      if (st && !st.exhausted && !refreshing && pageViewRef.current === view && frontier !== FRONTIER_PENDING
-        && (!st.cursor || frontier === null || st.cursor.date > frontier)) {
-        setCatchUps(q => (q.some(c => c.source === s) ? q : [...q, { source: s, target: frontier }]));
+      if (st && !st.exhausted && !refreshing && pageViewRef.current === view
+        && frontier !== null && frontier !== FRONTIER_PENDING
+        && (!st.cursor || st.cursor.date > frontier)) {
+        const target = frontier;
+        const id = ++catchUpIdRef.current;
+        setCatchUps(q => (q.some(c => c.source === s) ? q : [...q, { id, source: s, target }]));
       }
     }
     setOff(prev => {
