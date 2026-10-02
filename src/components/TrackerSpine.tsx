@@ -16,6 +16,7 @@ import {
   allOnErrored,
   mergeEntries,
   FRONTIER_PENDING,
+  holdFrontier,
   SOURCE_LABELS,
   ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
@@ -103,6 +104,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // The view pageState was fetched for, so a chip switched back on is never
   // paged with a stale view's cursors while the new view loads.
   const pageViewRef = useRef<TrackerView | null>(null);
+  // The coverage frontier on screen, kept while a re-enabled chip loads
+  const heldFrontierRef = useRef<string | null>(null);
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -172,7 +175,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
   }, [pageState, off, refreshing, loadingMore, view]);
 
-  const frontier = pageState ? coverageFrontier(pageState, off) : null;
+  const nextFrontier = pageState ? coverageFrontier(pageState, off) : null;
+  // A chip switched back on is waiting for its first page: the list stays
+  // exactly as it was until that page lands
+  const waitingOnChip = nextFrontier === FRONTIER_PENDING;
+  const frontier = holdFrontier(nextFrontier, heldFrontierRef.current);
+  heldFrontierRef.current = frontier;
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
   // openings and force_shown entries the rule deliberately included.
@@ -182,16 +190,17 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     [entries, frontier, minAlarm, off, query],
   );
 
-  // A chip switched back on is waiting for its first page: say "Updating…",
-  // not "nothing at this alarm level"
-  const waitingOnChip = frontier === FRONTIER_PENDING;
   // Only the sources switched on count (off sources are never fetched)
   const allExhausted = pageState !== null && allOnExhausted(pageState, off);
-  const allErrored = pageState !== null && allOnErrored(pageState, off);
+  // Every source switched on failed: an inline message under the chips, so the
+  // reader can switch another source on
+  const onSourcesFailed = pageState !== null && allOnErrored(pageState, off);
+  // All four sources failed, whatever the chips say
+  const allErrored = pageState !== null && allOnErrored(pageState, new Set());
 
   if (!enabled) return null;
   // Every source down and nothing to show: hide the surface (or, standalone, say so)
-  if (loaded && allErrored && visible.length === 0) {
+  if (loaded && allErrored && entries.length === 0) {
     return standalone ? <ErrorState /> : null;
   }
 
@@ -511,11 +520,13 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           {rows}
           {loaded && !refreshing && !waitingOnChip && visible.length === 0 && (
             <div style={{ ...mono, position: 'relative', zIndex: 2, fontSize: 10.5, color: theme.dim, textAlign: narrow ? 'left' : 'center', padding: narrow ? '18px 0 18px 28px' : '18px 0', background: theme.bg }}>
-              {query
-                ? 'Nothing on the record matches that search at this filter.'
-                : view === 'main'
-                  ? 'Nothing on the main line yet · try "All" for the complete record.'
-                  : 'Nothing at this alarm level yet · try "All" for the complete record.'}
+              {onSourcesFailed
+                ? 'Couldn’t load the sources switched on · switch on another source or try again later.'
+                : query
+                  ? 'Nothing on the record matches that search at this filter.'
+                  : view === 'main'
+                    ? 'Nothing on the main line yet · try "All" for the complete record.'
+                    : 'Nothing at this alarm level yet · try "All" for the complete record.'}
             </div>
           )}
         </div>
