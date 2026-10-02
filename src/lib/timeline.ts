@@ -115,11 +115,22 @@ export function pardonRowToEntry(raw: Raw): TimelineEntry {
   };
 }
 
-/** Merge per-source rows into one ascending chronological list, dropping undated rows. */
+/**
+ * Merge per-source rows into one ascending chronological list, dropping
+ * undated rows and keeping one entry per source + id (a backstop: the same
+ * row twice would render twice under one React key).
+ */
 export function mergeEntries(groups: TimelineEntry[][]): TimelineEntry[] {
+  const seen = new Set<string>();
   return groups
     .flat()
-    .filter(e => e.date && e.headline)
+    .filter(e => {
+      if (!e.date || !e.headline) return false;
+      const key = `${e.source}:${e.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
 }
 
@@ -359,7 +370,6 @@ export async function fetchTrackerPage(
     TIMELINE_SOURCES.map(async source => {
       const st = prev[source];
       if (st.exhausted || off.has(source)) return [];
-      if (!st.cursor) firstPage.add(source);
       const spec = SPECS[source];
       try {
         const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, view, st.cursor)}`, { headers, signal });
@@ -368,6 +378,9 @@ export async function fetchTrackerPage(
           return [];
         }
         const rows: Raw[] = await res.json();
+        // Pins inject only once a first page SUCCEEDS: a failed one is retried
+        // from no cursor, and injecting on both attempts would duplicate them
+        if (!st.cursor) firstPage.add(source);
         const last = rows[rows.length - 1];
         next[source] = {
           cursor: last
@@ -454,15 +467,31 @@ export function coverageFrontier(
 }
 
 /** coverageFrontier's answer while a switched-on source has no first page yet. */
-export const FRONTIER_PENDING = '￿';
+export const FRONTIER_PENDING = '\uffff';
 
 /**
- * The frontier to render: while a source is pending, keep the one already on
- * screen so the list neither collapses nor moves under the reader's scroll,
- * and recompute once its first page lands.
+ * The frontier to render. While a switched-on source is pending, keep the one
+ * already on screen (`held`) so the list neither collapses nor moves under
+ * the reader's scroll, and recompute once its first page lands. With nothing
+ * held yet (a chip switched on mid-load, or every source on was exhausted),
+ * hold at the newest cursor among the sources on that have loaded: never null,
+ * which would show every buffered row with fake gaps and then pull them back.
  */
-export function holdFrontier(next: string | null, held: string | null): string | null {
-  return next === FRONTIER_PENDING ? held : next;
+export function holdFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  held: string | null,
+): string | null {
+  const next = coverageFrontier(state, off);
+  if (next !== FRONTIER_PENDING) return next;
+  if (held !== null) return held;
+  let strictest: string | null = null;
+  for (const s of TIMELINE_SOURCES) {
+    const cursor = state[s].cursor;
+    if (off.has(s) || !cursor) continue;
+    if (strictest === null || cursor.date > strictest) strictest = cursor.date;
+  }
+  return strictest ?? FRONTIER_PENDING;
 }
 
 /** Every switched-on source has nothing left to load (true when every chip is off). */
