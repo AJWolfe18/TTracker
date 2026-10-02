@@ -447,7 +447,7 @@ function skipsDownSupabase(writes, failWrites = []) {
   };
 }
 
-await test('19. A failed hold-count lookup still holds the row (never a guess on one bad fetch) but fails the run; it inserts and flags only if the hold cannot be written either', async () => {
+await test('19. A failed hold-count lookup still holds the row (never a guess on one bad fetch) and fails the run, also when the hold cannot be written', async () => {
   const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
   const row = () => ({ recipient_name: 'Row kerr', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/kerr/dl?inline', pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'kerr' });
 
@@ -462,17 +462,16 @@ await test('19. A failed hold-count lookup still holds the row (never a guess on
   assert.equal(ingestTripwires(stats).length, 1);
   assert.match(ingestTripwires(stats)[0], new RegExp(`could not be counted.*${MAX_WARRANT_HOLDS}-run limit is not enforced: Row kerr`));
 
-  // Lookup down and hold write fails: insert as pardon and flag.
+  // Lookup down and hold write fails: still held (never guessed), run fails.
   writes = { pardons: [], pipeline_skips: [] };
   stats = await insertPardons(skipsDownSupabase(writes, [REASONS.API_ERROR]), [row()], { fetchImpl: botWall });
-  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['kerr', 'pardon']]);
-  assert.equal(stats.type_retries, 0);
-  assert.equal(stats.type_fallbacks, 1);
-  assert.deepEqual(stats.hold_count_unknown, []);
-  assert.deepEqual(writes.pipeline_skips.map(s => s.reason), [REASONS.CLEMENCY_TYPE_UNKNOWN]);
-  assert.equal(writes.pipeline_skips[0].entity_id, '710');
-  assert.match(writes.pipeline_skips[0].metadata.detail, /not a PDF.*earlier holds could not be counted \(relation unavailable\) and the hold could not be recorded/);
-  assert.deepEqual(ingestTripwires(stats), []);
+  assert.equal(writes.pardons.length, 0, 'held, not guessed');
+  assert.equal(stats.type_retries, 1);
+  assert.equal(stats.type_fallbacks, 0);
+  assert.deepEqual(stats.hold_unrecorded, ['Row kerr']);
+  assert.deepEqual(writes.pipeline_skips, []);
+  assert.equal(ingestTripwires(stats).length, 1);
+  assert.match(ingestTripwires(stats)[0], /held although the hold could not be recorded.*Row kerr/);
 });
 
 await test('20. Held rows on the newest DOJ date keep the staleness tripwire quiet; anything else newer than the DB still trips it', async () => {
@@ -507,7 +506,7 @@ await test('20. Held rows on the newest DOJ date keep the staleness tripwire qui
   assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: page, stats: day({ total: 1, held: 0, duplicate: 1 }) }), 'fresh');
 });
 
-await test('21. A hold whose skip row could not be written inserts the row as pardon and flags it, so the run cannot stay green while the grant never lands', async () => {
+await test('21. A hold whose skip row could not be written still holds the row (no guess) and fails the run, so it can never stay green while the grant never lands', async () => {
   const writes = { pardons: [], pipeline_skips: [] };
   let apiErrorWrites = 0;
   const supabase = {
@@ -534,12 +533,13 @@ await test('21. A hold whose skip row could not be written inserts the row as pa
   const stats = await insertPardons(supabase, [row], { fetchImpl: botWall });
 
   assert.equal(apiErrorWrites, 1, 'the hold was attempted');
-  assert.equal(stats.type_retries, 0, 'an unrecorded hold is not a hold');
-  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['nohold', 'pardon']]);
-  assert.equal(stats.type_fallbacks, 1);
-  assert.equal(writes.pipeline_skips[0].reason, REASONS.CLEMENCY_TYPE_UNKNOWN);
-  assert.match(writes.pipeline_skips[0].metadata.detail, /the hold could not be recorded/);
-  assert.equal(stalenessVerdict({ newestPageDate: '2026-09-03', newestDbDate: '2026-08-20', stats: { ...stats, inserted: 0 } }), 'stale');
+  assert.equal(writes.pardons.length, 0, 'held, not guessed: the only guessed insert is past a counted 3-hold history');
+  assert.equal(stats.type_retries, 1);
+  assert.equal(stats.type_fallbacks, 0);
+  assert.deepEqual(stats.hold_unrecorded, ['Row nohold']);
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 0, duplicate: 0 }, 'an unrecorded hold does not quiet the staleness check');
+  assert.equal(stalenessVerdict({ newestPageDate: '2026-09-03', newestDbDate: '2026-08-20', stats }), 'stale');
+  assert.match(ingestTripwires(stats).join(' | '), /1 row\(s\) held although the hold could not be recorded.*Row nohold/);
 
   // recordSkip reports whether the row was written
   const ok = { from: () => ({ insert: async () => ({ error: null }) }) };
@@ -586,7 +586,7 @@ await test('22. A guessed type whose review flag cannot be written counts as an 
   const trips = ingestTripwires(stats);
   assert.equal(trips.length, 1);
   assert.match(trips[0], /2 row\(s\) inserted as a guessed type without their review flag.*No Type, Over Limit/);
-  assert.deepEqual(ingestTripwires({ unflagged: [], hold_count_unknown: [] }), []);
+  assert.deepEqual(ingestTripwires({ unflagged: [], hold_count_unknown: [], hold_unrecorded: [] }), []);
 });
 
 console.log(`\ndoj-pardons-parser: ${passed} passed, ${failed} failed`);
