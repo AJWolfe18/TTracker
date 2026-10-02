@@ -36,6 +36,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   current member falls outside its pattern) and rollback. Not applied anywhere; run by hand on TEST, then PROD, as part of
   the ADO-592 build. If that build adds a test that reads this file, move this entry to "What DOES
   go to prod" (same reason as the ADO-582 file).
+- `scripts/maintenance/2026-10-01-ado-592-hegseth-pentagon-front.sql` - new front "Hegseth's Pentagon"
+  (events row with sweep and agent patterns, full sweep, refresh, rollback). Applied on TEST
+  October 1, 2026; Josh pastes it in the PROD SQL Editor. Never deployed by code.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
