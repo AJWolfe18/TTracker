@@ -570,8 +570,9 @@ async function scrapeDOJPage() {
  * How many earlier runs held this row back (ADO-590). Each hold wrote an api_error
  * skip carrying the row's source_key; pipeline_skips keeps 30 days, far longer
  * than the MAX_WARRANT_HOLDS daily runs this has to see.
- * A failed lookup counts as 0: this run holds the row again rather than guess.
- * @returns {Promise<number>} 0..MAX_WARRANT_HOLDS
+ * A failed lookup returns { count: null, error }: the caller inserts and flags the
+ * row, because a lookup that keeps failing would otherwise hold it forever.
+ * @returns {Promise<{ count: number|null, error?: string }>} count 0..MAX_WARRANT_HOLDS
  */
 async function countWarrantHolds(supabase, sourceKey) {
   const { data, error } = await supabase
@@ -583,9 +584,9 @@ async function countWarrantHolds(supabase, sourceKey) {
     .limit(MAX_WARRANT_HOLDS);
   if (error) {
     console.warn(`  ⚠️ Could not count earlier warrant holds for ${sourceKey}: ${error.message}`);
-    return 0;
+    return { count: null, error: error.message };
   }
-  return (data || []).length;
+  return { count: (data || []).length };
 }
 
 /**
@@ -603,6 +604,7 @@ export async function insertPardons(supabase, pardons, opts) {
     errors: 0,
     type_fallbacks: 0,   // ADO-590: mixed-section rows inserted as 'pardon' because the warrant named no type
     type_retries: 0,     // ADO-590: mixed-section rows held back because their warrant could not be read
+    held_newest_date: null, // ADO-590: newest pardon_date among held rows (keeps the staleness tripwire quiet)
     inserted_names: []   // ADO-577: for the Discord new-work alert
   };
 
@@ -631,14 +633,23 @@ export async function insertPardons(supabase, pardons, opts) {
       let typeFallback = null;
       if (pardon.clemency_type === null) {
         const { outcome, detail } = await typeRowFromWarrant(pardon, opts);
-        const priorHolds = outcome === 'retry' ? await countWarrantHolds(supabase, pardon.source_key) : 0;
-        if (outcome === 'retry' && priorHolds >= MAX_WARRANT_HOLDS) {
+        const holds = outcome === 'retry' ? await countWarrantHolds(supabase, pardon.source_key) : { count: 0 };
+        const priorHolds = holds.count;
+        if (outcome === 'retry' && priorHolds === null) {
+          // The hold count is unknown, so the MAX_WARRANT_HOLDS bound cannot be checked. Insert and flag.
+          pardon.clemency_type = 'pardon';
+          typeFallback = `${detail}; earlier holds could not be counted (${holds.error})`;
+          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable and earlier holds could not be counted, inserting as 'pardon' (${detail})`);
+        } else if (outcome === 'retry' && priorHolds >= MAX_WARRANT_HOLDS) {
           // Bounded: the warrant stayed unreadable for MAX_WARRANT_HOLDS runs. Insert and flag.
           pardon.clemency_type = 'pardon';
           typeFallback = `${detail}; still unreadable after ${priorHolds + 1} runs`;
           console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable for ${priorHolds + 1} runs, inserting as 'pardon' (${detail})`);
         } else if (outcome === 'retry') {
           stats.type_retries++;
+          if (!stats.held_newest_date || pardon.pardon_date > stats.held_newest_date) {
+            stats.held_newest_date = pardon.pardon_date;
+          }
           console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (hold ${priorHolds + 1} of ${MAX_WARRANT_HOLDS}: ${detail})`);
           await recordSkip(supabase, {
             pipeline: PIPELINES.PARDONS_INGEST,
@@ -701,6 +712,19 @@ export async function insertPardons(supabase, pardons, opts) {
   }
 
   return stats;
+}
+
+/**
+ * ADO-550 staleness verdict for a run that inserted nothing.
+ * 'held' (ADO-590): the newest page grants were held back because their warrants could
+ * not be read. That is a bounded, quiet retry (MAX_WARRANT_HOLDS), not a silent drop,
+ * so it must not fail the run on every held run.
+ * @returns {'fresh'|'held'|'stale'}
+ */
+export function stalenessVerdict({ newestPageDate, newestDbDate, heldNewestDate }) {
+  if (newestDbDate && newestPageDate <= newestDbDate) return 'fresh';
+  if (heldNewestDate && heldNewestDate >= newestPageDate) return 'held';
+  return 'stale';
 }
 
 // ============================================================================
@@ -815,7 +839,10 @@ async function main() {
           console.warn(`  ⚠️ Staleness check query failed (non-blocking): ${newestErr.message}`);
         } else {
           const newestDbDate = newestRows?.[0]?.pardon_date || null;
-          if (!newestDbDate || newestPageDate > newestDbDate) {
+          const verdict = stalenessVerdict({ newestPageDate, newestDbDate, heldNewestDate: stats.held_newest_date });
+          if (verdict === 'held') {
+            out(`  ⏳ Newest DOJ grants (${newestPageDate}) are held for a warrant retry, not stale; each held row is in the Skips tab`);
+          } else if (verdict === 'stale') {
             tripwires.push(`inserted 0 but DOJ page has newer grants (page: ${newestPageDate}, db: ${newestDbDate || 'none'})`);
             await recordSkip(supabase, {
               pipeline: PIPELINES.PARDONS_INGEST,

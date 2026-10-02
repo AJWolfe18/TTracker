@@ -23,6 +23,7 @@ import {
   typeRowFromWarrant,
   insertPardons,
   MAX_WARRANT_HOLDS,
+  stalenessVerdict,
 } from '../ingest/doj-pardons-scraper.js';
 import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
@@ -388,7 +389,7 @@ await test('17. insertPardons flags a fallback row, holds an unreadable-warrant 
 await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, then inserts it as pardon and flags it', async () => {
   const writes = { pardons: [], pipeline_skips: [] };
   // Earlier holds per source_key, as pipeline_skips api_error rows
-  const holds = { k0: 0, k2: 2, k3: MAX_WARRANT_HOLDS, kerr: 'error' };
+  const holds = { k0: 0, k2: 2, k3: MAX_WARRANT_HOLDS };
   const lookups = [];
   let nextId = 700;
   const supabase = {
@@ -400,7 +401,6 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
       q.limit = async (n) => {
         lookups.push({ table, ...q.filters, limit: n });
         const h = holds[q.filters['metadata->>source_key']];
-        if (h === 'error') return { data: null, error: { message: 'relation unavailable' } };
         return { data: Array.from({ length: Math.min(h, n) }, (_, i) => ({ id: i })), error: null };
       };
       q.insert = (row) => { writes[table].push(row); return q; };
@@ -410,10 +410,10 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
   };
   const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
   const row = (key) => ({ recipient_name: `Row ${key}`, clemency_type: null, primary_source_url: `https://www.justice.gov/pardon/media/${key}/dl?inline`, pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: key });
-  const stats = await insertPardons(supabase, ['k0', 'k2', 'k3', 'kerr'].map(row), { fetchImpl: botWall });
+  const stats = await insertPardons(supabase, ['k0', 'k2', 'k3'].map(row), { fetchImpl: botWall });
 
   assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['k3', 'pardon']], 'only the row past the hold limit is inserted');
-  assert.equal(stats.type_retries, 3, 'first hold, a hold below the limit, and a failed lookup all hold');
+  assert.equal(stats.type_retries, 2, 'a first hold and a hold below the limit both hold');
   assert.equal(stats.type_fallbacks, 1);
   const lookup = lookups.find(l => l['metadata->>source_key'] === 'k3');
   assert.deepEqual([lookup.table, lookup.pipeline, lookup.reason, lookup.limit], ['pipeline_skips', PIPELINES.PARDONS_INGEST, REASONS.API_ERROR, MAX_WARRANT_HOLDS]);
@@ -421,7 +421,62 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
   assert.equal(flagged.entity_id, '700');
   assert.match(flagged.metadata.detail, new RegExp(`not a PDF.*still unreadable after ${MAX_WARRANT_HOLDS + 1} runs`));
   const held = writes.pipeline_skips.filter(s => s.reason === REASONS.API_ERROR).map(s => s.metadata.source_key);
-  assert.deepEqual(held, ['k0', 'k2', 'kerr'], 'each held row writes the api_error skip the next run counts');
+  assert.deepEqual(held, ['k0', 'k2'], 'each held row writes the api_error skip the next run counts');
+});
+
+await test('19. A failed hold-count lookup inserts the row as pardon and flags it instead of holding it forever', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: null, error: { message: 'relation unavailable' } });
+      q.insert = (row) => { writes[table].push(row); return q; };
+      q.single = async () => ({ data: { id: 710 }, error: null });
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = { recipient_name: 'Row kerr', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/kerr/dl?inline', pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'kerr' };
+  const stats = await insertPardons(supabase, [row], { fetchImpl: botWall });
+
+  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['kerr', 'pardon']]);
+  assert.equal(stats.type_retries, 0, 'an unknown hold count must not hold the row again');
+  assert.equal(stats.type_fallbacks, 1);
+  assert.equal(stats.held_newest_date, null);
+  assert.deepEqual(writes.pipeline_skips.map(s => s.reason), [REASONS.CLEMENCY_TYPE_UNKNOWN]);
+  assert.equal(writes.pipeline_skips[0].entity_id, '710');
+  assert.match(writes.pipeline_skips[0].metadata.detail, /not a PDF.*earlier holds could not be counted \(relation unavailable\)/);
+});
+
+await test('20. Held rows on the newest DOJ date keep the staleness tripwire quiet; anything else newer than the DB still trips it', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: [], error: null });
+      q.insert = (row) => { writes[table].push(row); return q; };
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = (key, date) => ({ recipient_name: `Row ${key}`, clemency_type: null, primary_source_url: `https://www.justice.gov/pardon/media/${key}/dl?inline`, pardon_date: date, source_system: 'doj_opa', source_key: key });
+  const stats = await insertPardons(supabase, [row('a', '2026-09-02'), row('b', '2026-09-03'), row('c', '2026-09-01')], { fetchImpl: botWall });
+  assert.equal(stats.inserted, 0);
+  assert.equal(stats.type_retries, 3);
+  assert.equal(stats.held_newest_date, '2026-09-03');
+
+  const page = '2026-09-03';
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: stats.held_newest_date }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: null, heldNewestDate: stats.held_newest_date }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: '2026-09-02' }), 'stale', 'held rows on an older date do not cover a newer section');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', heldNewestDate: null }), 'stale');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: page, heldNewestDate: null }), 'fresh');
 });
 
 console.log(`\ndoj-pardons-parser: ${passed} passed, ${failed} failed`);
