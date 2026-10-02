@@ -180,7 +180,7 @@ docs/features/
 4. **ADO Operations via `/ado` command** - Avoids 20K+ context cost
    - ADO MCP tools return full work item dumps (20-30K tokens each) - never call them directly for one item
    - Use `/ado` command to query/update work items: REST + jq reads (~0.5-2K tokens) and REST JSON Patch writes (~0.1-0.5K), both in the main session
-   - No subagent: `Agent` and `Task` are denied in `.claude/settings.json`
+   - No subagent for ADO. Agents are allowed again (October 1, 2026), but only for specific cases: autonomous multi-lane sessions, advisor passes, and parallel independent work. Work inline by default
    - See `.claude/skills/ado/SKILL.md` for syntax
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
