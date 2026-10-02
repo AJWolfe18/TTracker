@@ -47,7 +47,10 @@ $$;
 -- an en dash (a slug like /c–d), and rewriting it would break the link for good; the prose
 -- around it is still cleaned. A URL here:
 --   starts with a scheme ("https://", "http://", ...) at the start of the text or right after
---   whitespace, ( [ " ' or a dash;
+--   any character that cannot be part of a scheme: whitespace, ( [ " ' < : = a dash, ...
+--   ("Source:https://x.gov/c–d" and "<https://x.gov/c–d>" are kept; Codex P1 on PR #165).
+--   A scheme glued to a word ("xhttps://") is read from the start of that word, never
+--   from its middle;
 --   stops before whitespace, ) ] " ' < > , and any em dash; an en dash stays in the URL only
 --   when more URL follows it ("/c–d"), so "x.gov/b– more" still loses its dash.
 -- So "(https://x.gov/a)—which" -> "(https://x.gov/a) - which",
@@ -76,7 +79,7 @@ BEGIN
 
   v_parts := regexp_split_to_array(
     regexp_replace(p,
-      '(^|[[:space:](["''—–])([A-Za-z][A-Za-z0-9+.-]*://(?:' || c_url || '|–(?=' || c_url || '))+)',
+      '(^|[^A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://(?:' || c_url || '|–(?=' || c_url || '))+)',
       '\1' || c_open || '\2' || c_close, 'g'),
     '[' || c_open || c_close || ']');
 
@@ -136,6 +139,39 @@ SET search_path = pg_catalog, public
 AS $$
   SELECT public.strip_dashes_json_walk(p, NULL)
 $$;
+
+-- A2) Self-test, before any trigger or rewrite: a wrong answer raises and the whole file rolls
+-- back (the SQL Editor runs it as one transaction), so the backfill never runs on a bad rule.
+DO $$
+DECLARE
+  r record;
+  v_got text;
+BEGIN
+  FOR r IN SELECT * FROM (VALUES
+    ('Source:https://x.gov/c–d',              'Source:https://x.gov/c–d'),
+    ('<https://x.gov/c–d>',                   '<https://x.gov/c–d>'),
+    ('See <https://x.gov/c–d>—then',          'See <https://x.gov/c–d> - then'),
+    ('link=https://x.gov/c–d',                'link=https://x.gov/c–d'),
+    ('https://x.gov/c–d',                     'https://x.gov/c–d'),
+    ('(https://x.gov/a–b)—which',             '(https://x.gov/a–b) - which'),
+    ('"https://x.gov/a–b"',                   '"https://x.gov/a–b"'),
+    ('here—https://x.gov/b',                  'here - https://x.gov/b'),
+    ('foo–https://x.gov/c–d',                 'foo - https://x.gov/c–d'),
+    ('see https://x.gov/b– more',             'see https://x.gov/b - more'),
+    ('see https://x.gov/b–c.',                'see https://x.gov/b–c.'),
+    ('A — B, 6–3 and 4–1–4',                  'A - B, 6-3 and 4-1-4'),
+    ('No URL: a–b',                           'No URL: a - b')
+  ) AS t(input, expected) LOOP
+    v_got := public.strip_dashes(r.input);
+    IF v_got IS DISTINCT FROM r.expected THEN
+      RAISE EXCEPTION 'strip_dashes self-test failed: % -> % (expected %)', r.input, v_got, r.expected;
+    END IF;
+  END LOOP;
+  IF public.strip_dashes('{"source_url":"https://x.gov/c–d","note":"A—B, see:https://x.gov/e–f"}'::jsonb)
+     IS DISTINCT FROM '{"source_url":"https://x.gov/c–d","note":"A - B, see:https://x.gov/e–f"}'::jsonb THEN
+    RAISE EXCEPTION 'strip_dashes(jsonb) self-test failed';
+  END IF;
+END $$;
 
 -- B) Triggers
 CREATE OR REPLACE FUNCTION public.stories_strip_dashes()
@@ -307,3 +343,19 @@ SELECT 'pardons', count(*) FROM public.pardons
        IS DISTINCT FROM (crime_description, corruption_reasoning, trump_connection_detail,
         summary_neutral, summary_spicy, why_it_matters, pattern_analysis, post_pardon_notes,
         receipts_timeline);
+
+-- ROLLBACK (only if the guard must come off; the rewrite in C is not reversible, the dashes
+-- are gone). Order matters: the triggers and the jsonb overloads call strip_dashes(text),
+-- which calls strip_dashes_plain.
+-- DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.stories;
+-- DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.scotus_cases;
+-- DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.executive_orders;
+-- DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.pardons;
+-- DROP FUNCTION IF EXISTS public.stories_strip_dashes();
+-- DROP FUNCTION IF EXISTS public.scotus_cases_strip_dashes();
+-- DROP FUNCTION IF EXISTS public.executive_orders_strip_dashes();
+-- DROP FUNCTION IF EXISTS public.pardons_strip_dashes();
+-- DROP FUNCTION IF EXISTS public.strip_dashes(jsonb);
+-- DROP FUNCTION IF EXISTS public.strip_dashes_json_walk(jsonb, text);
+-- DROP FUNCTION IF EXISTS public.strip_dashes(text);
+-- DROP FUNCTION IF EXISTS public.strip_dashes_plain(text);
