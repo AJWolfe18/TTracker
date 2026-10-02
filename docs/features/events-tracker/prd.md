@@ -475,7 +475,7 @@ Each item names the build story (14.10) it blocks. The recommendation is what th
 
 - [ ] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. *Recommended: approve as written.* **Blocks S1, S2, S3.**
 - [ ] **D2. Do "ally" actions count as his?** (Republicans in Congress, Trump family and businesses, allied governors, MAGA groups.) *Recommended: no on their own. An ally's action reaches the main line through a front or a pin, not by default.* **Blocks S4.**
-- [ ] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; any did or said at alarm 5 stays on (today's safety net); coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **Blocks S4.**
+- [ ] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **This drops today's "any loose end at alarm 5" bar for ally and other actors** (for example a court ruling in a case he is not part of, rated 5). *Recommended: drop it, consistent with D2; such a story reaches the main line through a front or a pin.* The alternative is to keep alarm 5 by anyone as an explicit exception to D2. None of the 40 sample stories is at alarm 5, so the sample does not move either way. **Blocks S4.**
 - [ ] **D4. Inside a front, does a big action skip the anchor principle?** Today a front member reaches the main line only as the front's opening, a new front peak, alarm 5, or the front's alarm floor. Example: 17234 (US destroys Iranian tankers, alarm 4) is on the Iran front but not a new peak, so it stays off. *Recommended: keep the anchor principle (locked August 18, 2026); the only change inside fronts is that coverage never counts.* **Blocks S4.**
 - [ ] **D5. Lower bar for EOs, SCOTUS rulings and pardons.** *Recommended: level 4 or higher (today: 5 only).* On TEST this takes these three sources from 13 main-line entries to 64 (14.4). **Blocks S5.**
 - [ ] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did and Said chips (both on by default). Public word for coverage on front pages: "Analysis".* Details in 14.5. **Blocks S6.**
@@ -593,11 +593,12 @@ Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stori
 1. **Pin:** `force_show` is on, `force_hide` is off. Unchanged.
 2. **No label yet:** rule v1.2 exactly as today. This is what lets v2 ship before the backfill finishes; the main line changes story by story as labels arrive.
 3. **Coverage:** off.
-4. **Member of a published front:** the v1.2 front clauses, unchanged (front opening, alarm 5, a new front peak at 4 or higher, or at or above the front's alarm floor). The opening and the running peak are now worked out over did and said members only, so a column can never be a front's "opening".
-5. **Loose end (no front):** on when any of these is true:
+4. **Member of a published front:** the v1.2 front clauses, unchanged (front opening, alarm 5, a new front peak at 4 or higher, or at or above the front's alarm floor). The opening and the running peak are now worked out over every member **not labeled coverage**: did, said and unlabeled members all count, coverage members are skipped. Because there is one member set per front at any moment, a front always has exactly one opening, whatever order the labels arrive in. During the backfill an unlabeled first member is the opening (as in v1.2); if it is later labeled coverage, the opening moves to the next non-coverage member at the next refresh. It never produces two openings. The same applies to stories still on step 2: an unlabeled front member is judged by the v1.2 front clauses against this same member set.
+5. **Loose end (no front):** on when either of these is true:
    - `did` by trump or administration at alarm 3 or higher;
-   - `said` by trump or administration at alarm 4 or higher;
-   - `did` or `said` by anyone at alarm 5 (today's loose-end bar, kept as a safety net).
+   - `said` by trump or administration at alarm 4 or higher.
+
+   Ally and other actors never reach the main line as loose ends, at any alarm level, unless pinned (D2 and D3). This replaces today's "any loose end at alarm 5" bar for them; it is listed in D3 so Josh can keep alarm 5 as an exception instead.
 
 **EOs, SCOTUS rulings, pardons:** all three are actions by definition, so they need no label. Their main-line bar drops from 5 to 4 (D5). Pins still apply.
 
@@ -643,6 +644,7 @@ In `docs/features/stories-claude-agent/prompt-v1.md`:
 - **Version:** `prompt_version` becomes `claude-v1.1`, so labels written by the old prompt (none) and the new one can be told apart.
 - **Deploy order:** the migration adding the columns lands on TEST and PROD before the prompt change merges to main (§9: the routine resets to `origin/main`).
 - **Re-enrichment** keeps its current rules: a story only comes back when it gains articles. A re-enriched story gets fresh labels; an unchanged story keeps the label from the backfill.
+- **A human label is locked.** When Josh corrects a label in admin, `action_label_source` becomes `human`. From then on no agent may change `action_label` or `action_actor` on that story: not the Stories agent on re-enrichment, not the backfill. The guard lives in the database, not only in the prompt: a trigger on `stories` (shipped with S1) keeps the old label and actor whenever the row's current source is `human` and the incoming write is not from admin. The prompt also tells the agent to leave the two fields out of its PATCH when Step 2 shows `action_label_source = human`, so the run log stays honest, but the trigger is what makes it safe. Only admin can unlock a label (set it back to `agent`), after which the next re-enrichment relabels it.
 
 ### 14.8 Backfill of active stories
 
@@ -679,13 +681,13 @@ In build order. Each is one session.
 
 | # | Title | Scope in one line | Blocked by |
 |---|---|---|---|
-| S1 | Action label columns on stories | Migration (next free number): `stories.action_label`, `stories.action_actor`, `stories.action_label_source` (agent / backfill / human), all nullable with CHECK constraints; expose the two labels through `v_tracker_stories` (tight select kept). | D1 |
+| S1 | Action label columns on stories | Migration (next free number): `stories.action_label`, `stories.action_actor`, `stories.action_label_source` (agent / backfill / human), all nullable with CHECK constraints; a trigger that keeps a `human` label and actor unless the write itself is a human (admin) write (14.7); expose the two labels through `v_tracker_stories` (tight select kept). | D1 |
 | S2 | Stories agent labels every story | Prompt change in 14.7, `claude-v1.1`, prompt tests (`qa:agent-prompts`), TEST routine run checked against the gold set. | D1, S1 |
 | S3 | One-time label backfill | Label-only candidate RPC, a `record`-style writer script, a short backfill routine prompt; TEST run with the 90% gate, then PROD runs at the agreed pace. | D1, D8, S1 |
-| S4 | Main-line rule v2 | New `v_tracker_main_line_rule` (14.4), unlabeled rows keep v1.2, opening and peak over did/said members only; TEST before/after count in the PR. | D2, D3, D4, S1 |
-| S5 | Lower main-line bar for EOs, SCOTUS and pardons | Per-source main-line bar in `src/lib/timeline.ts` (5 to 4) and its tests; after ADO-593 merges (same file). | D5, ADO-593 |
+| S4 | Main-line rule v2 | New `v_tracker_main_line_rule` (14.4), unlabeled rows keep v1.2, opening and peak over every non-coverage member (unlabeled included), loose ends by ally and other actors off at every alarm level; TEST before/after count in the PR. | D2, D3, D4, S1 |
+| S5 | Lower main-line bar for EOs, SCOTUS and pardons | One per-source main-line bar constant in `src/lib/timeline.ts` (5 to 4), used in **both** places that apply it: `buildSourcePath` (the main-view fetch, `s.alarm(5)` today) and the pinned-row injection (`filter(e => e.alarm < 5)` today), so a pinned alarm-4 entry is not shown twice; tests for both; after ADO-593 merges (same file). | D5, ADO-593 |
 | S6 | Did and Said on the Tracker | Speech-bubble marker, "Said" tag, Did/Said chips, "Analysis" tag on front pages, §8 copy; behind a feature flag. | D6, S1, ADO-593 |
 | S7 | Label-aware all-fronts candidates | Inside ADO-592: candidate RPC skips coverage (unlabeled stays in), the agent sees the labels. Folded into 592's own scope rather than a separate card. | D7, S1 |
-| S8 (later) | Admin label override | Edit a story's label in admin (`action_label_source = human`), never overwritten by the backfill. | S1 |
+| S8 (later) | Admin label override | Edit or unlock a story's label in admin (`action_label_source = human`). Locked against both the Stories agent's re-enrichment and the backfill by the S1 trigger; S2's prompt skips locked labels. | S1 |
 
 **Suggested order:** S1, then S2 and S3 on TEST, then S4, then S5 and S6, then ADO-592 with S7, then the S3 PROD runs, then the 592 PROD backfill.
