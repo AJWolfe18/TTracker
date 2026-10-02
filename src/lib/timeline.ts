@@ -504,14 +504,36 @@ export function olderFrontier(a: string | null, b: string | null): string | null
  * from under the reader, so the older of `prev` and the computed one wins.
  * `prev` undefined means nothing displayed yet for this view (a view change
  * resets it), which starts from holdFrontier's never-null rule.
+ *
+ * Null ("show everything") is only real when switched-on sources have
+ * loaded everything. A null that just means no switched-on source can say
+ * anything (every chip off, or every source on failed) keeps what is on
+ * screen instead, and rememberFrontier does not store it, so it never
+ * sticks for the rest of the view.
  */
 export function displayedFrontier(
   state: TrackerState,
   off: ReadonlySet<TimelineSource>,
   prev: string | null | undefined,
 ): string | null {
-  if (prev === undefined) return holdFrontier(state, off, null);
-  return olderFrontier(prev, coverageFrontier(state, off));
+  const computed = prev === undefined ? holdFrontier(state, off, null) : coverageFrontier(state, off);
+  if (computed === null && !onSourcesConstrain(state, off)) return prev ?? null;
+  return prev === undefined ? computed : olderFrontier(prev, computed);
+}
+
+/** The value to keep as `prev` for the next render (see displayedFrontier). */
+export function rememberFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  prev: string | null | undefined,
+  shown: string | null,
+): string | null | undefined {
+  return shown === null && !onSourcesConstrain(state, off) ? prev : shown;
+}
+
+/** Some switched-on source has rows and has not failed, so it can bound coverage. */
+function onSourcesConstrain(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s) && !state[s].errored && state[s].cursor !== null);
 }
 
 /**
@@ -562,7 +584,8 @@ export const CATCH_UP_MAX_PAGES = 10;
  * cursor reaches `target` (the frontier on screen when the chip went on), it
  * runs out or fails, or CATCH_UP_MAX_PAGES pages are fetched. The caller holds
  * the frontier at `target` meanwhile, so no row on screen disappears. A null
- * target (everything was showing) pages until the source runs out. `stillOn`
+ * target (everything was showing) needs no catch-up: nothing is fetched,
+ * and "load earlier" catches the source up instead. `stillOn`
  * is checked before every page so switching the chip off again stops it; an
  * aborted `signal` (view change) rejects with AbortError.
  */
@@ -583,10 +606,10 @@ export async function catchUpSource(
   const groups: TimelineEntry[][] = [];
   let current = state;
   let pages = 0;
-  while (pages < maxPages) {
+  while (target !== null && pages < maxPages) {
     const st = current[source];
     if (st.exhausted) break;
-    if (st.cursor && target !== null && st.cursor.date <= target) break;
+    if (st.cursor && st.cursor.date <= target) break;
     if (opts.stillOn && !opts.stillOn()) break;
     const next = await fetchTrackerPage(view, current, opts.signal, opts.pins, others);
     groups.push(next.entries);
