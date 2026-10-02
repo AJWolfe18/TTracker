@@ -132,8 +132,18 @@ SELECT CASE WHEN e.agent_pattern IS NULL THEN 'NOT APPLIED' ELSE 'PATTERN SET' E
                   'selling-the-white-house', 'the-courts', 'kushners-deals')
  ORDER BY e.id;
 
--- Rollback (back to no agent pass for these fronts):
--- UPDATE public.events
+-- Rollback: clears ONLY the patterns this file set (agent_pattern still equal to this file's value
+-- for that slug). A front the DO block skipped because a different pattern was already set keeps it.
+-- UPDATE public.events e
 --    SET agent_pattern = NULL
---  WHERE slug IN ('epstein-files', 'iran', 'trump-crypto', 'qatar-jet',
---                 'selling-the-white-house', 'the-courts', 'kushners-deals');
+--   FROM (VALUES
+--   ('epstein-files', 'epstein|\m(ghislaine|giuffre|birthday book|client list)\M'),
+--   ('iran', '\miran(ian)?\M|\m(iran\w*|tehran|hormuz|khamenei|irgc|ayatollah|fordow|natanz|isfahan|war powers)\M'),
+--   ('trump-crypto', '(crypto|memecoin|meme coin|\$TRUMP|world liberty|stablecoin|bitcoin|binance)|\m(meme ?coins?|wlfi|usd1|digital assets?|tokens?|nfts?|digital trading cards?)\M'),
+--   ('qatar-jet', 'qatar|\m(747s?|jumbo jet|boeing|(new|gifted|qatari|luxury|replacement) air force one)\M'),
+--   ('selling-the-white-house', 'ballroom|\m(east wing|donors?|donations?|fundrais\w*|incognito|pay[- ]to[- ]play|fine arts commission|capital planning commission)\M'),
+--   ('the-courts', '(def(y|ies|ied|iance)|contempt|ignor(e|es|ed|ing) (the )?(court|ruling|order)|constitutional crisis|impeach(ing)? (a |the )?judge|existential threat|attack(s|ed|ing)? (on )?(the )?(judge|judiciary|courts))|\m(judges?|judiciary|judicial|injunctions?|restraining orders?|court orders?|appeals courts?|appellate|circuit courts?|district courts?|unconstitutional|struck down|strikes? down|impeach\w*|boasberg|blocks?|blocked|blocking)\M'),
+--   ('kushners-deals', 'kushner|\m(affinity partners|jared|public investment fund|pif|sovereign wealth|electronic arts|saudi\w*|emirat\w*|abu dhabi|gulf (money|states|investors?|investment|royals?))\M')
+--   ) AS v(slug, pat)
+--  WHERE e.slug = v.slug
+--    AND e.agent_pattern = v.pat;
