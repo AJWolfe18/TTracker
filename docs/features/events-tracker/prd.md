@@ -1,6 +1,6 @@
 # Fronts — Product Requirements
 
-**ADO:** 530 (design) · Epic 541 (auto-proposal, deferred)
+**ADO:** 530 (design) · Epic 541 (auto-proposal, deferred) · 594 (action tracker design, §14)
 **Status:** Draft for approval
 **Created:** 2026-08-09
 **Supersedes:** `design.md` (Apr 2026) **entirely** (clarified 2026-08-17). What survives from it is the mission — "when someone says 'he wasn't that bad,' you point them here" — and the term-2-only scope. What does **not** survive: its vision of events *replacing* stories as the user-facing product. This PRD builds fronts as an **aggregation layer**; stories stay visible (the running log renders them directly). Its Schema v1 was rejected and is replaced by §6.
@@ -458,3 +458,234 @@ Each wave ships behind a feature flag, off in PROD until verified, per `docs/gui
 | 7 | One-shot ambiguity | One-shots are not fronts. A story with no `story_event` row is a loose end and renders from `stories`. One representation, one rule. |
 | 8 | Thin publishing gate | `publish_state` + `published_at` + `created_by` + `enrichment_meta` provenance. Updates carry their own `approval_state`. |
 | 9 | `event_updates` too light | Adds `sort_key`, `updated_at`, `approval_state`, `was_edited`, and `significance` as a constrained enum. |
+
+---
+
+## 14. Action tracker (ADO-594)
+
+**Status:** design draft, October 1, 2026. Nothing here is built. Josh decides the items in 14.0, then the build stories in 14.10 get carded.
+
+**Why.** Josh, September 30, 2026: the Tracker should be an action tracker, a record of every concrete thing he did (orders, tariffs, cancelled deals, taking a case to the Supreme Court and losing it) and what he said or promised (the $5,000 promise, threats). Fronts hold the big sagas. The gap is the single actions in between. Today the main line cannot tell an action from a column about it: the bar is alarm level only, so a fiery opinion piece and a signed order look the same to the rule.
+
+**The idea in one line.** The Stories agent, which already reads every story, adds two small labels: what kind of news it is (**did**, **said** or **coverage**) and whose action it is (**actor**). The main line then becomes "actions above a bar", with fronts on top exactly as today.
+
+### 14.0 Open Decisions (Josh)
+
+Each item names the build story (14.10) it blocks. The recommendation is what the draft assumes; change any of them and the matching section changes with it.
+
+- [ ] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. *Recommended: approve as written.* **Blocks S1, S2, S3.**
+- [ ] **D2. Do "ally" actions count as his?** (Republicans in Congress, Trump family and businesses, allied governors, MAGA groups.) *Recommended: no on their own. An ally's action reaches the main line through a front or a pin, not by default.* **Blocks S4.**
+- [ ] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; any did or said at alarm 5 stays on (today's safety net); coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **Blocks S4.**
+- [ ] **D4. Inside a front, does a big action skip the anchor principle?** Today a front member reaches the main line only as the front's opening, a new front peak, alarm 5, or the front's alarm floor. Example: 17234 (US destroys Iranian tankers, alarm 4) is on the Iran front but not a new peak, so it stays off. *Recommended: keep the anchor principle (locked August 18, 2026); the only change inside fronts is that coverage never counts.* **Blocks S4.**
+- [ ] **D5. Lower bar for EOs, SCOTUS rulings and pardons.** *Recommended: level 4 or higher (today: 5 only).* On TEST this takes these three sources from 13 main-line entries to 64 (14.4). **Blocks S5.**
+- [ ] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did and Said chips (both on by default). Public word for coverage on front pages: "Analysis".* Details in 14.5. **Blocks S6.**
+- [ ] **D7. How the all-fronts agent (ADO-592) uses the label.** *Recommended: coverage stories are not candidates for the agent; unlabeled stories still are (so nothing is lost while the backfill runs); the regex sweep is unchanged.* **Blocks S7 (and the matching part of ADO-592).**
+- [ ] **D8. Backfill scope and pace.** *Recommended: label every active enriched story (about 15,000 on PROD), headline and summary only, at about 3 runs a day, before the ADO-592 PROD backfill.* About 38 runs, roughly two weeks, $0 cash (14.8). **Blocks S3 (PROD part).**
+
+### 14.1 What does not change
+
+- Fronts, front pages, the rubric in §2 and one-front-per-story.
+- Pins (`tracker_pin`) still force any single row on or off the main line.
+- The "All" alarm filter still shows everything, labels or not. Labels only decide the default main line and the new Did and Said chips.
+- `stories.primary_actor` (free text such as "ICE") stays. The new actor label is a four-value field with a different job: "is this his side?"
+
+### 14.2 The label set
+
+**`action_label`** answers: what is the news in this story?
+
+| Value | Means | Typical verbs |
+|---|---|---|
+| `did` | Something concrete happened: an order, a firing, a filing, a strike, a ruling, a raid, a tariff taking effect, an arrest, an accident. | signed, ordered, fired, sued, filed, cancelled, struck, ruled, charged, deployed |
+| `said` | Words are the news: a threat, a promise, a claim, a post, a statement, with no action taken yet. | threatened, promised, posted, claimed, suggested, vowed |
+| `coverage` | The reporting itself is the news: analysis, opinion, explainers, fact-checks, polls, live streams, retrospectives, and the campaign trail (primaries, ads, PACs, conventions, candidate profiles). | argues, examines, explains, analyzes, "what to know" |
+
+**`action_actor`** answers: whose action or words is it?
+
+| Value | Means |
+|---|---|
+| `trump` | Trump personally: his signature, his posts, his own words. |
+| `administration` | The government he runs: White House staff, cabinet, agencies (DOJ, DHS, ICE, Pentagon), the US military, and the government's own lawyers in court. |
+| `ally` | Not the government but on his side: Republicans in Congress, allied governors and attorneys general, his family and businesses, MAGA groups, his campaign. |
+| `other` | Everyone else: courts acting in cases he is not part of, foreign governments, Democrats, states, companies, private people. |
+
+For coverage, the actor is whoever the piece is about (a column on his record is `coverage` / `trump`). It does not matter for the main line, because coverage never counts.
+
+**Edge cases (the rule for each):**
+
+1. **A threat and an action in one story:** `did`. The action wins.
+2. **A promise later kept or broken:** each story is labeled on its own news. The promise was `said` when made; the fact-check months later is `coverage`.
+3. **A record roundup or fact-check** that lists many actions: `coverage`. The actions in it were news on their own days (17248, 17250).
+4. **Reactions to his actions** (Canada retaliates, groups sue, a court blocks): `did` or `said` with actor `other`. They can still join a front.
+5. **Court rulings:** if the administration is a party (it brought the case or defends it), `did` / `administration`. Taking a case to the Supreme Court and losing it is his record (Josh, September 30, 2026). A ruling in a case without the administration is `did` / `other` (17230).
+6. **His rallies and speeches:** a new threat or promise in the speech is `said` / `trump`. A live stream or recap with nothing new is `coverage` (17239).
+7. **His social media posts:** `said`, unless the post announces something that has taken effect (then `did`).
+8. **Reported plans and leaks:** `said` / `administration` when officials confirm it or a document exists (a draft order, a memo). Anonymous "he is weighing" reporting is `coverage` until something happens.
+9. **Accidents and incidents nobody decided:** `did` / `other` (17246, a worker hurt at the White House renovation).
+10. **Off-topic stories** that slipped past the feeds: label them honestly (usually `did` / `other` or `coverage`). They never reach the main line (17241).
+11. **A story that merged two events:** label the event in the headline.
+12. **Unsure:** pick the lower-impact label (`coverage` over `said`, `said` over `did`) and note it in the run log, the same "under-commit" rule the Stories agent already uses for alarm levels.
+
+### 14.3 Evidence: 40 hand-labeled stories
+
+The 40 newest enriched TEST stories (ids 17215 to 17254, first seen September 6 to 8, 2026), read from `id, primary_headline, summary_neutral, alarm_level, main_line, primary_actor` plus their `story_event` rows. Labeled by hand from the headline and the neutral summary, the same input the backfill will use. "Now" is today's `main_line`; "v2" is the main line under the recommended rule in 14.4.
+
+| id | Headline (shortened) | Alarm | Front | Label | Actor | Now | v2 | Why |
+|---|---|---|---|---|---|---|---|---|
+| 17254 | Midterms kick into high gear | 2 | | coverage | other | no | no | Horse race overview |
+| 17253 | Can Democrats flip Florida? | 2 | | coverage | other | no | no | Race analysis |
+| 17252 | Trump suggests renaming New Mexico | 2 | | said | trump | no | no | A post he has no power to act on |
+| 17251 | Keith and Walter on GOP midterm challenges | 2 | | coverage | other | no | no | TV analysis segment |
+| 17250 | Trump pledged lower prices: risen or fallen? | 2 | | coverage | trump | no | no | Fact-check of old promises (edge case 2) |
+| 17249 | Data centers are bringing Americans together | 2 | | coverage | other | no | no | Trend piece |
+| 17248 | "The most anti-union president" | 3 | | coverage | trump | no | no | Record roundup (edge case 3) |
+| 17247 | Democrats try moving to the left | 2 | | coverage | other | no | no | Campaign strategy |
+| 17246 | Worker injured in White House construction | 2 | | did | other | no | no | An accident, not a decision (edge case 9) |
+| 17245 | Legal veterans fight his election orders | 4 | Election | did | other | yes | yes | Groups widened lawsuits; the front's floor of 3 keeps it |
+| 17244 | The DSA's problem isn't media training | 2 | | coverage | other | no | no | Opinion |
+| 17243 | Charges dropped, damage done (Huerta) | 3 | | coverage | administration | no | no | Feature revisiting an older arrest |
+| 17242 | GOP convention will be "Trumpist pageantry" | 2 | | coverage | trump | no | no | Column |
+| 17241 | AI hacking tool breaches phones | 3 | | did | other | no | no | Off-topic tech news (edge case 10) |
+| 17240 | Rare charges against ICE agent; DOJ retreats from shooting probes | 4 | | did | administration | no | **yes** | DOJ charging decision and pattern; his side, above the did bar |
+| 17239 | Watch live: GOP convention night 1 | 2 | | coverage | trump | no | no | Live stream, nothing new (edge case 6) |
+| 17238 | Prediction markets and the 2026 races | 2 | | coverage | other | no | no | Trend piece |
+| 17237 | How Christians can fight Christian nationalism | 3 | | coverage | other | no | no | Book argument |
+| 17236 | 9/11 memories at Guantanamo | 2 | | coverage | other | no | no | Anniversary feature |
+| 17235 | Why Iowa is a state to watch | 2 | | coverage | other | no | no | Horse race |
+| 17234 | US destroys Iranian tankers after missile attacks | 4 | Iran | did | administration | no | no | Military strike; inside a front, not a new peak (D4) |
+| 17233 | Carney: retaliation was unavoidable | 3 | | said | other | no | no | Foreign leader's statement |
+| 17232 | The mystery at the heart of the trade war | 2 | | coverage | trump | no | no | Analysis |
+| 17231 | DHS asks Supreme Court for Social Security data on voters | 3 | Election | did | administration | yes | yes | Court filing; meets the front's floor |
+| 17230 | Court: no constitutional right to clean water | 4 | | did | other | no | no | Ruling in a case without the administration (edge case 5) |
+| 17229 | How Canada decided to hurt its own economy | 3 | | coverage | other | no | no | Analysis of Canada's tariffs |
+| 17228 | Senate candidates skipping his convention | 2 | | coverage | ally | no | no | Campaign trail |
+| 17227 | Attorney faces discipline over 2020 Fulton suit | 2 | | did | other | no | no | Bar proceeding by a third party |
+| 17226 | Paxton whistle-blower in rival's ad | 3 | | coverage | other | no | no | Campaign ad |
+| 17225 | Space Force uniform makeover | 2 | | said | trump | no | no | Posted images, no order (edge case 7) |
+| 17224 | Renames places, poses as superhero | 2 | | said | trump | no | no | Posts, no power used |
+| 17223 | Last test of dynastic politics | 2 | | coverage | other | no | no | Horse race |
+| 17222 | Marshall's challenger criticizes him | 2 | | coverage | other | no | no | Campaign attack line |
+| 17221 | House candidate helped imprison a Democrat | 2 | | coverage | other | no | no | Candidate profile |
+| 17220 | No charges for false report on Buttigieg | 2 | | did | other | no | no | Local prosecutor's decision |
+| 17219 | Live results: Rhode Island primaries | 1 | | coverage | other | no | no | Results page |
+| 17218 | Ohio governor's race turns violent | 4 | | did | other | no | no | Attack by a private person |
+| 17217 | Approval falls as his fortune grows | 3 | | coverage | trump | no | no | Column |
+| 17216 | Trump threatens to bar Bombardier | 3 | | said | trump | no | no (yes if said bar is 3) | A threat, no order yet |
+| 17215 | Democratic PAC wants to catch up on AI | 1 | | coverage | other | no | no | Campaign money |
+
+**Shares in the sample:**
+
+| Label | Stories | Share | Of these, his side (trump or administration) |
+|---|---|---|---|
+| did | 10 | 25% | 3 (17240, 17234, 17231) |
+| said | 5 | 12.5% | 4 (17252, 17225, 17224, 17216) |
+| coverage | 25 | 62.5% | not counted |
+
+Actors across all 40: trump 10, administration 4, ally 1, other 25.
+
+**Caveats.** This is TEST, three days in early September 2026, in the middle of the midterm season, so it leans hard on horse-race coverage. PROD reads more feeds and will likely show a higher did share. The labels are one person's reading of a summary; D1 asks Josh to confirm them before they become the gold set.
+
+### 14.4 Main-line rule v2
+
+Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stories. EOs, SCOTUS rulings and pardons get their bar in the frontend (`src/lib/timeline.ts`, alarm 5 only today). v2 keeps that split.
+
+**Stories, checked in this order (recommended values from D2 to D4):**
+
+1. **Pin:** `force_show` is on, `force_hide` is off. Unchanged.
+2. **No label yet:** rule v1.2 exactly as today. This is what lets v2 ship before the backfill finishes; the main line changes story by story as labels arrive.
+3. **Coverage:** off.
+4. **Member of a published front:** the v1.2 front clauses, unchanged (front opening, alarm 5, a new front peak at 4 or higher, or at or above the front's alarm floor). The opening and the running peak are now worked out over did and said members only, so a column can never be a front's "opening".
+5. **Loose end (no front):** on when any of these is true:
+   - `did` by trump or administration at alarm 3 or higher;
+   - `said` by trump or administration at alarm 4 or higher;
+   - `did` or `said` by anyone at alarm 5 (today's loose-end bar, kept as a safety net).
+
+**EOs, SCOTUS rulings, pardons:** all three are actions by definition, so they need no label. Their main-line bar drops from 5 to 4 (D5). Pins still apply.
+
+**Size of the main line:**
+
+| Scope | Today (v1.2) | Under v2 | Notes |
+|---|---|---|---|
+| The 40-story sample | 2 (17245, 17231) | 3 (adds 17240) | 4 if the said bar is 3 (adds 17216). 4 if D4 goes the other way (adds 17234). |
+| Executive orders, TEST, term 2 (217 public) | 7 | 44 | Level 3 or higher would be 47 |
+| SCOTUS rulings, TEST, term 2 (30 public) | 0 | 6 | Level 3 or higher would be 21 |
+| Pardons, TEST, term 2 (90 public) | 6 | 14 | Level 3 or higher would be 46 |
+| All TEST stories (750 active, enriched) | 223 | measured by S4 | 207 of the 223 are alarm 5 and 212 were written by the old GPT pipeline. If the sample's coverage share held for them, well over a hundred would leave the line; the real number comes from the TEST backfill. |
+
+For recent, calibrated stories the line grows a little (2 to 3 in three days, about 7.5% of stories). For the old GPT-era stories it shrinks, because their inflated alarm 5s stop counting once they are labeled coverage. Both moves are the point: actions in, commentary out.
+
+### 14.5 How "said" shows next to "did"
+
+- **One line, one order.** Said entries sit on the same spine as did entries, in date order. No second lane: a threat and the action that follows it should be next to each other.
+- **A different marker.** Did keeps today's solid marker. Said gets a speech-bubble marker and a small "Said" tag before the headline. Not a hollow dot: hollow markers already mean EO, SCOTUS and pardons (§5.1).
+- **Chips.** "Did" and "Said" chips sit next to the source chips, both on by default. Turning Said off leaves a pure record of actions. They follow the same rules as the source chips after bug ADO-593 is fixed (a switched-off chip is not fetched and does not hold back the date frontier).
+- **Mobile.** The same marker and tag in the single-column list.
+- **Front pages.** A front page is the complete record, so it shows every member. Coverage members get a muted "Analysis" tag (public copy avoids "coverage", the same way it avoids "story").
+- **Copy for §8 (draft):** chip labels "Did" and "Said"; tag "Said"; tag "Analysis"; empty state with only Said on: "Nothing said in this range. Turn Did back on to see what he did."
+- **Later, not now:** linking a said entry to the did entry that kept or broke it ("promised in March, signed in June"). Worth it once both labels exist, but it needs its own design.
+
+### 14.6 How ADO-592 (the all-fronts agent) uses the label
+
+- **Smaller pool.** Coverage stories are not candidates. In the sample this removes 25 of 40 stories (62.5%) before the agent reads anything, on top of the regex patterns.
+- **Nothing lost.** All three stories the agent has assigned in the sample (17231, 17234, 17245) are `did`, so the filter would not have dropped any of them.
+- **Fail open.** Unlabeled stories stay candidates, so 592 does not have to wait for the backfill to finish.
+- **A hint, not a gate, for the rest.** The agent sees `action_label` and `action_actor` next to the headline and summary. Actor `other` is still a valid front member (Iran's missiles belong on the Iran front).
+- **The regex sweep is unchanged.** Its matches are cheap and Josh can review them; filtering them is a later call.
+- **Order.** The label backfill (S3) runs before the 592 PROD backfill, so that backfill reads the smaller pool.
+
+### 14.7 The Stories agent prompt change
+
+In `docs/features/stories-claude-agent/prompt-v1.md`:
+
+- **Step 4:** two new fields in the output table, `action_label` (`did` / `said` / `coverage`) and `action_actor` (`trump` / `administration` / `ally` / `other`), with the definitions and edge cases from 14.2.
+- **Step 5:** two new checklist lines: both values are from the allowed set, and the label was chosen from what the story reports, not from how angry the headline sounds.
+- **Step 6:** both fields go in the success PATCH. They are not written on the failure path, the same as `alarm_level`.
+- **Gold examples:** six short calibration cases from 14.3: 17240 (did, administration), 17216 (said, trump), 17248 (coverage despite listing actions), 17233 (said, other), 17231 (did, administration, a court filing), 17246 (did, other, an accident).
+- **Version:** `prompt_version` becomes `claude-v1.1`, so labels written by the old prompt (none) and the new one can be told apart.
+- **Deploy order:** the migration adding the columns lands on TEST and PROD before the prompt change merges to main (§9: the routine resets to `origin/main`).
+- **Re-enrichment** keeps its current rules: a story only comes back when it gains articles. A re-enriched story gets fresh labels; an unchanged story keeps the label from the backfill.
+
+### 14.8 Backfill of active stories
+
+The Stories agent will label new and changed stories from S2 onwards. Every story already on the site needs a one-time label pass. The normal enrichment queue will not pick them up (migration 117 never rewrites an unchanged story), so the backfill is its own small job:
+
+- **Input:** headline, neutral summary and `primary_actor` only. No articles, no `content`, no embeddings. That keeps egress tiny (about 0.5 MB per 1,000 stories, so under 10 MB for all of PROD) and makes each label cheap.
+- **Pool:** active enriched stories with no label yet, newest first (an RPC like the fronts agent's candidate RPC).
+- **Writes:** one checked file per page of 50 stories, recorded in one call (the fronts agent's `record` pattern from ADO-582). Only the two label columns and a source marker (`backfill`) are written. Summaries, alarm levels and enrichment watermarks are never touched.
+- **Quality gate:** the TEST run must agree with the 40 gold labels on at least 90% of stories before any PROD run.
+
+**Cost (Claude plan usage, $0 cash).** Estimates, to be replaced by the TEST run's real numbers:
+
+| Item | Estimate |
+|---|---|
+| Per story | about 170 tokens in (headline and summary), about 40 tokens out |
+| Per run | about 400 stories (8 pages of 50); about 1.2M tokens processed, of which about 100K are new input, 20K output, and the rest cached re-reads of the conversation |
+| TEST (750 stories) | 2 runs, about 2.5M tokens processed |
+| PROD (about 15,000 active stories, per migration 117's notes) | about 38 runs, about 45M tokens processed, about 4M new input and 0.8M output |
+| Pace | about 3 runs a day so the Stories and Judge routines are never starved: roughly two weeks |
+| For scale | labeling one story costs roughly 1/30 of enriching one (enrichment reads up to 6 full articles). The whole PROD backfill is about the plan usage of 5 to 6 days of the normal Stories routine. |
+
+**Ongoing cost:** the label adds about 40 output tokens per story and about 2K tokens of prompt per Stories run. Under 2% of a normal run. Rule v2 and the display add no AI calls. ADO-592 gets cheaper, because its pool shrinks.
+
+### 14.9 Risks
+
+- **Old GPT-era summaries can be spun.** A label from a slanted summary can be wrong. The 90% gate catches a systematic problem; pins and a later admin override (S8) fix single rows.
+- **The main line moves while the backfill runs.** Unlabeled stories keep rule v1.2, so the line shifts gradually rather than all at once. S4 reports the TEST before/after count; PROD runs can be paused at any time.
+- **Front opening shifts.** If a front's first member is labeled coverage, the opening moves to its first did or said member. Intended, but worth a look on the front pages after the TEST backfill.
+- **The sample is small and election-heavy.** Treat the shares in 14.3 as a direction, not a forecast.
+
+### 14.10 Proposed build stories (not carded yet)
+
+In build order. Each is one session.
+
+| # | Title | Scope in one line | Blocked by |
+|---|---|---|---|
+| S1 | Action label columns on stories | Migration (next free number): `stories.action_label`, `stories.action_actor`, `stories.action_label_source` (agent / backfill / human), all nullable with CHECK constraints; expose the two labels through `v_tracker_stories` (tight select kept). | D1 |
+| S2 | Stories agent labels every story | Prompt change in 14.7, `claude-v1.1`, prompt tests (`qa:agent-prompts`), TEST routine run checked against the gold set. | D1, S1 |
+| S3 | One-time label backfill | Label-only candidate RPC, a `record`-style writer script, a short backfill routine prompt; TEST run with the 90% gate, then PROD runs at the agreed pace. | D1, D8, S1 |
+| S4 | Main-line rule v2 | New `v_tracker_main_line_rule` (14.4), unlabeled rows keep v1.2, opening and peak over did/said members only; TEST before/after count in the PR. | D2, D3, D4, S1 |
+| S5 | Lower main-line bar for EOs, SCOTUS and pardons | Per-source main-line bar in `src/lib/timeline.ts` (5 to 4) and its tests; after ADO-593 merges (same file). | D5, ADO-593 |
+| S6 | Did and Said on the Tracker | Speech-bubble marker, "Said" tag, Did/Said chips, "Analysis" tag on front pages, §8 copy; behind a feature flag. | D6, S1, ADO-593 |
+| S7 | Label-aware all-fronts candidates | Inside ADO-592: candidate RPC skips coverage (unlabeled stays in), the agent sees the labels. Folded into 592's own scope rather than a separate card. | D7, S1 |
+| S8 (later) | Admin label override | Edit a story's label in admin (`action_label_source = human`), never overwritten by the backfill. | S1 |
+
+**Suggested order:** S1, then S2 and S3 on TEST, then S4, then S5 and S6, then ADO-592 with S7, then the S3 PROD runs, then the 592 PROD backfill.
