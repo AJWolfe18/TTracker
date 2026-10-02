@@ -15,18 +15,26 @@
 -- vote_split and majority_author (null, per curiam) are not touched.
 -- AC 4 (impact level 3 or 4) is Josh's call and is not in this file.
 --
--- Keyed on the docket number, not the id. Guard: exactly 1 row, and it must still hold
--- the values checked on October 1, 2026 (6-3, {Sotomayor,Jackson}, the old first
--- sentence). If it was re-enriched since, the block raises and nothing changes.
--- Already fixed: the block says so and changes nothing, so running it twice is safe.
+-- Keyed on the docket number, not the id. Guard: exactly 1 row with vote 6-3, and each
+-- of the two fields must be either still as checked on October 1, 2026 ({Sotomayor,Jackson};
+-- first sentence "Sotomayor and Jackson dissented.") or already fixed. Each field is
+-- checked on its own, so a row where only one was corrected gets the other repaired.
+-- Anything else (e.g. re-enriched since) raises and nothing changes.
+-- Both already fixed: the block says so and changes nothing, so running it twice is safe.
 
 DO $$
 DECLARE
-  v_rows     int;
-  v_authors  text[];
-  v_vote     text;
-  v_hl       text;
-  v_updated  int;
+  c_old_hl   constant text   := 'Sotomayor and Jackson dissented. ';
+  c_new_hl   constant text   := 'Sotomayor, joined by Kagan, and Jackson dissented. ';
+  c_old_auth constant text[] := ARRAY['Sotomayor', 'Jackson'];
+  c_new_auth constant text[] := ARRAY['Sotomayor', 'Kagan', 'Jackson'];
+  v_rows      int;
+  v_authors   text[];
+  v_vote      text;
+  v_hl        text;
+  v_auth_done boolean;
+  v_hl_done   boolean;
+  v_updated   int;
 BEGIN
   v_rows := (SELECT count(*) FROM public.scotus_cases WHERE docket_number = '26A124');
   IF v_rows <> 1 THEN
@@ -37,28 +45,44 @@ BEGIN
   v_vote    := (SELECT vote_split FROM public.scotus_cases WHERE docket_number = '26A124');
   v_hl      := (SELECT dissent_highlights FROM public.scotus_cases WHERE docket_number = '26A124');
 
-  IF v_authors = ARRAY['Sotomayor', 'Kagan', 'Jackson'] THEN
-    RAISE NOTICE 'ADO-580: 26A124 already lists Sotomayor, Kagan, Jackson. Nothing to do.';
+  IF v_vote IS DISTINCT FROM '6-3' THEN
+    RAISE EXCEPTION 'ADO-580: 26A124 vote is % (expected 6-3). Nothing was changed.', v_vote;
+  END IF;
+
+  IF v_authors IS NOT DISTINCT FROM c_new_auth THEN
+    v_auth_done := true;
+  ELSIF v_authors IS NOT DISTINCT FROM c_old_auth THEN
+    v_auth_done := false;
+  ELSE
+    RAISE EXCEPTION 'ADO-580: 26A124 dissent_authors is % (expected {Sotomayor,Jackson} or {Sotomayor,Kagan,Jackson}). Nothing was changed.', v_authors;
+  END IF;
+
+  IF v_hl IS NOT NULL AND left(v_hl, length(c_new_hl)) = c_new_hl THEN
+    v_hl_done := true;
+  ELSIF v_hl IS NOT NULL AND left(v_hl, length(c_old_hl)) = c_old_hl THEN
+    v_hl_done := false;
+  ELSE
+    RAISE EXCEPTION 'ADO-580: 26A124 dissent_highlights starts with neither the old nor the fixed sentence: "%". Nothing was changed.', left(coalesce(v_hl, '<null>'), 60);
+  END IF;
+
+  IF v_auth_done AND v_hl_done THEN
+    RAISE NOTICE 'ADO-580: 26A124 already lists Sotomayor, Kagan, Jackson in both fields. Nothing to do.';
     RETURN;
   END IF;
 
-  IF v_vote IS DISTINCT FROM '6-3'
-     OR v_authors IS DISTINCT FROM ARRAY['Sotomayor', 'Jackson']
-     OR v_hl IS NULL
-     OR left(v_hl, 33) <> 'Sotomayor and Jackson dissented. ' THEN
-    RAISE EXCEPTION 'ADO-580: 26A124 changed since October 1, 2026 (vote %, dissenters %). Nothing was changed.', v_vote, v_authors;
-  END IF;
-
   UPDATE public.scotus_cases
-     SET dissent_authors    = ARRAY['Sotomayor', 'Kagan', 'Jackson'],
-         dissent_highlights = 'Sotomayor, joined by Kagan, and Jackson dissented. ' || substr(dissent_highlights, 34)
+     SET dissent_authors    = c_new_auth,
+         dissent_highlights = CASE WHEN v_hl_done THEN dissent_highlights
+                                   ELSE c_new_hl || substr(dissent_highlights, length(c_old_hl) + 1) END
    WHERE docket_number = '26A124';
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   IF v_updated <> 1 THEN
     RAISE EXCEPTION 'ADO-580: updated % rows, expected 1. Rolled back.', v_updated;
   END IF;
 
-  RAISE NOTICE 'ADO-580: 26A124 dissenters set to Sotomayor, Kagan, Jackson';
+  RAISE NOTICE 'ADO-580: 26A124 fixed (dissent_authors %, dissent_highlights %)',
+    CASE WHEN v_auth_done THEN 'already right' ELSE 'set' END,
+    CASE WHEN v_hl_done THEN 'already right' ELSE 'set' END;
 END $$;
 
 -- Check (read-only). Expect: 6-3, {Sotomayor,Kagan,Jackson},
