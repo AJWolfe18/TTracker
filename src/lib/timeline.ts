@@ -474,8 +474,10 @@ export const FRONTIER_PENDING = '\uffff';
  * already on screen (`held`) so the list neither collapses nor moves under
  * the reader's scroll, and recompute once its first page lands. With nothing
  * held yet (a chip switched on mid-load, or every source on was exhausted),
- * hold at the newest cursor among the sources on that have loaded: never null,
- * which would show every buffered row with fake gaps and then pull them back.
+ * hold at the coverage frontier of the sources on that have loaded (the same
+ * rule, with the pending ones left out). Never null, which would show every
+ * buffered row with fake gaps and then pull them back: if those sources have
+ * no frontier either, show nothing until the first page lands.
  */
 export function holdFrontier(
   state: TrackerState,
@@ -485,13 +487,8 @@ export function holdFrontier(
   const next = coverageFrontier(state, off);
   if (next !== FRONTIER_PENDING) return next;
   if (held !== null) return held;
-  let strictest: string | null = null;
-  for (const s of TIMELINE_SOURCES) {
-    const cursor = state[s].cursor;
-    if (off.has(s) || !cursor) continue;
-    if (strictest === null || cursor.date > strictest) strictest = cursor.date;
-  }
-  return strictest ?? FRONTIER_PENDING;
+  const pending = TIMELINE_SOURCES.filter(s => !off.has(s) && !state[s].exhausted && !state[s].cursor);
+  return coverageFrontier(state, new Set([...off, ...pending])) ?? FRONTIER_PENDING;
 }
 
 /** Every switched-on source has nothing left to load (true when every chip is off). */
