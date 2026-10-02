@@ -473,12 +473,12 @@ Each wave ships behind a feature flag, off in PROD until verified, per `docs/gui
 
 Each item names the build story (14.10) it blocks. The recommendation is what the draft assumes; change any of them and the matching section changes with it.
 
-- [ ] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. *Recommended: approve as written.* **Blocks S1, S2, S3.**
+- [ ] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. Includes two rules worth a look: court rulings in his cases count as his record whichever way they go (edge case 5), and when unsure the agent picks an action label over coverage, so doubtful stories stay visible rather than silently dropping (edge case 12). *Recommended: approve as written.* **Blocks S1, S2, S3.**
 - [ ] **D2. Do "ally" actions count as his?** (Republicans in Congress, Trump family and businesses, allied governors, MAGA groups.) *Recommended: no on their own. An ally's action reaches the main line through a front or a pin, not by default.* **Blocks S4.**
 - [ ] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **This drops today's "any loose end at alarm 5" bar for ally and other actors** (for example a court ruling in a case he is not part of, rated 5). *Recommended: drop it, consistent with D2; such a story reaches the main line through a front or a pin.* The alternative is to keep alarm 5 by anyone as an explicit exception to D2. None of the 40 sample stories is at alarm 5, so the sample does not move either way. **Blocks S4.**
 - [ ] **D4. Inside a front, does a big action skip the anchor principle?** Today a front member reaches the main line only as the front's opening, a new front peak, alarm 5, or the front's alarm floor. Example: 17234 (US destroys Iranian tankers, alarm 4) is on the Iran front but not a new peak, so it stays off. *Recommended: keep the anchor principle (locked August 18, 2026); the only change inside fronts is that coverage never counts.* **Blocks S4.**
 - [ ] **D5. Lower bar for EOs, SCOTUS rulings and pardons.** *Recommended: level 4 or higher (today: 5 only).* On TEST this takes these three sources from 13 main-line entries to 64 (14.4). **Blocks S5.**
-- [ ] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did and Said chips (both on by default). Public word for coverage on front pages: "Analysis".* Details in 14.5. **Blocks S6.**
+- [ ] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did, Said and Analysis chips (all on by default). Unlabeled stories and EO/SCOTUS/pardon rows count as Did. Public word for coverage: "Analysis".* Details and the full chip table in 14.5. **Blocks S6.**
 - [ ] **D7. How the all-fronts agent (ADO-592) uses the label.** *Recommended: coverage stories are not candidates for the agent; unlabeled stories still are (so nothing is lost while the backfill runs); the regex sweep is unchanged.* **Blocks S7 (and the matching part of ADO-592).**
 - [ ] **D8. Backfill scope and pace.** *Recommended: label every active enriched story (about 15,000 on PROD), headline and summary only, at about 3 runs a day, before the ADO-592 PROD backfill.* About 38 runs, roughly two weeks, $0 cash (14.8). **Blocks S3 (PROD part).**
 
@@ -515,15 +515,15 @@ For coverage, the actor is whoever the piece is about (a column on his record is
 1. **A threat and an action in one story:** `did`. The action wins.
 2. **A promise later kept or broken:** each story is labeled on its own news. The promise was `said` when made; the fact-check months later is `coverage`.
 3. **A record roundup or fact-check** that lists many actions: `coverage`. The actions in it were news on their own days (17248, 17250).
-4. **Reactions to his actions** (Canada retaliates, groups sue, a court blocks): `did` or `said` with actor `other`. They can still join a front.
-5. **Court rulings:** if the administration is a party (it brought the case or defends it), `did` / `administration`. Taking a case to the Supreme Court and losing it is his record (Josh, September 30, 2026). A ruling in a case without the administration is `did` / `other` (17230).
+4. **Reactions to his actions by people outside the courts** (Canada retaliates, groups file suit, a governor refuses): `did` or `said` with actor `other`. They can still join a front. Court rulings are not reactions for this purpose; they follow rule 5.
+5. **Court rulings, one rule:** if the administration is a party to the case (it brought the case or defends it), the ruling is `did` / `administration`, **whichever way it goes**. A court blocking his order, upholding it, or the Supreme Court ruling against him are all his record (Josh, September 30, 2026: "taking a case to the Supreme Court and losing it"). A ruling in a case without the administration is `did` / `other` (17230). Filing the lawsuit against him is still rule 4 (`other`, as 17245); the ruling in that suit is rule 5 (`administration`).
 6. **His rallies and speeches:** a new threat or promise in the speech is `said` / `trump`. A live stream or recap with nothing new is `coverage` (17239).
 7. **His social media posts:** `said`, unless the post announces something that has taken effect (then `did`).
 8. **Reported plans and leaks:** `said` / `administration` when officials confirm it or a document exists (a draft order, a memo). Anonymous "he is weighing" reporting is `coverage` until something happens.
 9. **Accidents and incidents nobody decided:** `did` / `other` (17246, a worker hurt at the White House renovation).
 10. **Off-topic stories** that slipped past the feeds: label them honestly (usually `did` / `other` or `coverage`). They never reach the main line (17241).
 11. **A story that merged two events:** label the event in the headline.
-12. **Unsure:** pick the lower-impact label (`coverage` over `said`, `said` over `did`) and note it in the run log, the same "under-commit" rule the Stories agent already uses for alarm levels.
+12. **Unsure:** err toward keeping the story visible. Between `coverage` and an action label, pick the action label (`did` or `said`): a wrong `coverage` silently drops a story off the main line and out of ADO-592's pool, while a wrong `did` only adds an entry that a `force_hide` pin removes. Between `did` and `said`, pick `said` (it has the higher bar, so a doubtful story needs alarm 4 to show). Between `trump` / `administration` and `ally` / `other`, pick by who signed, ordered or spoke; if that is unclear, pick `other`. The agent notes `label_uncertain` in its run log row so Josh can review those first. This is deliberately not the "under-commit" rule used for alarm levels (D1).
 
 ### 14.3 Evidence: 40 hand-labeled stories
 
@@ -591,9 +591,9 @@ Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stori
 **Stories, checked in this order (recommended values from D2 to D4):**
 
 1. **Pin:** `force_show` is on, `force_hide` is off. Unchanged.
-2. **No label yet:** rule v1.2 exactly as today. This is what lets v2 ship before the backfill finishes; the main line changes story by story as labels arrive.
+2. **No label yet:** judged by the v1.2 clauses (a loose end needs alarm 5; a front member uses the four front clauses in step 4), with one difference: a front's opening and running peak come from the step 4 member set, which skips members labeled coverage. Until some member of that front is labeled coverage, the result is identical to v1.2. This is what lets v2 ship before the backfill finishes; the main line changes story by story as labels arrive.
 3. **Coverage:** off.
-4. **Member of a published front:** the v1.2 front clauses, unchanged (front opening, alarm 5, a new front peak at 4 or higher, or at or above the front's alarm floor). The opening and the running peak are now worked out over every member **not labeled coverage**: did, said and unlabeled members all count, coverage members are skipped. Because there is one member set per front at any moment, a front always has exactly one opening, whatever order the labels arrive in. During the backfill an unlabeled first member is the opening (as in v1.2); if it is later labeled coverage, the opening moves to the next non-coverage member at the next refresh. It never produces two openings. The same applies to stories still on step 2: an unlabeled front member is judged by the v1.2 front clauses against this same member set.
+4. **Member of a published front:** the v1.2 front clauses, unchanged (front opening, alarm 5, a new front peak at 4 or higher, or at or above the front's alarm floor). The opening and the running peak are now worked out over every member **not labeled coverage**: did, said and unlabeled members all count, coverage members are skipped. Because there is one member set per front at any moment, a front always has exactly one opening, whatever order the labels arrive in. During the backfill an unlabeled first member is the opening (as in v1.2); if it is later labeled coverage, the opening moves to the next non-coverage member at the next refresh. It never produces two openings. Step 2 uses this same member set, so labeled and unlabeled members of one front are always judged against one opening and one peak.
 5. **Loose end (no front):** on when either of these is true:
    - `did` by trump or administration at alarm 3 or higher;
    - `said` by trump or administration at alarm 4 or higher.
@@ -618,10 +618,20 @@ For recent, calibrated stories the line grows a little (2 to 3 in three days, ab
 
 - **One line, one order.** Said entries sit on the same spine as did entries, in date order. No second lane: a threat and the action that follows it should be next to each other.
 - **A different marker.** Did keeps today's solid marker. Said gets a speech-bubble marker and a small "Said" tag before the headline. Not a hollow dot: hollow markers already mean EO, SCOTUS and pardons (§5.1).
-- **Chips.** "Did" and "Said" chips sit next to the source chips, both on by default. Turning Said off leaves a pure record of actions. They follow the same rules as the source chips after bug ADO-593 is fixed (a switched-off chip is not fetched and does not hold back the date frontier).
+- **Chips.** "Did", "Said" and "Analysis" chips sit next to the source chips, all on by default. Turning Said off leaves a pure record of actions. They follow the same rules as the source chips after bug ADO-593 is fixed (a switched-off chip is not fetched and does not hold back the date frontier). What each chip covers:
+
+  | Row | Chip that controls it | Marker / tag |
+  |---|---|---|
+  | Story labeled `did` | Did | solid marker, no tag |
+  | Story labeled `said` | Said | speech bubble, "Said" tag |
+  | Story labeled `coverage` | Analysis | muted, "Analysis" tag |
+  | Story not labeled yet (every story until the backfill reaches it) | Did | solid marker, no tag, so the Tracker looks exactly like today while the backfill runs |
+  | EO, SCOTUS ruling, pardon | Did (as well as its own source chip; the row shows only when both are on) | today's hollow source marker |
+
+  On the main line, coverage stories only ever appear when pinned (14.4 step 3), so the Analysis chip matters there only for pinned rows. In the alarm views ("All", "3+" and so on) coverage stories appear as today, and the Analysis chip lets a reader hide them. On the server the chips become a filter on the stories query (Did off: no `did` and no unlabeled stories, and the EO, SCOTUS and pardon sources are not fetched at all).
 - **Mobile.** The same marker and tag in the single-column list.
 - **Front pages.** A front page is the complete record, so it shows every member. Coverage members get a muted "Analysis" tag (public copy avoids "coverage", the same way it avoids "story").
-- **Copy for §8 (draft):** chip labels "Did" and "Said"; tag "Said"; tag "Analysis"; empty state with only Said on: "Nothing said in this range. Turn Did back on to see what he did."
+- **Copy for §8 (draft):** chip labels "Did", "Said" and "Analysis"; tag "Said"; tag "Analysis"; empty state with only Said on: "Nothing said in this range. Turn Did back on to see what he did."
 - **Later, not now:** linking a said entry to the did entry that kept or broke it ("promised in March, signed in June"). Worth it once both labels exist, but it needs its own design.
 
 ### 14.6 How ADO-592 (the all-fronts agent) uses the label
@@ -641,10 +651,15 @@ In `docs/features/stories-claude-agent/prompt-v1.md`:
 - **Step 5:** two new checklist lines: both values are from the allowed set, and the label was chosen from what the story reports, not from how angry the headline sounds.
 - **Step 6:** both fields go in the success PATCH. They are not written on the failure path, the same as `alarm_level`.
 - **Gold examples:** six short calibration cases from 14.3: 17240 (did, administration), 17216 (said, trump), 17248 (coverage despite listing actions), 17233 (said, other), 17231 (did, administration, a court filing), 17246 (did, other, an accident).
+- **Gold check (how S2 is tested).** The 40 gold stories are already enriched and unchanged, so the normal queue (migration 117) will never hand them to the agent. S2 therefore adds a **gold-check mode** to the prompt, used on TEST only: given a fixed list of story ids instead of the Step 2 RPC, the agent runs Steps 3 to 5 (reads the articles, produces the fields) and writes **only** a results file with `id, action_label, action_actor` per story. No PATCH, no log rows, no watermark change. A small script compares the file to the 14.3 table; S2 passes at 90% agreement or better (the same gate as the backfill). One gold check costs about the plan usage of 40 normal enrichments, once. The mode refuses to run without an explicit id list, so it cannot touch the live queue.
 - **Version:** `prompt_version` becomes `claude-v1.1`, so labels written by the old prompt (none) and the new one can be told apart.
 - **Deploy order:** the migration adding the columns lands on TEST and PROD before the prompt change merges to main (§9: the routine resets to `origin/main`).
 - **Re-enrichment** keeps its current rules: a story only comes back when it gains articles. A re-enriched story gets fresh labels; an unchanged story keeps the label from the backfill.
-- **A human label is locked.** When Josh corrects a label in admin, `action_label_source` becomes `human`. From then on no agent may change `action_label` or `action_actor` on that story: not the Stories agent on re-enrichment, not the backfill. The guard lives in the database, not only in the prompt: a trigger on `stories` (shipped with S1) keeps the old label and actor whenever the row's current source is `human` and the incoming write is not from admin. The prompt also tells the agent to leave the two fields out of its PATCH when Step 2 shows `action_label_source = human`, so the run log stays honest, but the trigger is what makes it safe. Only admin can unlock a label (set it back to `agent`), after which the next re-enrichment relabels it.
+- **A human label is locked.** When Josh corrects a label in admin, `action_label_source` becomes `human`. From then on no agent may change `action_label`, `action_actor` or `action_label_source` on that story: not the Stories agent on re-enrichment, not the backfill. Admin and the agents both write with the service key, so the key cannot tell them apart. The mechanism instead (shipped with S1):
+  - **One door for human labels:** an RPC, `set_story_action_label(p_story_id, p_label, p_actor, p_unlock)`. It is the only code that sets `action_label_source = human` or unlocks a label (`p_unlock = true` sets the source back to `agent`, after which the next re-enrichment relabels the story). Inside its own transaction it sets a local flag (`set_config('app.label_admin', 'on', true)`) before its UPDATE.
+  - **A trigger that checks the flag:** on any UPDATE of `stories`, if the old `action_label_source` is `human`, or the new one is `human`, and the flag is not on, the trigger puts back the old `action_label`, `action_actor` and `action_label_source` and lets the rest of the write through. So an agent's enrichment PATCH still saves its summary and alarm level; only the label part is ignored. It neither fails the write nor raises an error.
+  - **Who calls the door:** only the admin label edit (S8, from `admin-update-story` or a small new admin function). No agent prompt names the RPC, and a `qa:agent-prompts` test asserts that. This protects against accidental overwrites; it is not a security boundary against code that holds the service key, which is the same trust level every admin write has today.
+  - The Stories prompt also leaves the two fields out of its PATCH when Step 2 shows `action_label_source = human`, so its run log stays honest, but the trigger is what makes it safe.
 
 ### 14.8 Backfill of active stories
 
@@ -672,7 +687,7 @@ The Stories agent will label new and changed stories from S2 onwards. Every stor
 
 - **Old GPT-era summaries can be spun.** A label from a slanted summary can be wrong. The 90% gate catches a systematic problem; pins and a later admin override (S8) fix single rows.
 - **The main line moves while the backfill runs.** Unlabeled stories keep rule v1.2, so the line shifts gradually rather than all at once. S4 reports the TEST before/after count; PROD runs can be paused at any time.
-- **Front opening shifts.** If a front's first member is labeled coverage, the opening moves to its first did or said member. Intended, but worth a look on the front pages after the TEST backfill.
+- **Front opening shifts.** If a front's first member is labeled coverage, the opening moves to its first member not labeled coverage (did, said or still unlabeled). Intended, but worth a look on the front pages after the TEST backfill.
 - **The sample is small and election-heavy.** Treat the shares in 14.3 as a direction, not a forecast.
 
 ### 14.10 Proposed build stories (not carded yet)
@@ -681,13 +696,13 @@ In build order. Each is one session.
 
 | # | Title | Scope in one line | Blocked by |
 |---|---|---|---|
-| S1 | Action label columns on stories | Migration (next free number): `stories.action_label`, `stories.action_actor`, `stories.action_label_source` (agent / backfill / human), all nullable with CHECK constraints; a trigger that keeps a `human` label and actor unless the write itself is a human (admin) write (14.7); expose the two labels through `v_tracker_stories` (tight select kept). | D1 |
-| S2 | Stories agent labels every story | Prompt change in 14.7, `claude-v1.1`, prompt tests (`qa:agent-prompts`), TEST routine run checked against the gold set. | D1, S1 |
+| S1 | Action label columns on stories | Migration (next free number): `stories.action_label`, `stories.action_actor`, `stories.action_label_source` (agent / backfill / human), all nullable with CHECK constraints; the `set_story_action_label` RPC (the only way to set or unlock a `human` label) plus the trigger that restores the label fields on any other write to a human-labeled row (14.7); expose the two labels through `v_tracker_stories` (tight select kept). | D1 |
+| S2 | Stories agent labels every story | Prompt change in 14.7, `claude-v1.1`, prompt tests (`qa:agent-prompts`), plus a TEST-only gold check (14.7). | D1, S1 |
 | S3 | One-time label backfill | Label-only candidate RPC, a `record`-style writer script, a short backfill routine prompt; TEST run with the 90% gate, then PROD runs at the agreed pace. | D1, D8, S1 |
 | S4 | Main-line rule v2 | New `v_tracker_main_line_rule` (14.4), unlabeled rows keep v1.2, opening and peak over every non-coverage member (unlabeled included), loose ends by ally and other actors off at every alarm level; TEST before/after count in the PR. | D2, D3, D4, S1 |
 | S5 | Lower main-line bar for EOs, SCOTUS and pardons | One per-source main-line bar constant in `src/lib/timeline.ts` (5 to 4), used in **both** places that apply it: `buildSourcePath` (the main-view fetch, `s.alarm(5)` today) and the pinned-row injection (`filter(e => e.alarm < 5)` today), so a pinned alarm-4 entry is not shown twice; tests for both; after ADO-593 merges (same file). | D5, ADO-593 |
-| S6 | Did and Said on the Tracker | Speech-bubble marker, "Said" tag, Did/Said chips, "Analysis" tag on front pages, §8 copy; behind a feature flag. | D6, S1, ADO-593 |
+| S6 | Did and Said on the Tracker | Speech-bubble marker, "Said" tag, Did/Said/Analysis chips per the 14.5 table (unlabeled and EO/SCOTUS/pardon rows under Did), "Analysis" tag on front pages, §8 copy; behind a feature flag. | D6, S1, ADO-593 |
 | S7 | Label-aware all-fronts candidates | Inside ADO-592: candidate RPC skips coverage (unlabeled stays in), the agent sees the labels. Folded into 592's own scope rather than a separate card. | D7, S1 |
-| S8 (later) | Admin label override | Edit or unlock a story's label in admin (`action_label_source = human`). Locked against both the Stories agent's re-enrichment and the backfill by the S1 trigger; S2's prompt skips locked labels. | S1 |
+| S8 (later) | Admin label override | Edit or unlock a story's label in admin, always through the S1 `set_story_action_label` RPC (never a plain PATCH, which the trigger would undo). Locked against both the Stories agent's re-enrichment and the backfill by the S1 trigger; S2's prompt skips locked labels. | S1 |
 
 **Suggested order:** S1, then S2 and S3 on TEST, then S4, then S5 and S6, then ADO-592 with S7, then the S3 PROD runs, then the 592 PROD backfill.
