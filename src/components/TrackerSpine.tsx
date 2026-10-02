@@ -108,6 +108,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const pageViewRef = useRef<TrackerView | null>(null);
   // The coverage frontier on screen, kept while a re-enabled chip loads
   const heldFrontierRef = useRef<string | null>(null);
+  const heldViewRef = useRef<TrackerView | null>(null);
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -178,10 +179,15 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   }, [pageState, off, refreshing, loadingMore, view]);
 
   const nextFrontier = pageState ? coverageFrontier(pageState, off) : null;
+  // A held frontier belongs to the view it was rendered for
+  if (heldViewRef.current !== pageViewRef.current) {
+    heldFrontierRef.current = null;
+    heldViewRef.current = pageViewRef.current;
+  }
   // A chip switched back on is waiting for its first page: the list stays
   // exactly as it was until that page lands
   const waitingOnChip = nextFrontier === FRONTIER_PENDING;
-  const frontier = holdFrontier(nextFrontier, heldFrontierRef.current);
+  const frontier = pageState ? holdFrontier(pageState, off, heldFrontierRef.current) : null;
   heldFrontierRef.current = frontier;
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front

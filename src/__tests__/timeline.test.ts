@@ -124,6 +124,14 @@ describe('mergeEntries', () => {
     expect(merged[0].id).toBe(1);
   });
 
+  it('keeps one entry per source + id (backstop against double injection)', () => {
+    const merged = mergeEntries([
+      [mk({ id: 'eo_1', source: 'eos', date: '2026-03-01' })],
+      [mk({ id: 'eo_1', source: 'eos', date: '2026-03-01' }), mk({ id: 'eo_1', source: 'stories', date: '2026-03-01' })],
+    ]);
+    expect(merged.map(e => `${e.source}:${e.id}`)).toEqual(['eos:eo_1', 'stories:eo_1']);
+  });
+
   it('sorts ties deterministically by id', () => {
     const merged = mergeEntries([[
       mk({ id: 20, date: '2026-01-01' }),
@@ -264,20 +272,47 @@ describe('coverageFrontier', () => {
     const shownIds = (frontier: string | null, off: ReadonlySet<TimelineSource>) =>
       visibleEntries(entries, { frontier, min: 0, off, query: '' }).map(e => e.id);
 
-    const before = holdFrontier(coverageFrontier(state, pardonsOnly), null);
+    const before = holdFrontier(state, pardonsOnly, null);
     expect(before).toBe('2026-03-01');
     expect(shownIds(before, pardonsOnly)).toEqual([2, 1]);
 
     // Stories back on: its first page is pending, so the previous frontier is
     // kept and the list does not collapse or move while it loads
     expect(coverageFrontier(state, storiesBackOn)).toBe(FRONTIER_PENDING);
-    const pending = holdFrontier(coverageFrontier(state, storiesBackOn), before);
+    const pending = holdFrontier(state, storiesBackOn, before);
     expect(pending).toBe('2026-03-01');
     expect(shownIds(pending, storiesBackOn)).toEqual([2, 1]);
 
     // Once the first page lands, the stories cursor sets the frontier as usual
     state.stories = st({ cursor: { date: '2026-08-07', id: 9 } });
-    expect(holdFrontier(coverageFrontier(state, storiesBackOn), pending)).toBe('2026-08-07');
+    expect(holdFrontier(state, storiesBackOn, pending)).toBe('2026-08-07');
+  });
+
+  it('never falls back to "show everything" while a chip is pending and nothing is held yet (ADO-593 review)', () => {
+    const storiesBackOn = new Set<TimelineSource>(['eos', 'scotus']);
+    // A chip switched on mid-load: no frontier rendered yet for this view.
+    // Hold at the most restrictive cursor of the sources already on.
+    const loading: TrackerState = {
+      stories: st({}),
+      eos: st({ exhausted: true }),
+      scotus: st({ exhausted: true }),
+      pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
+    };
+    expect(holdFrontier(loading, storiesBackOn, null)).toBe('2026-03-01');
+
+    // Every source already on is exhausted (the held value was a genuine null):
+    // still hold at their newest cursor rather than show everything
+    const doneOn: TrackerState = {
+      stories: st({}),
+      eos: st({ exhausted: true, cursor: { date: '2025-02-01', id: 'eo_1' } }),
+      scotus: st({ exhausted: true }),
+      pardons: st({ exhausted: true, cursor: { date: '2025-03-15', id: 1 } }),
+    };
+    expect(holdFrontier(doneOn, new Set(), null)).toBe('2025-03-15');
+
+    // No source on has loaded anything: show nothing, never everything
+    const empty: TrackerState = { stories: st({}), eos: st({}), scotus: st({ exhausted: true }), pardons: st({ exhausted: true }) };
+    expect(holdFrontier(empty, new Set(), null)).toBe(FRONTIER_PENDING);
   });
 });
 
@@ -752,6 +787,33 @@ describe('tracker pins (ADO-554)', () => {
     const ids = done.map(e => e.id);
     expect(ids).toContain('eo_low');
     expect(ids.indexOf('eo_low')).toBe(ids.length - 1); // oldest → rendered last (newest first)
+  });
+
+  it('a failed first page injects no pins, and its retry injects them exactly once (ADO-593 review)', async () => {
+    let eosUp = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.includes('/tracker_pin?')) {
+        return { ok: true, json: async () => [{ source: 'eos', entity_id: 'eo_low', pin: 'force_show' }] };
+      }
+      if (input.includes('/executive_orders?') && input.includes('id=in.')) {
+        return { ok: true, json: async () => [{ id: 'eo_low', title: 'Quiet order', date: '2026-03-01', alarm_level: 2 }] };
+      }
+      if (input.includes('/executive_orders?')) {
+        return eosUp ? { ok: true, json: async () => [] } : { ok: false, json: async () => [] };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+    const pins = await fetchTrackerPins();
+    const none = new Set<TimelineSource>();
+
+    const first = await fetchTrackerPage('main', null, undefined, pins);
+    expect(first.state.eos).toMatchObject({ errored: true, cursor: null });
+    expect(first.entries.some(e => e.id === 'eo_low')).toBe(false);
+
+    eosUp = true;
+    const retry = await fetchTrackerPage('main', retryErrored(first.state, none), undefined, pins);
+    const all = mergeEntries([first.entries, retry.entries]);
+    expect(all.filter(e => e.source === 'eos' && e.id === 'eo_low')).toHaveLength(1);
   });
 
   it('does not re-inject force_shown rows on later pages', async () => {
