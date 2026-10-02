@@ -18,6 +18,8 @@ import {
   allOnErrored,
   anyOnErrored,
   retryErrored,
+  catchUpSource,
+  CATCH_UP_MAX_PAGES,
   FRONTIER_PENDING,
   holdFrontier,
   SOURCE_ROUTES,
@@ -658,6 +660,133 @@ describe('source chips (ADO-593): switched-off sources are not paged or counted'
     // Rows already loaded stay hidden while every chip is off
     const loaded = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF);
     expect(shown(loaded.entries, loaded.state, allOff)).toHaveLength(0);
+  });
+});
+
+describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  let calls: string[];
+  let failStoriesAfter: number;
+  const DAY = 86400_000;
+
+  // Keyset-aware mock: each table is a long newest-first list, and a request
+  // with `id.lt."N"` returns the next page after id N.
+  const storyAt = (i: number) => ({
+    id: 5000 - i, primary_headline: `Story ${i}`, alarm_level: 4, severity: null,
+    first_seen_at: new Date(Date.UTC(2026, 7, 10) - i * DAY / 2).toISOString(), // every 12 hours
+  });
+  const pardonAt = (i: number) => ({
+    id: 900 - i, recipient_name: `Donor ${i}`, corruption_level: 5,
+    pardon_date: new Date(Date.UTC(2026, 5, 30) - i * 3 * DAY).toISOString().slice(0, 10), // every 3 days
+  });
+  const page = (input: string, base: number, total: number, limit: number, at: (i: number) => object) => {
+    const m = /id\.lt\."(\d+)"/.exec(decodeURIComponent(input));
+    const start = m ? base - Number(m[1]) + 1 : 0;
+    return Array.from({ length: Math.max(0, Math.min(limit, total - start)) }, (_, k) => at(start + k));
+  };
+  let storyPages: number;
+
+  beforeEach(() => {
+    calls = [];
+    storyPages = 0;
+    failStoriesAfter = Infinity;
+    vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: { signal?: AbortSignal }) => {
+      if (init?.signal?.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+      calls.push(input);
+      if (input.includes('/v_tracker_stories?')) {
+        if (++storyPages > failStoriesAfter) return { ok: false, json: async () => [] };
+        return { ok: true, json: async () => page(input, 5000, 1000, 60, storyAt) };
+      }
+      if (input.includes('/pardons?')) return { ok: true, json: async () => page(input, 900, 100, 25, pardonAt) };
+      return { ok: true, json: async () => [] }; // eos, scotus: nothing
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+  });
+
+  const STORIES_OFF = new Set<TimelineSource>(['stories']);
+  const NONE_OFF = new Set<TimelineSource>();
+  const key = (e: TimelineEntry) => `${e.source}:${e.id}`;
+
+  /** Everything on, then Stories off and "load earlier" once: pardons reach back to February. */
+  async function storiesOffAndPagedBack() {
+    const first = await fetchTrackerPage(0, null);
+    const more = await fetchTrackerPage(0, first.state, undefined, undefined, STORIES_OFF);
+    return { entries: mergeEntries([first.entries, more.entries]), state: more.state };
+  }
+
+  it('(a) Stories back on: Stories pages until it reaches the frontier on screen, and no shown row disappears', async () => {
+    const { entries, state } = await storiesOffAndPagedBack();
+    const target = coverageFrontier(state, STORIES_OFF);
+    expect(target).toBe(pardonAt(49).pardon_date);
+    const shownBefore = visibleEntries(entries, { frontier: target, min: 0, off: STORIES_OFF, query: '' }).map(key);
+    expect(state.stories.cursor!.date > target!).toBe(true); // stale cursor: the jump this fixes
+
+    calls = [];
+    const caught = await catchUpSource(0, state, 'stories', target);
+    expect(calls.every(c => c.includes('/v_tracker_stories?'))).toBe(true);
+    expect(caught.pages).toBeGreaterThan(1);
+    expect(caught.pages).toBeLessThanOrEqual(CATCH_UP_MAX_PAGES);
+    expect(caught.state.stories.cursor!.date <= target!).toBe(true);
+    expect(caught.state.pardons).toEqual(state.pardons);
+
+    const all = mergeEntries([entries, caught.entries]);
+    const frontierAfter = coverageFrontier(caught.state, NONE_OFF);
+    const shownAfter = new Set(visibleEntries(all, { frontier: frontierAfter, min: 0, off: NONE_OFF, query: '' }).map(key));
+    expect(shownBefore.filter(k => !shownAfter.has(k))).toEqual([]);
+  });
+
+  it('(b) stops at the 10-page cap when the target is further back', async () => {
+    const { state } = await storiesOffAndPagedBack();
+    calls = [];
+    const caught = await catchUpSource(0, state, 'stories', '2025-03-01');
+    expect(CATCH_UP_MAX_PAGES).toBe(10);
+    expect(caught.pages).toBe(10);
+    expect(calls).toHaveLength(10);
+    expect(caught.state.stories.exhausted).toBe(false); // "load earlier" carries on from here
+  });
+
+  it('(c) switching the chip off mid-catch-up stops fetching; a view change aborts it', async () => {
+    const { state } = await storiesOffAndPagedBack();
+    calls = [];
+    let checks = 0;
+    const caught = await catchUpSource(0, state, 'stories', '2025-03-01', { stillOn: () => ++checks <= 2 });
+    expect(calls).toHaveLength(2);
+    expect(caught.pages).toBe(2);
+
+    calls = [];
+    const ac = new AbortController();
+    let n = 0;
+    const run = catchUpSource(0, state, 'stories', '2025-03-01', {
+      signal: ac.signal,
+      stillOn: () => { if (++n === 3) ac.abort(); return true; },
+    });
+    await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('(d) a failed catch-up page stops it and leaves the retry footer, never "the whole record"', async () => {
+    const { state } = await storiesOffAndPagedBack();
+    failStoriesAfter = storyPages + 2; // the third catch-up page fails
+    const caught = await catchUpSource(0, state, 'stories', '2025-03-01');
+    expect(caught.pages).toBe(3);
+    expect(caught.state.stories).toMatchObject({ errored: true, exhausted: true });
+    expect(anyOnErrored(caught.state, NONE_OFF)).toBe(true);
+    expect(allOnExhausted(retryErrored(caught.state, NONE_OFF), NONE_OFF)).toBe(false);
+  });
+
+  it('a never-fetched source catches up from its first page', async () => {
+    const first = await fetchTrackerPage(0, null, undefined, undefined, STORIES_OFF);
+    const more = await fetchTrackerPage(0, first.state, undefined, undefined, STORIES_OFF);
+    const target = coverageFrontier(more.state, STORIES_OFF);
+    calls = [];
+    const caught = await catchUpSource(0, more.state, 'stories', target);
+    expect(decodeURIComponent(calls[0])).not.toContain('id.lt.');
+    expect(caught.state.stories.cursor!.date <= target!).toBe(true);
   });
 });
 
