@@ -9,13 +9,14 @@ import { checkAdminPassword, getAdminClient } from '../_shared/auth.ts'
 
 // Entity types undo_content_change knows, with the id shape each table uses.
 // story/pardon/scotus/feed ids are bigint; articles use text ids; EO ids are
-// integer on TEST and 'eo_<uuid>' on PROD, so both shapes are accepted there.
+// integer on TEST and text on PROD: older rows 'eo_<timestamp>_<suffix>', newer
+// 'eo_<uuid>' (migration 108), in a VARCHAR(50) column, so both shapes are accepted.
 const ENTITY_ID_PATTERNS: Record<string, RegExp> = {
   story: /^[1-9][0-9]{0,17}$/,
   pardon: /^[1-9][0-9]{0,17}$/,
   scotus: /^[1-9][0-9]{0,17}$/,
   feed: /^[1-9][0-9]{0,17}$/,
-  eo: /^([1-9][0-9]{0,17}|eo_[A-Za-z0-9-]{1,60})$/,
+  eo: /^([1-9][0-9]{0,17}|eo_[A-Za-z0-9_-]{1,47})$/,
   article: /^[A-Za-z0-9_-]{1,100}$/,
 }
 

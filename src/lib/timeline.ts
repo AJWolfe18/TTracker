@@ -115,11 +115,22 @@ export function pardonRowToEntry(raw: Raw): TimelineEntry {
   };
 }
 
-/** Merge per-source rows into one ascending chronological list, dropping undated rows. */
+/**
+ * Merge per-source rows into one ascending chronological list, dropping
+ * undated rows and keeping one entry per source + id (a backstop: the same
+ * row twice would render twice under one React key).
+ */
 export function mergeEntries(groups: TimelineEntry[][]): TimelineEntry[] {
+  const seen = new Set<string>();
   return groups
     .flat()
-    .filter(e => e.date && e.headline)
+    .filter(e => {
+      if (!e.date || !e.headline) return false;
+      const key = `${e.source}:${e.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
 }
 
@@ -317,11 +328,15 @@ export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<Timeline
  * Fetch the next page for every non-exhausted source and advance its cursor.
  * Returns only the NEW entries (ascending); callers merge with what they hold.
  *
+ * Sources in `off` (switched-off chips, ADO-593) are not fetched at all and
+ * keep their state, so switching the chip back on resumes where it stopped,
+ * or starts at its first page if it was never fetched.
+ *
  * In the 'main' view, pins adjust the non-stories sources client-side:
- * force_hide entries are dropped from every page, and on the FIRST page
- * (state === null) force_show rows below the alarm-5 stream are fetched by id
- * and merged in at their chronological position. Stories pins are already
- * applied by v_tracker_stories on the server.
+ * force_hide entries are dropped from every page, and on a source's FIRST
+ * page (no cursor yet) force_show rows below the alarm-5 stream are fetched
+ * by id and merged in at their chronological position. Stories pins are
+ * already applied by v_tracker_stories on the server.
  *
  * Pinned rows surface AT THEIR DATE, deliberately: the Tracker is a
  * chronological record, not a pinboard (pin-to-top is the ADO-552 hero
@@ -336,6 +351,7 @@ export async function fetchTrackerPage(
   // May be a promise so callers can fetch pins CONCURRENTLY with the source
   // pages (pins are only consumed after every page response has arrived).
   pins?: TrackerPins | Promise<TrackerPins | undefined>,
+  off: ReadonlySet<TimelineSource> = new Set(),
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
@@ -348,11 +364,12 @@ export async function fetchTrackerPage(
   const prev = state ?? initialTrackerState();
   const next: TrackerState = { ...prev };
   const isMain = view === 'main';
+  const firstPage = new Set<TimelineSource>();
 
   const groups = await Promise.all(
     TIMELINE_SOURCES.map(async source => {
       const st = prev[source];
-      if (st.exhausted) return [];
+      if (st.exhausted || off.has(source)) return [];
       const spec = SPECS[source];
       try {
         const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, view, st.cursor)}`, { headers, signal });
@@ -361,6 +378,9 @@ export async function fetchTrackerPage(
           return [];
         }
         const rows: Raw[] = await res.json();
+        // Pins inject only once a first page SUCCEEDS: a failed one is retried
+        // from no cursor, and injecting on both attempts would duplicate them
+        if (!st.cursor) firstPage.add(source);
         const last = rows[rows.length - 1];
         next[source] = {
           cursor: last
@@ -389,14 +409,15 @@ export async function fetchTrackerPage(
     });
   }
 
-  // First page of the main line: surface force_show pins on non-stories
-  // sources. Only rows below the alarm-5 stream are merged — anything at 5
-  // arrives (or already arrived) through normal paging, so injecting it again
-  // would duplicate the entry.
-  if (isMain && state === null && resolvedPins?.size) {
+  // A source's first page on the main line (the first load, or its chip
+  // switched back on after a load that skipped it): surface force_show pins
+  // on non-stories sources. Only rows below the alarm-5 stream are merged —
+  // anything at 5 arrives (or already arrived) through normal paging, so
+  // injecting it again would duplicate the entry.
+  if (isMain && firstPage.size && resolvedPins?.size) {
     const bySource = forceShowIdsBySource(resolvedPins);
     const injected = await Promise.all(
-      (Object.keys(bySource) as TimelineSource[]).map(async source => {
+      (Object.keys(bySource) as TimelineSource[]).filter(s => firstPage.has(s)).map(async source => {
         const spec = SPECS[source];
         const ids = bySource[source]!.map(id => quoted(id)).join(',');
         try {
@@ -424,16 +445,259 @@ export async function fetchTrackerPage(
  * cursor date among sources that still have unfetched rows. Entries older than
  * this are buffered, not shown — otherwise a sparse source (25 EOs reach back
  * months, 60 stories reach back days) would fake gaps in the record.
- * Null means every source is exhausted: show everything.
+ * Sources in `off` are skipped (ADO-593): a switched-off chip must not hold
+ * back the sources still on. A source that is on but not fetched yet (a chip
+ * switched back on, waiting for its first page) covers nothing yet, so the
+ * frontier is FRONTIER_PENDING; callers keep their previous frontier for that
+ * round trip (holdFrontier). Null means every source still counted is
+ * exhausted: show everything.
  */
-export function coverageFrontier(state: TrackerState): string | null {
+export function coverageFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource> = new Set(),
+): string | null {
   let frontier: string | null = null;
   for (const src of TIMELINE_SOURCES) {
     const st = state[src];
-    if (st.exhausted || !st.cursor) continue;
+    if (st.exhausted || off.has(src)) continue;
+    if (!st.cursor) return FRONTIER_PENDING;
     if (frontier === null || st.cursor.date > frontier) frontier = st.cursor.date;
   }
   return frontier;
+}
+
+/** coverageFrontier's answer while a switched-on source has no first page yet. */
+export const FRONTIER_PENDING = '\uffff';
+
+/**
+ * The frontier to render. While a switched-on source is pending, keep the one
+ * already on screen (`held`) so the list neither collapses nor moves under
+ * the reader's scroll, and recompute once its first page lands. With nothing
+ * held yet (a chip switched on mid-load, or every source on was exhausted),
+ * hold at the coverage frontier of the sources on that have loaded (the same
+ * rule, with the pending ones left out). Never null, which would show every
+ * buffered row with fake gaps and then pull them back: if those sources have
+ * no frontier either, show nothing until the first page lands.
+ */
+export function holdFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  held: string | null,
+): string | null {
+  const next = coverageFrontier(state, off);
+  if (next !== FRONTIER_PENDING) return next;
+  if (held !== null) return held;
+  const pending = TIMELINE_SOURCES.filter(s => !off.has(s) && !state[s].exhausted && !state[s].cursor);
+  return coverageFrontier(state, new Set([...off, ...pending])) ?? FRONTIER_PENDING;
+}
+
+/** The older of two frontiers. Null (show everything) is the oldest of all. */
+export function olderFrontier(a: string | null, b: string | null): string | null {
+  if (a === null || b === null) return null;
+  return a < b ? a : b;
+}
+
+/**
+ * The frontier to DISPLAY. Within a view it never moves newer: a chip
+ * switched back on, a catch-up stopped at its cap, or a retry from an old
+ * cursor can push the computed frontier forward, which would pull rows out
+ * from under the reader, so the older of `prev` and the computed one wins.
+ * `prev` undefined means nothing displayed yet for this view (a view change
+ * resets it), which starts from holdFrontier's never-null rule.
+ *
+ * Null ("show everything") is only real when switched-on sources have
+ * loaded everything. A null that just means no switched-on source can say
+ * anything (every chip off, or every source on failed) keeps what is on
+ * screen instead, and rememberFrontier does not store it, so it never
+ * sticks for the rest of the view.
+ */
+export function displayedFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  prev: string | null | undefined,
+): string | null {
+  const computed = prev === undefined ? holdFrontier(state, off, null) : coverageFrontier(state, off);
+  if (computed === null && !onSourcesConstrain(state, off)) return prev ?? null;
+  return prev === undefined ? computed : olderFrontier(prev, computed);
+}
+
+/** The value to keep as `prev` for the next render (see displayedFrontier). */
+export function rememberFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  prev: string | null | undefined,
+  shown: string | null,
+): string | null | undefined {
+  return shown === null && !onSourcesConstrain(state, off) ? prev : shown;
+}
+
+/** Some switched-on source has rows and has not failed, so it can bound coverage. */
+function onSourcesConstrain(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s) && !state[s].errored && state[s].cursor !== null);
+}
+
+/**
+ * Switched-on sources still short of the displayed frontier (never fetched,
+ * or a cursor newer than it). "Load earlier" pages these alone first, and the
+ * count line says "Updating…" while there are any.
+ */
+export function behindSources(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  displayed: string | null,
+): TimelineSource[] {
+  return TIMELINE_SOURCES.filter(s => {
+    const st = state[s];
+    if (off.has(s) || st.exhausted) return false;
+    return !st.cursor || displayed === null || st.cursor.date > displayed;
+  });
+}
+
+/**
+ * What the count line and the "load earlier" button say. "Updating…" only
+ * while something is actually loading for the view or for a source that is
+ * behind; when idle but behind, the button says which sources it will catch
+ * up, so the reader knows why the record is not complete yet. `busy` (any
+ * fetch in flight) hides the empty-list message; being behind while idle
+ * does not.
+ */
+export function trackerProgress(o: {
+  refreshing: boolean;
+  loadingMore: boolean;
+  failed: boolean;
+  behind: readonly TimelineSource[];
+}): { updating: boolean; busy: boolean; button: string } {
+  const updating = o.refreshing || (o.loadingMore && o.behind.length > 0);
+  const busy = o.refreshing || o.loadingMore;
+  const button = o.loadingMore
+    ? 'Loading earlier…'
+    : o.failed
+      ? 'Try again · load earlier ↓'
+      : o.behind.length > 0
+        ? `Load earlier · catching up ${o.behind.map(s => SOURCE_LABELS[s]).join(', ')} ↓`
+        : 'Keep going · load earlier ↓';
+  return { updating, busy, button };
+}
+
+/**
+ * What the count line says after the number. While a source is behind (a
+ * capped catch-up, or a chip switched on with everything showing), the list
+ * is missing part of that source, so it is never "the complete record"
+ * (Codex P1 on PR #158).
+ */
+export function countScope(view: TrackerView, behind: readonly TimelineSource[]): string {
+  const scope = view === 'main' ? ' · the main line' : view > 0 ? ` at alarm ${view}+` : '';
+  if (behind.length > 0) return `${scope} · catching up ${behind.map(s => SOURCE_LABELS[s]).join(', ')}`;
+  return scope || ' · the complete record';
+}
+
+/** Where a source that is behind stops covering the record (see coverageGaps). */
+export interface CoverageGap {
+  source: TimelineSource;
+  /** The oldest date the source has reached; null = nothing loaded yet */
+  from: string | null;
+  /** Position in the visible list (newest first) the marker goes before */
+  index: number;
+}
+
+/**
+ * A source that is behind shows its recent rows, then nothing from it down to
+ * the frontier while the other sources carry on (a catch-up stopped at its
+ * cap, a chip switched on with everything showing). The spine marks where each
+ * one stops, so that stretch never passes as one continuous record (Codex P1
+ * on PR #158). `visible` is newest first, as visibleEntries returns it.
+ */
+export function coverageGaps(
+  visible: readonly TimelineEntry[],
+  state: TrackerState,
+  behind: readonly TimelineSource[],
+): CoverageGap[] {
+  return behind.map(source => {
+    const from = state[source].cursor?.date ?? null;
+    if (from === null) return { source, from, index: 0 };
+    const i = visible.findIndex(e => e.date < from);
+    return { source, from, index: i === -1 ? visible.length : i };
+  });
+}
+
+/** Most pages one catch-up fetches before handing over to "load earlier". */
+export const CATCH_UP_MAX_PAGES = 10;
+
+/**
+ * Catch-up for a chip switched back on (ADO-593): page ONLY `source` until its
+ * cursor reaches `target` (the frontier on screen when the chip went on), it
+ * runs out or fails, or CATCH_UP_MAX_PAGES pages are fetched. The caller holds
+ * the frontier at `target` meanwhile, so no row on screen disappears. A null
+ * target (everything was showing) needs no catch-up: nothing is fetched,
+ * and "load earlier" catches the source up instead. `stillOn`
+ * is checked before every page so switching the chip off again stops it; an
+ * aborted `signal` (view change) rejects with AbortError.
+ */
+export async function catchUpSource(
+  view: TrackerView,
+  state: TrackerState,
+  source: TimelineSource,
+  target: string | null,
+  opts: {
+    signal?: AbortSignal;
+    pins?: TrackerPins;
+    maxPages?: number;
+    stillOn?: () => boolean;
+  } = {},
+): Promise<{ entries: TimelineEntry[]; state: TrackerState; pages: number }> {
+  const others = new Set(TIMELINE_SOURCES.filter(s => s !== source));
+  const maxPages = opts.maxPages ?? CATCH_UP_MAX_PAGES;
+  const groups: TimelineEntry[][] = [];
+  let current = state;
+  let pages = 0;
+  while (target !== null && pages < maxPages) {
+    const st = current[source];
+    if (st.exhausted) break;
+    if (st.cursor && st.cursor.date <= target) break;
+    if (opts.stillOn && !opts.stillOn()) break;
+    const next = await fetchTrackerPage(view, current, opts.signal, opts.pins, others);
+    groups.push(next.entries);
+    current = next.state;
+    pages++;
+  }
+  return { entries: mergeEntries(groups), state: current, pages };
+}
+
+/** Every switched-on source has nothing left to load (true when every chip is off). */
+export function allOnExhausted(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.every(s => off.has(s) || state[s].exhausted);
+}
+
+/**
+ * Some switched-on source failed. A failed request marks the source exhausted
+ * so it never blocks the rest, but it is owed a retry: while this holds, the
+ * record is not "the whole record" (Codex P1 on PR #158).
+ */
+export function anyOnErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s) && state[s].errored);
+}
+
+/**
+ * The state to page from on a retry: every switched-on source that failed is
+ * reopened at its last good cursor, so fetchTrackerPage refetches the page
+ * that failed (or the first page, if that one failed). Healthy and
+ * switched-off sources are untouched.
+ */
+export function retryErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): TrackerState {
+  const next: TrackerState = { ...state };
+  for (const s of TIMELINE_SOURCES) {
+    if (!off.has(s) && state[s].errored) next[s] = { ...state[s], exhausted: false, errored: false };
+  }
+  return next;
+}
+
+/**
+ * Every switched-on source failed. Off sources are never fetched, so they never
+ * error and must not count; every chip off is a choice, not an outage.
+ */
+export function allOnErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s))
+    && TIMELINE_SOURCES.every(s => off.has(s) || state[s].errored);
 }
 
 export interface VisibleOptions {

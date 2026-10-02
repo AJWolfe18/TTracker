@@ -1889,7 +1889,11 @@
                         headers: { 'x-admin-password': password },
                         body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-                    if (fnError) throw new Error(fnError.message);
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Undo failed');
+                    }
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
 
                     // Refresh the story in the list
@@ -3053,7 +3057,11 @@
                         headers: { 'x-admin-password': password },
                         body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-                    if (fnError) throw new Error(fnError.message);
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Undo failed');
+                    }
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
                     toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
                     setUndoInfo(null);
@@ -3629,7 +3637,11 @@
                         headers: { 'x-admin-password': password },
                         body: { entity_type: undoInfo.entityType, entity_id: String(undoInfo.entityId) }
                     });
-                    if (fnError) throw new Error(fnError.message);
+                    if (fnError) {
+                        let body = data;
+                        try { if (!body && fnError.context) body = await fnError.context.json(); } catch (_) {}
+                        throw new Error(body?.error || fnError.message || 'Undo failed');
+                    }
                     if (!data?.success) throw new Error(data?.error || 'Undo failed');
                     toast?.addToast(`Restored ${data.field.replace(/_/g, ' ')}`, 'success');
                     setUndoInfo(null);

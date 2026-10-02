@@ -23,8 +23,10 @@ import {
   typeRowFromWarrant,
   insertPardons,
   MAX_WARRANT_HOLDS,
+  ingestTripwires,
+  stalenessVerdict,
 } from '../ingest/doj-pardons-scraper.js';
-import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { PIPELINES, REASONS, recordSkip } from '../lib/skip-reasons.js';
 
 let passed = 0;
 let failed = 0;
@@ -388,7 +390,7 @@ await test('17. insertPardons flags a fallback row, holds an unreadable-warrant 
 await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, then inserts it as pardon and flags it', async () => {
   const writes = { pardons: [], pipeline_skips: [] };
   // Earlier holds per source_key, as pipeline_skips api_error rows
-  const holds = { k0: 0, k2: 2, k3: MAX_WARRANT_HOLDS, kerr: 'error' };
+  const holds = { k0: 0, k2: 2, k3: MAX_WARRANT_HOLDS };
   const lookups = [];
   let nextId = 700;
   const supabase = {
@@ -400,7 +402,6 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
       q.limit = async (n) => {
         lookups.push({ table, ...q.filters, limit: n });
         const h = holds[q.filters['metadata->>source_key']];
-        if (h === 'error') return { data: null, error: { message: 'relation unavailable' } };
         return { data: Array.from({ length: Math.min(h, n) }, (_, i) => ({ id: i })), error: null };
       };
       q.insert = (row) => { writes[table].push(row); return q; };
@@ -410,10 +411,10 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
   };
   const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
   const row = (key) => ({ recipient_name: `Row ${key}`, clemency_type: null, primary_source_url: `https://www.justice.gov/pardon/media/${key}/dl?inline`, pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: key });
-  const stats = await insertPardons(supabase, ['k0', 'k2', 'k3', 'kerr'].map(row), { fetchImpl: botWall });
+  const stats = await insertPardons(supabase, ['k0', 'k2', 'k3'].map(row), { fetchImpl: botWall });
 
   assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['k3', 'pardon']], 'only the row past the hold limit is inserted');
-  assert.equal(stats.type_retries, 3, 'first hold, a hold below the limit, and a failed lookup all hold');
+  assert.equal(stats.type_retries, 2, 'a first hold and a hold below the limit both hold');
   assert.equal(stats.type_fallbacks, 1);
   const lookup = lookups.find(l => l['metadata->>source_key'] === 'k3');
   assert.deepEqual([lookup.table, lookup.pipeline, lookup.reason, lookup.limit], ['pipeline_skips', PIPELINES.PARDONS_INGEST, REASONS.API_ERROR, MAX_WARRANT_HOLDS]);
@@ -421,7 +422,171 @@ await test('18. An unreadable warrant holds its row for MAX_WARRANT_HOLDS runs, 
   assert.equal(flagged.entity_id, '700');
   assert.match(flagged.metadata.detail, new RegExp(`not a PDF.*still unreadable after ${MAX_WARRANT_HOLDS + 1} runs`));
   const held = writes.pipeline_skips.filter(s => s.reason === REASONS.API_ERROR).map(s => s.metadata.source_key);
-  assert.deepEqual(held, ['k0', 'k2', 'kerr'], 'each held row writes the api_error skip the next run counts');
+  assert.deepEqual(held, ['k0', 'k2'], 'each held row writes the api_error skip the next run counts');
+});
+
+// A Supabase mock whose hold-count lookup fails; failWrites names pipeline_skips reasons whose insert fails.
+function skipsDownSupabase(writes, failWrites = []) {
+  return {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: null, error: { message: 'relation unavailable' } });
+      q.insert = (row) => {
+        if (table === 'pipeline_skips' && failWrites.includes(row.reason)) {
+          return { then: (resolve) => resolve({ error: { message: 'insert denied' } }) };
+        }
+        writes[table].push(row);
+        return q;
+      };
+      q.single = async () => ({ data: { id: 710 }, error: null });
+      return q;
+    },
+  };
+}
+
+await test('19. A failed hold-count lookup still holds the row (never a guess on one bad fetch) and fails the run, also when the hold cannot be written', async () => {
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = () => ({ recipient_name: 'Row kerr', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/kerr/dl?inline', pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'kerr' });
+
+  // Lookup down, hold write works: held, run fails, not counted as a quiet hold.
+  let writes = { pardons: [], pipeline_skips: [] };
+  let stats = await insertPardons(skipsDownSupabase(writes), [row()], { fetchImpl: botWall });
+  assert.equal(writes.pardons.length, 0, 'held, not guessed');
+  assert.equal(stats.type_retries, 1);
+  assert.deepEqual(stats.hold_count_unknown, ['Row kerr']);
+  assert.deepEqual(writes.pipeline_skips.map(s => s.reason), [REASONS.API_ERROR]);
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 0, duplicate: 0 }, 'not a bounded hold, so it does not quiet the staleness check');
+  assert.equal(ingestTripwires(stats).length, 1);
+  assert.match(ingestTripwires(stats)[0], new RegExp(`could not be counted.*${MAX_WARRANT_HOLDS}-run limit is not enforced: Row kerr`));
+
+  // Lookup down and hold write fails: still held (never guessed), run fails.
+  writes = { pardons: [], pipeline_skips: [] };
+  stats = await insertPardons(skipsDownSupabase(writes, [REASONS.API_ERROR]), [row()], { fetchImpl: botWall });
+  assert.equal(writes.pardons.length, 0, 'held, not guessed');
+  assert.equal(stats.type_retries, 1);
+  assert.equal(stats.type_fallbacks, 0);
+  assert.deepEqual(stats.hold_unrecorded, ['Row kerr']);
+  assert.deepEqual(writes.pipeline_skips, []);
+  assert.equal(ingestTripwires(stats).length, 1);
+  assert.match(ingestTripwires(stats)[0], /held although the hold could not be recorded.*Row kerr/);
+});
+
+await test('20. Held rows on the newest DOJ date keep the staleness tripwire quiet; anything else newer than the DB still trips it', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: [], error: null });
+      q.insert = (row) => { writes[table].push(row); return q; };
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = (key, date) => ({ recipient_name: `Row ${key}`, clemency_type: null, primary_source_url: `https://www.justice.gov/pardon/media/${key}/dl?inline`, pardon_date: date, source_system: 'doj_opa', source_key: key });
+  const stats = await insertPardons(supabase, [row('a', '2026-09-02'), row('b', '2026-09-03'), row('c', '2026-09-01')], { fetchImpl: botWall });
+  assert.equal(stats.inserted, 0);
+  assert.equal(stats.type_retries, 3);
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 1, duplicate: 0 });
+
+  const page = '2026-09-03';
+  const day = (d) => ({ errors: 0, by_date: { [page]: d } });
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: null, stats }), 'held');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 3, held: 2, duplicate: 1 }) }), 'held', 'held or already in the DB');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: { ...stats, errors: 2 } }), 'stale', 'one held row must not hide failed inserts');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 3, held: 1, duplicate: 0 }) }), 'stale', 'rows on the newest date that were neither held nor in the DB');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: { errors: 0, by_date: { '2026-09-02': { total: 1, held: 1, duplicate: 0 } } } }), 'stale', 'held rows on an older date do not cover a newer section');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: '2026-08-20', stats: day({ total: 0, held: 0, duplicate: 0 }) }), 'stale');
+  assert.equal(stalenessVerdict({ newestPageDate: page, newestDbDate: page, stats: day({ total: 1, held: 0, duplicate: 1 }) }), 'fresh');
+});
+
+await test('21. A hold whose skip row could not be written still holds the row (no guess) and fails the run, so it can never stay green while the grant never lands', async () => {
+  const writes = { pardons: [], pipeline_skips: [] };
+  let apiErrorWrites = 0;
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async () => ({ data: [], error: null });
+      q.insert = (row) => {
+        if (table === 'pipeline_skips' && row.reason === REASONS.API_ERROR) {
+          apiErrorWrites++;
+          return { then: (resolve) => resolve({ error: { message: 'insert denied' } }) };
+        }
+        writes[table].push(row);
+        return q;
+      };
+      q.single = async () => ({ data: { id: 720 }, error: null });
+      return q;
+    },
+  };
+  const botWall = async () => new Response('<html>Checking your browser</html>', { status: 200 });
+  const row = { recipient_name: 'Row nohold', clemency_type: null, primary_source_url: 'https://www.justice.gov/pardon/media/nohold/dl?inline', pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'nohold' };
+  const stats = await insertPardons(supabase, [row], { fetchImpl: botWall });
+
+  assert.equal(apiErrorWrites, 1, 'the hold was attempted');
+  assert.equal(writes.pardons.length, 0, 'held, not guessed: the only guessed insert is past a counted 3-hold history');
+  assert.equal(stats.type_retries, 1);
+  assert.equal(stats.type_fallbacks, 0);
+  assert.deepEqual(stats.hold_unrecorded, ['Row nohold']);
+  assert.deepEqual(stats.by_date['2026-09-03'], { total: 1, held: 0, duplicate: 0 }, 'an unrecorded hold does not quiet the staleness check');
+  assert.equal(stalenessVerdict({ newestPageDate: '2026-09-03', newestDbDate: '2026-08-20', stats }), 'stale');
+  assert.match(ingestTripwires(stats).join(' | '), /1 row\(s\) held although the hold could not be recorded.*Row nohold/);
+
+  // recordSkip reports whether the row was written
+  const ok = { from: () => ({ insert: async () => ({ error: null }) }) };
+  const denied = { from: () => ({ insert: async () => ({ error: { message: 'denied' } }) }) };
+  const throws = { from: () => ({ insert: async () => { throw new Error('network'); } }) };
+  const skip = { pipeline: PIPELINES.PARDONS_INGEST, reason: REASONS.API_ERROR };
+  assert.equal(await recordSkip(ok, skip), true);
+  assert.equal(await recordSkip(denied, skip), false);
+  assert.equal(await recordSkip(throws, skip), false);
+  assert.equal(await recordSkip(null, skip), false);
+});
+
+await test('22. A guessed type whose review flag cannot be written counts as an error and fails the run', async () => {
+  const url = (n) => `https://www.justice.gov/pardon/media/${n}/dl?inline`;
+  const fetchImpl = fakeFetch({ [url('notype')]: {}, [url('over')]: { throws: 'The operation was aborted due to timeout' } });
+  const rows = [
+    { recipient_name: 'No Type', clemency_type: null, primary_source_url: url('notype'), pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'notype' },
+    { recipient_name: 'Over Limit', clemency_type: null, primary_source_url: url('over'), pardon_date: '2026-09-03', source_system: 'doj_opa', source_key: 'over' },
+  ];
+  const writes = { pardons: [], pipeline_skips: [] };
+  let nextId = 730;
+  const supabase = {
+    from(table) {
+      const q = { filters: {} };
+      q.select = () => q;
+      q.eq = (col, val) => { q.filters[col] = val; return q; };
+      q.maybeSingle = async () => ({ data: null, error: null });
+      q.limit = async (n) => ({ data: Array.from({ length: n }, (_, i) => ({ id: i })), error: null }); // every row is past the hold limit
+      q.insert = (row) => {
+        if (table === 'pipeline_skips') return { then: (resolve) => resolve({ error: { message: 'pipeline_skips down' } }) };
+        writes[table].push(row);
+        return q;
+      };
+      q.single = async () => ({ data: { id: nextId++ }, error: null });
+      return q;
+    },
+  };
+  const stats = await insertPardons(supabase, rows, { fetchImpl });
+
+  assert.deepEqual(writes.pardons.map(p => [p.source_key, p.clemency_type]), [['notype', 'pardon'], ['over', 'pardon']]);
+  assert.equal(stats.type_fallbacks, 2);
+  assert.equal(stats.errors, 2, 'an unflagged guess is an error');
+  assert.deepEqual(stats.unflagged, ['No Type', 'Over Limit']);
+  const trips = ingestTripwires(stats);
+  assert.equal(trips.length, 1);
+  assert.match(trips[0], /2 row\(s\) inserted as a guessed type without their review flag.*No Type, Over Limit/);
+  assert.deepEqual(ingestTripwires({ unflagged: [], hold_count_unknown: [], hold_unrecorded: [] }), []);
 });
 
 console.log(`\ndoj-pardons-parser: ${passed} passed, ${failed} failed`);
