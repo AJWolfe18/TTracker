@@ -10,7 +10,10 @@
 --   Only spaces and tabs next to the dash are absorbed; line breaks are kept.
 --   ' - ' is the form the compliant agent outputs already use.
 -- Verbatim quote fields (scotus_cases.evidence_quotes / evidence_anchors) are NOT touched:
--- they must match the source text.
+-- they must match the source text. In jsonb columns, links are NOT touched either (see A).
+-- October 1, 2026 (Codex review): added scotus_cases.ruling_label and substantive_winner, and
+-- the jsonb rewrite now skips URLs. TEST ran the first version on September 25, 2026; re-run
+-- this whole file there (safe, see Idempotent below).
 --
 -- Parts: A) the function, B) one BEFORE INSERT OR UPDATE OF <editorial columns> trigger per
 -- table, C) a one-time rewrite of existing rows (only rows that contain a dash).
@@ -35,17 +38,49 @@ AS $$
   END
 $$;
 
--- jsonb: rewrite the text form. The dashes only ever sit inside string values, so the JSON
--- structure is untouched.
+-- jsonb: walk the document and rewrite prose strings only. Keys, numbers and the structure
+-- are untouched, and so are links: a string under a key that is or ends with url / href /
+-- link (plural too: source_urls, links), and any string that starts with http:// or https://.
+-- A URL may legitimately contain a Unicode dash, and rewriting it would break it for good.
+-- Array elements inherit the key of their array.
+CREATE OR REPLACE FUNCTION public.strip_dashes_json_walk(p jsonb, p_key text)
+RETURNS jsonb
+LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_out jsonb;
+BEGIN
+  IF p IS NULL OR p::text !~ '[—–]' THEN
+    RETURN p;
+  END IF;
+
+  CASE jsonb_typeof(p)
+    WHEN 'object' THEN
+      v_out := (SELECT coalesce(jsonb_object_agg(e.key, public.strip_dashes_json_walk(e.value, e.key)), '{}'::jsonb)
+                  FROM jsonb_each(p) AS e);
+      RETURN v_out;
+    WHEN 'array' THEN
+      v_out := (SELECT coalesce(jsonb_agg(public.strip_dashes_json_walk(a.value, p_key) ORDER BY a.ord), '[]'::jsonb)
+                  FROM jsonb_array_elements(p) WITH ORDINALITY AS a(value, ord));
+      RETURN v_out;
+    WHEN 'string' THEN
+      IF lower(coalesce(p_key, '')) ~ '(url|href|link)s?$' OR (p #>> '{}') ~* '^\s*https?://' THEN
+        RETURN p;
+      END IF;
+      RETURN to_jsonb(public.strip_dashes(p #>> '{}'));
+    ELSE
+      RETURN p;
+  END CASE;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION public.strip_dashes(p jsonb)
 RETURNS jsonb
 LANGUAGE sql IMMUTABLE PARALLEL SAFE
 SET search_path = pg_catalog, public
 AS $$
-  SELECT CASE
-    WHEN p IS NULL OR p::text !~ '[—–]' THEN p
-    ELSE public.strip_dashes(p::text)::jsonb
-  END
+  SELECT public.strip_dashes_json_walk(p, NULL)
 $$;
 
 -- B) Triggers
@@ -69,6 +104,8 @@ BEGIN
   NEW.practical_effect   := public.strip_dashes(NEW.practical_effect);
   NEW.media_says         := public.strip_dashes(NEW.media_says);
   NEW.actually_means     := public.strip_dashes(NEW.actually_means);
+  NEW.ruling_label       := public.strip_dashes(NEW.ruling_label);
+  NEW.substantive_winner := public.strip_dashes(NEW.substantive_winner);
   RETURN NEW;
 END $$;
 
@@ -108,7 +145,8 @@ CREATE TRIGGER strip_editorial_dashes
 DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.scotus_cases;
 CREATE TRIGGER strip_editorial_dashes
   BEFORE INSERT OR UPDATE OF summary_spicy, why_it_matters, who_wins, who_loses, holding,
-    dissent_highlights, practical_effect, media_says, actually_means ON public.scotus_cases
+    dissent_highlights, practical_effect, media_says, actually_means, ruling_label,
+    substantive_winner ON public.scotus_cases
   FOR EACH ROW EXECUTE FUNCTION public.scotus_cases_strip_dashes();
 
 DROP TRIGGER IF EXISTS strip_editorial_dashes ON public.executive_orders;
@@ -130,36 +168,44 @@ REVOKE EXECUTE ON FUNCTION public.stories_strip_dashes(), public.scotus_cases_st
   public.executive_orders_strip_dashes(), public.pardons_strip_dashes() FROM PUBLIC, anon, authenticated;
 
 -- C) One-time rewrite of existing rows. Setting a column to itself fires the trigger above,
--- which does the rewrite; the WHERE keeps it to rows that contain a dash.
+-- which does the rewrite; the WHERE keeps it to rows that contain a dash in prose (jsonb: rows the
+-- guard would change, so a dash that only sits inside a URL is not counted).
 UPDATE public.stories SET summary_neutral = summary_neutral
  WHERE summary_neutral ~ '[—–]' OR summary_spicy ~ '[—–]';
 
 UPDATE public.scotus_cases SET summary_spicy = summary_spicy
  WHERE concat_ws(' ', summary_spicy, why_it_matters, who_wins, who_loses, holding,
-                 dissent_highlights, practical_effect, media_says, actually_means) ~ '[—–]';
+                 dissent_highlights, practical_effect, media_says, actually_means,
+                 ruling_label, substantive_winner) ~ '[—–]';
 
 UPDATE public.executive_orders SET summary = summary
  WHERE concat_ws(' ', summary, section_what_they_say, section_what_it_means, section_reality_check,
-                 section_why_it_matters, action_reasoning, action_section::text) ~ '[—–]';
+                 section_why_it_matters, action_reasoning) ~ '[—–]'
+    OR public.strip_dashes(action_section) IS DISTINCT FROM action_section;
 
 UPDATE public.pardons SET summary_spicy = summary_spicy
  WHERE concat_ws(' ', crime_description, corruption_reasoning, trump_connection_detail,
                  summary_neutral, summary_spicy, why_it_matters, pattern_analysis,
-                 post_pardon_notes, receipts_timeline::text) ~ '[—–]';
+                 post_pardon_notes) ~ '[—–]'
+    OR public.strip_dashes(receipts_timeline) IS DISTINCT FROM receipts_timeline;
 
--- VERIFY (read-only): every count must be 0.
+-- VERIFY (read-only): every count must be 0. Also the pre-migration count (Josh step 1); before
+-- the migration exists, run the earlier form without the strip_dashes() lines (see the PR body).
 SELECT 'stories' AS t, count(*) FROM public.stories
  WHERE summary_neutral ~ '[—–]' OR summary_spicy ~ '[—–]'
 UNION ALL
 SELECT 'scotus_cases', count(*) FROM public.scotus_cases
  WHERE concat_ws(' ', summary_spicy, why_it_matters, who_wins, who_loses, holding,
-                 dissent_highlights, practical_effect, media_says, actually_means) ~ '[—–]'
+                 dissent_highlights, practical_effect, media_says, actually_means,
+                 ruling_label, substantive_winner) ~ '[—–]'
 UNION ALL
 SELECT 'executive_orders', count(*) FROM public.executive_orders
  WHERE concat_ws(' ', summary, section_what_they_say, section_what_it_means, section_reality_check,
-                 section_why_it_matters, action_reasoning, action_section::text) ~ '[—–]'
+                 section_why_it_matters, action_reasoning) ~ '[—–]'
+    OR public.strip_dashes(action_section) IS DISTINCT FROM action_section
 UNION ALL
 SELECT 'pardons', count(*) FROM public.pardons
  WHERE concat_ws(' ', crime_description, corruption_reasoning, trump_connection_detail,
                  summary_neutral, summary_spicy, why_it_matters, pattern_analysis,
-                 post_pardon_notes, receipts_timeline::text) ~ '[—–]';
+                 post_pardon_notes) ~ '[—–]'
+    OR public.strip_dashes(receipts_timeline) IS DISTINCT FROM receipts_timeline;
