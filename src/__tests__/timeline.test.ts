@@ -22,6 +22,7 @@ import {
   displayedFrontier,
   olderFrontier,
   behindSources,
+  trackerProgress,
   CATCH_UP_MAX_PAGES,
   FRONTIER_PENDING,
   holdFrontier,
@@ -844,6 +845,31 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
     expect(displayedFrontier(state, NONE_OFF, undefined)).toBe('2026-08-07');
     expect(olderFrontier('2026-03-01', FRONTIER_PENDING)).toBe('2026-03-01');
     expect(olderFrontier(null, '2026-03-01')).toBeNull();
+  });
+
+  it('idle but behind: normal count line, button says which source is catching up', async () => {
+    const { state } = await storiesOffAndPagedBack();
+    const shown = displayedFrontier(state, STORIES_OFF, undefined);
+    const caught = await catchUpSource(0, state, 'stories', shown, { maxPages: 2 });
+    const behind = behindSources(caught.state, NONE_OFF, displayedFrontier(caught.state, NONE_OFF, shown));
+    expect(behind).toEqual(['stories']);
+
+    // Idle (nothing in flight): no "Updating…", and the button explains itself
+    expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind }))
+      .toEqual({ updating: false, button: 'Load earlier · catching up Stories ↓' });
+    // A catch-up page in flight: "Updating…"
+    expect(trackerProgress({ refreshing: false, loadingMore: true, failed: false, behind }))
+      .toEqual({ updating: true, button: 'Loading earlier…' });
+    // Plain "load earlier" with nothing behind keeps the count line
+    expect(trackerProgress({ refreshing: false, loadingMore: true, failed: false, behind: [] }).updating).toBe(false);
+    expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind: [] }).button)
+      .toBe('Keep going · load earlier ↓');
+    // A failure wins: retry first
+    expect(trackerProgress({ refreshing: false, loadingMore: false, failed: true, behind }).button)
+      .toBe('Try again · load earlier ↓');
+    expect(trackerProgress({ refreshing: false, loadingMore: false, failed: false, behind: ['stories', 'pardons'] }).button)
+      .toBe('Load earlier · catching up Stories, Pardons ↓');
+    expect(trackerProgress({ refreshing: true, loadingMore: false, failed: false, behind: [] }).updating).toBe(true);
   });
 
   it('a never-fetched source catches up from its first page', async () => {

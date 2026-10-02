@@ -531,6 +531,29 @@ export function behindSources(
   });
 }
 
+/**
+ * What the count line and the "load earlier" button say. "Updating…" only
+ * while something is actually loading for the view or for a source that is
+ * behind; when idle but behind, the button says which sources it will catch
+ * up, so the reader knows why the record is not complete yet.
+ */
+export function trackerProgress(o: {
+  refreshing: boolean;
+  loadingMore: boolean;
+  failed: boolean;
+  behind: readonly TimelineSource[];
+}): { updating: boolean; button: string } {
+  const updating = o.refreshing || (o.loadingMore && o.behind.length > 0);
+  const button = o.loadingMore
+    ? 'Loading earlier…'
+    : o.failed
+      ? 'Try again · load earlier ↓'
+      : o.behind.length > 0
+        ? `Load earlier · catching up ${o.behind.map(s => SOURCE_LABELS[s]).join(', ')} ↓`
+        : 'Keep going · load earlier ↓';
+  return { updating, button };
+}
+
 /** Most pages one catch-up fetches before handing over to "load earlier". */
 export const CATCH_UP_MAX_PAGES = 10;
 

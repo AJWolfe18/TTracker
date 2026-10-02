@@ -18,6 +18,7 @@ import {
   anyOnErrored,
   retryErrored,
   catchUpSource,
+  trackerProgress,
   mergeEntries,
   FRONTIER_PENDING,
   SOURCE_LABELS,
@@ -221,7 +222,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const frontier = pageState ? displayedFrontier(pageState, off, displayedRef.current) : null;
   if (pageState) displayedRef.current = frontier;
   // Sources switched on that are short of that frontier: "load earlier" pages
-  // them first, and the count line says "Updating…" until they catch up
+  // them first; the count line says "Updating…" only while one is loading
   const behind = pageState ? behindSources(pageState, off, frontier) : [];
   const catchingUp = behind.length > 0;
   // In the main-line view the server (plus pins) already decided inclusion —
@@ -498,9 +499,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     );
   });
 
+  const progress = trackerProgress({ refreshing, loadingMore, failed: someOnFailed, behind });
   const countHint = !loaded
     ? 'Loading the record…'
-    : refreshing || catchingUp
+    : progress.updating
       ? 'Updating…'
       : `${visible.length} development${visible.length === 1 ? '' : 's'}`
         + (view === 'main'
@@ -623,9 +625,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 opacity: loadingMore || refreshing || !loaded ? 0.5 : 1,
               }}
             >
-              {loadingMore
-                ? 'Loading earlier…'
-                : someOnFailed ? 'Try again · load earlier ↓' : 'Keep going · load earlier ↓'}
+              {progress.button}
             </button>
           )}
         </div>
