@@ -491,6 +491,48 @@ export function holdFrontier(
   return coverageFrontier(state, new Set([...off, ...pending])) ?? FRONTIER_PENDING;
 }
 
+/** Most pages one catch-up fetches before handing over to "load earlier". */
+export const CATCH_UP_MAX_PAGES = 10;
+
+/**
+ * Catch-up for a chip switched back on (ADO-593): page ONLY `source` until its
+ * cursor reaches `target` (the frontier on screen when the chip went on), it
+ * runs out or fails, or CATCH_UP_MAX_PAGES pages are fetched. The caller holds
+ * the frontier at `target` meanwhile, so no row on screen disappears. A null
+ * target (everything was showing) pages until the source runs out. `stillOn`
+ * is checked before every page so switching the chip off again stops it; an
+ * aborted `signal` (view change) rejects with AbortError.
+ */
+export async function catchUpSource(
+  view: TrackerView,
+  state: TrackerState,
+  source: TimelineSource,
+  target: string | null,
+  opts: {
+    signal?: AbortSignal;
+    pins?: TrackerPins;
+    maxPages?: number;
+    stillOn?: () => boolean;
+  } = {},
+): Promise<{ entries: TimelineEntry[]; state: TrackerState; pages: number }> {
+  const others = new Set(TIMELINE_SOURCES.filter(s => s !== source));
+  const maxPages = opts.maxPages ?? CATCH_UP_MAX_PAGES;
+  const groups: TimelineEntry[][] = [];
+  let current = state;
+  let pages = 0;
+  while (pages < maxPages) {
+    const st = current[source];
+    if (st.exhausted) break;
+    if (st.cursor && target !== null && st.cursor.date <= target) break;
+    if (opts.stillOn && !opts.stillOn()) break;
+    const next = await fetchTrackerPage(view, current, opts.signal, opts.pins, others);
+    groups.push(next.entries);
+    current = next.state;
+    pages++;
+  }
+  return { entries: mergeEntries(groups), state: current, pages };
+}
+
 /** Every switched-on source has nothing left to load (true when every chip is off). */
 export function allOnExhausted(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
   return TIMELINE_SOURCES.every(s => off.has(s) || state[s].exhausted);

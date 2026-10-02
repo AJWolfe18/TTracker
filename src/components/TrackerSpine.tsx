@@ -16,6 +16,7 @@ import {
   allOnErrored,
   anyOnErrored,
   retryErrored,
+  catchUpSource,
   mergeEntries,
   FRONTIER_PENDING,
   holdFrontier,
@@ -93,6 +94,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const [off, setOff] = useState<Set<TimelineSource>>(new Set());
   const [query, setQuery] = useState('');
   const [tally, setTally] = useState<TrackerTally | null>(null);
+  // Chips switched back on that are paging to catch up with the frontier that
+  // was on screen when they went on; the first one's target is held meanwhile
+  const [catchUps, setCatchUps] = useState<{ source: TimelineSource; target: string | null }[]>([]);
 
   const acRef = useRef<AbortController | null>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -120,6 +124,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     const ac = new AbortController();
     acRef.current = ac;
     setLoadingMore(false);
+    setCatchUps([]); // a view change aborts any catch-up (its cursors belong to the old view)
     setRefreshing(true);
     (async () => {
       // Pins and source pages fetch CONCURRENTLY (the pins promise is only
@@ -168,15 +173,42 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       .finally(() => setLoadingMore(false));
   };
 
-  // A chip switched back on whose source was never fetched (it was off when
-  // the view loaded) gets its first page now, and only that source is fetched.
-  // A source fetched before keeps its cursor and resumes on "load earlier".
+  // Chips switched back on, one fetch at a time (one effect, so two fetches
+  // never race on pageState):
+  // - a queued catch-up pages only its source until it reaches the frontier
+  //   that was on screen (capped; "load earlier" carries on after the cap).
+  //   The hold is released when it leaves the queue, in the same render as
+  //   its rows, so nothing on screen disappears.
+  // - otherwise a source switched on that was never fetched (it was off when
+  //   the view loaded, and no catch-up was queued) gets its first page.
   useEffect(() => {
     if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
+    const pins = view === 'main' ? pinsRef.current ?? undefined : undefined;
+    if (catchUps.length > 0) {
+      const { source, target } = catchUps[0];
+      const ac = acRef.current;
+      setLoadingMore(true);
+      catchUpSource(view, pageState, source, target, {
+        signal: ac?.signal,
+        pins,
+        stillOn: () => !offRef.current.has(source),
+      })
+        .then(({ entries: more, state: next }) => {
+          if (ac?.signal.aborted) return;
+          setEntries(prev => mergeEntries([prev, more]));
+          setPageState(next);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!ac?.signal.aborted) setCatchUps(q => q.filter(c => c.source !== source));
+          setLoadingMore(false);
+        });
+      return;
+    }
     const unfetched = TIMELINE_SOURCES.filter(s => !off.has(s) && !pageState[s].exhausted && !pageState[s].cursor);
     if (unfetched.length === 0) return;
     fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
-  }, [pageState, off, refreshing, loadingMore, view]);
+  }, [pageState, off, refreshing, loadingMore, view, catchUps]);
 
   const nextFrontier = pageState ? coverageFrontier(pageState, off) : null;
   // A held frontier belongs to the view it was rendered for
@@ -184,10 +216,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     heldFrontierRef.current = null;
     heldViewRef.current = pageViewRef.current;
   }
-  // A chip switched back on is waiting for its first page: the list stays
-  // exactly as it was until that page lands
-  const waitingOnChip = nextFrontier === FRONTIER_PENDING;
-  const frontier = pageState ? holdFrontier(pageState, off, heldFrontierRef.current) : null;
+  // A chip switched back on is waiting for its first page or catching up: the
+  // list stays exactly as it was until it lands
+  const waitingOnChip = nextFrontier === FRONTIER_PENDING || catchUps.length > 0;
+  const frontier = catchUps.length > 0
+    ? catchUps[0].target
+    : pageState ? holdFrontier(pageState, off, heldFrontierRef.current) : null;
   heldFrontierRef.current = frontier;
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
@@ -237,6 +271,19 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const toggleSource = (s: TimelineSource) => {
     // filter_value records the resulting state, not the click itself.
     track('filter_apply', { tab: TRACKER_TAB, filter_key: `source_${s}`, filter_value: off.has(s) ? 'on' : 'off' });
+    if (!off.has(s)) {
+      // Switched off: drop any catch-up for it (a running one stops before its next page)
+      setCatchUps(q => q.filter(c => c.source !== s));
+    } else {
+      // Switched on but behind the frontier on screen (never fetched, or its
+      // cursor is newer than that frontier): catch it up to that frontier
+      // instead of letting the frontier jump forward to its cursor
+      const st = pageState?.[s];
+      if (st && !st.exhausted && !refreshing && pageViewRef.current === view && frontier !== FRONTIER_PENDING
+        && (!st.cursor || frontier === null || st.cursor.date > frontier)) {
+        setCatchUps(q => (q.some(c => c.source === s) ? q : [...q, { source: s, target: frontier }]));
+      }
+    }
     setOff(prev => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s); else next.add(s);
