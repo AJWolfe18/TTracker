@@ -19,6 +19,9 @@ import {
   anyOnErrored,
   retryErrored,
   catchUpSource,
+  displayedFrontier,
+  olderFrontier,
+  behindSources,
   CATCH_UP_MAX_PAGES,
   FRONTIER_PENDING,
   holdFrontier,
@@ -777,6 +780,70 @@ describe('catch-up when a chip is switched back on (ADO-593, Josh approved)', ()
     expect(caught.state.stories).toMatchObject({ errored: true, exhausted: true });
     expect(anyOnErrored(caught.state, NONE_OFF)).toBe(true);
     expect(allOnExhausted(retryErrored(caught.state, NONE_OFF), NONE_OFF)).toBe(false);
+  });
+
+  const shownKeys = (entries: TimelineEntry[], frontier: string | null, off: ReadonlySet<TimelineSource>) =>
+    visibleEntries(entries, { frontier, min: 0, off, query: '' }).map(key);
+
+  it('cap hit before the target: the displayed frontier does not move newer, no row disappears', async () => {
+    const { entries, state } = await storiesOffAndPagedBack();
+    const shown = displayedFrontier(state, STORIES_OFF, undefined);
+    const shownBefore = shownKeys(entries, shown, STORIES_OFF);
+
+    const caught = await catchUpSource(0, state, 'stories', shown, { maxPages: 2 });
+    expect(caught.state.stories.cursor!.date > shown!).toBe(true); // cap hit short of the target
+    const all = mergeEntries([entries, caught.entries]);
+    const after = displayedFrontier(caught.state, NONE_OFF, shown);
+    expect(after).toBe(shown);
+    const shownAfter = new Set(shownKeys(all, after, NONE_OFF));
+    expect(shownBefore.filter(k => !shownAfter.has(k))).toEqual([]);
+    // Stories is still behind, so "load earlier" pages it first and the count says "Updating…"
+    expect(behindSources(caught.state, NONE_OFF, after)).toEqual(['stories']);
+  });
+
+  it('a successful retry from an old cursor does not move the displayed frontier newer', async () => {
+    const first = await fetchTrackerPage(0, null);
+    let shown = displayedFrontier(first.state, NONE_OFF, undefined);
+    // Stories page 2 fails while pardons page on, so the frontier moves older to February
+    failStoriesAfter = storyPages;
+    const failed = await fetchTrackerPage(0, first.state);
+    expect(failed.state.stories).toMatchObject({ errored: true, exhausted: true });
+    const entries = mergeEntries([first.entries, failed.entries]);
+    shown = displayedFrontier(failed.state, NONE_OFF, shown);
+    expect(shown).toBe(pardonAt(49).pardon_date);
+    const shownBefore = shownKeys(entries, shown, NONE_OFF);
+
+    // Retry succeeds: Stories gets one page from its July cursor
+    failStoriesAfter = Infinity;
+    const retry = retryErrored(failed.state, NONE_OFF);
+    expect(behindSources(retry, NONE_OFF, shown)).toEqual(['stories']); // "load earlier" pages it alone
+    const retried = await fetchTrackerPage(0, retry, undefined, undefined, new Set(['eos', 'scotus', 'pardons']));
+    expect(coverageFrontier(retried.state, NONE_OFF)! > shown!).toBe(true); // what used to jump
+    const after = displayedFrontier(retried.state, NONE_OFF, shown);
+    expect(after).toBe(shown);
+    const shownAfter = new Set(shownKeys(mergeEntries([entries, retried.entries]), after, NONE_OFF));
+    expect(shownBefore.filter(k => !shownAfter.has(k))).toEqual([]);
+  });
+
+  it('a view change resets the displayed frontier; within a view it only moves older', () => {
+    const st = (over: Partial<TrackerState[keyof TrackerState]>) =>
+      ({ cursor: null, exhausted: false, errored: false, ...over });
+    const state: TrackerState = {
+      stories: st({ cursor: { date: '2026-08-07', id: 1 } }),
+      eos: st({ exhausted: true }),
+      scotus: st({ exhausted: true }),
+      pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
+    };
+    // Same view, older frontier already on screen: it stays
+    expect(displayedFrontier(state, NONE_OFF, '2026-02-01')).toBe('2026-02-01');
+    // Same view, the computed frontier is older: it moves older
+    expect(displayedFrontier(state, NONE_OFF, '2026-09-01')).toBe('2026-08-07');
+    // Null (everything shown) stays null within the view
+    expect(displayedFrontier(state, NONE_OFF, null)).toBeNull();
+    // New view (nothing displayed yet): starts from the computed frontier
+    expect(displayedFrontier(state, NONE_OFF, undefined)).toBe('2026-08-07');
+    expect(olderFrontier('2026-03-01', FRONTIER_PENDING)).toBe('2026-03-01');
+    expect(olderFrontier(null, '2026-03-01')).toBeNull();
   });
 
   it('a never-fetched source catches up from its first page', async () => {

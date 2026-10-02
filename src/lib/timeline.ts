@@ -491,6 +491,46 @@ export function holdFrontier(
   return coverageFrontier(state, new Set([...off, ...pending])) ?? FRONTIER_PENDING;
 }
 
+/** The older of two frontiers. Null (show everything) is the oldest of all. */
+export function olderFrontier(a: string | null, b: string | null): string | null {
+  if (a === null || b === null) return null;
+  return a < b ? a : b;
+}
+
+/**
+ * The frontier to DISPLAY. Within a view it never moves newer: a chip
+ * switched back on, a catch-up stopped at its cap, or a retry from an old
+ * cursor can push the computed frontier forward, which would pull rows out
+ * from under the reader, so the older of `prev` and the computed one wins.
+ * `prev` undefined means nothing displayed yet for this view (a view change
+ * resets it), which starts from holdFrontier's never-null rule.
+ */
+export function displayedFrontier(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  prev: string | null | undefined,
+): string | null {
+  if (prev === undefined) return holdFrontier(state, off, null);
+  return olderFrontier(prev, coverageFrontier(state, off));
+}
+
+/**
+ * Switched-on sources still short of the displayed frontier (never fetched,
+ * or a cursor newer than it). "Load earlier" pages these alone first, and the
+ * count line says "Updating…" while there are any.
+ */
+export function behindSources(
+  state: TrackerState,
+  off: ReadonlySet<TimelineSource>,
+  displayed: string | null,
+): TimelineSource[] {
+  return TIMELINE_SOURCES.filter(s => {
+    const st = state[s];
+    if (off.has(s) || st.exhausted) return false;
+    return !st.cursor || displayed === null || st.cursor.date > displayed;
+  });
+}
+
 /** Most pages one catch-up fetches before handing over to "load earlier". */
 export const CATCH_UP_MAX_PAGES = 10;
 
