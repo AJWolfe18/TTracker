@@ -3,6 +3,19 @@
 -- APPLIED ON TEST October 1, 2026 (PostgREST POST of the same row, then assign_fronts_sweep(NULL)
 -- and refresh_tracker_derived()). PROD: Josh pastes this file in the PROD SQL Editor.
 --
+-- GOES LIVE IMMEDIATELY: the row is inserted as publish_state 'published', so the moment parts
+-- (2) to (4) run, the front is public on trumpytracker.com and its members can reach the main line.
+-- STILL OPEN (Josh): the title, the tier (major here; flagship is the alternative) and whether the
+-- boat strikes belong on this front. Each is a one-line change after the fact:
+--   UPDATE public.events SET name = '<new title>', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
+--   UPDATE public.events SET tier = 'flagship', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
+--   Boat strikes out: remove 'boat strikes?|drug boats?|' from sweep_pattern and agent_pattern
+--   (UPDATE events), then move the already-filed boat strike stories in admin.
+-- To hold it back until Josh decides, set v_state to 'draft' in part (2) before pasting (the sweep
+-- still files stories into a draft front; publish later with
+--   UPDATE public.events SET publish_state = 'published', published_at = NOW() WHERE slug = 'hegseth-pentagon';
+-- then SELECT * FROM public.refresh_tracker_derived();).
+--
 -- WHAT BELONGS: what Hegseth and the Pentagon leadership do to and with the military, and the
 -- fights over it: generals, admirals and military lawyers (JAGs) fired or pushed out, the
 -- Caribbean boat strikes and the orders behind them, the Signal chat, press restrictions at the
@@ -35,10 +48,12 @@
 --
 -- Five pastes, in order: (1) pre-check, (2) DO block, (3) sweep, (4) refresh, (5) result.
 
--- (1) PRE-CHECK (read-only). Expect 0 rows (or 1 identical row on a re-run), and the current
--- sweep priorities (90 must be the highest so this front never wins an overlap).
+-- (1) PRE-CHECK (read-only). Lists every front that has a sweep, lowest priority number first
+-- (lower wins an overlap). Expect the 8 existing fronts with priorities 10 to 80 (iran last at 80)
+-- and NO hegseth-pentagon row; on a re-run, hegseth-pentagon appears last at 90. If any other front
+-- shows 90 or more, stop: this front would no longer lose every overlap.
 SELECT id, slug, name, publish_state, sweep_priority FROM public.events
- WHERE slug = 'hegseth-pentagon' OR sweep_priority IS NOT NULL ORDER BY sweep_priority NULLS LAST, id;
+ WHERE sweep_pattern IS NOT NULL ORDER BY sweep_priority, id;
 
 -- (2) INSERT the front. Idempotent on slug: an identical row is a NOTICE; a row with different
 -- values raises (nothing changes).
@@ -49,6 +64,7 @@ DECLARE
   v_dek     CONSTANT TEXT := 'The Pentagon remade around loyalty, with the reasons rarely given. Generals and military lawyers pushed out, boat strikes that killed survivors, reporters locked out, and a senator investigated for telling troops to refuse illegal orders.';
   v_alarm   CONSTANT SMALLINT := 5;
   v_tier    CONSTANT TEXT := 'major';
+  v_state   CONSTANT TEXT := 'published';   -- 'draft' holds the front back (not public)
   v_started CONSTANT TIMESTAMPTZ := '2025-02-21T00:00:00+00:00';
   v_sweep   CONSTANT TEXT := '\m(hegseth|pentagon|department of war|war department|secretary of war|war secretary|joint chiefs|boat strikes?|drug boats?|signalgate)\M';
   v_coword  CONSTANT TEXT := '^(?!.*\m(russia|moscow|ukraine|nato|china|taiwan)\M)';
@@ -61,7 +77,7 @@ BEGIN
   IF FOUND THEN
     IF r.name IS DISTINCT FROM v_name OR r.dek IS DISTINCT FROM v_dek
        OR r.alarm_level IS DISTINCT FROM v_alarm OR r.tier IS DISTINCT FROM v_tier
-       OR r.lifecycle IS DISTINCT FROM 'open' OR r.publish_state IS DISTINCT FROM 'published'
+       OR r.lifecycle IS DISTINCT FROM 'open' OR r.publish_state IS DISTINCT FROM v_state
        OR r.started_at IS DISTINCT FROM v_started
        OR r.sweep_pattern IS DISTINCT FROM v_sweep OR r.sweep_coword IS DISTINCT FROM v_coword
        OR r.sweep_priority IS DISTINCT FROM v_prio OR r.sweep_summary IS DISTINCT FROM false
@@ -84,7 +100,8 @@ BEGIN
   INSERT INTO public.events (slug, name, dek, alarm_level, tier, lifecycle, publish_state, published_at,
                              started_at, created_by, sweep_pattern, sweep_coword, sweep_priority,
                              sweep_summary, main_line_alarm_floor, agent_pattern)
-  VALUES (v_slug, v_name, v_dek, v_alarm, v_tier, 'open', 'published', NOW(),
+  VALUES (v_slug, v_name, v_dek, v_alarm, v_tier, 'open', v_state,
+          CASE WHEN v_state = 'published' THEN NOW() END,
           v_started, 'human', v_sweep, v_coword, v_prio,
           false, NULL, v_agent);
   RAISE NOTICE 'INSERTED front %', v_slug;
