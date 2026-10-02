@@ -1,4 +1,4 @@
-# Autonomous multi-card session: plan (October 1, 2026, rev 2)
+# Autonomous multi-card session: plan (October 1, 2026, rev 3)
 
 **Goal (Josh, October 1, 2026):** run one long session with agents and no input from Josh. At the end, every card in scope is cleaned up and **ready for PROD**: PRs open against `main`, AC checked, Josh's PROD steps written down, and one merge-order list. Josh merges and pastes the PROD SQL.
 
@@ -15,6 +15,14 @@
 - Lane A: the card stays Active (not Resolved) until the PR to test merges. Its brief now covers what happens when a chip is switched back on.
 - Lane D: 2099 is dropped from the hand fix, because the B3 re-run repopulates it; checks for links to other tables (and what happens to them on delete) come before the TEST DELETE.
 - **Fable advisor:** a critique pass before any agent starts (step 1.0).
+
+### Rev 3 changes (Fable advisor pass, October 1, 2026)
+- **Blocker fixed:** 74b505e (docs, ADO-580) edits `docs/ARCHITECTURE.md`, as does 7cb1d43 in P1. 74b505e moves into P1, so P3 is c635b8f + 3e8b647 only.
+- 577's original feature commit is 884afe8 (September 2, 2026). B1 now has one explicit cherry-pick list in the order the commits landed on test, instead of a list grouped by card.
+- a42b674 (#153's docs commit) has no test equivalent; its scraper comment already arrives with 7cb1d43.
+- `docs/common-issues.md` and `docs/ARCHITECTURE.md` carry hunks from cards that are not shipping (220af1b, 0fc1c59 judge-v1.2, 006ac32 Social posts). These are now named in the leftover-hunk list.
+- Card states corrected: 315 is a Bug in **New** (not Closed); 590 is a Bug and goes to Resolved, not Ready for Prod; Lane D owns 493's state; 580 stays Active.
+- Section 0 step 1 was already done (commit 590d1a8). The plan commit in step 1.0 is the one direct docs push to test allowed besides `/end-work`.
 
 ---
 
@@ -79,30 +87,30 @@
 
 ### Lane B1: P1 pipelines PR (replaces #151 and #153)
 - Cards: **590, 577, 494, 349, 493**.
-- Cherry-pick from `refs/heads/test` onto `origin/main`, in the order they landed on test. Start from this list and confirm it with `git log --reverse refs/heads/test` on these paths since September 19:
-  - 590: 2bb119c, d56c403, 2b822d6, plus the test equivalent of #153's a42b674 docs commit if there is one
-  - 577: the test-side commits behind #151 (1619b3e, 37c917e, daec01b, 988e0e1, bf1fd16, and the original feature commit)
-  - 494: 0016d16, a38280f
-  - 7cb1d43 (docs: alerts reference and warrant-hold rule)
-  - 349: c5feacf
-  - 493: 69dea16
-- **Leave out:** c5e3286 and 4bd42f5 (test-only maintenance SQL) and anything for ADO-572.
+- Cherry-pick from `refs/heads/test` onto `origin/main` in exactly this order (the order they landed on test, rev 3):
+  884afe8 (577 feature), 1619b3e (577), 37c917e (577), 2bb119c (590), d56c403 (590), 0016d16 (494), a38280f (494), 2b822d6 (590), daec01b (577), 7cb1d43 (docs, 577/590), 74b505e (580 docs, moved here from P3), c5feacf (349), 69dea16 (493), 988e0e1 (577), bf1fd16 (577).
+  - a42b674 (#153's docs commit) is not on test; its scraper comment arrives with 7cb1d43. Nothing to add.
+  - **Expected conflicts on 884afe8:** it predates ADO-589 (#152) and ADO-581 on main. #151 resolved the same conflicts in 0ac5668 (EO workflow step order, `qa:eo-dates` next to `qa:alerts`, both EO imports). Read 0ac5668 and resolve the same way.
+  - **`docs/common-issues.md`:** test also carries 220af1b (September 21 quick checks, not on main) next to the 2bb119c/7cb1d43 hunks. Resolve by hand and keep only the 590/577 text.
+  - **`docs/ARCHITECTURE.md`:** test carries the `judge-v1.2` row (0fc1c59, ADO-583) and the "Social posts (ADO-572)" row (006ac32). Neither ships; list them as leftover hunks.
+- **Leave out:** c5e3286 and 4bd42f5 (test-only maintenance SQL), 220af1b, and anything for ADO-572.
 - `package.json` is resolved by hand. Add `qa:alerts` and `qa:scotus-dates` and put both in `qa:smoke`. Never add `qa:social` or `social:draft`, because the social scripts are not on main.
 - Check: `qa:pardons-parser`, `qa:alerts`, `qa:scotus-dates` and `qa:smoke` in the worktree. Parse every changed workflow YAML with `require('yaml')`. The live DOJ dry run still reports September 3, 2026 as 23 pardons and 6 commutations.
 - PR body: one section per card with its AC status, plus "Josh steps": none for code; for 590, the May 2025 data fix SQL if it has not run yet (check the count of public commutations through anon REST).
 - **Once P1 is open:** comment on #151 and #153 that P1 replaces them, then close both. A closed PR can be reopened. Comment on cards 577 and 590 with the new PR.
-- Move cards to Ready for Prod only when every AC bullet is met on TEST.
+- Move stories (577, 494, 349) to Ready for Prod only when every AC bullet is met on TEST. 590 is a Bug: it goes to Resolved when its AC is met on TEST. Do not change 493's state; Lane D owns that card.
 
 ### Lane B2: P2 site, P3 dash guard, P4 undo lockdown (one agent, three small PRs)
 
 | PR | Cards | Test commits | Josh PROD steps |
 |---|---|---|---|
 | P2 `deploy/sept-site` | 262, 315, 569 | 2f3439e, d12e987, c625637 | None. After merge: GA4 realtime + PostHog event check, Lighthouse on trumpytracker.com |
-| P3 `deploy/ado-580-dash-guard` | 580 | c635b8f, 74b505e, 3e8b647 | (1) Run the read-only count of rows with a dash, (2) run migration 120, (3) run its verify query and expect 0 (PROD triggers have differed from TEST before, so the verify is required), (4) after merge, run the reset SQL for SCOTUS 2399 and 2099 (write it as a file) so the agent re-enriches them with the full opinion |
+| P3 `deploy/ado-580-dash-guard` | 580 | c635b8f, 3e8b647 (74b505e moved to P1 in rev 3) | (1) Run the read-only count of rows with a dash, (2) run migration 120, (3) run its verify query and expect 0 (PROD triggers have differed from TEST before, so the verify is required), (4) after merge, run the reset SQL for SCOTUS 2399 and 2099 (write it as a file) so the agent re-enriches them with the full opinion |
 | P4 `deploy/ado-525-353-undo` | 525, 353 | 861a405, 068793c | **Order matters:** deploy the `admin-undo` edge function to PROD → merge → run migration 118 → run migration 119. Include rollback SQL for 118 and 119 |
 
 - P4: the cherry-pick of `admin.html` must bring only the Undo change. Confirm that the leftover hunks against test are all ADO-572 Social tab. Syntax-check `admin.html` with `@babel/parser` (jsx plugin).
-- 315 is already Closed in ADO, so only ship its commit. 262 is a Bug in Resolved, so leave its state alone.
+- 315 is a Bug in **New**: ship its commit and leave the state alone (it moves to Resolved only after TEST verification, which is Josh's click-through). 262 is a Bug in Resolved, so leave its state alone.
+- 580 stays Active: P3 ships only AC 1 and AC 2, AC 3 is Lane D, AC 4 is Josh's.
 
 ### Lane D: small leftovers (TEST only plus SQL files for Josh)
 1. **ADO-493:**
@@ -115,7 +123,7 @@
    - Write a guarded PROD SQL fix keyed on the docket, not the id.
    - 2099's authorship comes from the P3 re-run, so verify it after that run and do not hand-write it.
    - AC 4 (2392 level 3 or 4) stays as a Josh decision.
-3. Deliver through one PR to test, `chore/sept-leftovers`.
+3. Deliver through one PR to test, `chore/sept-leftovers`. Lane D owns card 493 (state and comment); Lane B1 only ships its 69dea16 guard.
 
 ### Lane E: ADO-594 action tracker design draft (docs only)
 - Write a new section in `docs/features/events-tracker/prd.md`. It opens with an **Open Decisions (Josh)** checklist that names the story each item blocks. It covers:
