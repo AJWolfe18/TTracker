@@ -206,9 +206,9 @@ curl -s "${SUPABASE_URL}/rest/v1/scotus_opinions?case_id=eq.{CASE_ID}&select=opi
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-**30,000 character hard cap, keep both ends:** If `opinion_full_text` is longer than 30,000 chars minus what you already have from the syllabus, read the FIRST 24,000 chars and the LAST 6,000 chars, and skip the middle. The start carries the holding and the majority's reasoning; the end carries what the start does not: on orders and per curiam opinions the vote notes ("Justice Sotomayor would deny the application") and the dissents; on merits opinions the last dissent. Never truncate only from the end.
+**30,000 character hard cap, keep both ends:** Your budget is 30,000 chars minus the length of the syllabus you already have (the full 30,000 if there is no syllabus). If `opinion_full_text` fits in the budget, read all of it. If it is longer, read the FIRST 80% of the budget and the LAST 20% of the budget, and skip the middle (example: a 2,000-char syllabus leaves a 28,000 budget, so read the first 22,400 and the last 5,600 chars; no syllabus: the first 24,000 and the last 6,000). The two parts never overlap, because you only cut when the opinion is longer than the budget. The start carries the holding and the majority's reasoning; the end carries what the start does not: on orders and per curiam opinions the vote notes ("Justice Sotomayor would deny the application") and the dissents; on merits opinions the last dissent. Never truncate only from the end.
 
-**If truncated:** Note it. You will record the actual character count read in `source_char_count`.
+**If truncated:** Note it. `source_char_count` is the number of opinion characters you actually read (the whole opinion if it fit; otherwise the first part plus the last part), never the opinion's full length.
 
 **Priority 3: Opinion excerpt** (from `scotus_cases.opinion_excerpt`)
 - Only if there is no `scotus_opinions` row for the case: append the opinion_excerpt to the syllabus.
