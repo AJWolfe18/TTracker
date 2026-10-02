@@ -434,10 +434,10 @@ export async function fetchTrackerPage(
  * months, 60 stories reach back days) would fake gaps in the record.
  * Sources in `off` are skipped (ADO-593): a switched-off chip must not hold
  * back the sources still on. A source that is on but not fetched yet (a chip
- * switched back on, waiting for its first page) covers nothing, so the
- * frontier is FRONTIER_PENDING and nothing shows for that round trip, rather
- * than older rows showing and then vanishing under the reader's scroll.
- * Null means every source still counted is exhausted: show everything.
+ * switched back on, waiting for its first page) covers nothing yet, so the
+ * frontier is FRONTIER_PENDING; callers keep their previous frontier for that
+ * round trip (holdFrontier). Null means every source still counted is
+ * exhausted: show everything.
  */
 export function coverageFrontier(
   state: TrackerState,
@@ -453,8 +453,17 @@ export function coverageFrontier(
   return frontier;
 }
 
-/** Sorts after every date string, so `date >= FRONTIER_PENDING` holds for nothing. */
+/** coverageFrontier's answer while a switched-on source has no first page yet. */
 export const FRONTIER_PENDING = '￿';
+
+/**
+ * The frontier to render: while a source is pending, keep the one already on
+ * screen so the list neither collapses nor moves under the reader's scroll,
+ * and recompute once its first page lands.
+ */
+export function holdFrontier(next: string | null, held: string | null): string | null {
+  return next === FRONTIER_PENDING ? held : next;
+}
 
 /** Every switched-on source has nothing left to load (true when every chip is off). */
 export function allOnExhausted(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {

@@ -17,6 +17,7 @@ import {
   allOnExhausted,
   allOnErrored,
   FRONTIER_PENDING,
+  holdFrontier,
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
@@ -244,7 +245,7 @@ describe('coverageFrontier', () => {
     expect(coverageFrontier(state, new Set<TimelineSource>(TIMELINE_SOURCES))).toBeNull();
   });
 
-  it('holds everything back while a chip switched back on waits for its first page (ADO-593 review)', () => {
+  it('keeps the list exactly as it was while a chip switched back on waits for its first page (ADO-593 review)', () => {
     // Pardons reach back to March; stories were off for the load, so no cursor yet
     const state: TrackerState = {
       stories: st({}),
@@ -253,21 +254,28 @@ describe('coverageFrontier', () => {
       pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
     };
     const pardonsOnly = new Set<TimelineSource>(['stories', 'eos', 'scotus']);
-    expect(coverageFrontier(state, pardonsOnly)).toBe('2026-03-01');
-
-    // Stories back on: nothing is known complete until its first page lands, so
-    // March pardons must not show for one round trip and then vanish
-    const frontier = coverageFrontier(state, new Set<TimelineSource>(['eos', 'scotus']));
-    expect(frontier).toBe(FRONTIER_PENDING);
+    const storiesBackOn = new Set<TimelineSource>(['eos', 'scotus']);
     const entries: TimelineEntry[] = [
       { id: 1, source: 'pardons', date: '2026-03-01', headline: 'p', alarm: 5 },
       { id: 2, source: 'pardons', date: '2026-09-30T23:59:59+00:00', headline: 'p2', alarm: 5 },
     ];
-    expect(visibleEntries(entries, { frontier, min: 0, off: new Set(), query: '' })).toHaveLength(0);
+    const shownIds = (frontier: string | null, off: ReadonlySet<TimelineSource>) =>
+      visibleEntries(entries, { frontier, min: 0, off, query: '' }).map(e => e.id);
+
+    const before = holdFrontier(coverageFrontier(state, pardonsOnly), null);
+    expect(before).toBe('2026-03-01');
+    expect(shownIds(before, pardonsOnly)).toEqual([2, 1]);
+
+    // Stories back on: its first page is pending, so the previous frontier is
+    // kept and the list does not collapse or move while it loads
+    expect(coverageFrontier(state, storiesBackOn)).toBe(FRONTIER_PENDING);
+    const pending = holdFrontier(coverageFrontier(state, storiesBackOn), before);
+    expect(pending).toBe('2026-03-01');
+    expect(shownIds(pending, storiesBackOn)).toEqual([2, 1]);
 
     // Once the first page lands, the stories cursor sets the frontier as usual
     state.stories = st({ cursor: { date: '2026-08-07', id: 9 } });
-    expect(coverageFrontier(state, new Set<TimelineSource>(['eos', 'scotus']))).toBe('2026-08-07');
+    expect(holdFrontier(coverageFrontier(state, storiesBackOn), pending)).toBe('2026-08-07');
   });
 });
 
@@ -295,6 +303,19 @@ describe('allOnExhausted / allOnErrored (only switched-on sources count)', () =>
     const allOff = new Set<TimelineSource>(TIMELINE_SOURCES);
     expect(allOnErrored(state, allOff)).toBe(false);
     expect(allOnExhausted(state, allOff)).toBe(true);
+  });
+
+  it('only EOs on and EOs failed is an inline error, never a hidden Tracker (ADO-593 review)', () => {
+    // EOs errored on load, the rest loaded; the reader leaves only EOs on.
+    // The section (and its chips) hides only when ALL four sources failed,
+    // whatever the chips say, so the reader can always switch back.
+    const ok = st({ cursor: { date: '2026-08-07', id: 1 } });
+    const state: TrackerState = { stories: ok, eos: failed, scotus: ok, pardons: ok };
+    const onlyEos = new Set<TimelineSource>(['stories', 'scotus', 'pardons']);
+    expect(allOnErrored(state, onlyEos)).toBe(true);           // inline message under the chips
+    expect(allOnErrored(state, new Set())).toBe(false);        // the hide check: not every source failed
+    const allDown: TrackerState = { stories: failed, eos: failed, scotus: failed, pardons: failed };
+    expect(allOnErrored(allDown, new Set())).toBe(true);
   });
 });
 
