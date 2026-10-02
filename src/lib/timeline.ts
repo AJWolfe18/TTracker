@@ -471,6 +471,29 @@ export function allOnExhausted(state: TrackerState, off: ReadonlySet<TimelineSou
 }
 
 /**
+ * Some switched-on source failed. A failed request marks the source exhausted
+ * so it never blocks the rest, but it is owed a retry: while this holds, the
+ * record is not "the whole record" (Codex P1 on PR #158).
+ */
+export function anyOnErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s) && state[s].errored);
+}
+
+/**
+ * The state to page from on a retry: every switched-on source that failed is
+ * reopened at its last good cursor, so fetchTrackerPage refetches the page
+ * that failed (or the first page, if that one failed). Healthy and
+ * switched-off sources are untouched.
+ */
+export function retryErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): TrackerState {
+  const next: TrackerState = { ...state };
+  for (const s of TIMELINE_SOURCES) {
+    if (!off.has(s) && state[s].errored) next[s] = { ...state[s], exhausted: false, errored: false };
+  }
+  return next;
+}
+
+/**
  * Every switched-on source failed. Off sources are never fetched, so they never
  * error and must not count; every chip off is a choice, not an outage.
  */

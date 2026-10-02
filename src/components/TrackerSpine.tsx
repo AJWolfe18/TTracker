@@ -14,6 +14,8 @@ import {
   visibleEntries,
   allOnExhausted,
   allOnErrored,
+  anyOnErrored,
+  retryErrored,
   mergeEntries,
   FRONTIER_PENDING,
   holdFrontier,
@@ -190,8 +192,13 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     [entries, frontier, minAlarm, off, query],
   );
 
-  // Only the sources switched on count (off sources are never fetched)
-  const allExhausted = pageState !== null && allOnExhausted(pageState, off);
+  // "Load earlier" pages from here: a source that failed (on any page) is
+  // reopened at its last good cursor, so the same button retries it
+  const pageFrom = pageState ? retryErrored(pageState, off) : null;
+  // Only the sources switched on count (off sources are never fetched), and a
+  // failed source is never "the whole record"
+  const allExhausted = pageFrom !== null && allOnExhausted(pageFrom, off);
+  const someOnFailed = pageState !== null && anyOnErrored(pageState, off);
   // Every source switched on failed: an inline message under the chips, so the
   // reader can switch another source on
   const onSourcesFailed = pageState !== null && allOnErrored(pageState, off);
@@ -205,8 +212,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   }
 
   const loadEarlier = () => {
-    if (!pageState || loadingMore || refreshing || allExhausted) return;
-    fetchMore(pageState, off);
+    if (!pageFrom || loadingMore || refreshing || allExhausted) return;
+    fetchMore(pageFrom, off);
   };
 
   // Changing the view swaps in a list of a different length; if the reader is
@@ -533,6 +540,12 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
 
         {/* Load earlier */}
         <div style={{ textAlign: 'center', padding: '6px 0 0' }}>
+          {/* Skipped when the empty-list message above already says it */}
+          {someOnFailed && !loadingMore && !(onSourcesFailed && visible.length === 0) && (
+            <p role="status" style={{ ...mono, fontSize: 10, color: theme.dim, margin: '0 0 10px' }}>
+              Part of the record didn’t load · try again below
+            </p>
+          )}
           {allExhausted ? (
             // visible, not entries: with every chip off, nothing is "the whole record"
             visible.length > 0 && (
@@ -553,7 +566,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 opacity: loadingMore || refreshing || !loaded ? 0.5 : 1,
               }}
             >
-              {loadingMore ? 'Loading earlier…' : 'Keep going · load earlier ↓'}
+              {loadingMore
+                ? 'Loading earlier…'
+                : someOnFailed ? 'Try again · load earlier ↓' : 'Keep going · load earlier ↓'}
             </button>
           )}
         </div>
