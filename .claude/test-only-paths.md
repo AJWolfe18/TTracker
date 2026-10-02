@@ -37,6 +37,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-01-ado-580-trump-v-california-dissenters.sql` - one-time PROD fix of
   case 26A124's dissenters (adds Kagan; keyed on the docket, guarded to 1 row). Josh runs it
   manually in the PROD SQL Editor; never deployed.
+- `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
+  SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
+  SQL Editor AFTER PR #165 merges and migration 120 is applied; never deployed.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
