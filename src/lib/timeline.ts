@@ -579,6 +579,47 @@ export function trackerProgress(o: {
   return { updating, busy, button };
 }
 
+/**
+ * What the count line says after the number. While a source is behind (a
+ * capped catch-up, or a chip switched on with everything showing), the list
+ * is missing part of that source, so it is never "the complete record"
+ * (Codex P1 on PR #158).
+ */
+export function countScope(view: TrackerView, behind: readonly TimelineSource[]): string {
+  const scope = view === 'main' ? ' · the main line' : view > 0 ? ` at alarm ${view}+` : '';
+  if (behind.length > 0) return `${scope} · catching up ${behind.map(s => SOURCE_LABELS[s]).join(', ')}`;
+  return scope || ' · the complete record';
+}
+
+/** Where a source that is behind stops covering the record (see coverageGaps). */
+export interface CoverageGap {
+  source: TimelineSource;
+  /** The oldest date the source has reached; null = nothing loaded yet */
+  from: string | null;
+  /** Position in the visible list (newest first) the marker goes before */
+  index: number;
+}
+
+/**
+ * A source that is behind shows its recent rows, then nothing from it down to
+ * the frontier while the other sources carry on (a catch-up stopped at its
+ * cap, a chip switched on with everything showing). The spine marks where each
+ * one stops, so that stretch never passes as one continuous record (Codex P1
+ * on PR #158). `visible` is newest first, as visibleEntries returns it.
+ */
+export function coverageGaps(
+  visible: readonly TimelineEntry[],
+  state: TrackerState,
+  behind: readonly TimelineSource[],
+): CoverageGap[] {
+  return behind.map(source => {
+    const from = state[source].cursor?.date ?? null;
+    if (from === null) return { source, from, index: 0 };
+    const i = visible.findIndex(e => e.date < from);
+    return { source, from, index: i === -1 ? visible.length : i };
+  });
+}
+
 /** Most pages one catch-up fetches before handing over to "load earlier". */
 export const CATCH_UP_MAX_PAGES = 10;
 

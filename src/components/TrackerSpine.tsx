@@ -19,6 +19,8 @@ import {
   anyOnErrored,
   retryErrored,
   catchUpSource,
+  countScope,
+  coverageGaps,
   trackerProgress,
   mergeEntries,
   FRONTIER_PENDING,
@@ -384,10 +386,27 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   });
 
   // ── Spine rows ──
+  // Where a source that is behind stops: marked on the spine, so its missing
+  // stretch never reads as part of a continuous record (Codex P1 on PR #158)
+  const gaps = pageState ? coverageGaps(visible, pageState, behind) : [];
+  const gapMarker = (g: (typeof gaps)[number]) => (
+    <div key={`gap-${g.source}`} role="note" style={{
+      position: 'relative', zIndex: 2, padding: narrow ? '14px 0 14px 28px' : '14px 0',
+      textAlign: narrow ? 'left' : 'center',
+    }}>
+      <span style={{
+        ...mono, fontSize: 10, color: theme.dim, background: theme.bg,
+        border: `1px dashed ${theme.dim}`, padding: '5px 12px', display: 'inline-block',
+      }}>
+        {SOURCE_LABELS[g.source]}{g.from === null ? '' : ` before ${fmtDate(g.from)}`} not loaded yet · load earlier ↓
+      </span>
+    </div>
+  );
   const rows: React.ReactNode[] = [];
   let lastYM: string | null = null;
   let side = 0;
   visible.forEach((e, idx) => {
+    for (const g of gaps) if (g.index === idx) rows.push(gapMarker(g));
     const ym = e.date.slice(0, 7);
     if (ym !== lastYM) {
       rows.push(
@@ -502,16 +521,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       </div>,
     );
   });
+  for (const g of gaps) if (g.index >= visible.length) rows.push(gapMarker(g));
 
   const progress = trackerProgress({ refreshing, loadingMore, failed: someOnFailed, behind });
   const countHint = !loaded
     ? 'Loading the record…'
     : progress.updating
       ? 'Updating…'
-      : `${visible.length} development${visible.length === 1 ? '' : 's'}`
-        + (view === 'main'
-          ? ' · the main line'
-          : view > 0 ? ` at alarm ${view}+` : ' · the complete record');
+      : `${visible.length} development${visible.length === 1 ? '' : 's'}` + countScope(view, behind);
 
   return (
     <section aria-label="The Tracker timeline" style={{ padding: '8px 0 24px', borderBottom: `1px solid ${theme.line}` }}>
