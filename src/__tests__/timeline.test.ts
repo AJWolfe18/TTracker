@@ -228,6 +228,18 @@ describe('coverageFrontier', () => {
     };
     expect(coverageFrontier(state)).toBeNull();
   });
+
+  it('ignores sources whose chip is switched off (ADO-593)', () => {
+    const state: TrackerState = {
+      stories: st({ cursor: { date: '2026-08-10', id: 1 } }),
+      eos: st({ cursor: { date: '2026-06-01', id: 1 } }),
+      scotus: st({ exhausted: true }),
+      pardons: st({ cursor: { date: '2026-03-01', id: 1 } }),
+    };
+    expect(coverageFrontier(state, new Set<TimelineSource>(['stories']))).toBe('2026-06-01');
+    expect(coverageFrontier(state, new Set<TimelineSource>(['stories', 'eos']))).toBe('2026-03-01');
+    expect(coverageFrontier(state, new Set<TimelineSource>(TIMELINE_SOURCES))).toBeNull();
+  });
 });
 
 describe('visibleEntries', () => {
@@ -337,6 +349,145 @@ describe('fetchTrackerPage', () => {
     expect(entries).toHaveLength(0);
     expect(calls).toHaveLength(0);
     expect(next).toEqual(state);
+  });
+});
+
+describe('source chips (ADO-593): switched-off sources are not paged or counted', () => {
+  const originalWindow = (globalThis as { window?: unknown }).window;
+  let calls: string[];
+  const ONLY_PARDONS = new Set<TimelineSource>(['stories', 'eos', 'scotus']);
+  const NONE_OFF = new Set<TimelineSource>();
+
+  // Shaped like PROD "All": a full page of 60 stories reaches back only to
+  // August 8, while a full page of 25 pardons reaches back to April.
+  const storyRows = Array.from({ length: 60 }, (_, i) => ({
+    id: 1000 - i,
+    primary_headline: `Story ${i}`,
+    first_seen_at: new Date(Date.UTC(2026, 7, 10) - i * 3600_000).toISOString(),
+    alarm_level: 4,
+    severity: null,
+  }));
+  const pardonRows = Array.from({ length: 25 }, (_, i) => ({
+    id: 500 - i,
+    recipient_name: `Donor ${i}`,
+    pardon_date: new Date(Date.UTC(2026, 5, 30) - i * 3 * 86400_000).toISOString().slice(0, 10),
+    corruption_level: 5,
+  }));
+  const storyFrontier = storyRows[storyRows.length - 1].first_seen_at;
+
+  beforeEach(() => {
+    calls = [];
+    vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      if (input.includes('/v_tracker_stories?')) return { ok: true, json: async () => storyRows };
+      if (input.includes('/pardons?')) return { ok: true, json: async () => pardonRows };
+      if (input.includes('/executive_orders?')) {
+        return { ok: true, json: async () => [{ id: 'eo_1', title: 'Order one', date: '2026-07-01', alarm_level: 5 }] };
+      }
+      return { ok: true, json: async () => [] }; // scotus
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+  });
+
+  const shown = (entries: TimelineEntry[], state: TrackerState, off: ReadonlySet<TimelineSource>, min: 0 | 5 = 0) =>
+    visibleEntries(entries, { frontier: coverageFrontier(state, off), min, off, query: '' });
+
+  it('All with only Pardons on shows pardons older than the story frontier', async () => {
+    const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, ONLY_PARDONS);
+    const out = shown(entries, state, ONLY_PARDONS);
+    expect(out).toHaveLength(25);
+    expect(out.every(e => e.source === 'pardons')).toBe(true);
+    expect(out.every(e => e.date < storyFrontier)).toBe(true);
+  });
+
+  it('switching the other chips off after an All load shows the older pardons too', async () => {
+    // The reported case: everything loads, then the reader switches chips off.
+    const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF);
+    expect(coverageFrontier(state, NONE_OFF)).toBe(storyFrontier);
+    const out = shown(entries, state, ONLY_PARDONS);
+    expect(out).toHaveLength(25);
+    expect(out.every(e => e.source === 'pardons')).toBe(true);
+  });
+
+  it('switched-off sources are not fetched, on the first page or on load earlier', async () => {
+    const { state } = await fetchTrackerPage(0, null, undefined, undefined, ONLY_PARDONS);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/pardons?');
+    // Untouched, so switching the chip back on starts from its first page
+    expect(state.stories).toEqual({ cursor: null, exhausted: false, errored: false });
+
+    calls = [];
+    await fetchTrackerPage(0, state, undefined, undefined, ONLY_PARDONS);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/pardons?');
+    expect(decodeURIComponent(calls[0])).toContain('id.lt."476"');
+  });
+
+  it('switching a chip back on fetches it', async () => {
+    const { state } = await fetchTrackerPage(0, null, undefined, undefined, ONLY_PARDONS);
+    calls = [];
+    // Stories back on: its first page (no cursor) is fetched
+    const stillOff = new Set<TimelineSource>(['eos', 'scotus', 'pardons']);
+    const { entries, state: next } = await fetchTrackerPage(0, state, undefined, undefined, stillOff);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/v_tracker_stories?');
+    expect(decodeURIComponent(calls[0])).not.toContain('id.lt.');
+    expect(entries).toHaveLength(60);
+    expect(next.stories.cursor?.id).toBe(941);
+    expect(next.pardons).toEqual(state.pardons);
+  });
+
+  it('switching a chip back on in the main line still surfaces its force_shown pins', async () => {
+    const pins: TrackerPins = new Map([[pinKey('eos', 'eo_low'), 'force_show']]);
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      if (input.includes('/executive_orders?') && input.includes('id=in.')) {
+        return { ok: true, json: async () => [{ id: 'eo_low', title: 'Quiet order', date: '2026-03-01', alarm_level: 2 }] };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+    const eosOff = new Set<TimelineSource>(['eos']);
+    const { entries, state } = await fetchTrackerPage('main', null, undefined, pins, eosOff);
+    expect(calls.some(c => c.includes('/executive_orders?'))).toBe(false);
+    expect(entries.some(e => e.id === 'eo_low')).toBe(false);
+
+    calls = [];
+    const { entries: more } = await fetchTrackerPage('main', state, undefined, pins, NONE_OFF);
+    expect(calls.some(c => c.includes('/executive_orders?') && !c.includes('id=in.'))).toBe(true);
+    expect(more.map(e => e.id)).toEqual(['eo_low']);
+  });
+
+  it('Only 5 behaves as before', async () => {
+    const { entries, state } = await fetchTrackerPage(5, null, undefined, undefined, ONLY_PARDONS);
+    expect(shown(entries, state, ONLY_PARDONS, 5)).toHaveLength(25);
+
+    // With every chip on, the off set changes nothing: same requests, same frontier
+    calls = [];
+    const plain = await fetchTrackerPage(5, null);
+    const plainCalls = calls;
+    calls = [];
+    const withSet = await fetchTrackerPage(5, null, undefined, undefined, NONE_OFF);
+    expect(calls).toEqual(plainCalls);
+    expect(calls).toHaveLength(4);
+    expect(withSet.state).toEqual(plain.state);
+    expect(coverageFrontier(withSet.state, NONE_OFF)).toBe(coverageFrontier(plain.state));
+  });
+
+  it('everything switched off shows nothing and fetches nothing', async () => {
+    const allOff = new Set<TimelineSource>(TIMELINE_SOURCES);
+    const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, allOff);
+    expect(calls).toHaveLength(0);
+    expect(entries).toHaveLength(0);
+    expect(state).toEqual(initialTrackerState());
+
+    // Rows already loaded stay hidden while every chip is off
+    const loaded = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF);
+    expect(shown(loaded.entries, loaded.state, allOff)).toHaveLength(0);
   });
 });
 
