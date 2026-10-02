@@ -463,24 +463,24 @@ Each wave ships behind a feature flag, off in PROD until verified, per `docs/gui
 
 ## 14. Action tracker (ADO-594)
 
-**Status:** design draft, October 1, 2026. Nothing here is built. Josh decides the items in 14.0, then the build stories in 14.10 get carded.
+**Status:** design approved, October 1, 2026 (Josh answered D1 to D8, all as recommended). Nothing here is built yet; the build stories in 14.10 are next to be carded.
 
 **Why.** Josh, September 30, 2026: the Tracker should be an action tracker, a record of every concrete thing he did (orders, tariffs, cancelled deals, taking a case to the Supreme Court and losing it) and what he said or promised (the $5,000 promise, threats). Fronts hold the big sagas. The gap is the single actions in between. Today the main line cannot tell an action from a column about it: the bar is alarm level only, so a fiery opinion piece and a signed order look the same to the rule.
 
 **The idea in one line.** The Stories agent, which already reads every story, adds two small labels: what kind of news it is (**did**, **said** or **coverage**) and whose action it is (**actor**). The main line then becomes "actions above a bar", with fronts on top exactly as today.
 
-### 14.0 Open Decisions (Josh)
+### 14.0 Answered decisions (Josh, October 1, 2026)
 
-Each item names the build story (14.10) it blocks. The recommendation is what the draft assumes; change any of them and the matching section changes with it.
+All eight were answered "yes" to the recommendation on October 1, 2026. Do not re-ask them; changing one now is a new decision, and the matching section changes with it. Each item still names the build story (14.10) it unblocked.
 
-- [ ] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. Includes two rules worth a look: court rulings in his cases count as his record whichever way they go (edge case 5), and when unsure the agent picks an action label over coverage and `did` over `said`, so doubtful stories stay visible rather than silently dropping, while an unclear actor goes to `other` so nothing is wrongly put on his record (edge case 12). *Recommended: approve as written.* **Blocks S1, S2, S3.**
-- [ ] **D2. Do "ally" actions count as his?** (Republicans in Congress, Trump family and businesses, allied governors, MAGA groups.) *Recommended: no on their own. An ally's action reaches the main line through a front or a pin, not by default.* **Blocks S4.**
-- [ ] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **This drops today's "any loose end at alarm 5" bar for ally and other actors** (for example a court ruling in a case he is not part of, rated 5). *Recommended: drop it, consistent with D2; such a story reaches the main line through a front or a pin.* The alternative is to keep alarm 5 by anyone as an explicit exception to D2. None of the 40 sample stories is at alarm 5, so the sample does not move either way. **Blocks S4.**
-- [ ] **D4. Inside a front, does a big action skip the anchor principle?** Today a front member reaches the main line only as the front's opening, a new front peak, alarm 5, or the front's alarm floor. Example: 17234 (US destroys Iranian tankers, alarm 4) is on the Iran front but not a new peak, so it stays off. *Recommended: keep the anchor principle (locked August 18, 2026); the only change inside fronts is that coverage never counts.* **Blocks S4.**
-- [ ] **D5. Lower bar for EOs, SCOTUS rulings and pardons.** *Recommended: level 4 or higher (today: 5 only).* On TEST this takes these three sources from 13 main-line entries to 64 (14.4). **Blocks S5.**
-- [ ] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did, Said and Analysis chips (all on by default). Unlabeled stories and EO/SCOTUS/pardon rows count as Did. Public word for coverage: "Analysis".* Details and the full chip table in 14.5. **Blocks S6.**
-- [ ] **D7. How the all-fronts agent (ADO-592) uses the label.** *Recommended: coverage stories are not candidates for the agent; unlabeled stories still are (so nothing is lost while the backfill runs); the regex sweep is unchanged.* **Blocks S7 (and the matching part of ADO-592).**
-- [ ] **D8. Backfill scope and pace.** *Recommended: label every active enriched story (about 15,000 on PROD), headline and summary only, at about 3 runs a day, before the ADO-592 PROD backfill.* About 38 runs, roughly two weeks, $0 cash (14.8). **Blocks S3 (PROD part).**
+- [x] **D1. Approve the label set and the 40 hand labels.** Labels did / said / coverage plus actor trump / administration / ally / other, with the definitions and edge cases in 14.2. The 40 hand labels in 14.3 become the gold set the agents are tested against. Includes two rules worth a look: court rulings in his cases count as his record whichever way they go (edge case 5), and when unsure the agent picks an action label over coverage and `did` over `said`, so doubtful stories stay visible rather than silently dropping, while an unclear actor goes to `other` so nothing is wrongly put on his record (edge case 12). *Recommended: approve as written.* **Decided October 1, 2026 (Josh): approved as written; the 40 hand labels are the gold set.** Blocked S1, S2, S3.
+- [x] **D2. Do "ally" actions count as his?** (Republicans in Congress, Trump family and businesses, allied governors, MAGA groups.) *Recommended: no on their own. An ally's action reaches the main line through a front or a pin, not by default.* **Decided October 1, 2026 (Josh): ally actions do not count on their own; they reach the main line only through a front or a pin.** Blocked S4.
+- [x] **D3. The bars for loose-end stories.** *Recommended: did by trump or administration at alarm 3 or higher; said by trump or administration at alarm 4 or higher; coverage never, unless pinned.* In the sample, a said bar of 3 instead of 4 adds one story (17216, the Bombardier threat). **This drops today's "any loose end at alarm 5" bar for ally and other actors** (for example a court ruling in a case he is not part of, rated 5). *Recommended: drop it, consistent with D2; such a story reaches the main line through a front or a pin.* The alternative is to keep alarm 5 by anyone as an explicit exception to D2. None of the 40 sample stories is at alarm 5, so the sample does not move either way. **Decided October 1, 2026 (Josh): did by trump or administration at alarm 3+, said at 4+, coverage never unless pinned, and the alarm-5 loose-end bar for ally and other actors is dropped (no exception).** Blocked S4.
+- [x] **D4. Inside a front, does a big action skip the anchor principle?** Today a front member reaches the main line only as the front's opening, a new front peak, alarm 5, or the front's alarm floor. Example: 17234 (US destroys Iranian tankers, alarm 4) is on the Iran front but not a new peak, so it stays off. *Recommended: keep the anchor principle (locked August 18, 2026); the only change inside fronts is that coverage never counts.* **Decided October 1, 2026 (Josh): keep the anchor principle; inside fronts the only change is that coverage never counts.** Blocked S4.
+- [x] **D5. Lower bar for EOs, SCOTUS rulings and pardons.** *Recommended: level 4 or higher (today: 5 only).* On TEST this takes these three sources from 13 main-line entries to 64 (14.4). **Decided October 1, 2026 (Josh): level 4 or higher for EOs, SCOTUS rulings and pardons.** Blocked S5.
+- [x] **D6. How "said" looks next to "did".** *Recommended: same line, same date order, a speech-bubble marker and a small "Said" tag, plus Did, Said and Analysis chips (all on by default). Unlabeled stories and EO/SCOTUS/pardon rows count as Did. Public word for coverage: "Analysis".* Details and the full chip table in 14.5. **Decided October 1, 2026 (Josh): as recommended (same line, speech-bubble marker, "Said" tag, Did/Said/Analysis chips all on by default, unlabeled and EO/SCOTUS/pardon rows under Did, "Analysis" as the public word).** Blocked S6.
+- [x] **D7. How the all-fronts agent (ADO-592) uses the label.** *Recommended: coverage stories are not candidates for the agent; unlabeled stories still are (so nothing is lost while the backfill runs); the regex sweep is unchanged.* **Decided October 1, 2026 (Josh): coverage stories are not agent candidates, unlabeled stories stay in, the sweep is unchanged.** Blocked S7 (and the matching part of ADO-592).
+- [x] **D8. Backfill scope and pace.** *Recommended: label every active enriched story (about 15,000 on PROD), headline and summary only, at about 3 runs a day, before the ADO-592 PROD backfill.* About 38 runs, roughly two weeks, $0 cash (14.8). **Decided October 1, 2026 (Josh): backfill every active enriched story from headline and summary, about 3 runs a day, before the ADO-592 PROD backfill.** Blocked S3 (PROD part).
 
 ### 14.1 What does not change
 
@@ -582,13 +582,13 @@ The 40 newest enriched TEST stories (ids 17215 to 17254, first seen September 6 
 
 Actors across all 40: trump 10, administration 4, ally 1, other 25.
 
-**Caveats.** This is TEST, three days in early September 2026, in the middle of the midterm season, so it leans hard on horse-race coverage. PROD reads more feeds and will likely show a higher did share. The labels are one person's reading of a summary; D1 asks Josh to confirm them before they become the gold set.
+**Caveats.** This is TEST, three days in early September 2026, in the middle of the midterm season, so it leans hard on horse-race coverage. PROD reads more feeds and will likely show a higher did share. The labels are one person's reading of a summary; Josh confirmed them as the gold set on October 1, 2026 (D1).
 
 ### 14.4 Main-line rule v2
 
 Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stories. EOs, SCOTUS rulings and pardons get their bar in the frontend (`src/lib/timeline.ts`, alarm 5 only today). v2 keeps that split.
 
-**Stories, checked in this order (recommended values from D2 to D4):**
+**Stories, checked in this order (values as decided in D2 to D4, October 1, 2026):**
 
 1. **Pin:** `force_show` is on, `force_hide` is off. Unchanged.
 2. **No label yet:** judged by the v1.2 clauses (a loose end needs alarm 5; a front member uses the four front clauses in step 4), with one difference: a front's opening and running peak come from the step 4 member set, which skips members labeled coverage. Until some member of that front is labeled coverage, the result is identical to v1.2. This is what lets v2 ship before the backfill finishes; the main line changes story by story as labels arrive.
@@ -598,7 +598,7 @@ Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stori
    - `did` by trump or administration at alarm 3 or higher;
    - `said` by trump or administration at alarm 4 or higher.
 
-   Ally and other actors never reach the main line as loose ends, at any alarm level, unless pinned (D2 and D3). This replaces today's "any loose end at alarm 5" bar for them; it is listed in D3 so Josh can keep alarm 5 as an exception instead.
+   Ally and other actors never reach the main line as loose ends, at any alarm level, unless pinned (D2 and D3). This replaces today's "any loose end at alarm 5" bar for them, with no exception (D3, decided October 1, 2026).
 
 **EOs, SCOTUS rulings, pardons:** all three are actions by definition, so they need no label. Their main-line bar drops from 5 to 4 (D5). Pins still apply.
 
