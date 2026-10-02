@@ -1,5 +1,15 @@
 # Autonomous multi-card session (October 1, 2026)
 
+## Late update 3 (merges, October 1, 2026, about midnight CT)
+- **Merged to `test` (squash):** #158, #163, #167, #157, #160, #164 (conflict in `.claude/test-only-paths.md` resolved by keeping both lists), #168. TEST `admin-undo` redeployed for #167 (via `npx supabase`, since the global CLI install has no binary).
+- **Not merged: all 5 main PRs.** The permission guard blocks production merges from Claude, so Josh merges them. In order:
+  1. **#162**: no steps first.
+  2. **#159**: first click through the chips on TEST (#158 is live there).
+  3. **#161**: its test twin #163 is merged. Afterwards, check that the first scheduled PROD runs are green.
+  4. **#165**: first re-run migration 120 in the TEST SQL Editor (#168 is merged), then on PROD run the dash count, migration 120, and the verify query (must be 0).
+  5. **#166**: first deploy `admin-undo` to PROD; afterwards run migrations 118 then 119.
+- The SQL files from #157 and #164 are now on `test`: `scripts/maintenance/2026-10-01-ado-*.sql`.
+
 ## Late update 2 (Codex round 2, October 1, 2026, about 11:30 PM CT)
 - **Every Codex round 2 finding is fixed (4 P1, 1 P2), and each changed PR was re-reviewed at `/code-review medium`.** Main twins match their test PR file for file.
   - **#158 / #159 (593):** a catch-up that stops at its 10-page cap now shows a marker where that source stops ("Stories before Jun 3, 2025 not loaded yet · load earlier"), and the count line says "catching up Stories", never "the complete record". The medium review found nothing at medium or above. Its one low (a retry loop if the `rap_sheet` flag turns off mid-session) is fixed too. **HOLD lifted.**
