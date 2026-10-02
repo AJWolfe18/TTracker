@@ -62,16 +62,17 @@ export const REASONS = Object.freeze({
  * @param {string} [skip.entity_type]
  * @param {string|number|null} [skip.entity_id] — coerced to string; 0 is preserved, only null/undefined becomes NULL
  * @param {object} [skip.metadata]
- * @returns {Promise<void>} resolves even on insert failure (skip-logging must not break the pipeline)
+ * @returns {Promise<boolean>} true when the row was written; resolves (false) even on insert failure
+ *   (skip-logging must not break the pipeline). Callers whose logic depends on the row existing check it.
  */
 export async function recordSkip(supabase, { pipeline, reason, entity_type, entity_id, metadata }) {
   if (!pipeline || !reason) {
     console.warn('[skip-reasons] recordSkip called without pipeline or reason — ignoring');
-    return;
+    return false;
   }
   if (!supabase || typeof supabase.from !== 'function') {
     console.warn(`[skip-reasons] recordSkip called without supabase client (pipeline=${pipeline}, reason=${reason})`);
-    return;
+    return false;
   }
   try {
     const { error } = await supabase
@@ -85,8 +86,11 @@ export async function recordSkip(supabase, { pipeline, reason, entity_type, enti
       });
     if (error) {
       console.warn(`[skip-reasons] insert failed (pipeline=${pipeline}, reason=${reason}):`, error.message);
+      return false;
     }
+    return true;
   } catch (err) {
     console.warn(`[skip-reasons] recordSkip threw (pipeline=${pipeline}, reason=${reason}):`, err?.message || err);
+    return false;
   }
 }
