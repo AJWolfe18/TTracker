@@ -190,6 +190,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // - otherwise a source switched on that was never fetched (it was off when
   //   the view loaded, and no catch-up was queued) gets its first page.
   useEffect(() => {
+    // An aborted load (flag switched off mid-session) must not retry on a dead signal forever
+    if (!enabled || acRef.current?.signal.aborted) return;
     if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
     const pins = view === 'main' ? pinsRef.current ?? undefined : undefined;
     if (catchUps.length > 0) {
@@ -217,7 +219,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     const unfetched = TIMELINE_SOURCES.filter(s => !off.has(s) && !pageState[s].exhausted && !pageState[s].cursor);
     if (unfetched.length === 0) return;
     fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
-  }, [pageState, off, refreshing, loadingMore, view, catchUps]);
+  }, [enabled, pageState, off, refreshing, loadingMore, view, catchUps]);
 
   // The frontier on screen only moves older within a view (a chip switched
   // back on, a capped catch-up or a retry from an old cursor would otherwise
