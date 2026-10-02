@@ -31,6 +31,15 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-09-23-ado-590-2025-mixed-section-types.sql` - one-time PROD fix of the
   17 May 28-29, 2025 pardons the scraper stored as commutations (ADO-590 bug, older sections).
   Josh runs it manually in the PROD SQL Editor; skip when cherry-picking ADO-590 to main.
+- `scripts/maintenance/2026-10-01-ado-493-delete-2020-bulk-import.sql` - one-time PROD delete of the
+  1,220 flagged 2020 SCOTUS rows from the February 23, 2026 bulk import (guarded count; the 8 public
+  2020 merits cases are left alone). Josh runs it manually in the PROD SQL Editor; never deployed.
+- `scripts/maintenance/2026-10-01-ado-580-trump-v-california-dissenters.sql` - one-time PROD fix of
+  case 26A124's dissenters (adds Kagan) and impact level 3 to 4 (keyed on the docket, guarded to 1 row). Josh runs it
+  manually in the PROD SQL Editor; never deployed.
+- `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
+  SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
+  SQL Editor AFTER PR #165 merges and migration 120 is applied; never deployed.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)

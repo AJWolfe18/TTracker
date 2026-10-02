@@ -1,0 +1,122 @@
+-- ADO-580 AC 3 and AC 4 (case 2392 only): Trump v. California, docket 26A124.
+-- Run by hand in the PROD SQL Editor (Josh). Never deployed; listed in .claude/test-only-paths.md.
+-- The row does not exist on TEST, so there was nothing to fix there.
+--
+-- Settled October 1, 2026 from the August 24, 2026 order itself (CourtListener
+-- cluster 10956828, opinion 11424433; PDF supremecourt.gov/opinions/25pdf/26a124_hgci.pdf):
+--   Per curiam grants the stay. Two dissents:
+--     "JUSTICE SOTOMAYOR, with whom JUSTICE KAGAN joins, dissenting."
+--     "JUSTICE JACKSON, dissenting."
+--   No other Justice noted a vote to deny. So the vote is 6-3 (stored value is right)
+--   and the dissenters are Sotomayor, Kagan and Jackson. The August 26 run's 7-2 was wrong.
+--
+-- Fix: dissent_authors gets Kagan (the prompt defines it as "Justices who filed or
+-- joined dissents", last names), and dissent_highlights' first sentence names her.
+-- vote_split and majority_author (null, per curiam) are not touched.
+-- AC 4: Josh decided (October 1, 2026) that ruling_impact_level goes from 3 to 4: the
+-- order unblocks citizenship lists, prosecution of election officials and USPS ballot
+-- rules months before the midterms. ruling_label is free text and is left alone.
+-- Nothing stores a value derived from ruling_impact_level: the site reads it live
+-- (alarm in src/lib/adapter.ts and timeline.ts), and tracker_stats (migration 113)
+-- only counts level 5, so moving 3 to 4 needs no other write and no refresh.
+--
+-- Keyed on the docket number, not the id. Guard: exactly 1 row with vote 6-3, and each
+-- of the three fields must be either still as checked on October 1, 2026
+-- ({Sotomayor,Jackson}; first sentence "Sotomayor and Jackson dissented."; level 3)
+-- or already fixed. Each field is checked on its own, so a row where only some were
+-- corrected gets the rest repaired. Anything else (e.g. re-enriched since) raises and
+-- nothing changes. All already fixed: the block says so and changes nothing, so
+-- running it twice is safe. The row is locked (FOR UPDATE) before it is read, and the
+-- UPDATE repeats the values it validated, so a concurrent write cannot slip in between.
+
+DO $$
+DECLARE
+  c_old_hl   constant text   := 'Sotomayor and Jackson dissented. ';
+  c_new_hl   constant text   := 'Sotomayor, joined by Kagan, and Jackson dissented. ';
+  c_old_auth constant text[] := ARRAY['Sotomayor', 'Jackson'];
+  c_new_auth constant text[] := ARRAY['Sotomayor', 'Kagan', 'Jackson'];
+  v_rows      int;
+  v_id        bigint;
+  v_authors   text[];
+  v_vote      text;
+  v_hl        text;
+  v_level     smallint;
+  v_auth_done boolean;
+  v_hl_done   boolean;
+  v_lvl_done  boolean;
+  v_updated   int;
+BEGIN
+  -- Lock the row first, then read every guarded field from that locked row in one
+  -- SELECT, so an enrichment run or admin edit cannot change it between the checks
+  -- and the UPDATE (Codex P1 on PR #157). A concurrent writer waits for this block.
+  v_rows := (SELECT count(*) FROM (SELECT 1 FROM public.scotus_cases
+                                    WHERE docket_number = '26A124' FOR UPDATE) AS locked);
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'ADO-580: expected 1 row with docket 26A124, found %. Nothing was changed.', v_rows;
+  END IF;
+
+  SELECT id, dissent_authors, vote_split, dissent_highlights, ruling_impact_level
+    INTO v_id, v_authors, v_vote, v_hl, v_level
+    FROM public.scotus_cases
+   WHERE docket_number = '26A124';
+
+  IF v_vote IS DISTINCT FROM '6-3' THEN
+    RAISE EXCEPTION 'ADO-580: 26A124 vote is % (expected 6-3). Nothing was changed.', v_vote;
+  END IF;
+
+  IF v_authors IS NOT DISTINCT FROM c_new_auth THEN
+    v_auth_done := true;
+  ELSIF v_authors IS NOT DISTINCT FROM c_old_auth THEN
+    v_auth_done := false;
+  ELSE
+    RAISE EXCEPTION 'ADO-580: 26A124 dissent_authors is % (expected {Sotomayor,Jackson} or {Sotomayor,Kagan,Jackson}). Nothing was changed.', v_authors;
+  END IF;
+
+  IF v_hl IS NOT NULL AND left(v_hl, length(c_new_hl)) = c_new_hl THEN
+    v_hl_done := true;
+  ELSIF v_hl IS NOT NULL AND left(v_hl, length(c_old_hl)) = c_old_hl THEN
+    v_hl_done := false;
+  ELSE
+    RAISE EXCEPTION 'ADO-580: 26A124 dissent_highlights starts with neither the old nor the fixed sentence: "%". Nothing was changed.', left(coalesce(v_hl, '<null>'), 60);
+  END IF;
+
+  IF v_level IS NOT DISTINCT FROM 4 THEN
+    v_lvl_done := true;
+  ELSIF v_level IS NOT DISTINCT FROM 3 THEN
+    v_lvl_done := false;
+  ELSE
+    RAISE EXCEPTION 'ADO-580: 26A124 ruling_impact_level is % (expected 3 or 4). Nothing was changed.', coalesce(v_level::text, '<null>');
+  END IF;
+
+  IF v_auth_done AND v_hl_done AND v_lvl_done THEN
+    RAISE NOTICE 'ADO-580: 26A124 already has Sotomayor, Kagan, Jackson in both fields and level 4. Nothing to do.';
+    RETURN;
+  END IF;
+
+  UPDATE public.scotus_cases
+     SET dissent_authors    = c_new_auth,
+         dissent_highlights = CASE WHEN v_hl_done THEN dissent_highlights
+                                   ELSE c_new_hl || substr(dissent_highlights, length(c_old_hl) + 1) END,
+         ruling_impact_level = 4
+   WHERE id = v_id
+     -- Belt and braces with the lock: still exactly the values validated above
+     AND vote_split = '6-3'
+     AND dissent_authors IS NOT DISTINCT FROM v_authors
+     AND dissent_highlights IS NOT DISTINCT FROM v_hl
+     AND ruling_impact_level IS NOT DISTINCT FROM v_level;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  IF v_updated <> 1 THEN
+    RAISE EXCEPTION 'ADO-580: updated % rows, expected 1. Rolled back.', v_updated;
+  END IF;
+
+  RAISE NOTICE 'ADO-580: 26A124 fixed (dissent_authors %, dissent_highlights %, ruling_impact_level %)',
+    CASE WHEN v_auth_done THEN 'already right' ELSE 'set' END,
+    CASE WHEN v_hl_done THEN 'already right' ELSE 'set' END,
+    CASE WHEN v_lvl_done THEN 'already 4' ELSE '3 to 4' END;
+END $$;
+
+-- Check (read-only). Expect: 6-3, {Sotomayor,Kagan,Jackson}, level 4,
+-- "Sotomayor, joined by Kagan, and Jackson dissented. Jackson filed an opinion ..."
+SELECT id, case_name, vote_split, dissent_authors, ruling_impact_level, dissent_highlights
+  FROM public.scotus_cases
+ WHERE docket_number = '26A124';
