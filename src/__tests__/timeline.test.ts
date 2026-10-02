@@ -16,6 +16,8 @@ import {
   visibleEntries,
   allOnExhausted,
   allOnErrored,
+  anyOnErrored,
+  retryErrored,
   FRONTIER_PENDING,
   holdFrontier,
   SOURCE_ROUTES,
@@ -417,6 +419,50 @@ describe('fetchTrackerPage', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]).toContain('/v_tracker_stories?');
     expect(decodeURIComponent(calls[0])).toContain('id.lt."941"');
+  });
+
+  it('a failed LATER page is retryable, not "the whole record" (Codex P1 on PR #158)', async () => {
+    const { state: first } = await fetchTrackerPage(4, null);
+    // Page 2 of stories fails: the source degrades to errored + exhausted
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      return { ok: false, json: async () => [] };
+    }));
+    const { state: failedState } = await fetchTrackerPage(4, first);
+    expect(failedState.stories).toMatchObject({ exhausted: true, errored: true, cursor: { id: 941 } });
+
+    const none = new Set<TimelineSource>();
+    // Every source now reads exhausted, but the errored ones are owed a retry
+    expect(allOnExhausted(failedState, none)).toBe(true);
+    expect(anyOnErrored(failedState, none)).toBe(true);
+    const retry = retryErrored(failedState, none);
+    expect(allOnExhausted(retry, none)).toBe(false);
+    // The retry resumes from the failed page's cursor; healthy sources are untouched
+    expect(retry.stories).toEqual({ cursor: first.stories.cursor, exhausted: false, errored: false });
+    expect(retry.eos).toEqual(failedState.eos);
+
+    // Retrying refetches only the errored sources, from where they stopped
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      calls.push(input);
+      return { ok: true, json: async () => [] };
+    }));
+    calls = [];
+    const { state: after } = await fetchTrackerPage(4, retry);
+    expect(calls.map(c => c.split('/rest/v1/')[1].split('?')[0]).sort())
+      .toEqual(['pardons', 'scotus_cases', 'v_tracker_stories']);
+    expect(decodeURIComponent(calls.find(c => c.includes('/v_tracker_stories?'))!)).toContain('id.lt."941"');
+    expect(anyOnErrored(after, none)).toBe(false);
+  });
+
+  it('retryErrored leaves switched-off sources alone', () => {
+    const state = initialTrackerState();
+    state.eos = { cursor: null, exhausted: true, errored: true };
+    state.pardons = { cursor: null, exhausted: true, errored: true };
+    const eosOff = new Set<TimelineSource>(['eos']);
+    expect(anyOnErrored(state, new Set<TimelineSource>(['eos', 'pardons']))).toBe(false);
+    const retry = retryErrored(state, eosOff);
+    expect(retry.eos).toEqual(state.eos);
+    expect(retry.pardons).toEqual({ cursor: null, exhausted: false, errored: false });
   });
 
   it('never advances an already-exhausted source', async () => {
