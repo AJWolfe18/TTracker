@@ -690,11 +690,12 @@ non-PDF page such as a bot check), the row is not inserted: it is held and logge
 its `source_key`, and the next run tries again. After 3 held runs (`MAX_WARRANT_HOLDS`, counted from
 those skip rows) it is inserted as `pardon` with the `clemency_type_unknown` flag, so a grant can be
 held back for about 3 days but never lost, and never guessed on a single bad fetch (Codex review on
-PR #153, September 25, 2026). If those skip rows cannot be counted (the lookup fails), the row is
-still held, so one bad fetch is never guessed, but the run fails because the 3-run limit cannot be
-enforced. If a hold's own skip row cannot be written, the row is inserted and flagged the same way
-as after 3 holds. If that review flag cannot be written either, the row counts as an error and the
-run fails, so a guessed type is never published with no flag anywhere. A run that inserts nothing does not trip the staleness check
+PR #153, September 25, 2026). If those skip rows cannot be counted (the lookup fails) or the
+hold's own skip row cannot be written, the row is still held, so one bad fetch is never guessed, but
+the run fails because the 3-run limit cannot be enforced without the skip rows. An unreadable
+warrant becomes a `pardon` guess only after 3 holds that were actually counted. If the review flag
+for a guessed type cannot be written, the row counts as an error and the run fails, so a guess is
+never published with no flag anywhere. A run that inserts nothing does not trip the staleness check
 only when no insert failed and every row on the newest DOJ date was held or is already in the DB: it
 logs "held for a warrant retry" and stays green (code review on PRs #161 and #163, October 1, 2026). `npm run ingest:pardons -- --dry-run` prints the per-date type split,
 and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.

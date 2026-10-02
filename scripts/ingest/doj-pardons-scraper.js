@@ -606,6 +606,7 @@ export async function insertPardons(supabase, pardons, opts) {
     type_retries: 0,     // ADO-590: mixed-section rows held back because their warrant could not be read
     by_date: {},         // ADO-590: { [pardon_date]: { total, held, duplicate } } for stalenessVerdict
     hold_count_unknown: [], // ADO-590: rows held while the hold-count lookup failed (fails the run)
+    hold_unrecorded: [],  // ADO-590: rows held although their hold skip row could not be written (fails the run)
     unflagged: [],       // ADO-590: rows inserted as a guessed type whose review flag could not be written (fails the run)
     inserted_names: []   // ADO-577: for the Discord new-work alert
   };
@@ -646,10 +647,10 @@ export async function insertPardons(supabase, pardons, opts) {
           typeFallback = `${detail}; still unreadable after ${priorHolds + 1} runs`;
           console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable for ${priorHolds + 1} runs, inserting as 'pardon' (${detail})`);
         } else if (outcome === 'retry') {
-          // The skip row IS the hold: the next run counts it. A hold that could not be
-          // recorded would never reach MAX_WARRANT_HOLDS, so it falls through to insert and flag.
-          // An unknown hold count (lookup failed) still holds, so one bad fetch is never
-          // guessed, but fails the run: the bound cannot be enforced while the lookup is down.
+          // The skip row IS the hold: the next run counts it. The row is held even when the
+          // count failed or the skip row could not be written, so one bad fetch is never
+          // guessed; those holds fail the run instead (ingestTripwires), because the
+          // MAX_WARRANT_HOLDS bound cannot be enforced without the skip rows.
           const recorded = await recordSkip(supabase, {
             pipeline: PIPELINES.PARDONS_INGEST,
             reason: REASONS.API_ERROR,
@@ -662,23 +663,18 @@ export async function insertPardons(supabase, pardons, opts) {
               detail,
             },
           });
-          if (recorded && priorHolds === null) {
-            stats.type_retries++;
+          stats.type_retries++;
+          if (!recorded) {
+            stats.hold_unrecorded.push(pardon.recipient_name);
+            console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, held although the hold could not be recorded (${detail})`);
+          } else if (priorHolds === null) {
             stats.hold_count_unknown.push(pardon.recipient_name);
             console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (earlier holds could not be counted: ${holds.error}; ${detail})`);
-            continue;
-          }
-          if (recorded) {
-            stats.type_retries++;
+          } else {
             day.held++;
             console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable, not inserted, next run retries (hold ${priorHolds + 1} of ${MAX_WARRANT_HOLDS}: ${detail})`);
-            continue;
           }
-          pardon.clemency_type = 'pardon';
-          typeFallback = priorHolds === null
-            ? `${detail}; earlier holds could not be counted (${holds.error}) and the hold could not be recorded`
-            : `${detail}; the hold could not be recorded`;
-          console.warn(`  ⚠️ ${pardon.recipient_name}: warrant unreadable and the hold could not be recorded, inserting as 'pardon' (${detail})`);
+          continue;
         }
         if (outcome === 'fallback') {
           typeFallback = detail;
@@ -762,6 +758,9 @@ export function ingestTripwires(stats) {
   const msgs = [];
   if (stats.unflagged?.length) {
     msgs.push(`${stats.unflagged.length} row(s) inserted as a guessed type without their review flag (pipeline_skips write failed): ${stats.unflagged.join(', ')}`);
+  }
+  if (stats.hold_unrecorded?.length) {
+    msgs.push(`${stats.hold_unrecorded.length} row(s) held although the hold could not be recorded (pipeline_skips write failed), so the ${MAX_WARRANT_HOLDS}-run limit is not enforced: ${stats.hold_unrecorded.join(', ')}`);
   }
   if (stats.hold_count_unknown?.length) {
     msgs.push(`${stats.hold_count_unknown.length} row(s) held while earlier holds could not be counted (pipeline_skips lookup failed), so the ${MAX_WARRANT_HOLDS}-run limit is not enforced: ${stats.hold_count_unknown.join(', ')}`);
