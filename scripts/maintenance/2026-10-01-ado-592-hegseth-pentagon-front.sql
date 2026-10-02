@@ -166,7 +166,9 @@ SELECT e.id, e.slug, e.name, e.publish_state, e.sweep_priority,
 
 -- Rollback: deleting the front removes its story_event rows (ON DELETE CASCADE), so those
 -- stories become loose ends again; then refresh the main line. Step (3) files only Hegseth
--- rows, so this undoes everything this file did (stories the pipeline files into the front
--- after the paste are removed too, as they should be).
+-- rows, so no other front keeps anything from this file. Also removed with the front: rows
+-- the pipeline or the agent filed into it later, any front updates (event_updates cascade),
+-- and stories moved onto it by hand in admin (they become loose ends, not back on their
+-- old front).
 -- DELETE FROM public.events WHERE slug = 'hegseth-pentagon';
 -- SELECT * FROM public.refresh_tracker_derived();
