@@ -433,8 +433,11 @@ export async function fetchTrackerPage(
  * this are buffered, not shown — otherwise a sparse source (25 EOs reach back
  * months, 60 stories reach back days) would fake gaps in the record.
  * Sources in `off` are skipped (ADO-593): a switched-off chip must not hold
- * back the sources still on. Null means every source still counted is
- * exhausted: show everything.
+ * back the sources still on. A source that is on but not fetched yet (a chip
+ * switched back on, waiting for its first page) covers nothing, so the
+ * frontier is FRONTIER_PENDING and nothing shows for that round trip, rather
+ * than older rows showing and then vanishing under the reader's scroll.
+ * Null means every source still counted is exhausted: show everything.
  */
 export function coverageFrontier(
   state: TrackerState,
@@ -443,10 +446,28 @@ export function coverageFrontier(
   let frontier: string | null = null;
   for (const src of TIMELINE_SOURCES) {
     const st = state[src];
-    if (st.exhausted || !st.cursor || off.has(src)) continue;
+    if (st.exhausted || off.has(src)) continue;
+    if (!st.cursor) return FRONTIER_PENDING;
     if (frontier === null || st.cursor.date > frontier) frontier = st.cursor.date;
   }
   return frontier;
+}
+
+/** Sorts after every date string, so `date >= FRONTIER_PENDING` holds for nothing. */
+export const FRONTIER_PENDING = '￿';
+
+/** Every switched-on source has nothing left to load (true when every chip is off). */
+export function allOnExhausted(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.every(s => off.has(s) || state[s].exhausted);
+}
+
+/**
+ * Every switched-on source failed. Off sources are never fetched, so they never
+ * error and must not count; every chip off is a choice, not an outage.
+ */
+export function allOnErrored(state: TrackerState, off: ReadonlySet<TimelineSource>): boolean {
+  return TIMELINE_SOURCES.some(s => !off.has(s))
+    && TIMELINE_SOURCES.every(s => off.has(s) || state[s].errored);
 }
 
 export interface VisibleOptions {
