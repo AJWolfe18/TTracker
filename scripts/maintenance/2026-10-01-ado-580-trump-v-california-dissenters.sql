@@ -26,7 +26,8 @@
 -- or already fixed. Each field is checked on its own, so a row where only some were
 -- corrected gets the rest repaired. Anything else (e.g. re-enriched since) raises and
 -- nothing changes. All already fixed: the block says so and changes nothing, so
--- running it twice is safe.
+-- running it twice is safe. The row is locked (FOR UPDATE) before it is read, and the
+-- UPDATE repeats the values it validated, so a concurrent write cannot slip in between.
 
 DO $$
 DECLARE
@@ -35,6 +36,7 @@ DECLARE
   c_old_auth constant text[] := ARRAY['Sotomayor', 'Jackson'];
   c_new_auth constant text[] := ARRAY['Sotomayor', 'Kagan', 'Jackson'];
   v_rows      int;
+  v_id        bigint;
   v_authors   text[];
   v_vote      text;
   v_hl        text;
@@ -44,15 +46,19 @@ DECLARE
   v_lvl_done  boolean;
   v_updated   int;
 BEGIN
-  v_rows := (SELECT count(*) FROM public.scotus_cases WHERE docket_number = '26A124');
+  -- Lock the row first, then read every guarded field from that locked row in one
+  -- SELECT, so an enrichment run or admin edit cannot change it between the checks
+  -- and the UPDATE (Codex P1 on PR #157). A concurrent writer waits for this block.
+  v_rows := (SELECT count(*) FROM (SELECT 1 FROM public.scotus_cases
+                                    WHERE docket_number = '26A124' FOR UPDATE) AS locked);
   IF v_rows <> 1 THEN
     RAISE EXCEPTION 'ADO-580: expected 1 row with docket 26A124, found %. Nothing was changed.', v_rows;
   END IF;
 
-  v_authors := (SELECT dissent_authors FROM public.scotus_cases WHERE docket_number = '26A124');
-  v_vote    := (SELECT vote_split FROM public.scotus_cases WHERE docket_number = '26A124');
-  v_hl      := (SELECT dissent_highlights FROM public.scotus_cases WHERE docket_number = '26A124');
-  v_level   := (SELECT ruling_impact_level FROM public.scotus_cases WHERE docket_number = '26A124');
+  SELECT id, dissent_authors, vote_split, dissent_highlights, ruling_impact_level
+    INTO v_id, v_authors, v_vote, v_hl, v_level
+    FROM public.scotus_cases
+   WHERE docket_number = '26A124';
 
   IF v_vote IS DISTINCT FROM '6-3' THEN
     RAISE EXCEPTION 'ADO-580: 26A124 vote is % (expected 6-3). Nothing was changed.', v_vote;
@@ -92,7 +98,12 @@ BEGIN
          dissent_highlights = CASE WHEN v_hl_done THEN dissent_highlights
                                    ELSE c_new_hl || substr(dissent_highlights, length(c_old_hl) + 1) END,
          ruling_impact_level = 4
-   WHERE docket_number = '26A124';
+   WHERE id = v_id
+     -- Belt and braces with the lock: still exactly the values validated above
+     AND vote_split = '6-3'
+     AND dissent_authors IS NOT DISTINCT FROM v_authors
+     AND dissent_highlights IS NOT DISTINCT FROM v_hl
+     AND ruling_impact_level IS NOT DISTINCT FROM v_level;
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   IF v_updated <> 1 THEN
     RAISE EXCEPTION 'ADO-580: updated % rows, expected 1. Rolled back.', v_updated;
