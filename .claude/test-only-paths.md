@@ -35,7 +35,7 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   1,220 flagged 2020 SCOTUS rows from the February 23, 2026 bulk import (guarded count; the 8 public
   2020 merits cases are left alone). Josh runs it manually in the PROD SQL Editor; never deployed.
 - `scripts/maintenance/2026-10-01-ado-580-trump-v-california-dissenters.sql` - one-time PROD fix of
-  case 26A124's dissenters (adds Kagan; keyed on the docket, guarded to 1 row). Josh runs it
+  case 26A124's dissenters (adds Kagan) and impact level 3 to 4 (keyed on the docket, guarded to 1 row). Josh runs it
   manually in the PROD SQL Editor; never deployed.
 - `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
   SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
