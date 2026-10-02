@@ -45,6 +45,8 @@
 -- hegseth-pentagon 62, iran 3 (three September 22-23 Iran stories the manual TEST pipeline had not
 -- swept yet; unrelated to this front), _candidates 2991. refresh_tracker_derived(): 1 row changed.
 -- Result: 62 members (13 enriched), 0 outside agent_pattern, 5 on the main line, agent pool 9.
+-- (TEST used the full sweep; the 3 Iran rows it added are correct Iran matches and stay. PROD
+-- uses the targeted step (3) below, which files Hegseth stories only.)
 --
 -- Five pastes, in order: (1) pre-check, (2) DO block, (3) sweep, (4) refresh, (5) result.
 
@@ -107,10 +109,41 @@ BEGIN
   RAISE NOTICE 'INSERTED front %', v_slug;
 END $$;
 
--- (3) SWEEP (full backfill; the pipeline's own runs only look back 48 hours, so older stories
--- need this once). It only fills stories with NO front yet, for every front, and never moves an
--- assigned story. Expect a hegseth-pentagon row (TEST: 62) plus '_candidates'.
-SELECT * FROM public.assign_fronts_sweep(NULL);
+-- (3) TARGETED SWEEP (full backfill for THIS front only; the pipeline's own runs look back 48
+-- hours, so older stories need this once). Same rules as assign_fronts_sweep(NULL) (migration
+-- 115): every front's sweep competes and the lowest priority number wins a story, but only the
+-- stories whose winner is hegseth-pentagon are filed. Stories another front wins are left alone
+-- (not filed anywhere), so this step creates ONLY Hegseth rows and the rollback below undoes
+-- all of it (Codex P1 on PR #164: the full sweep also filed unrelated fronts' stories).
+-- Never moves an assigned story. Expect hegseth_assigned > 0 (TEST: 62).
+WITH pool AS (
+  SELECT st.id, st.primary_headline AS h, st.summary_neutral AS s
+    FROM public.stories st
+   WHERE st.status = 'active'
+     AND st.primary_headline IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.story_event se WHERE se.story_id = st.id)
+), rules AS (
+  SELECT e.id AS event_id, e.slug, e.sweep_pattern, e.sweep_coword, e.sweep_priority, e.sweep_summary
+    FROM public.events e
+   WHERE e.sweep_pattern IS NOT NULL
+), pick AS (
+  SELECT p.id AS story_id, r.event_id, r.slug, r.sweep_priority
+    FROM pool p
+    JOIN rules r
+      ON (r.sweep_coword IS NULL OR p.h ~* r.sweep_coword)
+     AND (p.h ~* r.sweep_pattern
+          OR (r.sweep_summary AND r.sweep_coword IS NOT NULL AND p.s IS NOT NULL AND p.s ~* r.sweep_pattern))
+), best AS (
+  SELECT DISTINCT ON (pk.story_id) pk.story_id, pk.event_id, pk.slug
+    FROM pick pk
+   ORDER BY pk.story_id, pk.sweep_priority, pk.event_id
+), ins AS (
+  INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
+  SELECT b.story_id, b.event_id, 'agent', 0.8 FROM best b WHERE b.slug = 'hegseth-pentagon'
+  ON CONFLICT (story_id) DO NOTHING
+  RETURNING story_id
+)
+SELECT COUNT(*) AS hegseth_assigned FROM ins;
 
 -- (4) REFRESH the main line (convention after any front or assignment change).
 SELECT * FROM public.refresh_tracker_derived();
@@ -132,6 +165,8 @@ SELECT e.id, e.slug, e.name, e.publish_state, e.sweep_priority,
 -- UPDATE public.events SET name = '<new title>', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
 
 -- Rollback: deleting the front removes its story_event rows (ON DELETE CASCADE), so those
--- stories become loose ends again; then refresh the main line.
+-- stories become loose ends again; then refresh the main line. Step (3) files only Hegseth
+-- rows, so this undoes everything this file did (stories the pipeline files into the front
+-- after the paste are removed too, as they should be).
 -- DELETE FROM public.events WHERE slug = 'hegseth-pentagon';
 -- SELECT * FROM public.refresh_tracker_derived();
