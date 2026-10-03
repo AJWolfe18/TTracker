@@ -3,7 +3,7 @@
 // String() on those throws "Cannot convert object to primitive value" - five
 // Democracy Docket articles failed on the first TEST fetch (September 8, 2026).
 import assert from 'node:assert/strict';
-import { toStr, toBool, toStrArray } from '../rss/utils/primitive.js';
+import { toStr, toBool, toStrArray, pickItemText } from '../rss/utils/primitive.js';
 
 const attrOnly = Object.create(null);
 attrOnly.$ = { isPermaLink: 'false' };
@@ -25,5 +25,15 @@ assert.deepEqual(toStrArray(['a', attrOnly, { _: 'c' }]), ['a', '', 'c']);
 
 // safeGuid's contract downstream: an empty guid falls back to the link
 assert.equal((toStr(attrOnly) || 'https://fallback.test/') , 'https://fallback.test/');
+
+// ADO-597: article text = the longest text field, whichever format the feed uses
+const body = 'b'.repeat(5000);
+assert.equal(pickItemText({ summary: 'teaser', content: body }), body);                       // Atom (Vox, The Atlantic)
+assert.equal(pickItemText({ content: body }), body);                                          // Arc (Votebeat): nothing else set
+assert.equal(pickItemText({ 'content:encoded': body, contentEncoded: body, description: 'x', content: 'x' }), body); // RSS 2.0 (Fortune)
+assert.equal(pickItemText({ description: 'One-line NYT blurb.' }), 'One-line NYT blurb.');   // blurb-only feeds unchanged
+assert.equal(pickItemText({ description: attrOnly, summary: { _: 'from _' } }), 'from _');   // object fields coerced, never thrown
+assert.equal(pickItemText({}), '');
+assert.equal(pickItemText(null), '');
 
 console.log('rss-primitive.test: all assertions passed');

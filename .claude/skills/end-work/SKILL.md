@@ -85,6 +85,11 @@ Before any state change:
 ### 6. Update ADO
 - Move ticket to appropriate state (only after AC verification)
 - Add comment if needed
+- **Every finding this session noticed but did not fix gets its own ADO card now** (or a comment on
+  an existing card that owns it), and the handoff names the card number. A finding that lives only
+  in a handoff is lost: on July 1, 2026 a handoff noted "articles.content = NULL in PROD" and nobody
+  acted until ADO-597 three months later. List the findings and proposed cards for Josh in the
+  wrap-up message if he has not already approved creating them.
 
 ### 7. Confirm Completion
 Summarize what was saved to memory and what the next session should pick up.
