@@ -1,7 +1,11 @@
 -- ADO-595 - three fronts: Kushner's Deals widens to "The Envoys' Deals" (Kushner + Witkoff),
 -- new "Israel & Gaza", new "RFK Jr.'s HHS". Josh asked on October 2, 2026.
--- Run AFTER 2026-10-01-ado-592-hegseth-pentagon-front.sql (that file creates hegseth-pentagon,
--- now flagship per Josh, October 2, 2026). This file does not touch hegseth-pentagon.
+-- PROD ORDER: run this file FIRST, then 2026-10-01-ado-592-hegseth-pentagon-front.sql. Hegseth sweeps
+-- at 90 and loses every overlap, but its one-time targeted sweep can only lose to fronts that already
+-- exist: run first, it would file stories that Israel & Gaza (75) or RFK (85) should win (for example
+-- "Hegseth says Pentagon will investigate Israel leak"), and filed stories never move. This file does
+-- not touch hegseth-pentagon (now flagship per Josh, October 2, 2026). Both files' priority guards
+-- accept this order. Tested end to end in this order: scripts/tests/fronts-sql-pglite.test.mjs.
 -- APPLIED ON TEST October 2, 2026 (PostgREST writes of the same values, then
 -- assign_fronts_sweep(NULL) and refresh_tracker_derived()). PROD: Josh pastes this file.
 --
@@ -65,23 +69,39 @@
 -- directional ("by" required for the passive form; no "push back", "pulled back" or "under pressure"),
 -- dropped bare billion/million/invest/financing from the Envoys money words, and left Tehran- or
 -- Khamenei-only headlines to Israel (Iran's sweep never matched them). TEST re-synced again, read
--- back byte for byte, membership unchanged. PGlite run of this whole file: 42 headlines placed as
--- expected, re-run files nothing, the hand-edit guard raises, rollback works.
+-- back byte for byte, membership unchanged. Cowork review (October 2, 2026): parts (2) to (4) are now
+-- ONE transaction, and the priority check is enforced in the DO block (it was only a pre-check note);
+-- the run order is this file first, then Hegseth. Test: scripts/tests/fronts-sql-pglite.test.mjs (44
+-- headlines, idempotent re-run, all-or-nothing on a failing refresh, both priority guards, the
+-- hand-edit guard, rollback).
 -- TEST is thin for these fronts (its RSS window is short); the seed timelines and the backfill
 -- plan (docs/features/events-tracker/plan-595-fronts-backfill.md) are how the 2025 record gets in.
 --
--- Five pastes, in order: (1) pre-check, (2) DO block, (3) targeted sweep, (4) refresh, (5) result.
+-- Three pastes, in order: (1) pre-check (read-only); (2) the APPLY block, from BEGIN to COMMIT,
+-- pasted and run as ONE block: write, targeted sweep and main-line refresh in a single transaction,
+-- so if any statement errors nothing is saved and no front goes public half-built (the SQL Editor
+-- shows the error); (3) result (read-only).
+-- IF THE APPLY BLOCK ERRORS: run   ROLLBACK;   on its own FIRST. A failed transaction stays open on
+-- the SQL Editor connection and every later command (a re-run, or the part (3) result query) is
+-- refused with "current transaction is aborted". After the ROLLBACK, fix the cause and re-run the
+-- whole apply block (it is idempotent). The guards (priority, hand edit) raise on purpose and also
+-- need the ROLLBACK.
 
 -- (1) PRE-CHECK (read-only). Lists every front that has a sweep, lowest priority number first.
 -- Expect iran at 80. On a first run: kushners-deals at 20 with sweep_pattern 'kushner', and no
--- israel-gaza or rfk-hhs rows. If another front already uses 75 or 85, stop and ask (a tie falls
--- back to the lower event id).
+-- israel-gaza or rfk-hhs rows. Part (2) refuses to run (and changes nothing) if any OTHER front with
+-- a sweep already uses priority 20, 75 or 85: a tie falls back to the lower event id and would decide
+-- permanent assignments.
 SELECT id, slug, name, tier, alarm_level, publish_state, sweep_priority, sweep_pattern
   FROM public.events
  WHERE sweep_pattern IS NOT NULL
  ORDER BY sweep_priority, id;
 
--- (2) WRITE the three fronts. Idempotent: a front already holding exactly these values is a
+-- (2) APPLY: one transaction, BEGIN to COMMIT. Paste and run the whole block at once.
+-- On ANY error: run ROLLBACK; by itself before doing anything else (see the header).
+BEGIN;
+
+-- (2a) WRITE the three fronts. Idempotent: a front already holding exactly these values is a
 -- NOTICE. A new front whose slug exists with different values raises (nothing changes). For
 -- kushners-deals, the update only runs when the sweep is still the original 'kushner' (the August
 -- 24, 2026 seed); any other value raises, so a hand edit is never overwritten.
@@ -117,10 +137,22 @@ DECLARE
   r_agent  CONSTANT TEXT := '\m(rfk|robert f\. kennedy|kennedy jr|secretary kennedy|maha|make america healthy again|acip|vaccine (advisers|advisors|advisory|panel|committee|schedule)|childhood vaccines?|monarez|tylenol|acetaminophen|leucovorin|health secretary|hhs|health and human services|cdc|c\.d\.c)\M|\m(kennedy|vaccines?|vaccinations?|measles|autism|fluoride|mrna|fda|nih|makary|prasad|bhattacharya|surgeon general|public health|gavi|thimerosal|hepatitis b)\M';
 
   v_exists BOOLEAN;
+  v_clash  TEXT;
   v_same   BOOLEAN;
   v_old    TEXT;
   missing  BIGINT[];
 BEGIN
+  -- priority guard: no OTHER sweeping front may share 20, 75 or 85 (a tie is decided by event id)
+  v_clash := (SELECT string_agg(slug || ' at ' || sweep_priority, ', ' ORDER BY sweep_priority, slug)
+                FROM public.events
+               WHERE sweep_pattern IS NOT NULL
+                 AND ((sweep_priority = 20 AND slug <> 'kushners-deals')
+                   OR (sweep_priority = 75 AND slug <> 'israel-gaza')
+                   OR (sweep_priority = 85 AND slug <> 'rfk-hhs')));
+  IF v_clash IS NOT NULL THEN
+    RAISE EXCEPTION 'sweep priority already taken by %; nothing changed (pick free priorities first)', v_clash;
+  END IF;
+
   -- Envoys: update in place
   v_exists := EXISTS (SELECT 1 FROM public.events WHERE slug = 'kushners-deals');
   IF NOT v_exists THEN
@@ -146,7 +178,7 @@ BEGIN
   END IF;
   -- member gate: every current member must match the new agent_pattern. The old sweep was 'kushner'
   -- anywhere in the headline and the new pattern has kushner\w*, so expect none; any id listed here is
-  -- a member to look at in admin, and part (5) shows it as members_outside_pattern.
+  -- a member to look at in admin, and part (3) shows it as members_outside_pattern.
   missing := (SELECT array_agg(st.id ORDER BY st.id)
                 FROM public.story_event se
                 JOIN public.events e ON e.id = se.event_id
@@ -205,11 +237,11 @@ BEGIN
   END IF;
 END $$;
 
--- (3) TARGETED SWEEP (full backfill for THESE three fronts only; the pipeline's own runs look back
+-- (2b) TARGETED SWEEP (full backfill for THESE three fronts only; the pipeline's own runs look back
 -- 48 hours). Same rules as assign_fronts_sweep(NULL) (migration 115): every front's sweep competes
 -- and the lowest priority number wins a story, but only stories won by one of the three slugs below
 -- are filed. Stories another front wins are left alone, so the rollback below undoes all of it.
--- Never moves an assigned story. Expect israel-gaza and rfk-hhs > 0 (TEST: see part (5) note).
+-- Never moves an assigned story. Expect israel-gaza and rfk-hhs > 0 (TEST numbers in the header).
 WITH pool AS (
   SELECT st.id, st.primary_headline AS h, st.summary_neutral AS s
     FROM public.stories st
@@ -242,10 +274,12 @@ SELECT e.slug, COUNT(*) AS assigned
   FROM ins JOIN public.events e ON e.id = ins.event_id
  GROUP BY e.slug ORDER BY e.slug;
 
--- (4) REFRESH the main line (convention after any front or assignment change).
+-- (2c) REFRESH the main line (convention after any front or assignment change).
 SELECT * FROM public.refresh_tracker_derived();
 
--- (5) RESULT. Expect 3 rows, published, members_outside_pattern 0.
+COMMIT;
+
+-- (3) RESULT (read-only). Expect 3 rows, published, members_outside_pattern 0.
 SELECT e.id, e.slug, e.name, e.tier, e.alarm_level, e.publish_state, e.sweep_priority,
        (SELECT COUNT(*) FROM public.story_event se WHERE se.event_id = e.id) AS members,
        (SELECT COUNT(*) FROM public.story_event se JOIN public.stories st ON st.id = se.story_id
@@ -265,9 +299,9 @@ SELECT e.id, e.slug, e.name, e.tier, e.alarm_level, e.publish_state, e.sweep_pri
 
 -- Rollback:
 -- New fronts: deleting a front removes its story_event rows (ON DELETE CASCADE), so those stories
--- become loose ends again. Step (3) filed only these three fronts.
+-- become loose ends again. Step (2b) filed only these three fronts.
 --   DELETE FROM public.events WHERE slug IN ('israel-gaza', 'rfk-hhs');
--- Envoys: restore the August 24, 2026 values, then remove the rows step (3) or later sweeps filed
+-- Envoys: restore the August 24, 2026 values, then remove the rows step (2b) or later sweeps filed
 -- that the old 'kushner' sweep would not have filed (headline without "kushner"):
 --   UPDATE public.events SET name = 'Kushner''s Deals', tier = 'standard', alarm_level = 3,
 --          dek = 'Sovereign wealth keeps landing with the son-in-law. Gulf money, withheld disclosures, and a family business that never stopped running.',

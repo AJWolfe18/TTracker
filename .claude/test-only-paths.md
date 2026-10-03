@@ -51,7 +51,11 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-02-ado-595-new-fronts.sql` - ADO-595: Kushner's Deals widened to
   "The Envoys' Deals", new "Israel & Gaza" and "RFK Jr.'s HHS" fronts (guarded writes, targeted
   sweep, refresh, result, rollback). Applied on TEST October 2, 2026; Josh pastes it in the PROD SQL
-  Editor AFTER the Hegseth file. Never deployed by code.
+  Editor BEFORE the Hegseth file. Never deployed by code.
+- `scripts/tests/fronts-sql-pglite.test.mjs` - PGlite end-to-end test of the two fronts SQL files above
+  (placement, idempotency, all-or-nothing apply, priority guards, rollback). Reads test-only
+  maintenance files and needs the undeclared @electric-sql/pglite (skips when missing), so it is not
+  in qa:smoke and does not ship.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)

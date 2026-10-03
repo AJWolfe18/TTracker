@@ -1,10 +1,12 @@
 -- ADO-592 - new front: Hegseth's Pentagon (slug hegseth-pentagon). Josh asked for it on
 -- October 1, 2026 ("a huge one right now that is super shady and the reasoning not clear").
 -- APPLIED ON TEST October 1, 2026 (PostgREST POST of the same row, then assign_fronts_sweep(NULL)
--- and refresh_tracker_derived()). PROD: Josh pastes this file in the PROD SQL Editor.
+-- and refresh_tracker_derived()). PROD: Josh pastes this file in the PROD SQL Editor, AFTER
+-- 2026-10-02-ado-595-new-fronts.sql (ADO-595), so this front's one-time sweep cannot take stories
+-- that Israel & Gaza or RFK Jr.'s HHS should win. Test: scripts/tests/fronts-sql-pglite.test.mjs.
 --
--- GOES LIVE IMMEDIATELY: the row is inserted as publish_state 'published', so the moment parts
--- (2) to (4) run, the front is public on trumpytracker.com and its members can reach the main line.
+-- GOES LIVE IMMEDIATELY: the row is inserted as publish_state 'published', so the moment the
+-- APPLY block (2) commits, the front is public on trumpytracker.com and its members can reach the main line.
 -- DECIDED (Josh, October 2, 2026, ADO-595): flagship, title kept, boat strikes stay on this front.
 -- TEST was updated to flagship the same day. Each is still a one-line change after the fact:
 --   UPDATE public.events SET name = '<new title>', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
@@ -46,18 +48,33 @@
 -- swept yet; unrelated to this front), _candidates 2991. refresh_tracker_derived(): 1 row changed.
 -- Result: 62 members (13 enriched), 0 outside agent_pattern, 5 on the main line, agent pool 9.
 -- (TEST used the full sweep; the 3 Iran rows it added are correct Iran matches and stay. PROD
--- uses the targeted step (3) below, which files Hegseth stories only.)
+-- uses the targeted step (2b) below, which files Hegseth stories only.)
 --
--- Five pastes, in order: (1) pre-check, (2) DO block, (3) sweep, (4) refresh, (5) result.
+-- Three pastes, in order: (1) pre-check (read-only); (2) the APPLY block, from BEGIN to COMMIT,
+-- pasted and run as ONE block: write, targeted sweep and main-line refresh in a single transaction,
+-- so if any statement errors nothing is saved and no front goes public half-built (the SQL Editor
+-- shows the error); (3) result (read-only).
+-- IF THE APPLY BLOCK ERRORS: run   ROLLBACK;   on its own FIRST. A failed transaction stays open on
+-- the SQL Editor connection and every later command (a re-run, or the part (3) result query) is
+-- refused with "current transaction is aborted". After the ROLLBACK, fix the cause and re-run the
+-- whole apply block (it is idempotent). The guards (priority, hand edit) raise on purpose and also
+-- need the ROLLBACK.
+-- (Changed October 2, 2026 per review: previously five separate pastes, which could leave the front
+-- published but empty if a later paste failed.)
 
 -- (1) PRE-CHECK (read-only). Lists every front that has a sweep, lowest priority number first
 -- (lower wins an overlap). Expect the 8 existing fronts with priorities 10 to 80 (iran last at 80)
--- and NO hegseth-pentagon row; on a re-run, hegseth-pentagon appears last at 90. If any other front
--- shows 90 or more, stop: this front would no longer lose every overlap.
+-- and NO hegseth-pentagon row; on a re-run, hegseth-pentagon appears last at 90. Part (2) refuses to
+-- run (and changes nothing) if any OTHER sweeping front has priority 90 or more: this front must lose
+-- every overlap.
 SELECT id, slug, name, publish_state, sweep_priority FROM public.events
  WHERE sweep_pattern IS NOT NULL ORDER BY sweep_priority, id;
 
--- (2) INSERT the front. Idempotent on slug: an identical row is a NOTICE; a row with different
+-- (2) APPLY: one transaction, BEGIN to COMMIT. Paste and run the whole block at once.
+-- On ANY error: run ROLLBACK; by itself before doing anything else (see the header).
+BEGIN;
+
+-- (2a) INSERT the front. Idempotent on slug: an identical row is a NOTICE; a row with different
 -- values raises (nothing changes).
 DO $$
 DECLARE
@@ -74,7 +91,16 @@ DECLARE
   v_agent   CONSTANT TEXT := '\m(hegseth|pentagon|department of war|war department|secretary of war|war secretary|joint chiefs|boat strikes?|drug boats?|signalgate)\M|\m(defense secretary|secretary of defense|defense department|admirals?|generals and admirals|four-star|three-star|top brass|military (leaders?|leadership|officers?|lawyers?|brass|commanders?|chaplains?|academies|academy)|judge advocates?|jag|illegal orders|signal chat|service members?|warrior ethos)\M';
   r public.events%ROWTYPE;
   missing BIGINT[];
+  v_clash TEXT;
 BEGIN
+  -- priority guard: this front must lose every overlap, so no OTHER sweeping front may be at 90+
+  v_clash := (SELECT string_agg(slug || ' at ' || sweep_priority, ', ' ORDER BY sweep_priority, slug)
+                FROM public.events
+               WHERE sweep_pattern IS NOT NULL AND sweep_priority >= 90 AND slug <> v_slug);
+  IF v_clash IS NOT NULL THEN
+    RAISE EXCEPTION 'another front already sweeps at priority 90 or more (%); nothing changed', v_clash;
+  END IF;
+
   SELECT * INTO r FROM public.events WHERE slug = v_slug;
   IF FOUND THEN
     IF r.name IS DISTINCT FROM v_name OR r.dek IS DISTINCT FROM v_dek
@@ -109,7 +135,7 @@ BEGIN
   RAISE NOTICE 'INSERTED front %', v_slug;
 END $$;
 
--- (3) TARGETED SWEEP (full backfill for THIS front only; the pipeline's own runs look back 48
+-- (2b) TARGETED SWEEP (full backfill for THIS front only; the pipeline's own runs look back 48
 -- hours, so older stories need this once). Same rules as assign_fronts_sweep(NULL) (migration
 -- 115): every front's sweep competes and the lowest priority number wins a story, but only the
 -- stories whose winner is hegseth-pentagon are filed. Stories another front wins are left alone
@@ -145,10 +171,12 @@ WITH pool AS (
 )
 SELECT COUNT(*) AS hegseth_assigned FROM ins;
 
--- (4) REFRESH the main line (convention after any front or assignment change).
+-- (2c) REFRESH the main line (convention after any front or assignment change).
 SELECT * FROM public.refresh_tracker_derived();
 
--- (5) RESULT. Expect 1 row: published, members > 0, members_outside_pattern 0.
+COMMIT;
+
+-- (3) RESULT (read-only). Expect 1 row: published, members > 0, members_outside_pattern 0.
 SELECT e.id, e.slug, e.name, e.publish_state, e.sweep_priority,
        (SELECT COUNT(*) FROM public.story_event se WHERE se.event_id = e.id) AS members,
        (SELECT COUNT(*) FROM public.story_event se JOIN public.stories st ON st.id = se.story_id
@@ -165,7 +193,7 @@ SELECT e.id, e.slug, e.name, e.publish_state, e.sweep_priority,
 -- UPDATE public.events SET name = '<new title>', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
 
 -- Rollback: deleting the front removes its story_event rows (ON DELETE CASCADE), so those
--- stories become loose ends again; then refresh the main line. Step (3) files only Hegseth
+-- stories become loose ends again; then refresh the main line. Step (2b) files only Hegseth
 -- rows, so no other front keeps anything from this file. Also removed with the front: rows
 -- the pipeline or the agent filed into it later, any front updates (event_updates cascade),
 -- and stories moved onto it by hand in admin (they become loose ends, not back on their
