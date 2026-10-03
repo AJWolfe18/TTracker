@@ -52,6 +52,13 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   "The Envoys' Deals", new "Israel & Gaza" and "RFK Jr.'s HHS" fronts (guarded writes, targeted
   sweep, refresh, result, rollback). Applied on TEST October 2, 2026; Josh pastes it in the PROD SQL
   Editor BEFORE the Hegseth file. Never deployed by code.
+- `scripts/maintenance/2026-10-02-ado-597-fix-three-stories.sql` - ADO-597: one-time PROD correction
+  of stories 16294, 16291, 16287 (guarded: only runs while the bad text is still there; writes
+  admin.content_history rows). Josh pastes it in the PROD SQL Editor. Never deployed by code.
+- `scripts/maintenance/2026-10-02-ado-597-thin-source-diagnostics.sql` - ADO-597: read-only PROD
+  aggregates (stored text length by feed, thin-story share by month, agent review-flag rate).
+- `scripts/maintenance/2026-10-02-ado-597-prod-content-null-check.sql` - ADO-597: read-only PROD
+  check of the upsert RPC definition, articles triggers and pg_cron jobs (found the 005a drift).
 - `scripts/tests/fronts-sql-pglite.test.mjs` - PGlite end-to-end test of the two fronts SQL files above
   (placement, idempotency, all-or-nothing apply, priority guards, rollback). Reads test-only
   maintenance files and needs the undeclared @electric-sql/pglite (skips when missing), so it is not
