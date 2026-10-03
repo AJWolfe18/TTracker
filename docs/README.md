@@ -30,6 +30,7 @@
 - `guides/deployment/production-deployment-checklist.md` - Deploy to prod
 - `database/database-schema.md` - Database structure
 - `reference/TROUBLESHOOTING.md` - Common issues
+- `reference/discord-alerts.md` - Discord alerts (what pings, when, and the decided rules)
 
 ## Finding Documents
 - **Architecture decisions?** → `/architecture/`

@@ -666,8 +666,28 @@ When something breaks:
 2. Verify daily budget not exceeded: `SELECT * FROM budgets ORDER BY day DESC`
 3. Check GitHub Actions logs for enrichment errors
 
+### Pardons: a pardon shows as a commutation (or the reverse)
+The DOJ can put both types in ONE table under a heading like "September 3, 2026 - 23 Pardons and
+6 Commutations". Since ADO-590 the scraper types those rows one by one: the warrant link's title
+attribute first, then the warrant PDF's Title metadata, then its download filename. A row that none of
+them types is inserted as `pardon` and logged as `clemency_type_unknown` (admin → Skips tab); check
+its warrant and fix it by hand. If the warrant cannot be READ (network error, any HTTP error, or a
+non-PDF page such as a bot check), the row is not inserted: it is held and logged as `api_error` with
+its `source_key`, and the next run tries again. After 3 held runs (`MAX_WARRANT_HOLDS`, counted from
+those skip rows) it is inserted as `pardon` with the `clemency_type_unknown` flag, so a grant can be
+held back for about 3 days but never lost, and never guessed on a single bad fetch (Codex review on
+PR #153, September 25, 2026). If those skip rows cannot be counted (the lookup fails) or the
+hold's own skip row cannot be written, the row is still held, so one bad fetch is never guessed, but
+the run fails because the 3-run limit cannot be enforced without the skip rows. An unreadable
+warrant becomes a `pardon` guess only after 3 holds that were actually counted. If the review flag
+for a guessed type cannot be written, the row counts as an error and the run fails, so a guess is
+never published with no flag anywhere. A run that inserts nothing does not trip the staleness check
+only when no insert failed and every row on the newest DOJ date was held or is already in the DB: it
+logs "held for a warrant retry" and stays green (code review on PRs #161 and #163, October 1, 2026). `npm run ingest:pardons -- --dry-run` prints the per-date type split,
+and the ingest never overwrites existing rows, so a wrong stored type needs guarded SQL, not a re-run.
+
 ---
 
-_Last Updated: 2026-08-06_
+_Last Updated: 2026-09-23_
 _Maintained by: Claude Code_
 _Reference: `/docs/code-patterns.md` for prevention patterns_

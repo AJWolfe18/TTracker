@@ -21,6 +21,9 @@ export const COLORS = Object.freeze({
 });
 
 const MAX_DESCRIPTION = 4000; // Discord embed description cap is 4096
+// A webhook call that never answers must not hold a pipeline step until the job timeout:
+// the fetchers await their alerts before the refresh and failure-alert steps run.
+const DEFAULT_TIMEOUT_MS = 10000;
 
 /**
  * @param {object} embed
@@ -31,25 +34,34 @@ const MAX_DESCRIPTION = 4000; // Discord embed description cap is 4096
  * @param {object} [opts]
  * @param {string} [opts.webhookUrl]  defaults to process.env.DISCORD_WEBHOOK_URL
  * @param {typeof fetch} [opts.fetchImpl] injectable for tests
+ * @param {string} [opts.envLabel]    defaults to process.env.ALERT_ENV; 'test' prefixes the title with [TEST]
+ *                                    so a TEST-branch run can never look like a PROD alert
+ * @param {number} [opts.timeoutMs]   abort the POST after this long (default 10s); a timeout is a
+ *                                    failed POST like any other (false, non-blocking)
  * @returns {Promise<boolean>} true when Discord accepted the message
  */
-export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch } = {}) {
+export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBHOOK_URL, fetchImpl = globalThis.fetch, envLabel = process.env.ALERT_ENV, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   if (!webhookUrl) return false;
   if (!embed || !embed.title) return false;
   const payload = {
     embeds: [{
-      title: String(embed.title).slice(0, 256),
+      title: `${envLabel === 'test' ? '[TEST] ' : ''}${embed.title}`.slice(0, 256),
       description: embed.description ? String(embed.description).slice(0, MAX_DESCRIPTION) : undefined,
       color: embed.color ?? COLORS.info,
       fields: Array.isArray(embed.fields) ? embed.fields.slice(0, 25) : undefined,
       timestamp: new Date().toISOString(),
     }],
   };
+  // A ref'd timer (not AbortSignal.timeout, whose timer is unref'd) so the abort always fires
+  // and the failure is reported, even when nothing else keeps the process alive.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException('webhook timed out', 'TimeoutError')), timeoutMs);
   try {
     const res = await fetchImpl(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
     if (!res.ok) {
       console.warn(`[discord] webhook returned ${res.status} (non-blocking)`);
@@ -57,9 +69,38 @@ export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBH
     }
     return true;
   } catch (err) {
-    console.warn(`[discord] webhook failed: ${err.message} (non-blocking)`);
+    const why = err?.name === 'TimeoutError' ? `no answer after ${timeoutMs}ms` : err?.message;
+    console.warn(`[discord] webhook failed: ${why} (non-blocking)`);
     return false;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+/**
+ * postDiscord for an alert that must not vanish: the fetchers' new-work pings (ADO-577).
+ * Same contract (never throws, never changes the caller's exit code, so a notification
+ * problem never fails an ingest that worked), but an undelivered alert is REPORTED: one
+ * stderr line and, inside GitHub Actions, an error annotation on the run, so a green run
+ * shows it. In Actions a missing DISCORD_WEBHOOK_URL counts as undelivered; outside
+ * Actions (local runs) it stays a silent no-op. Rules: docs/reference/discord-alerts.md
+ * @param {object} embed - as postDiscord
+ * @param {object} [opts] - as postDiscord, plus env / write / logError, injectable for tests
+ * @returns {Promise<boolean>} true when Discord accepted the message
+ */
+export async function postDiscordReported(embed, { env = process.env, write = (s) => process.stdout.write(s), logError = console.error, ...opts } = {}) {
+  const webhookUrl = opts.webhookUrl ?? env.DISCORD_WEBHOOK_URL;
+  const inActions = env.GITHUB_ACTIONS === 'true';
+  if (!webhookUrl && !inActions) return false;
+  const delivered = await postDiscord(embed, { ...opts, webhookUrl });
+  if (!delivered) {
+    const why = webhookUrl ? 'the webhook POST failed' : 'DISCORD_WEBHOOK_URL is not set';
+    const msg = `Discord alert NOT delivered (${why}): ${embed?.title ?? '(no title)'}`;
+    logError(`[discord] ${msg}`);
+    // Workflow command escaping: % first, then line breaks
+    if (inActions) write(`::error title=Discord alert not delivered::${msg.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}\n`);
+  }
+  return delivered;
 }
 
 /**
