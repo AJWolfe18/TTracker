@@ -1,0 +1,39 @@
+name: ADO-603 SCOTUS flag fix (one-time, PROD)
+
+# One-time data fix, run by hand from main: clears 18 verified SCOTUS review flags and re-queues
+# 18 rows with wrong facts (scripts/maintenance/ado-603-scotus-flags.js). Idempotent; refuses to
+# write unless every id still carries its expected case name. Delete this workflow once it has run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Write the changes (unchecked = dry run)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ado-603-scotus-flags
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    name: SCOTUS flag fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Run fix
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/maintenance/ado-603-scotus-flags.js ${{ inputs.apply && '--apply' || '' }}
