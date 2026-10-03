@@ -50,6 +50,7 @@ export const REASONS = Object.freeze({
   AGENT_DECLINED:        'agent_declined',        // front assignment agent judged a candidate and declined; metadata.front + rationale (ADO-582)
   CLEMENCY_TYPE_UNKNOWN: 'clemency_type_unknown', // DOJ mixed pardon/commutation section row whose warrant named no type; inserted as 'pardon' (ADO-590)
   MALFORMED_DECIDED_AT:  'malformed_decided_at',  // SCOTUS cluster date_filed missing, invalid, before the run's since date or in the future (ADO-493)
+  OLDER_DECISION:        'older_decision',        // SCOTUS cluster is an earlier decision on a docket whose row already holds a later one (ADO-603)
 });
 
 /**
