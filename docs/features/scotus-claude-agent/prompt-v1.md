@@ -232,6 +232,15 @@ For each case, read the opinion text and produce ALL of the following fields. Us
 - If the text does not explicitly name the opinion author, do NOT assume per curiam (`null`). Look for "Justice X delivered the opinion" or similar language. If absent, set `fact_extraction_confidence = 'low'` and `needs_manual_review = true`.
 - **It is better to flag uncertainty than to guess wrong.** A `needs_manual_review = true` flag costs Josh 30 seconds. A wrong vote split or author erodes trust in the entire system.
 
+**Unsigned orders, cert denials, DIGs and per curiam opinions follow the Court's own convention, and that convention is NOT uncertainty** (ADO-603: 34 of 36 open review flags on October 3, 2026 were this case and nobody could act on them):
+- The Court never prints a vote count on an unsigned order. The record IS the noted votes: a dissent ("Justice Jackson, dissenting"), a dissent from denial, or a vote note ("Justice Sotomayor would deny the application", "Justice Thomas would grant the petition"). Every justice not noted is counted with the majority. This is how SCOTUSblog and every outlet report these orders.
+- So `vote_split` = (participating justices minus noted dissenters)-(noted dissenters). Example: Jackson dissents and Sotomayor would deny = `7-2`. No noted dissent at all = `9-0` (minus recusals). Count a justice ONCE even if they both wrote and joined.
+- A justice who JOINS a dissent is a dissenter: "Justice Alito, with whom Justice Thomas joins, dissenting" = two dissenters. Read the full heading of every dissent.
+- NOT dissenters: a concurrence, a "statement respecting the denial", a statement respecting the order, or a justice who "took no part" (that is a recusal: lower the total instead).
+- `majority_author` = `null` for every unsigned order, cert denial, DIG and per curiam. NEVER put the author of a concurrence, dissent or statement there.
+- Vote split from this convention, with the dissent headings and vote notes read in full, is `high` confidence and `needs_manual_review = false`. Leave `low_confidence_reason` null.
+- ALWAYS write `vote_split`, `majority_author` and `dissent_authors` in the PATCH, even when the answer is `null` or `[]`. The fetcher seeds those columns with CourtListener's guess (often the dissent writer as `majority_author`, in full-name form), and omitting a field leaves that wrong guess on the published page.
+
 **Fact fields** (must be accurate  - these have hard validation):
 
 | Field | Type | Constraints | How to determine |
@@ -332,7 +341,7 @@ The level is the valence of the outcome (how bad it is for democracy and rights)
 |-------|-------|
 | `fact_extraction_confidence` | `high`, `medium`, or `low`. Use `medium` for procedural cases with minimal text. Use `low` if opinion text was insufficient or ambiguous. |
 | `low_confidence_reason` | text or null. Explain why confidence is low (e.g., "Procedural dismissal with no opinion text", "Opinion truncated at 30K chars"). `null` when confidence is `high`. |
-| `needs_manual_review` | `true` when `fact_extraction_confidence` is `low`. `false` otherwise. |
+| `needs_manual_review` | `true` when `fact_extraction_confidence` is `low`. `false` otherwise. Low (and so a review flag) is ONLY for something a human must actually check: the vote notes or a dissent heading fell in text you could not read (truncated middle, missing opinion), the disposition is ambiguous, the text you read is a different decision from the one `decided_at` names, or the facts contradict each other. A vote inferred from noted dissents on an unsigned order is the convention, never a reason (see Step 4). |
 
 **Metadata fields (set automatically):**
 
@@ -350,9 +359,12 @@ Before writing each case, run this checklist mentally:
 
 - [ ] `disposition` is one of the allowed enum values?
 - [ ] `vote_split` matches format `N-N` and numbers add up to 9 (or less for recusals)?
-- [ ] `vote_split` was found explicitly in the text (not assumed)? If assumed, flag low confidence.
-- [ ] `majority_author` is a current SCOTUS justice last name, or null ONLY if confirmed per curiam?
-- [ ] `majority_author` was found explicitly in the text (e.g., "Justice X delivered the opinion")? If not found, flag low confidence.
+- [ ] `vote_split` was found explicitly in the text, or counted from the noted dissents and vote notes of an unsigned order (Step 4 convention)? If neither, flag low confidence.
+- [ ] The minority number in `vote_split` equals the number of names in `dissent_authors`? (Exception: a justice who concurred in part and dissented in part; say so in `dissent_highlights`.) If they differ, re-read the dissent headings; never write a mismatch.
+- [ ] `majority_author` is a current SCOTUS justice last name, or null for a per curiam, unsigned order, cert denial or DIG?
+- [ ] On a signed opinion, `majority_author` was found explicitly in the text (e.g., "Justice X delivered the opinion")? If not found, flag low confidence.
+- [ ] `vote_split`, `majority_author` and `dissent_authors` are all present in the PATCH body (null / `[]` included)?
+- [ ] The text you read is the decision dated `decided_at`? A docket can carry several decisions (a reargument order, then the merits opinion months later); if the text is an earlier order, enrich only what the text supports and flag low confidence.
 - [ ] `dissent_authors` are all current SCOTUS justice last names?
 - [ ] `case_type` is one of the allowed enum values?
 - [ ] `ruling_impact_level` is between 0 and 5?
@@ -625,7 +637,7 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
 
 **Case:** Laboratory Corp. of America Holdings v. Davis, No. 24-304 (Jun 5, 2025)
 **Type:** Procedural case (certiorari dismissed), unusual 8-1 with Kavanaugh dissent
-**Why selected:** Tests handling of non-merits dispositions, low-confidence flagging, and Level 2 calibration (a punt is Judicial Sidestepping, not a win)
+**Why selected:** Tests handling of non-merits dispositions, the unsigned-order vote convention (the dismissal order plus one noted dissent is a complete record: `8-1`, no review flag), and Level 2 calibration (a punt is Judicial Sidestepping, not a win)
 
 ```json
 {
@@ -649,9 +661,9 @@ These 5 cases are fact-checked against SCOTUSblog, Wikipedia, and Oyez. Use them
   "practical_effect": "The circuit court decision below remains in effect. No new legal standard was set.",
   "merits_reached": false,
   "dissent_exists": true,
-  "fact_extraction_confidence": "medium",
-  "low_confidence_reason": "Procedural dismissal  - limited source material, no opinion text beyond the dismissal order",
-  "needs_manual_review": true,
+  "fact_extraction_confidence": "high",
+  "low_confidence_reason": null,
+  "needs_manual_review": false,
   "source_char_count": 890,
   "media_says": null,
   "actually_means": null,

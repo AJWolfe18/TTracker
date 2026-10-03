@@ -27,6 +27,7 @@ import { buildCanonicalOpinionText, upsertOpinionIfChanged } from './opinion-uti
 import { postDiscordReported, COLORS, summarizeList } from '../lib/discord.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 import { checkDecidedAt, DEFAULT_SINCE_DATE } from './decided-at-guard.js';
+import { classifyRefetch, REQUEUE_COLUMNS } from './refetch-guard.js';
 dotenv.config();
 
 // ============================================================================
@@ -68,6 +69,8 @@ const dryRun = args['dry-run'] === true;
 // ADO-577: cases INSERTED this run (not refreshed). Reported to Discord at the end so
 // a ruling landing in the DB is never only a line in a GitHub Actions log.
 const newCases = [];
+// ADO-603: existing rows a LATER decision landed on, re-queued for enrichment this run.
+const requeuedCases = [];
 
 // Supabase client
 const supabase = createClient(
@@ -493,31 +496,53 @@ async function processCluster(cluster) {
   // ONLY the fetch-owned refresh; the full record is written on first insert.
   // Docketless clusters fall back to courtlistener_cluster_id (UNIQUE per
   // migration 066) so a re-fetch refreshes instead of erroring on the insert.
+  // A docket can carry several decisions months apart (ADO-603), so the lookup also reads which
+  // decision the row holds and whether it is enriched.
+  const EXISTING_COLS = 'id, courtlistener_cluster_id, decided_at, enrichment_status';
   let upsertedCase = null;
   let error = null;
   let existing = null;
   if (caseRecord.docket_number) {
     ({ data: existing, error } = await supabase
       .from('scotus_cases')
-      .select('id')
+      .select(EXISTING_COLS)
       .eq('docket_number', caseRecord.docket_number)
       .maybeSingle());
   }
   if (!error && !existing) {
     ({ data: existing, error } = await supabase
       .from('scotus_cases')
-      .select('id')
+      .select(EXISTING_COLS)
       .eq('courtlistener_cluster_id', clusterId)
       .maybeSingle());
   }
   if (!error) {
     if (existing) {
+      const refetch = classifyRefetch(existing, { clusterId, dateFiled: fetchOwned.decided_at });
+      if (refetch === 'older_decision') {
+        // Writing it would put an older decision's text under the newer write-up.
+        process.stdout.write(`   [SKIP] Cluster ${clusterId} (${fetchOwned.decided_at}) is older than the decision row ${existing.id} holds (${String(existing.decided_at).slice(0, 10)})\n`);
+        await recordSkip(supabase, {
+          pipeline: PIPELINES.SCOTUS_FETCH,
+          reason: REASONS.OLDER_DECISION,
+          entity_type: 'scotus_cluster',
+          entity_id: clusterId,
+          metadata: { case_id: existing.id, docket: caseRecord.docket_number, date_filed: fetchOwned.decided_at, row_decided_at: existing.decided_at, row_cluster_id: existing.courtlistener_cluster_id },
+        });
+        return true;
+      }
+      // A later decision on an enriched row: re-queue it, or the old write-up stays published
+      // over the new text. Pending/failed rows are already in the agent's queue.
+      const requeue = refetch === 'new_decision' && existing.enrichment_status === 'enriched';
       ({ data: upsertedCase, error } = await supabase
         .from('scotus_cases')
-        .update(fetchOwned)
+        .update(requeue ? { ...fetchOwned, ...REQUEUE_COLUMNS } : fetchOwned)
         .eq('id', existing.id)
         .select('id')
         .single());
+      if (!error && requeue) {
+        requeuedCases.push({ id: existing.id, name: caseRecord.case_name_short || caseRecord.case_name, docket: caseRecord.docket_number });
+      }
     } else {
       ({ data: upsertedCase, error } = await supabase
         .from('scotus_cases')
@@ -691,6 +716,18 @@ async function fetchAllCases() {
     await postDiscordReported({
       title: `SCOTUS fetch: ${n} new case${n === 1 ? '' : 's'}`,
       description: `${summarizeList(newCases.map(c => (c.docket ? `${c.name} (${c.docket})` : c.name)))} - pending enrichment (agent runs 16:00 UTC weekdays; text-less cases wait for CourtListener).`,
+      color: COLORS.info,
+    });
+  }
+
+  // ADO-603: a later decision replaced the text of a published case; its write-up is stale until
+  // the agent's next run.
+  process.stdout.write(`Re-queued (new decision on an existing docket): ${requeuedCases.length}\n`);
+  if (!dryRun && requeuedCases.length > 0) {
+    const n = requeuedCases.length;
+    await postDiscordReported({
+      title: `SCOTUS fetch: ${n} case${n === 1 ? '' : 's'} re-queued for a new decision`,
+      description: `${summarizeList(requeuedCases.map(c => (c.docket ? `${c.name} (${c.docket})` : c.name)))} - a later decision landed on the same docket. The published write-up describes the earlier one until the agent re-enriches it (16:00 UTC weekdays).`,
       color: COLORS.info,
     });
   }

@@ -40,6 +40,10 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
   SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
   SQL Editor AFTER PR #165 merges and migration 120 is applied; never deployed.
+- `scripts/maintenance/2026-10-03-ado-603-scotus-review-flags.sql` - one-time PROD work-off of the 38
+  open SCOTUS review flags: clears 18 verified rows, re-queues 18 with wrong facts (incl. the stale
+  Louisiana v. Callais write-up). Josh runs it manually in the PROD SQL Editor (STEP 3 only after the
+  ADO-603 prompt fix is on main); never deployed.
 - `scripts/maintenance/2026-10-01-ado-592-agent-patterns.sql` - DRAFT `events.agent_pattern` for the
   7 non-election fronts, with a self-checking per-front UPDATE (a front is skipped with a NOTICE if a
   current member falls outside its pattern) and rollback. Not applied anywhere; run by hand on TEST, then PROD, as part of
