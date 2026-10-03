@@ -58,6 +58,38 @@ jobs:
           SILENCE_HOURS_STORIES: ${{ vars.SILENCE_HOURS_STORIES }}
         run: node scripts/monitoring/alert-routine-silence.js
 
+      # ADO-597: daily ingest health (PROD, main only). Alerts when no article stored its text in 24h,
+      # when articles land with empty excerpts, or when an active feed has been silent for 7 days.
+      # The script itself only checks on the scheduled run starting 12:00-17:59 UTC or a manual run (once a day; push runs skip). Same
+      # continue-on-error + follow-up Discord pattern as the routine silence check.
+      - name: Ingest health check (PROD, main only)
+        id: ingest_health
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          FEED_SILENT_DAYS: ${{ vars.FEED_SILENT_DAYS }}
+        run: node scripts/monitoring/alert-ingest-health.js
+
+      - name: Discord alert (ingest health check could not run)
+        if: always() && github.ref == 'refs/heads/main' && steps.ingest_health.outcome == 'failure'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          echo "::error::Ingest health check could not run - RSS ingest is NOT being monitored"
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "::error::DISCORD_WEBHOOK_URL secret not set - this failure could not be sent to Discord"
+            exit 1
+          fi
+          if ! curl -f -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"Ingest health check could not run\",\"description\":\"RSS ingest (stored text, empty excerpts, silent feeds) is not being monitored until this is fixed.\",\"color\":15158332,\"fields\":[{\"name\":\"Run\",\"value\":\"[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\",\"inline\":true}],\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]}" \
+            "$DISCORD_WEBHOOK_URL"; then
+            echo "::error::Discord webhook failed - this failure could not be sent to Discord"
+            exit 1
+          fi
+
       # No continue-on-error here on purpose: if Discord cannot be reached either, this step exits 1
       # and the run goes red, so GitHub's failed-run email is the last resort.
       - name: Discord alert (routine silence check could not run)

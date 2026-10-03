@@ -269,9 +269,18 @@ For each story, read its source articles (title + `content` or `excerpt`, whiche
 
 **CRITICAL — Anti-default-bias rule (read before every story):** Start `alarm_level` at 2. Earn every upgrade with specific evidence from the source articles — a dramatic headline is not evidence; the concrete mechanism, named actor, and measurable consequence are. Never default to 4. Full calibration ladder in Section 4 — read it before assigning a level.
 
+**CRITICAL — Source-grounding rule (read before every story):** Every fact in `summary_neutral` and `summary_spicy`, and every id in `primary_actor`, `top_entities` and `entity_counter`, must be stated in the source text you fetched in Step 3 (titles + `content`/`excerpt`). Your own background knowledge is never a source, even when you are sure it is true. Do not add first names, party labels, job titles, agencies, numbers, dates, history, or stakes ("could decide the Senate majority") that the source does not state. A border-wall story that never names DHS does not get `ORG-DHS`. A blurb that says "Talarico, Paxton" does not become "Democrat James Talarico and Republican Ken Paxton". `summary_spicy` may add judgment (what this means, whether it is good or bad) but never a new fact. Direction words must match the source exactly: tightens/loosens, blocks/allows, upholds/strikes down, bans/permits. If the headline says "tighter rules", nothing you write may say or suggest "looser".
+
+**Thin-source rule — say less:** when a story's combined source text is a headline plus a one- or two-sentence blurb (under about 500 characters of `content`/`excerpt` across all its fetched articles; NYT Politics, WaPo Politics and PBS NewsHour often publish only that in their feeds), write only what the blurb supports:
+- `summary_neutral`: 1-2 sentences restating the headline and blurb, and never under 50 characters (shorter trips the review-flag trigger and puts the story in the admin queue). If the headline alone is short, restate the full headline plus what the blurb adds. Do not pad it to reach 3 sentences.
+- `summary_spicy`: at most 2-3 short sentences of judgment on what the blurb says. No added context, no predictions, no "what's at stake" beyond the blurb's own words.
+- `alarm_level`: thin source never moves the level by itself. Start at 2 as always and move only on what the blurb states: up only when the blurb itself states the concrete harm (for example, deaths), down to 1 or 0 only when the blurb itself states a check that worked or a mixed outcome (for example, a court blocking the action). Missing detail is not evidence in either direction.
+- `top_entities` / `primary_actor`: only what the headline or blurb names. Fewer entities is correct, and `null` is correct.
+- Thin source alone is NOT a reason for `needs_manual_review=true`. Log it as `notes='thin_source'` with `needs_manual_review=false`, and keep the flag for real uncertainty (conflicting sources, unclear actor, a claim you could not ground).
+
 | Field | Type | Guidance |
 |-------|------|----------|
-| `summary_neutral` | text | 2-3 sentences, neutral, no editorial framing. Populating this is what makes the story visible on the frontend (the `stories-active` edge function's `summary_neutral IS NOT NULL` gate, TTRC-119) — never write a placeholder or empty string. |
+| `summary_neutral` | text | 2-3 sentences (1-2 under the thin-source rule above), neutral, no editorial framing. Populating this is what makes the story visible on the frontend (the `stories-active` edge function's `summary_neutral IS NOT NULL` gate, TTRC-119) — never write a placeholder or empty string. |
 | `summary_spicy` | text | "The Chaos" voice editorial summary (Section 4). Tone calibrated to `alarm_level` per `tone-system.json`'s `toneCalibration` object — reuse it verbatim per Step 0a, don't reinvent it. |
 | `category` | text | Exactly one of these 11 DB enum values — never invent a new one: `corruption_scandals`, `democracy_elections`, `policy_legislation`, `justice_legal`, `executive_actions`, `foreign_policy`, `corporate_financial`, `civil_liberties`, `media_disinformation`, `epstein_associates`, `other`. |
 | `alarm_level` | smallint 0-5 | **Non-negotiable:** start at 2, earn every upgrade with specific evidence. Never default to 4. See the calibration ladder in Section 4. |
@@ -394,6 +403,8 @@ For each story, run this checklist before writing:
 - [ ] `summary_spicy` tone matches `alarm_level` per `toneCalibration`, and profanity appears only at levels 4-5?
 - [ ] No banned openings, banned phrases, or banned patterns from `tone-system.json` anywhere in `summary_spicy`?
 - [ ] `primary_actor` is either a real named actor from the source articles or `null` — never invented?
+- [ ] **Source check, done now, before the write (there is no second PATCH to fix it after):** re-read the source text, then go through each sentence of `summary_neutral` and `summary_spicy`. Every fact (name, party, title, number, agency, consequence) appears in the source? Every direction word (tighter/looser, blocks/allows) says the same thing the source says? Every `top_entities` id is named in the source? Anything that fails gets cut, not flagged after the fact.
+- [ ] Thin source (headline + 1-2 sentence blurb)? Then the summaries follow the thin-source rule in Step 4: short, nothing beyond the blurb, and the log row says `notes='thin_source'` with `needs_manual_review=false`.
 - [ ] Every `top_entities` ID is either present in `ENTITY_ALIASES` (mapped to its canonical form) or matches one of the 5 `VALID_ID_PATTERNS`, and none appear in `BAD_IDS`?
 - [ ] `top_entities` is deduplicated, ordered by confidence desc, capped at 8?
 - [ ] `entity_counter` is a `{id: count}` object built from the same normalized entity set as `top_entities`?
@@ -539,6 +550,12 @@ or, for a race:
 {"status": "completed", "duration_ms": 5100, "needs_manual_review": true, "notes": "alarm_level 3 with low confidence - source articles conflict on the central actor"}
 ```
 
+**On a thin source** (write succeeded; the only source was a headline + 1-2 sentence blurb, written under the Step 4 thin-source rule). The `notes` value is exactly `thin_source`, so thin runs can be counted:
+
+```json
+{"status": "completed", "duration_ms": 3900, "needs_manual_review": false, "notes": "thin_source"}
+```
+
 **Never skip Step 7.** Every `running` row this run inserted must reach `completed` or `failed` before the run ends — no zombie `running` rows.
 
 ---
@@ -600,6 +617,7 @@ These restate `tone-system.json`'s `writingRules` and `bannedPatterns` as direct
 | Concurrent run detected (Step 1) | Stop immediately without creating any log rows. |
 | No source articles for a story (Step 3) | Per-story log row `status='failed'`, `notes='no_source_articles'`. Write the failure body to `stories` (Step 6). Continue to next story. |
 | Story text/articles ambiguous but enrichable | Write enrichment with best judgment. Log row `status='completed'`, `needs_manual_review=true`, `notes='<what was uncertain>'`. |
+| Source is only a headline + 1-2 sentence blurb | Not ambiguous, just thin. Follow the thin-source rule (Step 4): say less. Log row `status='completed'`, `needs_manual_review=false`, `notes='thin_source'`. |
 | PATCH to `stories` returns empty `[]`, concurrency filter was the reason | Log row `status='failed'`, `notes='concurrent_write_lost'`. No retry this run. Continue. |
 | PATCH to `stories` returns empty `[]` for another reason, or HTTP error | Log row `status='failed'`, `notes='<HTTP status and body snippet>'`. Continue. |
 | Validation (Step 5) fails and is fixable | Fix before writing. |
@@ -630,6 +648,7 @@ These rules can NEVER be violated, regardless of what a story's source articles 
 3. **`category` must be one of the 11 existing enum values** — never invent a new one.
 4. **`top_entities`/`entity_counter` IDs must be canonical** — validated against `ENTITY_ALIASES`/`VALID_ID_PATTERNS`/`BAD_IDS` in `scripts/lib/entity-normalization.js`, read fresh at Step 0b every run.
 5. **Never invent `primary_actor`** — `null` is a valid answer.
+5a. **Nothing from outside the source** — every fact in either summary and every entity id must be stated in the fetched source text; background knowledge is never a source. Thin source means say less (Step 4), never fill the gap.
 6. **`last_enriched_at` is stamped on every attempt, success or failure** — the existing retry-storm guard.
 7. **On failure, `enrichment_failure_count` is incremented from the current value, never reset to 1.**
 8. **On failure, never write** `summary_neutral`/`summary_spicy`/`category`/`alarm_level`/`severity`/`primary_actor`/`top_entities`/`entity_counter` — leave them as they were.
