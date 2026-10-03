@@ -24,7 +24,9 @@ article workflows, Test Secrets) have no failure alert: whoever dispatched them 
 
 **1. An alert never fails the pipeline, and a lost alert is never silent.** (Codex review on PR #151,
 September 25, 2026.) `postDiscord` never throws and never changes the caller's exit code, so a
-Discord outage cannot turn a good ingest red. But when an alert that matters is not delivered:
+Discord outage cannot turn a good ingest red. Each webhook POST is aborted after 10 seconds (Codex,
+October 2, 2026), so a hung Discord connection cannot hold a pipeline step until the job timeout; a
+timeout counts as not delivered. But when an alert that matters is not delivered:
 - New-work alerts use `postDiscordReported`: one stderr line plus a GitHub Actions error annotation
   on the run, so a green run shows it. In Actions a missing `DISCORD_WEBHOOK_URL` counts as not
   delivered. Local runs without the secret stay silent.
