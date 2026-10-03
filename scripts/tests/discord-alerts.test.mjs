@@ -30,6 +30,17 @@ import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay } from 
   assert.equal(await postDiscord({ title: 'T' }, { webhookUrl: 'https://d.test/h', fetchImpl: async () => new Response('rate limited', { status: 429 }) }), false);
   // network error -> false, no throw
   assert.equal(await postDiscord({ title: 'T' }, { webhookUrl: 'https://d.test/h', fetchImpl: async () => { throw new Error('ECONNRESET'); } }), false);
+  // a webhook that never answers is aborted at timeoutMs -> false, no throw (Codex P1 on #161)
+  const hang = async (_u, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  const started = Date.now();
+  assert.equal(await postDiscord({ title: 'T' }, { webhookUrl: 'https://d.test/h', fetchImpl: hang, timeoutMs: 50 }), false);
+  assert.ok(Date.now() - started < 2000);
+  // every POST carries an abort signal (default timeout applies when none is passed)
+  let signal = null;
+  await postDiscord({ title: 'T' }, { webhookUrl: 'https://d.test/h', fetchImpl: async (_u, init) => { signal = init.signal; return new Response(null, { status: 204 }); } });
+  assert.ok(signal instanceof AbortSignal);
   // caps: title 256, description 4000
   let capped = null;
   await postDiscord({ title: 'x'.repeat(300), description: 'y'.repeat(5000) }, { webhookUrl: 'https://d.test/h', fetchImpl: async (_u, init) => { capped = JSON.parse(init.body).embeds[0]; return new Response(null, { status: 204 }); } });
