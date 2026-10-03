@@ -8,7 +8,7 @@ import he from 'he';
 import { fetchWithTimeout, readLimitedResponse, withRetry, getNetworkConfig } from '../utils/network.js';
 import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
-import { toStr, toBool, toStrArray } from './utils/primitive.js';
+import { toStr, toBool, toStrArray, pickItemText } from './utils/primitive.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 const parser = new Parser({
@@ -481,11 +481,8 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   // Generate URL hash for deduplication
   const urlHash = crypto.createHash('sha256').update(articleUrl).digest('hex');
 
-  // Extract content/description with safe coercion
-  const content = toStr(item['content:encoded']) ||
-                  toStr(item.contentEncoded) ||
-                  toStr(item.description) ||
-                  toStr(item.summary) || '';
+  // Extract content/description with safe coercion (longest text field; ADO-597)
+  const content = pickItemText(item);
   
   // Detect opinion content based on URL patterns
   const isOpinion = detectOpinionContent(articleUrl, content, title);

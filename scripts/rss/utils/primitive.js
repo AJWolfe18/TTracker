@@ -45,6 +45,22 @@ export const toBool = (v) => {
 };
 
 /**
+ * The article text an RSS/Atom item carries: the longest of its text fields.
+ * rss-parser puts full text in different places per feed format - RSS 2.0 in
+ * content:encoded, Atom (Vox, The Atlantic) and Arc feeds (Votebeat) in `content`,
+ * while `summary`/`description` are often a one-line teaser. Reading a fixed
+ * order without `content` stored 64 of 21,824 chars for The Atlantic and nothing
+ * for Votebeat (ADO-597, October 2, 2026). Longest wins, so a feed that sends a
+ * teaser in one field and the body in another always yields the body.
+ * @param {Object} item - Parsed rss-parser item
+ * @returns {string}
+ */
+export const pickItemText = (item) =>
+  [item?.['content:encoded'], item?.contentEncoded, item?.content, item?.description, item?.summary]
+    .map(toStr)
+    .reduce((best, s) => (s.length > best.length ? s : best), '');
+
+/**
  * Safely convert array to array of string primitives
  * @param {*} xs - Value to convert (should be array, but handles non-arrays safely)
  * @returns {string[]} - Array of primitive strings

@@ -40,6 +40,19 @@ assert.ok(step3.includes('new_article_ids') && step3.includes('article_id=in.(')
 // v4 (PR #145 review, P1): a burst over six articles is read in full, the overflow at headline level
 assert.ok(step3.includes('every remaining id') && step3.includes('articles(title,source_name,excerpt)'), 'Step 3B reads ids 7+ at headline level instead of dropping them');
 
+// --- Stories agent: copy stays inside the source (ADO-597: 16294 "loosened", 16287 ORG-DHS, 16291 party labels) ---
+const step4 = stories.slice(stories.indexOf('### Step 4'), stories.indexOf('### Step 5'));
+const step5 = stories.slice(stories.indexOf('### Step 5'), stories.indexOf('### Step 6'));
+assert.ok(step4.includes('Source-grounding rule') && /background knowledge is never a source/i.test(step4), 'Step 4 must forbid facts/entities from outside the source');
+assert.ok(step4.includes('Thin-source rule') && step4.includes("notes='thin_source'"), 'Step 4 must carry the thin-source say-less rule');
+assert.ok(/thin source alone is NOT a reason for `needs_manual_review=true`/i.test(step4), 'thin source alone must not set the review flag');
+assert.ok(step5.includes('Source check, done now, before the write'), 'Step 5 must check the copy against the source before the single PATCH');
+assert.ok(stories.includes('**Nothing from outside the source**'), 'Section 6 hard rule for source grounding');
+const step7 = stories.slice(stories.indexOf('### Step 7'), stories.indexOf('## 4. Brand Voice'));
+assert.ok(step7.includes('"needs_manual_review": false, "notes": "thin_source"'), 'Step 7 must show the thin_source log body, or thin runs log no notes');
+assert.ok(/thin source never moves the level by itself/i.test(step4), 'thin source must not lower alarm_level (level 1 means a mixed outcome, not missing detail)');
+assert.ok(/never under 50 characters/.test(step4), 'thin summary_neutral must stay >= 50 chars (migration 080 review-flag trigger)');
+
 // --- migration 117 defines exactly what the prompt calls, with the review-fixed rules ---
 assert.ok(mig117.includes('FUNCTION public.stories_needing_enrichment('), 'migration 117 defines the RPC');
 assert.ok(mig117.includes("s.enrichment_meta->>'evidence_as_of'"), 'RPC must read the echoed watermark');
