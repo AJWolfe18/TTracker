@@ -14,6 +14,7 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row | blue |
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
 | Routine went silent (ADO-586) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h | red |
+| RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; the scheduled run starting 12:00-17:59 UTC, or a manual run) | no article from the last 24h stored `content`, articles with an empty excerpt, or an active feed's source silent for `FEED_SILENT_DAYS` (default 7) | amber (red if every read failed) |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
 | Social drafts waiting (ADO-572) | `social/draft-posts.js` | new drafts need approval in the admin Social tab | amber |
 

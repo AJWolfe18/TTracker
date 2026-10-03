@@ -67,7 +67,7 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | published_at | TIMESTAMPTZ | When article published |
 | published_date | DATE | GENERATED from published_at |
 | fetched_at | TIMESTAMPTZ | When RSS fetched |
-| content | TEXT | Article text (scraped) |
+| content | TEXT | Feed item text, longest RSS/Atom field, capped at 5,000 chars (`excerpt` = its first 500). PROD stored NULL for every row until migration 121 (October 3, 2026, ADO-597); older PROD rows have `excerpt` only |
 | excerpt | TEXT | Article excerpt/description |
 | content_type | TEXT | 'news_report', 'opinion', 'analysis' |
 | guid | TEXT | RSS GUID for deduplication |
