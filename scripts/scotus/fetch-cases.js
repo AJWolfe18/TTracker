@@ -532,16 +532,19 @@ async function processCluster(cluster) {
         return true;
       }
       // A later decision on an enriched row: re-queue it, or the old write-up stays published
-      // over the new text. Pending/failed rows are already in the agent's queue.
+      // over the new text. Pending/failed rows are already in the agent's queue. A 'flagged' row
+      // is on admin hold, so its status is left alone, but it is reported below: its text now
+      // belongs to a different decision than its write-up.
       const requeue = refetch === 'new_decision' && existing.enrichment_status === 'enriched';
+      const heldStale = refetch === 'new_decision' && existing.enrichment_status === 'flagged';
       ({ data: upsertedCase, error } = await supabase
         .from('scotus_cases')
         .update(requeue ? { ...fetchOwned, ...REQUEUE_COLUMNS } : fetchOwned)
         .eq('id', existing.id)
         .select('id')
         .single());
-      if (!error && requeue) {
-        requeuedCases.push({ id: existing.id, name: caseRecord.case_name_short || caseRecord.case_name, docket: caseRecord.docket_number });
+      if (!error && (requeue || heldStale)) {
+        requeuedCases.push({ id: existing.id, name: caseRecord.case_name_short || caseRecord.case_name, docket: caseRecord.docket_number, held: heldStale });
       }
     } else {
       ({ data: upsertedCase, error } = await supabase
@@ -722,12 +725,12 @@ async function fetchAllCases() {
 
   // ADO-603: a later decision replaced the text of a published case; its write-up is stale until
   // the agent's next run.
-  process.stdout.write(`Re-queued (new decision on an existing docket): ${requeuedCases.length}\n`);
+  process.stdout.write(`New decision on an existing docket (re-queued or on hold): ${requeuedCases.length}\n`);
   if (!dryRun && requeuedCases.length > 0) {
     const n = requeuedCases.length;
     await postDiscordReported({
-      title: `SCOTUS fetch: ${n} case${n === 1 ? '' : 's'} re-queued for a new decision`,
-      description: `${summarizeList(requeuedCases.map(c => (c.docket ? `${c.name} (${c.docket})` : c.name)))} - a later decision landed on the same docket. The published write-up describes the earlier one until the agent re-enriches it (16:00 UTC weekdays).`,
+      title: `SCOTUS fetch: a new decision landed on ${n} existing case${n === 1 ? '' : 's'}`,
+      description: `${summarizeList(requeuedCases.map(c => `${c.docket ? `${c.name} (${c.docket})` : c.name}${c.held ? ' [on admin hold: not re-queued, re-check it in admin]' : ''}`))} - a later decision landed on the same docket. The write-up describes the earlier one until the agent re-enriches it (16:00 UTC weekdays).`,
       color: COLORS.info,
     });
   }

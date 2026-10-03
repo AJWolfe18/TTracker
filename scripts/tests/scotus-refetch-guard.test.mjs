@@ -27,7 +27,11 @@ assert.equal(classifyRefetch(callais, { clusterId: 2, dateFiled: null }), 'refre
 // row from before cluster ids were stored
 assert.equal(classifyRefetch({ courtlistener_cluster_id: null, decided_at: '2025-06-27' }, { clusterId: 5, dateFiled: '2026-01-05' }), 'new_decision');
 
-assert.deepEqual({ ...REQUEUE_COLUMNS }, { enrichment_status: 'pending', enriched_at: null, prompt_version: null });
+// the earlier decision's review stamp goes too, or a new flag on the new text never alerts
+assert.deepEqual({ ...REQUEUE_COLUMNS }, {
+  enrichment_status: 'pending', enriched_at: null, prompt_version: null,
+  manual_reviewed_at: null, manual_review_note: null,
+});
 assert.ok(Object.isFrozen(REQUEUE_COLUMNS));
 
 process.stdout.write('scotus-refetch-guard: ok\n');

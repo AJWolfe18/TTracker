@@ -35,10 +35,14 @@ export function classifyRefetch(existing, { clusterId, dateFiled }) {
 /**
  * Columns that put a row back in the SCOTUS agent's queue (enrichment_status pending; the agent
  * rewrites enriched_at and prompt_version on success). Same mechanic as the hand-run ADO-580 reset.
+ * The earlier decision's review stamp is cleared too: the needs-review alert skips rows with
+ * manual_reviewed_at set, so a stamp left over would hide a flag the agent raises on the new text.
  * Editorial copy and is_public are untouched: the case stays published until the agent rewrites it.
  */
 export const REQUEUE_COLUMNS = Object.freeze({
   enrichment_status: 'pending',
   enriched_at: null,
   prompt_version: null,
+  manual_reviewed_at: null,
+  manual_review_note: null,
 });
