@@ -5,10 +5,10 @@
 --
 -- GOES LIVE IMMEDIATELY: the row is inserted as publish_state 'published', so the moment parts
 -- (2) to (4) run, the front is public on trumpytracker.com and its members can reach the main line.
--- STILL OPEN (Josh): the title, the tier (major here; flagship is the alternative) and whether the
--- boat strikes belong on this front. Each is a one-line change after the fact:
+-- DECIDED (Josh, October 2, 2026, ADO-595): flagship, title kept, boat strikes stay on this front.
+-- TEST was updated to flagship the same day. Each is still a one-line change after the fact:
 --   UPDATE public.events SET name = '<new title>', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
---   UPDATE public.events SET tier = 'flagship', updated_at = NOW() WHERE slug = 'hegseth-pentagon';
+--   UPDATE public.events SET tier = 'major', updated_at = NOW() WHERE slug = 'hegseth-pentagon';   -- back to major
 --   Boat strikes out: remove 'boat strikes?|drug boats?|' from sweep_pattern and agent_pattern
 --   (UPDATE events), then move the already-filed boat strike stories in admin.
 -- To hold it back until Josh decides, set v_state to 'draft' in part (2) before pasting (the sweep
@@ -65,7 +65,7 @@ DECLARE
   v_name    CONSTANT TEXT := 'Hegseth''s Pentagon';
   v_dek     CONSTANT TEXT := 'The Pentagon remade around loyalty, with the reasons rarely given. Generals and military lawyers pushed out, boat strikes that killed survivors, reporters locked out, and a senator investigated for telling troops to refuse illegal orders.';
   v_alarm   CONSTANT SMALLINT := 5;
-  v_tier    CONSTANT TEXT := 'major';
+  v_tier    CONSTANT TEXT := 'flagship';
   v_state   CONSTANT TEXT := 'published';   -- 'draft' holds the front back (not public)
   v_started CONSTANT TIMESTAMPTZ := '2025-02-21T00:00:00+00:00';
   v_sweep   CONSTANT TEXT := '\m(hegseth|pentagon|department of war|war department|secretary of war|war secretary|joint chiefs|boat strikes?|drug boats?|signalgate)\M';

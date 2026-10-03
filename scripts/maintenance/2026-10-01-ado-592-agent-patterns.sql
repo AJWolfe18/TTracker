@@ -36,6 +36,13 @@
 --
 -- DO NOT edit migration 116 PART D or the ADO-582 file for this; election-suppression is untouched.
 --
+-- SUPERSEDED FOR kushners-deals (October 2, 2026): ADO-595 (2026-10-02-ado-595-new-fronts.sql) widens
+-- that front to "The Envoys' Deals" and sets its sweep and agent_pattern itself. TEST already has the
+-- ADO-595 values, so this file SKIPS kushners-deals with a NOTICE there (different pattern already
+-- set; expected). On PROD either order is safe: run before ADO-595, the ADO-595 file overwrites the
+-- pattern below; run after, this file skips the front. The pre-check below then shows kushners-deals
+-- with a non-NULL agent_pattern; that is expected, not a reason to stop.
+--
 -- Three pastes, in order: (1) pre-check (read-only), (2) the DO block, (3) the result query.
 -- In the SQL editor, read the NOTICE output of (2): one line per front, APPLIED or SKIPPED.
 

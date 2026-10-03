@@ -48,6 +48,10 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-01-ado-592-hegseth-pentagon-front.sql` - new front "Hegseth's Pentagon"
   (events row with sweep and agent patterns, targeted sweep, refresh, rollback). Applied on TEST
   October 1, 2026; Josh pastes it in the PROD SQL Editor. Never deployed by code.
+- `scripts/maintenance/2026-10-02-ado-595-new-fronts.sql` - ADO-595: Kushner's Deals widened to
+  "The Envoys' Deals", new "Israel & Gaza" and "RFK Jr.'s HHS" fronts (guarded writes, targeted
+  sweep, refresh, result, rollback). Applied on TEST October 2, 2026; Josh pastes it in the PROD SQL
+  Editor AFTER the Hegseth file. Never deployed by code.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
