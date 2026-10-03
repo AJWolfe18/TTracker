@@ -27,9 +27,11 @@
 -- Editorial copy and is_public are NOT touched: both cases stay public with
 -- their current text until the agent overwrites it (same as the August 31, 2026
 -- restore of 12 cases). No dash-guard columns are written.
--- Runs once per row: only rows still carrying the excerpt-era enrichment of
--- September 1, 2026 (enriched_at before September 2, 2026; read through the public
--- API on October 1, 2026 as 03:31 UTC on September 1 for both) are re-queued.
+-- Runs once per row: only rows still carrying an excerpt-era enrichment (enriched_at
+-- before PR #165 merged, October 3, 2026 01:54:33 UTC) are re-queued. Corrected
+-- October 2, 2026 CT: the cutoff was September 2, 2026, but PROD showed 2399 enriched
+-- on September 2 at 16:04 UTC (the October 1 read was wrong), still under the old
+-- prompt, so the old cutoff would have skipped it and reported "fix did not take".
 -- prompt_version cannot tell the runs apart (the agent writes 'v1.1' both times).
 -- After the agent's full-opinion pass, a second run is a no-op even if that pass
 -- came back low again; the NOTICE then says the fix did not take, so look at the
@@ -39,7 +41,7 @@
 -- STEP 1 - AUDIT (read-only; run first and keep the output).
 -- Expect 2 rows: 2099 Trump v. Slaughter and 2399 National Park Service v.
 -- National Trust..., both enrichment_status 'enriched' and
--- fact_extraction_confidence 'low', enriched_at on September 1, 2026 (2099:
+-- fact_extraction_confidence 'low', enriched_at before October 3, 2026 01:54 UTC (2099:
 -- majority_author null, dissent_authors empty). has_full_opinion must be true for both, or the re-run cannot do better.
 -- queued_ahead = pending/failed cases the agent takes first (20 per run).
 SELECT sc.id, sc.case_name, sc.is_public, sc.enrichment_status, sc.prompt_version,
@@ -56,8 +58,8 @@ ORDER BY sc.id;
 
 -- STEP 2 - RESET (one block; highlight it and run it by itself).
 -- Raises and changes nothing unless ids 2099 and 2399 are exactly the two
--- expected cases. Then re-queues only the ones still enriched by the September 1
--- excerpt-era run at low confidence or flagged for manual review, and only if
+-- expected cases. Then re-queues only the ones still enriched by an excerpt-era
+-- run (before the #165 merge) at low confidence or flagged for manual review, and only if
 -- their full opinion is stored. The NOTICE says how many (0, 1 or 2), how many were
 -- skipped for a missing opinion, and how many the full-opinion pass has already
 -- redone (and of those, how many are still low).
@@ -88,13 +90,13 @@ BEGIN
     SELECT count(*) FROM public.scotus_cases
     WHERE id IN (2099, 2399)
       AND enrichment_status = 'enriched'
-      AND enriched_at >= '2026-09-02 00:00:00+00'
+      AND enriched_at >= '2026-10-03 01:54:33+00'
   );
   v_still_low := (
     SELECT count(*) FROM public.scotus_cases
     WHERE id IN (2099, 2399)
       AND enrichment_status = 'enriched'
-      AND enriched_at >= '2026-09-02 00:00:00+00'
+      AND enriched_at >= '2026-10-03 01:54:33+00'
       AND (fact_extraction_confidence = 'low' OR needs_manual_review IS TRUE)
   );
 
@@ -104,7 +106,7 @@ BEGIN
       prompt_version    = NULL
   WHERE sc.id IN (2099, 2399)
     AND sc.enrichment_status = 'enriched'
-    AND sc.enriched_at < '2026-09-02 00:00:00+00'
+    AND sc.enriched_at < '2026-10-03 01:54:33+00'
     AND (sc.fact_extraction_confidence = 'low' OR sc.needs_manual_review IS TRUE)
     AND EXISTS (SELECT 1 FROM public.scotus_opinions so WHERE so.case_id = sc.id);
   GET DIAGNOSTICS v_reset = ROW_COUNT;

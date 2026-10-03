@@ -25,8 +25,8 @@
 -- from outside. Run one STEP at a time (highlight it, then Run), STEP 1 first.
 
 
--- STEP 1 (read-only). Expect: target_rows = 1220, public_in_predicate = 0,
--- public_2020_kept = 8. If target_rows is not 1220, do NOT edit STEP 2:
+-- STEP 1 (read-only). Expect: target_rows = 1212 (the card's 1,220 includes the 8 kept), public_in_predicate = 0,
+-- public_2020_kept = 8. If target_rows is not 1212, do NOT edit STEP 2:
 -- send the three numbers to Claude first.
 SELECT
   (SELECT count(*) FROM public.scotus_cases
@@ -48,7 +48,7 @@ SELECT
 -- target is not exactly v_expected rows, the block raises and nothing is deleted.
 DO $$
 DECLARE
-  v_expected int := 1220;  -- EXPECTED VALUE: the card's count; must equal STEP 1 target_rows
+  v_expected int := 1212;  -- 1,220 imported minus the 8 public cases kept (PROD, October 2, 2026)
   v_public   int;
   v_target   int;
   v_opinions int;
