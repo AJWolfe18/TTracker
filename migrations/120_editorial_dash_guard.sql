@@ -16,6 +16,8 @@
 -- October 1, 2026 (reviews): added scotus_cases.ruling_label and substantive_winner, URLs are
 -- kept, and the digit rule handles chains ("4–1–4"). TEST ran the first version on
 -- September 25, 2026; re-run this whole file there (safe, see Idempotent below).
+-- October 2, 2026 (Codex): none of the functions is callable by anon or authenticated (end of B,
+-- with a privilege check that stops the file if that fails).
 --
 -- Parts: A) the function, B) one BEFORE INSERT OR UPDATE OF <editorial columns> trigger per
 -- table, C) a one-time rewrite of existing rows (only rows the guard would change).
@@ -256,6 +258,37 @@ CREATE TRIGGER strip_editorial_dashes
 -- The trigger functions are internal: nobody calls them directly.
 REVOKE EXECUTE ON FUNCTION public.stories_strip_dashes(), public.scotus_cases_strip_dashes(),
   public.executive_orders_strip_dashes(), public.pardons_strip_dashes() FROM PUBLIC, anon, authenticated;
+
+-- The helpers are internal too (Codex P1, October 2, 2026): Postgres grants EXECUTE on a new
+-- function to PUBLIC, which would expose them as anonymous /rpc endpoints, and the recursive
+-- jsonb walk is a needless load surface. The triggers are SECURITY INVOKER, so the helpers run
+-- as the writing role: service_role (pipelines, agents, admin edge functions) and postgres (SQL
+-- Editor, owner). anon and authenticated have no write policy on these four tables.
+REVOKE EXECUTE ON FUNCTION public.strip_dashes_plain(text), public.strip_dashes(text),
+  public.strip_dashes_json_walk(jsonb, text), public.strip_dashes(jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.strip_dashes_plain(text), public.strip_dashes(text),
+  public.strip_dashes_json_walk(jsonb, text), public.strip_dashes(jsonb) TO service_role;
+
+-- Privilege check: stops the file (the SQL Editor runs it as one transaction, so nothing is
+-- kept) if anon or authenticated can still call
+-- any of the eight functions, or if service_role cannot call a helper its writes depend on.
+DO $$
+DECLARE v_bad text;
+BEGIN
+  SELECT string_agg(p.oid::regprocedure::text, ', ') INTO v_bad
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public'
+     AND p.proname IN ('strip_dashes_plain', 'strip_dashes', 'strip_dashes_json_walk',
+                       'stories_strip_dashes', 'scotus_cases_strip_dashes',
+                       'executive_orders_strip_dashes', 'pardons_strip_dashes')
+     AND (has_function_privilege('anon', p.oid, 'EXECUTE')
+          OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+          OR (p.proname IN ('strip_dashes_plain', 'strip_dashes', 'strip_dashes_json_walk')
+              AND NOT has_function_privilege('service_role', p.oid, 'EXECUTE')));
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'migration 120 privilege check failed: %', v_bad;
+  END IF;
+END $$;
 
 -- C) One-time rewrite of existing rows. Setting a column to itself fires the trigger above,
 -- which does the rewrite. The WHERE keeps it to rows the guard would change: a dash somewhere
