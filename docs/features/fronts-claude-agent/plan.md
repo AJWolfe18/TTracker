@@ -143,6 +143,45 @@ Row values follow the other fronts' launch (the August 24 seed): `tier` major, `
 
 **Rollback.** Revert the prompt and script commit on `main` (the old prompt uses the untouched 116 RPC). Assignments: `DELETE FROM story_event WHERE assigned_by = 'agent' AND note LIKE 'fronts-v2:%'`, then `SELECT refresh_tracker_derived()`. Migration 127 is additive and harmless to leave.
 
+### Definitions file (October 4, 2026)
+
+**File:** `scripts/maintenance/2026-10-04-ado-592-front-definitions.sql`. It supersedes the October 1 draft `2026-10-01-ado-592-agent-patterns.sql`, which must not be applied. **Not applied anywhere.** Run it after migration 127 and before the fronts-v2 prompt reaches `main`, outside the 14:00 UTC run (it refuses if the agent wrote anything in the last 15 minutes). One transaction: guards (each value must be the old value it expects or already the new one, so a hand edit is never overwritten; no member lost; no shared sweep priority; each agent_pattern starts with its sweep; all nine fronts join the agent), a backup of the old values (`front_merge_backup_events`, tag `ado-592-defs`), the writes, a full sweep whose rows carry `note = 'ado-592-defs: keyword sweep'` (so the rollback finds them), and the refresh. Same file on TEST and PROD (fronts by slug). Test: `scripts/tests/front-definitions-sql-pglite.test.mjs` (PGlite, by hand; it checks every regex against its review). **Cost:** $0 cash; the agent pool grows (plan usage only).
+
+Per front ("filed" = the review's PROD headline simulation; overlaps can shift a few):
+
+| Front | What changes | Filed on PROD |
+|---|---|---|
+| Trump Corruption | Definition only | 0 |
+| Election Suppression | Sweep adds SAVE America Act, mail-voting limits, voter lists and records, Fulton County, election-office raids, troops at polls, election orders, emergency powers before elections; co-word takes the SAVE act name. agent_pattern unchanged. Definition = the 127 seed plus three additions, tie-breaks and 5 calibration rows | ~39 |
+| The Epstein Files | Sweep adds rare names, Maxwell next to a custody or clemency word, the Clintons next to contempt or deposition (not Prince Andrew); agent_pattern set (Andrew, Maxwell, Mandelson, survivors); definition | ~15 |
+| The Courts | Co-word folded into the sweep, plus judges with US attorneys, rebukes of the government's lawyers, Trump attacking judges, defied orders; agent_pattern set (tight: no Supreme Court phrase); definition | ~33 |
+| ICE & Deportations | Kilmar Abrego Garcia in the sweep (and the agent_pattern); definition | ~6 |
+| Israel & Gaza | Sweep adds Board of Peace, Francesca Albanese, the ICC next to a US actor; co-word excludes East Palestine, adds three push verbs; agent extras swapped (war powers, Epic Fury, Midnight Hammer, bare Albanese out); definition | ~28 |
+| Iran | Sweep adds Iranians, Hormuz, Tehran, Khamenei, Kharg, Epic Fury, Midnight Hammer, the IRGC, the nuclear sites, "Middle East war"; agent_pattern set; definition | ~79 |
+| RFK Jr.'s HHS | Sweep adds R.F.K., FDA and NIH leaders, surgeon general picks, vaccine policy phrases, measles (not Canada or Mexico), Kennedy next to a health word; bare "kennedy" out of the agent_pattern; definition | ~46 |
+| Hegseth's Pentagon | Sweep adds the "illegal orders" video, service secretaries, transgender troops, General Caine, court-martial, boat strikes not called that; agent extras add DOD, Quantico, press credentials, SOUTHCOM; definition | ~29 |
+
+**Claude's calls (one-line changes if Josh disagrees):** Prince Andrew is left to the agent, not swept (Josh's open question). The Courts' agent_pattern is the tight variant. Election's agent_pattern is unchanged (the review's extras were not tested, and a new value also means repointing `front-agent-prompt.test.mjs`). ICE's agent_pattern gains the three Abrego words so it stays a superset of its sweep. The Anthropic (Hegseth) and abortion-pill (RFK) questions are held in the definitions as `uncertain` declines (`borderline <slug>: ... pending`), not decided. Election's 2020 addition leaves out "old prosecutions winding down" (that is the Tina Peters question). Calibration rows carry headlines only (PROD story ids differ on TEST).
+
+**Open for Josh** (none of these is in the SQL):
+1. Epstein: should UK and royal fallout be on the front, and should the sweep file Prince Andrew stories? Today the agent judges them and the definition keeps only fallout tied to the US files or US officials. (`front-reviews/epstein-files.md`, Q1)
+2. Epstein: keep jokes, protest art and celebrity spats on the front? (`epstein-files.md`, Q2)
+3. Epstein: move `started_at` to February 27, 2025? (`epstein-files.md`, Q3)
+4. Iran: Iran only, or all of Trump's wars (Venezuela, Cuba, Greenland)? (`iran.md`, Q1)
+5. Iran: the Houthis, only when tied to the Iran war? (`iran.md`, Q2)
+6. Iran: move `started_at` to June 21, 2025? (`iran.md`, Q3)
+7. Israel & Gaza: hand-move the 10 "Israel pulled the US into Iran" stories from Iran (724, 3107, 3854, 4124, 4387, 4402, 6760, 7037, 7116, 12061)? (`israel-gaza.md`; `iran.md`, Q4)
+8. The Courts: every "judge blocks Trump" ruling on this front? The definition takes them through the agent (the dek says "blocked orders"); none are swept. (`the-courts.md`, Q1)
+9. The Courts: Supreme Court tight (shipped), middle or wide? Middle = append the review's `supreme court|justices ... ruled/blocked/...` branch to the agent_pattern. (`the-courts.md`, Q2)
+10. The Courts: court losses in DOJ cases against critics (Comey, Letitia James), or a separate "Retribution" front? (`the-courts.md`, Q3)
+11. Election: were the Fulton County raid, the voting-rights group search and DOJ's voter-data push declined or still waiting? One service-role `pipeline_skips` query. (`election-suppression.md`, Q1)
+12. Election: Tina Peters and the fake electors, out unless a federal action now? (`election-suppression.md`, Q2)
+13. Election: the sweep now files every SAVE America Act headline, horse race included (accepted here, as the review recommends; ADO-594's coverage label keeps analysis off the main line). (`election-suppression.md`, Q3)
+14. RFK: the abortion pill, FDA or HHS actions only? Held as uncertain declines until then. (`rfk-hhs.md`)
+15. Hegseth: the Pentagon's dispute with Anthropic (D4). Held as uncertain declines; Claude takes no view. (`hegseth-pentagon.md`)
+16. Hegseth: hand-move 6596 (General George's ouster) from Iran? (`hegseth-pentagon.md`)
+17. Trump Corruption: hand-move the 10 envoy-diplomacy members (6 to Iran, 4 to no front) before the agent goes live? (`trump-corruption.md`)
+
 ## Verification
 
 - TEST: migration 116 via SQL editor, push prompt to `test`, create the TEST trigger (env `env_01YRYGLu8C8ijpVWdPAwgVSQ`, branch `test`, no cron), run once, read `story_event.note` + `pipeline_skips` rows, spot-check 30 (AC 1).

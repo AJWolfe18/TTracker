@@ -1,3 +1,4 @@
+-- SUPERSEDED (October 4, 2026) by 2026-10-04-ado-592-front-definitions.sql. DO NOT APPLY THIS FILE.
 -- ADO-592 groundwork - draft events.agent_pattern for the 7 fronts other than election-suppression.
 -- DRAFT. NOT APPLIED ANYWHERE (TEST or PROD) as of October 1, 2026.
 -- Apply it as part of the ADO-592 build: TEST first (SQL editor), PROD before the all-fronts routine

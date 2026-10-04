@@ -78,6 +78,14 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   (placement, idempotency, all-or-nothing apply, priority guards, rollback). Reads test-only
   maintenance files and needs the undeclared @electric-sql/pglite (skips when missing), so it is not
   in qa:smoke and does not ship.
+- `scripts/maintenance/2026-10-04-ado-592-front-definitions.sql` - ADO-592: agent definitions, agent
+  patterns and keyword fixes for the nine published fronts (needs migration 127). Josh pastes it in the
+  TEST then PROD SQL Editor, outside the daily fronts run. Never deployed by code.
+- `scripts/tests/front-definitions-sql-pglite.test.mjs` - PGlite test of that file; reads a test-only
+  file, does not ship.
+- The PGlite tests of migrations 123-127 (`action-labels-`, `stories-queue-label-source-`,
+  `label-backfill-sql-`, `main-line-v2-sql-`, `all-fronts-agent-sql-pglite.test.mjs`) read only
+  shipping migrations and skip without pglite: harmless if cherry-picked, not needed on main.
 
 ## Test-Only Frontend Tools
 - `public/style-preview.html` - Style preview tool (test only)
