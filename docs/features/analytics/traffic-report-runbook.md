@@ -1,6 +1,6 @@
-# Traffic report: monthly re-run (ADO-596)
+# Traffic report: weekly re-run (ADO-596, routine ADO-606)
 
-A plain-English "who's coming to the site" report for Josh, built from PostHog plus GA4. First run: October 3, 2026 (private claude.ai page, link on ADO-596). A re-run should take one short session.
+A plain-English "who's coming to the site" report for Josh, built from PostHog plus GA4. First run: October 3, 2026 (private claude.ai page, link on ADO-596). Josh wants it weekly (October 3, 2026). Until the ADO-606 routine exists, a by-hand re-run takes one short session.
 
 ## Before you start
 - Josh logs into PostHog in Chrome: https://us.posthog.com, **Continue with Google** (ajwolfe37@gmail.com), project 572949. Claude cannot enter passwords, and the session cookie expires every few weeks.
