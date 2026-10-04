@@ -11,7 +11,7 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | Alert | Sent by | When | Color |
 |---|---|---|---|
 | Pipeline failed | `Discord alert (on failure)` step in every scheduled workflow: RSS Tracker PROD + TEST, Track Pardons, Judge Executor, and (ADO-349, same step copied from Track Pardons) Track Executive Orders, SCOTUS Tracker, Pipeline Skips Cleanup; RSS Health Check alerts when its silence check cannot run | the job fails or is cancelled | red |
-| New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row | blue |
+| New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row; SCOTUS also posts when a later decision lands on an existing case and re-queues it (ADO-603) | blue |
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
 | Routine went silent (ADO-586) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h | red |
 | RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; the scheduled run starting 12:00-17:59 UTC, or a manual run) | no article from the last 24h stored `content`, articles with an empty excerpt, or an active feed's source silent for `FEED_SILENT_DAYS` (default 7) | amber (red if every read failed) |

@@ -41,6 +41,11 @@ For each case it produces a full enrichment and writes it in one atomic update:
 - **Confidence flags:** `fact_extraction_confidence` (high/medium/low) and `needs_manual_review`. The agent
   is told to **flag uncertainty rather than guess** — if the vote split or author is not explicit in the
   text, it does not assume, it sets confidence `low` and `needs_manual_review = true` with a reason.
+  **Exception (ADO-603, October 3, 2026):** unsigned orders, cert denials, DIGs and per curiam opinions never
+  print a vote count; counting the noted dissents and "would deny" notes is the Court's own convention and is
+  NOT flagged (the old rule flagged 34 of 38 cases for this and buried the real errors). `majority_author` is
+  null on those, and the agent always writes the vote and author fields so CourtListener's seed guess never
+  survives.
 
 Every run — even a run that finds 0 cases — writes a row to the **`scotus_enrichment_log`** table for
 observability (what it found, what it enriched, any errors, duration).
@@ -59,6 +64,13 @@ Cases enter the pipeline as `pending` because the **CourtListener fetch** (`scri
 inserts every new case with `enrichment_status = 'pending'` and `is_public = false` — invisible to the
 public until this agent enriches it. So the agent's candidate list is exactly "cases that have been fetched
 but not yet enriched (or failed last time)."
+
+**One docket, several decisions (ADO-603):** the fetch dedupes on docket number, and a docket can carry a
+reargument order and, months later, the merits opinion. When a cluster with a LATER date lands on an enriched
+row, the fetch replaces the text and re-queues the row (`pending`, review stamp cleared) and posts to Discord;
+a row on admin `flagged` hold is reported but not re-queued; an OLDER cluster is skipped and logged to
+`pipeline_skips` as `older_decision`. Logic: `scripts/scotus/refetch-guard.js`. Before this, Louisiana v.
+Callais showed the 2025 reargument write-up over the April 29, 2026 merits ruling for five months.
 
 **Recess is normal.** July-September the Court is out, so most runs find **0 cases** — that is logged as a
 healthy completed run, not a failure.
