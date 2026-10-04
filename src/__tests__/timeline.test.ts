@@ -171,11 +171,13 @@ describe('buildSourcePath', () => {
     expect(p).not.toContain('status=');
   });
 
-  it("main view: stories filter on the server-computed main_line, others get the alarm-5 loose-end bar", () => {
+  it("main view: stories filter on the server-computed main_line, others get the alarm-4 bar", () => {
     expect(dec(buildSourcePath('stories', 'main', null))).toContain('and=(main_line.is.true)');
-    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.5)');
-    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.5');
-    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.5');
+    expect(dec(buildSourcePath('eos', 'main', null))).toContain('and=(alarm_level.gte.4)');
+    expect(dec(buildSourcePath('scotus', 'main', null))).toContain('ruling_impact_level.gte.4');
+    expect(dec(buildSourcePath('pardons', 'main', null))).toContain('corruption_level.gte.4');
+    // the EO/SCOTUS null fallback is 3, so a null row stays below the bar
+    expect(dec(buildSourcePath('eos', 'main', null))).not.toContain('is.null');
   });
 
   it('floors every source at inauguration day - the record is term 2 only', () => {
@@ -1082,7 +1084,7 @@ describe('tracker pins (ADO-554)', () => {
       if (input.includes('/executive_orders?') && input.includes('id=in.')) {
         return {
           ok: true,
-          json: async () => [{ id: 'eo_low', title: 'Quiet but nasty order', date: '2026-03-01', alarm_level: 4 }],
+          json: async () => [{ id: 'eo_low', title: 'Quiet but nasty order', date: '2026-03-01', alarm_level: 3 }],
         };
       }
       if (input.includes('/executive_orders?')) {
