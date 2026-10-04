@@ -1,6 +1,6 @@
 # AGENTS.md - Codex Review Guidelines
 
-This file configures OpenAI Codex code review for TrumpyTracker.
+This file configures OpenAI Codex code review for TrumpyTracker. Codex runs locally (Josh), before a PR is opened. GitHub `@codex review` comments and automatic PR reviews were retired August 25, 2026.
 
 ## Review guidelines
 

@@ -15,6 +15,8 @@ Josh asked for fronts on Hegseth's Pentagon, Kushner's deals, Israel (elections 
 | D5 | Kennedy Center takeover as its own front? About 30 TEST stories (renaming, board purge, artists leaving), all loose ends today and kept out of RFK on purpose. | Yes, as a later card | Nothing |
 | D6 | PROD apply: `2026-10-02-ado-595-new-fronts.sql` FIRST, then `2026-10-01-ado-592-hegseth-pentagon-front.sql`. Each file is a read-only pre-check, ONE apply block (BEGIN to COMMIT: write, sweep and refresh in one transaction; nothing is saved if any step fails), then a read-only result. If the apply block errors, run `ROLLBACK;` on its own before anything else; the failed transaction otherwise blocks every later command on that connection. Order matters: Hegseth's one-time sweep can only lose to fronts that already exist, so run first it would take stories Israel or RFK should win. | Claude loads each block in the SQL Editor, Josh presses Run | PROD fronts |
 
+Decided October 4, 2026 (Josh): **D1 approved.** B1 (importer) is its own card; B2 (manual add) is folded into ADO-547. About $0.50 of OpenAI, one time. D2 to D5 stay open.
+
 Decided October 2, 2026 (Josh): Hegseth's Pentagon goes flagship, title kept, boat strikes stay inside. Kushner's front becomes "The Envoys' Deals" (Kushner + Witkoff). The Israel front covers elections and AIPAC, pushing the US toward Iran, and Gaza.
 
 ## 1. What this card shipped
