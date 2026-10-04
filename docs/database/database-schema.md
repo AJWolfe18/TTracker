@@ -334,6 +334,11 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 **RLS:** `story_event_anon_select` — anon sees memberships of published fronts only. Since migration 116 the anon grant is **column-level** (every column except `note`, same treatment as `tracker_pin.note`): an anon `select=*` on this table fails by design; nothing public reads it directly (the views read `story_id`/`event_id`).
 **Gotcha:** `merge_stories` does NOT repoint story_event (unlike article_story) — a member story merged away leaves the front counting a tombstone. Open Wave 2 decision.
 
+### `front_merge_backup_events` / `front_merge_backup_story_event` (ADO-610, created by a paste file, not a migration)
+**Purpose:** Undo data for a front merge. `front_merge_backup_events` keeps each retired front's settings before the merge (publish_state, published_at, sweep_*, agent_pattern), PK (merge_tag, event_id). `front_merge_backup_story_event` keeps every moved membership (story_id, from_event_id), PK (merge_tag, story_id). Generic on `merge_tag` so later merges (ADO-592 front review) reuse them.
+**RLS:** on, no policy; anon/authenticated grants revoked; service_role only.
+**Current contents (October 4, 2026, TEST and PROD):** merge_tag `ado-610` - trump-crypto, qatar-jet, selling-the-white-house and kushners-deals merged into `trump-corruption` (flagship, sweep priority 15; PROD 318 members). The four old fronts are `draft` with no sweep or agent pattern. Rollback block: footer of `scripts/maintenance/2026-10-04-ado-610-trump-corruption-front.sql`.
+
 ### `v_event_stats` (view)
 **Purpose:** All derived front stats — nothing derived is ever stored (PRD §6.5)
 
