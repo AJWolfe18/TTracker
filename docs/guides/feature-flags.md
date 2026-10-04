@@ -85,6 +85,7 @@ The system auto-detects environment from hostname:
 | `tone_v2` | Spicy label system | frontend |
 | `rap_sheet` | The Tracker homepage | frontend |
 | `share_cards` | Per-record og:image share card at `/api/og-image/...` (ADO-571) | `netlify/edge-functions/og-tags.ts` (server side, reads the flag JSON over HTTP; `?ff_share_cards=true` overrides) |
+| `did_said` | Did / Said / Analysis markers and chips on the Tracker (ADO-594 S6). Test ON, Prod OFF. Needs migration 123; Said/Analysis tags appear only once stories are labeled. Turn on in PROD only after the boot prefetch is flag-aware | `src/lib/timeline.ts`, `src/components/TrackerSpine.tsx` |
 
 ### URL Overrides (Testing)
 
