@@ -37,7 +37,7 @@ Size of the new main line on PROD, front members at 4+ per month: Jul 64, Aug 36
 1. **Josh, TEST:** paste `migrations/122_main_line_rule_v1_3.sql` into the TrumpyTracker-Test SQL Editor. Expect one row starting with `rows_changed`.
 2. Claude verifies on TEST: no alarm-3 rows on `main_line=is.true` except pins, and several fronts including ICE show at 4+.
 3. **Josh, PROD:** paste migration 122, then the ICE file in its three parts (pre-check, the BEGIN-to-COMMIT apply block, result). Expect `ice-deportations` with several hundred members and `members_outside_pattern` 0.
-4. PROD PR: cherry-pick d195cd0 and a8a4376, plus this handoff commit if wanted (the mockups are not in git). The frontend change is independent of the SQL order.
+4. PROD PR: cherry-pick d195cd0, a8a4376 and 0866473 (0866473 also carries this handoff; the mockups are not in git). The frontend change is independent of the SQL order.
 5. AC4 check on PROD, then ADO-608 moves to Testing and on.
 
 ## Homepage design round (ADO-548, NOT built)
