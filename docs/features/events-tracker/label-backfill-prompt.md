@@ -30,7 +30,7 @@ echo "RUN_ID=labels-$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 
 ## 2. Database access: `scripts/maintenance/label-backfill-db.js` ONLY
 
-The repo's `.claude/settings.json` allows exactly `Bash(node scripts/maintenance/label-backfill-db.js *)`. Each call is its own Bash command starting with `node scripts/maintenance/label-backfill-db.js` from the repo root: no `cd`, no `VAR=... &&` prefix, no pipes, no `>`, no `;` or `&&` chains. Never use `curl` or WebFetch. If the script cannot do something, stop and report it.
+The repo's `.claude/settings.json` must allow exactly `Bash(node scripts/maintenance/label-backfill-db.js *)` (Josh adds it before the first run, the same as the fronts agent's rule; as of October 4, 2026 it is NOT there yet, so a first run without it is denied and stops). Each call is its own Bash command starting with `node scripts/maintenance/label-backfill-db.js` from the repo root: no `cd`, no `VAR=... &&` prefix, no pipes, no `>`, no `;` or `&&` chains. Never use `curl` or WebFetch. If the script cannot do something, stop and report it.
 
 | Command | Does |
 |---|---|
@@ -141,4 +141,4 @@ stopped because: <8 pages | pool empty | not draining | error: ...>
 | Writes | `stories.action_label`, `action_actor`, `action_label_source = 'backfill'` (unlabeled rows only); `pipeline_skips` rows `label_backfill` / `already_labeled`, `story_not_found`, `label_uncertain` |
 | Env | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional `LABEL_BACKFILL_PROD`, `LABELS_DRY_RUN` |
 | Migrations | 123 and 125, applied to the environment before this prompt runs there |
-| API method | `node scripts/maintenance/label-backfill-db.js` only, allowed by one exact rule in `.claude/settings.json` |
+| API method | `node scripts/maintenance/label-backfill-db.js` only, allowed by one exact rule in `.claude/settings.json` (to be added by Josh before the first run) |
