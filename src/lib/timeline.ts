@@ -21,6 +21,23 @@ export type AlarmMin = 0 | 3 | 4 | 5;
  */
 export type TrackerView = AlarmMin | 'main';
 
+/**
+ * What a row's news is (ADO-594, PRD §14.2): something he did, something he
+ * said, or reporting about it (`coverage`, public word "Analysis").
+ */
+export type ActionKind = 'did' | 'said' | 'coverage';
+
+/** Chip order and public labels for the Did/Said/Analysis chips (PRD §14.5, did_said flag) */
+export const ACTION_KINDS: ActionKind[] = ['did', 'said', 'coverage'];
+export const ACTION_KIND_LABELS: Record<ActionKind, string> = {
+  did: 'Did',
+  said: 'Said',
+  coverage: 'Analysis',
+};
+
+const isActionKind = (v: unknown): v is ActionKind =>
+  typeof v === 'string' && (ACTION_KINDS as string[]).includes(v);
+
 export interface TimelineEntry {
   id: string | number;
   source: TimelineSource;
@@ -30,6 +47,16 @@ export interface TimelineEntry {
   alarm: number;
   /** Published front this entry belongs to (stories only, via v_tracker_stories) */
   front?: { name: string; slug: string };
+  /** stories.action_label (stories only, did_said flag); absent = not labeled yet */
+  label?: ActionKind;
+}
+
+/**
+ * The chip a row answers to (PRD §14.5 table): a story by its label, an
+ * unlabeled story and every EO, SCOTUS ruling and pardon by Did.
+ */
+export function entryKind(e: TimelineEntry): ActionKind {
+  return e.source === 'stories' && e.label ? e.label : 'did';
 }
 
 export const SOURCE_LABELS: Record<TimelineSource, string> = {
@@ -80,6 +107,8 @@ export function storyRowToEntry(raw: Raw): TimelineEntry {
     front: raw.front_name
       ? { name: raw.front_name as string, slug: (raw.front_slug as string) || '' }
       : undefined,
+    // Only selected with the did_said flag on; an unknown value reads as unlabeled
+    ...(isActionKind(raw.action_label) ? { label: raw.action_label } : {}),
   };
 }
 
@@ -228,11 +257,98 @@ export interface SourceState {
   exhausted: boolean;
   /** Last fetch failed; used to hide the surface only when everything is down */
   errored: boolean;
+  /**
+   * Stories only, did_said flag on: the Did/Said/Analysis filter (labelKey)
+   * this cursor was paged under. A cursor is never paged under another filter.
+   */
+  labels?: string;
+  /**
+   * Stories only: the view has no action_label column yet (before migration
+   * 123), so the stream is paged without it and every story reads as Did.
+   */
+  noLabels?: boolean;
 }
 
 export type TrackerState = Record<TimelineSource, SourceState>;
 
 const quoted = (v: string | number) => `"${String(v).replace(/"/g, '')}"`;
+
+/** PostgREST's "column does not exist" (42703): the view predates migration 123. */
+async function missingColumn(res: Response): Promise<boolean> {
+  try {
+    const body = await res.json();
+    return (body as { code?: unknown } | null)?.code === '42703';
+  } catch {
+    return false;
+  }
+}
+
+// ── Did / Said / Analysis chips (ADO-594 S6, PRD §14.5, did_said flag) ──
+// Callers pass the set of kinds switched OFF, or undefined with the flag off,
+// which leaves every query and state exactly as before.
+
+/** Names the stories stream a set of switched-off kinds pages (the kinds on, in chip order). */
+export function labelKey(kindsOff: ReadonlySet<ActionKind>): string {
+  return ACTION_KINDS.filter(k => !kindsOff.has(k)).join(',') || 'none';
+}
+
+/**
+ * The stories filter for the kinds switched on, in PostgREST logic-tree
+ * syntax, or null with every kind on. Did covers unlabeled stories too, and
+ * NULL never matches `in.()`, so Did adds an explicit `is.null`.
+ */
+export function storyLabelPredicate(kindsOff: ReadonlySet<ActionKind>): string | null {
+  const on = ACTION_KINDS.filter(k => !kindsOff.has(k));
+  if (on.length === ACTION_KINDS.length) return null;
+  // Every kind off: stories are never fetched (effectiveOff); match nothing if they are
+  if (on.length === 0) return 'id.is.null';
+  const list = `action_label.in.(${on.join(',')})`;
+  return on.includes('did') ? `or(action_label.is.null,${list})` : list;
+}
+
+/**
+ * The sources not to fetch or count: the switched-off source chips, plus EOs,
+ * SCOTUS rulings and pardons while Did is off (they are all actions), plus
+ * stories while every kind is off. With no kind off it is `off` itself.
+ */
+export function effectiveOff(
+  off: ReadonlySet<TimelineSource>,
+  kindsOff?: ReadonlySet<ActionKind>,
+): ReadonlySet<TimelineSource> {
+  if (!kindsOff || kindsOff.size === 0) return off;
+  const out = new Set(off);
+  if (kindsOff.has('did')) for (const s of TIMELINE_SOURCES) if (s !== 'stories') out.add(s);
+  if (ACTION_KINDS.every(k => kindsOff.has(k))) out.add('stories');
+  return out;
+}
+
+/**
+ * The state with the stories stream reset to its first page when it was
+ * paged under a different Did/Said/Analysis filter, so a switched kind is
+ * paged afresh (and caught up like a chip switched back on) instead of being
+ * mixed into the old cursor. Returns `state` itself when nothing changes.
+ */
+export function alignStoryLabels(state: TrackerState, kindsOff?: ReadonlySet<ActionKind>): TrackerState {
+  if (!kindsOff) return state;
+  const key = labelKey(kindsOff);
+  const st = state.stories;
+  if (st.labels === key) return state;
+  return {
+    ...state,
+    stories: { cursor: null, exhausted: false, errored: false, labels: key, ...(st.noLabels ? { noLabels: true } : {}) },
+  };
+}
+
+/**
+ * The empty-list message while Did is off (PRD §14.5 copy), or null.
+ * Public copy never says "coverage" or "story".
+ */
+export function kindsEmptyMessage(kindsOff?: ReadonlySet<ActionKind>): string | null {
+  if (!kindsOff?.has('did')) return null;
+  if (kindsOff.has('said') && kindsOff.has('coverage')) return 'Did, Said and Analysis are all switched off · switch one back on.';
+  if (!kindsOff.has('said') && kindsOff.has('coverage')) return 'Nothing said in this range. Turn Did back on to see what he did.';
+  return 'Nothing here at this filter. Turn Did back on to see what he did.';
+}
 
 /**
  * Main-line bar for EOs, SCOTUS rulings and pardons: they are actions by
@@ -250,18 +366,26 @@ export const MAIN_LINE_SOURCE_ALARM = 4;
  * In the 'main' view (ADO-554) stories filter on the server-computed
  * main_line column; the other sources get MAIN_LINE_SOURCE_ALARM, with pins
  * applied client-side.
+ *
+ * `kindsOff` (did_said flag only) adds action_label to the stories select and
+ * filters stories by the Did/Said/Analysis chips; other sources ignore it.
+ * Undefined leaves the path exactly as it was before the flag.
  */
 export function buildSourcePath(
   source: TimelineSource,
   view: TrackerView,
   cursor: SourceCursor | null,
+  kindsOff?: ReadonlySet<ActionKind>,
 ): string {
   const s = SPECS[source];
+  const labelled = source === 'stories' && kindsOff !== undefined;
   const conditions: string[] = [];
   const alarmFrag = view === 'main'
     ? (source === 'stories' ? 'main_line.is.true' : s.alarm(MAIN_LINE_SOURCE_ALARM))
     : s.alarm(view);
   if (alarmFrag) conditions.push(alarmFrag);
+  const labelFrag = labelled ? storyLabelPredicate(kindsOff) : null;
+  if (labelFrag) conditions.push(labelFrag);
   if (cursor) {
     conditions.push(
       `or(${s.dateCol}.lt.${quoted(cursor.date)},`
@@ -269,7 +393,7 @@ export function buildSourcePath(
     );
   }
   const logic = conditions.length ? `&and=${encodeURIComponent(`(${conditions.join(',')})`)}` : '';
-  return `${s.table}?select=${s.select}&${s.base}${logic}`
+  return `${s.table}?select=${s.select}${labelled ? ',action_label' : ''}&${s.base}${logic}`
     + `&order=${s.dateCol}.desc,id.desc&limit=${s.limit}`;
 }
 
@@ -348,6 +472,13 @@ export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<Timeline
  * carousel), so an injected old pin stays buffered by the coverage frontier
  * until paging reaches its date — exempting it would fake completeness of a
  * range that hasn't loaded. Covered by the frontier test in the pins suite.
+ *
+ * `kindsOff` (did_said flag only, ADO-594 S6): the Did/Said/Analysis chips
+ * switched off. Stories are filtered by label on the server and paged per
+ * filter (alignStoryLabels); with Did off, EOs, SCOTUS and pardons are not
+ * fetched (effectiveOff). Against a view without the label column (before
+ * migration 123) stories fall back to the plain query, where every story is
+ * unlabeled and so Did.
  */
 export async function fetchTrackerPage(
   view: TrackerView,
@@ -356,8 +487,10 @@ export async function fetchTrackerPage(
   // May be a promise so callers can fetch pins CONCURRENTLY with the source
   // pages (pins are only consumed after every page response has arrived).
   pins?: TrackerPins | Promise<TrackerPins | undefined>,
-  off: ReadonlySet<TimelineSource> = new Set(),
+  sourcesOff: ReadonlySet<TimelineSource> = new Set(),
+  kindsOff?: ReadonlySet<ActionKind>,
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState }> {
+  const off = effectiveOff(sourcesOff, kindsOff);
   // Lazy import: lib/supabase reads window.location at module load, which would
   // break node-env unit tests that import this module's pure functions.
   const { url, anonKey } = await import('./supabase');
@@ -366,7 +499,7 @@ export async function fetchTrackerPage(
     'Authorization': `Bearer ${anonKey}`,
   };
 
-  const prev = state ?? initialTrackerState();
+  const prev = alignStoryLabels(state ?? initialTrackerState(), kindsOff);
   const next: TrackerState = { ...prev };
   const isMain = view === 'main';
   const firstPage = new Set<TimelineSource>();
@@ -414,8 +547,24 @@ export async function fetchTrackerPage(
       const st = prev[source];
       if (st.exhausted || off.has(source)) return [];
       const spec = SPECS[source];
+      // Only stories carry labels, and only with the did_said flag on
+      const labelled = source === 'stories' && kindsOff !== undefined;
+      let noLabels = labelled && st.noLabels === true;
+      // Without the label column every story is unlabeled, so Did: Did off matches none
+      const noneMatch = () => {
+        next[source] = { ...st, exhausted: true, errored: false, noLabels: true };
+        return [];
+      };
+      if (noLabels && kindsOff!.has('did')) return noneMatch();
       try {
-        const res = await fetch(`${url}/rest/v1/${buildSourcePath(source, view, st.cursor)}`, { headers, signal });
+        const pathFor = (withLabels: boolean) =>
+          `${url}/rest/v1/${buildSourcePath(source, view, st.cursor, withLabels ? kindsOff : undefined)}`;
+        let res = await fetch(pathFor(labelled && !noLabels), { headers, signal });
+        if (labelled && !noLabels && res.status === 400 && await missingColumn(res)) {
+          noLabels = true;
+          if (kindsOff!.has('did')) return noneMatch();
+          res = await fetch(pathFor(false), { headers, signal });
+        }
         if (!res.ok) {
           next[source] = { ...st, exhausted: true, errored: true };
           return [];
@@ -431,6 +580,8 @@ export async function fetchTrackerPage(
             : st.cursor,
           exhausted: rows.length < spec.limit,
           errored: false,
+          ...(labelled ? { labels: labelKey(kindsOff!) } : {}),
+          ...(noLabels ? { noLabels: true } : {}),
         };
         return rows.map(spec.adapter);
       } catch (err) {
@@ -667,19 +818,21 @@ export async function catchUpSource(
     pins?: TrackerPins;
     maxPages?: number;
     stillOn?: () => boolean;
+    /** did_said flag only: the Did/Said/Analysis chips switched off */
+    kindsOff?: ReadonlySet<ActionKind>;
   } = {},
 ): Promise<{ entries: TimelineEntry[]; state: TrackerState; pages: number }> {
   const others = new Set(TIMELINE_SOURCES.filter(s => s !== source));
   const maxPages = opts.maxPages ?? CATCH_UP_MAX_PAGES;
   const groups: TimelineEntry[][] = [];
-  let current = state;
+  let current = alignStoryLabels(state, opts.kindsOff);
   let pages = 0;
   while (target !== null && pages < maxPages) {
     const st = current[source];
     if (st.exhausted) break;
     if (st.cursor && st.cursor.date <= target) break;
     if (opts.stillOn && !opts.stillOn()) break;
-    const next = await fetchTrackerPage(view, current, opts.signal, opts.pins, others);
+    const next = await fetchTrackerPage(view, current, opts.signal, opts.pins, others, opts.kindsOff);
     groups.push(next.entries);
     current = next.state;
     pages++;
@@ -729,6 +882,11 @@ export interface VisibleOptions {
   min: AlarmMin;
   off: ReadonlySet<TimelineSource>;
   query: string;
+  /**
+   * did_said flag only: Did/Said/Analysis chips switched off. The server
+   * already filters, so this only hides rows held from before a chip changed.
+   */
+  kindsOff?: ReadonlySet<ActionKind>;
 }
 
 /** Apply the combined client-side filters. Returns newest-first (render order). */
@@ -736,6 +894,7 @@ export function visibleEntries(entries: TimelineEntry[], opts: VisibleOptions): 
   const q = opts.query.trim().toLowerCase();
   const out = entries.filter(e =>
     !opts.off.has(e.source)
+    && !opts.kindsOff?.has(entryKind(e))
     && e.alarm >= opts.min
     && (opts.frontier === null || e.date >= opts.frontier)
     && (!q || e.headline.toLowerCase().includes(q)),

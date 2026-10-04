@@ -23,12 +23,20 @@ import {
   coverageGaps,
   trackerProgress,
   mergeEntries,
+  alignStoryLabels,
+  effectiveOff,
+  entryKind,
+  kindsEmptyMessage,
+  labelKey,
+  ACTION_KINDS,
+  ACTION_KIND_LABELS,
   FRONTIER_PENDING,
   SOURCE_LABELS,
   ENTRY_TYPE_LABELS,
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
+  type ActionKind,
   type TimelineEntry,
   type TimelineSource,
   type TrackerPins,
@@ -72,6 +80,21 @@ function useIsNarrow(px: number): boolean {
   return narrow;
 }
 
+/** The "said" marker (PRD §14.5): a small speech bubble, never a hollow dot (hollow = EO/SCOTUS/pardon). */
+function SpeechBubble({ size, fill, stroke, style }: {
+  size: number; fill: string; stroke?: string; style?: React.CSSProperties;
+}) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 16 16" style={{ flex: 'none', overflow: 'visible', ...style }}>
+      <path
+        d="M8 1.5C4.1 1.5 1 4.1 1 7.3c0 1.8 1 3.4 2.6 4.4L2.8 15l3.9-2.2c.4.1.9.1 1.3.1 3.9 0 7-2.6 7-5.7S11.9 1.5 8 1.5z"
+        fill={fill}
+        {...(stroke ? { stroke, strokeWidth: 2.5, paintOrder: 'stroke', strokeLinejoin: 'round' as const } : {})}
+      />
+    </svg>
+  );
+}
+
 const monthLabel = (ym: string) =>
   new Date(ym + '-01T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -86,6 +109,9 @@ interface TrackerSpineProps {
 
 export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const enabled = useFeatureFlag('rap_sheet');
+  // Did / Said / Analysis (ADO-594 S6, PRD §14.5). Off: no label column is
+  // selected and every query, row and control is exactly as before.
+  const labelsOn = useFeatureFlag('did_said');
   const { theme, headType, mode } = useTheme();
   const [, navigate] = useLocation();
   const narrow = useIsNarrow(760);
@@ -101,8 +127,17 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const [tally, setTally] = useState<TrackerTally | null>(null);
   // Chips switched back on that are paging to catch up with the frontier that
   // was on screen when they went on; the first one's target is held meanwhile
-  const [catchUps, setCatchUps] = useState<{ id: number; source: TimelineSource; target: string }[]>([]);
+  // (`labels`: the Did/Said/Analysis filter a stories catch-up pages under)
+  const [catchUps, setCatchUps] = useState<{ id: number; source: TimelineSource; target: string; labels?: string }[]>([]);
   const catchUpIdRef = useRef(0);
+  // Did/Said/Analysis chips switched off; undefined with the did_said flag off
+  const [kindsOffState, setKindsOff] = useState<Set<ActionKind>>(new Set());
+  const kindsOff = labelsOn ? kindsOffState : undefined;
+  const kindsOffRef = useRef(kindsOff);
+  kindsOffRef.current = kindsOff;
+  // The sources not fetched or counted: the source chips, plus EOs, SCOTUS and
+  // pardons while Did is off (all of it is `off` itself with the flag off)
+  const effOff = useMemo(() => effectiveOff(off, kindsOff), [off, kindsOff]);
 
   const acRef = useRef<AbortController | null>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -119,6 +154,13 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   // The frontier on screen: it never moves newer until the next first-page
   // load, which clears it (undefined = nothing displayed yet for this load)
   const displayedRef = useRef<string | null | undefined>(undefined);
+  // pageState as the chips see it: a stories stream paged under other
+  // Did/Said/Analysis chips reads as not fetched yet, so it is paged afresh
+  // exactly like a source chip switched back on (pageState itself with the flag off)
+  const ps = useMemo(
+    () => (pageState ? alignStoryLabels(pageState, kindsOff) : null),
+    [pageState, kindsOff],
+  );
 
   // First page — refetched whenever the view changes, because the server-side
   // predicate (main_line or alarm floor) is baked into every source's cursor
@@ -134,8 +176,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     setRefreshing(true);
     (async () => {
       // The default view's first load was already started at boot, alongside
-      // the flag file (ADO-605); later loads and other views fetch here
-      const boot = view === 'main' && offRef.current.size === 0 ? takeBootTracker() : null;
+      // the flag file (ADO-605); later loads and other views fetch here. The
+      // boot page is fetched without labels, so it is not used with did_said on.
+      const boot = view === 'main' && offRef.current.size === 0 && !labelsOn ? takeBootTracker() : null;
       // Pins and source pages fetch CONCURRENTLY (the pins promise is only
       // awaited inside fetchTrackerPage after every page response arrives) —
       // serializing them added a full round-trip to first paint (ADO-568).
@@ -147,7 +190,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 .catch(() => undefined))
         : undefined;
       const { entries: page, state } = (boot && await boot.page)
-        ?? await fetchTrackerPage(view, null, ac.signal, pins, offRef.current);
+        ?? await fetchTrackerPage(view, null, ac.signal, pins, offRef.current, kindsOffRef.current);
       if (ac.signal.aborted) return;
       setEntries(page);
       setPageState(state);
@@ -159,7 +202,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
       setRefreshing(false);
     })().catch(() => { /* the Tracker is additive — never break the homepage */ });
     return () => ac.abort();
-  }, [enabled, view]);
+  }, [enabled, view, labelsOn]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -175,7 +218,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   const fetchMore = (state: TrackerState, skip: ReadonlySet<TimelineSource>) => {
     const ac = acRef.current;
     setLoadingMore(true);
-    fetchTrackerPage(view, state, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined, skip)
+    fetchTrackerPage(view, state, ac?.signal, view === 'main' ? pinsRef.current ?? undefined : undefined, skip, kindsOff)
       .then(({ entries: more, state: next }) => {
         if (ac?.signal.aborted) return;
         setEntries(prev => mergeEntries([prev, more]));
@@ -197,16 +240,20 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   useEffect(() => {
     // An aborted load (flag switched off mid-session) must not retry on a dead signal forever
     if (!enabled || acRef.current?.signal.aborted) return;
-    if (!pageState || refreshing || loadingMore || pageViewRef.current !== view) return;
+    if (!ps || refreshing || loadingMore || pageViewRef.current !== view) return;
     const pins = view === 'main' ? pinsRef.current ?? undefined : undefined;
     if (catchUps.length > 0) {
-      const { id, source, target } = catchUps[0];
+      const { id, source, target, labels } = catchUps[0];
       const ac = acRef.current;
       setLoadingMore(true);
-      catchUpSource(view, pageState, source, target, {
+      catchUpSource(view, ps, source, target, {
         signal: ac?.signal,
         pins,
-        stillOn: () => !offRef.current.has(source),
+        kindsOff,
+        // A Did/Said/Analysis change re-pages stories under the new filter, so
+        // a stories catch-up under the old one stops too
+        stillOn: () => !effectiveOff(offRef.current, kindsOffRef.current).has(source)
+          && (labels === undefined || !kindsOffRef.current || labelKey(kindsOffRef.current) === labels),
       })
         .then(({ entries: more, state: next }) => {
           if (ac?.signal.aborted) return;
@@ -221,40 +268,40 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
         });
       return;
     }
-    const unfetched = TIMELINE_SOURCES.filter(s => !off.has(s) && !pageState[s].exhausted && !pageState[s].cursor);
+    const unfetched = TIMELINE_SOURCES.filter(s => !effOff.has(s) && !ps[s].exhausted && !ps[s].cursor);
     if (unfetched.length === 0) return;
-    fetchMore(pageState, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
-  }, [enabled, pageState, off, refreshing, loadingMore, view, catchUps]);
+    fetchMore(ps, new Set(TIMELINE_SOURCES.filter(s => !unfetched.includes(s))));
+  }, [enabled, ps, effOff, kindsOff, refreshing, loadingMore, view, catchUps]);
 
   // The frontier on screen only moves older within a view (a chip switched
   // back on, a capped catch-up or a retry from an old cursor would otherwise
   // pull rows out from under the reader); every first-page load starts afresh.
-  const frontier = pageState ? displayedFrontier(pageState, off, displayedRef.current) : null;
-  if (pageState) displayedRef.current = rememberFrontier(pageState, off, displayedRef.current, frontier);
+  const frontier = ps ? displayedFrontier(ps, effOff, displayedRef.current) : null;
+  if (ps) displayedRef.current = rememberFrontier(ps, effOff, displayedRef.current, frontier);
   // Sources switched on that are short of that frontier: "load earlier" pages
   // them first; the count line says "Updating…" only while one is loading
-  const behind = pageState ? behindSources(pageState, off, frontier) : [];
+  const behind = ps ? behindSources(ps, effOff, frontier) : [];
   // In the main-line view the server (plus pins) already decided inclusion —
   // the client alarm floor must be 0 or it would drop low-alarm front
   // openings and force_shown entries the rule deliberately included.
   const minAlarm = view === 'main' ? 0 : view;
   const visible = useMemo(
-    () => visibleEntries(entries, { frontier, min: minAlarm, off, query }),
-    [entries, frontier, minAlarm, off, query],
+    () => visibleEntries(entries, { frontier, min: minAlarm, off: effOff, query, kindsOff }),
+    [entries, frontier, minAlarm, effOff, query, kindsOff],
   );
 
   // "Load earlier" pages from here: a source that failed (on any page) is
   // reopened at its last good cursor, so the same button retries it
-  const pageFrom = pageState ? retryErrored(pageState, off) : null;
+  const pageFrom = ps ? retryErrored(ps, effOff) : null;
   // Only the sources switched on count (off sources are never fetched), and a
   // failed source is never "the whole record"
-  const allExhausted = pageFrom !== null && allOnExhausted(pageFrom, off);
-  const someOnFailed = pageState !== null && anyOnErrored(pageState, off);
+  const allExhausted = pageFrom !== null && allOnExhausted(pageFrom, effOff);
+  const someOnFailed = ps !== null && anyOnErrored(ps, effOff);
   // Every source switched on failed: an inline message under the chips, so the
   // reader can switch another source on
-  const onSourcesFailed = pageState !== null && allOnErrored(pageState, off);
+  const onSourcesFailed = ps !== null && allOnErrored(ps, effOff);
   // All four sources failed, whatever the chips say
-  const allErrored = pageState !== null && allOnErrored(pageState, new Set());
+  const allErrored = ps !== null && allOnErrored(ps, new Set());
 
   if (!enabled) return null;
   // Every source down and nothing to show: hide the surface (or, standalone, say so)
@@ -266,7 +313,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     if (!pageFrom || loadingMore || refreshing || allExhausted) return;
     // Sources behind the frontier on screen (including a retried one) catch
     // up before the others advance
-    const first = behindSources(pageFrom, off, frontier);
+    const first = behindSources(pageFrom, effOff, frontier);
     fetchMore(pageFrom, first.length ? new Set(TIMELINE_SOURCES.filter(s => !first.includes(s))) : off);
   };
 
@@ -282,31 +329,63 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     }
   };
 
+  // A catch-up for a source switched on, or null: only when it is behind the
+  // frontier on screen (never fetched, or its cursor is newer than that
+  // frontier). With everything showing (null) there is nothing to catch up
+  // to; "load earlier" catches it up instead.
+  const catchUpFor = (s: TimelineSource, st: TrackerState[TimelineSource] | undefined, labels?: string) => {
+    if (st && !st.exhausted && !refreshing && pageViewRef.current === view
+      && frontier !== null && frontier !== FRONTIER_PENDING
+      && (!st.cursor || st.cursor.date > frontier)) {
+      return { id: ++catchUpIdRef.current, source: s, target: frontier, labels };
+    }
+    return null;
+  };
+
   const toggleSource = (s: TimelineSource) => {
     // filter_value records the resulting state, not the click itself.
     track('filter_apply', { tab: TRACKER_TAB, filter_key: `source_${s}`, filter_value: off.has(s) ? 'on' : 'off' });
     if (!off.has(s)) {
       // Switched off: drop any catch-up for it (a running one stops before its next page)
       setCatchUps(q => q.filter(c => c.source !== s));
-    } else {
-      // Switched on but behind the frontier on screen (never fetched, or its
-      // cursor is newer than that frontier): catch it up to that frontier.
-      // With everything showing (null) there is nothing to catch up to;
-      // "load earlier" catches it up instead.
-      const st = pageState?.[s];
-      if (st && !st.exhausted && !refreshing && pageViewRef.current === view
-        && frontier !== null && frontier !== FRONTIER_PENDING
-        && (!st.cursor || st.cursor.date > frontier)) {
-        const target = frontier;
-        const id = ++catchUpIdRef.current;
-        setCatchUps(q => (q.some(c => c.source === s) ? q : [...q, { id, source: s, target }]));
-      }
+    } else if (!effectiveOff(new Set([...off].filter(x => x !== s)), kindsOff).has(s)) {
+      // Switched on (and not held off by the Did chip): catch it up to the
+      // frontier on screen if it is behind it
+      const c = catchUpFor(s, ps?.[s], s === 'stories' && kindsOff ? labelKey(kindsOff) : undefined);
+      if (c) setCatchUps(q => (q.some(x => x.source === s) ? q : [...q, c]));
     }
     setOff(prev => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s); else next.add(s);
       return next;
     });
+  };
+
+  // Did / Said / Analysis (did_said flag): the same rules as the source chips.
+  // Stories are re-paged under the new filter and caught up to the frontier on
+  // screen; Did also switches EOs, SCOTUS and pardons off or back on.
+  const toggleKind = (k: ActionKind) => {
+    if (!kindsOff) return;
+    track('filter_apply', { tab: TRACKER_TAB, filter_key: `kind_${k}`, filter_value: kindsOff.has(k) ? 'on' : 'off' });
+    const nextKinds = new Set(kindsOff);
+    if (nextKinds.has(k)) nextKinds.delete(k); else nextKinds.add(k);
+    const nextOff = effectiveOff(off, nextKinds);
+    const adds = TIMELINE_SOURCES.flatMap(s => {
+      if (nextOff.has(s)) return [];
+      if (s === 'stories') {
+        // The stories stream restarts from its first page under the new filter
+        const fresh = ps && alignStoryLabels(ps, nextKinds).stories;
+        return catchUpFor(s, fresh ?? undefined, labelKey(nextKinds)) ?? [];
+      }
+      return effOff.has(s) ? catchUpFor(s, ps?.[s]) ?? [] : [];
+    });
+    // Stories catch-ups under the old filter, and sources now off, are dropped
+    // (a running one stops before its next page)
+    setCatchUps(q => {
+      const kept = q.filter(c => c.source !== 'stories' && !nextOff.has(c.source));
+      return [...kept, ...adds.filter(a => !kept.some(c => c.source === a.source))];
+    });
+    setKindsOff(nextKinds);
   };
 
   const open = (e: TimelineEntry, position: number) => {
@@ -392,10 +471,43 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     );
   });
 
+  // Did / Said / Analysis chips (did_said flag), styled like the source chips;
+  // each glyph is the row marker it controls
+  const kindChips = kindsOff && (
+    <span role="group" aria-label="What happened" style={{ display: 'inline-flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      {ACTION_KINDS.map(k => {
+        const on = !kindsOff.has(k);
+        return (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={on}
+            onClick={() => toggleKind(k)}
+            className="tt-ts-chip"
+            style={{
+              ...mono, fontSize: 10, padding: '6px 11px', background: 'none', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              color: on ? theme.ink : theme.dim,
+              border: `1px solid ${on ? theme.dim : theme.line}`,
+            }}
+          >
+            {k === 'said'
+              ? <SpeechBubble size={9} fill={on ? 'currentColor' : theme.line} />
+              : <i aria-hidden="true" style={{
+                  width: 7, height: 7, borderRadius: '50%', flex: 'none',
+                  background: on ? (k === 'coverage' ? theme.dim : 'currentColor') : theme.line,
+                }} />}
+            {ACTION_KIND_LABELS[k]}
+          </button>
+        );
+      })}
+    </span>
+  );
+
   // ── Spine rows ──
   // Where a source that is behind stops: marked on the spine, so its missing
   // stretch never reads as part of a continuous record (Codex P1 on PR #158)
-  const gaps = pageState ? coverageGaps(visible, pageState, behind) : [];
+  const gaps = ps ? coverageGaps(visible, ps, behind) : [];
   const gapMarker = (g: (typeof gaps)[number]) => (
     <div key={`gap-${g.source}`} role="note" style={{
       position: 'relative', zIndex: 2, padding: narrow ? '14px 0 14px 28px' : '14px 0',
@@ -435,14 +547,28 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     }
 
     const right = side++ % 2 === 1;
-    const accent = accentOf(e.alarm);
+    // did_said flag (PRD §14.5): said gets a speech bubble and a "Said" tag;
+    // analysis is muted (dim marker and type, no alarm badge) with an
+    // "Analysis" tag. Did, unlabeled and flag off: exactly as before.
+    const kind = kindsOff ? entryKind(e) : 'did';
+    const said = kind === 'said';
+    const muted = kind === 'coverage';
+    const kindTag = said || muted ? ACTION_KIND_LABELS[kind] : null;
+    const accent = muted ? theme.dim : accentOf(e.alarm);
     const dotSize = e.alarm >= 5 ? 16 : e.alarm === 4 ? 13 : 12;
     const hollow = e.source !== 'stories';
+    // Analysis never shouts: its type stops at the alarm 2-3 size
+    const typeAlarm = muted ? Math.min(e.alarm, 3) : e.alarm;
+    const markerSide: React.CSSProperties = narrow
+      ? { left: 8, transform: 'translate(-50%, 0)' }
+      : right
+        ? { left: 0, transform: 'translate(-50%, 0)' }
+        : { right: 0, transform: 'translate(50%, 0)' };
 
     const hlStyle: React.CSSProperties =
-      e.alarm >= 5 ? { fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 21 : 25, lineHeight: 1.12, letterSpacing: '-0.015em' }
-      : e.alarm === 4 ? { fontFamily: headType.display, fontWeight: 500, fontSize: 18, lineHeight: 1.22 }
-      : e.alarm >= 2 ? { fontFamily: headType.display, fontSize: 15, lineHeight: 1.3 }
+      typeAlarm >= 5 ? { fontFamily: headType.display, fontWeight: 600, fontSize: narrow ? 21 : 25, lineHeight: 1.12, letterSpacing: '-0.015em' }
+      : typeAlarm === 4 ? { fontFamily: headType.display, fontWeight: 500, fontSize: 18, lineHeight: 1.22 }
+      : typeAlarm >= 2 ? { fontFamily: headType.display, fontSize: 15, lineHeight: 1.3 }
       : { fontFamily: headType.display, fontSize: 14, lineHeight: 1.3 };
 
     rows.push(
@@ -462,29 +588,38 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
             width: 18, height: 2, background: theme.line, zIndex: 1,
           }} />
         )}
-        <span aria-hidden="true" style={{
-          position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
-          width: dotSize, height: dotSize, borderRadius: '50%',
-          background: hollow ? theme.bg : accent,
-          // alarm 4/5 dots get a glow ring so the big items read at a glance
-          boxShadow: [
-            hollow ? `inset 0 0 0 3px ${accent}` : '',
-            e.alarm >= 5 ? `0 0 0 5px ${accent}33` : e.alarm === 4 ? `0 0 0 4px ${accent}2e` : '',
-          ].filter(Boolean).join(', ') || 'none',
-          border: `2px solid ${theme.bg}`,
-          ...(narrow
-            ? { left: 8, transform: 'translate(-50%, 0)' }
-            : right
-              ? { left: 0, transform: 'translate(-50%, 0)' }
-              : { right: 0, transform: 'translate(50%, 0)' }),
-        }} />
+        {said ? (
+          <SpeechBubble
+            size={dotSize + 3}
+            fill={accent}
+            stroke={theme.bg}
+            style={{
+              position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3, ...markerSide,
+              // the bubble's glow follows its shape (the dots' ring is a box-shadow)
+              ...(e.alarm >= 4 ? { filter: `drop-shadow(0 0 ${e.alarm >= 5 ? 4 : 3}px ${accent}66)` } : {}),
+            }}
+          />
+        ) : (
+          <span aria-hidden="true" style={{
+            position: 'absolute', top: e.alarm >= 5 ? 18 : 20, zIndex: 3,
+            width: dotSize, height: dotSize, borderRadius: '50%',
+            background: hollow ? theme.bg : accent,
+            // alarm 4/5 dots get a glow ring so the big items read at a glance
+            boxShadow: [
+              hollow ? `inset 0 0 0 3px ${accent}` : '',
+              muted ? '' : e.alarm >= 5 ? `0 0 0 5px ${accent}33` : e.alarm === 4 ? `0 0 0 4px ${accent}2e` : '',
+            ].filter(Boolean).join(', ') || 'none',
+            border: `2px solid ${theme.bg}`,
+            ...markerSide,
+          }} />
+        )}
         <time style={{ ...mono, display: 'block', fontSize: 10, color: accent }}>
           {fmtDate(e.date)}
           {/* Entry type always visible: the front tag below replaces the source
               tag on front members, so without this a reader can't tell a story
               from an EO or a ruling at a glance (Josh, August 29, 2026) */}
           <span style={{ color: theme.ink, fontWeight: 600 }}> · {ENTRY_TYPE_LABELS[e.source]}</span>
-          {e.alarm >= 5 ? (
+          {e.alarm >= 5 && !muted ? (
             <span style={{
               background: accent, color: theme.bg, fontWeight: 600,
               padding: '2px 7px', marginLeft: 8, letterSpacing: '0.1em',
@@ -501,10 +636,19 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           className="tt-ts-hl"
           style={{
             display: 'block', marginTop: 5, textDecoration: 'none',
-            color: e.alarm >= 2 ? theme.ink : theme.dim,
+            color: e.alarm >= 2 && !muted ? theme.ink : theme.dim,
             ...hlStyle,
           }}
         >
+          {/* Small, quiet, no box: part of the link so it is read with the headline */}
+          {kindTag && (
+            <span style={{
+              ...mono, fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', color: theme.dim,
+              marginRight: 8, verticalAlign: '0.15em',
+            }}>
+              {kindTag}
+            </span>
+          )}
           {e.headline}
         </a>
         <div style={{
@@ -601,6 +745,7 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           />
           {seg}
           {chips}
+          {kindChips}
         </div>
 
         {/* Spine */}
@@ -618,9 +763,10 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
                 ? 'Couldn’t load the sources switched on · switch on another source or try again later.'
                 : query
                   ? 'Nothing on the record matches that search at this filter.'
-                  : view === 'main'
-                    ? 'Nothing on the main line yet · try "All" for the complete record.'
-                    : 'Nothing at this alarm level yet · try "All" for the complete record.'}
+                  : kindsEmptyMessage(kindsOff)
+                    ?? (view === 'main'
+                      ? 'Nothing on the main line yet · try "All" for the complete record.'
+                      : 'Nothing at this alarm level yet · try "All" for the complete record.')}
             </div>
           )}
         </div>

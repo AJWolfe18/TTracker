@@ -32,6 +32,14 @@ import {
   SOURCE_ROUTES,
   TERM_START,
   TIMELINE_SOURCES,
+  ACTION_KIND_LABELS,
+  alignStoryLabels,
+  effectiveOff,
+  entryKind,
+  kindsEmptyMessage,
+  labelKey,
+  storyLabelPredicate,
+  type ActionKind,
   type TimelineEntry,
   type TimelineSource,
   type TrackerPins,
@@ -1214,5 +1222,241 @@ describe('fetchTrackerTally (ADO-570: one GET on tracker_stats)', () => {
   it('rethrows AbortError so navigation cancels cleanly', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }));
     await expect(fetchTrackerTally()).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('Did / Said / Analysis chips (ADO-594 S6, PRD §14.5, did_said flag)', () => {
+  const dec = (p: string) => decodeURIComponent(p);
+  const NO_KINDS_OFF = new Set<ActionKind>();
+  const kinds = (...k: ActionKind[]) => new Set<ActionKind>(k);
+  const NONE_OFF = new Set<TimelineSource>();
+
+  describe('server query (buildSourcePath)', () => {
+    it('flag off: the stories path is byte-for-byte what it was before the flag', () => {
+      expect(buildSourcePath('stories', 'main', null, undefined)).toBe(
+        'v_tracker_stories?select=id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug'
+        + `&first_seen_at=gte.${TERM_START}&and=(main_line.is.true)&order=first_seen_at.desc,id.desc&limit=60`,
+      );
+      for (const v of ['main', 0, 3, 4, 5] as const) {
+        expect(buildSourcePath('stories', v, null, undefined)).toBe(buildSourcePath('stories', v, null));
+        expect(buildSourcePath('stories', v, null)).not.toContain('action_label');
+      }
+    });
+
+    it('every chip on: selects the label but filters nothing', () => {
+      const p = dec(buildSourcePath('stories', 'main', null, NO_KINDS_OFF));
+      expect(p).toContain('select=id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug,action_label&');
+      expect(p).toContain('and=(main_line.is.true)&');
+      expect(p).not.toContain('action_label.');
+    });
+
+    it('Said off: did, unlabeled and coverage stay (NULL needs its own is.null)', () => {
+      expect(dec(buildSourcePath('stories', 0, null, kinds('said'))))
+        .toContain('and=(or(action_label.is.null,action_label.in.(did,coverage)))');
+    });
+
+    it('Analysis off: no coverage', () => {
+      expect(dec(buildSourcePath('stories', 4, null, kinds('coverage'))))
+        .toContain('and=(or(alarm_level.gte.4,and(alarm_level.is.null,severity.in.(critical,severe))),'
+          + 'or(action_label.is.null,action_label.in.(did,said)))');
+    });
+
+    it('Did off: no did and no unlabeled stories', () => {
+      const p = dec(buildSourcePath('stories', 'main', null, kinds('did')));
+      expect(p).toContain('and=(main_line.is.true,action_label.in.(said,coverage))');
+      expect(p).not.toContain('is.null');
+      expect(dec(buildSourcePath('stories', 0, null, kinds('did', 'coverage')))).toContain('and=(action_label.in.(said))');
+      expect(storyLabelPredicate(kinds('did', 'said', 'coverage'))).toBe('id.is.null');
+    });
+
+    it('label filter and keyset cursor share one and=()', () => {
+      const p = dec(buildSourcePath('stories', 0, { date: '2026-08-01T10:00:00+00:00', id: 42 }, kinds('did')));
+      expect(p).toContain('and=(action_label.in.(said,coverage),or(first_seen_at.lt."2026-08-01T10:00:00+00:00",');
+    });
+
+    it('EOs, SCOTUS and pardons ignore the label chips (Did gates them by not fetching them)', () => {
+      for (const s of ['eos', 'scotus', 'pardons'] as const) {
+        expect(buildSourcePath(s, 'main', null, kinds('did', 'said'))).toBe(buildSourcePath(s, 'main', null));
+      }
+    });
+  });
+
+  describe('rows and client filters', () => {
+    it('reads the label; unlabeled stories and every other source count as Did', () => {
+      const said = storyRowToEntry({ id: 1, primary_headline: 'h', first_seen_at: '2026-09-01', alarm_level: 3, action_label: 'said' });
+      expect(said.label).toBe('said');
+      expect(entryKind(said)).toBe('said');
+      const unlabeled = storyRowToEntry({ id: 2, primary_headline: 'h', first_seen_at: '2026-09-01', alarm_level: 3, action_label: null });
+      expect('label' in unlabeled).toBe(false);
+      expect(entryKind(unlabeled)).toBe('did');
+      expect(entryKind(storyRowToEntry({ id: 3, primary_headline: 'h', first_seen_at: '2026-09-01', action_label: 'bogus' }))).toBe('did');
+      expect(entryKind(eoRowToEntry({ id: 'eo_1', title: 't', date: '2026-09-01', alarm_level: 4 }))).toBe('did');
+      expect(ACTION_KIND_LABELS).toEqual({ did: 'Did', said: 'Said', coverage: 'Analysis' });
+    });
+
+    it('visibleEntries hides kinds switched off; without kindsOff nothing changes', () => {
+      const entries: TimelineEntry[] = [
+        { id: 1, source: 'stories', date: '2026-09-01', headline: 'a', alarm: 4 },
+        { id: 2, source: 'stories', date: '2026-09-02', headline: 'b', alarm: 4, label: 'said' },
+        { id: 3, source: 'stories', date: '2026-09-03', headline: 'c', alarm: 4, label: 'coverage' },
+        { id: 4, source: 'eos', date: '2026-09-04', headline: 'd', alarm: 4 },
+      ];
+      const base = { frontier: null, min: 0 as const, off: NONE_OFF, query: '' };
+      expect(visibleEntries(entries, base).map(e => e.id)).toEqual([4, 3, 2, 1]);
+      expect(visibleEntries(entries, { ...base, kindsOff: NO_KINDS_OFF }).map(e => e.id)).toEqual([4, 3, 2, 1]);
+      expect(visibleEntries(entries, { ...base, kindsOff: kinds('did', 'coverage') }).map(e => e.id)).toEqual([2]);
+      expect(visibleEntries(entries, { ...base, kindsOff: kinds('said') }).map(e => e.id)).toEqual([4, 3, 1]);
+    });
+
+    it('effectiveOff: Did off drops EOs, SCOTUS and pardons; every kind off drops stories', () => {
+      const off = new Set<TimelineSource>(['pardons']);
+      expect(effectiveOff(off, undefined)).toBe(off);
+      expect(effectiveOff(off, NO_KINDS_OFF)).toBe(off);
+      expect([...effectiveOff(off, kinds('said'))].sort()).toEqual(['pardons']);
+      expect([...effectiveOff(off, kinds('did'))].sort()).toEqual(['eos', 'pardons', 'scotus']);
+      expect([...effectiveOff(NONE_OFF, kinds('did', 'said', 'coverage'))].sort()).toEqual([...TIMELINE_SOURCES].sort());
+    });
+
+    it('a Did-off frontier is not held back by the EO, SCOTUS and pardon cursors', () => {
+      const st = (date: string) => ({ cursor: { date, id: 1 }, exhausted: false, errored: false });
+      const state: TrackerState = {
+        stories: st('2026-03-01'), eos: st('2026-08-01'), scotus: st('2026-07-01'), pardons: st('2026-06-01'),
+      };
+      expect(coverageFrontier(state, effectiveOff(NONE_OFF, NO_KINDS_OFF))).toBe('2026-08-01');
+      expect(coverageFrontier(state, effectiveOff(NONE_OFF, kinds('did')))).toBe('2026-03-01');
+    });
+
+    it('empty-state copy (PRD §14.5) only while Did is off, never saying coverage or story', () => {
+      expect(kindsEmptyMessage(undefined)).toBeNull();
+      expect(kindsEmptyMessage(kinds('said'))).toBeNull();
+      expect(kindsEmptyMessage(kinds('did', 'coverage'))).toBe('Nothing said in this range. Turn Did back on to see what he did.');
+      for (const k of [kinds('did'), kinds('did', 'said'), kinds('did', 'said', 'coverage')]) {
+        expect(kindsEmptyMessage(k)).toMatch(/Did/);
+        expect(kindsEmptyMessage(k)).not.toMatch(/coverage|story/i);
+      }
+    });
+
+    it('alignStoryLabels restarts stories paged under another filter, and leaves the rest alone', () => {
+      const state = initialTrackerState();
+      state.stories = { cursor: { date: '2026-09-01', id: 9 }, exhausted: false, errored: false, labels: labelKey(NO_KINDS_OFF) };
+      state.eos = { cursor: { date: '2026-08-01', id: 'eo_1' }, exhausted: false, errored: false };
+      expect(alignStoryLabels(state, undefined)).toBe(state);
+      expect(alignStoryLabels(state, NO_KINDS_OFF)).toBe(state);
+      const switched = alignStoryLabels(state, kinds('said'));
+      expect(switched.stories).toEqual({ cursor: null, exhausted: false, errored: false, labels: 'did,coverage' });
+      expect(switched.eos).toBe(state.eos);
+    });
+  });
+
+  describe('fetching', () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    let calls: string[];
+    let noColumn: boolean;
+    const storyRows = (label: ActionKind | null, n: number, startId: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: startId - i, primary_headline: `S ${startId - i}`, alarm_level: 4, severity: null,
+        first_seen_at: new Date(Date.UTC(2026, 8, 10) - i * 3600_000).toISOString(),
+        ...(noColumn ? {} : { action_label: label }),
+      }));
+
+    beforeEach(() => {
+      calls = [];
+      noColumn = false;
+      vi.stubGlobal('window', { location: { hostname: 'localhost', search: '' } });
+      vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+        calls.push(input);
+        if (input.includes('/v_tracker_stories?')) {
+          if (noColumn && input.includes('action_label')) {
+            return { ok: false, status: 400, json: async () => ({ code: '42703', message: 'column v_tracker_stories.action_label does not exist' }) };
+          }
+          const said = decodeURIComponent(input).includes('action_label.in.(said)');
+          return { ok: true, status: 200, json: async () => (said ? storyRows('said', 3, 900) : storyRows('did', 60, 1000)) };
+        }
+        if (input.includes('/executive_orders?')) {
+          return { ok: true, status: 200, json: async () => [{ id: 'eo_1', title: 'Order', date: '2026-09-01', alarm_level: 4 }] };
+        }
+        return { ok: true, status: 200, json: async () => [] };
+      }));
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+    });
+
+    it('flag off: the same requests and state as before the flag', async () => {
+      const plain = await fetchTrackerPage('main', null);
+      const plainCalls = calls;
+      calls = [];
+      const flagOff = await fetchTrackerPage('main', null, undefined, undefined, NONE_OFF, undefined);
+      expect(calls).toEqual(plainCalls);
+      expect(calls.some(c => c.includes('action_label'))).toBe(false);
+      expect(flagOff.state).toEqual(plain.state);
+      expect('labels' in flagOff.state.stories).toBe(false);
+    });
+
+    it('Did off: EOs, SCOTUS and pardons are not fetched; stories are filtered on the server', async () => {
+      const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF, kinds('did', 'coverage'));
+      expect(calls).toHaveLength(1);
+      expect(dec(calls[0])).toContain('/v_tracker_stories?select=id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug,action_label&');
+      expect(dec(calls[0])).toContain('and=(action_label.in.(said))');
+      expect(entries.map(e => e.label)).toEqual(['said', 'said', 'said']);
+      expect(state.eos).toEqual({ cursor: null, exhausted: false, errored: false });
+      expect(state.stories).toMatchObject({ exhausted: true, labels: 'said' });
+      // The sources switched off do not hold back the frontier: only stories count
+      expect(coverageFrontier(state, effectiveOff(NONE_OFF, kinds('did', 'coverage')))).toBeNull();
+    });
+
+    it('a stories cursor from another filter is never paged: the stream restarts at its first page', async () => {
+      const { state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF, NO_KINDS_OFF);
+      expect(state.stories).toMatchObject({ labels: 'did,said,coverage', cursor: { id: 941 } });
+      calls = [];
+      await fetchTrackerPage(0, state, undefined, undefined, NONE_OFF, kinds('coverage'));
+      const storiesCall = dec(calls.find(c => c.includes('/v_tracker_stories?'))!);
+      expect(storiesCall).not.toContain('id.lt.');
+      expect(storiesCall).toContain('or(action_label.is.null,action_label.in.(did,said))');
+      // Same filter again: pages on from the cursor
+      calls = [];
+      await fetchTrackerPage(0, state, undefined, undefined, NONE_OFF, NO_KINDS_OFF);
+      expect(dec(calls.find(c => c.includes('/v_tracker_stories?'))!)).toContain('id.lt."941"');
+    });
+
+    it('catch-up pages stories under the new filter', async () => {
+      const { state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF, NO_KINDS_OFF);
+      calls = [];
+      const caught = await catchUpSource(0, state, 'stories', '2026-09-01', { kindsOff: kinds('did', 'coverage') });
+      expect(calls.length).toBeGreaterThan(0);
+      expect(calls.every(c => dec(c).includes('action_label.in.(said)'))).toBe(true);
+      expect(caught.state.stories.labels).toBe('said');
+    });
+
+    it('before migration 123 (no label column): falls back to the plain query, every story as Did', async () => {
+      noColumn = true;
+      const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF, kinds('said'));
+      const storyCalls = calls.filter(c => c.includes('/v_tracker_stories?'));
+      expect(storyCalls).toHaveLength(2);
+      expect(storyCalls[1].endsWith(`/rest/v1/${buildSourcePath('stories', 0, null)}`)).toBe(true);
+      expect(state.stories).toMatchObject({ errored: false, noLabels: true, labels: 'did,coverage' });
+      expect(entries.filter(e => e.source === 'stories')).toHaveLength(60);
+      expect(entries.every(e => entryKind(e) === 'did')).toBe(true);
+
+      // Later pages go straight to the plain query
+      calls = [];
+      await fetchTrackerPage(0, state, undefined, undefined, NONE_OFF, kinds('said'));
+      expect(calls.filter(c => c.includes('/v_tracker_stories?'))).toHaveLength(1);
+      expect(calls.some(c => c.includes('action_label'))).toBe(false);
+    });
+
+    it('before migration 123 with Did off: no story can match, so none is shown and nothing errors', async () => {
+      noColumn = true;
+      const { entries, state } = await fetchTrackerPage(0, null, undefined, undefined, NONE_OFF, kinds('did'));
+      expect(calls).toHaveLength(1); // the probe; EOs, SCOTUS and pardons are off with Did
+      expect(entries).toHaveLength(0);
+      expect(state.stories).toMatchObject({ exhausted: true, errored: false, noLabels: true });
+      // A later filter change re-pages stories but remembers the column is missing
+      calls = [];
+      await fetchTrackerPage(0, state, undefined, undefined, NONE_OFF, kinds('did', 'coverage'));
+      expect(calls).toHaveLength(0);
+    });
   });
 });
