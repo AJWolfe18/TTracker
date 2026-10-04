@@ -5,8 +5,12 @@
 // writes the cloud sandbox denies) or loses the review fixes (evidence watermark,
 // merge re-qualification, failed-attempt retry) and the Judge -> executor hand-off
 // (the agent writes one verdict file, .github/workflows/judge-executor.yml writes the DB).
+// ADO-594 S2: the Stories action labels (success-only, human lock, gold-check mode writes nothing)
+// and the rule that no agent prompt names the admin-only human-label door.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const stories = read('../../docs/features/stories-claude-agent/prompt-v1.md');
@@ -77,6 +81,50 @@ assert.ok(idsSql.length > 0 && !/LIMIT/i.test(idsSql), 'new_article_ids must not
 for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_failure_count', 'enrichment_meta', 'evidence_as_of', 'prior_evidence_as_of', 'new_article_ids', 'reason', 'pool_size']) {
   assert.ok(new RegExp(`^\\s+${col}\\s`, 'm').test(mig117), `RPC must return ${col}`);
 }
+
+// --- Stories agent v1.1 (ADO-594 S2): action labels, the human lock, the gold check ---
+const mig124 = read('../../migrations/124_stories_needing_enrichment_label_source.sql');
+const jsonBlock = (s) => { const a = s.indexOf('```json'); return a < 0 ? '' : s.slice(a, s.indexOf('```', a + 7)); };
+const successJson = jsonBlock(successBody);
+const failureJson = jsonBlock(failureBody);
+assert.ok(successJson.includes('"action_label":') && successJson.includes('"action_actor":'), 'success PATCH writes both action labels');
+assert.ok(successJson.includes('"action_label_source": "agent"'), 'success PATCH writes action_label_source = agent with the labels');
+assert.ok(failureJson.length > 0 && !failureJson.includes('action_'), 'failure PATCH writes no label field');
+assert.ok(/leave all three keys out/.test(successBody) && successBody.includes("`action_label_source = 'human'`"), 'Step 6 leaves the labels out when a human locked them');
+const step2 = stories.slice(stories.indexOf('### Step 2'), stories.indexOf('### Step 3'));
+assert.ok(step2.includes('action_label_source}') && /`human` means Josh locked the label/.test(step2), 'Step 2 reads action_label_source and explains the human lock');
+assert.ok(/no `action_label_source` key at all/.test(step2), 'Step 2 stops when migration 124 is missing instead of failing every PATCH');
+assert.ok(step4.includes('| `action_label` | text |') && step4.includes('| `action_actor` | text |'), 'Step 4 output table has both labels');
+for (let n = 1; n <= 12; n++) assert.ok(new RegExp(`^${n}\\. \\*\\*`, 'm').test(step4.slice(step4.indexOf('#### Action labels'))), `Step 4 carries action-label edge case ${n}`);
+assert.ok(step4.includes('whichever way it goes') && step4.includes('label_uncertain'), 'court-ruling rule and the unsure rule are present');
+assert.ok(step5.includes('`action_label` is exactly') && /not from how angry the headline sounds/.test(step5), 'Step 5 checks the label values and their basis');
+assert.ok(stories.includes('| Prompt version | claude-v1.1 |') && !/"claude-v1"|\\"claude-v1\\"/.test(stories), 'prompt_version is claude-v1.1 everywhere');
+const goldFixture = JSON.parse(read('./fixtures/action-label-gold.json')).stories;
+for (const id of [17240, 17216, 17248, 17233, 17231, 17246]) {
+  const g = goldFixture.find((x) => x.id === id);
+  assert.ok(new RegExp(`^\\| ${id} \\|[^\\n]*\\| \`${g.action_label}\` / \`${g.action_actor}\` \\|`, 'm').test(step4), `gold example ${id} matches the fixture (${g.action_label}/${g.action_actor})`);
+}
+const gold = stories.slice(stories.indexOf('### Gold-Check Mode'), stories.indexOf('### Step 0a'));
+assert.ok(gold.length > 0 && gold.includes('explicit list of numeric story ids') && gold.includes('gold-check refused: an explicit list of story ids is required'), 'gold-check mode refuses without an explicit id list');
+assert.ok(gold.includes('Do **not** fall back to a normal run'), 'a refused gold check never turns into a normal (writing) run');
+assert.ok(gold.includes('wnrjrywpcadwutfykflu') && gold.includes('TEST only'), 'gold-check mode is TEST only');
+assert.ok(gold.includes('**no PATCH to `stories`**') && !/-X (PATCH|POST|DELETE)/.test(gold), 'gold-check mode writes no PATCH and shows no write call');
+assert.ok(gold.includes('/tmp/action-label-gold-results.json') && gold.includes('action-label-gold-check.js --file'), 'gold-check output is the results file the gold-check script reads');
+assert.ok(mig124.includes('DROP FUNCTION IF EXISTS public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER);'), 'migration 124 drops the exact signature before changing the return type');
+assert.ok(/pool_size\s+INTEGER,\s+action_label_source\s+TEXT\s+\)/.test(mig124) && mig124.includes('k.action_label_source'), 'migration 124 returns action_label_source as the last column');
+assert.ok(mig124.includes('TO service_role') && mig124.includes('FROM PUBLIC, anon, authenticated'), 'migration 124 keeps the RPC service_role only');
+// The human-label door is admin-only (PRD 14.7): no agent prompt may name it.
+const promptFiles = [];
+const walk = (dir) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p);
+    else if (/^prompt.*\.md$/i.test(e.name)) promptFiles.push(p);
+  }
+};
+walk(fileURLToPath(new URL('../../docs/features/', import.meta.url)));
+assert.ok(promptFiles.length > 0, 'found the agent prompt files');
+for (const f of promptFiles) assert.ok(!readFileSync(f, 'utf8').includes('set_story_action_label'), `${f} must not name set_story_action_label`);
 
 // --- Judge agent (v1.2, ADO-583): the agent never writes to the database; the executor does ---
 const workflow = read('../../.github/workflows/judge-executor.yml');
