@@ -37,7 +37,10 @@ export function prefetchTrackerHome(now: number = performance.now()): void {
   const pins = fetchTrackerPins().catch(() => new Map() as TrackerPins);
   tracker = {
     pins,
-    page: fetchTrackerPage('main', null, undefined, pins).catch(() => null),
+    // Every source and every Did/Said/Analysis chip on (ADO-594): the page carries
+    // action_label so it serves the did_said flag on or off (off ignores labels).
+    // Before migration 123 the stories request falls back to no labels (42703).
+    page: fetchTrackerPage('main', null, undefined, pins, new Set(), new Set()).catch(() => null),
   };
   tally = fetchTrackerTally().catch(() => null);
 }

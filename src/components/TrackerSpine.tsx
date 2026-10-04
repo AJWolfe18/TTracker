@@ -177,8 +177,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     (async () => {
       // The default view's first load was already started at boot, alongside
       // the flag file (ADO-605); later loads and other views fetch here. The
-      // boot page is fetched without labels, so it is not used with did_said on.
-      const boot = view === 'main' && offRef.current.size === 0 && !labelsOn ? takeBootTracker() : null;
+      // boot page carries action_label with every chip on, so it serves the
+      // did_said flag on or off.
+      const boot = view === 'main' && offRef.current.size === 0 && (kindsOffRef.current?.size ?? 0) === 0 ? takeBootTracker() : null;
       // Pins and source pages fetch CONCURRENTLY (the pins promise is only
       // awaited inside fetchTrackerPage after every page response arrives) —
       // serializing them added a full round-trip to first paint (ADO-568).
