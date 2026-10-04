@@ -23,6 +23,8 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const GOLD_PATH = path.join(here, '..', 'tests', 'fixtures', 'action-label-gold.json');
 export const GATE = 0.9;
+// Gold rows shown as worked examples in the Stories and backfill prompts (PRD 14.7).
+const CALIBRATION_IDS = new Set([17240, 17216, 17248, 17233, 17231, 17246]);
 
 const ACTORS = new Set(['trump', 'administration', 'ally', 'other']);
 const side = (actor) => (actor === 'trump' || actor === 'administration' ? 'his' : 'not');
@@ -84,7 +86,11 @@ async function main() {
   for (const r of res.rows.filter((x) => !x.agree)) {
     console.log(`  MISS ${r.id} want ${r.action_label}/${r.action_actor} got ${r.got ?? '-'} (${r.why}) ${r.headline}`);
   }
-  console.log(`agree ${res.agree}/${res.total} (${Math.round(res.rate * 100)}%), exact actor ${res.exact}/${res.total}, gate ${GATE * 100}%: ${res.pass ? 'PASS' : 'FAIL'}`);
+  // The six calibration examples in both prompts are gold rows too, so also
+  // report the 34 the agent never saw an answer for.
+  const held = res.rows.filter((r) => !CALIBRATION_IDS.has(r.id));
+  const heldAgree = held.filter((r) => r.agree).length;
+  console.log(`agree ${res.agree}/${res.total} (${Math.round(res.rate * 100)}%), exact actor ${res.exact}/${res.total}, held-out ${heldAgree}/${held.length}, gate ${GATE * 100}%: ${res.pass ? 'PASS' : 'FAIL'}`);
   process.exit(res.pass ? 0 : 1);
 }
 
