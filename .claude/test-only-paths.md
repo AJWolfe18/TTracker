@@ -63,6 +63,17 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   aggregates (stored text length by feed, thin-story share by month, agent review-flag rate).
 - `scripts/maintenance/2026-10-02-ado-597-prod-content-null-check.sql` - ADO-597: read-only PROD
   check of the upsert RPC definition, articles triggers and pg_cron jobs (found the 005a drift).
+- `scripts/maintenance/2026-10-03-ado-608-ice-front.sql` - ADO-608: new "ICE & Deportations" front
+  (guarded write, targeted sweep, refresh, result, rollback). Applied on TEST October 3, 2026; Josh
+  pastes it in the PROD SQL Editor. Never deployed by code. (Migration 122 from the same commit DOES ship.)
+- `scripts/tests/ice-front-sql-pglite.test.mjs` - PGlite test of migration 122 + the ICE file. Reads a
+  test-only file and needs the undeclared @electric-sql/pglite; not in qa:smoke, does not ship.
+- `scripts/maintenance/2026-10-04-ado-610-trump-corruption-front.sql` - ADO-610: merges Trump Crypto,
+  The Qatar Jet, Selling the White House and The Envoys' Deals into "Trump Corruption" (backup tables,
+  guarded write, move, retire, targeted sweep, refresh, result, rollback). Josh pastes it in the TEST
+  then PROD SQL Editor. Never deployed by code.
+- `scripts/tests/corruption-front-sql-pglite.test.mjs` - PGlite test of the ADO-610 file; same reasons
+  as the ICE test, does not ship.
 - `scripts/tests/fronts-sql-pglite.test.mjs` - PGlite end-to-end test of the two fronts SQL files above
   (placement, idempotency, all-or-nothing apply, priority guards, rollback). Reads test-only
   maintenance files and needs the undeclared @electric-sql/pglite (skips when missing), so it is not
