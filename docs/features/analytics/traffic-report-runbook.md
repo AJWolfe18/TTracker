@@ -49,3 +49,6 @@ Sections, in this order: headline (3 sentences), how many people, where they com
 Load https://trumpytracker.com in Chrome, then run:
 `performance.getEntriesByType('resource').map(e=>new URL(e.name)).filter(u=>/google-analytics|posthog/.test(u.hostname)).map(u=>u.hostname+u.pathname)`.
 Expect `www.google-analytics.com/g/collect` and `us-assets.i.posthog.com/...`. Leave the query strings out of the output; the Chrome tool blocks them.
+
+## Subtract our own test browsers (until ADO-607 ships)
+On October 3, 2026, 34 of 40 PostHog "people" were automated browsers (Lighthouse, Playwright and other phone or speed checks run from cloud servers). Spot them by grouping people on `$timezone`, `$geoip_city_name`, `$screen_width` x `$screen_height` and `$raw_user_agent`. The signature: `$timezone` = `America/Los_Angeles` while GeoIP is New York, Newark or empty; screens 800x600, 412x823 (UA "moto g power (2022)" = Lighthouse) or 390x844. Report real readers only, and say how many were removed. Josh's own early visits are Wentzville, `America/Chicago`, August 25-27. Once ADO-607 ships, browsers with `navigator.webdriver` are not counted at all.
