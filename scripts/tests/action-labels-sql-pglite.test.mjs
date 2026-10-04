@@ -84,6 +84,14 @@ await db.exec("update public.stories set action_label='said', action_actor='trum
 r = await row(2);
 check('backfill write lands', r.action_label === 'said' && r.action_label_source === 'backfill', JSON.stringify(r));
 
+// 3b. Agent relabel over a backfill label without sending a source -> agent
+await db.exec("insert into public.stories(id, status, primary_headline, summary_neutral, action_label, action_actor, action_label_source) values (6, 'active', 'y', 'sum', 'coverage', 'other', 'backfill')");
+await db.exec("update public.stories set action_label='did', action_actor='administration' where id=6");
+r = await row(6);
+check('agent relabel over backfill (no source sent) becomes agent', r.action_label === 'did' && r.action_label_source === 'agent', JSON.stringify(r));
+await db.exec("update public.stories set summary_neutral='s2' where id=6");
+check('unrelated write keeps source', (await row(6)).action_label_source === 'agent');
+
 // 4. The door sets a human label
 const set = (await db.query("select * from public.set_story_action_label(2, 'did', 'trump')")).rows[0];
 check('RPC sets human label and returns it', set.action_label === 'did' && set.action_label_source === 'human', JSON.stringify(set));

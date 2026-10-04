@@ -24,6 +24,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const GOLD_PATH = path.join(here, '..', 'tests', 'fixtures', 'action-label-gold.json');
 export const GATE = 0.9;
 
+const ACTORS = new Set(['trump', 'administration', 'ally', 'other']);
 const side = (actor) => (actor === 'trump' || actor === 'administration' ? 'his' : 'not');
 
 export function compareToGold(gold, results) {
@@ -32,6 +33,9 @@ export function compareToGold(gold, results) {
     const r = byId.get(g.id);
     if (!r || !r.action_label) return { ...g, got: null, agree: false, exact: false, why: 'missing' };
     const labelOk = r.action_label === g.action_label;
+    if (!ACTORS.has(r.action_actor)) {
+      return { ...g, got: `${r.action_label}/${r.action_actor ?? '-'}`, agree: false, exact: false, why: 'actor missing or invalid' };
+    }
     const sideOk = side(r.action_actor) === side(g.action_actor);
     return {
       ...g,

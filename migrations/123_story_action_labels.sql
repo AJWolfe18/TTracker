@@ -91,7 +91,19 @@ BEGIN
   END IF;
 
   -- A label written without a source is an agent write (PRD 14.7 step 6).
-  IF NEW.action_label IS NOT NULL AND NEW.action_label_source IS NULL THEN
+  -- On UPDATE an omitted source arrives as the OLD value, so a changed label
+  -- or actor with an unchanged source also counts as an agent write (a
+  -- re-enrichment over a backfill label). Writers that mean another source
+  -- must send it, and it must differ from the old one; the human case was
+  -- already restored above.
+  IF NEW.action_label IS NOT NULL AND (
+       NEW.action_label_source IS NULL
+       OR (TG_OP = 'UPDATE'
+           AND NEW.action_label_source IS DISTINCT FROM 'human'
+           AND NEW.action_label_source IS NOT DISTINCT FROM OLD.action_label_source
+           AND (NEW.action_label IS DISTINCT FROM OLD.action_label
+                OR NEW.action_actor IS DISTINCT FROM OLD.action_actor))
+     ) THEN
     NEW.action_label_source := 'agent';
   END IF;
 
