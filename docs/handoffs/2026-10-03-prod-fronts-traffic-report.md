@@ -34,9 +34,17 @@ Picks up from the three October 2-3 handoffs (`2026-10-02-prod-merges-and-sql.md
 
 ## Open
 - **Monthly traffic report:** Josh wants it recurring ("on some frequency"). A cloud routine cannot use Josh's Chrome login, so it needs a read-only PostHog personal API key stored in the routine's environment. Josh creates the key; Claude never handles it in chat. Card: **ADO-606**.
-- **Proposed cards (Josh to OK):** (1) the phone home-page dead swipes (11 of 25 phone visitors); (2) 4 `stories_enrichment_log` rows stuck at `running` since July and August (story ids 12134, 12291, 12691, 12718), reported by the Stories agent.
+- **Proposed card (Josh to OK):** 4 `stories_enrichment_log` rows stuck at `running` since July and August (story ids 12134, 12291, 12691, 12718), reported by the Stories agent.
 - **Site speed:** ADO-605 (home page load chain) is being worked in another session.
 - **Still Josh's:** fronts decisions D1-D6 (plan-595 section 0), ADO-525 admin Undo checks, ADO-593 Pardons-only check, 592 pattern + Hegseth calls, ADO-585 DB size.
+
+## Late update: traffic report corrected
+- 34 of the 40 PostHog "people" were our own automated test browsers. Signature: a Pacific-time clock with east-coast or missing GeoIP, screens of 800x600 / 412x823 ("moto g power (2022)" = Lighthouse) / 390x844. 3 more were Josh before the home IP filter, leaving at most 2 real outside readers.
+- The phone dead swipes were test browsers too, so that proposed card was dropped. The report was republished at the same link; the correction is on ADO-596; the runbook explains how to subtract test browsers.
+- **ADO-607** (Bug): skip analytics when `navigator.webdriver` is true.
+- **ADO-606** is now weekly (Mondays).
+- PostHog replay sampling went from 50% to 100% (Josh asked; $0).
+- Josh's Tracker design feedback ("better but not great", level 5 front and center, plain "what it takes away" lines, action tracker = ADO-594, borrowing cues from non-political trackers) continued in a parallel chat; it is not tracked here.
 
 ## Next session
 1. Monday, October 5, after 11 AM CT: `/scotus-review 2099,2399` (ADO-580 AC 2).
