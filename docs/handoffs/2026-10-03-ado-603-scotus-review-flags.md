@@ -61,3 +61,14 @@ The re-runs were then started by firing the PROD SCOTUS routine through RemoteTr
 
 - Agent prompts are read from main at run time, so a prompt fix must merge before any re-queue, or the rows get flagged again under the old rule.
 - An enriched row only re-enters the agent's queue when `enrichment_status` is set back to `pending`. Editorial copy and `is_public` stay live until the agent rewrites them.
+
+## Later in the session: home page load speed (ADO-605) and the traffic report
+
+- **Traffic report artifact:** the column was widened from 44rem to 52rem at Josh's request (same URL).
+- **Dead swipes are not a speed metric.** The report's "11 of 25 phone visitors swiped and nothing moved" counts PostHog `$dead_swipe` events: a gesture that changed nothing on screen. Nothing on the home page scrolls sideways (`body` has `overflow-x: hidden` and there are no carousels). Some of these may be swipes made during the 1 to 2 seconds before stories render. The check (watch 3 PostHog replays, and re-count after ADO-605 ships) is written on ADO-605.
+- **Load speed was measured,** not guessed, with `scripts/perf/phone-load.mjs`: Galaxy S9+ emulation, first visit, CPU 4x slower, analytics blocked.
+  - First Tracker entry: 0.6 s on Wi-Fi, 1.7 to 2.0 s on 4G, 2.8 s on slow 4G.
+  - Cause: a serial chain. HTML, then JS, then `flags-prod.json`, then the Tracker's 6 PostgREST calls, each about 0.2 s. The database is not the bottleneck.
+  - Also, every `/assets/*` file is served `max-age=0, must-revalidate`, so returning visitors re-check every file.
+- **Plan and acceptance criteria are on ADO-605** (Todo, own session). Lazy loading was discussed and ruled out: the stories are the first thing on screen, so the fix is starting their fetch in parallel with the flag file, not deferring anything.
+- **Gotcha:** the anonymous PageSpeed Insights API quota was exhausted. Use the local Playwright script instead (Chrome is installed, and `playwright` is already a devDependency).

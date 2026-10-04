@@ -83,3 +83,5 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-09-30-ado-582-tighten-agent-pattern.sql` - the current election
   `events.agent_pattern` + the self-checking PROD UPDATE and rollback (ADO-582). Run by hand; it
   MUST ship because `scripts/tests/front-agent-prompt.test.mjs` reads the pattern from it.
+- `scripts/perf/phone-load.mjs` - local phone load-time measurement (ADO-605). Dev tool only; nothing deploys
+  or runs it. Never needed on main.

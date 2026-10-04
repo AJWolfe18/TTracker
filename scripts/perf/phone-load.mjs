@@ -10,6 +10,11 @@ const PROFILES = {
 const profile = process.env.PROFILE || '4g';
 const url = process.env.URL_ || 'https://trumpytracker.com/';
 const shotDir = process.env.SHOTS;
+// A mistyped profile must fail, not silently run unthrottled under a throttled-looking label.
+if (!Object.hasOwn(PROFILES, profile)) {
+  process.stderr.write(`Unknown PROFILE "${profile}". Use one of: ${Object.keys(PROFILES).join(', ')}\n`);
+  process.exit(1);
+}
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const ctx = await browser.newContext({ ...devices['Galaxy S9+'] });
@@ -30,7 +35,9 @@ page.on('requestfinished', async (req) => {
   const u = req.url();
   if (!/supabase\.co|trumpytracker\.com|fonts\./.test(u)) return;
   const tm = req.timing();
-  reqs.push({ name: u.replace(/^https:\/\/[^/]+/, '').split('?')[0].slice(0, 50), host: new URL(u).host.split('.')[0], start: tm.startTime - t0, end: tm.startTime + tm.responseEnd - t0 });
+  // responseEnd is -1 for cached / memory-served responses: report those as zero-length, never negative.
+  const end = tm.responseEnd >= 0 ? tm.startTime + tm.responseEnd : tm.startTime;
+  reqs.push({ name: u.replace(/^https:\/\/[^/]+/, '').split('?')[0].slice(0, 50), host: new URL(u).host.split('.')[0], start: tm.startTime - t0, end: end - t0 });
 });
 
 await page.goto(url, { waitUntil: 'commit' });
