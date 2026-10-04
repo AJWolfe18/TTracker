@@ -16,7 +16,7 @@ export type AlarmMin = 0 | 3 | 4 | 5;
 
 /**
  * The Tracker's view selector (ADO-554): 'main' is the curated main line
- * (PRD §12 anchor principle — the default), the numbers are raw alarm floors
+ * (rule v2 in v_tracker_main_line_rule, PRD §14.4 — the default), the numbers are raw alarm floors
  * that recover the complete record.
  */
 export type TrackerView = AlarmMin | 'main';

@@ -369,7 +369,9 @@ Stored boolean, `NOT NULL DEFAULT false`. Written ONLY by `refresh_tracker_deriv
 ### `tracker_stats` (table, migration 113)
 One row (`id = 1`, CHECK-enforced): `developments`, `alarm5_last30`, `open_fronts`, `refreshed_at`. The masthead tally; replaces 9 `HEAD count=exact` requests per page load. Counts are as of `refreshed_at`. Anon SELECT (explicit grant + RLS policy); service_role write.
 
-### `v_tracker_main_line_rule` (view, migration 113, v1.2 in 115, v1.3 in 122) — service_role only
+### `v_tracker_main_line_rule` (view, migration 113, v1.2 in 115, v1.3 in 122, v2 in 126) — service_role only
+**Rule v2 (migration 126, ADO-594 S4):** pins win; `action_label = coverage` is off; a published-front member is on at alarm_eff 4+ (any other label); an unlabeled loose end needs alarm_eff 5 (v1.3, while the label backfill runs); a loose end `did` by trump/administration is on at 3+, `said` at 4+; ally/other loose ends are off at every level. With no labels written v2 equals v1.3. Rollback = re-run 122.
+
 **The single definition of the rule** (moved verbatim from the 112 `v_tracker_stories`; 115 added the per-front floor clause). Returns `id, main_line`. NOT `security_invoker`: it carries `events.publish_state = 'published'` explicitly so the refresh (SECURITY DEFINER, bypasses RLS) scores draft-front members as loose ends exactly as anon saw them. Edit the rule here and nowhere else.
 
 ### `refresh_tracker_derived()` (function, migration 113) — service_role only
