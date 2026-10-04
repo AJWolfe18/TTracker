@@ -235,16 +235,21 @@ export type TrackerState = Record<TimelineSource, SourceState>;
 const quoted = (v: string | number) => `"${String(v).replace(/"/g, '')}"`;
 
 /**
+ * Main-line bar for EOs, SCOTUS rulings and pardons: they are actions by
+ * definition, so they need no front to qualify. Lowered from 5 to 4 on
+ * October 3, 2026 (ADO-594 D5, shipped with the alarm 4-5 homepage, ADO-608).
+ */
+export const MAIN_LINE_SOURCE_ALARM = 4;
+
+/**
  * Build the PostgREST path for one source page. Pure — unit-tested.
  * Keyset pagination: order date desc, id desc; the next page is
  * (date < D) OR (date = D AND id < I). Values are quoted so timestamps
  * with `:`/`+` survive, and the whole logic tree is URL-encoded.
  *
  * In the 'main' view (ADO-554) stories filter on the server-computed
- * main_line column; the other sources get the loose-end bar — alarm 5 only
- * (rule v1.1: they are all loose ends until fronts can contain them, and the
- * 4+ bar drowned the line in severity-saturated rows) — with pins applied
- * client-side.
+ * main_line column; the other sources get MAIN_LINE_SOURCE_ALARM, with pins
+ * applied client-side.
  */
 export function buildSourcePath(
   source: TimelineSource,
@@ -254,7 +259,7 @@ export function buildSourcePath(
   const s = SPECS[source];
   const conditions: string[] = [];
   const alarmFrag = view === 'main'
-    ? (source === 'stories' ? 'main_line.is.true' : s.alarm(5))
+    ? (source === 'stories' ? 'main_line.is.true' : s.alarm(MAIN_LINE_SOURCE_ALARM))
     : s.alarm(view);
   if (alarmFrag) conditions.push(alarmFrag);
   if (cursor) {
@@ -334,7 +339,7 @@ export function forceShowIdsBySource(pins: TrackerPins): Partial<Record<Timeline
  *
  * In the 'main' view, pins adjust the non-stories sources client-side:
  * force_hide entries are dropped from every page, and on a source's FIRST
- * page (no cursor yet) force_show rows below the alarm-5 stream are fetched
+ * page (no cursor yet) force_show rows below the main-line bar are fetched
  * by id and merged in at their chronological position. Stories pins are
  * already applied by v_tracker_stories on the server.
  *
@@ -365,6 +370,44 @@ export async function fetchTrackerPage(
   const next: TrackerState = { ...prev };
   const isMain = view === 'main';
   const firstPage = new Set<TimelineSource>();
+
+  // Main line: force_show rows below the main-line bar are fetched by id for
+  // every source attempting its FIRST page (the first load, or a chip switched
+  // back on after a load that skipped it). The lookup needs only the pins, so
+  // it runs concurrently with the source pages instead of after them (ADO-605:
+  // it was a serial round trip before first paint). Its rows are used only
+  // for sources whose first page then succeeds; anything at the bar arrives through
+  // normal paging, so injecting it again would duplicate the entry.
+  const firstAttempt = TIMELINE_SOURCES.filter(s => !prev[s].exhausted && !prev[s].cursor && !off.has(s));
+  const injectedP: Promise<Partial<Record<TimelineSource, TimelineEntry[]>>> = !isMain || !pins || !firstAttempt.length
+    ? Promise.resolve({})
+    : Promise.resolve(pins).then(async resolved => {
+      if (!resolved?.size) return {};
+      const bySource = forceShowIdsBySource(resolved);
+      const out: Partial<Record<TimelineSource, TimelineEntry[]>> = {};
+      await Promise.all(
+        (Object.keys(bySource) as TimelineSource[]).filter(s => firstAttempt.includes(s)).map(async source => {
+          const spec = SPECS[source];
+          const ids = bySource[source]!.map(id => quoted(id)).join(',');
+          try {
+            const res = await fetch(
+              `${url}/rest/v1/${spec.table}?select=${spec.select}&${spec.base}&id=in.(${ids})`,
+              { headers, signal },
+            );
+            if (!res.ok) return;
+            const rows: Raw[] = await res.json();
+            out[source] = rows.map(spec.adapter).filter(e => e.alarm < MAIN_LINE_SOURCE_ALARM);
+          } catch (err) {
+            if ((err as Error).name === 'AbortError') throw err;
+            // pins are additive — a failed fetch must not break the page
+          }
+        }),
+      );
+      return out;
+    });
+  // Awaited below; if a page fetch throws first (abort), this must not surface
+  // as an unhandled rejection.
+  injectedP.catch(() => {});
 
   const groups = await Promise.all(
     TIMELINE_SOURCES.map(async source => {
@@ -409,32 +452,13 @@ export async function fetchTrackerPage(
     });
   }
 
-  // A source's first page on the main line (the first load, or its chip
-  // switched back on after a load that skipped it): surface force_show pins
-  // on non-stories sources. Only rows below the alarm-5 stream are merged —
-  // anything at 5 arrives (or already arrived) through normal paging, so
-  // injecting it again would duplicate the entry.
-  if (isMain && firstPage.size && resolvedPins?.size) {
-    const bySource = forceShowIdsBySource(resolvedPins);
-    const injected = await Promise.all(
-      (Object.keys(bySource) as TimelineSource[]).filter(s => firstPage.has(s)).map(async source => {
-        const spec = SPECS[source];
-        const ids = bySource[source]!.map(id => quoted(id)).join(',');
-        try {
-          const res = await fetch(
-            `${url}/rest/v1/${spec.table}?select=${spec.select}&${spec.base}&id=in.(${ids})`,
-            { headers, signal },
-          );
-          if (!res.ok) return [];
-          const rows: Raw[] = await res.json();
-          return rows.map(spec.adapter).filter(e => e.alarm < 5);
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') throw err;
-          return []; // pins are additive — a failed fetch must not break the page
-        }
-      }),
-    );
-    groups.push(...injected);
+  // Surface the force_show rows only for sources whose first page succeeded:
+  // a failed one is retried from no cursor, and injecting on both attempts
+  // would duplicate them
+  const injected = await injectedP;
+  for (const source of firstPage) {
+    const rows = injected[source];
+    if (rows) groups.push(rows);
   }
 
   return { entries: mergeEntries(groups), state: next };
