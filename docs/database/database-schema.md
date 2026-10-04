@@ -44,6 +44,9 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | top_entities | TEXT[] | Top entities in story |
 | enrichment_status | TEXT | Enrichment pipeline status |
 | enrichment_failure_count | INTEGER | Failed enrichment attempts |
+| action_label | TEXT | ADO-594 (migration 123): `did` / `said` / `coverage`; NULL = not labeled yet. Definitions: events-tracker PRD 14.2 |
+| action_actor | TEXT | ADO-594: `trump` / `administration` / `ally` / `other` (whose action; a different job from primary_actor) |
+| action_label_source | TEXT | ADO-594: `agent` / `backfill` / `human`. Trigger `stories_action_label_lock` keeps a human label: a write that does not come through `set_story_action_label()` gets the three label fields restored (the rest of the write goes through), and a label sent without a source gets `agent` |
 
 **Key Indexes:**
 - `stories_pkey` - Primary key on `id`
@@ -352,10 +355,13 @@ The candidate pool for the **Stories Enrichment Agent** (`docs/features/stories-
 ### `front_agent_candidates(p_slug TEXT, p_limit INTEGER DEFAULT 25)` (function, migration 116 — ADO-582) — service_role only
 The candidate pool for the **front assignment agent** (`docs/features/fronts-claude-agent/prompt-v1.md`, a daily claude.ai routine, Election Suppression only for now). Returns active, enriched (`summary_neutral IS NOT NULL`) stories with **no** `story_event` row whose headline or `summary_neutral` matches `events.agent_pattern` for `p_slug`, **excluding** stories the agent already declined since their last update (a `pipeline_skips` row with `pipeline='front_assignment'`, `reason='agent_declined'`, `entity_type='story'`, `metadata->>'front' = p_slug`, `created_at >= last_updated_at`). Newest first; every row carries `pool_size` (total before `LIMIT`) and the front's `event_id` so the prompt never hardcodes an id. Paging is by exhaustion: each judged story leaves a `story_event` or `pipeline_skips` row, so the next call returns only what is left (no OFFSET). The agent ends its run with `refresh_tracker_derived()` so assignments reach the main line the same day. Decline rows use the exact `PIPELINES.FRONT_ASSIGNMENT` / `REASONS.AGENT_DECLINED` strings from `scripts/lib/skip-reasons.js`; `qa:fronts` asserts the prompt, the constants and this function's filter agree.
 
-### `v_tracker_stories` (view)
-**Purpose:** The Tracker spine's stories read path with the server-computed `main_line` rule (ADO-554, PRD §12 anchor principle)
+### `set_story_action_label(p_story_id BIGINT, p_label TEXT, p_actor TEXT, p_unlock BOOLEAN DEFAULT false)` (function, migration 123 — ADO-594 S1) — service_role only
+The ONLY way to set a human action label (source becomes `human`) or unlock one (`p_unlock = true`: label kept, source back to `agent`, so the next re-enrichment relabels). Sets the transaction-local flag `app.label_admin` around its own UPDATE and switches it off again. Admin only (S8); no agent prompt may call it. Guards against accidental overwrites, not against service-key code.
 
-`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, front_opening, tracker_pin, alarm_eff, main_line`
+### `v_tracker_stories` (view)
+**Purpose:** The Tracker spine's stories read path (ADO-554, PRD §12 anchor principle). Since migration 113 it reads the STORED `main_line` flag through a plain front join — no window function, no rule logic.
+
+`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, tracker_pin, main_line, action_label, action_actor` (123 appended the two labels; 113 dropped `front_opening` and `alarm_eff`; nothing read them)
 
 **The rule (v1.3, migration 122 — ADO-608, October 3, 2026)** (evaluated by `v_tracker_main_line_rule`, applied by the refresh): `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5`; member of a published front → `alarm_eff >= 4`. Nothing else: the v1.1/v1.2 front opening, new-peak and per-front floor clauses are retired (on PROD they put 63 alarm-3 Election Suppression items on the September homepage while hiding every later alarm-4 Iran development). Alarm-3 front members live on their front page (ADO-548). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side. EO/SCOTUS/pardon rows: the frontend bar is `MAIN_LINE_SOURCE_ALARM` (4) in `src/lib/timeline.ts`.
 
