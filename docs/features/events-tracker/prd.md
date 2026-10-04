@@ -588,6 +588,8 @@ Actors across all 40: trump 10, administration 4, ally 1, other 25.
 
 ### 14.4 Main-line rule v2
 
+**As built (migration 126, October 4, 2026):** rule v2 builds on v1.3 (migration 122), because D4 was superseded on October 3. The order is: pins; coverage off; published-front member at alarm 4+ whatever its label; unlabeled loose end at alarm 5; loose end did by Trump or the administration at 3+, said at 4+; ally and other loose ends never (a label without an actor counts as other). The v1.2 opening, peak and floor clauses described below are retired. On the 40-story sample the main line is 3 stories (17234, 17240, 17245): 17234 is on and 17231 is off under v1.3, unlike the v2 column in 14.3.
+
 Rule v1.2 lives in `v_tracker_main_line_rule` (migrations 113 and 115) for stories. EOs, SCOTUS rulings and pardons get their bar in the frontend (`src/lib/timeline.ts`, alarm 5 only today). v2 keeps that split.
 
 **Stories, checked in this order (values as decided in D2 to D4, October 1, 2026):**
