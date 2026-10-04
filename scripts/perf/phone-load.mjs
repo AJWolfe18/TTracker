@@ -21,13 +21,19 @@ if (!Object.hasOwn(PROFILES, profile)) {
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const ctx = await browser.newContext({ ...devices['Galaxy S9+'] });
-// Never count as a visitor: block analytics.
-await ctx.route(/posthog|googletagmanager|google-analytics|analytics-gate/, (r) => r.abort());
 const page = await ctx.newPage();
 const cdp = await ctx.newCDPSession(page);
+// Never count as a visitor: block analytics. Chrome's own URL blocking, NOT ctx.route():
+// Playwright turns the HTTP cache off whenever routing is on, which would hide what
+// caching saves a returning phone (REPEAT=1).
+const ANALYTICS = /posthog|googletagmanager|google-analytics|analytics-gate/;
+await cdp.send('Network.enable');
+await cdp.send('Network.setBlockedURLs', { urls: ['*posthog*', '*googletagmanager*', '*google-analytics*', '*analytics-gate*'] });
+// Belt and braces: if an analytics request ever gets through, say so and fail the run.
+let analyticsLeaked = false;
+page.on('requestfinished', (req) => { if (ANALYTICS.test(req.url())) analyticsLeaked = true; });
 const p = PROFILES[profile];
 if (p) {
-  await cdp.send('Network.enable');
   await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: p.latency, downloadThroughput: p.downloadThroughput, uploadThroughput: p.uploadThroughput });
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: p.cpu });
 }
@@ -71,3 +77,7 @@ async function measure(label) {
 await measure('first visit');
 if (repeat) await measure('repeat visit');
 await browser.close();
+if (analyticsLeaked) {
+  process.stderr.write('An analytics request was NOT blocked: this run may have been counted as a visitor.\n');
+  process.exit(1);
+}
