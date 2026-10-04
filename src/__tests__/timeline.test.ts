@@ -1145,6 +1145,27 @@ describe('tracker pins (ADO-554)', () => {
     expect(all.filter(e => e.source === 'eos' && e.id === 'eo_low')).toHaveLength(1);
   });
 
+  it('starts the force_show lookup before the source pages answer (ADO-605: no serial round trip)', async () => {
+    let releasePages!: () => void;
+    const pagesHeld = new Promise<void>(r => { releasePages = r; });
+    const order: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.includes('id=in.')) {
+        order.push('pin lookup');
+        return { ok: true, json: async () => [{ id: 'eo_low', title: 'Quiet order', date: '2026-03-01', alarm_level: 2 }] };
+      }
+      order.push('page');
+      await pagesHeld; // no page answers until the lookup has had its chance to start
+      return { ok: true, json: async () => [] };
+    }));
+    const pins: TrackerPins = new Map([[pinKey('eos', 'eo_low'), 'force_show']]);
+    const pending = fetchTrackerPage('main', null, undefined, Promise.resolve(pins));
+    await vi.waitFor(() => expect(order).toContain('pin lookup'));
+    releasePages();
+    const { entries } = await pending;
+    expect(entries.map(e => e.id)).toContain('eo_low');
+  });
+
   it('does not re-inject force_shown rows on later pages', async () => {
     const pins = await fetchTrackerPins();
     const { state } = await fetchTrackerPage('main', null, undefined, pins);

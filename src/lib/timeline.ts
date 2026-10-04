@@ -366,6 +366,44 @@ export async function fetchTrackerPage(
   const isMain = view === 'main';
   const firstPage = new Set<TimelineSource>();
 
+  // Main line: force_show rows below the alarm-5 stream are fetched by id for
+  // every source attempting its FIRST page (the first load, or a chip switched
+  // back on after a load that skipped it). The lookup needs only the pins, so
+  // it runs concurrently with the source pages instead of after them (ADO-605:
+  // it was a serial round trip before first paint). Its rows are used only
+  // for sources whose first page then succeeds; anything at 5 arrives through
+  // normal paging, so injecting it again would duplicate the entry.
+  const firstAttempt = TIMELINE_SOURCES.filter(s => !prev[s].exhausted && !prev[s].cursor && !off.has(s));
+  const injectedP: Promise<Partial<Record<TimelineSource, TimelineEntry[]>>> = !isMain || !pins || !firstAttempt.length
+    ? Promise.resolve({})
+    : Promise.resolve(pins).then(async resolved => {
+      if (!resolved?.size) return {};
+      const bySource = forceShowIdsBySource(resolved);
+      const out: Partial<Record<TimelineSource, TimelineEntry[]>> = {};
+      await Promise.all(
+        (Object.keys(bySource) as TimelineSource[]).filter(s => firstAttempt.includes(s)).map(async source => {
+          const spec = SPECS[source];
+          const ids = bySource[source]!.map(id => quoted(id)).join(',');
+          try {
+            const res = await fetch(
+              `${url}/rest/v1/${spec.table}?select=${spec.select}&${spec.base}&id=in.(${ids})`,
+              { headers, signal },
+            );
+            if (!res.ok) return;
+            const rows: Raw[] = await res.json();
+            out[source] = rows.map(spec.adapter).filter(e => e.alarm < 5);
+          } catch (err) {
+            if ((err as Error).name === 'AbortError') throw err;
+            // pins are additive — a failed fetch must not break the page
+          }
+        }),
+      );
+      return out;
+    });
+  // Awaited below; if a page fetch throws first (abort), this must not surface
+  // as an unhandled rejection.
+  injectedP.catch(() => {});
+
   const groups = await Promise.all(
     TIMELINE_SOURCES.map(async source => {
       const st = prev[source];
@@ -409,32 +447,13 @@ export async function fetchTrackerPage(
     });
   }
 
-  // A source's first page on the main line (the first load, or its chip
-  // switched back on after a load that skipped it): surface force_show pins
-  // on non-stories sources. Only rows below the alarm-5 stream are merged —
-  // anything at 5 arrives (or already arrived) through normal paging, so
-  // injecting it again would duplicate the entry.
-  if (isMain && firstPage.size && resolvedPins?.size) {
-    const bySource = forceShowIdsBySource(resolvedPins);
-    const injected = await Promise.all(
-      (Object.keys(bySource) as TimelineSource[]).filter(s => firstPage.has(s)).map(async source => {
-        const spec = SPECS[source];
-        const ids = bySource[source]!.map(id => quoted(id)).join(',');
-        try {
-          const res = await fetch(
-            `${url}/rest/v1/${spec.table}?select=${spec.select}&${spec.base}&id=in.(${ids})`,
-            { headers, signal },
-          );
-          if (!res.ok) return [];
-          const rows: Raw[] = await res.json();
-          return rows.map(spec.adapter).filter(e => e.alarm < 5);
-        } catch (err) {
-          if ((err as Error).name === 'AbortError') throw err;
-          return []; // pins are additive — a failed fetch must not break the page
-        }
-      }),
-    );
-    groups.push(...injected);
+  // Surface the force_show rows only for sources whose first page succeeded:
+  // a failed one is retried from no cursor, and injecting on both attempts
+  // would duplicate them
+  const injected = await injectedP;
+  for (const source of firstPage) {
+    const rows = injected[source];
+    if (rows) groups.push(rows);
   }
 
   return { entries: mergeEntries(groups), state: next };
