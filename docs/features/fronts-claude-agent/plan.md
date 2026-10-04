@@ -122,6 +122,27 @@ Row values follow the other fronts' launch (the August 24 seed): `tier` major, `
 5. **Tier.** *Recommended: major* (like Courts and Crypto). Flagship would make it the fourth flagship next to Epstein, Iran and Election Suppression (the PRD allows 3 to 5). Note the pairing on TEST: every major front is alarm 4 and every flagship is alarm 5, and this row is major at alarm 5. Major means also setting `alarm_level = 4` to match; flagship keeps alarm 5.
 6. **Boat strikes inside this front.** *Recommended: yes.* The scandal is Hegseth's order and its legal cover; they are 40 of the 62 TEST members. The alternative is a front of their own.
 
+## All fronts (ADO-592)
+
+**Files:** `migrations/127_all_fronts_agent.sql`, `scripts/fronts/front-agent-db.js`, `prompt-v1.md` (same path, so the routines need no config change; content is now prompt version `fronts-v2`). Tests: `scripts/tests/front-agent-prompt.test.mjs` (in `qa:fronts`) and `scripts/tests/all-fronts-agent-sql-pglite.test.mjs` (PGlite, run by hand).
+
+**How it works.** One routine, one pass over the pool, one front (or none) per story.
+- **Agent fronts** are events that are published AND have `agent_pattern` AND have `agent_definition` (new column, migration 127). The definition is the plain rubric the agent judges a front against (what belongs, what does not, calibration examples). It is data: a new front, or a sharper definition, is an `UPDATE`, never a prompt edit, and admin can edit it later (ADO-547). A front without a definition is invisible to the agent, so a pattern can be set before its definition is ready.
+- **Election carries over unchanged.** Migration 127 seeds `election-suppression.agent_definition` with the fronts-v1 Section 4 rubric verbatim (only when NULL, so a re-run never undoes an edit). Until the other definitions land (a follow-up maintenance file built from `front-reviews/<slug>.md`), election is the only agent front and the pool is the election pool.
+- **Pool:** `front_agent_candidates_all(p_limit)`: active, enriched, no `story_event` row, NOT `action_label = 'coverage'` (unlabeled stays in: fail open, PRD 14.6), headline or summary matches ANY agent front's pattern. Each row carries `action_label`, `action_actor` (hints) and `matched_fronts` (the fronts whose pattern matched, lowest sweep priority first).
+- **Script:** a new `fronts` verb prints the agent fronts with their definitions once per run; `candidates` calls the new RPC; every `assign` (and every record-file assign entry) names a front slug, which the script checks against the agent fronts before ANY write (one unknown front refuses the whole file). The single allow rule is unchanged and covers every call.
+- **Declines mean "fits no front"**: `pipeline_skips` with `metadata.front = 'none'` and `metadata.judged_fronts` (the agent fronts at write time). The story is hidden from exactly those fronts until it gains articles, so a front whose definition lands later (the planned order) still gets one look at every active story its pattern matches. Old election-only declines (`metadata.front = 'election-suppression'`) hide the story from election only, so a story the v1 agent declined still reaches ICE, Hegseth and the rest when it matches their patterns; an election-only match stays hidden (no re-judging the ~1,000 PROD election declines).
+- **Tie-break:** the definitions' own rules first, then lower `sweep_priority` wins (same as the sweep).
+- **Notes** are `fronts-v2: <slug>: <rationale>`. Any future election pattern gate should match `note LIKE 'fronts-v%'` (the 2026-09-30 file checks `fronts-v1%` only).
+
+**Deploy order.** (1) Migration 123 must already be on the environment (127 reads `stories.action_label`; on October 4, 2026 TEST did not have it yet). (2) Migration 127 on TEST and PROD. (3) The definitions maintenance file. (4) Only then the prompt and script reach `main`: PROD's routine resets to `origin/main`, and the old prompt keeps using `front_agent_candidates(p_slug)` (116, untouched) until then. The ADO-592 agent-pattern files must also be applied for those fronts to have a pool.
+
+**TEST pool (October 4, 2026, before coverage and declines; PostgREST `imatch`, ids only):** election 37 (almost all already declined by fronts-v1, so hidden), ICE 38, Israel & Gaza 12, RFK 9, Hegseth 9 (2 overlap ICE), 3 election stories also match ICE. Trump Corruption not measured (its pattern is too long to pass through a URL filter). Rough first pool once every definition is set: about 70 plus Trump Corruption. The 127 result query reports the real `pool_size`.
+
+**Cost.** $0 cash: plan usage on the existing routine, no OpenAI. The pool is bigger than election-only (more fronts), and the coverage filter shrinks it (PRD 14.6 measured 62.5% of a sample as coverage). Egress per run stays at headline + summary for at most `FRONTS_MAX_PER_RUN` (80) stories plus the definitions once (a few KB each), about 100-150 KB.
+
+**Rollback.** Revert the prompt and script commit on `main` (the old prompt uses the untouched 116 RPC). Assignments: `DELETE FROM story_event WHERE assigned_by = 'agent' AND note LIKE 'fronts-v2:%'`, then `SELECT refresh_tracker_derived()`. Migration 127 is additive and harmless to leave.
+
 ## Verification
 
 - TEST: migration 116 via SQL editor, push prompt to `test`, create the TEST trigger (env `env_01YRYGLu8C8ijpVWdPAwgVSQ`, branch `test`, no cron), run once, read `story_event.note` + `pipeline_skips` rows, spot-check 30 (AC 1).
