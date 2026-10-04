@@ -55,6 +55,27 @@ begin
   get diagnostics n = row_count;
   return query select n;
 end $$;
+-- assign_fronts_sweep(NULL) as migration 115 defines it (the rollback calls it): every front's sweep
+-- competes, lowest priority wins, every winner is filed (no time filter needed for p_since NULL).
+create function public.assign_fronts_sweep(p_since timestamptz default null) returns table(slug text, assigned int) language plpgsql as $$
+begin
+  return query
+  with pool as (
+    select st.id, st.primary_headline as h, st.summary_neutral as s from public.stories st
+     where st.status = 'active' and st.primary_headline is not null
+       and not exists (select 1 from public.story_event se where se.story_id = st.id)
+  ), pick as (
+    select p.id as story_id, e.id as event_id, e.sweep_priority from pool p join public.events e
+      on e.sweep_pattern is not null and (e.sweep_coword is null or p.h ~* e.sweep_coword)
+     and (p.h ~* e.sweep_pattern or (e.sweep_summary and e.sweep_coword is not null and p.s is not null and p.s ~* e.sweep_pattern))
+  ), best as (
+    select distinct on (pk.story_id) pk.story_id, pk.event_id from pick pk order by pk.story_id, pk.sweep_priority, pk.event_id
+  ), ins as (
+    insert into public.story_event (story_id, event_id, assigned_by, confidence)
+    select b.story_id, b.event_id, 'agent', 0.8 from best b on conflict (story_id) do nothing returning story_event.event_id
+  )
+  select e.slug, count(*)::int from ins join public.events e on e.id = ins.event_id group by e.slug;
+end $$;
 insert into public.events(id, slug, name, alarm_level, tier, publish_state, published_at, sweep_pattern, sweep_coword, sweep_priority, sweep_summary, agent_pattern) values
  (10,'qatar-jet','The Qatar Jet',4,'major','published','2026-08-24','qatar','(jet|747|air force one|plane|boeing)',10,false,null),
  (13,'kushners-deals','The Envoys'' Deals',4,'major','published','2026-10-02','\m(kushner\w*|witkoff\w*|affinity partners)\M',$k$${KUSHNER_COWORD}$k$,20,false,$a$${KUSHNER_AGENT}$a$),
@@ -110,6 +131,10 @@ const CASES = [
   [135, 'Obama Presidential Library opens in Chicago', '-'],
   [136, '9/11 Victim Compensation Fund extended for first responders', '-'],
   [137, 'BBC seeks to subpoena Trump family members in defamation suit', '-'],
+  // code review October 4, 2026: plurals, no bare law, no bare "administration"
+  [138, 'Trump moves to gut federal anti-corruption bodies', 'trump-corruption'],
+  [139, 'Ukraine protests anti-corruption law', '-'],
+  [144, 'Social Security Administration official charged with insider trading', '-'],
   // overlaps: lower priority number wins; a story another front wins is left unfiled
   [140, 'Company backed by Trump sons looks to sell drone interceptors to Gulf states attacked by Iran', 'trump-corruption'], // 15 beats Iran 80
   [141, 'Trump pardons donor who ran a polling firm', 'trump-corruption'],     // 15 beats Election 50
@@ -166,7 +191,7 @@ out('corruption-front-sql-pglite');
   const db = await makeDb();
   const start = await placement(db);
   const startSettings = await oldSettings(db);
-  const startMain = await count(db, 'select count(*) n from public.stories where main_line');
+  const startMain = Object.fromEntries((await db.query('select id, main_line from public.stories')).rows.map((r) => [r.id, r.main_line]));
 
   // 1. Apply
   check(await run(db, MERGE) === null, 'merge file applies');
@@ -196,15 +221,40 @@ out('corruption-front-sql-pglite');
   check(await count(db, "select count(*) n from public.front_merge_backup_events where merge_tag = 'ado-610' and publish_state = 'published' and sweep_pattern is not null") === 4,
     're-run keeps the ORIGINAL settings in the backup');
 
+  // 2b. Straggler (code review): a pipeline sweep that read the old rules files a story into a
+  // retired front after COMMIT. The result query shows it; re-running the apply block moves it.
+  await db.exec("insert into public.stories(id, primary_headline, alarm_level) values (400, 'Kushner fund draws Saudi investors', 4)");
+  await db.exec("insert into public.story_event values (400, 13, 'agent', 0.8)");
+  check(await run(db, MERGE) === null, 'apply block re-run with a straggler in an old front');
+  check((await placement(db))[400] === 'trump-corruption', 'straggler moved into trump-corruption');
+  check(await count(db, "select count(*) n from public.front_merge_backup_story_event where merge_tag = 'ado-610' and story_id = 400 and from_event_id = 13") === 1, 'straggler backed up with its old front');
+
+  // Post-merge life: the pipeline files a new story into trump-corruption, and a human assigns one.
+  await db.exec("insert into public.stories(id, primary_headline, alarm_level) values (401, 'Trump crypto coin soars after White House dinner', 4), (402, 'Envoy visits Doha', 4)");
+  await db.exec('select * from public.assign_fronts_sweep(null)');
+  check((await placement(db))[401] === 'trump-corruption', 'post-merge pipeline sweep files into trump-corruption');
+  await db.exec("insert into public.story_event select 402, id, 'human', 1 from public.events where slug = 'trump-corruption'");
+
   // 3. Rollback (file footer, uncommented)
-  check(ROLLBACK.includes('BEGIN;') && ROLLBACK.includes('COMMIT;'), 'rollback block extracted from the file footer');
+  check(ROLLBACK.includes('BEGIN;') && ROLLBACK.includes('COMMIT;') && ROLLBACK.includes('assign_fronts_sweep(NULL)'), 'rollback block extracted from the file footer');
+  const from = footer.findIndex((l) => l.startsWith('-- HAND ASSIGNMENTS'));
+  const handListing = footer.slice(from + 1, footer.indexOf('-- Then paste as one block:')).map((l) => l.slice(5)).join('\n');
+  const hand = (await db.query(handListing)).rows.map((r) => Number(r.story_id));
+  check(hand.length === 1 && hand[0] === 402, 'pre-rollback listing finds the post-merge hand assignment');
   check(await run(db, ROLLBACK) === null, 'rollback runs');
   const after = await placement(db);
-  const drift = Object.keys(start).filter((id) => start[id] !== after[id]).map((id) => `${id}: ${start[id]} -> ${after[id]}`);
-  check(drift.length === 0, `rollback restores every membership${drift.length ? ': ' + drift.join('; ') : ''}`);
+  const drift = Object.keys(start).filter((id) => start[id] !== '-' && start[id] !== after[id]).map((id) => `${id}: ${start[id]} -> ${after[id]}`);
+  check(drift.length === 0, `rollback restores every original membership${drift.length ? ': ' + drift.join('; ') : ''}`);
+  check(after[400] === 'kushners-deals', 'rollback returns the straggler to its old front');
+  check(after[401] === 'trump-crypto', 'rollback refiles a post-merge pipeline story by the restored rules');
+  check(after[402] === '-', 'post-merge hand assignment is dropped (documented)');
+  check(Object.values(after).every((s) => s !== 'trump-corruption'), 'nothing left in trump-corruption');
   check(await oldSettings(db) === startSettings, 'rollback restores the old fronts\' exact settings');
   check(await count(db, "select count(*) n from public.events where slug = 'trump-corruption'") === 0, 'rollback removes the front');
-  check(await count(db, 'select count(*) n from public.stories where main_line') === startMain, 'rollback restores the main line');
+  const ml = Object.fromEntries((await db.query('select id, main_line from public.stories')).rows.map((r) => [r.id, r.main_line]));
+  const mainDrift = Object.keys(start).filter((id) => start[id] !== '-' && ml[id] !== startMain[id]).map((id) => `${id}: ${startMain[id]} -> ${ml[id]}`);
+  check(mainDrift.length === 0, `rollback restores the main line for every original member${mainDrift.length ? ': ' + mainDrift.join('; ') : ''}`);
+  check(await count(db, "select count(*) n from public.front_merge_backup_events where merge_tag = 'ado-610'") === 0, 'rollback clears its backup rows');
   check(await run(db, MERGE) === null, 'merge applies again after a rollback');
   check((await placement(db))[304] === 'trump-corruption', 'second apply moves members again');
 }

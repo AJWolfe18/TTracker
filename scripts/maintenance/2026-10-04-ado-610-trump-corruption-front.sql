@@ -40,10 +40,11 @@
 --          (was selling-the-white-house); Kushner/Witkoff/Affinity Partners with its full business
 --          co-word (was kushners-deals, verbatim).
 --   new:   Reflecting Pool; East Potomac; oil deal(s), Harold Hamm; stock or insider trading or market
---          manipulation next to Trump/White House/administration; Trump Media (not "Trump media ban /
+--          manipulation next to Trump or the White House (a bare "administration" caught any agency); Trump Media (not "Trump media ban /
 --          ecosystem / coverage / outlets / personalities"), Truth Social stock/shares/priority, DJT;
---          Trump Organization; emoluments, self-dealing, kleptocracy, no-bid, FCPA; Greco and
---          anti-corruption squads/units/monitors/bodies/watchdogs/offices/laws; gold card; Trump
+--          Trump Organization; emoluments, self-dealing, kleptocracy, no-bid, FCPA; Greco; anti-corruption
+--          squads/units/monitors/bodies/watchdogs/offices only next to Trump/FBI/DOJ/White House/federal
+--          (foreign anti-corruption laws and bureaus stay out); gold card; Trump
 --          presidential library; LIV Golf; Trump family (Eric, Don Jr, Ivanka, sons, family,
 --          children) ONLY next to a money word (business, firm, deal, invest, stake, loan, paid,
 --          bankrolled, resort, develop, rich...); donor/megadonor/fundraiser/crony next to
@@ -81,6 +82,12 @@ SELECT e.id, e.slug, e.publish_state, e.sweep_priority,
 -- (2) APPLY: one transaction, BEGIN to COMMIT. Paste and run the whole block at once.
 -- On ANY error: run ROLLBACK; by itself before doing anything else (see the header).
 BEGIN;
+
+-- Block story_event writes (pipeline sweep, front agent, admin) until COMMIT, so no story is filed
+-- into an old front while this runs; reads are not blocked. A pipeline sweep that already read the
+-- old rules can still land a story there after COMMIT: the result query shows it as old-front
+-- members above 0, and re-running this apply block moves it (see part 3).
+LOCK TABLE public.story_event IN SHARE ROW EXCLUSIVE MODE;
 
 -- (2a) Backup tables. Generic on purpose (merge_tag), so the ADO-592 front review can reuse them.
 -- Service role only: RLS on with no policy, and anon/authenticated grants revoked.
@@ -127,7 +134,7 @@ DECLARE
   c_name   CONSTANT TEXT := 'Trump Corruption';
   c_dek    CONSTANT TEXT := 'Family crypto coins, a 747 from Qatar, a ballroom paid for by donors, no-bid contracts for friends, Gulf money for the family business, and the president''s own stock trades. The office, run for profit.';
   c_start  CONSTANT TIMESTAMPTZ := '2025-01-17T00:00:00+00:00';   -- the $TRUMP memecoin launch
-  c_sweep  CONSTANT TEXT := '^(?=.*(crypto|memecoin|meme coin|\$TRUMP|world liberty|stablecoin|bitcoin|binance)).*(trump|kushner|witkoff|white house|president)|qatar.*(jet|747|air force one|plane|boeing)|(jet|747|air force one|plane|boeing).*qatar|ballroom|^(?=.*\m(kushner\w*|witkoff\w*|affinity partners)\M)(?!.*\m(world liberty|wlfi|usd1|crypto\w*|memecoins?|meme coins?|stablecoins?|bitcoin|binance|charles kushner|josh kushner|tony kushner|thrive capital)\M)(?=.*\m(affinity|business (deal|deals|dealings|interests|ties|empire)|dealings|money|windfalls?|payday|payments?|fundrais\w*|investors?|investment (firm|fund|company)|private equity|profit\w*|conflicts? of interest|ethics?|hotels?|resorts?|real estate|financial (empire|interests?|ties|disclosures?|stakes?|dealings)|disclos\w*|empire|probes?|investigat\w*|(saudi|qatari|emirati|abu dhabi|uae|gulf|foreign|sovereign) (money|fund|funds|investors?|investment|cash|royals?|backers?|wealth)|pif|public investment fund|electronic arts|paramount|warner|sazan|albania\w*|serbia\w*|belgrade)\M)|reflecting pool|east potomac|\moil deals?\M|harold hamm|\m(trump\w*|white house|administration)\M.*\m(stock trad\w*|insider trad\w*|market manipulat\w*)|\m(stock trad\w*|insider trad\w*|market manipulat\w*).*\m(trump\w*|white house)\M|trump media\M(?! (ban|ecosystem|coverage|outlets?|personalit))|truth social (stock|shares|priority)|\mdjt\M|trump organi[sz]ation|\mtrump org\M|\m(emoluments?|self[- ]dealing|kleptocra\w*|no[- ]bid|foreign corrupt practices|fcpa)\M|\mgreco\M|anti[- ]corruption (squad|unit|monitor\w*|body|watchdog|office|section|division|enforcement|law|rules?|probes?)|gold card|\mtrump\w*\M.*presidential library|presidential library.*\mtrump|trump library|liv golf|^(?=.*\m(eric trump|trump jr|don jr|donald trump jr|ivanka|trump sons|trump family|trump children)\M).*\m(business\w*|firms?|company|companies|deals?|invest\w*|stakes?|ventures?|startups?|backed|profit\w*|resorts?|develop\w*|loans?|contracts?|fund\w*|money|bankroll\w*|paid|portfolio|brand|licens\w*|towers?|golf|hotels?|rich|wealth\w*|windfalls?)\M|\m(donors?|megadonors?|fundraisers?|cronies|crony)\M.*\m(contracts?|pardon\w*|loans?)\M|\m(contracts?|pardon\w*)\M.*\m(donors?|megadonors?|fundraisers?|cronies|crony)\M|\m(trump\w*|jan(uary)?\.? 6)\M.*compensation fund|compensation fund.*\mtrump';
+  c_sweep  CONSTANT TEXT := '^(?=.*(crypto|memecoin|meme coin|\$TRUMP|world liberty|stablecoin|bitcoin|binance)).*(trump|kushner|witkoff|white house|president)|qatar.*(jet|747|air force one|plane|boeing)|(jet|747|air force one|plane|boeing).*qatar|ballroom|^(?=.*\m(kushner\w*|witkoff\w*|affinity partners)\M)(?!.*\m(world liberty|wlfi|usd1|crypto\w*|memecoins?|meme coins?|stablecoins?|bitcoin|binance|charles kushner|josh kushner|tony kushner|thrive capital)\M)(?=.*\m(affinity|business (deal|deals|dealings|interests|ties|empire)|dealings|money|windfalls?|payday|payments?|fundrais\w*|investors?|investment (firm|fund|company)|private equity|profit\w*|conflicts? of interest|ethics?|hotels?|resorts?|real estate|financial (empire|interests?|ties|disclosures?|stakes?|dealings)|disclos\w*|empire|probes?|investigat\w*|(saudi|qatari|emirati|abu dhabi|uae|gulf|foreign|sovereign) (money|fund|funds|investors?|investment|cash|royals?|backers?|wealth)|pif|public investment fund|electronic arts|paramount|warner|sazan|albania\w*|serbia\w*|belgrade)\M)|reflecting pool|east potomac|\moil deals?\M|harold hamm|\m(trump\w*|white house)\M.*\m(stock trad\w*|insider trad\w*|market manipulat\w*)|\m(stock trad\w*|insider trad\w*|market manipulat\w*).*\m(trump\w*|white house)\M|trump media\M(?! (ban|ecosystem|coverage|outlets?|personalit))|truth social (stock|shares|priority)|\mdjt\M|trump organi[sz]ation|\mtrump org\M|\m(emoluments?|self[- ]dealing|kleptocra\w*|no[- ]bid|foreign corrupt practices|fcpa)\M|\mgreco\M|^(?=.*\m(trump\w*|fbi|doj|justice department|white house|federal)\M).*anti[- ]corruption (squads?|units?|monitor\w*|bod(y|ies)|watchdogs?|offices?|sections?|divisions?|enforcement|probes?)|gold card|\mtrump\w*\M.*presidential library|presidential library.*\mtrump|trump library|liv golf|^(?=.*\m(eric trump|trump jr|don jr|donald trump jr|ivanka|trump sons|trump family|trump children)\M).*\m(business\w*|firms?|company|companies|deals?|invest\w*|stakes?|ventures?|startups?|backed|profit\w*|resorts?|develop\w*|loans?|contracts?|fund\w*|money|bankroll\w*|paid|portfolio|brand|licens\w*|towers?|golf|hotels?|rich|wealth\w*|windfalls?)\M|\m(donors?|megadonors?|fundraisers?|cronies|crony)\M.*\m(contracts?|pardon\w*|loans?)\M|\m(contracts?|pardon\w*)\M.*\m(donors?|megadonors?|fundraisers?|cronies|crony)\M|\m(trump\w*|jan(uary)?\.? 6)\M.*compensation fund|compensation fund.*\mtrump';
   c_prio   CONSTANT INTEGER := 15;
   c_agent  CONSTANT TEXT := c_sweep || '|\m(corrupt\w*|donors?|megadonors?|oligarchs?|bribe\w*|kickbacks?|conflicts? of interest|self[- ]enrich\w*|pay[- ]to[- ]play|grift\w*|cronies|crony|cronyism|payouts?|watchdogs?|inspectors? general|qatar\w*|crypto\w*|stablecoins?|memecoins?|golf|resorts?|licensing|gifts?|rose garden|arch|jared|special envoys?|board of peace|sazan|phoenix financial|public investment fund|pif|sovereign wealth|electronic arts|tahnoon|aryam|mgx|g42|saudi\w*|emirat\w*|abu dhabi|gulf (money|states|investors?|investment|royals?))\M';
 
@@ -254,7 +261,9 @@ SELECT * FROM public.refresh_tracker_derived();
 COMMIT;
 
 -- (3) RESULT (read-only). Expect: trump-corruption published with members = moved + swept (PROD:
--- 196 moved plus roughly 100 to 150 swept); the four old fronts draft, 0 members, no sweep.
+-- 196 moved plus about 120 swept); the four old fronts draft, 0 members, no sweep.
+-- IF AN OLD FRONT SHOWS MEMBERS ABOVE 0: a pipeline run filed a story there during the paste. Run
+-- the apply block (2) again; it is idempotent and moves and backs up the stragglers.
 -- moved_outside_pattern counts moved stories the new agent_pattern would not match on headline or
 -- summary (hand-seeded ones can be legitimately outside); it is information, not a failure.
 SELECT e.slug, e.publish_state, e.tier, e.alarm_level, e.sweep_priority,
@@ -274,9 +283,20 @@ SELECT e.slug, e.publish_state, e.tier, e.alarm_level, e.sweep_priority,
  WHERE e.slug IN ('trump-corruption', 'trump-crypto', 'qatar-jet', 'selling-the-white-house', 'kushners-deals')
  ORDER BY e.publish_state DESC, e.slug;
 
--- ROLLBACK (puts every moved story back in its old front, restores the old fronts' settings from
--- the backup, then deletes trump-corruption, which also removes the stories its own sweep filed;
--- story_event cascades on the event). Paste as one block:
+-- ROLLBACK. It puts every moved story back in its old front, restores the old fronts' settings from
+-- the backup, and deletes trump-corruption; every other member of it becomes unassigned (story_event
+-- cascades on the event). It then sweeps ALL active unassigned stories once (assign_fronts_sweep(NULL),
+-- migration 115) so the restored rules refile them, not only the last 48 hours the pipeline looks at;
+-- that full sweep also files any other unassigned story a front's rule matches, as each front's own
+-- creation backfill did.
+-- HAND ASSIGNMENTS made to Trump Corruption after the merge are dropped. List them first (read-only):
+--   SELECT se.story_id, st.primary_headline FROM public.story_event se
+--     JOIN public.stories st ON st.id = se.story_id
+--    WHERE se.event_id = (SELECT id FROM public.events WHERE slug = 'trump-corruption')
+--      AND se.assigned_by = 'human'
+--      AND NOT EXISTS (SELECT 1 FROM public.front_merge_backup_story_event b
+--                       WHERE b.merge_tag = 'ado-610' AND b.story_id = se.story_id);
+-- Then paste as one block:
 -- BEGIN;
 -- UPDATE public.story_event se SET event_id = b.from_event_id
 --   FROM public.front_merge_backup_story_event b
@@ -288,6 +308,7 @@ SELECT e.slug, e.publish_state, e.tier, e.alarm_level, e.sweep_priority,
 --   FROM public.front_merge_backup_events b
 --  WHERE b.merge_tag = 'ado-610' AND b.event_id = e.id;
 -- DELETE FROM public.events WHERE slug = 'trump-corruption';
+-- SELECT * FROM public.assign_fronts_sweep(NULL);
 -- DELETE FROM public.front_merge_backup_story_event WHERE merge_tag = 'ado-610';
 -- DELETE FROM public.front_merge_backup_events WHERE merge_tag = 'ado-610';
 -- SELECT * FROM public.refresh_tracker_derived();
