@@ -91,6 +91,9 @@ const CASES = [
   [113, 'Congress is absent as Trump threatens Iranians \'will die\'', 'iran'],
   [114, 'In Choosing \'Epic Fury,\' Trump Names a War and Defines His Presidency', 'iran'],
   [115, 'Republicans confront the massive cost of Trump\'s Middle East war', 'iran'],
+  // Code review: Israel's co-word guard must cover Iran's widened terms, or priority 75 steals these
+  [9190, 'Israel strikes Tehran, killing IRGC commanders', 'iran'],
+  [9191, 'Israeli strikes kill hundreds of Iranians as Trump weighs joining', 'iran'],
   [116, 'U.S. national security offices, weakened by firings, confront Mideast war', 'iran'],
   [117, 'Americans have little appetite for sending U.S. troops to Iran, polls show', 'iran'],  // not Election's troops branch
   [118, 'Republicans Again Block War Powers Measure in the Senate', '-'],         // agent only
