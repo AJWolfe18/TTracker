@@ -99,6 +99,11 @@ const ICE_CASES = [
   [122, 'Noem on thin ice as ICE raids draw backlash', 'ice-deportations'],
   [123, 'Hockey star detained by ICE at the airport', 'ice-deportations'],
   [124, 'Ice storm warning: ICE says Texas offices close Friday', '-'],
+  // generic words alone (border, agents, arrests, raids) do not rescue weather/sports "ice" (review round 2)
+  [125, 'Ice storm closes border crossings in Maine', '-'],
+  [126, 'Sea ice retreat sparks Arctic border dispute', '-'],
+  [127, "Hockey free agents: who's still on ice", '-'],
+  [128, 'Ice storm grounds ICE agents in Minneapolis', 'ice-deportations'],
 ];
 const ALREADY = [[150, 'Deportation flights land as judge weighs contempt', 'the-courts']]; // filed earlier, must not move
 
