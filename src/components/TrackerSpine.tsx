@@ -36,6 +36,7 @@ import {
   type TrackerTally,
   type TrackerView,
 } from '@/lib/timeline';
+import { takeBootTally, takeBootTracker } from '@/lib/tracker-boot';
 
 /** Every Tracker event is tagged with this tab so it never blends into the News feed. */
 const TRACKER_TAB = 'tracker';
@@ -132,17 +133,21 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
     setCatchUps([]); // a view change aborts any catch-up (its cursors belong to the old view)
     setRefreshing(true);
     (async () => {
+      // The default view's first load was already started at boot, alongside
+      // the flag file (ADO-605); later loads and other views fetch here
+      const boot = view === 'main' && offRef.current.size === 0 ? takeBootTracker() : null;
       // Pins and source pages fetch CONCURRENTLY (the pins promise is only
       // awaited inside fetchTrackerPage after every page response arrives) —
       // serializing them added a full round-trip to first paint (ADO-568).
       const pins = view === 'main'
         ? (pinsRef.current
             ? Promise.resolve(pinsRef.current)
-            : fetchTrackerPins(ac.signal)
+            : (boot?.pins ?? fetchTrackerPins(ac.signal))
                 .then(p => (pinsRef.current = p))
                 .catch(() => undefined))
         : undefined;
-      const { entries: page, state } = await fetchTrackerPage(view, null, ac.signal, pins, offRef.current);
+      const { entries: page, state } = (boot && await boot.page)
+        ?? await fetchTrackerPage(view, null, ac.signal, pins, offRef.current);
       if (ac.signal.aborted) return;
       setEntries(page);
       setPageState(state);
@@ -159,8 +164,8 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
   useEffect(() => {
     if (!enabled) return;
     const ac = new AbortController();
-    fetchTrackerTally(ac.signal)
-      .then(t => { if (!ac.signal.aborted) setTally(t); })
+    (takeBootTally() ?? fetchTrackerTally(ac.signal))
+      .then(t => { if (!ac.signal.aborted && t) setTally(t); })
       .catch(() => {});
     return () => ac.abort();
   }, [enabled]);
