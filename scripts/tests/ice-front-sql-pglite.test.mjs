@@ -93,6 +93,12 @@ const ICE_CASES = [
   [116, 'Masked agents detain student outside Tufts', 'ice-deportations'],
   [117, 'Immigration judges fired in latest purge', 'ice-deportations'],
   [118, 'Nonimmigrant visa fee hike takes effect', '-'],
+  // weather/sports "ice" only excludes a headline with no immigration word (code review, October 3)
+  [120, 'Ice Cube slams ICE raids', 'ice-deportations'],
+  [121, 'Judge puts ICE detention expansion on ice', 'ice-deportations'],
+  [122, 'Noem on thin ice as ICE raids draw backlash', 'ice-deportations'],
+  [123, 'Hockey star detained by ICE at the airport', 'ice-deportations'],
+  [124, 'Ice storm warning: ICE says Texas offices close Friday', '-'],
 ];
 const ALREADY = [[150, 'Deportation flights land as judge weighs contempt', 'the-courts']]; // filed earlier, must not move
 

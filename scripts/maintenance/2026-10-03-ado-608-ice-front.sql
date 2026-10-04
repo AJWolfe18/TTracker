@@ -25,8 +25,11 @@
 --     at the polls") and The Courts (70, keeps contempt over deportation flights) and before Israel
 --     & Gaza (75), Iran (80), RFK (85) and Hegseth (90).
 --     The co-word only EXCLUDES: weather and sports "ice" (ice storm, ice cream, hockey, sea ice,
---     thin ice, on ice, glaciers, Vanilla Ice, ice cube). A bare "raid" is NOT swept (FBI and
---     military raids are other fronts or none).
+--     thin ice, on ice, glaciers, Vanilla Ice, ice cube), and only when the headline has no
+--     immigration word (deport, immigration, migrants, asylum, detention, detain, raids, agents,
+--     arrests, border, Homan, Noem, DHS, CBP): "Ice Cube slams ICE raids" and "Judge puts ICE
+--     detention expansion on ice" are still filed (code review, October 3, 2026). A bare "raid" is
+--     NOT swept (FBI and military raids are other fronts or none).
 -- agent_pattern = sweep_pattern verbatim | extras (same convention as the 592/595 files): DHS,
 --   Homeland Security, Noem, border, citizenship, visas, TPS, DACA, Dreamers, birthright, travel
 --   ban, green cards, naturalization. The agent covers this front once ADO-592 ships.
@@ -64,7 +67,7 @@ DECLARE
   c_dek    CONSTANT TEXT := 'Mass arrests by masked agents, detention camps, and deportations to third countries and foreign prisons, fought in court at every step.';
   c_start  CONSTANT TIMESTAMPTZ := '2025-01-20T00:00:00+00:00';
   c_sweep  CONSTANT TEXT := '\m(ice|deport\w*|immigra\w*|migrants?|asylum|refugee admissions|detention (camps?|centers?|centres?|facilit\w*|beds?|polic\w*|sites?)|mass detention|mandatory detention|detainees?|third[- ]countr\w*|border patrol|bovino|cbp|customs and border protection|border czar|homan|alligator alcatraz|cornhusker clink|speedway slammer|cecot|alien enemies act|sanctuary (cities|city|states?|jurisdictions?|polic\w*)|masked (agents?|officers?|men)|(workplace|worksite|farm|factory) raids?)\M';
-  c_coword CONSTANT TEXT := '^(?!.*\m(ice (storms?|cream|caps?|sheets?|age|hockey|rinks?|skat\w*|shelf|shelves|melt\w*|dance|bath|plunge|cube)|sea ice|thin ice|on ice|hockey|glaciers?|vanilla ice)\M)';
+  c_coword CONSTANT TEXT := '^(?!.*\m(ice (storms?|cream|caps?|sheets?|age|hockey|rinks?|skat\w*|shelf|shelves|melt\w*|dance|bath|plunge|cube)|sea ice|thin ice|on ice|hockey|glaciers?|vanilla ice)\M)|\m(deport\w*|immigra\w*|migrants?|asylum|detention|detain\w*|detainees?|raids?|agents?|arrests?|border|homan|noem|dhs|cbp)\M';
   c_prio   CONSTANT INTEGER := 72;
   c_agent  CONSTANT TEXT := '\m(ice|deport\w*|immigra\w*|migrants?|asylum|refugee admissions|detention (camps?|centers?|centres?|facilit\w*|beds?|polic\w*|sites?)|mass detention|mandatory detention|detainees?|third[- ]countr\w*|border patrol|bovino|cbp|customs and border protection|border czar|homan|alligator alcatraz|cornhusker clink|speedway slammer|cecot|alien enemies act|sanctuary (cities|city|states?|jurisdictions?|polic\w*)|masked (agents?|officers?|men)|(workplace|worksite|farm|factory) raids?)\M|\m(dhs|homeland security|noem|border|citizenship|visas?|tps|temporary protected status|daca|dreamers?|birthright|travel ban|green cards?|naturaliz\w*|denaturaliz\w*)\M';
 
