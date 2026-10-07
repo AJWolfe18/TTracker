@@ -240,7 +240,8 @@ function matchesSubtab(
 ): boolean {
   switch (subtab) {
     case 'needs_review':
-      return isClaudeEnriched(eo.prompt_version) && !eo.is_public && eo.needs_manual_review
+      // Migration 128: a flag no longer unpublishes, so flagged rows are usually live.
+      return isClaudeEnriched(eo.prompt_version) && eo.needs_manual_review
     case 'unenriched':
       return !isClaudeEnriched(eo.prompt_version)
     case 'unpublished':
