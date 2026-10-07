@@ -86,9 +86,12 @@ criminal is itself the signal ("someone paid, we can't prove who").
   and any flagged pardon is set `is_public = false`. A database trigger enforces this pairing on every
   write, so a flagged pardon cannot leak to the site.
 - **`review_reason` is mandatory when flagging.** Whenever `needs_review = true`, `enrichment_meta` must
-  contain a one-sentence `review_reason` explaining what triggered the flag. Triggers include:
-  `corruption_level = 0`, low confidence, co-defendant ambiguity, a name mismatch, a serious criminal with
-  no advocacy channel, or any post-pardon status change. Josh reviews these before they publish.
+  contain a one-sentence `review_reason` explaining what triggered the flag. Since prompt v1.3 (October 6,
+  2026) the triggers are only doubts a human can check: identity (a namesake, or a name mismatch),
+  sources that contradict each other on a load-bearing fact, a load-bearing connection claim seen only in a
+  search snippet, co-defendant role ambiguity, or a post-pardon status change. Thin research, level 0 and a
+  serious criminal with no advocacy channel no longer flag (v1.2 flagged them, which hid 27 pardons).
+  Josh reviews flagged pardons before they publish.
 - **One atomic write per pardon.** No partial updates; each write is verified (an empty PostgREST response
   means the write failed and is logged).
 - **Factual DOJ fields are never touched** — the agent has an explicit never-write list, so it cannot
