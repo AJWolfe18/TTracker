@@ -520,17 +520,18 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
   const ids = parsedItems.map(i => i.id)
   const { data: currentRows, error: fetchError } = await supabase
     .from('executive_orders')
-    .select('id, is_public, prompt_version, updated_at')
+    .select('id, is_public, needs_manual_review, prompt_version, updated_at')
     .in('id', ids)
   if (fetchError) {
     console.error('Bulk fetch error:', fetchError)
     return jsonResponse({ error: 'Failed to fetch EOs for bulk publish' }, 500)
   }
 
-  const stateById = new Map<string, { is_public: boolean; prompt_version: string | null; updated_at: string }>()
+  const stateById = new Map<string, { is_public: boolean; needs_manual_review: boolean; prompt_version: string | null; updated_at: string }>()
   for (const r of (currentRows ?? [])) {
     stateById.set(String(r.id), {
       is_public: r.is_public as boolean,
+      needs_manual_review: r.needs_manual_review === true,
       prompt_version: r.prompt_version as string | null,
       updated_at: r.updated_at as string,
     })
@@ -542,7 +543,9 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
       failed.push({ id: item.id, reason: 'not_found', message: 'EO not found' })
       continue
     }
-    if (cur.is_public === true) {
+    // Migration 128: flagged EOs stay live, so for a live flagged row this clears the flag
+    // ("mark reviewed"). Only a live, unflagged row has nothing to do.
+    if (cur.is_public === true && !cur.needs_manual_review) {
       skipped.push({ id: item.id, current_updated_at: cur.updated_at, reason: 'already_published' })
       continue
     }
@@ -556,15 +559,15 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
     }
 
     // CAS UPDATE per row.
-    // Extra `is_public=false` guard handles the race where another writer published
-    // between our pre-fetch and this UPDATE — we want to report `already_published`
+    // Extra `is_public` guard (the pre-fetched value) handles the race where another writer
+    // changed it between our pre-fetch and this UPDATE — we want to report `already_published`
     // consistently rather than no-op-overwrite.
     const { data, error } = await supabase
       .from('executive_orders')
       .update({ is_public: true, needs_manual_review: false })
       .eq('id', item.id)
       .eq('updated_at', item.if_updated_at)
-      .eq('is_public', false)
+      .eq('is_public', cur.is_public)
       .select('id, updated_at')
       .single()
 
@@ -574,10 +577,10 @@ async function handleBulkPublish(supabase: any, body: Record<string, unknown>) {
         // Re-fetch to distinguish so we report the correct reason.
         const { data: fresh } = await supabase
           .from('executive_orders')
-          .select('is_public, updated_at')
+          .select('is_public, needs_manual_review, updated_at')
           .eq('id', item.id)
           .single()
-        if (fresh?.is_public === true) {
+        if (fresh?.is_public === true && fresh?.needs_manual_review !== true) {
           skipped.push({ id: item.id, current_updated_at: fresh.updated_at, reason: 'already_published' })
         } else {
           skipped.push({ id: item.id, current_updated_at: fresh?.updated_at ?? cur.updated_at, reason: 'stale_updated_at' })

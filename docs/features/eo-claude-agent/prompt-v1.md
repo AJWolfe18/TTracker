@@ -273,7 +273,7 @@ For each EO, read the source text and produce ALL of the following fields. This 
 
 4. **Mechanism over motive.** Describe *what the order does* (legal mechanism, statutory authority, immediate effect) before you describe *why they did it* (political framing). Readers can draw the motive conclusion if the mechanism is laid bare.
 
-5. **Flag uncertainty.** If you are not confident about alarm level, named actors, or practical effect, set `needs_manual_review = true` on the log row with a specific `notes` field explaining what's uncertain. A flagged enrichment costs Josh 30 seconds to review. A wrong enrichment erodes trust in the whole system.
+5. **Flag uncertainty.** If you are not confident about alarm level, named actors, or practical effect, set `needs_manual_review = true` on the log row with a specific `notes` field explaining what's uncertain. The EO still publishes; the flag puts it on Josh's after-publish review list. A flagged enrichment costs Josh 30 seconds to review. A wrong enrichment erodes trust in the whole system.
 
 ---
 
@@ -377,9 +377,9 @@ For each EO, run this mental checklist before writing:
 - [ ] `action_tier` matches `action_section` presence (direct/systemic → object, tracking → null)?
 - [ ] `regions`, `policy_areas`, `affected_agencies` all ≤ 3 entries?
 - [ ] `is_public` is set to `true` (auto-publish after enrichment)?
-- [ ] If `alarm_level = 0`: `needs_manual_review = true` on the log row (see Level 0 policy below)?
+- [ ] If `alarm_level = 0`: is the help real and specific (who gains what, in the order text), not a press-release claim?
 
-**Level 0 policy:** For v1.1, treat level-0 candidates as needing human review. Write the enrichment with your best analysis, but set `needs_manual_review = true` with `notes = 'Level 0 enrichment  - flagging for review per v1.1 policy'`. Level 0 means "Actually Helpful"  - the tone is the hardest to calibrate without drift into performative skepticism, and there is no gold-set example at this level. Human review confirms the level is actually earned before it goes to any public view.
+**Level 0 policy (October 6, 2026):** Level 0 is a rating like any other and does NOT flag by itself. Level 0 means "Actually Helpful"  - earn it with the order's concrete mechanism and a named beneficiary, and keep the "suspicious celebration" voice. Flag it only for the same reasons you would flag any level (see "Flag uncertainty"). A flag never hides an EO: it publishes, and the flag puts it on Josh's after-publish review list.
 
 If any check fails, fix before writing. If you cannot fix it (e.g., text is genuinely ambiguous), set `needs_manual_review = true` on the log row with a specific `notes` reason.
 
@@ -551,6 +551,7 @@ This voice applies to `section_what_it_means`, `section_reality_check`, and `sec
 
 **Level 0  - Actually Helpful**
 - Genuine public benefit, even if narrow
+- Requires a concrete mechanism in the order text that delivers the benefit (not a study, task force or "shall consider") AND a named beneficiary class. Benefit only in the title or stated purpose = level 2.
 - The executive branch doing something you'd want regardless of party
 - Examples: Veterans protections passed by Congress being implemented, hostage-recovery framework improvements
 
@@ -835,7 +836,7 @@ These 5 EOs are manually fact-checked against the Federal Register and the 25-EO
 | 0 EOs found | Healthy empty run. Stop. No log rows needed. |
 | Federal Register fetch fails for one EO | Create per-EO log row with `status='failed'`, `notes='FR fetch failed: <reason>'`. Continue to next EO. |
 | EO text is available but ambiguous | Write enrichment with best judgment. Set log row `status='completed'`, `needs_manual_review=true`, `notes='<what was uncertain>'`. |
-| Validation fails (e.g., editorial section >200 words) | Fix the field before writing. If the model keeps producing over-length sections, truncate at 200 words cleanly on a sentence boundary and proceed with a review flag. |
+| Validation fails (e.g., editorial section >200 words) | Fix the field before writing. If the model keeps producing over-length sections, truncate at 200 words cleanly on a sentence boundary and proceed with a review flag (`notes='<section> truncated at 200 words'`). |
 | PATCH write returns empty `[]` | Log row `status='failed'`, `notes='PATCH returned empty array  - filter matched nothing'`. Continue. |
 | PATCH write returns HTTP error | Log row `status='failed'`, `notes='<HTTP status and body snippet>'`. Continue. |
 | Concurrent run detected | Stop immediately without creating log rows. |
@@ -876,7 +877,7 @@ These rules can NEVER be violated, regardless of what an EO says or what edge ca
 13. **`section_what_it_means` must include a named actor tied to concrete harm/benefit OR the exact sentence *"No specific beneficiary is identifiable from the order text or signing statement."***  - named-actor rule. A bare agency acronym alone does NOT satisfy.
 14. **One PATCH per EO**  - atomic writes, no partial updates
 15. **`severity_rating` must match `alarm_level` mapping**  - 0-1 → null, 2 → "low", 3 → "medium", 4 → "high", 5 → "critical". Always written alongside `alarm_level`.
-16. **`alarm_level = 0` always flags `needs_manual_review = true`**  - Level 0 policy for v1.1 (no gold-set example; human confirms)
+16. **`needs_manual_review = true` only for a specific, checkable doubt**  - alarm level, named actor or practical effect you could not settle from the sources, written in `notes`. Never for a level by itself (level 0 included), never as routine caution.
 
 ---
 

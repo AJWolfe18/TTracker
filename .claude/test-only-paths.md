@@ -104,3 +104,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
   MUST ship because `scripts/tests/front-agent-prompt.test.mjs` reads the pattern from it.
 - `scripts/perf/phone-load.mjs` - local phone load-time measurement (ADO-605). Dev tool only; nothing deploys
   or runs it. Never needed on main.
+- `scripts/maintenance/2026-10-06-held-back-rows.sql` - one-time PROD fix: republishes the 2 EOs the old
+  flag trigger hid and re-queues the 49 pre-agent `v2-ado280-flagged` SCOTUS rows (ADO-603 AC 4). Guarded
+  exact counts, stops unless migration 128 is applied. Josh runs it manually in the PROD SQL Editor; never deployed.

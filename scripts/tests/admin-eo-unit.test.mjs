@@ -106,7 +106,7 @@ const isClaudeEnriched = (pv) => pv != null && CLAUDE_AGENT_VERSIONS.includes(pv
 function matchesSubtab(eo, latestLogStatus, subtab) {
   switch (subtab) {
     case 'needs_review':
-      return isClaudeEnriched(eo.prompt_version) && !eo.is_public && eo.needs_manual_review;
+      return isClaudeEnriched(eo.prompt_version) && eo.needs_manual_review;
     case 'unenriched':
       return !isClaudeEnriched(eo.prompt_version);
     case 'unpublished':
@@ -397,8 +397,8 @@ test('matchesSubtab — needs_review predicate', () => {
   assert.equal(matchesSubtab({ prompt_version: 'v1', is_public: false, needs_manual_review: true }, null, 'needs_review'), false);
   // Wrong prompt version (null = unenriched)
   assert.equal(matchesSubtab({ prompt_version: null, is_public: false, needs_manual_review: true }, null, 'needs_review'), false);
-  // Already public
-  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: true, needs_manual_review: true }, null, 'needs_review'), false);
+  // Already public: still needs review (migration 128 - a flag no longer unpublishes)
+  assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: true, needs_manual_review: true }, null, 'needs_review'), true);
   // Not flagged
   assert.equal(matchesSubtab({ prompt_version: 'v1.1', is_public: false, needs_manual_review: false }, null, 'needs_review'), false);
 });
