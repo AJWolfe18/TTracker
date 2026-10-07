@@ -361,7 +361,7 @@ For each pardon, use your research to produce ALL of the following fields in a s
 
 6. **Unexplained pardons for serious criminals default to L3, not L1.** If the recipient committed serious crimes (violent offenses, major drug trafficking, large-scale fraud) AND no public justification, advocacy channel, or connection can be found despite thorough research  - assign `corruption_level >= 3` and `primary_connection_type = 'wealthy_unknown'`. The absence of any documented reason for pardoning a major criminal IS itself suspicious. Legitimate clemency leaves a paper trail (advocacy organizations, attorney statements, sentencing reform campaigns, Alice Marie Johnson referral). Silent pardons for serious criminals suggest undocumented channels. Explain the gap in `corruption_reasoning` and `pattern_analysis`; this alone is not a flag (v1.3). In the published copy, state the absence (no advocacy, no explanation, no connection found) and the pattern it fits. Never assert or imply that a specific payment, person or deal existed.
 
-   **The L1 test:** L1 is ONLY appropriate when the crime itself is minor/non-violent AND the sentence was arguably excessive AND no deeper investigation reveals hidden connections. A drug kingpin with $6.7M in seized assets and zero public justification is NOT L1  - that's L3 minimum ("someone paid, we can't prove who").
+   **The L1 test:** L1 is ONLY appropriate when the crime itself is minor/non-violent AND the sentence was arguably excessive AND no deeper investigation reveals hidden connections. A drug kingpin with $6.7M in seized assets and zero public justification is NOT L1  - that's L3 minimum ("the paper trail is missing, and that absence is the finding").
 
 ---
 
@@ -606,7 +606,7 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/pardons_enrichment_log?id=eq.{LOG_ID}"
 ```json
 [
   {"id": 44, "recipient_name": "Trevor Milton", "corruption_level": 5, "status": "enriched"},
-  {"id": 71, "recipient_name": "Garnett Gilbert Smith", "corruption_level": 1, "status": "enriched", "note": "No public reporting found; enriched from DOJ record only"}
+  {"id": 71, "recipient_name": "Garnett Gilbert Smith", "corruption_level": 3, "status": "enriched", "note": "No public reporting found; enriched from DOJ record only"}
 ]
 ```
 
