@@ -112,6 +112,12 @@ out('ingest-rpc-130-pglite');
   await upsert(db, { url: 'https://x/bad-undefined', title: 'B', content: 'b', feedId: '12', metadata: {} });
   check('a NULL feed_id is filled by a later upsert with a real id', (await row(db, 'https://x/bad-undefined')).feed_id === '12');
 
+  // feed_id and metadata move together: metadata stored without a feed_id is replaced by the feed that fills feed_id
+  await upsert(db, { url: 'https://x/3', title: 'T3', content: 'b', feedId: 'undefined', metadata: { feed_url: 'feed-A' } });
+  await upsert(db, { url: 'https://x/3', title: 'T3', content: 'b', feedId: '7', metadata: { feed_url: 'feed-B' } });
+  const a3 = await row(db, 'https://x/3');
+  check('feed_id and metadata come from the same feed', a3.feed_id === '7' && a3.metadata.feed_url === 'feed-B', JSON.stringify(a3));
+
   const again = await runMigration(db);
   check('second run is a no-op', again.notices.some((n) => n.includes('skipped, nothing changed')), again.notices.join(' | '));
   check('second run: function still stores feed_id + metadata', again.verify.stores_feed_id_metadata === true);

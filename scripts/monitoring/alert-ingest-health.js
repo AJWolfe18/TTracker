@@ -20,9 +20,10 @@
  * (7 AM CT in summer) or a manual run, so a known problem is reported once a day, not four times.
  *
  * Egress: every read is bounded (limit) and selects only ids, timestamps or source names, never
- * content. Silent-feed check matches each feed by feed_id (PROD stores it from migration 130, ADO-600),
- * so a dead feed is named even when another feed of the same source still produces (Politico Top vs
- * Politico Congress). Articles with no feed_id make that source's feeds unknown, never silent.
+ * content. Silent-feed check matches on source_name. articles.feed_id (PROD from migration 130,
+ * ADO-600) cannot tell a dead feed from a live one: one URL from two feeds is attributed to the first,
+ * so a feed whose items always also appear in another feed has no articles of its own. Per-feed
+ * liveness has to be recorded at fetch time (ADO-625).
  *
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
@@ -122,11 +123,10 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     f.emptyExcerptSources = [...new Set(rows.map((r) => r.source_name || '(no source)'))].sort();
   } catch (err) { f.readErrors.push(`empty-excerpt check (${err.message})`); }
 
-  let feeds = [];
   let sources = [];
-  const stopped = (r) => Number(r.failure_count) >= QUARANTINE_FAILURES;
   try {
-    feeds = await get('/feed_registry?select=id,feed_name,source_name,failure_count&is_active=eq.true&limit=200');
+    const feeds = await get('/feed_registry?select=source_name,failure_count&is_active=eq.true&limit=200');
+    const stopped = (r) => Number(r.failure_count) >= QUARANTINE_FAILURES;
     f.quarantinedSources = feeds.filter(stopped)
       .map((r) => `${r.source_name || '(no source)'} (${r.failure_count} failed fetches)`).sort();
     // A source whose every active feed is stopped is already named above; listing it as "silent" too
@@ -134,38 +134,13 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     sources = [...new Set(feeds.map((r) => r.source_name).filter(Boolean))]
       .filter((s) => !feeds.filter((r) => r.source_name === s).every(stopped)).sort();
   } catch (err) { f.readErrors.push(`silent-feed check, feed list (${err.message})`); }
-
-  // Per feed (ADO-600): a feed with an article carrying its feed_id in the window is alive. On a miss,
-  // ask whether its source has an article in the window with NO feed_id: if so we cannot tell which
-  // feed that article came from (the week after migration 130, a rollback, a manual article), so the
-  // feed is not named. Only when every article of the source in the window is attributed elsewhere, or
-  // the source has none, is the feed silent. Feeds without an id fall back to the source_name read.
-  const checkFeed = async (r) => {
-    const name = r.id == null ? r.source_name : `${r.feed_name || r.source_name || '(no name)'} (feed ${r.id})`;
+  // One read per source, each in its own try: a failed read names that source and the rest still run.
+  for (const s of sources) {
     try {
-      const src = encodeURIComponent(r.source_name ?? '');
-      if (r.id == null) {
-        const rows = await get(`/articles?select=id&source_name=eq.${src}&created_at=gte.${sinceSilent}&limit=1`);
-        return rows.length ? null : name;
-      }
-      if ((await get(`/articles?select=id&feed_id=eq.${encodeURIComponent(r.id)}&created_at=gte.${sinceSilent}&limit=1`)).length) return null;
-      const unattributed = await get(`/articles?select=id&source_name=eq.${src}&feed_id=is.null&created_at=gte.${sinceSilent}&limit=1`);
-      return unattributed.length ? null : name;
-    } catch (err) { f.readErrors.push(`silent-feed check for ${name} (${err.message})`); return null; }
-  };
-  // Every active feed whose source is not fully stopped (a stopped feed is already named above). Feeds
-  // without an id collapse to one read per source. Eight reads at a time; each failure is reported.
-  const toCheck = [];
-  const seenSource = new Set();
-  for (const r of feeds.filter((x) => !stopped(x) && sources.includes(x.source_name))) {
-    if (r.id == null) { if (seenSource.has(r.source_name)) continue; seenSource.add(r.source_name); }
-    toCheck.push(r);
+      const rows = await get(`/articles?select=id&source_name=eq.${encodeURIComponent(s)}&created_at=gte.${sinceSilent}&limit=1`);
+      if (!rows.length) f.silentSources.push(s);
+    } catch (err) { f.readErrors.push(`silent-feed check for ${s} (${err.message})`); }
   }
-  for (let i = 0; i < toCheck.length; i += 8) {
-    const names = await Promise.all(toCheck.slice(i, i + 8).map(checkFeed));
-    f.silentSources.push(...names.filter(Boolean));
-  }
-  f.silentSources.sort();
 
   const alert = buildIngestAlert(f);
   log(`[ingest-health] recent=${f.recentArticles} content=${f.recentWithContent} empty_excerpt=[${f.emptyExcerptSources.join(', ')}] silent=[${f.silentSources.join(', ')}] quarantined=[${f.quarantinedSources.join(', ')}] errors=${f.readErrors.length}`);

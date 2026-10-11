@@ -123,52 +123,6 @@ const healthy = (u) => {
   assert.ok(!/no article in 7 days:\*\* Time/.test(seen.discord[0].description));
 }
 
-// --- ADO-600: feeds are checked by feed_id, so a dead feed is named even when another feed of the
-//     same source still produces (source_name matching missed Politico Top for months)
-const ID_FEEDS = [
-  { id: 9, feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
-  { id: 21, feed_name: 'Politico Congress', source_name: 'Politico', failure_count: 0 },
-  { id: 4, feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
-  { id: 175, feed_name: 'CSM Politics', source_name: 'Christian Science Monitor', failure_count: 5 },
-];
-// `unattributed`: sources that still have articles with no feed_id in the window
-const idRoute = ({ dead = [], unattributed = [] }) => (u) => {
-  if (table(u) === 'feed_registry') return ID_FEEDS;
-  if (u.searchParams.get('or')) return [];
-  if (u.searchParams.get('feed_id') === 'is.null') {
-    return unattributed.includes(u.searchParams.get('source_name').slice(3)) ? [{ id: 'art-old' }] : [];
-  }
-  if (dead.some((id) => u.searchParams.get('feed_id') === `eq.${id}`)) return [];
-  return [{ id: 'art-1' }];
-};
-{
-  const { seen, fetchImpl } = harness(idRoute({ dead: [9, 4] }));
-  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.deepEqual(r.findings.silentSources, ['Politico Top (feed 9)', 'Reason Latest (feed 4)']);
-  assert.match(seen.discord[0].description, /no article in 7 days:\*\* Politico Top \(feed 9\), Reason Latest \(feed 4\)/);
-  assert.equal(seen.queries.filter((q) => q.searchParams.get('feed_id') === 'eq.175').length, 0, 'a stopped feed is not also read as silent');
-  assert.equal(seen.queries.filter((q) => q.searchParams.get('feed_id') === 'is.null').length, 2, 'the unattributed read runs only for the two misses');
-  for (const q of seen.queries) assert.ok(Number(q.searchParams.get('limit')) > 0, `unbounded read: ${q}`);
-}
-
-// --- the week after migration 130 (or a rollback): a miss whose source still has feed_id-less articles
-//     is unknown, not silent, so slow feeds are not all named at once
-{
-  const { seen, fetchImpl } = harness(idRoute({ dead: [9, 21, 4], unattributed: ['Politico'] }));
-  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.deepEqual(r.findings.silentSources, ['Reason Latest (feed 4)'], 'Politico feeds are unknown while untagged Politico articles exist; Reason has none, so it is silent');
-  assert.equal(seen.discord.length, 1);
-}
-
-// --- a failed per-feed read names that feed and the rest still run
-{
-  const route = idRoute({ dead: [4] });
-  const { fetchImpl } = harness((u) => (u.searchParams.get('feed_id') === 'eq.21' ? new Error('timeout') : route(u)));
-  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.deepEqual(r.findings.readErrors, ['silent-feed check for Politico Congress (feed 21) (timeout)']);
-  assert.deepEqual(r.findings.silentSources, ['Reason Latest (feed 4)']);
-}
-
 // --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),
 //     manual runs always do, push-triggered runs never do
 assert.equal(shouldCheck({ env: {}, now: NOON }), true);

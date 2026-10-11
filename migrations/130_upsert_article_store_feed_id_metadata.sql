@@ -112,10 +112,13 @@ BEGIN
     source_domain = COALESCE(EXCLUDED.source_domain, articles.source_domain),
     excerpt = COALESCE(EXCLUDED.excerpt, articles.excerpt),
     content = COALESCE(EXCLUDED.content, articles.content),
-    -- First feed to store the article keeps it (ADO-600): only fill what is still empty
+    -- First feed to store the article keeps it (ADO-600). feed_id and metadata move together: when the
+    -- stored row has no feed_id and this upsert brings one, both come from this feed; otherwise metadata
+    -- is only filled when empty. (SET expressions read the stored row, so articles.feed_id is the old value.)
     feed_id = COALESCE(articles.feed_id, EXCLUDED.feed_id),
-    metadata = CASE WHEN articles.metadata IS NULL OR articles.metadata = '{}'::jsonb
-                    THEN EXCLUDED.metadata ELSE articles.metadata END,
+    metadata = CASE WHEN articles.feed_id IS NULL AND EXCLUDED.feed_id IS NOT NULL THEN EXCLUDED.metadata
+                    WHEN articles.metadata IS NULL OR articles.metadata = '{}'::jsonb THEN EXCLUDED.metadata
+                    ELSE articles.metadata END,
     updated_at = now()
   RETURNING
     id,
