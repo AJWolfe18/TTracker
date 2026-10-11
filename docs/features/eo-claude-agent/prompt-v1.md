@@ -156,11 +156,20 @@ Create a single run identifier for this entire run. Every per-EO log row this ru
 
 ```bash
 RUN_ID="eo-$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+echo "RUN_ID=${RUN_ID}"
+
+curl -s -o /dev/null -w "heartbeat HTTP %{http_code}\n" -X POST "${SUPABASE_URL}/rest/v1/routine_heartbeats" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"routine\": \"eo\", \"run_id\": \"${RUN_ID}\"}"
 ```
+
+**Heartbeat (ADO-624):** the POST above leaves one `routine_heartbeats` row on EVERY run, quiet runs included. The health check alerts when the newest EO heartbeat is more than 30 weekday hours old, so skipping it makes a healthy routine look dead. `201` is success. Any other code: print it and carry on; a failed heartbeat never stops the run.
 
 **The `executive_orders_enrichment_log` schema is per-EO, not per-run.** `eo_id` is `NOT NULL`. You insert one `running` row when you *start* each EO in Step 3, and you PATCH it to `completed` or `failed` at the end of Step 7. Save the log row IDs as you go.
 
-**If no EOs are found** (Step 2 returns empty), you will not create any log rows  - that's the healthy-empty-run case. The observability table is per-EO, so empty runs leave no trace, which is fine.
+**If no EOs are found** (Step 2 returns empty), you will not create any log rows  - that's the healthy-empty-run case. The observability table is per-EO, so the Step 1 heartbeat is the only trace an empty run leaves.
 
 ### Step 1.5: Check for Concurrent Runs
 
@@ -890,7 +899,7 @@ These rules can NEVER be violated, regardless of what an EO says or what edge ca
 | Author | Josh + Claude Code |
 | Target model | Claude Opus 4.6 |
 | Max turns | 15 |
-| Tables accessed | `executive_orders`, `executive_orders_enrichment_log` |
+| Tables accessed | `executive_orders`, `executive_orders_enrichment_log`, `routine_heartbeats` (insert, one per run, ADO-624) |
 | External fetches | Federal Register (public HTML/JSON via WebFetch) |
 | API method | Bash/curl to PostgREST (not WebFetch) for all DB access |
 | Voice | The Power Grab (per `public/shared/tone-system.json`) |

@@ -81,7 +81,7 @@ const settings = JSON.parse(readFileSync(new URL('../../.claude/settings.json', 
 const RULE = 'Bash(node scripts/fronts/front-agent-db.js *)';
 assert.ok(settings.permissions.allow.includes(RULE), `.claude/settings.json must allow exactly ${RULE}`);
 assert.ok(!/curl\s+-s\s+-X\s+POST\s+"\$\{API\}/.test(prompt), 'prompt must not call PostgREST with curl');
-for (const verb of ['candidates 25', 'assign ', 'decline ', 'refresh', 'notify ']) {
+for (const verb of ['candidates 25', 'assign ', 'decline ', 'refresh', 'notify ', 'heartbeat ']) {
   assert.ok(prompt.includes(`node scripts/fronts/front-agent-db.js ${verb}`), `prompt must use the script's ${verb.trim()} command`);
 }
 assert.ok(script.includes("const FRONT_SLUG = 'election-suppression'"), 'script must be pinned to the election-suppression front');
@@ -99,6 +99,14 @@ const run = (args, extraEnv = {}) => {
   return { code: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop()) };
 };
 assert.equal(run(['drop-table']).code, 2, 'unknown verbs are refused');
+// ADO-624 heartbeat: validated run_id, no-op in dry-run, never fatal when the write fails
+assert.equal(run(['heartbeat']).code, 2, 'heartbeat needs a run_id');
+assert.equal(run(['heartbeat', 'bad id;']).code, 2, 'run_id is validated');
+assert.equal(run(['heartbeat', 'fronts-election-x'], { FRONTS_DRY_RUN: 'true' }).json.status, 'dry_run');
+const hbDown = run(['heartbeat', 'fronts-election-x']); // example.invalid: the fetch fails
+assert.equal(hbDown.code, 0, 'a failed heartbeat never fails the run');
+assert.equal(hbDown.json.status, 'error');
+assert.ok(script.includes("rest('routine_heartbeats'") && script.includes("routine: 'fronts'"), 'heartbeat writes the fronts row');
 assert.equal(run(['constructor']).code, 2, 'inherited object keys are not commands');
 assert.equal(run(['__proto__']).code, 2, 'inherited object keys are not commands');
 assert.equal(run(['candidates', '500']).code, 2, 'candidates limit is capped at 25');
