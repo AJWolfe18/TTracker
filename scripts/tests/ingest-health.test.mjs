@@ -132,16 +132,19 @@ const healthy = (u) => {
     { feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
     { feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
     { feed_name: 'Time Politics', source_name: 'Time', failure_count: 9 },
+    { feed_name: 'Axios Politics', source_name: 'Axios', failure_count: 0 },
   ];
+  const feeds = [...FEEDS, { source_name: 'Politico' }, { source_name: 'Axios' }];
   const { seen, fetchImpl } = harness((u) => {
-    if (table(u) === 'feed_registry') return FEEDS;
+    if (table(u) === 'feed_registry') return feeds;
     if (u.searchParams.get('or')) return [];
     if (u.searchParams.get('source_name') === 'eq.Reason') return [];
+    if (u.searchParams.get('source_name') === 'eq.Axios') return { status: 500, body: 'flaky' };
     return [{ id: 'art-1' }];
   }, () => staleRows);
   const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.deepEqual(r.findings.staleFeeds, ['Politico Top']);
-  assert.match(seen.discord[0].description, /Feeds with no new item in 7 days\*\* \(their source still gets articles from another feed\): Politico Top\./);
+  assert.deepEqual(r.findings.staleFeeds, ['Politico Top'], 'a source whose silence read failed (Axios) is unverified, not stale');
+  assert.match(seen.discord[0].description, /Feeds with no new item in 7 days\*\* \(their source still gets new articles\): Politico Top\./);
   const q = seen.queries.find((x) => x.searchParams.has('last_item_published_at'));
   assert.equal(q.searchParams.get('last_item_published_at'), `lt.${new Date(NOON - 7 * 24 * 3600000).toISOString()}`);
   assert.ok(Number(q.searchParams.get('limit')) > 0);
@@ -155,6 +158,11 @@ const healthy = (u) => {
   const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
   assert.equal(r.state, 'healthy');
   assert.equal(seen.discord.length, 0);
+  // ...and a stopped feed is then described as NOT retried, with the manual reset
+  const h1 = harness((u) => (table(u) === 'feed_registry' ? [...FEEDS, { source_name: 'Time', failure_count: 7 }] : healthy(u)), () => missing);
+  const r1 = await runIngestHealth({ env, fetchImpl: h1.fetchImpl, log: silent, now: NOON });
+  assert.equal(r1.findings.retryActive, false);
+  assert.match(h1.seen.discord[0].description, /Feeds failing every fetch\*\* \(5\+ failed fetches in a row\): Time \(7 failed fetches\)\. Nothing retries them until migration 131/);
   const h2 = harness(healthy, () => ({ status: 500, body: 'boom' }));
   const r2 = await runIngestHealth({ env, fetchImpl: h2.fetchImpl, log: silent, now: NOON });
   assert.match(r2.findings.readErrors.join(' '), /stale-feed check \(500 boom\)/);

@@ -80,13 +80,15 @@ export function buildIngestAlert(f) {
     problems.push(`**Articles saved with no text at all** in the last 24 hours, from: ${f.emptyExcerptSources.join(', ')}. The feed probably puts its text in a field the parser does not read (pickItemText in scripts/rss/utils/primitive.js).`);
   }
   if (f.quarantinedSources?.length) {
-    problems.push(`**Feeds failing every fetch** (${QUARANTINE_FAILURES}+ failed fetches in a row; retried once a day and still failing): ${f.quarantinedSources.join(', ')}. Fix or replace the feed_url; the next successful fetch resets failure_count.`);
+    problems.push(`**Feeds failing every fetch** (${QUARANTINE_FAILURES}+ failed fetches in a row${f.retryActive === false ? '' : '; retried once a day and still failing'}): ${f.quarantinedSources.join(', ')}. ${f.retryActive === false
+      ? 'Nothing retries them until migration 131 is applied on PROD: fix or replace the feed_url, then set failure_count = 0.'
+      : 'Fix or replace the feed_url; the next successful fetch resets failure_count.'}`);
   }
   if (f.silentSources.length) {
     problems.push(`**Active feeds with no article in ${f.silentDays} days:** ${f.silentSources.join(', ')}. The feed may be dead, blocking us (403), or filtered out by filter_config. Check the RSS Tracker run logs.`);
   }
   if (f.staleFeeds?.length) {
-    problems.push(`**Feeds with no new item in ${f.silentDays} days** (their source still gets articles from another feed): ${f.staleFeeds.join(', ')}. The feed is probably frozen or moved; check its feed_url.`);
+    problems.push(`**Feeds with no new item in ${f.silentDays} days** (their source still gets new articles): ${f.staleFeeds.join(', ')}. The feed is probably frozen or moved, or its items carry old dates; check its feed_url.`);
   }
   for (const e of f.readErrors) problems.push(`Could not read: ${e}`);
   if (!problems.length) return null;
@@ -117,7 +119,7 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
   const since24h = encodeURIComponent(new Date(now - DAY_MS).toISOString());
   const silentDays = Number(env.FEED_SILENT_DAYS) > 0 ? Number(env.FEED_SILENT_DAYS) : 7;
   const sinceSilent = encodeURIComponent(new Date(now - silentDays * DAY_MS).toISOString());
-  const f = { recentArticles: false, recentWithContent: true, emptyExcerptSources: [], silentSources: [], quarantinedSources: [], staleFeeds: [], silentDays, readErrors: [] };
+  const f = { recentArticles: false, recentWithContent: true, emptyExcerptSources: [], silentSources: [], quarantinedSources: [], staleFeeds: [], retryActive: true, silentDays, readErrors: [] };
 
   try {
     f.recentArticles = (await get(`/articles?select=id&created_at=gte.${since24h}&limit=1`)).length > 0;
@@ -143,10 +145,12 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
       .filter((s) => !feeds.filter((r) => r.source_name === s).every(stopped)).sort();
   } catch (err) { f.readErrors.push(`silent-feed check, feed list (${err.message})`); }
   // One read per source, each in its own try: a failed read names that source and the rest still run.
+  const freshSources = new Set();
   for (const s of sources) {
     try {
       const rows = await get(`/articles?select=id&source_name=eq.${encodeURIComponent(s)}&created_at=gte.${sinceSilent}&limit=1`);
       if (!rows.length) f.silentSources.push(s);
+      else freshSources.add(s);
     } catch (err) { f.readErrors.push(`silent-feed check for ${s} (${err.message})`); }
   }
 
@@ -154,12 +158,17 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
   // must not cost the checks above.
   try {
     const feeds = await get(`/feed_registry?select=feed_name,source_name,failure_count&is_active=eq.true&last_item_published_at=lt.${sinceSilent}&limit=200`);
-    const silent = new Set(f.silentSources);
+    // Only sources confirmed to have new articles: a silent source is already named, and a source whose
+    // read failed is unverified (it is in readErrors)
     f.staleFeeds = feeds
-      .filter((r) => Number(r.failure_count) < QUARANTINE_FAILURES && !silent.has(r.source_name))
+      .filter((r) => Number(r.failure_count) < QUARANTINE_FAILURES && freshSources.has(r.source_name))
       .map((r) => r.feed_name || r.source_name || '(no name)').sort();
   } catch (err) {
-    if (/last_item_published_at/.test(err.message)) log('[ingest-health] stale-feed check skipped: migration 131 not applied');
+    if (/last_item_published_at/.test(err.message)) {
+      // The same migration adds last_failed_at, so stopped feeds are not being retried yet either
+      f.retryActive = false;
+      log('[ingest-health] stale-feed check skipped: migration 131 not applied');
+    }
     else f.readErrors.push(`stale-feed check (${err.message})`);
   }
 

@@ -10,7 +10,7 @@ import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
 import { toStr, toBool, toStrArray, pickItemText } from './utils/primitive.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
-import { stampFeedLiveness, stampFeedFailure } from './feed-health.js';
+import { stampFeedLiveness, stampFeedFailure, needsUnconditionalFetch, QUARANTINE_FAILURES } from './feed-health.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -206,7 +206,8 @@ async function handleFetchFeed(job, db) {
     // 1) Read ETag/Last-Modified from feed_registry AND compliance rules for conditional GET
     const { data: record, error: feedError } = await db
       .from('feed_registry')
-      .select('etag, last_modified, failure_count, filter_config, source_name')
+      // '*' so migration 131's last_item_published_at is read when it exists without failing when it does not
+      .select('*')
       .eq('feed_url', url)
       .single();
 
@@ -242,11 +243,15 @@ async function handleFetchFeed(job, db) {
       'Cache-Control': 'no-cache'
     };
 
-    if (feedRecord?.etag) {
-      headers['If-None-Match'] = feedRecord.etag;
-    }
-    if (feedRecord?.last_modified) {
-      headers['If-Modified-Since'] = feedRecord.last_modified;
+    // ADO-625: a feed with no liveness stamp yet gets one full fetch, or a feed that answers 304 forever
+    // (frozen) would never be stamped and never reach the stale-feed check
+    if (!needsUnconditionalFetch(feedRecord)) {
+      if (feedRecord?.etag) {
+        headers['If-None-Match'] = feedRecord.etag;
+      }
+      if (feedRecord?.last_modified) {
+        headers['If-Modified-Since'] = feedRecord.last_modified;
+      }
     }
 
     // 3) Fetch the feed with proper timeout and retry logic
@@ -404,12 +409,12 @@ async function handleFetchFeed(job, db) {
     });
     
     // FIX: Only increment failure count if we have the feed URL
-    // feedRecord might be null if the initial query failed
+    // feedRecord is null if the initial query failed: the count is unknown, so only stamp the failure
+    // (writing 0 + 1 would pull a stopped feed with 5+ failures back into the healthy list, ADO-625)
     if (url) {
       try {
-        // Use feedRecord's failure_count if available, otherwise 0
-        const currentCount = feedRecord?.failure_count || 0;
-        await incrementFailureCount(db, url, currentCount);
+        if (feedRecord) await incrementFailureCount(db, url, feedRecord.failure_count || 0);
+        else await stampFeedFailure(db, url);
       } catch (incError) {
         safeLog('error', 'Failed to increment failure count', {
           url,
@@ -583,7 +588,7 @@ async function incrementFailureCount(db, url, currentCount = 0) {
   // ADO-625: a stopped feed (5+) is retried once this is more than 24 hours old
   await stampFeedFailure(db, url);
 
-  if (newCount >= 5) {
+  if (newCount >= QUARANTINE_FAILURES) {
     safeLog('warn', 'Feed failure threshold reached', {
       feed_url: url,  // Keep the full URL
       source_domain: new URL(url).hostname,  // Add domain separately
