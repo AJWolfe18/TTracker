@@ -29,11 +29,15 @@ BEGIN
      AND feed_url = 'https://www.newsweek.com/rss' AND failure_count >= 5;
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Newsweek: expected 1 row, got %. Nothing changed.', n; END IF;
 
+  -- Time's new feed is site-wide, so only filter_config keeps entertainment/health stories out: refuse
+  -- unless the row already has a non-empty allow list (TEST's: Trump, Congress, White House, ...).
   UPDATE feed_registry
      SET feed_url = 'https://time.com/feed/', failure_count = 0, etag = NULL, last_modified = NULL
    WHERE source_name = 'Time' AND is_active = true
-     AND feed_url = 'https://time.com/section/politics/feed/';
-  GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Time: expected 1 row, got %. Nothing changed.', n; END IF;
+     AND feed_url = 'https://time.com/section/politics/feed/'
+     AND jsonb_typeof(filter_config->'allow') = 'array'
+     AND jsonb_array_length(filter_config->'allow') > 0;
+  GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Time: expected 1 row with the old URL and an allow list in filter_config, got %. Nothing changed.', n; END IF;
 
   UPDATE feed_registry
      SET feed_url = 'https://rss.politico.com/politics-news.xml', failure_count = 0, etag = NULL, last_modified = NULL

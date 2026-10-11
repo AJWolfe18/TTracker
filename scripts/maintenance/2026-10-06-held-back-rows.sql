@@ -12,8 +12,9 @@
 -- STEP 3 - Pardons (added October 10, 2026): reset the 27 pardons held off the site by v1.1/v1.2 review
 --          flags so the agent re-researches them under prompt v1.3 (flags only checkable doubts). Same
 --          fields the admin re-enrich button resets (trigger-enrichment, ADO-553); rows stay hidden until
---          the agent republishes them, 5 per daily run. RUN ONLY AFTER prompt v1.3 IS ON MAIN, or the
---          next run re-flags them under v1.2. Locked rows are never touched.
+--          the agent republishes them, 5 per daily run. It refuses to run until the pardons agent's
+--          latest run logged prompt v1.3 (merge v1.3 to main, then run the agent once), or the next run
+--          would re-flag them under v1.2. Locked rows and v1.3 flags are never touched.
 
 DO $$
 DECLARE
@@ -71,12 +72,31 @@ BEGIN
   GET DIAGNOSTICS v_changed = ROW_COUNT;
   RAISE NOTICE 'SCOTUS step: % of 49 rows re-queued (0 means it already ran).', v_changed;
 
-  -- STEP 3: Pardons held by pre-v1.3 flags
+END $$;
+
+-- STEP 3 has its own block and guards. The SQL Editor runs the whole file as one transaction, so an
+-- error in ANY step changes nothing at all: read the error, fix that step's cause, run the file again.
+DO $$
+DECLARE
+  v_latest  text;
+  v_matched integer;
+  v_changed integer;
+BEGIN
+  -- Guard: the pardons agent must already be running prompt v1.3 (it logs its version on every run,
+  -- even an empty one). Without this, the next run would re-flag the reset rows under v1.2.
+  SELECT prompt_version INTO v_latest FROM public.pardons_enrichment_log
+   WHERE run_source = 'cloud-agent' ORDER BY ran_at DESC LIMIT 1;
+  IF v_latest IS DISTINCT FROM 'v1.3' THEN
+    RAISE EXCEPTION 'Pardon step: the latest pardons agent run used prompt %, not v1.3. Merge v1.3 to main and run the agent once first. Nothing changed.', coalesce(v_latest, 'none');
+  END IF;
+
+  -- Every pardon a pre-v1.3 flag holds off the site, whatever version string it carries; locked rows
+  -- (hand-written, e.g. Jan 6 id 3) and v1.3 flags (real doubts) are never touched.
   SELECT count(*) INTO v_matched FROM public.pardons
    WHERE needs_review IS TRUE
      AND is_public IS FALSE
-     AND enriched_at IS NOT NULL
-     AND prompt_version IN ('v1.1', 'v1.2');
+     AND prompt_version IS DISTINCT FROM 'locked'
+     AND prompt_version IS DISTINCT FROM 'v1.3';
   IF v_matched = 0 THEN
     RAISE NOTICE 'Pardon step: 0 rows to reset (it already ran).';
   ELSIF v_matched <> 27 THEN
@@ -104,15 +124,15 @@ BEGIN
            needs_review               = false
      WHERE needs_review IS TRUE
        AND is_public IS FALSE
-       AND enriched_at IS NOT NULL
-       AND prompt_version IN ('v1.1', 'v1.2');
+       AND prompt_version IS DISTINCT FROM 'locked'
+       AND prompt_version IS DISTINCT FROM 'v1.3';
     GET DIAGNOSTICS v_changed = ROW_COUNT;
     RAISE NOTICE 'Pardon step: % of 27 pardons reset for a v1.3 re-run.', v_changed;
   END IF;
 END $$;
 
 -- AFTER (read-only, optional): expect scotus pending = 49 until the agent runs, eo hidden_flagged = 0,
--- pardons queued = 27 until the agent runs
+-- pardons still flagged = 0 right after the reset (the reset rows wait in the agent queue, 5 per run)
 -- SELECT 'scotus pending' AS what, count(*) FROM scotus_cases WHERE enrichment_status = 'pending'
 -- UNION ALL SELECT 'eo hidden_flagged', count(*) FROM executive_orders WHERE needs_manual_review AND NOT is_public
--- UNION ALL SELECT 'pardons queued', count(*) FROM pardons WHERE enriched_at IS NULL;
+-- UNION ALL SELECT 'pardons still flagged', count(*) FROM pardons WHERE needs_review AND prompt_version IS DISTINCT FROM 'locked';

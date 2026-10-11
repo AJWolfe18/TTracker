@@ -40,6 +40,9 @@ import { postDiscord, COLORS } from '../lib/discord.js';
 // day whenever the 12:00 run slipped past 13:00).
 export const CHECK_WINDOW_UTC = Object.freeze([12, 18]);
 const DAY_MS = 24 * 3600000;
+// Must match selectFeeds() in scripts/rss-tracker-supabase.js (.lt('failure_count', 5)): a feed at or
+// above this count is never fetched again. Not imported: that file runs the whole pipeline on load.
+export const QUARANTINE_FAILURES = 5;
 
 const out = (line) => process.stdout.write(`${line}\n`);
 
@@ -57,7 +60,7 @@ export function shouldCheck({ env = process.env, now = Date.now() } = {}) {
 
 /**
  * @param {{recentArticles: boolean, recentWithContent: boolean, emptyExcerptSources: string[],
- *          silentSources: string[], silentDays: number, readErrors: string[]}} f
+ *          silentSources: string[], quarantinedSources: string[], silentDays: number, readErrors: string[]}} f
  * @returns {null | {title, description, color}} null when ingest is healthy
  */
 export function buildIngestAlert(f) {
@@ -69,7 +72,7 @@ export function buildIngestAlert(f) {
     problems.push(`**Articles saved with no text at all** in the last 24 hours, from: ${f.emptyExcerptSources.join(', ')}. The feed probably puts its text in a field the parser does not read (pickItemText in scripts/rss/utils/primitive.js).`);
   }
   if (f.quarantinedSources?.length) {
-    problems.push(`**Feeds the pipeline stopped fetching** (5+ failed fetches in a row; nothing retries them): ${f.quarantinedSources.join(', ')}. Fix or replace the feed_url, then set failure_count = 0 on PROD.`);
+    problems.push(`**Feeds the pipeline stopped fetching** (${QUARANTINE_FAILURES}+ failed fetches in a row; nothing retries them): ${f.quarantinedSources.join(', ')}. Fix or replace the feed_url, then set failure_count = 0 on PROD.`);
   }
   if (f.silentSources.length) {
     problems.push(`**Active feeds with no article in ${f.silentDays} days:** ${f.silentSources.join(', ')}. The feed may be dead, blocking us (403), or filtered out by filter_config. Check the RSS Tracker run logs.`);
@@ -120,9 +123,13 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
   let sources = [];
   try {
     const feeds = await get('/feed_registry?select=source_name,failure_count&is_active=eq.true&limit=200');
-    sources = [...new Set(feeds.map((r) => r.source_name).filter(Boolean))].sort();
-    f.quarantinedSources = feeds.filter((r) => Number(r.failure_count) >= 5)
+    const stopped = (r) => Number(r.failure_count) >= QUARANTINE_FAILURES;
+    f.quarantinedSources = feeds.filter(stopped)
       .map((r) => `${r.source_name || '(no source)'} (${r.failure_count} failed fetches)`).sort();
+    // A source whose every active feed is stopped is already named above; listing it as "silent" too
+    // would point the reader at filter_config instead of the reset.
+    sources = [...new Set(feeds.map((r) => r.source_name).filter(Boolean))]
+      .filter((s) => !feeds.filter((r) => r.source_name === s).every(stopped)).sort();
   } catch (err) { f.readErrors.push(`silent-feed check, feed list (${err.message})`); }
   // One read per source, each in its own try: a failed read names that source and the rest still run.
   for (const s of sources) {
