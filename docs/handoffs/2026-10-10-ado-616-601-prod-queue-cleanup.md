@@ -34,6 +34,7 @@ Each candidate was run through the real `scoreGovRelevance` and compared with th
 5. Verify the ADO-616 AC bullet by bullet, then Close. Migration 128 on TEST: confirm with Josh that it ran.
 6. ADO-624: stopped-routine alert for SCOTUS/EO/Pardons/Election front.
 
-## Findings not fixed (proposed cards, not created)
-- Automatic daily retry for stopped feeds (a failed fetch should stamp a time so `selectFeeds` can retry once a day). Currently noted only in an ADO-601 comment.
-- The pardons agent logs `agent_model: claude-opus-4-6` while the routine runs `claude-opus-5-5`, because the prompt hardcodes the string. Cosmetic.
+## Findings not fixed (each has a card)
+- **ADO-625:** stopped feeds should retry once a day (a failed fetch should stamp a time so `selectFeeds` can retry).
+- **ADO-626:** the pardons agent logs `agent_model: claude-opus-4-6` while the routine runs `claude-opus-5-5`, because the prompt hardcodes the string. Cosmetic; check the SCOTUS/EO prompts too.
+- **ADO-624:** stopped-routine alert for SCOTUS/EO/Pardons/Election front (Josh: next session).
