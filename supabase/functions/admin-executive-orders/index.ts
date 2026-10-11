@@ -12,6 +12,8 @@ import { checkAdminPassword } from '../_shared/auth.ts'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
+// Only columns present on BOTH TEST and PROD: one missing column fails the whole query
+// (archive_reason is TEST-only; selecting it broke the PROD EO tab, October 11, 2026).
 const SELECT_FIELDS = `
   id, order_number, date, title, source_url,
   section_what_they_say, section_what_it_means, section_reality_check, section_why_it_matters,
@@ -20,7 +22,7 @@ const SELECT_FIELDS = `
   enriched_at, prompt_version, enrichment_meta,
   is_public, needs_manual_review,
   created_at, updated_at, added_at,
-  archived, archive_reason, verified
+  archived, verified
 `
 
 // Sort key whitelist — parsed via lastIndexOf('-') so underscored keys work
