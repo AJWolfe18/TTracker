@@ -154,7 +154,7 @@ serve(async (req: Request) => {
     }
     if (corruptionLevel) {
       const level = parseInt(corruptionLevel)
-      if (isNaN(level) || level < 1 || level > 5) {
+      if (isNaN(level) || level < 0 || level > 5) { // 0 = Actual Mercy (migration 063, ADO-629)
         return badParam('corruption_level', corruptionLevel)
       }
     }

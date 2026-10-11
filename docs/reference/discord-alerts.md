@@ -14,6 +14,7 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row | blue |
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
 | Routine went silent (ADO-586, ADO-624) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h; SCOTUS, EO, Pardons and Election front older than 30h (SCOTUS and EO count weekday hours only). EO and fronts read `routine_heartbeats` (migration 129), one row per run | red |
+| RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; the scheduled run starting 12:00-17:59 UTC, or a manual run) | no article from the last 24h stored `content`, articles with an empty excerpt, an active feed's source silent for `FEED_SILENT_DAYS` (default 7), feeds failing every fetch (5+ in a row, retried daily), or a working feed whose newest item is older than that window (ADO-625) | amber (red if every read failed) |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
 
 A run with nothing to say posts nothing. Manual-only workflows (Enrich Single Story, the manual

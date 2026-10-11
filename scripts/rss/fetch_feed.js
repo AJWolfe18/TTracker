@@ -10,6 +10,7 @@ import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
 import { toStr, toBool, toStrArray, pickItemText } from './utils/primitive.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { stampFeedLiveness, stampFeedFailure, needsUnconditionalFetch, QUARANTINE_FAILURES } from './feed-health.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -200,12 +201,14 @@ async function handleFetchFeed(job, db) {
   });
 
   let feedRecord = null; // Declare at function scope
+  let failureRecorded = false; // a non-OK response is counted before the throw; the catch must not count it again
 
   try {
     // 1) Read ETag/Last-Modified from feed_registry AND compliance rules for conditional GET
     const { data: record, error: feedError } = await db
       .from('feed_registry')
-      .select('etag, last_modified, failure_count, filter_config, source_name')
+      // '*' so migration 131's last_item_published_at is read when it exists without failing when it does not
+      .select('*')
       .eq('feed_url', url)
       .single();
 
@@ -241,11 +244,17 @@ async function handleFetchFeed(job, db) {
       'Cache-Control': 'no-cache'
     };
 
-    if (feedRecord?.etag) {
-      headers['If-None-Match'] = feedRecord.etag;
-    }
-    if (feedRecord?.last_modified) {
-      headers['If-Modified-Since'] = feedRecord.last_modified;
+    // ADO-625: a feed with no liveness stamp yet gets one full fetch, or a feed that answers 304 forever
+    // (frozen) would never be stamped and never reach the stale-feed check. A feed whose items carry no
+    // date stays unstamped and keeps fetching this way: the cost of an ordinary 200, and RSS/Atom items
+    // carry dates in practice.
+    if (!needsUnconditionalFetch(feedRecord)) {
+      if (feedRecord?.etag) {
+        headers['If-None-Match'] = feedRecord.etag;
+      }
+      if (feedRecord?.last_modified) {
+        headers['If-Modified-Since'] = feedRecord.last_modified;
+      }
     }
 
     // 3) Fetch the feed with proper timeout and retry logic
@@ -283,6 +292,7 @@ async function handleFetchFeed(job, db) {
     // 5) Handle fetch errors
     if (!response.ok) {
       await incrementFailureCount(db, url, feedRecord?.failure_count || 0);
+      failureRecorded = true;
       throw new Error(`Feed fetch failed: ${response.status} ${response.statusText}`);
     }
 
@@ -313,6 +323,9 @@ async function handleFetchFeed(job, db) {
       total_items: feed.items?.length || 0,
       content_size_bytes: xmlContent.length
     });
+
+    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself, whatever we already stored
+    await stampFeedLiveness(db, url, feed.items);
 
     // 9) Apply RSS item limit protection (P1 requirement)
     const maxItems = parseInt(process.env.RSS_MAX_ITEMS || '500', 10);
@@ -400,12 +413,12 @@ async function handleFetchFeed(job, db) {
     });
     
     // FIX: Only increment failure count if we have the feed URL
-    // feedRecord might be null if the initial query failed
-    if (url) {
+    // feedRecord is null if the initial query failed: the count is unknown, so only stamp the failure
+    // (writing 0 + 1 would pull a stopped feed with 5+ failures back into the healthy list, ADO-625)
+    if (url && !failureRecorded) {
       try {
-        // Use feedRecord's failure_count if available, otherwise 0
-        const currentCount = feedRecord?.failure_count || 0;
-        await incrementFailureCount(db, url, currentCount);
+        if (feedRecord) await incrementFailureCount(db, url, feedRecord.failure_count || 0);
+        else await stampFeedFailure(db, url);
       } catch (incError) {
         safeLog('error', 'Failed to increment failure count', {
           url,
@@ -576,12 +589,15 @@ async function incrementFailureCount(db, url, currentCount = 0) {
     })
     .eq('feed_url', url);
 
-  if (newCount >= 5) {
+  // ADO-625: a stopped feed (5+) is retried once this is more than 24 hours old
+  await stampFeedFailure(db, url);
+
+  if (newCount >= QUARANTINE_FAILURES) {
     safeLog('warn', 'Feed failure threshold reached', {
       feed_url: url,  // Keep the full URL
       source_domain: new URL(url).hostname,  // Add domain separately
       failure_count: newCount,
-      status: 'will_be_skipped'
+      status: 'retried_daily'
     });
   }
 }

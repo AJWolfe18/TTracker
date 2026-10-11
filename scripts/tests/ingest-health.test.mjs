@@ -8,14 +8,15 @@ const NOON = Date.parse('2026-10-03T12:00:00Z');
 const silent = () => {};
 const env = { SUPABASE_URL: 'https://db.test/', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
 
-// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call
-function harness(route) {
+// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call.
+// The per-feed stale read (ADO-625) goes to `stale(url)` instead, healthy (no rows) by default.
+function harness(route, stale = () => []) {
   const seen = { queries: [], discord: [] };
   const fetchImpl = async (url, init) => {
     if (url === env.DISCORD_WEBHOOK_URL) { seen.discord.push(JSON.parse(init.body).embeds[0]); return new Response(null, { status: 204 }); }
     const u = new URL(url);
     seen.queries.push(u);
-    const r = route(u);
+    const r = u.searchParams.has('last_item_published_at') ? stale(u) : route(u);
     if (r instanceof Error) throw r;
     if (r && r.status) return new Response(r.body, { status: r.status });
     return new Response(JSON.stringify(r), { status: 200 });
@@ -105,7 +106,7 @@ const healthy = (u) => {
   const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
   assert.deepEqual(r.findings.quarantinedSources, ['Time (7 failed fetches)']);
   assert.equal(r.state, 'problems');
-  assert.match(seen.discord[0].description, /Feeds the pipeline stopped fetching\*\* \(5\+ failed fetches in a row; nothing retries them\): Time \(7 failed fetches\)/);
+  assert.match(seen.discord[0].description, /Feeds failing every fetch\*\* \(5\+ failed fetches in a row; retried once a day and still failing\): Time \(7 failed fetches\)/);
   assert.ok(!/Reason/.test(seen.discord[0].description), 'a feed under the threshold is not named');
 }
 // --- a source whose only feed is stopped is named once (as stopped), not also as silent; a source with
@@ -121,6 +122,50 @@ const healthy = (u) => {
   assert.deepEqual(r.findings.silentSources, ['The Guardian']);
   assert.equal(seen.queries.filter((q) => q.searchParams.get('source_name') === 'eq.Time').length, 0, 'a stopped-only source is not read for silence');
   assert.ok(!/no article in 7 days:\*\* Time/.test(seen.discord[0].description));
+}
+
+// --- ADO-625 stale feeds: a working feed whose newest item is old is named even though its source
+//     still gets articles (Politico Top vs Politico Congress); a silent source or a stopped feed is not
+//     named twice; the read is bounded and filters on the silent window
+{
+  const staleRows = [
+    { feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
+    { feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
+    { feed_name: 'Time Politics', source_name: 'Time', failure_count: 9 },
+    { feed_name: 'Axios Politics', source_name: 'Axios', failure_count: 0 },
+  ];
+  const feeds = [...FEEDS, { source_name: 'Politico' }, { source_name: 'Axios' }];
+  const { seen, fetchImpl } = harness((u) => {
+    if (table(u) === 'feed_registry') return feeds;
+    if (u.searchParams.get('or')) return [];
+    if (u.searchParams.get('source_name') === 'eq.Reason') return [];
+    if (u.searchParams.get('source_name') === 'eq.Axios') return { status: 500, body: 'flaky' };
+    return [{ id: 'art-1' }];
+  }, () => staleRows);
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.deepEqual(r.findings.staleFeeds, ['Politico Top'], 'a source whose silence read failed (Axios) is unverified, not stale');
+  assert.match(seen.discord[0].description, /Feeds with no new item in 7 days\*\* \(their source still gets new articles\): Politico Top\./);
+  const q = seen.queries.find((x) => x.searchParams.has('last_item_published_at'));
+  assert.equal(q.searchParams.get('last_item_published_at'), `lt.${new Date(NOON - 7 * 24 * 3600000).toISOString()}`);
+  assert.ok(Number(q.searchParams.get('limit')) > 0);
+}
+
+// --- ADO-625 before migration 131: the column is missing on PROD -> stale check skipped quietly
+//     (no "could not read" line every day); any other failure of that read is still reported
+{
+  const missing = { status: 400, body: '{"code":"42703","message":"column feed_registry.last_item_published_at does not exist"}' };
+  const { seen, fetchImpl } = harness(healthy, () => missing);
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.equal(r.state, 'healthy');
+  assert.equal(seen.discord.length, 0);
+  // ...and a stopped feed is then described as NOT retried, with the manual reset
+  const h1 = harness((u) => (table(u) === 'feed_registry' ? [...FEEDS, { source_name: 'Time', failure_count: 7 }] : healthy(u)), () => missing);
+  const r1 = await runIngestHealth({ env, fetchImpl: h1.fetchImpl, log: silent, now: NOON });
+  assert.equal(r1.findings.retryActive, false);
+  assert.match(h1.seen.discord[0].description, /Feeds failing every fetch\*\* \(5\+ failed fetches in a row\): Time \(7 failed fetches\)\. Nothing retries them until migration 131/);
+  const h2 = harness(healthy, () => ({ status: 500, body: 'boom' }));
+  const r2 = await runIngestHealth({ env, fetchImpl: h2.fetchImpl, log: silent, now: NOON });
+  assert.match(r2.findings.readErrors.join(' '), /stale-feed check \(500 boom\)/);
 }
 
 // --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),

@@ -282,8 +282,8 @@ SELECT
 ### Critical Alerts (Immediate Action Required)
 
 **Feed Failures:**
-- ✅ **Threshold:** Any feed with `failure_count >= 5`
-- 🔴 **Action:** Investigate immediately, disable if persistent
+- ✅ **Threshold:** Any feed with `failure_count >= 5` (retried once a day since ADO-625; the daily ingest alert lists it as "failing every fetch")
+- 🔴 **Action:** Investigate, fix or replace the feed_url (the next successful fetch resets the count), disable if persistent
 - 📊 **Check:** `SELECT * FROM feed_registry WHERE failure_count >= 5`
 
 **System Outage:**
