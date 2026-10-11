@@ -103,7 +103,8 @@ const feed = (id, extra) => ({ id, is_active: true, failure_count: 0, last_fetch
 }
 
 // --- liveness = newest item in the feed (isoDate, else pubDate); undated items ignored, never "now";
-//     future dates clamped to now + 5 minutes; object-shaped dates (xml2js) ignored
+//     items dated over 5 minutes ahead ignored (a frozen feed with one must not look alive); small
+//     clock skew kept; object-shaped dates (xml2js) ignored
 {
   const items = [
     { isoDate: '2026-10-01T10:00:00.000Z' },
@@ -116,7 +117,10 @@ const feed = (id, extra) => ({ id, is_active: true, failure_count: 0, last_fetch
   assert.equal(newestItemPublishedAt([{ title: 'x' }], NOW), null);
   assert.equal(newestItemPublishedAt([], NOW), null);
   assert.equal(newestItemPublishedAt(undefined, NOW), null);
-  assert.equal(newestItemPublishedAt([{ isoDate: iso(NOW + 30 * DAY) }], NOW), iso(NOW + 5 * 60000));
+  assert.equal(newestItemPublishedAt([{ isoDate: iso(NOW + 30 * DAY) }], NOW), null, 'only a future item -> no stamp');
+  assert.equal(newestItemPublishedAt([{ isoDate: iso(NOW + 30 * DAY) }, { isoDate: '2026-08-19T15:00:00Z' }], NOW),
+    '2026-08-19T15:00:00.000Z', 'frozen feed with a far-future item keeps its real newest date');
+  assert.equal(newestItemPublishedAt([{ isoDate: iso(NOW + 60000) }], NOW), iso(NOW + 60000), 'skew under 5 minutes counts');
 }
 
 // --- stamps are separate updates keyed by feed_url and never throw, even on a missing column
