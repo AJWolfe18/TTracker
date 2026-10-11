@@ -139,4 +139,14 @@ const feed = (id, extra) => ({ id, is_active: true, failure_count: 0, last_fetch
   await stampFeedFailure(throwing, 'https://f/rss', { now: NOW, log: quiet });
 }
 
+// --- one unconditional fetch per unstamped feed after migration 131 (a 304-forever feed gets stamped);
+//     before the migration (column absent from the row) conditional GETs are unchanged
+{
+  const { needsUnconditionalFetch } = await import('../rss/feed-health.js');
+  assert.equal(needsUnconditionalFetch({ etag: 'x', last_item_published_at: null }), true);
+  assert.equal(needsUnconditionalFetch({ etag: 'x', last_item_published_at: '2026-10-08T09:00:00Z' }), false);
+  assert.equal(needsUnconditionalFetch({ etag: 'x' }), false, 'pre-131 row: keep the conditional GET');
+  assert.equal(needsUnconditionalFetch(null), false);
+}
+
 console.log('feed-health.test: all assertions passed');

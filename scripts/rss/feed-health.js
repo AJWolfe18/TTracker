@@ -23,26 +23,27 @@ const FUTURE_SKEW_MS = 5 * 60 * 1000;
  * @returns {Promise<{feeds: object[], retryCount: number}>}
  */
 export async function selectFeeds(supabase, { maxFeeds, now = Date.now(), log = console } = {}) {
-  const { data, error } = await supabase
-    .from('feed_registry')
-    .select('*')
-    .eq('is_active', true)
-    .lt('failure_count', QUARANTINE_FAILURES)
-    .order('last_fetched_at', { ascending: true })
-    .limit(maxFeeds);
+  const dueBefore = new Date(now - RETRY_AFTER_MS).toISOString();
+  const [{ data, error }, { data: retry, error: retryError }] = await Promise.all([
+    supabase
+      .from('feed_registry')
+      .select('*')
+      .eq('is_active', true)
+      .lt('failure_count', QUARANTINE_FAILURES)
+      .order('last_fetched_at', { ascending: true })
+      .limit(maxFeeds),
+    supabase
+      .from('feed_registry')
+      .select('*')
+      .eq('is_active', true)
+      .gte('failure_count', QUARANTINE_FAILURES)
+      .or(`last_failed_at.is.null,last_failed_at.lt.${dueBefore}`)
+      .order('last_failed_at', { ascending: true, nullsFirst: true })
+      .limit(MAX_RETRY_FEEDS_PER_RUN),
+  ]);
 
   if (error) throw new Error(`Failed to select feeds: ${error.message}`);
   const feeds = data || [];
-
-  const dueBefore = new Date(now - RETRY_AFTER_MS).toISOString();
-  const { data: retry, error: retryError } = await supabase
-    .from('feed_registry')
-    .select('*')
-    .eq('is_active', true)
-    .gte('failure_count', QUARANTINE_FAILURES)
-    .or(`last_failed_at.is.null,last_failed_at.lt.${dueBefore}`)
-    .order('last_failed_at', { ascending: true, nullsFirst: true })
-    .limit(MAX_RETRY_FEEDS_PER_RUN);
 
   if (retryError) {
     // Most likely migration 131 is not applied yet: run the healthy feeds only.
@@ -50,6 +51,14 @@ export async function selectFeeds(supabase, { maxFeeds, now = Date.now(), log = 
     return { feeds, retryCount: 0 };
   }
   return { feeds: [...feeds, ...(retry || [])], retryCount: retry?.length || 0 };
+}
+
+/**
+ * True when migration 131 is applied (the column is present in the row) and this feed has no liveness
+ * stamp yet: fetch it once without If-None-Match / If-Modified-Since so a 304-forever feed gets stamped.
+ */
+export function needsUnconditionalFetch(feedRecord) {
+  return !!feedRecord && 'last_item_published_at' in feedRecord && feedRecord.last_item_published_at == null;
 }
 
 function itemTime(item) {
