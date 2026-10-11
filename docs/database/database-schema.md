@@ -73,7 +73,9 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | guid | TEXT | RSS GUID for deduplication |
 | primary_actor | TEXT | Main actor extracted |
 | categories | TEXT[] | Array of categories |
-| metadata | JSONB | Additional metadata |
+| metadata | JSONB | Feed item metadata (author, feed_url, original_guid, categories). PROD stored `{}` for every row until migration 130 (ADO-600) |
+| feed_id | TEST: BIGINT / PROD: TEXT | feed_registry.id of the feed the article came from (no FK on PROD). PROD stored NULL until migration 130 (ADO-600); the type differs between environments, so filter with `feed_id=eq.<id>`, never rely on numeric comparison |
+| opinion_flag | BOOLEAN | Opinion piece; clustering applies an opinion penalty (scripts/rss/scoring.js). Written on TEST only: PROD's ingest RPC deliberately does not write it yet (ADO-600, changes clustering) |
 
 **Deduplication:**
 - Composite unique on `(url_hash, published_date)`

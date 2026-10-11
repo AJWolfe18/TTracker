@@ -20,7 +20,10 @@
  * (7 AM CT in summer) or a manual run, so a known problem is reported once a day, not four times.
  *
  * Egress: every read is bounded (limit) and selects only ids, timestamps or source names, never
- * content. Silent-feed check matches on source_name because PROD articles carry no feed_id.
+ * content. Silent-feed check matches on source_name. articles.feed_id (PROD from migration 130,
+ * ADO-600) cannot tell a dead feed from a live one: one URL from two feeds is attributed to the first,
+ * so a feed whose items always also appear in another feed has no articles of its own. Per-feed
+ * liveness has to be recorded at fetch time (ADO-625).
  *
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
