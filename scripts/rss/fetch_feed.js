@@ -201,6 +201,7 @@ async function handleFetchFeed(job, db) {
   });
 
   let feedRecord = null; // Declare at function scope
+  let failureRecorded = false; // a non-OK response is counted before the throw; the catch must not count it again
 
   try {
     // 1) Read ETag/Last-Modified from feed_registry AND compliance rules for conditional GET
@@ -244,7 +245,9 @@ async function handleFetchFeed(job, db) {
     };
 
     // ADO-625: a feed with no liveness stamp yet gets one full fetch, or a feed that answers 304 forever
-    // (frozen) would never be stamped and never reach the stale-feed check
+    // (frozen) would never be stamped and never reach the stale-feed check. A feed whose items carry no
+    // date stays unstamped and keeps fetching this way: the cost of an ordinary 200, and RSS/Atom items
+    // carry dates in practice.
     if (!needsUnconditionalFetch(feedRecord)) {
       if (feedRecord?.etag) {
         headers['If-None-Match'] = feedRecord.etag;
@@ -289,6 +292,7 @@ async function handleFetchFeed(job, db) {
     // 5) Handle fetch errors
     if (!response.ok) {
       await incrementFailureCount(db, url, feedRecord?.failure_count || 0);
+      failureRecorded = true;
       throw new Error(`Feed fetch failed: ${response.status} ${response.statusText}`);
     }
 
@@ -411,7 +415,7 @@ async function handleFetchFeed(job, db) {
     // FIX: Only increment failure count if we have the feed URL
     // feedRecord is null if the initial query failed: the count is unknown, so only stamp the failure
     // (writing 0 + 1 would pull a stopped feed with 5+ failures back into the healthy list, ADO-625)
-    if (url) {
+    if (url && !failureRecorded) {
       try {
         if (feedRecord) await incrementFailureCount(db, url, feedRecord.failure_count || 0);
         else await stampFeedFailure(db, url);

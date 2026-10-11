@@ -824,8 +824,8 @@
   // ===========================================
 
   // Short labels for pills (matches severity filter pattern)
-  // Pills use the card labels (CORRUPTION_LABELS, loaded from tone-system.json), 5 down to 0 (ADO-629).
-  // Read at render time so the JSON load replaces the fallback labels here too.
+  // Pills use the card labels (CORRUPTION_LABELS: fallback matching tone-system.json, replaced in place
+  // when the JSON loads, so the next render of pills and cards picks it up), 5 down to 0 (ADO-629).
   const CORRUPTION_PILL_LEVELS = [null, 5, 4, 3, 2, 1, 0];
   const corruptionPill = (level) => (level === null
     ? { level, label: 'All', color: null }
@@ -841,7 +841,7 @@
       CORRUPTION_PILL_LEVELS.map(corruptionPill).map(({ level, label, color }) => {
         const isActive = value === level;
         return React.createElement('button', {
-          key: label,
+          key: level === null ? 'all' : String(level),
           className: `tt-severity-pill ${isActive ? 'active' : ''}`,
           onClick: () => onChange(level),
           'aria-pressed': isActive,
