@@ -8,18 +8,14 @@ const NOON = Date.parse('2026-10-03T12:00:00Z');
 const silent = () => {};
 const env = { SUPABASE_URL: 'https://db.test/', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
 
-// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call.
-// The feed_id coverage probe (ADO-600) answers "not covered" unless `covered` is set, so these tests
-// exercise the source_name path PROD runs until migration 130 has been live for a full window.
-function harness(route, { covered = false } = {}) {
+// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call
+function harness(route) {
   const seen = { queries: [], discord: [] };
   const fetchImpl = async (url, init) => {
     if (url === env.DISCORD_WEBHOOK_URL) { seen.discord.push(JSON.parse(init.body).embeds[0]); return new Response(null, { status: 204 }); }
     const u = new URL(url);
     seen.queries.push(u);
-    const r = (table(u) === 'articles' && u.searchParams.get('feed_id') === 'not.is.null')
-      ? (covered ? [{ id: 'art-9' }] : [])
-      : route(u);
+    const r = route(u);
     if (r instanceof Error) throw r;
     if (r && r.status) return new Response(r.body, { status: r.status });
     return new Response(JSON.stringify(r), { status: 200 });
@@ -127,48 +123,50 @@ const healthy = (u) => {
   assert.ok(!/no article in 7 days:\*\* Time/.test(seen.discord[0].description));
 }
 
-// --- ADO-600: once feed_id covers the whole window, each feed is checked by id, so a dead feed is named
-//     even when another feed of the same source is still producing (source_name matching missed this)
+// --- ADO-600: feeds are checked by feed_id, so a dead feed is named even when another feed of the
+//     same source still produces (source_name matching missed Politico Top for months)
+const ID_FEEDS = [
+  { id: 9, feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
+  { id: 21, feed_name: 'Politico Congress', source_name: 'Politico', failure_count: 0 },
+  { id: 4, feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
+  { id: 175, feed_name: 'CSM Politics', source_name: 'Christian Science Monitor', failure_count: 5 },
+];
+// `unattributed`: sources that still have articles with no feed_id in the window
+const idRoute = ({ dead = [], unattributed = [] }) => (u) => {
+  if (table(u) === 'feed_registry') return ID_FEEDS;
+  if (u.searchParams.get('or')) return [];
+  if (u.searchParams.get('feed_id') === 'is.null') {
+    return unattributed.includes(u.searchParams.get('source_name').slice(3)) ? [{ id: 'art-old' }] : [];
+  }
+  if (dead.some((id) => u.searchParams.get('feed_id') === `eq.${id}`)) return [];
+  return [{ id: 'art-1' }];
+};
 {
-  const feeds = [
-    { id: 9, feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
-    { id: 21, feed_name: 'Politico Congress', source_name: 'Politico', failure_count: 0 },
-    { id: 4, feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
-    { id: 175, feed_name: 'CSM Politics', source_name: 'Christian Science Monitor', failure_count: 5 },
-  ];
-  const { seen, fetchImpl } = harness((u) => {
-    if (table(u) === 'feed_registry') return feeds;
-    if (u.searchParams.get('or')) return [];
-    if (u.searchParams.get('feed_id') === 'eq.9') return [];
-    return [{ id: 'art-1' }];
-  }, { covered: true });
+  const { seen, fetchImpl } = harness(idRoute({ dead: [9, 4] }));
   const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.equal(r.findings.silentBy, 'feed');
-  assert.deepEqual(r.findings.silentSources, ['Politico Top (feed 9)']);
-  assert.match(seen.discord[0].description, /no article in 7 days:\*\* Politico Top \(feed 9\)/);
-  assert.equal(seen.queries.filter((q) => q.searchParams.get('source_name')).length, 0, 'no source_name reads in feed mode');
+  assert.deepEqual(r.findings.silentSources, ['Politico Top (feed 9)', 'Reason Latest (feed 4)']);
+  assert.match(seen.discord[0].description, /no article in 7 days:\*\* Politico Top \(feed 9\), Reason Latest \(feed 4\)/);
   assert.equal(seen.queries.filter((q) => q.searchParams.get('feed_id') === 'eq.175').length, 0, 'a stopped feed is not also read as silent');
-  const probe = seen.queries.find((q) => q.searchParams.get('feed_id') === 'not.is.null');
-  const window = probe.searchParams.getAll('created_at');
-  assert.deepEqual(window, [`gte.${new Date(NOON - 8 * 86400000).toISOString()}`, `lt.${new Date(NOON - 7 * 86400000).toISOString()}`], 'probe looks at the day before the silent window');
+  assert.equal(seen.queries.filter((q) => q.searchParams.get('feed_id') === 'is.null').length, 2, 'the unattributed read runs only for the two misses');
   for (const q of seen.queries) assert.ok(Number(q.searchParams.get('limit')) > 0, `unbounded read: ${q}`);
 }
 
-// --- not covered yet (the first week after migration 130): stays on source_name, so slow feeds are
-//     not called silent just because their older articles have no feed_id
+// --- the week after migration 130 (or a rollback): a miss whose source still has feed_id-less articles
+//     is unknown, not silent, so slow feeds are not all named at once
 {
-  const { fetchImpl } = harness(healthy);
+  const { seen, fetchImpl } = harness(idRoute({ dead: [9, 21, 4], unattributed: ['Politico'] }));
   const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
-  assert.equal(r.findings.silentBy, 'source');
+  assert.deepEqual(r.findings.silentSources, ['Reason Latest (feed 4)'], 'Politico feeds are unknown while untagged Politico articles exist; Reason has none, so it is silent');
+  assert.equal(seen.discord.length, 1);
 }
 
-// --- the coverage probe fails: falls back to source_name and reports the failed read
+// --- a failed per-feed read names that feed and the rest still run
 {
-  const { fetchImpl } = harness(healthy);
-  const failing = async (url, init) => (String(url).includes('feed_id=not.is.null') ? new Response('slow', { status: 500 }) : fetchImpl(url, init));
-  const r = await runIngestHealth({ env, fetchImpl: failing, log: silent, now: NOON });
-  assert.equal(r.findings.silentBy, 'source');
-  assert.deepEqual(r.findings.readErrors, ['feed_id coverage check (500 slow)']);
+  const route = idRoute({ dead: [4] });
+  const { fetchImpl } = harness((u) => (u.searchParams.get('feed_id') === 'eq.21' ? new Error('timeout') : route(u)));
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.deepEqual(r.findings.readErrors, ['silent-feed check for Politico Congress (feed 21) (timeout)']);
+  assert.deepEqual(r.findings.silentSources, ['Reason Latest (feed 4)']);
 }
 
 // --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),

@@ -17,7 +17,7 @@ SELECT jsonb_pretty(jsonb_build_object(
     SELECT jsonb_agg(jsonb_build_object(
       'signature', p.oid::regprocedure::text,
       'stores_content', position('left(p_content, 5000)' IN p.prosrc) > 0,
-      'writes_feed_id', p.prosrc ~ 'feed_id\s*,' AND p.prosrc ~ 'p_feed_id::bigint',
+      'writes_feed_id', p.prosrc ~ 'p_feed_id::bigint' OR p.prosrc ~ 'THEN p_feed_id END',
       'writes_opinion_flag', p.prosrc ~ 'opinion_flag',
       'writes_metadata', p.prosrc ~ 'metadata\s*,',
       'grants', (SELECT jsonb_agg(r.rolname) FROM pg_roles r WHERE has_function_privilege(r.oid, p.oid, 'EXECUTE') AND r.rolname IN ('anon', 'authenticated', 'service_role'))

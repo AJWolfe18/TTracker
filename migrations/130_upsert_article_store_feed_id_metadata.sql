@@ -5,9 +5,11 @@
 -- 30 days carry a feed_id or metadata. TEST runs the 032 version, which writes all three.
 --
 -- What this does: replaces the 121 function with the SAME function plus two writes:
---   feed_id  = NULLIF(p_feed_id, '')            (PROD column is TEXT; kept as text, no table rewrite)
+--   feed_id  = p_feed_id when it is all digits, else NULL (PROD column is TEXT; kept as text, no table
+--              rewrite). The caller sends String(feedId), so a missing id would arrive as 'undefined'.
 --   metadata = COALESCE(p_metadata, '{}')       (author, feed_url, original_guid, categories)
--- On conflict both keep the stored value when the new one is empty.
+-- On conflict the FIRST feed to store an article keeps it: one URL can arrive from two feeds (Politico
+-- Top and Politico Congress), and last-writer-wins would swap feed_id and metadata.feed_url every run.
 -- Deliberately NOT done: opinion_flag. scripts/rss/scoring.js applies an opinion penalty in clustering,
 -- so writing it changes clustering on PROD; deferred until a clustering eval + a week of Judge results.
 --
@@ -98,7 +100,7 @@ BEGIN
     left(p_content, 500),
     left(p_content, 5000),
     p_content_type,
-    NULLIF(p_feed_id, ''),
+    CASE WHEN p_feed_id ~ '^[0-9]+$' THEN p_feed_id END,
     COALESCE(p_metadata, '{}'::jsonb),
     now(),
     now()
@@ -110,8 +112,10 @@ BEGIN
     source_domain = COALESCE(EXCLUDED.source_domain, articles.source_domain),
     excerpt = COALESCE(EXCLUDED.excerpt, articles.excerpt),
     content = COALESCE(EXCLUDED.content, articles.content),
-    feed_id = COALESCE(EXCLUDED.feed_id, articles.feed_id),
-    metadata = COALESCE(NULLIF(EXCLUDED.metadata, '{}'::jsonb), articles.metadata),
+    -- First feed to store the article keeps it (ADO-600): only fill what is still empty
+    feed_id = COALESCE(articles.feed_id, EXCLUDED.feed_id),
+    metadata = CASE WHEN articles.metadata IS NULL OR articles.metadata = '{}'::jsonb
+                    THEN EXCLUDED.metadata ELSE articles.metadata END,
     updated_at = now()
   RETURNING
     id,
@@ -171,7 +175,7 @@ $migration$;
 -- Verify (read-only): expect stores_content = true, stores_feed_id_metadata = true
 SELECT p.oid::regprocedure AS fn,
        position('left(p_content, 5000)' IN p.prosrc) > 0 AS stores_content,
-       position('NULLIF(p_feed_id, '''')' IN p.prosrc) > 0 AND position('COALESCE(p_metadata, ''{}''::jsonb)' IN p.prosrc) > 0 AS stores_feed_id_metadata
+       position('THEN p_feed_id END' IN p.prosrc) > 0 AND position('COALESCE(p_metadata, ''{}''::jsonb)' IN p.prosrc) > 0 AS stores_feed_id_metadata
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
  WHERE n.nspname = 'public'

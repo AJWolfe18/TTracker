@@ -92,12 +92,25 @@ out('ingest-rpc-130-pglite');
   check('re-upsert with {} metadata keeps the stored one', a1b.metadata.author === 'A. Writer', JSON.stringify(a1b.metadata));
   check('re-upsert still updates the title', a1b.title === 'T1 updated', a1b.title);
 
-  await upsert(db, { url: 'https://x/1', title: 'T1', content: 'body', feedId: '9', metadata: { author: 'B' } });
-  check('re-upsert with new metadata replaces it', (await row(db, 'https://x/1')).metadata.author === 'B');
+  // Same URL from a second feed (Politico Congress after Politico Top): the first feed keeps it.
+  await upsert(db, { url: 'https://x/1', title: 'T1', content: 'body', feedId: '21', metadata: { author: 'B', feed_url: 'https://rss.politico.com/politics.xml' } });
+  const a1c = await row(db, 'https://x/1');
+  check('second feed does not take over feed_id', a1c.feed_id === '9', String(a1c.feed_id));
+  check('second feed does not replace metadata', a1c.metadata.author === 'A. Writer' && a1c.metadata.feed_url.endsWith('congress.xml'), JSON.stringify(a1c.metadata));
 
   await upsert(db, { url: 'https://x/2', title: 'T2', content: 'b', feedId: '4', metadata: null });
   const a2 = await row(db, 'https://x/2');
   check('null metadata stores {}', JSON.stringify(a2.metadata) === '{}', JSON.stringify(a2.metadata));
+  await upsert(db, { url: 'https://x/2', title: 'T2', content: 'b', feedId: '4', metadata: { author: 'C' } });
+  check('empty stored metadata is filled by a later upsert', (await row(db, 'https://x/2')).metadata.author === 'C');
+
+  for (const bad of ['undefined', 'null', 'abc', '']) {
+    await upsert(db, { url: `https://x/bad-${bad}`, title: 'B', content: 'b', feedId: bad, metadata: {} });
+  }
+  const bads = (await db.query("select feed_id from public.articles where url like 'https://x/bad-%'")).rows;
+  check("non-numeric feed ids ('undefined', 'null', 'abc', '') store NULL", bads.length === 4 && bads.every((b) => b.feed_id === null), JSON.stringify(bads));
+  await upsert(db, { url: 'https://x/bad-undefined', title: 'B', content: 'b', feedId: '12', metadata: {} });
+  check('a NULL feed_id is filled by a later upsert with a real id', (await row(db, 'https://x/bad-undefined')).feed_id === '12');
 
   const again = await runMigration(db);
   check('second run is a no-op', again.notices.some((n) => n.includes('skipped, nothing changed')), again.notices.join(' | '));
