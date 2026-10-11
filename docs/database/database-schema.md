@@ -115,13 +115,15 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | etag | TEXT | HTTP ETag for caching |
 | last_modified | TEXT | HTTP Last-Modified |
 | last_fetched_at | TIMESTAMPTZ | Last fetch time |
+| last_failed_at | TIMESTAMPTZ | Last failed fetch (migration 131, ADO-625); drives the daily retry of stopped feeds |
+| last_item_published_at | TIMESTAMPTZ | Newest item date in the feed itself, stamped on every 200 fetch (migration 131, ADO-625). Per-feed liveness; the daily ingest alert names a working feed whose newest item is older than 7 days |
 
 **Feed Tiers:**
 - **Tier 1:** Major news (Reuters, AP, WaPo)
 - **Tier 2:** Quality sources (Atlantic, Guardian)
 - **Tier 3:** Aggregators/secondary
 
-**Failure Handling:** Disabled when `failure_count >= 5`
+**Failure Handling:** at `failure_count >= 5` a feed leaves the normal selection and is retried once a day (when `last_failed_at` is over 24 hours old, up to 5 per run, after the healthy feeds). A success resets the count. See `scripts/rss/feed-health.js` (ADO-625).
 
 ---
 

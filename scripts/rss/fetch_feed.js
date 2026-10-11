@@ -10,6 +10,7 @@ import { safeLog } from '../utils/security.js';
 import { scoreGovRelevance } from './scorer.js';
 import { toStr, toBool, toStrArray, pickItemText } from './utils/primitive.js';
 import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { stampFeedLiveness, stampFeedFailure } from './feed-health.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -314,6 +315,9 @@ async function handleFetchFeed(job, db) {
       content_size_bytes: xmlContent.length
     });
 
+    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself, whatever we already stored
+    await stampFeedLiveness(db, url, feed.items);
+
     // 9) Apply RSS item limit protection (P1 requirement)
     const maxItems = parseInt(process.env.RSS_MAX_ITEMS || '500', 10);
     const items = (feed.items ?? []).slice(0, maxItems);
@@ -576,12 +580,15 @@ async function incrementFailureCount(db, url, currentCount = 0) {
     })
     .eq('feed_url', url);
 
+  // ADO-625: a stopped feed (5+) is retried once this is more than 24 hours old
+  await stampFeedFailure(db, url);
+
   if (newCount >= 5) {
     safeLog('warn', 'Feed failure threshold reached', {
       feed_url: url,  // Keep the full URL
       source_domain: new URL(url).hostname,  // Add domain separately
       failure_count: newCount,
-      status: 'will_be_skipped'
+      status: 'retried_daily'
     });
   }
 }
