@@ -107,3 +107,6 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-06-held-back-rows.sql` - one-time PROD fix: republishes the 2 EOs the old
   flag trigger hid and re-queues the 49 pre-agent `v2-ado280-flagged` SCOTUS rows (ADO-603 AC 4). Guarded
   exact counts, stops unless migration 128 is applied. Josh runs it manually in the PROD SQL Editor; never deployed.
+  Step 3 (added October 10, 2026) resets the 27 pre-v1.3 flagged pardons for a v1.3 re-run; run only after v1.3 is on main.
+- `scripts/maintenance/2026-10-10-ado-601-silent-feeds.sql` - one-time PROD fix for the five silent feeds (CSM, Newsweek
+  failure_count reset; new URLs for Time, Politico Top, Reason). Guarded exact-row block. Run by hand on PROD; never deployed.

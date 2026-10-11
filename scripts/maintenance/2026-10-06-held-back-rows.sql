@@ -9,6 +9,11 @@
 --          v2-ado280-flagged, enrichment_status flagged, never enriched, never public) back in the
 --          Claude agent's queue. The agent only reads pending/failed, so these sat hidden since spring.
 --          It writes them up 20 per weekday run (about 3 runs) and publishes them, as it does every case.
+-- STEP 3 - Pardons (added October 10, 2026): reset the 27 pardons held off the site by v1.1/v1.2 review
+--          flags so the agent re-researches them under prompt v1.3 (flags only checkable doubts). Same
+--          fields the admin re-enrich button resets (trigger-enrichment, ADO-553); rows stay hidden until
+--          the agent republishes them, 5 per daily run. RUN ONLY AFTER prompt v1.3 IS ON MAIN, or the
+--          next run re-flags them under v1.2. Locked rows are never touched.
 
 DO $$
 DECLARE
@@ -65,8 +70,49 @@ BEGIN
      AND enriched_at IS NULL;
   GET DIAGNOSTICS v_changed = ROW_COUNT;
   RAISE NOTICE 'SCOTUS step: % of 49 rows re-queued (0 means it already ran).', v_changed;
+
+  -- STEP 3: Pardons held by pre-v1.3 flags
+  SELECT count(*) INTO v_matched FROM public.pardons
+   WHERE needs_review IS TRUE
+     AND is_public IS FALSE
+     AND enriched_at IS NOT NULL
+     AND prompt_version IN ('v1.1', 'v1.2');
+  IF v_matched = 0 THEN
+    RAISE NOTICE 'Pardon step: 0 rows to reset (it already ran).';
+  ELSIF v_matched <> 27 THEN
+    RAISE EXCEPTION 'Pardon step: expected 27 flagged pre-v1.3 pardons, found %. Nothing changed.', v_matched;
+  ELSE
+    UPDATE public.pardons
+       SET enriched_at                = NULL,
+           prompt_version             = NULL,
+           enrichment_meta            = NULL,
+           crime_description          = NULL,
+           primary_connection_type    = NULL,
+           secondary_connection_types = NULL,
+           corruption_level           = NULL,
+           corruption_reasoning       = NULL,
+           trump_connection_detail    = NULL,
+           donation_amount_usd        = NULL,
+           receipts_timeline          = '[]'::jsonb,
+           summary_neutral            = NULL,
+           summary_spicy              = NULL,
+           why_it_matters             = NULL,
+           pattern_analysis           = NULL,
+           source_urls                = '[]'::jsonb,
+           research_status            = 'pending',
+           is_public                  = false,
+           needs_review               = false
+     WHERE needs_review IS TRUE
+       AND is_public IS FALSE
+       AND enriched_at IS NOT NULL
+       AND prompt_version IN ('v1.1', 'v1.2');
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RAISE NOTICE 'Pardon step: % of 27 pardons reset for a v1.3 re-run.', v_changed;
+  END IF;
 END $$;
 
--- AFTER (read-only, optional): expect scotus pending = 49 until the agent runs, eo hidden_flagged = 0
+-- AFTER (read-only, optional): expect scotus pending = 49 until the agent runs, eo hidden_flagged = 0,
+-- pardons queued = 27 until the agent runs
 -- SELECT 'scotus pending' AS what, count(*) FROM scotus_cases WHERE enrichment_status = 'pending'
--- UNION ALL SELECT 'eo hidden_flagged', count(*) FROM executive_orders WHERE needs_manual_review AND NOT is_public;
+-- UNION ALL SELECT 'eo hidden_flagged', count(*) FROM executive_orders WHERE needs_manual_review AND NOT is_public
+-- UNION ALL SELECT 'pardons queued', count(*) FROM pardons WHERE enriched_at IS NULL;
