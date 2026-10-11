@@ -98,6 +98,31 @@ const healthy = (u) => {
   assert.match(seen.discord[0].description, /The Guardian/);
 }
 
+// --- ADO-601: an active feed with 5+ failed fetches is named as stopped, with its count; fresh feeds are not
+{
+  const feeds = [{ source_name: 'NYT Politics', failure_count: 0 }, { source_name: 'Time', failure_count: 7 }, { source_name: 'Reason', failure_count: 4 }];
+  const { seen, fetchImpl } = harness((u) => (table(u) === 'feed_registry' ? feeds : healthy(u)));
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.deepEqual(r.findings.quarantinedSources, ['Time (7 failed fetches)']);
+  assert.equal(r.state, 'problems');
+  assert.match(seen.discord[0].description, /Feeds the pipeline stopped fetching\*\* \(5\+ failed fetches in a row; nothing retries them\): Time \(7 failed fetches\)/);
+  assert.ok(!/Reason/.test(seen.discord[0].description), 'a feed under the threshold is not named');
+}
+// --- a source whose only feed is stopped is named once (as stopped), not also as silent; a source with
+//     one stopped and one working feed is still checked for silence
+{
+  const feeds = [{ source_name: 'Time', failure_count: 7 }, { source_name: 'The Guardian', failure_count: 5 }, { source_name: 'The Guardian', failure_count: 0 }];
+  const { seen, fetchImpl } = harness((u) => {
+    if (table(u) === 'feed_registry') return feeds;
+    if (u.searchParams.get('source_name')) return [];
+    return healthy(u);
+  });
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.deepEqual(r.findings.silentSources, ['The Guardian']);
+  assert.equal(seen.queries.filter((q) => q.searchParams.get('source_name') === 'eq.Time').length, 0, 'a stopped-only source is not read for silence');
+  assert.ok(!/no article in 7 days:\*\* Time/.test(seen.discord[0].description));
+}
+
 // --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),
 //     manual runs always do, push-triggered runs never do
 assert.equal(shouldCheck({ env: {}, now: NOON }), true);

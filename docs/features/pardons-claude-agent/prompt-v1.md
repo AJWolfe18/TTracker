@@ -394,7 +394,7 @@ For each pardon, use your research to produce ALL of the following fields in a s
 | 3 | The Party Favor | NETWORK | MAGA movement, GOP allies, campaign promise beneficiary, political ally advocacy. **THIS IS THE DEFAULT for any political connection.** |
 | 2 | The PR Stunt | FAME | Celebrity, media attention, public interest case. Only if famous AND no deeper network tie. |
 | 1 | The Ego Discount | FLATTERY | Contacted Trump directly (DM, letter), no other connection found. **RARE  - most "no connection" is actually L3.** Should be <10% of output. |
-| 0 | Actual Mercy | MERIT | Genuinely deserved clemency, bipartisan support, no Trump ties. Auto-flags `needs_review = true`. |
+| 0 | Actual Mercy | MERIT | Genuinely deserved clemency, bipartisan support, no Trump ties. Needs sourced evidence of merit; does NOT flag by itself (v1.3). |
 
 **Editorial fields** (quality matters  - these are what readers see):
 
