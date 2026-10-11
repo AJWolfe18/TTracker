@@ -9,7 +9,11 @@
 --   Time            /section/politics/feed/ redirects to an HTML page ("not RSS 1 or 2"); Time has no
 --                   politics-only feed any more, so the main feed + filter_config does the narrowing.
 --   Politico Top    www.politico.com/rss/politicopicks.xml is behind a Cloudflare 403 since July 20, 2026.
+--                   congress.xml (Hill + White House + some campaign) is the closest match to the old Picks mix;
+--                   politics-news.xml was mostly campaign horse-race.
 --   Reason          /tag/politics/feed/ froze on August 19, 2026 (every run gets 304 Not Modified).
+--                   /latest/feed/ carries Reason's own articles, but also the Volokh law blog, podcasts and
+--                   video (26 of 48 /category/politics/ items were Volokh), so those paths are excluded.
 -- New URLs each returned 200, valid RSS, items from the last 96 hours, and items passing filter_config.
 -- URL changes clear etag/last_modified so the old feed's cache headers are not sent to the new URL.
 --
@@ -40,19 +44,21 @@ BEGIN
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Time: expected 1 row with the old URL and an allow list in filter_config, got %. Nothing changed.', n; END IF;
 
   UPDATE feed_registry
-     SET feed_url = 'https://rss.politico.com/politics-news.xml', failure_count = 0, etag = NULL, last_modified = NULL
+     SET feed_url = 'https://rss.politico.com/congress.xml', failure_count = 0, etag = NULL, last_modified = NULL
    WHERE id = 9 AND source_name = 'Politico Top' AND is_active = true
      AND feed_url = 'https://www.politico.com/rss/politicopicks.xml';
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Politico Top: expected 1 row, got %. Nothing changed.', n; END IF;
 
   UPDATE feed_registry
-     SET feed_url = 'https://reason.com/category/politics/feed/', failure_count = 0, etag = NULL, last_modified = NULL
+     SET feed_url = 'https://reason.com/latest/feed/', failure_count = 0, etag = NULL, last_modified = NULL,
+         filter_config = jsonb_set(filter_config, '{disallowedUrlIncludes}',
+           coalesce(filter_config->'disallowedUrlIncludes', '[]'::jsonb) || '["/volokh/", "/podcast/", "/video/"]'::jsonb)
    WHERE id = 4 AND source_name = 'Reason' AND is_active = true
      AND feed_url = 'https://reason.com/tag/politics/feed/';
   GET DIAGNOSTICS n = ROW_COUNT; IF n <> 1 THEN RAISE EXCEPTION 'Reason: expected 1 row, got %. Nothing changed.', n; END IF;
 END $$;
 
-SELECT id, source_name, feed_url, failure_count, is_active
+SELECT id, source_name, feed_url, failure_count, is_active, filter_config->'disallowedUrlIncludes' AS excluded_paths
   FROM feed_registry
  WHERE source_name IN ('Christian Science Monitor', 'Newsweek', 'Politico Top', 'Reason', 'Time')
  ORDER BY id;
