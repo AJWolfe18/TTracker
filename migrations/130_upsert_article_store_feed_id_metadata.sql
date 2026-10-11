@@ -13,9 +13,9 @@
 -- Deliberately NOT done: opinion_flag. scripts/rss/scoring.js applies an opinion penalty in clustering,
 -- so writing it changes clustering on PROD; deferred until a clustering eval + a week of Judge results.
 --
--- Guard: only replaces the 121 version (stores content, does not yet write metadata). On TEST (032
--- version) this is a NO-OP with a NOTICE, so it is safe to run on both. Idempotent: after one run the
--- guard no longer matches.
+-- Guard: replaces the 121 version or an earlier revision of this file. On TEST (032 version) this is a
+-- NO-OP with a NOTICE, so it is safe to run on both. Idempotent: after one run the guard no longer
+-- matches.
 -- Size: metadata is about 300 bytes an article, about 0.7 MB a month. Cost: $0. Existing rows are not
 -- backfilled. Rollback: re-run migrations/121_upsert_article_store_content.sql's inner CREATE (the
 -- function body between $fn$ markers).
@@ -38,7 +38,9 @@ BEGIN
     RAISE EXCEPTION 'upsert_article_and_enqueue_jobs(10 args) not found - nothing changed';
   END IF;
 
-  IF v_src !~ 'left\(p_content, 5000\)' OR v_src ~ 'p_metadata, ''\{\}''' THEN
+  -- Replaces the 121 version or any earlier revision of this file (both store content); skips TEST's
+  -- 032 version and this final revision (its 'IS NOT DISTINCT FROM articles.feed_id' clause).
+  IF v_src !~ 'left\(p_content, 5000\)' OR v_src ~ 'IS NOT DISTINCT FROM articles\.feed_id' THEN
     RAISE NOTICE 'upsert_article_and_enqueue_jobs is not the migration-121 version (TEST 032, or 130 already applied) - skipped, nothing changed';
     RETURN;
   END IF;
@@ -113,11 +115,13 @@ BEGIN
     excerpt = COALESCE(EXCLUDED.excerpt, articles.excerpt),
     content = COALESCE(EXCLUDED.content, articles.content),
     -- First feed to store the article keeps it (ADO-600). feed_id and metadata move together: when the
-    -- stored row has no feed_id and this upsert brings one, both come from this feed; otherwise metadata
-    -- is only filled when empty. (SET expressions read the stored row, so articles.feed_id is the old value.)
+    -- stored row has no feed_id and this upsert brings one, both come from this feed; empty metadata is
+    -- filled only by the feed that owns the row, never by another feed. (SET expressions read the stored
+    -- row, so articles.feed_id is the old value.)
     feed_id = COALESCE(articles.feed_id, EXCLUDED.feed_id),
     metadata = CASE WHEN articles.feed_id IS NULL AND EXCLUDED.feed_id IS NOT NULL THEN EXCLUDED.metadata
-                    WHEN articles.metadata IS NULL OR articles.metadata = '{}'::jsonb THEN EXCLUDED.metadata
+                    WHEN (articles.metadata IS NULL OR articles.metadata = '{}'::jsonb)
+                         AND EXCLUDED.feed_id IS NOT DISTINCT FROM articles.feed_id THEN EXCLUDED.metadata
                     ELSE articles.metadata END,
     updated_at = now()
   RETURNING
@@ -178,7 +182,7 @@ $migration$;
 -- Verify (read-only): expect stores_content = true, stores_feed_id_metadata = true
 SELECT p.oid::regprocedure AS fn,
        position('left(p_content, 5000)' IN p.prosrc) > 0 AS stores_content,
-       position('THEN p_feed_id END' IN p.prosrc) > 0 AND position('COALESCE(p_metadata, ''{}''::jsonb)' IN p.prosrc) > 0 AS stores_feed_id_metadata
+       position('THEN p_feed_id END' IN p.prosrc) > 0 AND position('IS NOT DISTINCT FROM articles.feed_id' IN p.prosrc) > 0 AS stores_feed_id_metadata
   FROM pg_proc p
   JOIN pg_namespace n ON n.oid = p.pronamespace
  WHERE n.nspname = 'public'

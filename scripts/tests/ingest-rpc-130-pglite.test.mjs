@@ -118,6 +118,14 @@ out('ingest-rpc-130-pglite');
   const a3 = await row(db, 'https://x/3');
   check('feed_id and metadata come from the same feed', a3.feed_id === '7' && a3.metadata.feed_url === 'feed-B', JSON.stringify(a3));
 
+  // Codex P2: a row owned by feed 9 with empty metadata is not filled by feed 21's metadata
+  await upsert(db, { url: 'https://x/4', title: 'T4', content: 'b', feedId: '9', metadata: {} });
+  await upsert(db, { url: 'https://x/4', title: 'T4', content: 'b', feedId: '21', metadata: { feed_url: 'feed-21' } });
+  const a4 = await row(db, 'https://x/4');
+  check("another feed does not fill the owner's empty metadata", a4.feed_id === '9' && JSON.stringify(a4.metadata) === '{}', JSON.stringify(a4));
+  await upsert(db, { url: 'https://x/4', title: 'T4', content: 'b', feedId: '9', metadata: { feed_url: 'feed-9' } });
+  check('the owning feed fills its own empty metadata', (await row(db, 'https://x/4')).metadata.feed_url === 'feed-9');
+
   const again = await runMigration(db);
   check('second run is a no-op', again.notices.some((n) => n.includes('skipped, nothing changed')), again.notices.join(' | '));
   check('second run: function still stores feed_id + metadata', again.verify.stores_feed_id_metadata === true);
@@ -132,6 +140,17 @@ RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN /* 032: LEFT(p_content, 500), p_conte
   const { notices, verify } = await runMigration(db);
   check('TEST (032) function: skipped', notices.some((n) => n.includes('skipped, nothing changed')), notices.join(' | '));
   check('TEST (032) function: body untouched', verify.stores_feed_id_metadata === false && verify.stores_content === false);
+}
+
+// 2b. An earlier revision of 130 (stores content and metadata, no final clause) is upgraded, not skipped.
+{
+  const db = await fresh();
+  await db.exec(String.raw`
+CREATE FUNCTION public.upsert_article_and_enqueue_jobs(p_url text, p_title text, p_content text, p_published_at timestamptz, p_feed_id text, p_source_name text, p_source_domain text, p_content_type text DEFAULT 'news_report', p_is_opinion boolean DEFAULT false, p_metadata jsonb DEFAULT '{}'::jsonb)
+RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN /* earlier 130: left(p_content, 5000), NULLIF(p_feed_id, ''), COALESCE(p_metadata, '{}'::jsonb) */ RETURN '{}'::jsonb; END $$;`);
+  const { notices, verify } = await runMigration(db);
+  check('earlier 130 revision: upgraded', notices.some((n) => n.includes('now stores feed_id and metadata')), notices.join(' | '));
+  check('earlier 130 revision: final body installed', verify.stores_feed_id_metadata === true);
 }
 
 // 3. No function at all: the migration raises instead of silently doing nothing.
