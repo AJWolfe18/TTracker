@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { handleFetchFeed } from './rss/fetch_feed.js';
+import { selectFeeds as selectFeedsForRun } from './rss/feed-health.js';
 import { clusterArticle, resetRunState, getRunStats } from './rss/hybrid-clustering.js';
 import { EMBEDDING_MODEL_V1 } from './lib/embedding-config.js';
 import { recordSkip, PIPELINES, REASONS } from './lib/skip-reasons.js';
@@ -92,23 +93,17 @@ export class RSSTracker {
 
   /**
    * Select active feeds for this run
-   * Max 30 feeds, ordered by last_fetched_at (oldest first)
+   * Max 30 feeds, ordered by last_fetched_at (oldest first), plus stopped feeds due their daily
+   * retry (ADO-625, scripts/rss/feed-health.js)
    */
   async selectFeeds() {
-    const { data, error } = await this.supabase
-      .from('feed_registry')
-      .select('*')
-      .eq('is_active', true)
-      .lt('failure_count', 5)
-      .order('last_fetched_at', { ascending: true })
-      .limit(MAX_FEEDS_PER_RUN);
+    const { feeds, retryCount } = await selectFeedsForRun(this.supabase, { maxFeeds: MAX_FEEDS_PER_RUN });
 
-    if (error) throw new Error(`Failed to select feeds: ${error.message}`);
+    this.stats.feeds_total = feeds.length;
+    console.log(`📋 Selected ${this.stats.feeds_total} feeds for processing` +
+      (retryCount ? ` (${retryCount} stopped feed(s) on their daily retry)` : ''));
 
-    this.stats.feeds_total = data?.length || 0;
-    console.log(`📋 Selected ${this.stats.feeds_total} feeds for processing`);
-
-    return data || [];
+    return feeds;
   }
 
   /**

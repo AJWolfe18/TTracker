@@ -11,9 +11,12 @@
  *   content_missing  articles arrived in the last 24h, but none stored content
  *   empty_excerpt    articles from the last 24h with an empty excerpt (names the sources)
  *   silent_feeds     active feeds whose source has no article in FEED_SILENT_DAYS (default 7)
- *   quarantined      active feeds with failure_count >= 5: selectFeeds() in rss-tracker-supabase.js stops
- *                    fetching them and nothing retries, so they stay dark until someone resets the count
- *                    (ADO-601: CSM, Time, Newsweek and Politico Top sat there for months)
+ *   quarantined      active feeds with failure_count >= 5: selectFeeds() (scripts/rss/feed-health.js) retries
+ *                    them once a day (ADO-625; before that nothing retried, and CSM, Time, Newsweek and
+ *                    Politico Top sat dark for months, ADO-601), so a listed feed is still failing
+ *   stale_feeds      active, working feeds whose newest item (feed_registry.last_item_published_at, stamped
+ *                    at fetch, migration 131) is older than FEED_SILENT_DAYS, when their source is not
+ *                    already silent: catches a dead feed while another feed of the same source produces
  *
  * One Discord message per run listing every problem; a healthy run posts nothing. Runs as a step
  * of the 6-hourly health check on main only (it reads PROD), but checks only on the scheduled run starting 12:00-17:59 UTC
@@ -23,7 +26,8 @@
  * content. Silent-feed check matches on source_name. articles.feed_id (PROD from migration 130,
  * ADO-600) cannot tell a dead feed from a live one: one URL from two feeds is attributed to the first,
  * so a feed whose items always also appear in another feed has no articles of its own. Per-feed
- * liveness has to be recorded at fetch time (ADO-625).
+ * liveness is recorded at fetch time instead (stale_feeds, ADO-625). Before migration 131 is applied the
+ * stale-feed read fails on the missing column and is skipped quietly.
  *
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
@@ -37,15 +41,15 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
+import { QUARANTINE_FAILURES } from '../rss/feed-health.js';
 
 // The health check is scheduled every 6 hours (0, 6, 12, 18 UTC), so exactly one scheduled run
 // starts in [12:00, 18:00) even when GitHub starts it late (an exact-hour match skipped the whole
 // day whenever the 12:00 run slipped past 13:00).
 export const CHECK_WINDOW_UTC = Object.freeze([12, 18]);
 const DAY_MS = 24 * 3600000;
-// Must match selectFeeds() in scripts/rss-tracker-supabase.js (.lt('failure_count', 5)): a feed at or
-// above this count is never fetched again. Not imported: that file runs the whole pipeline on load.
-export const QUARANTINE_FAILURES = 5;
+// A feed at or above QUARANTINE_FAILURES is only fetched on its daily retry (ADO-625).
+export { QUARANTINE_FAILURES };
 
 const out = (line) => process.stdout.write(`${line}\n`);
 
@@ -63,7 +67,8 @@ export function shouldCheck({ env = process.env, now = Date.now() } = {}) {
 
 /**
  * @param {{recentArticles: boolean, recentWithContent: boolean, emptyExcerptSources: string[],
- *          silentSources: string[], quarantinedSources: string[], silentDays: number, readErrors: string[]}} f
+ *          silentSources: string[], quarantinedSources: string[], staleFeeds?: string[], silentDays: number,
+ *          readErrors: string[]}} f
  * @returns {null | {title, description, color}} null when ingest is healthy
  */
 export function buildIngestAlert(f) {
@@ -75,10 +80,13 @@ export function buildIngestAlert(f) {
     problems.push(`**Articles saved with no text at all** in the last 24 hours, from: ${f.emptyExcerptSources.join(', ')}. The feed probably puts its text in a field the parser does not read (pickItemText in scripts/rss/utils/primitive.js).`);
   }
   if (f.quarantinedSources?.length) {
-    problems.push(`**Feeds the pipeline stopped fetching** (${QUARANTINE_FAILURES}+ failed fetches in a row; nothing retries them): ${f.quarantinedSources.join(', ')}. Fix or replace the feed_url, then set failure_count = 0 on PROD.`);
+    problems.push(`**Feeds failing every fetch** (${QUARANTINE_FAILURES}+ failed fetches in a row; retried once a day and still failing): ${f.quarantinedSources.join(', ')}. Fix or replace the feed_url; the next successful fetch resets failure_count.`);
   }
   if (f.silentSources.length) {
     problems.push(`**Active feeds with no article in ${f.silentDays} days:** ${f.silentSources.join(', ')}. The feed may be dead, blocking us (403), or filtered out by filter_config. Check the RSS Tracker run logs.`);
+  }
+  if (f.staleFeeds?.length) {
+    problems.push(`**Feeds with no new item in ${f.silentDays} days** (their source still gets articles from another feed): ${f.staleFeeds.join(', ')}. The feed is probably frozen or moved; check its feed_url.`);
   }
   for (const e of f.readErrors) problems.push(`Could not read: ${e}`);
   if (!problems.length) return null;
@@ -109,7 +117,7 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
   const since24h = encodeURIComponent(new Date(now - DAY_MS).toISOString());
   const silentDays = Number(env.FEED_SILENT_DAYS) > 0 ? Number(env.FEED_SILENT_DAYS) : 7;
   const sinceSilent = encodeURIComponent(new Date(now - silentDays * DAY_MS).toISOString());
-  const f = { recentArticles: false, recentWithContent: true, emptyExcerptSources: [], silentSources: [], quarantinedSources: [], silentDays, readErrors: [] };
+  const f = { recentArticles: false, recentWithContent: true, emptyExcerptSources: [], silentSources: [], quarantinedSources: [], staleFeeds: [], silentDays, readErrors: [] };
 
   try {
     f.recentArticles = (await get(`/articles?select=id&created_at=gte.${since24h}&limit=1`)).length > 0;
@@ -142,8 +150,21 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     } catch (err) { f.readErrors.push(`silent-feed check for ${s} (${err.message})`); }
   }
 
+  // Per-feed liveness (ADO-625). Its own read: a PROD without migration 131 rejects the column, and that
+  // must not cost the checks above.
+  try {
+    const feeds = await get(`/feed_registry?select=feed_name,source_name,failure_count&is_active=eq.true&last_item_published_at=lt.${sinceSilent}&limit=200`);
+    const silent = new Set(f.silentSources);
+    f.staleFeeds = feeds
+      .filter((r) => Number(r.failure_count) < QUARANTINE_FAILURES && !silent.has(r.source_name))
+      .map((r) => r.feed_name || r.source_name || '(no name)').sort();
+  } catch (err) {
+    if (/last_item_published_at/.test(err.message)) log('[ingest-health] stale-feed check skipped: migration 131 not applied');
+    else f.readErrors.push(`stale-feed check (${err.message})`);
+  }
+
   const alert = buildIngestAlert(f);
-  log(`[ingest-health] recent=${f.recentArticles} content=${f.recentWithContent} empty_excerpt=[${f.emptyExcerptSources.join(', ')}] silent=[${f.silentSources.join(', ')}] quarantined=[${f.quarantinedSources.join(', ')}] errors=${f.readErrors.length}`);
+  log(`[ingest-health] recent=${f.recentArticles} content=${f.recentWithContent} empty_excerpt=[${f.emptyExcerptSources.join(', ')}] silent=[${f.silentSources.join(', ')}] quarantined=[${f.quarantinedSources.join(', ')}] stale=[${f.staleFeeds.join(', ')}] errors=${f.readErrors.length}`);
   const posted = alert ? await postDiscord(alert, { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl }) : false;
   return { state: alert ? 'problems' : 'healthy', posted, findings: f };
 }
