@@ -657,6 +657,21 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 
 ---
 
+### `routine_heartbeats`
+**Purpose:** One row per run for Claude routines that have no run-level log (ADO-624), so the routine silence check can tell a quiet day from a dead routine
+**Migration:** `129_routine_heartbeats.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | BIGINT | Primary key (identity) |
+| routine | TEXT | `'eo'` (EO agent, curl POST in Step 1) or `'fronts'` (front agent, `front-agent-db.js heartbeat`); CHECK `^[a-z_]{1,40}$` |
+| run_id | TEXT | The run's id, nullable, at most 100 chars |
+| created_at | TIMESTAMPTZ | Insert time |
+
+**RLS:** enabled, no anon/authenticated grant. **Reader:** `scripts/monitoring/alert-routine-silence.js` (newest row per routine, `limit=1`). SCOTUS and Pardons do not write here: their run logs already get a row on every run.
+
+---
+
 ### `story_merge_audit`
 **Purpose:** Pre-merge snapshot of the loser story's `article_story` membership so a wrong merge can be reversed (ADO-533; consumed by `unmerge_story`, ADO-537)
 **Migrations:** `101_clustering_judge_hardening.sql`, `105` adds `unmerged_at`

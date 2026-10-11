@@ -112,7 +112,7 @@ const settings = JSON.parse(readFileSync(new URL('../../.claude/settings.json', 
 const RULE = 'Bash(node scripts/fronts/front-agent-db.js *)';
 assert.ok(settings.permissions.allow.includes(RULE), `.claude/settings.json must allow exactly ${RULE}`);
 assert.ok(!/curl\s+-s\s+-X\s+POST\s+"\$\{API\}/.test(prompt), 'prompt must not call PostgREST with curl');
-for (const verb of ['fronts', 'candidates 25', 'record tmp/fronts-page-1.json', 'assign ', 'decline ', 'refresh', 'notify ']) {
+for (const verb of ['fronts', 'candidates 25', 'record tmp/fronts-page-1.json', 'assign ', 'decline ', 'refresh', 'notify ', 'heartbeat ']) {
   assert.ok(prompt.includes(`node scripts/fronts/front-agent-db.js ${verb}`), `prompt must use the script's ${verb.split(' ')[0]} command`);
 }
 // every command line in a prompt code block starts with the allowed prefix (the rule matches nothing else)
@@ -290,6 +290,21 @@ try {
   assert.equal(run(['record', 'package.json.txt']).code, 2, 'only .json files');
   assert.equal(run(['record', 'tmp/does-not-exist.json']).code, 2, 'a missing file is a usage error');
   assert.equal(run(['record', page('ok2', { run_id: RUN, decisions: ok })], { SUPABASE_URL: 'http://plain.example' }).code, 2, 'record needs https');
+
+  // --- ADO-624: one heartbeat row per run; never fatal, nothing in dry-run ---------------
+  const hb = run(['heartbeat', RUN]);
+  assert.equal(hb.code, 0);
+  assert.equal(hb.json.status, 'recorded');
+  assert.deepEqual(writes(hb.requests), [{ method: 'POST', path: 'routine_heartbeats', query: '', body: { routine: 'fronts', run_id: RUN } }]);
+  const hbDry = run(['heartbeat', RUN], { FRONTS_DRY_RUN: 'true' });
+  assert.equal(hbDry.json.status, 'dry_run');
+  assert.equal(hbDry.requests.length, 0, 'dry-run heartbeat sends nothing');
+  const hbDown = run(['heartbeat', RUN], { FRONT_AGENT_MOCK_HEARTBEAT: 'fail' });
+  assert.equal(hbDown.code, 0, 'a failed heartbeat never fails the run');
+  assert.equal(hbDown.json.status, 'error');
+  assert.match(hbDown.json.error, /404/);
+  assert.equal(run(['heartbeat']).code, 2, 'heartbeat needs a run_id');
+  assert.equal(run(['heartbeat', 'bad id;']).code, 2, 'run_id is validated');
 } finally {
   for (const f of readdirSync(join(repoRoot, 'tmp')).filter((n) => n.startsWith(`front-agent-test-${process.pid}-`))) rmSync(join(repoRoot, 'tmp', f));
 }

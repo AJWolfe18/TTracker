@@ -64,10 +64,11 @@ Every database read and write goes through one committed script, `scripts/fronts
 | `node scripts/fronts/front-agent-db.js decline <story_id> <confidence> <run_id> <true\|false> "<rationale>"` | inserts one `pipeline_skips` row: `pipeline: "front_assignment"`, `reason: "agent_declined"`, `entity_type: "story"`, metadata `{front: "none", judged_fronts: [<every agent front slug>], confidence, rationale, run_id, uncertain, prompt_version}` | `{"status":"declined"}` or `{"status":"error",...}` |
 | `node scripts/fronts/front-agent-db.js refresh` | `rpc/refresh_tracker_derived` | `{"status":"refreshed","rows_changed":N,"took_ms":M}` (exit 1 on failure) |
 | `node scripts/fronts/front-agent-db.js notify "<message>"` | one Discord post if `DISCORD_WEBHOOK_URL` is set | `{"status":"posted"}` / `"skipped"` / an error (never fatal) |
+| `node scripts/fronts/front-agent-db.js heartbeat <run_id>` | inserts one `routine_heartbeats` row (`routine: "fronts"`, `run_id`) so the health check can tell a quiet day from a dead routine | `{"status":"recorded"}` / `"dry_run"` / `{"status":"error",...}` (never fatal) |
 
 `assign` and `decline` write one story each; use them only to retry a single story whose `record` result was an error. With `FRONTS_DRY_RUN=true` every write command is a no-op that prints `{"status":"dry_run"}` (`record` still checks the file, including the fronts, and prints one `dry_run` result per story); `fronts` and `candidates` still read. The decline values `front_assignment` / `agent_declined` come from `PIPELINES.FRONT_ASSIGNMENT` / `REASONS.AGENT_DECLINED` in `scripts/lib/skip-reasons.js`, and front `none` plus `judged_fronts` is what `front_agent_candidates_all` filters on: a declined story stays out of the pool of every front it was judged against until it gains new articles, while a front that joins the agent later still gets one look at it.
 
-Tables the script touches: `events` (read the agent fronts), `stories` (read, via the RPC), `story_event` (insert only), `pipeline_skips` (insert only). Nothing else.
+Tables the script touches: `events` (read the agent fronts), `stories` (read, via the RPC), `story_event` (insert only), `pipeline_skips` (insert only), `routine_heartbeats` (insert only, one row per run). Nothing else.
 
 ---
 
@@ -83,6 +84,14 @@ echo "RUN_ID=${RUN_ID} DRY_RUN=${DRY_RUN}"
 ```
 
 `RUN_ID` goes into every decline's metadata so a run's decisions can be grouped later. Shell variables do not survive between Bash calls, so copy the printed `RUN_ID` and pass it to the script as a **literal** value (never `$RUN_ID`).
+
+Then leave this run's heartbeat, with the printed `RUN_ID` as a literal (example value):
+
+```bash
+node scripts/fronts/front-agent-db.js heartbeat fronts-all-2026-10-05T14-05-00.000Z
+```
+
+Every run does this, quiet runs included: the health check alerts when the newest heartbeat is more than 30 hours old, so a run without one looks like a dead routine (ADO-624). Any result (`recorded`, `dry_run` or `error`) is fine; print it and go on to Step 2. A failed heartbeat never stops the run.
 
 ### Step 2: Read the fronts (once per run)
 
@@ -300,7 +309,7 @@ A story belongs on a front when what it **reports** is the thing that front's de
 | Author | Josh + Claude Code |
 | Target model | Claude Sonnet 5.5 |
 | Cadence | daily (cloud routine), after the RSS sweep; PROD cron `0 14 * * *` UTC |
-| Tables | `events` (read the agent fronts), `stories` (read via `front_agent_candidates_all`), `story_event` (insert), `pipeline_skips` (insert), `refresh_tracker_derived()` (RPC) |
+| Tables | `events` (read the agent fronts), `stories` (read via `front_agent_candidates_all`), `story_event` (insert), `pipeline_skips` (insert), `routine_heartbeats` (insert, one per run), `refresh_tracker_derived()` (RPC) |
 | Env | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional `FRONTS_DRY_RUN`, `FRONTS_MAX_PER_RUN`, `DISCORD_WEBHOOK_URL` |
-| Migrations | 116 (`events.agent_pattern`, `story_event.note`), 123 (`stories.action_label` / `action_actor`), 127 (`events.agent_definition`, `front_agent_candidates_all`) - all must be applied before this prompt runs against an environment |
+| Migrations | 116 (`events.agent_pattern`, `story_event.note`), 123 (`stories.action_label` / `action_actor`), 127 (`events.agent_definition`, `front_agent_candidates_all`) - all must be applied before this prompt runs against an environment. 129 (`routine_heartbeats`, ADO-624) only feeds the health check: without it the heartbeat prints an error and the run goes on |
 | API method | `node scripts/fronts/front-agent-db.js` only (one `record` call per page since September 30, 2026), allowed by one exact rule in `.claude/settings.json` (October 1, 2026: the cloud classifier denied the PROD routine's direct `curl` reads as "Production Reads") |

@@ -4,6 +4,7 @@
 //   GET  events?...                  -> the agent fronts below (FRONT_AGENT_MOCK_EVENTS=fail -> HTTP 500)
 //   POST story_event                 -> 201; story 999 -> 409 unique violation; story 998 -> 500
 //   POST pipeline_skips              -> 201
+//   POST routine_heartbeats          -> 201 (FRONT_AGENT_MOCK_HEARTBEAT=fail -> 404 PGRST205)
 //   POST rpc/front_agent_candidates_all -> 200 []
 //   POST rpc/refresh_tracker_derived -> 200 [{rows_changed: 2, took_ms: 5}]
 import { appendFileSync } from 'node:fs';
@@ -32,6 +33,9 @@ globalThis.fetch = async (url, init = {}) => {
     return reply(201, [{ story_id: body.story_id }]);
   }
   if (method === 'POST' && path === 'pipeline_skips') return reply(201, [{ id: 1 }]);
+  if (method === 'POST' && path === 'routine_heartbeats') {
+    return process.env.FRONT_AGENT_MOCK_HEARTBEAT === 'fail' ? reply(404, { code: 'PGRST205', message: 'no table' }) : reply(201);
+  }
   if (method === 'POST' && path === 'rpc/front_agent_candidates_all') return reply(200, []);
   if (method === 'POST' && path === 'rpc/refresh_tracker_derived') return reply(200, [{ rows_changed: 2, took_ms: 5 }]);
   return reply(404, { message: `mock: no route for ${method} ${path}` });
