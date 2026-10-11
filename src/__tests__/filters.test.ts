@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getFilterConfig } from '@/lib/filters';
+import { TONE_SYSTEM } from '@/tokens';
+import toneJson from '../../public/shared/tone-system.json';
 
 describe('getFilterConfig', () => {
   it('returns stories config', () => {
@@ -45,14 +47,20 @@ describe('getFilterConfig', () => {
     expect(keys).toContain('impact');
   });
 
-  it('pardons corruption pills have named labels', () => {
+  it('pardons corruption pills match the card labels, 5 down to 0 (ADO-629)', () => {
     const config = getFilterConfig('pardons');
     const corr = config.dimensions.find(d => d.key === 'corruption');
     expect(corr).toBeDefined();
-    const labels = corr!.options.map(o => o.label);
-    expect(labels).toContain('Pay-to-Play');
-    expect(labels).toContain('Friends & Fam');
-    expect(labels).toContain('Swamp');
+    const pills = corr!.options.slice(1);
+    expect(corr!.options[0]).toEqual({ label: 'All', urlValue: '', apiValue: '' });
+    expect(pills.map(o => o.urlValue)).toEqual(['5', '4', '3', '2', '1', '0']);
+    for (const o of pills) {
+      expect(o.apiValue).toBe(o.urlValue);
+      expect(o.label).toBe(TONE_SYSTEM.labels.pardons[Number(o.urlValue) as 0 | 1 | 2 | 3 | 4 | 5].spicy);
+      // the shared JSON the legacy page and the agents read says the same thing
+      expect(o.label).toBe((toneJson.labels.pardons as Record<string, { spicy: string }>)[o.urlValue].spicy);
+    }
+    expect(pills.map(o => o.label)).toContain('Actual Mercy');
   });
 
   it('pardons connection dropdown covers every DB-allowed value (migration 062)', () => {
