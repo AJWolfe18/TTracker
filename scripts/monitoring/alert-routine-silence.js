@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * Discord alert when a Claude routine goes silent (ADO-586).
+ * Discord alert when a Claude routine goes silent (ADO-586; SCOTUS, EO, Pardons and fronts added by ADO-624).
  *
  * On September 16, 2026 the PROD Clustering Judge stopped writing and nobody noticed for two
  * days: a denied or dead routine leaves no row, and quiet runs are silent by design (ADO-577).
- * Both routines below leave a row on EVERY healthy run (a heartbeat row when there is no work),
+ * Every routine below leaves a row on EVERY healthy run (a heartbeat row when there is no work),
  * so "no new row" means the routine, or the executor that writes for it, is not running.
+ * EO and the Election front agent have no run-level log, so they write one routine_heartbeats row
+ * per run (migration 129). SCOTUS and EO run weekdays only: their age leaves out Saturday and
+ * Sunday (UTC, the cron's clock), so a weekend never reads as silence.
  *
  * Runs as a step of the 6-hourly health check, on main only (it reads PROD). One Discord message
  * per silent routine per check, no dedup (v1). Fresh logs => no message.
@@ -15,7 +18,7 @@
  *
  * Usage: node scripts/monitoring/alert-routine-silence.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
- *        SILENCE_HOURS_JUDGE / SILENCE_HOURS_STORIES (optional overrides)
+ *        SILENCE_HOURS_<KEY> (optional per-routine override, e.g. SILENCE_HOURS_SCOTUS)
  *
  * Exit codes: 0 when the check RAN (fresh, silent or a failed read - each failed read posts its own
  * Discord message). 1 when the check could not run at all (missing credentials, crash). The workflow
@@ -46,7 +49,63 @@ export const ROUTINES = Object.freeze([
     envOverride: 'SILENCE_HOURS_STORIES',
     cadence: 'runs every 2 hours',
   },
+  // Daily and weekday routines: 30 hours = one missed run plus slack for a slow or manual run.
+  // weekdaysOnly matches the SCOTUS and EO crons ('0 16 * * 1-5', UTC); change both together.
+  // run_source filter: only the cloud agent's own rows count, never a manual or workflow row.
+  {
+    key: 'scotus',
+    label: 'SCOTUS enrichment',
+    path: '/scotus_enrichment_log?select=ran_at&run_source=eq.cloud-agent&order=ran_at.desc&limit=1',
+    hours: 30,
+    weekdaysOnly: true,
+    envOverride: 'SILENCE_HOURS_SCOTUS',
+    cadence: 'runs once each weekday; weekend hours are not counted',
+  },
+  {
+    key: 'eo',
+    label: 'EO enrichment',
+    path: '/routine_heartbeats?select=created_at&routine=eq.eo&order=created_at.desc&limit=1',
+    hours: 30,
+    weekdaysOnly: true,
+    envOverride: 'SILENCE_HOURS_EO',
+    cadence: 'runs once each weekday; weekend hours are not counted',
+  },
+  {
+    key: 'pardons',
+    label: 'Pardons enrichment',
+    path: '/pardons_enrichment_log?select=ran_at&run_source=eq.cloud-agent&order=ran_at.desc&limit=1',
+    hours: 30,
+    envOverride: 'SILENCE_HOURS_PARDONS',
+    cadence: 'runs once a day',
+  },
+  {
+    key: 'fronts',
+    label: 'Election front agent',
+    path: '/routine_heartbeats?select=created_at&routine=eq.fronts&order=created_at.desc&limit=1',
+    hours: 30,
+    envOverride: 'SILENCE_HOURS_FRONTS',
+    cadence: 'runs once a day',
+  },
 ]);
+
+// The timestamp column each routine reads is the path's select= (one source, so they cannot drift).
+const columnOf = (routine) => new URLSearchParams(routine.path.split('?')[1]).get('select');
+
+const HOUR_MS = 3600000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** Hours between two instants, leaving out every Saturday and Sunday (UTC) when weekdaysOnly. */
+export function silenceHours(fromMs, toMs, weekdaysOnly = false) {
+  if (!weekdaysOnly || toMs <= fromMs) return (toMs - fromMs) / HOUR_MS;
+  let counted = 0;
+  for (let t = fromMs; t < toMs;) {
+    const dayEnd = Math.min(toMs, (Math.floor(t / DAY_MS) + 1) * DAY_MS);
+    const dow = new Date(t).getUTCDay();
+    if (dow !== 0 && dow !== 6) counted += dayEnd - t;
+    t = dayEnd;
+  }
+  return counted / HOUR_MS;
+}
 
 // Josh reads Central time; ISO stays in the log line.
 function central(iso) {
@@ -71,11 +130,11 @@ export function buildSilenceAlert(routine, { newestIso, hours, now = Date.now(),
       color: COLORS.error,
     };
   }
-  const ageHours = (now - new Date(newestIso).getTime()) / 3600000;
+  const ageHours = silenceHours(new Date(newestIso).getTime(), now, routine.weekdaysOnly);
   if (ageHours <= hours) return null;
   return {
     title: `${routine.label} routine is silent`,
-    description: `No log row for ${Math.floor(ageHours)} hours (alert threshold ${hours}; ${routine.cadence}). Last row: ${central(newestIso)}.\n\nCheck the routine's runs in claude.ai first: a run can show green and still have been denied. Triage steps: docs/reference/cloud-classifier-playbook.md.`,
+    description: `No log row for ${Math.floor(ageHours)} ${routine.weekdaysOnly ? 'weekday ' : ''}hours (alert threshold ${hours}; ${routine.cadence}). Last row: ${central(newestIso)}.\n\nCheck the routine's runs in claude.ai first: a run can show green and still have been denied. Triage steps: docs/reference/cloud-classifier-playbook.md.`,
     color: COLORS.error,
   };
 }
@@ -97,7 +156,9 @@ export async function runRoutineSilenceAlert({ env = process.env, fetchImpl = gl
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       const rows = await res.json();
       if (!Array.isArray(rows)) throw new Error(`unexpected response: ${JSON.stringify(rows).slice(0, 200)}`);
-      newestIso = rows[0]?.created_at ?? null;
+      newestIso = rows[0]?.[columnOf(routine)] ?? null;
+      // A row whose timestamp cannot be parsed must not read as fresh (or as "NaN hours").
+      if (newestIso !== null && Number.isNaN(Date.parse(newestIso))) throw new Error(`unparseable timestamp: ${JSON.stringify(newestIso).slice(0, 80)}`);
     } catch (err) {
       readError = err.message;
     }

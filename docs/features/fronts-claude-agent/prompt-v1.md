@@ -62,10 +62,11 @@ Every database read and write goes through one committed script, `scripts/fronts
 | `node scripts/fronts/front-agent-db.js decline <story_id> <confidence> <run_id> <true\|false> "<rationale>"` | inserts one `pipeline_skips` row: `pipeline: "front_assignment"`, `reason: "agent_declined"`, `entity_type: "story"`, metadata `{front: $front, confidence, rationale, run_id, uncertain, prompt_version}` | `{"status":"declined"}` or `{"status":"error",...}` |
 | `node scripts/fronts/front-agent-db.js refresh` | `rpc/refresh_tracker_derived` | `{"status":"refreshed","rows_changed":N,"took_ms":M}` (exit 1 on failure) |
 | `node scripts/fronts/front-agent-db.js notify "<message>"` | one Discord post if `DISCORD_WEBHOOK_URL` is set | `{"status":"posted"}` / `"skipped"` / an error (never fatal) |
+| `node scripts/fronts/front-agent-db.js heartbeat <run_id>` | inserts one `routine_heartbeats` row (`routine: "fronts"`, `run_id`) so the health check can tell a quiet day from a dead routine | `{"status":"recorded"}` / `"dry_run"` / `{"status":"error",...}` (never fatal) |
 
 `assign` and `decline` write one story each; use them only to retry a single story whose `record` result was an error. With `FRONTS_DRY_RUN=true` every write command is a no-op that prints `{"status":"dry_run"}` (`record` still checks the file and prints one `dry_run` result per story); `candidates` still reads. The decline values `front_assignment` / `agent_declined` come from `PIPELINES.FRONT_ASSIGNMENT` / `REASONS.AGENT_DECLINED` in `scripts/lib/skip-reasons.js` and match the filter inside `front_agent_candidates`, so a declined story stays out of tomorrow's pool.
 
-Tables the script touches: `events` (read the front's id), `stories` (read, via the RPC), `story_event` (insert only), `pipeline_skips` (insert only). Nothing else.
+Tables the script touches: `events` (read the front's id), `stories` (read, via the RPC), `story_event` (insert only), `pipeline_skips` (insert only), `routine_heartbeats` (insert only, one row per run). Nothing else.
 
 ---
 
@@ -81,6 +82,14 @@ echo "RUN_ID=${RUN_ID} DRY_RUN=${DRY_RUN}"
 ```
 
 `RUN_ID` goes into every decline's metadata so a run's decisions can be grouped later. Shell variables do not survive between Bash calls, so copy the printed `RUN_ID` and pass it to the script as a **literal** value (never `$RUN_ID`).
+
+Then leave this run's heartbeat, with the printed `RUN_ID` as a literal (example value):
+
+```bash
+node scripts/fronts/front-agent-db.js heartbeat fronts-election-2026-10-05T14-05-00.000Z
+```
+
+Every run does this, quiet runs included: the health check alerts when the newest heartbeat is more than 30 hours old, so a run without one looks like a dead routine (ADO-624). Any result (`recorded`, `dry_run` or `error`) is fine; print it and go on to Step 2. A failed heartbeat never stops the run.
 
 ### Step 2: Fetch one page of candidates
 

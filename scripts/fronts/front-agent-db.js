@@ -9,7 +9,8 @@
 // repo's committed .claude/settings.json. So the owner approves this one script with one
 // exact rule - Bash(node scripts/fronts/front-agent-db.js *) - and the script can only do
 // the agent's designed job: read its pool, assign to ONE front, record a decline, refresh
-// the main line, post one Discord line. No other table, front, or verb is reachable.
+// the main line, post one Discord line, leave one routine_heartbeats row per run. No other
+// table, front, or verb is reachable.
 //
 // Usage (each call is its own Bash command, starting exactly with `node scripts/...`):
 //   node scripts/fronts/front-agent-db.js candidates <limit 1-25>
@@ -18,6 +19,12 @@
 //   node scripts/fronts/front-agent-db.js decline <story_id> <confidence> <run_id> <uncertain true|false> "<rationale>"
 //   node scripts/fronts/front-agent-db.js refresh
 //   node scripts/fronts/front-agent-db.js notify "<message>"
+//   node scripts/fronts/front-agent-db.js heartbeat <run_id>
+//
+// `heartbeat` (ADO-624, migration 129) inserts one routine_heartbeats row (routine 'fronts') at
+// the start of every live run, quiet runs included, so scripts/monitoring/alert-routine-silence.js
+// can tell a dead routine from a quiet day. It never fails the run: a failed insert prints an
+// error status and exits 0.
 //
 // `record` (September 30, 2026) writes one page of decisions per call instead of one call
 // per story - the first PROD run spent ~90 tool calls on 80 stories. The file is
@@ -286,7 +293,16 @@ async function notify([message]) {
   }
 }
 
-const COMMANDS = { candidates, record, assign, decline, refresh, notify };
+async function heartbeat([runId]) {
+  const id = runIdArg(runId);
+  env();
+  if (isDryRun()) return out({ ok: true, status: 'dry_run' });
+  const r = await rest('routine_heartbeats', { method: 'POST', body: { routine: 'fronts', run_id: id } });
+  if (r.status === 201) return out({ ok: true, status: 'recorded' });
+  return out({ ok: false, status: 'error', error: `HTTP ${r.status} ${r.text}`.slice(0, 300) });
+}
+
+const COMMANDS = { candidates, record, assign, decline, refresh, notify, heartbeat };
 const [verb, ...args] = process.argv.slice(2);
 if (!Object.hasOwn(COMMANDS, verb)) fail(2, `unknown command "${verb}"; expected one of ${Object.keys(COMMANDS).join(', ')}`);
 try {
