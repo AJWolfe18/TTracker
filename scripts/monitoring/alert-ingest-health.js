@@ -20,7 +20,9 @@
  * (7 AM CT in summer) or a manual run, so a known problem is reported once a day, not four times.
  *
  * Egress: every read is bounded (limit) and selects only ids, timestamps or source names, never
- * content. Silent-feed check matches on source_name because PROD articles carry no feed_id.
+ * content. Silent-feed check matches each feed by feed_id once every article in the silent window
+ * carries one (PROD from migration 130, ADO-600; TEST always); until then it matches on source_name,
+ * which cannot tell two feeds of one source apart (Politico Top vs Politico Congress).
  *
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
@@ -120,10 +122,11 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     f.emptyExcerptSources = [...new Set(rows.map((r) => r.source_name || '(no source)'))].sort();
   } catch (err) { f.readErrors.push(`empty-excerpt check (${err.message})`); }
 
+  let feeds = [];
   let sources = [];
+  const stopped = (r) => Number(r.failure_count) >= QUARANTINE_FAILURES;
   try {
-    const feeds = await get('/feed_registry?select=source_name,failure_count&is_active=eq.true&limit=200');
-    const stopped = (r) => Number(r.failure_count) >= QUARANTINE_FAILURES;
+    feeds = await get('/feed_registry?select=id,feed_name,source_name,failure_count&is_active=eq.true&limit=200');
     f.quarantinedSources = feeds.filter(stopped)
       .map((r) => `${r.source_name || '(no source)'} (${r.failure_count} failed fetches)`).sort();
     // A source whose every active feed is stopped is already named above; listing it as "silent" too
@@ -131,16 +134,41 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     sources = [...new Set(feeds.map((r) => r.source_name).filter(Boolean))]
       .filter((s) => !feeds.filter((r) => r.source_name === s).every(stopped)).sort();
   } catch (err) { f.readErrors.push(`silent-feed check, feed list (${err.message})`); }
-  // One read per source, each in its own try: a failed read names that source and the rest still run.
-  for (const s of sources) {
+
+  // ADO-600: match per feed only when feed_id was already being stored the day BEFORE the silent window
+  // began, so every article inside the window has one. Right after migration 130 the window still holds
+  // feed_id-less articles, and a per-feed check would call every slow feed silent for a week.
+  f.silentBy = 'source';
+  if (feeds.length) {
     try {
-      const rows = await get(`/articles?select=id&source_name=eq.${encodeURIComponent(s)}&created_at=gte.${sinceSilent}&limit=1`);
-      if (!rows.length) f.silentSources.push(s);
-    } catch (err) { f.readErrors.push(`silent-feed check for ${s} (${err.message})`); }
+      const coverFrom = encodeURIComponent(new Date(now - (silentDays + 1) * DAY_MS).toISOString());
+      const covered = await get(`/articles?select=id&feed_id=not.is.null&created_at=gte.${coverFrom}&created_at=lt.${sinceSilent}&limit=1`);
+      if (covered.length) f.silentBy = 'feed';
+    } catch (err) { f.readErrors.push(`feed_id coverage check (${err.message})`); }
+  }
+
+  if (f.silentBy === 'feed') {
+    // One read per active, unstopped feed, each in its own try.
+    for (const r of feeds.filter((x) => !stopped(x) && x.id != null)) {
+      const name = `${r.feed_name || r.source_name || '(no name)'} (feed ${r.id})`;
+      try {
+        const rows = await get(`/articles?select=id&feed_id=eq.${encodeURIComponent(r.id)}&created_at=gte.${sinceSilent}&limit=1`);
+        if (!rows.length) f.silentSources.push(name);
+      } catch (err) { f.readErrors.push(`silent-feed check for ${name} (${err.message})`); }
+    }
+    f.silentSources.sort();
+  } else {
+    // One read per source, each in its own try: a failed read names that source and the rest still run.
+    for (const s of sources) {
+      try {
+        const rows = await get(`/articles?select=id&source_name=eq.${encodeURIComponent(s)}&created_at=gte.${sinceSilent}&limit=1`);
+        if (!rows.length) f.silentSources.push(s);
+      } catch (err) { f.readErrors.push(`silent-feed check for ${s} (${err.message})`); }
+    }
   }
 
   const alert = buildIngestAlert(f);
-  log(`[ingest-health] recent=${f.recentArticles} content=${f.recentWithContent} empty_excerpt=[${f.emptyExcerptSources.join(', ')}] silent=[${f.silentSources.join(', ')}] quarantined=[${f.quarantinedSources.join(', ')}] errors=${f.readErrors.length}`);
+  log(`[ingest-health] recent=${f.recentArticles} content=${f.recentWithContent} empty_excerpt=[${f.emptyExcerptSources.join(', ')}] silent_by=${f.silentBy} silent=[${f.silentSources.join(', ')}] quarantined=[${f.quarantinedSources.join(', ')}] errors=${f.readErrors.length}`);
   const posted = alert ? await postDiscord(alert, { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl }) : false;
   return { state: alert ? 'problems' : 'healthy', posted, findings: f };
 }

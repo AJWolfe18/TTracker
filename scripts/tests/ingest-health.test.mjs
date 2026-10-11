@@ -8,14 +8,18 @@ const NOON = Date.parse('2026-10-03T12:00:00Z');
 const silent = () => {};
 const env = { SUPABASE_URL: 'https://db.test/', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
 
-// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call
-function harness(route) {
+// fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call.
+// The feed_id coverage probe (ADO-600) answers "not covered" unless `covered` is set, so these tests
+// exercise the source_name path PROD runs until migration 130 has been live for a full window.
+function harness(route, { covered = false } = {}) {
   const seen = { queries: [], discord: [] };
   const fetchImpl = async (url, init) => {
     if (url === env.DISCORD_WEBHOOK_URL) { seen.discord.push(JSON.parse(init.body).embeds[0]); return new Response(null, { status: 204 }); }
     const u = new URL(url);
     seen.queries.push(u);
-    const r = route(u);
+    const r = (table(u) === 'articles' && u.searchParams.get('feed_id') === 'not.is.null')
+      ? (covered ? [{ id: 'art-9' }] : [])
+      : route(u);
     if (r instanceof Error) throw r;
     if (r && r.status) return new Response(r.body, { status: r.status });
     return new Response(JSON.stringify(r), { status: 200 });
@@ -121,6 +125,50 @@ const healthy = (u) => {
   assert.deepEqual(r.findings.silentSources, ['The Guardian']);
   assert.equal(seen.queries.filter((q) => q.searchParams.get('source_name') === 'eq.Time').length, 0, 'a stopped-only source is not read for silence');
   assert.ok(!/no article in 7 days:\*\* Time/.test(seen.discord[0].description));
+}
+
+// --- ADO-600: once feed_id covers the whole window, each feed is checked by id, so a dead feed is named
+//     even when another feed of the same source is still producing (source_name matching missed this)
+{
+  const feeds = [
+    { id: 9, feed_name: 'Politico Top', source_name: 'Politico', failure_count: 0 },
+    { id: 21, feed_name: 'Politico Congress', source_name: 'Politico', failure_count: 0 },
+    { id: 4, feed_name: 'Reason Latest', source_name: 'Reason', failure_count: 0 },
+    { id: 175, feed_name: 'CSM Politics', source_name: 'Christian Science Monitor', failure_count: 5 },
+  ];
+  const { seen, fetchImpl } = harness((u) => {
+    if (table(u) === 'feed_registry') return feeds;
+    if (u.searchParams.get('or')) return [];
+    if (u.searchParams.get('feed_id') === 'eq.9') return [];
+    return [{ id: 'art-1' }];
+  }, { covered: true });
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.equal(r.findings.silentBy, 'feed');
+  assert.deepEqual(r.findings.silentSources, ['Politico Top (feed 9)']);
+  assert.match(seen.discord[0].description, /no article in 7 days:\*\* Politico Top \(feed 9\)/);
+  assert.equal(seen.queries.filter((q) => q.searchParams.get('source_name')).length, 0, 'no source_name reads in feed mode');
+  assert.equal(seen.queries.filter((q) => q.searchParams.get('feed_id') === 'eq.175').length, 0, 'a stopped feed is not also read as silent');
+  const probe = seen.queries.find((q) => q.searchParams.get('feed_id') === 'not.is.null');
+  const window = probe.searchParams.getAll('created_at');
+  assert.deepEqual(window, [`gte.${new Date(NOON - 8 * 86400000).toISOString()}`, `lt.${new Date(NOON - 7 * 86400000).toISOString()}`], 'probe looks at the day before the silent window');
+  for (const q of seen.queries) assert.ok(Number(q.searchParams.get('limit')) > 0, `unbounded read: ${q}`);
+}
+
+// --- not covered yet (the first week after migration 130): stays on source_name, so slow feeds are
+//     not called silent just because their older articles have no feed_id
+{
+  const { fetchImpl } = harness(healthy);
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: NOON });
+  assert.equal(r.findings.silentBy, 'source');
+}
+
+// --- the coverage probe fails: falls back to source_name and reports the failed read
+{
+  const { fetchImpl } = harness(healthy);
+  const failing = async (url, init) => (String(url).includes('feed_id=not.is.null') ? new Response('slow', { status: 500 }) : fetchImpl(url, init));
+  const r = await runIngestHealth({ env, fetchImpl: failing, log: silent, now: NOON });
+  assert.equal(r.findings.silentBy, 'source');
+  assert.deepEqual(r.findings.readErrors, ['feed_id coverage check (500 slow)']);
 }
 
 // --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),
