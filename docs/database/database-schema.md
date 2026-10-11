@@ -1,6 +1,6 @@
 # TrumpyTracker Database Schema
 
-**Last Updated:** 2026-08-23 (tracker_pin + v_tracker_stories, migration 112)
+**Last Updated:** 2026-10-10 (EO review flag advisory, migration 128)
 **Status:** RSS v2 system active on both TEST and PROD
 
 ---
@@ -486,7 +486,7 @@ The candidate pool for the **front assignment agent** (`docs/features/fronts-cla
 | Column | Type | Description |
 |--------|------|-------------|
 | is_public | BOOLEAN NOT NULL DEFAULT false | Canonical "is this EO visible on the public site?" Backfilled to `true` for all pre-migration rows. New rows require explicit admin publish. Filtered by `public/eo-app.js` via `is_public=eq.true`. |
-| needs_manual_review | BOOLEAN NOT NULL DEFAULT false | Row-level flag synced from `executive_orders_enrichment_log.needs_manual_review` via DB trigger on `status='completed'` writes. Cleared by admin publish (durable acknowledgment). When trigger raises this flag, `is_public` is auto-set to `false` (re-flag auto-unpublishes). |
+| needs_manual_review | BOOLEAN NOT NULL DEFAULT false | Row-level flag synced from `executive_orders_enrichment_log.needs_manual_review` via DB trigger on `status='completed'` writes. Cleared by admin publish / "Mark reviewed" (durable acknowledgment). Advisory since migration 128 (October 6, 2026): the trigger no longer touches `is_public`, so a flagged EO stays published and shows in the admin Needs Review tab (092-127 auto-unpublished on flag). |
 
 **Triggers:**
 - `eo_set_updated_at` (BEFORE UPDATE) — auto-advances `updated_at` so admin CAS works

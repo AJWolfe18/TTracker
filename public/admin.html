@@ -4722,7 +4722,7 @@
                 }
             };
 
-            const handlePublish   = (eo) => callUpdate('publish', eo, { successMsg: 'Published' });
+            const handlePublish   = (eo) => callUpdate('publish', eo, { successMsg: eo.is_public ? 'Marked reviewed' : 'Published' });
             const handleUnpublish = (eo) => {
                 if (!confirm('Unpublish this EO? It will be removed from the public site.')) return;
                 callUpdate('unpublish', eo, { successMsg: 'Unpublished' });
@@ -4754,7 +4754,7 @@
                     // catches it too, but this trims the request and keeps the
                     // count-they-see vs count-they-submit expectation tight.
                     const itemsPayload = items
-                        .filter(i => selectedIds.has(i.id) && !i.is_public && isClaudeEnriched(i.prompt_version))
+                        .filter(i => selectedIds.has(i.id) && (!i.is_public || i.needs_manual_review) && isClaudeEnriched(i.prompt_version))
                         .map(i => ({ id: i.id, if_updated_at: i.updated_at }));
                     if (itemsPayload.length === 0) {
                         toast?.addToast('No eligible items to publish (all already published or unenriched)', 'error');
@@ -4822,7 +4822,7 @@
                 });
             };
             const toggleSelectAll = () => {
-                const eligible = items.filter(i => !i.is_public && isClaudeEnriched(i.prompt_version)).map(i => i.id);
+                const eligible = items.filter(i => (!i.is_public || i.needs_manual_review) && isClaudeEnriched(i.prompt_version)).map(i => i.id);
                 if (selectedIds.size === eligible.length && eligible.length > 0) {
                     setSelectedIds(new Set());
                 } else {
@@ -4988,7 +4988,7 @@
                                                         type="checkbox"
                                                         className="bulk-checkbox"
                                                         checked={(() => {
-                                                            const eligible = items.filter(i => !i.is_public && isClaudeEnriched(i.prompt_version));
+                                                            const eligible = items.filter(i => (!i.is_public || i.needs_manual_review) && isClaudeEnriched(i.prompt_version));
                                                             return eligible.length > 0 && selectedIds.size === eligible.length;
                                                         })()}
                                                         onChange={toggleSelectAll}
@@ -5017,7 +5017,8 @@
                                             const alarmBadge = getAlarmBadge(eo.alarm_level);
                                             const isEnriched = isClaudeEnriched(eo.prompt_version);
                                             const isBusy = busyIds.has(eo.id);
-                                            const eligibleForSelect = !eo.is_public && isEnriched;
+                                            // Migration 128: a live flagged EO is selectable too (bulk publish clears its flag)
+                                            const eligibleForSelect = (!eo.is_public || eo.needs_manual_review) && isEnriched;
 
                                             return (
                                                 <tr key={eo.id} className={eo.needs_manual_review ? 'scotus-needs-review' : ''}>
@@ -5068,6 +5069,12 @@
                                                             >
                                                                 {isBusy ? <><span className="spinner-sm"></span> Working</> : '\u21BB Re-enrich'}
                                                             </button>
+                                                            {eo.is_public && eo.needs_manual_review && (
+                                                                // Migration 128: flagged EOs stay live; publish on a live row only clears the flag
+                                                                <button className="btn-icon" onClick={() => handlePublish(eo)} disabled={isBusy} title="Clear the review flag (stays published)" style={{color: '#16a34a'}}>
+                                                                    &#9989; Mark reviewed
+                                                                </button>
+                                                            )}
                                                             {eo.is_public ? (
                                                                 <button className="btn-icon" onClick={() => handleUnpublish(eo)} disabled={isBusy} title="Unpublish">
                                                                     &#128228; Unpublish
