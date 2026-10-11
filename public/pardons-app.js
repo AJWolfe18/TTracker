@@ -824,14 +824,12 @@
   // ===========================================
 
   // Short labels for pills (matches severity filter pattern)
-  const CORRUPTION_PILL_LABELS = [
-    { level: null, label: 'All', color: null },
-    { level: 5, label: 'Pay-to-Play', color: '#7f1d1d' },
-    { level: 4, label: 'Friends & Fam', color: '#dc2626' },
-    { level: 3, label: 'Swamp', color: '#ea580c' },
-    { level: 2, label: 'Celebrity', color: '#ca8a04' },
-    { level: 1, label: 'Broken Clock', color: '#16a34a' }
-  ];
+  // Pills use the card labels (CORRUPTION_LABELS, loaded from tone-system.json), 5 down to 0 (ADO-629).
+  // Read at render time so the JSON load replaces the fallback labels here too.
+  const CORRUPTION_PILL_LEVELS = [null, 5, 4, 3, 2, 1, 0];
+  const corruptionPill = (level) => (level === null
+    ? { level, label: 'All', color: null }
+    : { level, label: CORRUPTION_LABELS[level].label, color: CORRUPTION_LABELS[level].color });
 
   function CorruptionPills({ value, onChange }) {
     return React.createElement('div', {
@@ -840,7 +838,7 @@
       'aria-label': 'Filter by corruption level'
     },
       React.createElement('span', { className: 'tt-filter-label' }, 'Corruption:'),
-      CORRUPTION_PILL_LABELS.map(({ level, label, color }) => {
+      CORRUPTION_PILL_LEVELS.map(corruptionPill).map(({ level, label, color }) => {
         const isActive = value === level;
         return React.createElement('button', {
           key: label,
@@ -999,7 +997,7 @@
               'aria-label': 'Remove connection filter'
             }, '×')
           ),
-          filters.corruptionLevel && React.createElement('span', { className: 'tt-filter-chip' },
+          filters.corruptionLevel != null && React.createElement('span', { className: 'tt-filter-chip' },
             CORRUPTION_LABELS[filters.corruptionLevel]?.label || `Level ${filters.corruptionLevel}`,
             React.createElement('button', {
               className: 'tt-chip-remove',
@@ -1048,7 +1046,7 @@
         // Parse corruption_level as integer
         if (stateKey === 'corruptionLevel') {
           const num = parseInt(value);
-          if (!isNaN(num) && num >= 1 && num <= 5) {
+          if (!isNaN(num) && num >= 0 && num <= 5) {
             filters[stateKey] = num;
           }
         } else {
@@ -1063,7 +1061,8 @@
   function updateUrlFromFilters(filters) {
     Object.entries(FILTER_URL_PARAMS).forEach(([urlParam, stateKey]) => {
       const value = filters[stateKey];
-      if (value && value !== DEFAULT_FILTERS[stateKey]) {
+      // corruptionLevel 0 (Actual Mercy) is a real filter, not "unset"
+      if ((value || value === 0) && value !== DEFAULT_FILTERS[stateKey]) {
         window.TTShared?.pushUrlParam(urlParam, String(value));
       } else {
         window.TTShared?.removeUrlParam(urlParam);
@@ -1159,7 +1158,7 @@
         if (cursor) params.cursor = cursor;
         if (filters.q) params.q = filters.q;
         if (filters.sort && filters.sort !== 'date') params.sort = filters.sort;
-        if (filters.corruptionLevel) params.corruption_level = filters.corruptionLevel;
+        if (filters.corruptionLevel != null) params.corruption_level = filters.corruptionLevel;
         if (filters.connectionType) params.connection_type = filters.connectionType;
 
         const data = await edgeFunctionRequest('pardons-active', params, currentController.signal);

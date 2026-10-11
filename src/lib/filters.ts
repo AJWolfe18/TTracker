@@ -1,3 +1,5 @@
+import { TONE_SYSTEM } from '@/tokens';
+
 export type FilterType = 'pills' | 'dropdown';
 
 export interface FilterOption {
@@ -30,7 +32,18 @@ export interface TabFilterConfig {
 
 // Per-domain pill labels: short forms of the tone-system spicy labels the
 // cards display (tone-system.ts), so the filter speaks the same voice.
-// Pardons already does this below.
+// Pardons uses the card labels themselves (PARDON_CORRUPTION_PILLS).
+// Pardon pills read the exact card label per level from tone-system, 5 down to 0 (ADO-629), so a
+// rename changes cards and filters together.
+const PARDON_CORRUPTION_PILLS: FilterOption[] = [
+  { label: 'All', urlValue: '', apiValue: '' },
+  ...([5, 4, 3, 2, 1, 0] as const).map((level) => ({
+    label: TONE_SYSTEM.labels.pardons[level].spicy,
+    urlValue: String(level),
+    apiValue: String(level),
+  })),
+];
+
 const STORY_ALARM_PILLS: FilterOption[] = [
   { label: 'All', urlValue: '', apiValue: '' },
   { label: 'Dumpster Fire', urlValue: '5', apiValue: '5' },
@@ -212,14 +225,7 @@ const PARDONS_CONFIG: TabFilterConfig = {
       type: 'pills',
       postgrestColumn: 'corruption_level',
       postgrestOp: 'eq',
-      options: [
-        { label: 'All', urlValue: '', apiValue: '' },
-        { label: 'Pay-to-Play', urlValue: '5', apiValue: '5' },
-        { label: 'Friends & Fam', urlValue: '4', apiValue: '4' },
-        { label: 'Swamp', urlValue: '3', apiValue: '3' },
-        { label: 'Celebrity', urlValue: '2', apiValue: '2' },
-        { label: 'Broken Clock', urlValue: '1', apiValue: '1' },
-      ],
+      options: PARDON_CORRUPTION_PILLS,
     },
     {
       key: 'connection',
