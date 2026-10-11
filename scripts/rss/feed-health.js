@@ -71,18 +71,20 @@ function itemTime(item) {
 }
 
 /**
- * Newest item date in a parsed feed (all items, before filter_config), clamped to now + 5 minutes.
- * Items without a usable date are ignored, never treated as "now": a feed with no dates at all
- * returns null and leaves the stamp unchanged.
+ * Newest item date in a parsed feed (all items, before filter_config). Items without a usable date,
+ * and items dated more than 5 minutes ahead, are ignored: neither proves the feed is publishing, and
+ * clamping a far-future item to "now" would make a frozen feed that carries one look alive on every
+ * fetch (Codex, PR #179). A feed with no usable date returns null and leaves the stamp unchanged.
  * @returns {string|null} ISO timestamp
  */
 export function newestItemPublishedAt(items, now = Date.now()) {
   let newest = null;
   for (const item of items || []) {
     const t = itemTime(item);
-    if (t !== null && (newest === null || t > newest)) newest = t;
+    if (t === null || t > now + FUTURE_SKEW_MS) continue;
+    if (newest === null || t > newest) newest = t;
   }
-  return newest === null ? null : new Date(Math.min(newest, now + FUTURE_SKEW_MS)).toISOString();
+  return newest === null ? null : new Date(newest).toISOString();
 }
 
 async function updateFeed(db, url, fields, what, log) {
