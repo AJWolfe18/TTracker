@@ -351,8 +351,12 @@ BEGIN
          OR (r.set_agent  AND agent_pattern IS DISTINCT FROM r.new_agent)
          OR (r.def IS NOT NULL AND agent_definition IS DISTINCT FROM r.def));
 
-    -- member gate: no member is lost. Every member the old agent_pattern matched (every member,
-    -- when there was none) must match the new one, on headline or summary.
+    -- member gate: the new agent_pattern still describes the front's current members. Every member
+    -- the old agent_pattern matched (every member, when there was none) must match the new one, on
+    -- headline or summary. The pattern never removes a member (candidates exclude stories that have a
+    -- story_event row); the gate stops a pattern change that would silently disown what is on the
+    -- front. Only members on the site count (summary_neutral set, the publish gate), so an unenriched
+    -- member does not block (TEST 16449, "Kennedy, other Trump officials balk...", October 11, 2026).
     IF r.set_agent THEN
       b_agent := (SELECT agent_pattern FROM public.front_merge_backup_events
                    WHERE merge_tag = c_tag AND event_id = e.id);
@@ -360,6 +364,7 @@ BEGIN
                    SELECT st.id
                      FROM public.story_event se JOIN public.stories st ON st.id = se.story_id
                     WHERE se.event_id = e.id
+                      AND st.summary_neutral IS NOT NULL
                       AND (b_agent IS NULL
                            OR COALESCE(st.primary_headline, '') ~* b_agent
                            OR COALESCE(st.summary_neutral, '') ~* b_agent)
@@ -454,9 +459,11 @@ COMMIT;
 
 -- (3) RESULT (read-only). Expect 9 rows, in_agent true on every row. filed_now (PROD, from the
 -- reviews' headline simulations): election ~39, epstein ~15, the-courts ~33, ice ~6, israel ~28,
--- iran ~79, rfk ~46, hegseth ~29 (overlaps can shift a few). members_outside_pattern 0 for the
--- fronts this file changed; trump-corruption may show about 10 envoy-diplomacy members (open
--- question for Josh, not a failure). agent_pool is the all-fronts agent's pool, before declines run.
+-- iran ~79, rfk ~46, hegseth ~29 (overlaps can shift a few). members_outside_pattern counts members
+-- on the site (summary_neutral set, as the gate does) that the pattern does not match: 0 for the
+-- fronts this file changed, except members filed by hand outside any pattern (TEST election has a few);
+-- trump-corruption may show about 10 envoy-diplomacy members (open question for Josh, not a
+-- failure). agent_pool is the all-fronts agent's pool, before declines run.
 WITH pool AS (SELECT COALESCE(MAX(c.pool_size), 0) AS n FROM public.front_agent_candidates_all(1) c)
 SELECT e.slug,
        (e.publish_state = 'published' AND e.agent_pattern IS NOT NULL
@@ -466,7 +473,7 @@ SELECT e.slug,
        (SELECT COUNT(*) FROM public.story_event se
          WHERE se.event_id = e.id AND se.note = 'ado-592-defs: keyword sweep')      AS filed_now,
        (SELECT COUNT(*) FROM public.story_event se JOIN public.stories st ON st.id = se.story_id
-         WHERE se.event_id = e.id
+         WHERE se.event_id = e.id AND st.summary_neutral IS NOT NULL
            AND NOT (COALESCE(st.primary_headline, '') ~* e.agent_pattern
                     OR COALESCE(st.summary_neutral, '') ~* e.agent_pattern))        AS members_outside_pattern,
        (SELECT COUNT(*) FROM public.story_event se JOIN public.stories st ON st.id = se.story_id

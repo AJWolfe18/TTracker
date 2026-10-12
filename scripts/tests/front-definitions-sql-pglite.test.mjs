@@ -395,6 +395,20 @@ const guard = async (label, setup, needle) => {
 await guard('an Epstein member outside the new agent_pattern',
   "insert into public.stories(id, primary_headline) values (300, 'Royal biographer publishes new book'); insert into public.story_event(story_id, event_id, assigned_by) values (300, 7, 'human')",
   'epstein-files: member stories outside the new agent_pattern (first 20): 300');
+// The gate counts only members on the site: a bare-"Kennedy" RFK member (old agent_pattern only)
+// blocks when enriched, and does not when it has no summary (TEST 16449, October 11, 2026).
+const KENNEDY = "insert into public.stories(id, primary_headline, summary_neutral) values (301, 'Kennedy, other Trump officials balk at requests to testify on Capitol Hill', %s); insert into public.story_event(story_id, event_id, assigned_by) values (301, (select id from public.events where slug = 'rfk-hhs'), 'agent')";
+await guard('an enriched RFK member outside the new agent_pattern', KENNEDY.replace('%s', "'summary'"),
+  'rfk-hhs: member stories outside the new agent_pattern (first 20): 301');
+{
+  const db = await makeDb();
+  await db.exec(KENNEDY.replace('%s', 'NULL'));
+  const err = await run(db, DEFS);
+  check(err === null, `an unenriched RFK member outside the new agent_pattern does not block${err ? ' (got: ' + err + ')' : ''}`);
+  check((await placement(db))[301] === 'rfk-hhs', 'the unenriched member keeps its front');
+  const rfk = (await db.query(RESULT)).rows.find((r) => r.slug === 'rfk-hhs');
+  check(Number(rfk.members_outside_pattern) === 0, 'result: members_outside_pattern skips the unenriched member, as the gate does');
+}
 await guard('failing refresh', "create or replace function public.refresh_tracker_derived() returns table(rows_changed int) language plpgsql as $$ begin raise exception 'refresh broke'; end $$;",
   'refresh broke');
 await guard('a hand-edited sweep', "update public.events set sweep_pattern = 'iran|tehran' where slug = 'iran'",
