@@ -610,7 +610,7 @@ WebSearch(query="\"<recipient_name>\" arrested charged after pardon")
 
 Use plain words, no `OR` and no years (an article about a 2026 arrest may never mention the pardon year).
 
-**Common name:** if the results are all about OTHER people with this name, run ONE more search that adds a term only this person has: a word from `offense_raw` (e.g. the kind of case), the state of `conviction_district`, or what they are known for. Example: `"William Goodman" pro-life activist arrested` (the plain name search on TEST returned only namesakes). Still nothing about this person = no hit.
+**Common name:** if the results are all about OTHER people with this name, run ONE more search that adds a term only this person has: a word from `offense_raw` (e.g. the kind of case), the state of `conviction_district`, or what they are known for. Shape: `"<recipient_name>" <distinguishing term> arrested`. Still nothing about this person = no hit.
 
 Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
 
