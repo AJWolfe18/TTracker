@@ -581,7 +581,7 @@ NOTE: when `needs_review = true`, `enrichment_meta` MUST contain `"review_reason
 
 ### Step 6.5: Post-pardon recheck (v1.4, every run)
 
-Step 3D checks a recipient for new arrests once, at enrichment. This step rechecks published pardons on a rotation so a recipient arrested months later does not keep reading "quiet". It is cheap: one search per pardon, and full research only on a hit. Run it on every run, including runs where Step 2 found nothing to enrich. Skip it only when the run already stopped (concurrent run, research health check failed).
+Step 3D checks a recipient for new arrests once, at enrichment. This step rechecks published pardons on a rotation so a recipient arrested months later does not keep reading "quiet". It is cheap: two searches per pardon, and full research only on a hit. Run it on every run, including runs where Step 2 found nothing to enrich. Skip it only when the run already stopped (concurrent run, research health check failed).
 
 **6.5a. Get the due pardons** (up to 10; migration 132):
 
@@ -602,15 +602,14 @@ Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, 
 
 **Search must work before any stamp.** If the Step 3.0 research health check has not run in this run (Step 2 found nothing to enrich, or gold mode), run it now, before the first recheck. If it fails, recheck nothing and stamp nothing: add `"recheck skipped: research tool unavailable"` to the log `errors` and go to Step 7. A broken search reads as "no news", and a stamp would then hide a real arrest for 14 to 60 days.
 
-**6.5b. One search per pardon.** Load WebSearch if needed (Step 3). The search covers the years from the pardon to now:
+**6.5b. Two searches per pardon, always both.** Load WebSearch if needed (Step 3).
 
 ```
 WebSearch(query="\"<recipient_name>\" arrested charged after pardon")
+WebSearch(query="\"<recipient_name>\" <distinguishing term> arrested")
 ```
 
-Use plain words, no `OR` and no years (an article about a 2026 arrest may never mention the pardon year).
-
-**Common name:** if the results are all about OTHER people with this name, run ONE more search that adds a term only this person has: a word from `offense_raw` (e.g. the kind of case), the state of `conviction_district`, or what they are known for. Shape: `"<recipient_name>" <distinguishing term> arrested`. Still nothing about this person = no hit.
+The distinguishing term is something only this person has: what their case or cause was (from `offense_raw` or your knowledge of who they are), their home state, or what they are known for. Run the second search even when the first one found articles about this person: on TEST, a plain name search returned an old article about the recipient's original case plus two other people with the same name, and missed his new arrest, which only a search that included his cause found. Use plain words, no `OR` and no years (an article about a 2026 arrest may never mention the pardon year).
 
 Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
 
@@ -938,7 +937,7 @@ These rules can NEVER be violated:
 |-------|-------|
 | Prompt version | v1.4 |
 | Created | 2026-05-30 |
-| Updated | 2026-10-11 (v1.4, ADO-524: Step 6.5 post-pardon recheck on every run, up to 10 due pardons from `pardons_due_for_recheck`, one search each, a confirmed hit publishes the note directly and posts to Discord; Step 6 stamps `post_pardon_checked_at`; TEST-only gold mode `PARDONS_RECHECK_IDS`). 2026-10-06 (v1.3: review flags only for checkable doubts - identity, contradicting sources, unconfirmed load-bearing claim, co-defendant role, post-pardon status; thin research, L0 and silent serious-criminal pardons no longer flag; identity check step; full search protocol before "nothing found"). 2026-09-20 (v1.2: research uses WebSearch, never a fetched search results page; Step 3.0 research health check stops the run when search is broken). 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
+| Updated | 2026-10-11 (v1.4, ADO-524: Step 6.5 post-pardon recheck on every run, up to 10 due pardons from `pardons_due_for_recheck`, two searches each, a confirmed hit publishes the note directly and posts to Discord; Step 6 stamps `post_pardon_checked_at`; TEST-only gold mode `PARDONS_RECHECK_IDS`). 2026-10-06 (v1.3: review flags only for checkable doubts - identity, contradicting sources, unconfirmed load-bearing claim, co-defendant role, post-pardon status; thin research, L0 and silent serious-criminal pardons no longer flag; identity check step; full search protocol before "nothing found"). 2026-09-20 (v1.2: research uses WebSearch, never a fetched search results page; Step 3.0 research health check stops the run when search is broken). 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
 | Author | Josh + Claude Code |
 | Target model | Claude Opus 4.6 |
 | Max turns | 15 |
