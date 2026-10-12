@@ -593,7 +593,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pardons_due_for_recheck" \
   -d '{"p_limit": 10}'
 ```
 
-Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, source_urls, post_pardon_checked_at, pool_size`. Keep each row's `source_urls`: a hit PATCH sends that whole array back with the new URL added. Put `pool_size` in the Step 7 log (6.5g) so a growing backlog is visible. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days or under the January 20, 2025 Jan 6 proclamation, otherwise every 60 days, never-checked first). Do not add your own filter.
+Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, source_urls, post_pardon_checked_at, pool_size`. Keep each row's `source_urls`: a hit PATCH sends that whole array back with the new URL added. Put `pool_size` in the Step 7 log (6.5g) so a growing backlog is visible. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days or a Jan 6 recipient, otherwise every 60 days, never-checked first). Do not add your own filter.
 - `[]` = nothing due. Go to Step 7.
 - An error with code `PGRST202` = migration 132 is missing. Do not recheck; add `"recheck skipped: pardons_due_for_recheck missing (migration 132)"` to the log `errors` and go to Step 7.
 
@@ -605,15 +605,17 @@ Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, 
 **6.5b. Two searches per pardon, always both.** Load WebSearch if needed (Step 3).
 
 ```
-WebSearch(query="\"<recipient_name>\" arrested charged after pardon")
-WebSearch(query="\"<recipient_name>\" <distinguishing term> arrested")
+WebSearch(query="\"<news name>\" arrested charged after pardon")
+WebSearch(query="\"<news name>\" <distinguishing term> arrested")
 ```
+
+`<news name>` is the name news coverage uses: first and last name, without middle names, initials or suffixes (`Thomas Edward Caldwell` -> `Thomas Caldwell`, `Louis Michael Olerio, Jr.` -> `Louis Olerio`), or the well-known short form if there is one (`Rod R. Blagojevich` -> `Rod Blagojevich`). A quoted full formal name misses articles that use the short one.
 
 The distinguishing term is something only this person has: what their case or cause was (from `offense_raw` or your knowledge of who they are), their home state, or what they are known for. Run the second search even when the first one found articles about this person: on TEST, a plain name search returned an old article about the recipient's original case plus two other people with the same name, and missed his new arrest, which only a search that included his cause found. Use plain words, no `OR` and no years (an article about a 2026 arrest may never mention the pardon year).
 
 Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
 
-**A search that errors or returns no results at all is NOT "no hit".** Record `"result": "failed"` for that pardon and stamp nothing, so it stays due tomorrow. If two searches in a row fail that way, stop the recheck (the rest stay due) and add `"recheck stopped: search failing mid-run"` to the log `errors`. Only a search that returned results, none of them about a new development, counts as no hit.
+**A search TOOL ERROR is NOT "no hit".** If WebSearch returns an error (a tool error, timeout or rate-limit message instead of a result list), record `"result": "failed"` for that pardon and stamp nothing, so it stays due tomorrow. If two pardons in a row hit a tool error, stop the recheck (the rest stay due) and add `"recheck stopped: search failing mid-run"` to the log `errors`. An EMPTY result list is different: the search worked (the Step 3.0 health check passed) and found nothing, which is common for little-known recipients. Two searches that worked and found nothing new about this person count as no hit (6.5c).
 
 **6.5c. No hit:** stamp the check only, then the next pardon:
 

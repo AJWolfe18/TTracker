@@ -186,8 +186,13 @@ assert.ok(/"post_pardon_checked_at": "\{ENRICHED_AT value\}"/.test(pardons), 'fi
 assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"prompt_version": "v1.3"'), 'pardons writes are tagged v1.4');
 // review fixes (b9c32d0 /code-review medium)
 assert.ok(/source_urls\s+JSONB/.test(mig132) && step65.includes('source_urls, post_pardon_checked_at'), 'the RPC and gold select return source_urls, so a hit never wipes the existing sources');
-assert.ok(/errors or returns no results at all is NOT "no hit"/.test(step65), 'a failed search mid-loop is never stamped as checked');
-assert.ok(!/WebSearch\(query="[^"]*\bOR\b/.test(step65), 'the recheck search uses plain words, no OR syntax');
+assert.ok(/search TOOL ERROR is NOT "no hit"/.test(step65) && /EMPTY result list is different/.test(step65), 'a tool error is never stamped as checked; an empty result is a real no-hit (else obscure pardons block the rotation)');
+assert.ok(/two pardons in a row hit a tool error/.test(step65), 'the stop rule counts pardons, not the two searches of one pardon');
+// whole WebSearch(...) lines, so an escaped \" inside the query cannot end the match early
+const recheckQueries = step65.split('\n').filter((l) => l.startsWith('WebSearch(query='));
+assert.ok(recheckQueries.length === 2, 'Step 6.5 shows exactly its two recheck queries');
+assert.ok(recheckQueries.every((l) => !/\bOR\b/.test(l) && !/\b20\d\d\b/.test(l)), 'the recheck searches use plain words: no OR, no years');
+assert.ok(recheckQueries.every((l) => l.includes('<news name>')) && step65.includes('without middle names'), 'searches use the short news name, not the formal full name');
 assert.ok(pardons.includes('Deploy-order guard (v1.4)') && pardons.includes('PGRST204'), 'Step 6 survives a missing migration 132');
 // TEST gold run, October 12, 2026: one plain-name search missed William Goodman's arrest
 assert.ok(/Two searches per pardon, always both/.test(step65) && step65.includes('<distinguishing term> arrested'), 'every recheck runs the plain search AND the distinguishing-term search');
