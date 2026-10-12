@@ -178,12 +178,13 @@ assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"pr
 // review fixes (b9c32d0 /code-review medium)
 assert.ok(/source_urls\s+JSONB/.test(mig132) && step65.includes('source_urls, post_pardon_checked_at'), 'the RPC and gold select return source_urls, so a hit never wipes the existing sources');
 assert.ok(/search TOOL ERROR is NOT "no hit"/.test(step65) && /EMPTY result list is different/.test(step65), 'a tool error is never stamped as checked; an empty result is a real no-hit (else obscure pardons block the rotation)');
-assert.ok(/two pardons in a row hit a tool error/.test(step65), 'the stop rule counts pardons, not the two searches of one pardon');
+assert.ok(/If EITHER of a pardon's two searches returns an error/.test(step65) && /two pardons in a row are `failed`/.test(step65), 'any error fails that pardon; the stop rule counts pardons, not searches');
+assert.ok(/Degraded-search guard/.test(step65) && /stamp none of them/.test(step65), 'a search that quietly returns empty lists cannot stamp a run of pardons');
 // whole WebSearch(...) lines, so an escaped \" inside the query cannot end the match early
 const recheckQueries = step65.split('\n').filter((l) => l.startsWith('WebSearch(query='));
 assert.ok(recheckQueries.length === 2, 'Step 6.5 shows exactly its two recheck queries');
 assert.ok(recheckQueries.every((l) => !/\bOR\b/.test(l) && !/\b20\d\d\b/.test(l)), 'the recheck searches use plain words: no OR, no years');
-assert.ok(recheckQueries.every((l) => l.includes('<news name>')) && step65.includes('without middle names'), 'searches use the short news name, not the formal full name');
+assert.ok(recheckQueries.every((l) => l.includes('<news name>')) && step65.includes('drop middle names') && step65.includes('keep a multi-word surname whole'), 'searches use the short news name (keeping multi-word surnames and Jr./Sr.), not the formal full name');
 assert.ok(pardons.includes('Deploy-order guard (v1.4)') && pardons.includes('PGRST204'), 'Step 6 survives a missing migration 132');
 // TEST gold run, October 12, 2026: one plain-name search missed William Goodman's arrest
 assert.ok(/Two searches per pardon, always both/.test(step65) && step65.includes('<distinguishing term> arrested'), 'every recheck runs the plain search AND the distinguishing-term search');

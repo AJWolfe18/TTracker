@@ -12,8 +12,9 @@
 --      an enriched pardon = never checked, and it sorts first.
 --   B) pardons_due_for_recheck(p_limit 1-10, default 10): public, enriched
 --      person pardons whose check is due. Pardoned within 180 days, or a Jan 6
---      recipient (primary_connection_type 'jan6_defendant' or crime_category
---      'jan6': highest re-offense risk): due every 14 days; otherwise every 60. Never checked first, then oldest check, then
+--      recipient (primary_connection_type 'jan6_defendant', crime_category
+--      'jan6', or pardoned January 20, 2025 with a Capitol / January 6 offense:
+--      highest re-offense risk): due every 14 days; otherwise every 60. Never checked first, then oldest check, then
 --      id. Excludes the Jan 6 group card (id 3, manually curated), every group
 --      card (a name search means nothing for a group) and unenriched pardons
 --      (enriched_at NULL: Step 2 enriches them next, and Step 3D checks them
@@ -101,7 +102,11 @@ AS $$
                -- pardon date (Jan 6 people were pardoned on several dates, and other
                -- people on January 20, 2025).
                WHEN p.primary_connection_type = 'jan6_defendant'
-                 OR p.crime_category = 'jan6' THEN INTERVAL '14 days'
+                 OR p.crime_category = 'jan6'
+                 -- backstop when enrichment classified the connection differently:
+                 -- the proclamation date plus a Capitol offense
+                 OR (p.pardon_date = DATE '2025-01-20'
+                     AND COALESCE(p.offense_raw, '') ~* '(capitol|january 6)') THEN INTERVAL '14 days'
                ELSE INTERVAL '60 days'
              END)
    ORDER BY p.post_pardon_checked_at ASC NULLS FIRST, p.id
@@ -109,7 +114,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.pardons_due_for_recheck(INTEGER) IS
-  'ADO-524: post-pardon recheck rotation for the pardons agent (prompt v1.4 Step 6.5). Public, enriched person pardons (not id 3, no group cards) whose post_pardon_checked_at is NULL or older than 14 days (pardoned within 180 days, or a Jan 6 recipient: primary_connection_type jan6_defendant or crime_category jan6) or 60 days (otherwise). Never-checked first, then oldest check, then id; 1-10 rows; pool_size = due rows before LIMIT. service_role only.';
+  'ADO-524: post-pardon recheck rotation for the pardons agent (prompt v1.4 Step 6.5). Public, enriched person pardons (not id 3, no group cards) whose post_pardon_checked_at is NULL or older than 14 days (pardoned within 180 days, or a Jan 6 recipient: primary_connection_type jan6_defendant, crime_category jan6, or pardoned January 20, 2025 with a Capitol / January 6 offense) or 60 days (otherwise). Never-checked first, then oldest check, then id; 1-10 rows; pool_size = due rows before LIMIT. service_role only.';
 
 REVOKE ALL ON FUNCTION public.pardons_due_for_recheck(INTEGER) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.pardons_due_for_recheck(INTEGER) TO service_role;
