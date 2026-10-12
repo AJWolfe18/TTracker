@@ -4,6 +4,7 @@
 > - Migration 063 (`corruption_level` CHECK updated to 0-5)
 > - Migration 071 (`prompt_version` TEXT and `enrichment_meta` JSONB columns on pardons)
 > - Migration 094 (`pardons_enrichment_log` observability table)
+> - Migration 132 (`post_pardon_checked_at` + `pardons_due_for_recheck`, v1.4). Without it Step 6.5 skips itself (`PGRST202`), but every Step 6 enrichment PATCH FAILS (PostgREST rejects the unknown `post_pardon_checked_at` column), so apply 132 BEFORE v1.4 reaches the branch
 >
 > If `prompt_version` or `enrichment_meta` columns don't exist, PATCH writes will silently drop those fields  - the agent will report success but provenance data won't persist.
 
@@ -34,9 +35,15 @@ At the start of every run, read your environment variables:
 ```bash
 echo "SUPABASE_URL=${SUPABASE_URL}"
 echo "KEY_LENGTH=$(echo -n ${SUPABASE_SERVICE_ROLE_KEY} | wc -c)"
+echo "DISCORD_WEBHOOK_SET=$([ -n "${DISCORD_WEBHOOK_URL}" ] && echo yes || echo no)"
+echo "RECHECK_IDS=${PARDONS_RECHECK_IDS:-none}"
 ```
 
 **Verify:** `SUPABASE_URL` must start with `https://` and `SUPABASE_SERVICE_ROLE_KEY` must be non-empty. If either is missing, log an error and stop immediately.
+
+`DISCORD_WEBHOOK_URL` is optional (Step 6.5 posts a recheck hit there when it is set). Never print its value.
+
+**Recheck gold mode (TEST only, v1.4):** when `PARDONS_RECHECK_IDS` is set (comma-separated pardon ids, e.g. `11,19,155`), either in the environment or as a line `PARDONS_RECHECK_IDS=<ids>` in the run's first (bootstrap) message, this run is a test of the post-pardon recheck. Shell variables do not survive between Bash calls, so copy the ids as a literal value. Skip Steps 2 to 6 (no enrichment), run Step 6.5 on exactly those ids, then Step 7. If `SUPABASE_URL` contains `osjbulmltfpcoldydexg` (PROD), refuse: log `status = 'failed'` with `errors: ["PARDONS_RECHECK_IDS is TEST only"]` and stop. If the value is anything other than digits and commas, refuse the same way.
 
 Store the base URL for all API calls:
 ```
@@ -177,7 +184,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/pardons_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"prompt_version\": \"v1.3\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
+  -d "{\"prompt_version\": \"v1.4\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
 ```
 
 **Save the returned `id`**  - you need it in Step 7 to update this log entry.
@@ -207,7 +214,7 @@ curl -s "${SUPABASE_URL}/rest/v1/pardons?enriched_at=is.null&select=id,recipient
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
 ```
 
-**If 0 pardons returned:** Healthy empty run. Log completion with `pardons_found = 0` and stop.
+**If 0 pardons returned:** Healthy empty run for enrichment. Set `pardons_found = 0`, skip Steps 3 to 6, and go to **Step 6.5** (the post-pardon recheck runs every day, including days with nothing new to enrich), then Step 7.
 
 **Protected pardons  - NEVER overwrite these (skip silently):**
 - **id = 3** (Jan 6 Mass Pardon)  - group card representing 1500+ defendants. Manually curated with ongoing rearrest tracking. If it appears in your query results, skip it, log as `{"id": 3, "status": "skipped", "note": "Protected: Jan 6 group card is manually curated"}`, and increment `pardons_skipped`.
@@ -474,8 +481,8 @@ This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`.
 | Field | Value |
 |-------|-------|
 | `enriched_at` | Current ISO 8601 timestamp |
-| `prompt_version` | `'v1.3'` |
-| `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1.3", "run_source": "cloud-agent"}`  - when `needs_review = true`, ALSO include `"review_reason": "<one sentence explaining why flagged>"`. Example: `{"model": "claude-opus-4-6", "prompt_version": "v1.3", "run_source": "cloud-agent", "review_reason": "Two people named <name> have federal convictions in this district; sources describe different offenses, so the pardoned person's identity is unconfirmed"}` |
+| `prompt_version` | `'v1.4'` |
+| `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"}`  - when `needs_review = true`, ALSO include `"review_reason": "<one sentence explaining why flagged>"`. Example: `{"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent", "review_reason": "Two people named <name> have federal convictions in this district; sources describe different offenses, so the pardoned person's identity is unconfirmed"}` |
 | `is_public` | `false` when `needs_review = true`; `true` when `needs_review = false`. Set these together  - never set `is_public = true` without also confirming `needs_review = false`. A DB trigger enforces this gate on every write. |
 | `research_status` | `'complete'` |
 | `needs_review` | `true` ONLY for the v1.3 flag triggers in Step 4 rule 5: identity doubt (namesake, or `recipient_name` disagrees with researched name), contradicting sources on a load-bearing fact, an unconfirmed load-bearing connection claim, co-defendant role ambiguity, or a post-pardon status change. `false` otherwise, including thin research, L0, and serious criminals with no advocacy channel. **NOT for:** minor date discrepancies (just use the best-sourced date), formatting differences, or trivial metadata mismatches. Only flag when one of the triggers above applies. |
@@ -525,13 +532,14 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "pattern_analysis": "...",
   "source_urls": ["https://..."],
   "enriched_at": "{ENRICHED_AT value}",
-  "prompt_version": "v1.3",
-  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.3", "run_source": "cloud-agent"},
+  "prompt_version": "v1.4",
+  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"},
   "is_public": false,
   "research_status": "complete",
   "needs_review": false,
   "post_pardon_status": "quiet",
-  "post_pardon_notes": null
+  "post_pardon_notes": null,
+  "post_pardon_checked_at": "{ENRICHED_AT value}"
 }
 ```
 
@@ -559,7 +567,8 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/pardons?id=eq.{PARDON_ID}" \
 `needs_review` (= true ONLY for the v1.3 flag triggers in Step 4 rule 5: identity doubt, contradicting sources, unconfirmed load-bearing connection claim, co-defendant role ambiguity, post-pardon status change),
 NOTE: when `needs_review = true`, `enrichment_meta` MUST contain `"review_reason": "<one sentence>"` explaining what triggered the flag,
 `post_pardon_status` (= 'quiet', 'under_investigation', or 're_offended'),
-`post_pardon_notes` (summary of post-pardon developments, null if quiet)
+`post_pardon_notes` (summary of post-pardon developments, null if quiet),
+`post_pardon_checked_at` (= `enriched_at`: Step 3D is the first post-pardon check; Step 6.5 rechecks from here)
 
 **AGENT NEVER WRITES these columns:**
 `recipient_name`, `recipient_slug`, `nickname`, `photo_url`, `recipient_type`,
@@ -567,6 +576,81 @@ NOTE: when `needs_review = true`, `enrichment_meta` MUST contain `"review_reason
 `conviction_district`, `case_number`, `offense_raw`, `original_sentence`, `conviction_date`,
 `source_system`, `source_key`, `research_prompt_version`, `researched_at`,
 `crime_category`
+
+### Step 6.5: Post-pardon recheck (v1.4, every run)
+
+Step 3D checks a recipient for new arrests once, at enrichment. This step rechecks published pardons on a rotation so a recipient arrested months later does not keep reading "quiet". It is cheap: one search per pardon, and full research only on a hit. Run it on every run, including runs where Step 2 found nothing to enrich. Skip it only when the run already stopped (concurrent run, research health check failed).
+
+**6.5a. Get the due pardons** (up to 10; migration 132):
+
+```bash
+curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pardons_due_for_recheck" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"p_limit": 10}'
+```
+
+Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, post_pardon_checked_at, pool_size`. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days, otherwise every 60 days, never-checked first). Do not add your own filter.
+- `[]` = nothing due. Go to Step 7.
+- An error with code `PGRST202` = migration 132 is missing. Do not recheck; add `"recheck skipped: pardons_due_for_recheck missing (migration 132)"` to the log `errors` and go to Step 7.
+
+**Gold mode** (`PARDONS_RECHECK_IDS` set, TEST only, see Section 1): instead of the RPC, read exactly those ids:
+`GET /pardons?id=in.(<ids>)&select=id,recipient_name,pardon_date,clemency_type,conviction_district,case_number,offense_raw,post_pardon_status,post_pardon_notes,post_pardon_checked_at`. Recheck each one the same way below, whatever its `is_public` or check date.
+
+**Search must work before any stamp.** If the Step 3.0 research health check has not run in this run (Step 2 found nothing to enrich, or gold mode), run it now, before the first recheck. If it fails, recheck nothing and stamp nothing: add `"recheck skipped: research tool unavailable"` to the log `errors` and go to Step 7. A broken search reads as "no news", and a stamp would then hide a real arrest for 14 to 60 days.
+
+**6.5b. One search per pardon.** Load WebSearch if needed (Step 3). The search covers the years from the pardon to now:
+
+```
+WebSearch(query="<recipient_name> arrested OR charged OR indicted <pardon year> <current year>")
+```
+
+Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
+
+**6.5c. No hit:** stamp the check only, then the next pardon:
+
+```json
+{"post_pardon_checked_at": "{NOW, UTC ISO}"}
+```
+
+**6.5d. A possible hit: confirm before writing.** Read 1 or 2 sources with WebFetch. Confirm BOTH:
+1. **Same person.** The source matches the pardoned person on at least one identifier beyond the name: `conviction_district`, `case_number`, the original offense, home state, age, or the source itself says the person was pardoned by Trump. A common name with nothing else matching is NOT the same person (example: TEST id 155 Molly Ann Bloom, a Texas drug case, is not the "Poker Princess" Molly Bloom of the New York poker case).
+2. **After the pardon.** The new conduct (not just the report) happened after `pardon_date`. A pre-pardon case that ends after the pardon (a sentence handed down later for older conduct) is not a re-offense.
+
+If either is uncertain: stamp the check only (6.5c) and record `"result": "identity_unclear"` or `"result": "pre_pardon"` with one sentence in the run log. Never change the status on a doubt.
+
+**6.5e. A confirmed hit: write the post-pardon fields only.** Use the temp file pattern (Section 2). Status only moves up, never back:
+- `quiet` -> `under_investigation` (an official investigation or pending charges) or `re_offended` (an arrest, charge, plea or conviction for new conduct)
+- `under_investigation` -> `re_offended` when charges or an arrest follow
+- `re_offended` stays `re_offended`; add the new development to the notes
+
+```json
+{
+  "post_pardon_status": "re_offended",
+  "post_pardon_notes": "<existing notes, if any> Charged in <county, state> on <Month day, year> with <charge> over <what they did, on what date>. Source: <url>",
+  "source_urls": ["<every existing url>", "<the new url>"],
+  "post_pardon_checked_at": "{NOW, UTC ISO}"
+}
+```
+
+`post_pardon_notes`: keep what is there and append one or two dated sentences, each with its source URL. Plain and factual: what happened, when, who brought it. No editorial voice, no em dashes. `source_urls`: the full existing array plus the new URL (send the whole array; PATCH replaces it).
+
+**A recheck NEVER writes** `needs_review`, `is_public`, `corruption_level`, any editorial field (`summary_*`, `why_it_matters`, `pattern_analysis`, `crime_description`, `corruption_reasoning`, `trump_connection_detail`), `enriched_at` or `prompt_version`. A hit on a published pardon is published directly: the existing write-up stays up and the new note appears with it (Josh, October 11, 2026). Step 3D's rule (a post-pardon status sets `needs_review`) applies only at first enrichment, never here.
+
+Verify every PATCH response (non-empty array), as in Step 6. A failed PATCH is logged and the run continues.
+
+**6.5f. Report hits on Discord.** If at least one status changed in this run (gold mode excluded), and `DISCORD_WEBHOOK_URL` is set, post ONE message (never fails the run; ignore errors). Write the body with the Write tool to `/tmp/discord.json`:
+
+```json
+{"content": "Pardons recheck: 1 status change. <recipient_name> (id <id>): quiet -> re_offended. <one sentence: what, where, when>. Now on the site."}
+```
+
+```bash
+curl -s -X POST "${DISCORD_WEBHOOK_URL}" -H "Content-Type: application/json" -d @/tmp/discord.json
+```
+
+**6.5g. Log every recheck** in Step 7 `pardon_details`, one entry each: `{"id": 11, "recipient_name": "Joan Bell", "status": "rechecked", "result": "hit", "post_pardon_status": "re_offended"}`. `result` is one of `quiet`, `hit`, `identity_unclear`, `pre_pardon`, `failed`. Rechecks do not count toward `pardons_found` / `pardons_enriched`.
 
 ### Step 7: Log Run Completion
 
@@ -775,7 +859,7 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
   "is_public": true,
   "research_status": "complete",
   "needs_review": false,
-  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.3", "run_source": "cloud-agent"}
+  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"}
 }
 ```
 
@@ -787,7 +871,9 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
 |-----------|--------|
 | Env vars missing | Log error, PATCH log to `failed`, stop |
 | PostgREST unreachable (curl error) | PATCH log to `failed` (if possible), stop |
-| 0 pardons found | Log `pardons_found = 0`, PATCH log to `completed`, stop (healthy) |
+| 0 pardons found | `pardons_found = 0`, run Step 6.5 (recheck), then PATCH log to `completed` (healthy) |
+| Recheck RPC missing (`PGRST202`) | Skip Step 6.5, note it in the log `errors`, complete normally |
+| Recheck hit, identity or timing in doubt | Stamp `post_pardon_checked_at` only, log `identity_unclear` / `pre_pardon`, never change the status |
 | Web research yields nothing for a pardon | Still enrich using `offense_raw`, say less, state that no public reporting was found. No flag unless a v1.3 flag trigger applies |
 | PATCH write returns empty `[]` | Log error for that pardon, increment `pardons_failed`, continue to next |
 | PATCH write returns HTTP error | Log the error, increment `pardons_failed`, continue to next |
@@ -833,6 +919,8 @@ These rules can NEVER be violated:
 10. **Verify every PATCH response**  - empty response means the write failed.
 11. **Never skip Step 7** (log completion)  - even after failures.
 12. **L1 should be <10% of output**  - if you're assigning L1 more than once per run of 5, recalibrate.
+13. **A recheck (Step 6.5) writes only `post_pardon_status`, `post_pardon_notes`, `source_urls` and `post_pardon_checked_at`**  - never `needs_review`, `is_public` or any editorial field, and the status never moves back toward `quiet`.
+14. **Gold mode (`PARDONS_RECHECK_IDS`) never runs on PROD.**
 
 ---
 
@@ -840,12 +928,12 @@ These rules can NEVER be violated:
 
 | Field | Value |
 |-------|-------|
-| Prompt version | v1.3 |
+| Prompt version | v1.4 |
 | Created | 2026-05-30 |
-| Updated | 2026-10-06 (v1.3: review flags only for checkable doubts - identity, contradicting sources, unconfirmed load-bearing claim, co-defendant role, post-pardon status; thin research, L0 and silent serious-criminal pardons no longer flag; identity check step; full search protocol before "nothing found"). 2026-09-20 (v1.2: research uses WebSearch, never a fetched search results page; Step 3.0 research health check stops the run when search is broken). 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
+| Updated | 2026-10-11 (v1.4, ADO-524: Step 6.5 post-pardon recheck on every run, up to 10 due pardons from `pardons_due_for_recheck`, one search each, a confirmed hit publishes the note directly and posts to Discord; Step 6 stamps `post_pardon_checked_at`; TEST-only gold mode `PARDONS_RECHECK_IDS`). 2026-10-06 (v1.3: review flags only for checkable doubts - identity, contradicting sources, unconfirmed load-bearing claim, co-defendant role, post-pardon status; thin research, L0 and silent serious-criminal pardons no longer flag; identity check step; full search protocol before "nothing found"). 2026-09-20 (v1.2: research uses WebSearch, never a fetched search results page; Step 3.0 research health check stops the run when search is broken). 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
 | Author | Josh + Claude Code |
 | Target model | Claude Opus 4.6 |
 | Max turns | 15 |
-| Tables accessed | `pardons`, `pardons_enrichment_log` |
+| Tables accessed | `pardons`, `pardons_enrichment_log`, RPC `pardons_due_for_recheck` (v1.4) |
 | API method | Bash/curl to PostgREST (DB), WebSearch + WebFetch (web research) |
 | Schedule | Daily at 20:00 UTC (2hrs after DOJ scraper at 18:00 UTC) |

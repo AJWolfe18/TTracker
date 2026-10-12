@@ -150,4 +150,30 @@ assert.ok(executor.includes("'clustering_judge_log'"), 'executor writes the audi
 assert.ok(!/^\s+push:/m.test(workflow) && workflow.includes('scripts/clustering/process-judge-inbox.js') && read('../clustering/process-judge-inbox.js').includes('refs/heads/judge-run/*'), 'workflow listens on judge-run/** and runs the executor');
 assert.ok(workflow.includes('secrets.SUPABASE_SERVICE_KEY') && workflow.includes('secrets.SUPABASE_TEST_SERVICE_KEY'), 'workflow injects both service keys from secrets');
 
+// --- Pardons agent (v1.4, ADO-524): the post-pardon recheck rotation ---
+const pardons = read('../../docs/features/pardons-claude-agent/prompt-v1.md');
+const mig132 = read('../../migrations/132_pardons_post_pardon_recheck.sql');
+const step65 = pardons.slice(pardons.indexOf('### Step 6.5'), pardons.indexOf('### Step 7'));
+assert.ok(step65.length > 0, 'Step 6.5 (post-pardon recheck) exists, before Step 7');
+assert.ok(step65.includes('rpc/pardons_due_for_recheck') && mig132.includes('FUNCTION public.pardons_due_for_recheck('), 'recheck pool comes from the migration 132 RPC');
+assert.ok(step65.includes('"p_limit": 10') && mig132.includes('LEAST(GREATEST(COALESCE(p_limit, 10), 1), 10)'), 'up to 10 rechecks per run, clamped in the DB too');
+assert.ok(step65.includes('PGRST202'), 'a missing RPC skips the recheck instead of failing the run (deploy order)');
+assert.ok(/Healthy empty run for enrichment[\s\S]{0,200}Step 6\.5/.test(pardons), 'a run with nothing to enrich still runs the recheck');
+assert.ok(step65.includes('Step 3.0 research health check') && /stamp nothing/.test(step65), 'a broken search never stamps a pardon as checked');
+// the recheck writes only the post-pardon fields: no needs_review/is_public/editorial keys in its bodies
+const recheckBodies = [...step65.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => m[1]).filter((b) => b.includes('post_pardon_checked_at'));
+assert.ok(recheckBodies.length >= 2, 'Step 6.5 shows its no-hit and hit PATCH bodies');
+for (const b of recheckBodies) {
+  for (const k of ['needs_review', 'is_public', 'corruption_level', 'summary_spicy', 'summary_neutral', 'enriched_at', 'prompt_version']) {
+    assert.ok(!b.includes(`"${k}"`), `a recheck PATCH body must not write ${k}`);
+  }
+}
+assert.ok(/NEVER writes\*\* `needs_review`, `is_public`/.test(step65), 'Step 6.5 forbids needs_review/is_public (Josh, October 11: a hit publishes directly)');
+assert.ok(/only moves up, never back/.test(step65), 'status escalates only');
+assert.ok(step65.includes('After the pardon') && step65.includes('Same person'), 'a hit needs identity and post-pardon timing before any write');
+assert.ok(step65.includes('DISCORD_WEBHOOK_URL') && /never fails the run/.test(step65), 'hits are reported on Discord, never fatally');
+assert.ok(pardons.includes('osjbulmltfpcoldydexg') && /PARDONS_RECHECK_IDS is TEST only/.test(pardons), 'gold mode refuses on PROD');
+assert.ok(/"post_pardon_checked_at": "\{ENRICHED_AT value\}"/.test(pardons), 'first enrichment stamps the first check (Step 6)');
+assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"prompt_version": "v1.3"'), 'pardons writes are tagged v1.4');
+
 console.log('agent-prompt-contracts: all checks passed');
