@@ -14,7 +14,7 @@ research every pardon every day, so the fix is a small rotation inside the exist
   the enrichment queue is empty and the run takes about a minute.
 - **Rotation:** up to 10 rechecks per run, oldest check first. Pardoned within 180 days: due every
   14 days. Older: every 60 days.
-- **Cheap first pass:** one targeted search per pardon. Identity check and full research only on a
+- **Cheap first pass:** two searches per pardon (plain name, then name plus a distinguishing term; the TEST gold run showed one is not enough for a common name). Identity check and full research only on a
   hit. No hit = stamp `post_pardon_checked_at` only. Editorial fields are never touched by a recheck.
 - **A hit on a public pardon publishes the note directly** (Josh, October 11, 2026): no
   `needs_review`, no unpublish. The change is reported on Discord. This replaces AC 5.
@@ -65,7 +65,7 @@ research every pardon every day, so the fix is a small rotation inside the exist
 
 ## Cost
 
-$0 cash. About 10 extra searches per daily run on the subscription. No new routine.
+$0 cash. Up to 20 extra searches per daily run (two per due pardon) on the subscription. No new routine.
 
 ## PROD order
 

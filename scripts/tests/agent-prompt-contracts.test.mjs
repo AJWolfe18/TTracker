@@ -189,5 +189,7 @@ assert.ok(/source_urls\s+JSONB/.test(mig132) && step65.includes('source_urls, po
 assert.ok(/errors or returns no results at all is NOT "no hit"/.test(step65), 'a failed search mid-loop is never stamped as checked');
 assert.ok(!/WebSearch\(query="[^"]*\bOR\b/.test(step65), 'the recheck search uses plain words, no OR syntax');
 assert.ok(pardons.includes('Deploy-order guard (v1.4)') && pardons.includes('PGRST204'), 'Step 6 survives a missing migration 132');
+// TEST gold run, October 12, 2026: one plain-name search missed William Goodman's arrest
+assert.ok(/Two searches per pardon, always both/.test(step65) && step65.includes('<distinguishing term> arrested'), 'every recheck runs the plain search AND the distinguishing-term search');
 
 console.log('agent-prompt-contracts: all checks passed');
