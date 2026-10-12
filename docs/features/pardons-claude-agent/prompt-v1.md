@@ -4,7 +4,7 @@
 > - Migration 063 (`corruption_level` CHECK updated to 0-5)
 > - Migration 071 (`prompt_version` TEXT and `enrichment_meta` JSONB columns on pardons)
 > - Migration 094 (`pardons_enrichment_log` observability table)
-> - Migration 132 (`post_pardon_checked_at` + `pardons_due_for_recheck`, v1.4). Without it Step 6.5 skips itself (`PGRST202`), but every Step 6 enrichment PATCH FAILS (PostgREST rejects the unknown `post_pardon_checked_at` column), so apply 132 BEFORE v1.4 reaches the branch
+> - Migration 132 (`post_pardon_checked_at` + `pardons_due_for_recheck`, v1.4). Without it Step 6.5 skips itself (`PGRST202`) and Step 6 resends each PATCH without `post_pardon_checked_at` (`PGRST204` guard), so nothing breaks, but nothing is rechecked either: apply 132 BEFORE v1.4 reaches the branch
 >
 > If `prompt_version` or `enrichment_meta` columns don't exist, PATCH writes will silently drop those fields  - the agent will report success but provenance data won't persist.
 
@@ -43,7 +43,7 @@ echo "RECHECK_IDS=${PARDONS_RECHECK_IDS:-none}"
 
 `DISCORD_WEBHOOK_URL` is optional (Step 6.5 posts a recheck hit there when it is set). Never print its value.
 
-**Recheck gold mode (TEST only, v1.4):** when `PARDONS_RECHECK_IDS` is set (comma-separated pardon ids, e.g. `11,19,155`), either in the environment or as a line `PARDONS_RECHECK_IDS=<ids>` in the run's first (bootstrap) message, this run is a test of the post-pardon recheck. Shell variables do not survive between Bash calls, so copy the ids as a literal value. Skip Steps 2 to 6 (no enrichment), run Step 6.5 on exactly those ids, then Step 7. If `SUPABASE_URL` contains `osjbulmltfpcoldydexg` (PROD), refuse: log `status = 'failed'` with `errors: ["PARDONS_RECHECK_IDS is TEST only"]` and stop. If the value is anything other than digits and commas, refuse the same way.
+**Recheck gold mode (TEST only, v1.4):** when `PARDONS_RECHECK_IDS` is set (comma-separated pardon ids, e.g. `11,19,155`), either in the environment or as a line `PARDONS_RECHECK_IDS=<ids>` in the run's first (bootstrap) message, this run is a test of the post-pardon recheck. Shell variables do not survive between Bash calls, so copy the ids as a literal value. Run Steps 1 and 1.5 as usual (the log row), skip Steps 2 to 6 (no enrichment), run Step 6.5 on exactly those ids, then Step 7. If `SUPABASE_URL` contains `osjbulmltfpcoldydexg` (PROD), refuse right after Step 1: PATCH that log row to `status = 'failed'` with `errors: ["PARDONS_RECHECK_IDS is TEST only"]` and stop. If the value is anything other than digits and commas, refuse the same way.
 
 Store the base URL for all API calls:
 ```
@@ -556,6 +556,8 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/pardons?id=eq.{PARDON_ID}" \
 
 **Verify the response:** Must be a non-empty JSON array. If empty `[]` or error, the write failed  - log the error and continue to next pardon.
 
+**Deploy-order guard (v1.4):** if the error says the `post_pardon_checked_at` column does not exist (`PGRST204`, migration 132 not applied), remove that one key from the file and send the PATCH again once. Add `"post_pardon_checked_at missing: migration 132 not applied"` to the log `errors` (once per run). Enrichment must never fail for the recheck's column.
+
 **AGENT WRITES these columns on `pardons`:**
 `crime_description`, `primary_connection_type`, `secondary_connection_types`, `corruption_level`,
 `corruption_reasoning`, `trump_connection_detail`, `donation_amount_usd`,
@@ -591,22 +593,24 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pardons_due_for_recheck" \
   -d '{"p_limit": 10}'
 ```
 
-Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, post_pardon_checked_at, pool_size`. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days, otherwise every 60 days, never-checked first). Do not add your own filter.
+Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, source_urls, post_pardon_checked_at, pool_size`. Keep each row's `source_urls`: a hit PATCH sends that whole array back with the new URL added. Put `pool_size` in the Step 7 log (6.5g) so a growing backlog is visible. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days, otherwise every 60 days, never-checked first). Do not add your own filter.
 - `[]` = nothing due. Go to Step 7.
 - An error with code `PGRST202` = migration 132 is missing. Do not recheck; add `"recheck skipped: pardons_due_for_recheck missing (migration 132)"` to the log `errors` and go to Step 7.
 
 **Gold mode** (`PARDONS_RECHECK_IDS` set, TEST only, see Section 1): instead of the RPC, read exactly those ids:
-`GET /pardons?id=in.(<ids>)&select=id,recipient_name,pardon_date,clemency_type,conviction_district,case_number,offense_raw,post_pardon_status,post_pardon_notes,post_pardon_checked_at`. Recheck each one the same way below, whatever its `is_public` or check date.
+`GET /pardons?id=in.(<ids>)&select=id,recipient_name,pardon_date,clemency_type,conviction_district,case_number,offense_raw,post_pardon_status,post_pardon_notes,source_urls,post_pardon_checked_at`. Recheck each one the same way below, whatever its `is_public` or check date.
 
 **Search must work before any stamp.** If the Step 3.0 research health check has not run in this run (Step 2 found nothing to enrich, or gold mode), run it now, before the first recheck. If it fails, recheck nothing and stamp nothing: add `"recheck skipped: research tool unavailable"` to the log `errors` and go to Step 7. A broken search reads as "no news", and a stamp would then hide a real arrest for 14 to 60 days.
 
 **6.5b. One search per pardon.** Load WebSearch if needed (Step 3). The search covers the years from the pardon to now:
 
 ```
-WebSearch(query="<recipient_name> arrested OR charged OR indicted <pardon year> <current year>")
+WebSearch(query="\"<recipient_name>\" arrested charged after pardon")
 ```
 
-Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
+Use plain words, no `OR` and no years (an article about a 2026 arrest may never mention the pardon year). Look only for a NEW development: an arrest, charge, indictment, conviction, plea or official investigation for conduct AFTER `pardon_date`. Not a hit: the original case, coverage of the pardon itself, commentary, or anything dated before `pardon_date`.
+
+**A search that errors or returns no results at all is NOT "no hit".** Record `"result": "failed"` for that pardon and stamp nothing, so it stays due tomorrow. If two searches in a row fail that way, stop the recheck (the rest stay due) and add `"recheck stopped: search failing mid-run"` to the log `errors`. Only a search that returned results, none of them about a new development, counts as no hit.
 
 **6.5c. No hit:** stamp the check only, then the next pardon:
 
@@ -650,7 +654,7 @@ Verify every PATCH response (non-empty array), as in Step 6. A failed PATCH is l
 curl -s -X POST "${DISCORD_WEBHOOK_URL}" -H "Content-Type: application/json" -d @/tmp/discord.json
 ```
 
-**6.5g. Log every recheck** in Step 7 `pardon_details`, one entry each: `{"id": 11, "recipient_name": "Joan Bell", "status": "rechecked", "result": "hit", "post_pardon_status": "re_offended"}`. `result` is one of `quiet`, `hit`, `identity_unclear`, `pre_pardon`, `failed`. Rechecks do not count toward `pardons_found` / `pardons_enriched`.
+**6.5g. Log every recheck** in Step 7 `pardon_details`: first one summary entry `{"status": "recheck_summary", "recheck_pool": <pool_size>, "rechecked": <n>}` (`recheck_pool` 0 when nothing was due), then one entry per pardon: `{"id": 11, "recipient_name": "Joan Bell", "status": "rechecked", "result": "hit", "post_pardon_status": "re_offended"}`. `result` is one of `quiet`, `hit`, `identity_unclear`, `pre_pardon`, `failed`. Rechecks do not count toward `pardons_found` / `pardons_enriched`.
 
 ### Step 7: Log Run Completion
 

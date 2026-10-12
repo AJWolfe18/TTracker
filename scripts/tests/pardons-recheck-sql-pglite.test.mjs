@@ -30,7 +30,7 @@ create table public.pardons(
   pardon_date date not null, clemency_type text not null default 'pardon', conviction_district text,
   case_number text, offense_raw text, post_pardon_status text not null default 'quiet',
   post_pardon_notes text, enriched_at timestamptz, is_public boolean not null default false,
-  summary_neutral text);
+  summary_neutral text, source_urls jsonb not null default '[]'::jsonb);
 insert into public.pardons(id, recipient_name, recipient_type, pardon_date, enriched_at, is_public) values
   -- recent tier (pardoned within 180 days): due after 14 days
   (101, 'Recent, checked 20 days ago',  'person', current_date - 30,  now() - interval '20 days', true),
@@ -84,6 +84,7 @@ check(ids.includes(301), '179 days after the pardon is still the 14-day tier');
 check(![401, 402, 403, 3].some((x) => ids.includes(x)), 'excluded: unpublished, unenriched, group card, id 3');
 check(rows.every((r) => Number(r.pool_size) === 5), 'pool_size = due rows before LIMIT');
 check('offense_raw' in rows[0] && 'case_number' in rows[0] && !('summary_neutral' in rows[0]), 'returns identity columns, not editorial ones');
+check(Array.isArray(rows[0].source_urls), 'returns the current source_urls (a hit PATCH sends the whole array back)');
 
 out('4. limit clamp');
 check((await due(db, 2)).length === 2 && Number((await due(db, 2))[0].pool_size) === 5, 'p_limit 2 returns 2 rows, pool_size still 5');
