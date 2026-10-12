@@ -190,6 +190,7 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | research_status | TEXT | 'complete', 'in_progress', 'pending' |
 | post_pardon_status | TEXT | 'quiet', 'under_investigation', 're_offended' |
 | post_pardon_notes | TEXT | What happened after pardon |
+| post_pardon_checked_at | TIMESTAMPTZ | Last post-pardon news check (migration 132, ADO-524): set at enrichment and by every daily recheck, hit or not |
 | trump_connection_detail | TEXT | Connection explanation |
 | donation_amount_usd | NUMERIC(14,2) | Donation amount if applicable |
 | receipts_timeline | JSONB | Array of timeline events |
@@ -213,6 +214,8 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 - `pardons_donation_nonnegative` - Donation >= 0
 - `pardons_receipts_timeline_is_array` - JSONB array check
 - Partial unique: `(source_system, source_key) WHERE source_key IS NOT NULL`
+
+**RPC `pardons_due_for_recheck(p_limit int default 10)`** (migration 132, ADO-524, service_role only): the pardons agent's daily recheck pool (prompt v1.4 Step 6.5). Published, enriched person pardons (not id 3, no group cards) whose `post_pardon_checked_at` is NULL or older than 14 days (pardoned within 180 days, or Jan 6: `primary_connection_type = 'jan6_defendant'`, `crime_category = 'jan6'`, or January 20, 2025 with a Capitol / January 6 offense) or 60 days (otherwise). Never-checked first, then oldest check; 1-10 rows with identity columns, `source_urls` and `pool_size`.
 
 **Key Indexes:**
 - `idx_pardons_search` - GIN on search_vector

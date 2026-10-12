@@ -48,6 +48,8 @@ insert into public.pardons(id, recipient_name, recipient_type, pardon_date, enri
   (304, 'crime_category jan6, 20 days ago',     'person', current_date - 300, now() - interval '20 days', true),
   -- January 20, 2025 but NOT Jan 6 (a Bannon/Giuliani-style row): ordinary 60-day tier
   (305, 'Jan 20 2025, not Jan 6, 20 days ago',  'person', date '2025-01-20', now() - interval '20 days', true),
+  -- January 20, 2025 + a Capitol offense, but enrichment set no Jan 6 marker: still the fast tier
+  (306, 'Jan 6 by offense, no marker',         'person', date '2025-01-20', now() - interval '20 days', true),
   -- exclusions
   (401, 'Unpublished',                  'person', current_date - 400, now() - interval '90 days', false),
   (402, 'Unenriched',                   'person', current_date - 400, null,                       true),
@@ -55,7 +57,8 @@ insert into public.pardons(id, recipient_name, recipient_type, pardon_date, enri
   (3,   'January 6th Mass Pardon',      'person', current_date - 400, now() - interval '90 days', true);
 update public.pardons set primary_connection_type = 'jan6_defendant' where id in (302, 303);
 update public.pardons set crime_category = 'jan6' where id = 304;
-update public.pardons set primary_connection_type = 'campaign_staff' where id = 305;
+update public.pardons set primary_connection_type = 'campaign_staff', offense_raw = 'Contempt of Congress' where id = 305;
+update public.pardons set primary_connection_type = 'political_ally', crime_category = 'violent', offense_raw = 'Assaulting officers at the U.S. Capitol on January 6, 2021' where id = 306;
 `;
 
 let failures = 0;
@@ -85,7 +88,7 @@ out('3. due rule and exclusions');
 await db.exec('update public.pardons set post_pardon_checked_at = null where id = 501');
 const rows = await due(db);
 const ids = rows.map((r) => Number(r.id));
-check(JSON.stringify(ids) === JSON.stringify([501, 201, 203, 101, 301, 302, 304]),
+check(JSON.stringify(ids) === JSON.stringify([501, 201, 203, 101, 301, 302, 304, 306]),
   `order: never checked, then oldest check, then id (got ${ids.join(', ')})`);
 check(!ids.includes(102), 'recent tier: checked 5 days ago is not due');
 check(!ids.includes(202), 'older tier: checked 30 days ago is not due');
@@ -94,12 +97,13 @@ check(ids.includes(301), '179 days after the pardon is still the 14-day tier');
 check(![401, 402, 403, 3].some((x) => ids.includes(x)), 'excluded: unpublished, unenriched, group card, id 3');
 check(ids.includes(302) && ids.includes(304) && !ids.includes(303), 'Jan 6 recipients (jan6_defendant or crime_category jan6) use the 14-day tier on any pardon date (AC 2)');
 check(!ids.includes(305), 'a January 20, 2025 pardon that is not Jan 6 stays on the 60-day tier');
-check(rows.every((r) => Number(r.pool_size) === 7), 'pool_size = due rows before LIMIT');
+check(ids.includes(306), 'a January 20, 2025 Capitol offense with a different connection type is still the fast tier');
+check(rows.every((r) => Number(r.pool_size) === 8), 'pool_size = due rows before LIMIT');
 check('offense_raw' in rows[0] && 'case_number' in rows[0] && !('summary_neutral' in rows[0]), 'returns identity columns, not editorial ones');
 check(Array.isArray(rows[0].source_urls), 'returns the current source_urls (a hit PATCH sends the whole array back)');
 
 out('4. limit clamp');
-check((await due(db, 2)).length === 2 && Number((await due(db, 2))[0].pool_size) === 7, 'p_limit 2 returns 2 rows, pool_size still 7');
+check((await due(db, 2)).length === 2 && Number((await due(db, 2))[0].pool_size) === 8, 'p_limit 2 returns 2 rows, pool_size still 8');
 check((await due(db, 0)).length === 1, 'p_limit 0 clamps to 1');
 await db.exec(`insert into public.pardons(id, recipient_name, pardon_date, enriched_at, is_public)
   select g, 'bulk ' || g, current_date - 400, now() - interval '100 days', true from generate_series(600, 619) g`);
