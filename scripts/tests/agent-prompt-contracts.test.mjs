@@ -175,5 +175,10 @@ assert.ok(step65.includes('DISCORD_WEBHOOK_URL') && /never fails the run/.test(s
 assert.ok(pardons.includes('osjbulmltfpcoldydexg') && /PARDONS_RECHECK_IDS is TEST only/.test(pardons), 'gold mode refuses on PROD');
 assert.ok(/"post_pardon_checked_at": "\{ENRICHED_AT value\}"/.test(pardons), 'first enrichment stamps the first check (Step 6)');
 assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"prompt_version": "v1.3"'), 'pardons writes are tagged v1.4');
+// review fixes (b9c32d0 /code-review medium)
+assert.ok(/source_urls\s+JSONB/.test(mig132) && step65.includes('source_urls, post_pardon_checked_at'), 'the RPC and gold select return source_urls, so a hit never wipes the existing sources');
+assert.ok(/errors or returns no results at all is NOT "no hit"/.test(step65), 'a failed search mid-loop is never stamped as checked');
+assert.ok(!/WebSearch\(query="[^"]*\bOR\b/.test(step65), 'the recheck search uses plain words, no OR syntax');
+assert.ok(pardons.includes('Deploy-order guard (v1.4)') && pardons.includes('PGRST204'), 'Step 6 survives a missing migration 132');
 
 console.log('agent-prompt-contracts: all checks passed');

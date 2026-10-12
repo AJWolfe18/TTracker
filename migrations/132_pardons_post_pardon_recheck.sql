@@ -8,19 +8,25 @@
 --
 -- WHAT:
 --   A) pardons.post_pardon_checked_at TIMESTAMPTZ: when post-pardon news was last
---      checked. Backfilled from enriched_at (Step 3D ran at enrichment). NULL =
---      never checked (unenriched, or enriched by hand without a date).
+--      checked. Backfilled from enriched_at (Step 3D ran at enrichment). NULL on
+--      an enriched pardon = never checked, and it sorts first.
 --   B) pardons_due_for_recheck(p_limit 1-10, default 10): public, enriched
 --      person pardons whose check is due. Pardoned within 180 days: due every 14
 --      days; older: every 60 days. Never checked first, then oldest check, then
---      id. Excludes the Jan 6 group card (id 3, manually curated) and every group
---      card (a name search means nothing for a group). Returns the identity
---      columns the check needs plus pool_size (due rows before LIMIT).
+--      id. Excludes the Jan 6 group card (id 3, manually curated), every group
+--      card (a name search means nothing for a group) and unenriched pardons
+--      (enriched_at NULL: Step 2 enriches them next, and Step 3D checks them
+--      then). Returns the identity columns the check needs, the current
+--      source_urls (a hit PATCH sends the whole array back), and pool_size
+--      (due rows before LIMIT).
+--      The function's output changed during review (source_urls added), so it is
+--      dropped first: CREATE OR REPLACE cannot change a RETURNS TABLE (42P13).
 --
 -- APPLY: paste the whole file into the Supabase SQL Editor (TEST first, then
 -- PROD), BEFORE prompt v1.4 reaches that environment's branch (the prompt calls
--- the RPC). Idempotent: the backfill only fills NULLs, the RPC is CREATE OR
--- REPLACE. One transaction; if anything errors, run ROLLBACK; alone before
+-- the RPC). Idempotent: the backfill only fills NULLs, the RPC is dropped and
+-- recreated (the editor shows a "Potential issue detected" dialog for the DROP:
+-- click Run query). One transaction; if anything errors, run ROLLBACK; alone before
 -- retrying. Last statement is a read-only check whose first column is
 -- `checked_backfilled` (= enriched pardons; expect due_now > 0 on TEST).
 -- ROLLBACK (manual): DROP FUNCTION public.pardons_due_for_recheck(integer);
@@ -46,6 +52,7 @@ UPDATE public.pardons
 -- PART B: pardons_due_for_recheck(p_limit)
 -- ----------------------------------------------------------------------------
 -- Every column is table-qualified (RETURNS TABLE names shadow columns, 42702).
+DROP FUNCTION IF EXISTS public.pardons_due_for_recheck(INTEGER);
 CREATE OR REPLACE FUNCTION public.pardons_due_for_recheck(
   p_limit INTEGER DEFAULT 10
 )
@@ -59,6 +66,7 @@ RETURNS TABLE (
   offense_raw            TEXT,
   post_pardon_status     TEXT,
   post_pardon_notes      TEXT,
+  source_urls            JSONB,
   post_pardon_checked_at TIMESTAMPTZ,
   pool_size              INTEGER
 )
@@ -76,6 +84,7 @@ AS $$
          p.offense_raw,
          p.post_pardon_status,
          p.post_pardon_notes,
+         p.source_urls,
          p.post_pardon_checked_at,
          COUNT(*) OVER ()::integer
     FROM public.pardons p
