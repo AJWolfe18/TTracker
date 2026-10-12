@@ -12,8 +12,8 @@ research every pardon every day, so the fix is a small rotation inside the exist
 
 - **Step in the existing pardons agent, not a new routine** (October 10, 2026): $0 extra. Most days
   the enrichment queue is empty and the run takes about a minute.
-- **Rotation:** up to 10 rechecks per run, oldest check first. Pardoned within 180 days: due every
-  14 days. Older: every 60 days.
+- **Rotation:** up to 10 rechecks per run, oldest check first. Pardoned within 180 days, or under the
+  January 20, 2025 Jan 6 proclamation (AC 2): due every 14 days. Otherwise: every 60 days.
 - **Cheap first pass:** two searches per pardon (plain name, then name plus a distinguishing term; the TEST gold run showed one is not enough for a common name). Identity check and full research only on a
   hit. No hit = stamp `post_pardon_checked_at` only. Editorial fields are never touched by a recheck.
 - **A hit on a public pardon publishes the note directly** (Josh, October 11, 2026): no

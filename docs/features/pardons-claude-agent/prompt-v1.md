@@ -593,7 +593,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/rpc/pardons_due_for_recheck" \
   -d '{"p_limit": 10}'
 ```
 
-Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, source_urls, post_pardon_checked_at, pool_size`. Keep each row's `source_urls`: a hit PATCH sends that whole array back with the new URL added. Put `pool_size` in the Step 7 log (6.5g) so a growing backlog is visible. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days, otherwise every 60 days, never-checked first). Do not add your own filter.
+Each row: `id, recipient_name, pardon_date, clemency_type, conviction_district, case_number, offense_raw, post_pardon_status, post_pardon_notes, source_urls, post_pardon_checked_at, pool_size`. Keep each row's `source_urls`: a hit PATCH sends that whole array back with the new URL added. Put `pool_size` in the Step 7 log (6.5g) so a growing backlog is visible. The database decides who is due (published person pardons, not id 3: every 14 days when pardoned within 180 days or under the January 20, 2025 Jan 6 proclamation, otherwise every 60 days, never-checked first). Do not add your own filter.
 - `[]` = nothing due. Go to Step 7.
 - An error with code `PGRST202` = migration 132 is missing. Do not recheck; add `"recheck skipped: pardons_due_for_recheck missing (migration 132)"` to the log `errors` and go to Step 7.
 
