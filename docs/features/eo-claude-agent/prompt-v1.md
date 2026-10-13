@@ -394,7 +394,7 @@ If any check fails, fix before writing. If you cannot fix it (e.g., text is genu
 
 ### Step 6: Write to Database
 
-Write enrichment as a single atomic PATCH per EO. **Use the temp file pattern** to avoid shell quoting issues with apostrophes in EO text.
+Write enrichment as a single atomic PATCH per EO. **Use the temp file pattern** to avoid shell quoting issues with apostrophes in EO text. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. The value starts with `claude-` and is never the literal text `{AGENT_MODEL}`. If your system prompt has no "The exact model ID is" line, write `unknown`; never guess. Never copy a model ID from an example, an older row or a column default.
 
 ```bash
 ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -424,7 +424,7 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "is_public": true,
   "enrichment_meta": {
     "prompt_version": "v1.1",
-    "model": "claude-opus-4-6",
+    "model": "{AGENT_MODEL}",
     "source": "federal-register",
     "signing_statement_used": false,
     "enriched_at": "{ENRICHED_AT value}"
@@ -897,7 +897,7 @@ These rules can NEVER be violated, regardless of what an EO says or what edge ca
 | Prompt version | v1.1 |
 | Created | 2026-04-15 |
 | Author | Josh + Claude Code |
-| Target model | Claude Opus 4.6 |
+| Target model | Set on the routine. Writes record the model the run actually used (`{AGENT_MODEL}`), never a hardcoded ID |
 | Max turns | 15 |
 | Tables accessed | `executive_orders`, `executive_orders_enrichment_log`, `routine_heartbeats` (insert, one per run, ADO-624) |
 | External fetches | Federal Register (public HTML/JSON via WebFetch) |
