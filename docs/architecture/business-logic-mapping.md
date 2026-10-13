@@ -1061,7 +1061,7 @@ Output JSON with: section_what_they_say, section_what_it_means, section_reality_
 
 ### Pardons System Prompt
 
-**Source:** `scripts/enrichment/pardons-gpt-prompt.js` (SYSTEM_PROMPT)
+**Source:** legacy GPT prompt, deleted in ADO-523 (kept below for history). Pardons copy is now written by the Claude Pardons agent: `docs/features/pardons-claude-agent/prompt-v1.md`.
 
 ```
 You are writing for TrumpyTracker, an accountability site tracking Trump administration pardons.
