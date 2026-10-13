@@ -42,3 +42,7 @@ Josh asked for the top 10 bugs that need no input from him, worked in parallel w
 
 ## Next session
 Build one deploy PR to main for these cards (cherry-pick from `refs/heads/test`, in landed order) once Josh's Codex review is done. Respect the two order constraints above (admin-scotus deploy before #185; #186 after ADO-524).
+
+## Codex status (Josh, October 12, 2026, 9:26-9:28 PM CT)
+- Passed, no findings: #180, #181, #182 (607), #185 (495).
+- Still need Codex before PROD: #183 (609), #184 (602), #186 (626), #187 (523), #188 (196).
