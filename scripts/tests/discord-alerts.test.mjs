@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, postDiscordReported, summarizeList, COLORS } from '../lib/discord.js';
 import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay } from '../monitoring/alert-needs-review.js';
+import { dailySlot } from '../lib/daily-check-window.js';
 
 // --- postDiscord -----------------------------------------------------------
 {
@@ -233,14 +234,24 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
 
 // --- stories (ADO-602): daily digest of the Stories agent's own flags, no open queue ---
 {
+  // the slot is fixed (yesterday 12:00 UTC to today 12:00 UTC), wherever in the window the run starts
+  assert.deepEqual(dailySlot(Date.parse('2026-10-12T12:00:00Z')), { start: new Date('2026-10-11T12:00:00Z'), end: new Date('2026-10-12T12:00:00Z') });
+  assert.deepEqual(dailySlot(Date.parse('2026-10-12T17:59:00Z')), { start: new Date('2026-10-11T12:00:00Z'), end: new Date('2026-10-12T12:00:00Z') });
+  // a manual run before 12:00 UTC reports the last complete slot
+  assert.deepEqual(dailySlot(Date.parse('2026-10-12T06:10:00Z')), { start: new Date('2026-10-10T12:00:00Z'), end: new Date('2026-10-11T12:00:00Z') });
+  // runs almost 30h apart (12:00 one day, 17:59 the next) still report adjacent slots: no gap
+  assert.equal(dailySlot(Date.parse('2026-10-11T12:00:00Z')).end.getTime(), dailySlot(Date.parse('2026-10-12T17:59:00Z')).start.getTime());
+
   const DAILY = Date.parse('2026-10-12T12:30:00Z'); // inside the once-a-day health check window
-  const hoursAgo = (h) => new Date(DAILY - h * 3600000).toISOString();
-  // Fake PostgREST that applies the flag and created_at filters, so the test proves the query shape
-  // keeps unflagged thin_source rows and older flags out
+  const at = (iso) => new Date(iso).toISOString();
+  // Fake PostgREST that applies the flag, status and created_at filters, so the test proves the query
+  // keeps unflagged thin_source rows, failed runs and rows outside the slot out
   const log = [
-    { id: 41, story_id: 17301, needs_manual_review: true, notes: 'factual error: wrong vote count — 52-48, not 51-49', created_at: hoursAgo(3), stories: { primary_headline: 'Senate passes the budget bill' } },
-    { id: 40, story_id: 17300, needs_manual_review: false, notes: 'thin_source', created_at: hoursAgo(4), stories: { primary_headline: 'Thin story' } },
-    { id: 39, story_id: 17299, needs_manual_review: true, notes: 'old flag', created_at: hoursAgo(30), stories: { primary_headline: 'Yesterday story' } },
+    { id: 41, story_id: 17301, needs_manual_review: true, status: 'completed', notes: 'factual error: wrong vote count — 52-48, not 51-49', created_at: at('2026-10-12T09:30:00Z'), stories: { primary_headline: 'Senate passes the budget bill — barely' } },
+    { id: 40, story_id: 17300, needs_manual_review: false, status: 'completed', notes: 'thin_source', created_at: at('2026-10-12T08:30:00Z'), stories: { primary_headline: 'Thin story' } },
+    { id: 39, story_id: 17299, needs_manual_review: true, status: 'completed', notes: 'old flag', created_at: at('2026-10-11T06:30:00Z'), stories: { primary_headline: 'Day before story' } },
+    { id: 42, story_id: 17302, needs_manual_review: true, status: 'completed', notes: 'next slot', created_at: at('2026-10-12T12:10:00Z'), stories: { primary_headline: 'Tomorrow digest story' } },
+    { id: 38, story_id: 17298, needs_manual_review: true, status: 'failed', notes: 'run died', created_at: at('2026-10-12T07:00:00Z'), stories: { primary_headline: 'Failed run story' } },
   ];
   const seen = { queries: [], discord: [] };
   let table = log;
@@ -249,33 +260,38 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
     if (u.hostname === 'd.test') { seen.discord.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
     seen.queries.push(u);
     assert.ok(u.pathname.endsWith('/stories_enrichment_log'));
-    const since = Date.parse(u.searchParams.get('created_at').replace(/^gte\./, ''));
-    const rows = table.filter((r) => (u.searchParams.get('needs_manual_review') !== 'eq.true' || r.needs_manual_review) && Date.parse(r.created_at) >= since);
+    const created = u.searchParams.getAll('created_at');
+    const gte = Date.parse(created.find((c) => c.startsWith('gte.')).slice(4));
+    const lt = Date.parse(created.find((c) => c.startsWith('lt.')).slice(3));
+    const rows = table.filter((r) => (u.searchParams.get('needs_manual_review') !== 'eq.true' || r.needs_manual_review)
+      && (u.searchParams.get('status') !== 'eq.completed' || r.status === 'completed')
+      && Date.parse(r.created_at) >= gte && Date.parse(r.created_at) < lt);
     return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json', 'Content-Range': `0-${Math.max(rows.length - 1, 0)}/${rows.length}` } });
   };
   const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
   const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, log: () => {}, now });
 
-  // a flagged row alerts with the headline and the agent's note; the unflagged thin_source row and the 30h-old flag do not
+  // a flagged row alerts with the headline and the agent's note; the unflagged thin_source row, the
+  // failed run and the flags outside the slot do not
   assert.deepEqual(await run(), { flagged: 1, due: true, posted: true });
   const q = seen.queries[0];
   assert.equal(q.searchParams.get('needs_manual_review'), 'eq.true');
-  assert.equal(q.searchParams.get('created_at'), `gte.${hoursAgo(26)}`);
+  assert.equal(q.searchParams.get('status'), 'eq.completed');
+  assert.deepEqual(q.searchParams.getAll('created_at'), ['gte.2026-10-11T12:00:00.000Z', 'lt.2026-10-12T12:00:00.000Z']);
   assert.ok(q.searchParams.get('select').includes('stories(primary_headline)'));
   assert.ok(!q.searchParams.get('select').includes('*'));
   const embed = seen.discord[0].embeds[0];
-  assert.equal(embed.title, 'Stories: the agent flagged 1 enrichment for review (last 26h)');
-  assert.ok(embed.description.includes('• Story 17301: Senate passes the budget bill - factual error: wrong vote count - 52-48, not 51-49'), embed.description);
-  assert.ok(!embed.description.includes('Thin story') && !embed.description.includes('thin_source'));
-  assert.ok(!embed.description.includes('Yesterday story'));
+  assert.equal(embed.title, 'Stories: the agent flagged 1 enrichment for review (flags from October 11 12:00 UTC to October 12 12:00 UTC)');
+  assert.ok(embed.description.includes('• Story 17301: Senate passes the budget bill - barely - factual error: wrong vote count - 52-48, not 51-49'), embed.description);
+  for (const left of ['Thin story', 'thin_source', 'Day before story', 'Tomorrow digest story', 'Failed run story']) assert.ok(!embed.description.includes(left), left);
   assert.ok(embed.description.includes('https://trumpytracker.com/admin.html (Stories tab)'));
-  assert.ok(!embed.description.includes('—'), 'no em dashes');
+  assert.ok(!/[—–]/.test(embed.description), 'no em or en dashes, in the headline or the note');
   assert.equal(embed.color, COLORS.warning);
 
-  // a thin_source row with no flag, alone in the window -> nothing posted
+  // a thin_source row with no flag, alone in the slot -> nothing posted
   table = [log[1]];
   assert.deepEqual(await run(), { flagged: 0, due: false, posted: false });
-  // empty window -> nothing posted
+  // empty slot -> nothing posted
   table = [];
   assert.deepEqual(await run(), { flagged: 0, due: false, posted: false });
   assert.equal(seen.discord.length, 1);
@@ -287,13 +303,17 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: 'push' }), { flagged: 0, due: false, posted: false });
   assert.equal(seen.queries.length, queries);
   assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { GITHUB_EVENT_NAME: 'workflow_dispatch' })).posted, true);
+  assert.ok(seen.discord.at(-1).embeds[0].description.includes('Day before story'), 'the manual run reported the last complete slot');
+  // the ingest health override does not force the Stories digest (no coupling to the RSS monitor)
+  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { INGEST_HEALTH_FORCE: '1' })).due, false);
 
   // a flagged run-level row (no story) still names something
   assert.ok(buildAlert('stories', [{ id: 5, story_id: null, notes: 'n' }]).description.includes('• Log row 5 - n'));
 
-  // wired into the once-a-day RSS health check on main (reads PROD)
+  // wired into the once-a-day RSS health check on main (reads PROD), with a follow-up so a dead digest is never silent
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
-  assert.match(wf, /node scripts\/monitoring\/alert-needs-review\.js --domain stories/);
+  assert.match(wf, /id: stories_review[\s\S]*node scripts\/monitoring\/alert-needs-review\.js --domain stories/);
+  assert.match(wf, /steps\.stories_review\.outcome == 'failure'/);
 }
 
 // --- runCli: a check that cannot run is never silent ----------------------------

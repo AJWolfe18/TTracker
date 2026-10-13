@@ -20,9 +20,10 @@
  *
  * Stories (ADO-602) are different: the Stories agent flags its own log rows (stories_enrichment_log)
  * and there is no "reviewed" state, so an open queue would repeat forever. Instead it is a daily digest:
- * flagged log rows created in the last STORIES_WINDOW_HOURS (26h), checked only on the once-a-day run of
- * the RSS health check (same window as alert-ingest-health.js). Thin-source notes without the flag
- * never alert.
+ * flagged, completed log rows from the fixed slot yesterday 12:00 UTC to today 12:00 UTC (dailySlot),
+ * checked only on the once-a-day run of the RSS health check (scripts/lib/daily-check-window.js), so
+ * each flag is reported exactly once. A scheduled run that never happens skips its slot.
+ * Thin-source notes without the flag never alert.
  *
  * Usage: node scripts/monitoring/alert-needs-review.js --domain scotus|eo|pardons|stories
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or the SUPABASE_TEST_* names),
@@ -40,12 +41,10 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
-import { shouldCheck } from './alert-ingest-health.js';
+import { isDailyCheckRun, dailySlot } from '../lib/daily-check-window.js';
 
 const DEFAULT_WINDOW_HOURS = 168;
 const NEW_HOURS = 26;
-// Daily digest for Stories: 24h plus 2h of slack for a late GitHub start, so no flag falls between runs
-export const STORIES_WINDOW_HOURS = 26;
 const QUERY_LIMIT = 50;
 const REMINDER_WEEKDAY = 'Mon'; // weekly reminder day for older flags, Central time
 const ORIGINS = Object.freeze({ prod: 'https://trumpytracker.com', test: 'https://test--taupe-capybara-0ff2ed.netlify.app' });
@@ -81,11 +80,13 @@ export const DOMAINS = Object.freeze({
   },
   stories: {
     label: 'Stories',
-    // Rolling window, not an open queue: the log has no reviewed state (ADO-602). The flag alone
+    // A fixed daily slot, not an open queue: the log has no reviewed state (ADO-602). The flag alone
     // decides, so a thin_source note without needs_manual_review never alerts.
     daily: true,
-    path: ({ since }) => `/stories_enrichment_log?select=id,story_id,notes,created_at,stories(primary_headline)`
-      + `&needs_manual_review=eq.true&created_at=gte.${encodeURIComponent(since)}&order=created_at.desc&limit=${QUERY_LIMIT}`,
+    path: ({ slot }) => `/stories_enrichment_log?select=id,story_id,notes,created_at,stories(primary_headline)`
+      + `&needs_manual_review=eq.true&status=eq.completed`
+      + `&created_at=gte.${encodeURIComponent(slot.start.toISOString())}&created_at=lt.${encodeURIComponent(slot.end.toISOString())}`
+      + `&order=created_at.desc&limit=${QUERY_LIMIT}`,
     name: (r) => (r.story_id ? `Story ${r.story_id}` : `Log row ${r.id}`) + (r.stories?.primary_headline ? `: ${String(r.stories.primary_headline).slice(0, 80)}` : ''),
     reason: (r) => r.notes,
     adminTab: 'Stories',
@@ -109,16 +110,19 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
   if (!d) throw new Error(`unknown domain ${domainKey}`);
   if (!rows || rows.length === 0) return null;
   total = Math.max(total, rows.length);
+  // Names (headlines, case names) and reasons both come from source or agent text: no em/en dashes
   const line = (r, prefix = '') => {
     const why = d.reason(r);
-    return `• ${prefix}${d.name(r)}${why ? ` - ${String(why).replace(/[—–]/g, '-').slice(0, 160)}` : ''}`;
+    return `• ${prefix}${d.name(r)}${why ? ` - ${String(why).slice(0, 160)}` : ''}`.replace(/[—–]/g, '-');
   };
   if (d.daily) {
     const lines = rows.slice(0, 10).map((r) => line(r));
     if (total > 10) lines.push(`… and ${total - 10} more`);
+    const { start, end } = dailySlot(now);
+    const at = (t) => `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }).format(t)} ${t.getUTCHours()}:00 UTC`;
     return {
-      title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (last ${STORIES_WINDOW_HOURS}h)`,
-      description: `${lines.join('\n')}\n\nCheck the copy in ${origin}/admin.html (${d.adminTab} tab). Daily digest of new flags; there is nothing to mark as reviewed.`,
+      title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (flags from ${at(start)} to ${at(end)})`,
+      description: `${lines.join('\n')}\n\nCheck the copy in ${origin}/admin.html (${d.adminTab} tab). Daily digest: each flag is reported once, there is nothing to mark as reviewed.`,
       color: COLORS.warning,
     };
   }
@@ -159,7 +163,7 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const d = DOMAINS[domainKey];
   // The daily digest runs inside the 6-hourly health check: only the once-a-day run checks, or a
   // flag would be posted up to four times (manual runs always check, push runs never do)
-  if (d.daily && !shouldCheck({ env, now })) {
+  if (d.daily && !isDailyCheckRun({ env, now })) {
     log(`[needs-review] ${domainKey}: not the daily check run, skipping`);
     return { flagged: 0, due: false, posted: false };
   }
@@ -167,8 +171,8 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_TEST_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
   const hours = Number(env.ALERT_WINDOW_HOURS) > 0 ? Number(env.ALERT_WINDOW_HOURS) : DEFAULT_WINDOW_HOURS;
-  const since = new Date(now - STORIES_WINDOW_HOURS * 3600000).toISOString();
-  const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${d.path({ since })}`, {
+  const slot = dailySlot(now);
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${d.path({ slot })}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
   });
   if (!res.ok) throw new Error(`query failed: ${res.status} ${await res.text()}`);
@@ -177,7 +181,7 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const envLabel = env.ALERT_ENV === 'test' ? 'test' : 'prod';
   const origin = env.SITE_ORIGIN || ORIGINS[envLabel];
   if (d.daily) {
-    log(`[needs-review] ${domainKey}: ${total} flagged since ${since}`);
+    log(`[needs-review] ${domainKey}: ${total} flagged from ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
     if (total === 0) return { flagged: 0, due: false, posted: false };
     const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
     return { flagged: total, due: true, posted };
