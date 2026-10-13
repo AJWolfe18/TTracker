@@ -81,6 +81,7 @@ export function Home({
     />
   ) : null;
 
+  const listKey = `${currentPage}|${JSON.stringify(activeFilters ?? {})}|${loading}|${error}`;
   const shell = (children: React.ReactNode) => (
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: headType.sans, minHeight: '100vh' }}>
       <Header
@@ -91,9 +92,9 @@ export function Home({
       />
       <Scorecard stats={stats} />
       <main id="main-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
-        {/* A card list crash keeps the header and paging; the next page of
-            items tries again (ADO-196) */}
-        <ErrorBoundary resetKey={items} fallback={<CrashNotice />}>
+        {/* A card list crash keeps the header and paging; paging, filtering
+            or the next load tries again (ADO-196) */}
+        <ErrorBoundary resetKey={listKey} fallback={<CrashNotice />}>
           {children}
         </ErrorBoundary>
         {totalPages != null && totalPages > 1 && onPageChange && (

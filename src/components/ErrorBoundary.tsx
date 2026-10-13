@@ -18,22 +18,22 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   failed: boolean;
-  resetKey: unknown;
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { failed: false, resetKey: this.props.resetKey };
+  state: ErrorBoundaryState = { failed: false };
 
-  static getDerivedStateFromError(): Partial<ErrorBoundaryState> {
+  static getDerivedStateFromError(): ErrorBoundaryState {
     return { failed: true };
   }
 
-  static getDerivedStateFromProps(
-    props: ErrorBoundaryProps,
-    state: ErrorBoundaryState,
-  ): Partial<ErrorBoundaryState> | null {
-    if (Object.is(props.resetKey, state.resetKey)) return null;
-    return { failed: false, resetKey: props.resetKey };
+  // Reset after the update, not in getDerivedStateFromProps: there, a key
+  // change in the same render as the crash would clear it, and the retry
+  // would throw again past this boundary (the react-error-boundary pattern)
+  componentDidUpdate(prevProps: ErrorBoundaryProps): void {
+    if (this.state.failed && !Object.is(prevProps.resetKey, this.props.resetKey)) {
+      this.setState({ failed: false });
+    }
   }
 
   render(): ReactNode {

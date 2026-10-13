@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { CrashNotice } from '../edge-states/CrashNotice';
@@ -22,15 +22,26 @@ describe('ErrorBoundary (ADO-196)', () => {
     expect(b.render()).toBe('FALLBACK');
   });
 
+  // componentDidUpdate after a render with these props, previous key '/eos/1'
+  const afterUpdate = (failed: boolean, resetKey: unknown) => {
+    const b = boundary(resetKey);
+    b.state = { failed };
+    const setState = vi.fn();
+    b.setState = setState;
+    b.componentDidUpdate({ fallback: 'FALLBACK', children: 'CHILDREN', resetKey: '/eos/1' });
+    return setState;
+  };
+
   it('stays on the fallback while the reset key is unchanged', () => {
-    const state = { failed: true, resetKey: '/eos/1' };
-    expect(ErrorBoundary.getDerivedStateFromProps({ fallback: null, children: null, resetKey: '/eos/1' }, state)).toBeNull();
+    expect(afterUpdate(true, '/eos/1')).not.toHaveBeenCalled();
   });
 
   it('tries its children again when the reset key changes (navigating away)', () => {
-    const state = { failed: true, resetKey: '/eos/1' };
-    expect(ErrorBoundary.getDerivedStateFromProps({ fallback: null, children: null, resetKey: '/about' }, state))
-      .toEqual({ failed: false, resetKey: '/about' });
+    expect(afterUpdate(true, '/about')).toHaveBeenCalledWith({ failed: false });
+  });
+
+  it('a key change with nothing crashed changes nothing', () => {
+    expect(afterUpdate(false, '/about')).not.toHaveBeenCalled();
   });
 });
 

@@ -37,8 +37,8 @@ export function App() {
 
   return (
     <ThemeContext.Provider value={themeValue}>
-      {/* A crashed route (or a lazy chunk that failed to load) keeps the
-          header; navigating to another route tries again (ADO-196) */}
+      {/* A crashed route keeps the header; navigating to another route
+          tries again (ADO-196) */}
       <ErrorBoundary resetKey={location} fallback={<RouteCrash />}>
         <Suspense fallback={<LoadingSkeleton />}>
           <Switch>
@@ -83,7 +83,10 @@ function RouteCrash() {
   const { theme, headType } = useTheme();
   return (
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: headType.sans, minHeight: '100vh' }}>
-      <Header />
+      {/* If the header is what crashed, drop it rather than rethrow to the root */}
+      <ErrorBoundary fallback={null}>
+        <Header />
+      </ErrorBoundary>
       <main id="main-content" style={{ maxWidth: 820, margin: '0 auto', padding: '0 20px' }}>
         <CrashNotice />
       </main>

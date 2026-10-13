@@ -15,9 +15,6 @@ export function CrashNotice({ page = false }: { page?: boolean }) {
   const ctx = useContext(ThemeContext);
   const theme = ctx?.theme ?? resolveTheme('midnight', fallbackMode());
   const type = ctx?.headType ?? TYPOGRAPHY.editorial;
-  // A plain link to this same URL is a full reload, which also picks up a
-  // fresh build if a stale code chunk is what failed
-  const here = typeof window === 'undefined' ? '/' : window.location.href;
   const Heading = page ? 'h1' : 'h2';
 
   const notice = (
@@ -35,9 +32,14 @@ export function CrashNotice({ page = false }: { page?: boolean }) {
       </Heading>
       <p style={{ fontFamily: type.display, fontSize: 17, lineHeight: 1.55, color: theme.dim, marginTop: 14, maxWidth: 560 }}>
         Reloading usually fixes it.{' '}
-        <a href={here} style={{ color: theme.ink, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+        {/* A real reload, not a link to this URL: that only scrolls when the
+            URL has a #fragment (e.g. after the skip link) */}
+        <button type="button" onClick={() => window.location.reload()} style={{
+          font: 'inherit', color: theme.ink, background: 'none', border: 'none', padding: 0,
+          cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3,
+        }}>
           Reload the page
-        </a>
+        </button>
       </p>
     </section>
   );
