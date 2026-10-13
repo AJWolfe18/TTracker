@@ -27,6 +27,9 @@ function loadShared(options: {
   gtag?: ((...args: unknown[]) => void) | null;
   withPostHog?: boolean;
   hostname?: string;
+  /** false = analytics-gate.js failed to load, so shared.js's fallback decides. */
+  gateLoaded?: boolean;
+  navigator?: { webdriver?: boolean; userAgent?: string };
 } = {}): Loaded {
   const gaCalls: unknown[][] = [];
   const phCalls: Array<[string, Record<string, unknown>]> = [];
@@ -56,9 +59,12 @@ function loadShared(options: {
     matchMedia: () => ({ matches: false }),
     addEventListener: () => {},
     gtag,
-    // TT_ANALYTICS_ENABLED is normally set by public/analytics-gate.js.
-    TT_ANALYTICS_ENABLED: (options.hostname ?? 'trumpytracker.com') === 'trumpytracker.com',
+    navigator: options.navigator,
   };
+  // TT_ANALYTICS_ENABLED is normally set by public/analytics-gate.js.
+  if (options.gateLoaded !== false) {
+    win.TT_ANALYTICS_ENABLED = (options.hostname ?? 'trumpytracker.com') === 'trumpytracker.com';
+  }
 
   if (options.withPostHog !== false) {
     win.TTAnalytics = {
@@ -159,5 +165,27 @@ describe('public/shared.js trackEvent -> PostHog mirror', () => {
 
     expect(gaCalls).toHaveLength(0);
     expect(phCalls).toHaveLength(0);
+  });
+
+  // ADO-607: if analytics-gate.js did not load, the fallback applies the same
+  // automation rule (webdriver flag, HeadlessChrome / Lighthouse user agent).
+  it('fallback gate (no analytics-gate.js) keeps automated browsers off PROD analytics', () => {
+    const chromeUa =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+    for (const navigator of [
+      { webdriver: true, userAgent: chromeUa },
+      { webdriver: false, userAgent: `${chromeUa} Chrome-Lighthouse` },
+      { userAgent: chromeUa.replace('Chrome/', 'HeadlessChrome/') },
+    ]) {
+      const { trackEvent, gaCalls, phCalls } = loadShared({ gateLoaded: false, navigator });
+      trackEvent('outbound_click', { source_domain: 'apnews.com' });
+      expect(gaCalls, JSON.stringify(navigator)).toHaveLength(0);
+      expect(phCalls, JSON.stringify(navigator)).toHaveLength(0);
+    }
+
+    const real = loadShared({ gateLoaded: false, navigator: { userAgent: chromeUa } });
+    real.trackEvent('outbound_click', { source_domain: 'apnews.com' });
+    expect(real.gaCalls).toHaveLength(1);
+    expect(real.phCalls).toHaveLength(1);
   });
 });
