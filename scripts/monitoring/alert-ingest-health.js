@@ -42,11 +42,10 @@ import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
 import { QUARANTINE_FAILURES } from '../rss/feed-health.js';
+import { CHECK_WINDOW_UTC, isDailyCheckRun } from '../lib/daily-check-window.js';
 
-// The health check is scheduled every 6 hours (0, 6, 12, 18 UTC), so exactly one scheduled run
-// starts in [12:00, 18:00) even when GitHub starts it late (an exact-hour match skipped the whole
-// day whenever the 12:00 run slipped past 13:00).
-export const CHECK_WINDOW_UTC = Object.freeze([12, 18]);
+// The once-a-day window (12:00-17:59 UTC) lives in scripts/lib/daily-check-window.js
+export { CHECK_WINDOW_UTC };
 const DAY_MS = 24 * 3600000;
 // A feed at or above QUARANTINE_FAILURES is only fetched on its daily retry (ADO-625).
 export { QUARANTINE_FAILURES };
@@ -54,15 +53,11 @@ export { QUARANTINE_FAILURES };
 const out = (line) => process.stdout.write(`${line}\n`);
 
 /**
- * Once a day: the scheduled run that starts in the 12:00-17:59 UTC window. Manual runs always check.
- * Push-triggered runs of the health workflow (scripts/rss/**, migrations/**) never do, or a push
- * inside the window would post the same problems twice.
+ * Once a day (isDailyCheckRun: the scheduled run starting 12:00-17:59 UTC, or a manual run; push runs
+ * never), or always with INGEST_HEALTH_FORCE=1.
  */
 export function shouldCheck({ env = process.env, now = Date.now() } = {}) {
-  if (env.INGEST_HEALTH_FORCE === '1' || env.GITHUB_EVENT_NAME === 'workflow_dispatch') return true;
-  if (env.GITHUB_EVENT_NAME === 'push') return false;
-  const h = new Date(now).getUTCHours();
-  return h >= CHECK_WINDOW_UTC[0] && h < CHECK_WINDOW_UTC[1];
+  return isDailyCheckRun({ env, now, force: env.INGEST_HEALTH_FORCE === '1' });
 }
 
 /**

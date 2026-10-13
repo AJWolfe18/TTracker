@@ -18,7 +18,14 @@
  *   instead of every run. Every message states how many older flags are still open.
  * - The message stops by itself once the records are reviewed in admin. Nothing flagged => no message.
  *
- * Usage: node scripts/monitoring/alert-needs-review.js --domain scotus|eo|pardons
+ * Stories (ADO-602) are different: the Stories agent flags its own log rows (stories_enrichment_log)
+ * and there is no "reviewed" state, so an open queue would repeat forever. Instead it is a daily digest:
+ * flagged, completed log rows from the fixed slot yesterday 12:00 UTC to today 12:00 UTC (dailySlot),
+ * checked only on the once-a-day run of the RSS health check (scripts/lib/daily-check-window.js), so
+ * each flag is reported exactly once. A scheduled run that never happens skips its slot.
+ * Thin-source notes without the flag never alert.
+ *
+ * Usage: node scripts/monitoring/alert-needs-review.js --domain scotus|eo|pardons|stories
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or the SUPABASE_TEST_* names),
  *        DISCORD_WEBHOOK_URL, ALERT_WINDOW_HOURS (optional),
  *        ALERT_ENV=test marks the message [TEST] and links the TEST site (set by the workflows)
@@ -34,6 +41,7 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
+import { isDailyCheckRun, dailySlot } from '../lib/daily-check-window.js';
 
 const DEFAULT_WINDOW_HOURS = 168;
 const NEW_HOURS = 26;
@@ -70,6 +78,19 @@ export const DOMAINS = Object.freeze({
     reason: (r) => r.enrichment_meta?.review_reason || null,
     adminTab: 'Pardons',
   },
+  stories: {
+    label: 'Stories',
+    // A fixed daily slot, not an open queue: the log has no reviewed state (ADO-602). The flag alone
+    // decides, so a thin_source note without needs_manual_review never alerts.
+    daily: true,
+    path: ({ slot }) => `/stories_enrichment_log?select=id,story_id,notes,created_at,stories(primary_headline)`
+      + `&needs_manual_review=eq.true&status=eq.completed`
+      + `&created_at=gte.${encodeURIComponent(slot.start.toISOString())}&created_at=lt.${encodeURIComponent(slot.end.toISOString())}`
+      + `&order=created_at.desc&limit=${QUERY_LIMIT}`,
+    name: (r) => (r.story_id ? `Story ${r.story_id}` : `Log row ${r.id}`) + (r.stories?.primary_headline ? `: ${String(r.stories.primary_headline).slice(0, 80)}` : ''),
+    reason: (r) => r.notes,
+    adminTab: 'Stories',
+  },
 });
 
 /** Is `now` the weekly reminder day in Central time? */
@@ -89,6 +110,22 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
   if (!d) throw new Error(`unknown domain ${domainKey}`);
   if (!rows || rows.length === 0) return null;
   total = Math.max(total, rows.length);
+  // Names (headlines, case names) and reasons both come from source or agent text: no em/en dashes
+  const line = (r, prefix = '') => {
+    const why = d.reason(r);
+    return `• ${prefix}${d.name(r)}${why ? ` - ${String(why).slice(0, 160)}` : ''}`.replace(/[—–]/g, '-');
+  };
+  if (d.daily) {
+    const lines = rows.slice(0, 10).map((r) => line(r));
+    if (total > 10) lines.push(`… and ${total - 10} more`);
+    const { start, end } = dailySlot(now);
+    const at = (t) => `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }).format(t)} ${t.getUTCHours()}:00 UTC`;
+    return {
+      title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (flags from ${at(start)} to ${at(end)})`,
+      description: `${lines.join('\n')}\n\nCheck the copy in ${origin}/admin.html (${d.adminTab} tab). Daily digest: each flag is reported once, there is nothing to mark as reviewed.`,
+      color: COLORS.warning,
+    };
+  }
   const isNew = (r) => ageHours(r, now) <= NEW_HOURS;
   const newCount = rows.filter(isNew).length;
   const recentCount = rows.filter((r) => ageHours(r, now) <= windowHours).length;
@@ -97,10 +134,7 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
   // split is unknown and the line is left out rather than overstated (code review, September 25).
   const lastIsOlder = rows.length > 0 && ageHours(rows[rows.length - 1], now) > windowHours;
   const olderCount = total === rows.length || lastIsOlder ? total - recentCount : 0;
-  const lines = rows.slice(0, 10).map((r) => {
-    const why = d.reason(r);
-    return `• ${isNew(r) ? 'NEW ' : ''}${d.name(r)}${why ? ` - ${String(why).replace(/[—–]/g, '-').slice(0, 160)}` : ''}`;
-  });
+  const lines = rows.slice(0, 10).map((r) => line(r, isNew(r) ? 'NEW ' : ''));
   if (total > 10) lines.push(`… and ${total - 10} more`);
   const days = Math.round(windowHours / 24);
   const older = olderCount > 0
@@ -126,23 +160,38 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const i = argv.indexOf('--domain');
   const domainKey = i >= 0 ? argv[i + 1] : null;
   if (!domainKey || !DOMAINS[domainKey]) throw new Error(`--domain must be one of ${Object.keys(DOMAINS).join('|')}`);
+  const d = DOMAINS[domainKey];
+  // The daily digest runs inside the 6-hourly health check: only the once-a-day run checks, or a
+  // flag would be posted up to four times (manual runs always check, push runs never do)
+  if (d.daily && !isDailyCheckRun({ env, now })) {
+    log(`[needs-review] ${domainKey}: not the daily check run, skipping`);
+    return { flagged: 0, due: false, posted: false };
+  }
   const url = env.SUPABASE_URL || env.SUPABASE_TEST_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_TEST_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
   const hours = Number(env.ALERT_WINDOW_HOURS) > 0 ? Number(env.ALERT_WINDOW_HOURS) : DEFAULT_WINDOW_HOURS;
-  const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${DOMAINS[domainKey].path()}`, {
+  const slot = dailySlot(now);
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${d.path({ slot })}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
   });
   if (!res.ok) throw new Error(`query failed: ${res.status} ${await res.text()}`);
   const rows = await res.json();
   const total = Math.max(contentRangeTotal(res.headers?.get?.('content-range')) ?? rows.length, rows.length);
+  const envLabel = env.ALERT_ENV === 'test' ? 'test' : 'prod';
+  const origin = env.SITE_ORIGIN || ORIGINS[envLabel];
+  if (d.daily) {
+    log(`[needs-review] ${domainKey}: ${total} flagged from ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
+    if (total === 0) return { flagged: 0, due: false, posted: false };
+    const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
+    return { flagged: total, due: true, posted };
+  }
   const recent = rows.filter((r) => ageHours(r, now) <= hours).length;
   const reminderDay = isReminderDay(now);
   const due = recent > 0 || (total > 0 && reminderDay);
   log(`[needs-review] ${domainKey}: ${total} still flagged (${recent} from the last ${hours}h, ${total - recent} older; weekly reminder day: ${reminderDay ? 'yes' : 'no'})`);
   if (!due) return { flagged: total, due: false, posted: false };
-  const envLabel = env.ALERT_ENV === 'test' ? 'test' : 'prod';
-  const alert = buildAlert(domainKey, rows, { origin: env.SITE_ORIGIN || ORIGINS[envLabel], now, total, windowHours: hours });
+  const alert = buildAlert(domainKey, rows, { origin, now, total, windowHours: hours });
   const posted = await postDiscord(alert, { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
   return { flagged: total, due: true, posted };
 }
