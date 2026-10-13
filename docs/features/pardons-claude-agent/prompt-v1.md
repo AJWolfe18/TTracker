@@ -88,7 +88,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/pardons_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d '{"prompt_version": "v1", "run_source": "cloud-agent"}'
+  -d '{"prompt_version": "v1", "run_source": "cloud-agent", "agent_model": "{AGENT_MODEL}"}'
 ```
 
 **Important:** `Prefer: return=representation` makes the response include the created/modified row(s). Always use this for POST and PATCH so you can verify the write succeeded.
@@ -174,7 +174,7 @@ Read `public/shared/tone-system.json` from the repo. The `bannedOpenings`, `bann
 
 ### Step 1: Log Run Start
 
-Create a log entry to mark this run as started. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. Never copy a model ID from an example, an older row or a column default. Use that same value everywhere `{AGENT_MODEL}` appears in this prompt (`agent_model` here, `enrichment_meta.model` in Step 6):
+Create a log entry to mark this run as started. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. The value starts with `claude-` and is never the literal text `{AGENT_MODEL}`. If your system prompt has no "The exact model ID is" line, write `unknown`; never guess. Never copy a model ID from an example, an older row or a column default. Use that same value everywhere `{AGENT_MODEL}` appears in this prompt (`agent_model` here, `enrichment_meta.model` in Step 6):
 
 ```bash
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -869,8 +869,7 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
   "source_urls": ["https://www.baltimoresun.com/2025/12/09/trump-pardons-baltimore-drugs-garnett-gilbert-smith/", "https://foxbaltimore.com/news/local/president0trump-pardons-baltimore-drug-trafficker-garnett-smith"],
   "is_public": true,
   "research_status": "complete",
-  "needs_review": false,
-  "enrichment_meta": {"model": "{AGENT_MODEL}", "prompt_version": "v1.4", "run_source": "cloud-agent"}
+  "needs_review": false
 }
 ```
 

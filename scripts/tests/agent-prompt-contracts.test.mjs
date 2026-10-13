@@ -195,12 +195,24 @@ const agentPrompts = [...promptFiles, fileURLToPath(new URL('../../docs/features
 for (const f of agentPrompts) {
   const text = readFileSync(f, 'utf8');
   assert.ok(!/claude-(opus|sonnet|haiku)-\d/.test(text), `${f} must not hardcode a Claude model ID (write {AGENT_MODEL})`);
-  if (text.includes('{AGENT_MODEL}')) assert.ok(text.includes('The exact model ID is'), `${f} uses {AGENT_MODEL}, so it must say where the agent reads it`);
+  assert.ok(!/Claude (Opus|Sonnet|Haiku) \d/.test(text), `${f} must not name a model version (the routine sets it)`);
+  if (text.includes('{AGENT_MODEL}')) {
+    assert.ok(text.includes('The exact model ID is'), `${f} uses {AGENT_MODEL}, so it must say where the agent reads it`);
+    assert.ok(text.includes('starts with `claude-` and is never the literal text `{AGENT_MODEL}`') && text.includes('write `unknown`; never guess'), `${f} guards the placeholder (claude- prefix, no literal, unknown when missing)`);
+  }
 }
 const scotus = read('../../docs/features/scotus-claude-agent/prompt-v1.md');
 const eo = read('../../docs/features/eo-claude-agent/prompt-v1.md');
+// every log insert, Section 2 examples included (migration 133 drops the stale column default)
 for (const [name, p] of [['pardons', pardons], ['scotus', scotus]]) {
-  assert.ok(p.includes('\\"agent_model\\": \\"{AGENT_MODEL}\\"'), `${name} Step 1 log insert sets agent_model (the column default is a stale model ID)`);
+  const inserts = p.split(/-X POST "\$\{SUPABASE_URL\}\/rest\/v1\/\w+_enrichment_log"/).slice(1).map((s) => s.slice(0, s.indexOf('```')));
+  assert.ok(inserts.length >= 2, `${name} shows its log inserts`);
+  for (const ins of inserts) assert.ok(/\\?"agent_model\\?": \\?"\{AGENT_MODEL\}\\?"/.test(ins), `every ${name} log insert sets agent_model`);
+}
+assert.ok(!pardons.slice(pardons.indexOf('## 4. Gold Set'), pardons.indexOf('## 5.')).includes('{AGENT_MODEL}'), 'gold calibration examples carry no run provenance');
+const mig133 = read('../../migrations/133_drop_stale_agent_model_default.sql');
+for (const t of ['scotus_enrichment_log', 'pardons_enrichment_log']) {
+  assert.ok(mig133.includes(`${t} ALTER COLUMN agent_model DROP DEFAULT`) && mig133.includes(`${t} ALTER COLUMN agent_model DROP NOT NULL`), `migration 133 drops the default and NOT NULL on ${t}`);
 }
 for (const [name, p] of [['pardons', pardons], ['eo', eo], ['stories', stories]]) {
   assert.ok(p.includes('"model": "{AGENT_MODEL}"'), `${name} enrichment_meta.model is the running model`);

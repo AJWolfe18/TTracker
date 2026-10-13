@@ -136,7 +136,7 @@ stopped because: <8 pages | pool empty | not draining | error: ...>
 |---|---|
 | Prompt version | label-backfill-v1 |
 | Created | October 4, 2026 (ADO-594 S3) |
-| Target model | Claude Sonnet 5.5 |
+| Target model | Set on the routine |
 | Cadence | TEST: by hand until the gate passes. PROD: about 3 runs a day until `BACKFILL COMPLETE` (about 38 runs) |
 | Writes | `stories.action_label`, `action_actor`, `action_label_source = 'backfill'` (unlabeled rows only); `pipeline_skips` rows `label_backfill` / `already_labeled`, `story_not_found`, `label_uncertain` |
 | Env | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional `LABEL_BACKFILL_PROD`, `LABELS_DRY_RUN` |

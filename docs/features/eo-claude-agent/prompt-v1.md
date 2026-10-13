@@ -394,7 +394,7 @@ If any check fails, fix before writing. If you cannot fix it (e.g., text is genu
 
 ### Step 6: Write to Database
 
-Write enrichment as a single atomic PATCH per EO. **Use the temp file pattern** to avoid shell quoting issues with apostrophes in EO text. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. Never copy a model ID from an example, an older row or a column default.
+Write enrichment as a single atomic PATCH per EO. **Use the temp file pattern** to avoid shell quoting issues with apostrophes in EO text. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. The value starts with `claude-` and is never the literal text `{AGENT_MODEL}`. If your system prompt has no "The exact model ID is" line, write `unknown`; never guess. Never copy a model ID from an example, an older row or a column default.
 
 ```bash
 ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

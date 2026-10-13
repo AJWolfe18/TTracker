@@ -307,7 +307,7 @@ A story belongs on a front when what it **reports** is the thing that front's de
 |-------|-------|
 | Prompt version | fronts-v2 (all fronts, ADO-592, October 2026). fronts-v1 (September 15, 2026, ADO-582) judged Election Suppression only; its rubric is now that front's `agent_definition` |
 | Author | Josh + Claude Code |
-| Target model | Claude Sonnet 5.5 |
+| Target model | Set on the routine |
 | Cadence | daily (cloud routine), after the RSS sweep; PROD cron `0 14 * * *` UTC |
 | Tables | `events` (read the agent fronts), `stories` (read via `front_agent_candidates_all`), `story_event` (insert), `pipeline_skips` (insert), `routine_heartbeats` (insert, one per run), `refresh_tracker_derived()` (RPC) |
 | Env | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; optional `FRONTS_DRY_RUN`, `FRONTS_MAX_PER_RUN`, `DISCORD_WEBHOOK_URL` |
