@@ -667,8 +667,9 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
           ) : null}
           {e.caseName ? (
             // The case name under a plain-English ruling headline (ADO-609):
-            // quiet, no box, so it never reads as a front tag
-            <span style={{ ...mono, fontSize: 9, letterSpacing: '0.08em', color: theme.dim }}>
+            // quiet, no box, normal case (the search box's mono), so it never
+            // reads as a front tag
+            <span style={{ fontFamily: headType.mono, fontSize: 11, letterSpacing: '0.05em', color: theme.dim }}>
               {e.caseName}
             </span>
           ) : null}

@@ -5,7 +5,6 @@
 // rows it won't show (egress rule, CLAUDE.md #11).
 
 import { SEVERITY_TO_ALARM } from './adapter';
-import { TONE_SYSTEM } from '../tokens/tone-system';
 
 export type TimelineSource = 'stories' | 'eos' | 'scotus' | 'pardons';
 
@@ -125,26 +124,17 @@ export function eoRowToEntry(raw: Raw): TimelineEntry {
   };
 }
 
-// Older rulings carry an impact-scale tag ("Institutional Sabotage") in
-// ruling_label instead of a description of the ruling; never a headline
-const SCOTUS_SCALE_LABELS = new Set(
-  [0, 1, 2, 3, 4, 5].flatMap(l => {
-    const t = TONE_SYSTEM.labels.scotus[l];
-    return t ? [t.spicy, t.neutral] : [];
-  }),
-);
-
 /**
  * A ruling reads by what it did (ADO-609): the agent's plain-English
- * media_says headline, else a descriptive ruling_label, else the case name.
- * A case name alone ("Nelsen v. Pike") tells a reader nothing, so whenever
- * the headline is something else the case name rides underneath.
+ * media_says headline, else the case name. Not ruling_label: older rows hold
+ * an impact-scale tag ("Institutional Sabotage") or a bare disposition
+ * ("Certiorari dismissed as improvidently granted") there, both worse than
+ * the case name. With a media_says headline the case name rides underneath.
  */
 export function scotusRowToEntry(raw: Raw): TimelineEntry {
   const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
   const caseName = text(raw.case_name) || text(raw.case_name_short);
-  const label = text(raw.ruling_label);
-  const headline = text(raw.media_says) || (SCOTUS_SCALE_LABELS.has(label) ? '' : label) || caseName;
+  const headline = text(raw.media_says) || caseName;
   return {
     id: raw.id as number,
     source: 'scotus',
@@ -229,7 +219,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   },
   scotus: {
     table: 'scotus_cases',
-    select: 'id,case_name,case_name_short,media_says,ruling_label,decided_at,ruling_impact_level',
+    select: 'id,case_name,case_name_short,media_says,decided_at,ruling_impact_level',
     base: `is_public=eq.true&decided_at=not.is.null&decided_at=gte.${TERM_START}`,
     dateCol: 'decided_at',
     limit: 25,

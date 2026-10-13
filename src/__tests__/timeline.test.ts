@@ -119,16 +119,15 @@ describe('timeline row adapters', () => {
     expect(e.caseName).toBe('Nelsen v. Pike');
   });
 
-  it('falls back to a descriptive ruling_label, then the case name, never an impact-scale tag (ADO-609)', () => {
+  it('falls back to the case name without media_says, never to ruling_label (ADO-609)', () => {
     const row = { id: 9, case_name: 'Mulkey v. Alabama', decided_at: '2026-09-30', ruling_impact_level: 3 };
-    const label = scotusRowToEntry({ ...row, media_says: null, ruling_label: 'Juror arrest in capital voir dire goes unreviewed' });
-    expect(label.headline).toBe('Juror arrest in capital voir dire goes unreviewed');
-    expect(label.caseName).toBe('Mulkey v. Alabama');
-    // Older rows carry the tone scale ("Institutional Sabotage") in ruling_label
-    for (const tag of ['Institutional Sabotage', 'Crumbs from the Bench', 'Precedent Erosion']) {
-      const e = scotusRowToEntry({ ...row, media_says: '  ', ruling_label: tag });
-      expect(e.headline).toBe('Mulkey v. Alabama');
-      expect(e.caseName).toBeUndefined();
+    // Older rows hold a scale tag or a bare disposition in ruling_label
+    for (const media_says of [null, '  ']) {
+      for (const ruling_label of ['Institutional Sabotage', 'Certiorari dismissed as improvidently granted']) {
+        const e = scotusRowToEntry({ ...row, media_says, ruling_label });
+        expect(e.headline).toBe('Mulkey v. Alabama');
+        expect(e.caseName).toBeUndefined();
+      }
     }
   });
 
@@ -222,7 +221,7 @@ describe('buildSourcePath', () => {
 
   it('selects the SCOTUS headline columns, tight (ADO-609)', () => {
     const p = buildSourcePath('scotus', 'main', null);
-    expect(p).toContain('scotus_cases?select=id,case_name,case_name_short,media_says,ruling_label,decided_at,ruling_impact_level&');
+    expect(p).toContain('scotus_cases?select=id,case_name,case_name_short,media_says,decided_at,ruling_impact_level&');
   });
 
   it("main view: stories filter on the server-computed main_line, others get the alarm-4 bar", () => {
