@@ -92,7 +92,7 @@ csmonitor.com,pbs.org,propublica.org,reuters.com,apnews.com,politico.com
 |----------|---------|-------------|---------|
 | `RSS_MAX_BYTES` | `5000000` (5MB) | Max bytes per RSS feed | `RSS_MAX_BYTES=10000000` |
 | `RSS_MAX_ITEMS` | `50` | Max items to process per feed | `RSS_MAX_ITEMS=100` |
-| `MAX_ARTICLE_AGE_HOURS` | `72` | Skip articles older than this | `MAX_ARTICLE_AGE_HOURS=48` |
+| `MAX_ARTICLE_AGE_HOURS` | `96` | Skip articles older than this (logged + recorded in `pipeline_skips`) | `MAX_ARTICLE_AGE_HOURS=48` |
 | `FETCH_TIMEOUT_MS` | `10000` (10s) | HTTP fetch timeout | `FETCH_TIMEOUT_MS=15000` |
 | `FETCH_MAX_RETRIES` | `3` | Max retries for failed fetches | `FETCH_MAX_RETRIES=5` |
 | `FETCH_BASE_DELAY_MS` | `1000` (1s) | Base delay between retries | `FETCH_BASE_DELAY_MS=2000` |
