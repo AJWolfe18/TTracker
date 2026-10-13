@@ -3615,19 +3615,23 @@
             };
 
             // ADO-495: why a case is flagged or still a draft, without opening Edit.
-            // Muted badges; red only for a QA verdict that blocks publishing.
-            // Hover shows the full reason text.
+            // Drafts only (published rows show '-'). Muted badges; red only for a
+            // QA verdict that blocks publishing. Hover shows the full reason text.
+            // scotusReasonBadges:start
             const getReasonBadges = (c) => {
                 const badges = [];
-                if (c.clamp_reason && !c.is_public) {
-                    badges.push({ class: 'badge-closed', label: c.clamp_reason.replace(/_/g, ' ') });
-                }
-                if (c.enrichment_status === 'enriched' && !c.is_public && c.qa_status) {
+                if (c.is_public) return { badges, title: '' };
+                if (['pending_qa', 'flagged', 'rejected'].includes(c.qa_status)) {
                     const blocked = c.qa_status === 'flagged' || c.qa_status === 'rejected';
                     badges.push({
                         class: blocked ? 'badge-failed' : 'badge-closed',
                         label: SCOTUS_QA_STATUSES.find(s => s.value === c.qa_status)?.label || c.qa_status
                     });
+                }
+                // clamp_reason is legacy (old GPT pipeline, never cleared): only
+                // meaningful on a case the agent has not QA'd yet
+                if (c.clamp_reason && !c.qa_status) {
+                    badges.push({ class: 'badge-closed', label: c.clamp_reason.replace(/_/g, ' ') });
                 }
                 const notes = [
                     c.low_confidence_reason && `Low confidence: ${c.low_confidence_reason}`,
@@ -3640,6 +3644,7 @@
                 }
                 return { badges, title: notes.join('\n') };
             };
+            // scotusReasonBadges:end
 
             // Handle edit
             const handleEdit = (c) => setEditingCase(c);
@@ -4083,11 +4088,11 @@
                                                     <td>
                                                         <span className={`badge ${enrichBadge.class}`}>{enrichBadge.label}</span>
                                                     </td>
-                                                    <td style={{ whiteSpace: 'nowrap' }} title={reason.title || undefined}>
+                                                    <td style={{ maxWidth: '200px' }} title={reason.title || undefined}>
                                                         {reason.badges.length === 0
                                                             ? <span style={{ color: '#64748b', fontSize: '13px' }}>-</span>
                                                             : reason.badges.map((b, i) => (
-                                                                <span key={i} className={`badge ${b.class}`} style={{ marginRight: '4px', cursor: reason.title ? 'help' : 'default' }}>{b.label}</span>
+                                                                <span key={i} className={`badge ${b.class}`} style={{ margin: '0 4px 2px 0', cursor: reason.title ? 'help' : 'default' }}>{b.label}</span>
                                                             ))
                                                         }
                                                     </td>
