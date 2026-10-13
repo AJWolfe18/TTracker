@@ -665,6 +665,14 @@ export function TrackerSpine({ standalone = false }: TrackerSpineProps) {
               {e.front.name}
             </span>
           ) : null}
+          {e.caseName ? (
+            // The case name under a plain-English ruling headline (ADO-609):
+            // quiet, no box, normal case (the search box's mono), so it never
+            // reads as a front tag
+            <span style={{ fontFamily: headType.mono, fontSize: 11, letterSpacing: '0.05em', color: theme.dim }}>
+              {e.caseName}
+            </span>
+          ) : null}
           {/* Stories with no front get NO tag: the public "Loose end" label
               confused readers (Josh, August 31, 2026) — "loose end" stays
               admin/PRD vocabulary only. The real fix for mis-tagged rows is

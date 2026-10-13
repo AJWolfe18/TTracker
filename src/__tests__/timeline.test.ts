@@ -30,6 +30,7 @@ import {
   FRONTIER_PENDING,
   holdFrontier,
   SOURCE_ROUTES,
+  ENTRY_TYPE_LABELS,
   TERM_START,
   TIMELINE_SOURCES,
   ACTION_KIND_LABELS,
@@ -104,6 +105,45 @@ describe('timeline row adapters', () => {
       decided_at: '2026-06-01', ruling_impact_level: 4,
     });
     expect(e.headline).toBe('Trump v. X');
+    expect(e.caseName).toBeUndefined();
+  });
+
+  it('reads a ruling by its media_says headline, with the case name underneath (ADO-609)', () => {
+    const e = scotusRowToEntry({
+      id: 2404, case_name: 'Nelsen v. Pike', case_name_short: 'Nelsen',
+      media_says: 'Supreme Court clears the way for Tennessee to execute Christa Pike over three liberal dissents',
+      ruling_label: 'Stay vacated so Tennessee can execute Pike',
+      decided_at: '2026-09-30', ruling_impact_level: 4,
+    });
+    expect(e.headline).toBe('Supreme Court clears the way for Tennessee to execute Christa Pike over three liberal dissents');
+    expect(e.caseName).toBe('Nelsen v. Pike');
+  });
+
+  it('falls back to the case name without media_says, never to ruling_label (ADO-609)', () => {
+    const row = { id: 9, case_name: 'Mulkey v. Alabama', decided_at: '2026-09-30', ruling_impact_level: 3 };
+    // Older rows hold a scale tag or a bare disposition in ruling_label
+    for (const media_says of [null, '  ']) {
+      for (const ruling_label of ['Institutional Sabotage', 'Certiorari dismissed as improvidently granted']) {
+        const e = scotusRowToEntry({ ...row, media_says, ruling_label });
+        expect(e.headline).toBe('Mulkey v. Alabama');
+        expect(e.caseName).toBeUndefined();
+      }
+    }
+  });
+
+  it('labels a SCOTUS row "Supreme Court" on the spine (ADO-609)', () => {
+    expect(ENTRY_TYPE_LABELS.scotus).toBe('Supreme Court');
+  });
+
+  it('finds a ruling by its case name in search (ADO-609)', () => {
+    const e = scotusRowToEntry({
+      id: 2404, case_name: 'Nelsen v. Pike', media_says: 'Supreme Court clears the way for an execution',
+      decided_at: '2026-09-30', ruling_impact_level: 4,
+    });
+    const opts = { frontier: null, min: 0 as const, off: new Set<TimelineSource>() };
+    expect(visibleEntries([e], { ...opts, query: 'nelsen' })).toHaveLength(1);
+    expect(visibleEntries([e], { ...opts, query: 'execution' })).toHaveLength(1);
+    expect(visibleEntries([e], { ...opts, query: 'tariff' })).toHaveLength(0);
   });
 
   it('prefixes pardon headlines and includes nickname when present', () => {
@@ -177,6 +217,11 @@ describe('buildSourcePath', () => {
     // status/enrichment predicates are baked into v_tracker_stories (ADO-554)
     expect(p).toContain('v_tracker_stories?');
     expect(p).not.toContain('status=');
+  });
+
+  it('selects the SCOTUS headline columns, tight (ADO-609)', () => {
+    const p = buildSourcePath('scotus', 'main', null);
+    expect(p).toContain('scotus_cases?select=id,case_name,case_name_short,media_says,decided_at,ruling_impact_level&');
   });
 
   it("main view: stories filter on the server-computed main_line, others get the alarm-4 bar", () => {
