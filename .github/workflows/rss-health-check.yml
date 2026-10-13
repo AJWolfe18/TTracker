@@ -79,6 +79,20 @@ jobs:
           FEED_SILENT_DAYS: ${{ vars.FEED_SILENT_DAYS }}
         run: node scripts/monitoring/alert-ingest-health.js
 
+      # ADO-602: the Stories agent's own needs_manual_review flags (stories_enrichment_log), PROD, main only.
+      # Daily digest of the last 26 hours, checked in the same once-a-day window as the ingest health
+      # check. The script posts its own "could not run" message; it exits 1 only when Discord could
+      # not be told, so continue-on-error marks the step red without failing the health check.
+      - name: Stories flagged enrichments (PROD, main only)
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node scripts/monitoring/alert-needs-review.js --domain stories
+        timeout-minutes: 2
+
       - name: Discord alert (ingest health check could not run)
         if: always() && github.ref == 'refs/heads/main' && steps.ingest_health.outcome == 'failure'
         env:

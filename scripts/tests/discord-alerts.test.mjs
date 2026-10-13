@@ -228,7 +228,72 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.equal(seen.queries.at(-1).searchParams.get('enriched_at'), null);
 
   await assert.rejects(() => runNeedsReviewAlert({ env, argv: [], fetchImpl, log: silent }), /--domain/);
-  assert.deepEqual(Object.keys(DOMAINS), ['scotus', 'eo', 'pardons']);
+  assert.deepEqual(Object.keys(DOMAINS), ['scotus', 'eo', 'pardons', 'stories']);
+}
+
+// --- stories (ADO-602): daily digest of the Stories agent's own flags, no open queue ---
+{
+  const DAILY = Date.parse('2026-10-12T12:30:00Z'); // inside the once-a-day health check window
+  const hoursAgo = (h) => new Date(DAILY - h * 3600000).toISOString();
+  // Fake PostgREST that applies the flag and created_at filters, so the test proves the query shape
+  // keeps unflagged thin_source rows and older flags out
+  const log = [
+    { id: 41, story_id: 17301, needs_manual_review: true, notes: 'factual error: wrong vote count — 52-48, not 51-49', created_at: hoursAgo(3), stories: { primary_headline: 'Senate passes the budget bill' } },
+    { id: 40, story_id: 17300, needs_manual_review: false, notes: 'thin_source', created_at: hoursAgo(4), stories: { primary_headline: 'Thin story' } },
+    { id: 39, story_id: 17299, needs_manual_review: true, notes: 'old flag', created_at: hoursAgo(30), stories: { primary_headline: 'Yesterday story' } },
+  ];
+  const seen = { queries: [], discord: [] };
+  let table = log;
+  const fetchImpl = async (url, init = {}) => {
+    const u = new URL(url);
+    if (u.hostname === 'd.test') { seen.discord.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
+    seen.queries.push(u);
+    assert.ok(u.pathname.endsWith('/stories_enrichment_log'));
+    const since = Date.parse(u.searchParams.get('created_at').replace(/^gte\./, ''));
+    const rows = table.filter((r) => (u.searchParams.get('needs_manual_review') !== 'eq.true' || r.needs_manual_review) && Date.parse(r.created_at) >= since);
+    return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json', 'Content-Range': `0-${Math.max(rows.length - 1, 0)}/${rows.length}` } });
+  };
+  const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+  const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, log: () => {}, now });
+
+  // a flagged row alerts with the headline and the agent's note; the unflagged thin_source row and the 30h-old flag do not
+  assert.deepEqual(await run(), { flagged: 1, due: true, posted: true });
+  const q = seen.queries[0];
+  assert.equal(q.searchParams.get('needs_manual_review'), 'eq.true');
+  assert.equal(q.searchParams.get('created_at'), `gte.${hoursAgo(26)}`);
+  assert.ok(q.searchParams.get('select').includes('stories(primary_headline)'));
+  assert.ok(!q.searchParams.get('select').includes('*'));
+  const embed = seen.discord[0].embeds[0];
+  assert.equal(embed.title, 'Stories: the agent flagged 1 enrichment for review (last 26h)');
+  assert.ok(embed.description.includes('• Story 17301: Senate passes the budget bill - factual error: wrong vote count - 52-48, not 51-49'), embed.description);
+  assert.ok(!embed.description.includes('Thin story') && !embed.description.includes('thin_source'));
+  assert.ok(!embed.description.includes('Yesterday story'));
+  assert.ok(embed.description.includes('https://trumpytracker.com/admin.html (Stories tab)'));
+  assert.ok(!embed.description.includes('—'), 'no em dashes');
+  assert.equal(embed.color, COLORS.warning);
+
+  // a thin_source row with no flag, alone in the window -> nothing posted
+  table = [log[1]];
+  assert.deepEqual(await run(), { flagged: 0, due: false, posted: false });
+  // empty window -> nothing posted
+  table = [];
+  assert.deepEqual(await run(), { flagged: 0, due: false, posted: false });
+  assert.equal(seen.discord.length, 1);
+
+  // once a day: the other 6-hourly runs and push runs do not query at all; a manual run checks
+  table = log;
+  const queries = seen.queries.length;
+  assert.deepEqual(await run(Date.parse('2026-10-12T06:10:00Z')), { flagged: 0, due: false, posted: false });
+  assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: 'push' }), { flagged: 0, due: false, posted: false });
+  assert.equal(seen.queries.length, queries);
+  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { GITHUB_EVENT_NAME: 'workflow_dispatch' })).posted, true);
+
+  // a flagged run-level row (no story) still names something
+  assert.ok(buildAlert('stories', [{ id: 5, story_id: null, notes: 'n' }]).description.includes('• Log row 5 - n'));
+
+  // wired into the once-a-day RSS health check on main (reads PROD)
+  const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
+  assert.match(wf, /node scripts\/monitoring\/alert-needs-review\.js --domain stories/);
 }
 
 // --- runCli: a check that cannot run is never silent ----------------------------
