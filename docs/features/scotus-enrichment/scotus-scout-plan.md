@@ -1,5 +1,7 @@
 # SCOTUS Scout Plan (Revised)
 
+> **Note (October 12, 2026):** `scripts/enrichment/perplexity-client.js` was deleted in ADO-523. If Scout resumes, recover it from git history.
+
 ## Overview
 
 Replace GPT Pass 1 fact extraction with a **Perplexity-backed Scout** — a validated, source-tiered, confidence-aware extraction subsystem. Scout owns factual fields only; Pass 2 Writer remains the editorial layer.

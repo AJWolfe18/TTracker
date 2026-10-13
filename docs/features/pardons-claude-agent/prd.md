@@ -23,7 +23,7 @@ The current pardons enrichment pipeline uses Perplexity Sonar for research + GPT
 
 ### What's NOT Broken
 
-The corruption level **scale itself** is solid (lines 123-132 of `perplexity-research.js`):
+The corruption level **scale itself** is solid (now in `docs/features/pardons-claude-agent/prompt-v1.md`; the legacy `perplexity-research.js` was deleted in ADO-523):
 - L5 = Money (donations, PAC) — correct mechanism
 - L4 = Direct Trump relationship — correct mechanism
 - L3 = Network (MAGA world, GOP allies) — correct mechanism
