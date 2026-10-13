@@ -5,7 +5,7 @@
 //
 // POST /admin-judge-merge
 // Body:
-//   action:      'preview' | 'merge' | 'unmerge' (required)
+//   action:      'preview' | 'merge' | 'unmerge' | 'dismiss' (required)
 //   survivor_id: story id that keeps the articles (required, positive integer)
 //   loser_id:    story id that gets tombstoned into the survivor (required, positive integer)
 //
@@ -17,6 +17,13 @@
 // merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error? }
 // unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored? }
 //   (the 'unmerge' judge-log row is written atomically by the unmerge_story RPC — migration 107)
+// dismiss response: { ok, run_id }
+//
+// 'dismiss' is the admin "keep separate" decision for a reviewed pair (usually an uncertain
+// verdict). It changes no story — it only logs a source='manual', verdict='keep' row, which
+// the Judge's verdict memory (migration 106) treats as settled: the pair is not re-judged
+// until a new article attaches to either story. It also drops the pair out of the Judge tab's
+// "Needs review" view (admin-judge-log view='needs_review').
 //
 // The merge itself is the hardened merge_stories RPC (migrations 100/101/102): row-locked,
 // per-run hard-capped, snapshotted to story_merge_audit, loser tombstoned (never deleted).
@@ -67,8 +74,8 @@ Deno.serve(async (req) => {
     const survivorId = parseStoryId(body.survivor_id)
     const loserId = parseStoryId(body.loser_id)
 
-    if (action !== 'preview' && action !== 'merge' && action !== 'unmerge') {
-      return jsonResponse({ error: "action must be 'preview', 'merge' or 'unmerge'" }, 400)
+    if (action !== 'preview' && action !== 'merge' && action !== 'unmerge' && action !== 'dismiss') {
+      return jsonResponse({ error: "action must be 'preview', 'merge', 'unmerge' or 'dismiss'" }, 400)
     }
     if (survivorId == null || loserId == null) {
       return jsonResponse({ error: 'survivor_id and loser_id must be positive integers' }, 400)
@@ -140,6 +147,32 @@ Deno.serve(async (req) => {
       // a best-effort insert here could fail after commit and leave the Judge free to re-merge
       // a human unmerge, so this function no longer writes it.
       return jsonResponse({ ...result, run_id: runId })
+    }
+
+    if (action === 'dismiss') {
+      // For dismiss the two ids are just "the pair" (no survivor/loser roles).
+      if (!survivor || !loser) {
+        return jsonResponse({ ok: false, reason: !survivor ? 'survivor_not_found' : 'loser_not_found' })
+      }
+      const runId = `manual-admin-${Date.now()}`
+      // Unlike the post-merge log write, this row IS the action — a failed insert fails the request.
+      const { error: logError } = await supabase.from('clustering_judge_log').insert({
+        source: 'manual',
+        story_id_a: survivorId,
+        story_id_b: loserId,
+        headline_a: survivor.primary_headline,
+        headline_b: loser.primary_headline,
+        verdict: 'keep',
+        rationale: `Dismissed via admin Judge tab: keep #${survivorId} and #${loserId} separate`,
+        merged: false,
+        dry_run: false,
+        run_id: runId
+      })
+      if (logError) {
+        console.error('clustering_judge_log insert failed (dismiss):', logError.message)
+        return jsonResponse({ error: 'Dismiss failed', detail: logError.message }, 500)
+      }
+      return jsonResponse({ ok: true, run_id: runId })
     }
 
     // action === 'merge'

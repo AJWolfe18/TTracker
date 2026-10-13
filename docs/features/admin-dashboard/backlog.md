@@ -7,7 +7,7 @@ Scope decisions from Josh:
 - Submit Article: **leave as is** (planned for later, button stays disabled).
 - Legacy admin pages: **delete**.
 
-Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. No AI/API cost for any of these; they're dashboard and edge-function changes only.
+Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff: `plan.md`.** Cards 1, 3, 5 and 6 are built in PR 1 (cloud session); cards 2 and 4 are next. No AI/API cost for any of these; they're dashboard and edge-function changes only.
 
 ---
 
@@ -21,7 +21,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. No AI/API cost for any o
 - `admin-judge-merge` edge function: add a `dismiss` action (writes the manual keep row, `dry_run=false`, `merged=false`).
 - Judge tab: add a **Dismiss** button on each uncertain row, next to `use`.
 - Default view = **Needs review**: uncertain verdicts with no later manual verdict for the same pair. Keep an "All verdicts" toggle for the full log.
-- Tab order: Home, **Judge**, Stories, Pardons, SCOTUS, Exec Orders, Feeds, Failures.
+- Tab order: Home, **Judge**, Stories, Pardons, SCOTUS, Exec Orders, Feeds, Failures, Social.
 - Home "Needs Attention": add a "Judge: N to review" row that links to the Judge tab.
 - Remove the merge popup's outdated line "There's no undo from the UI yet" (Unmerge exists).
 
@@ -57,7 +57,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. No AI/API cost for any o
 
 **Changes**
 - **Trigger Pipeline** always opens the TEST workflow (`rss-tracker-test.yml`), even on PROD. Make it follow the environment (`rss-tracker-prod.yml` on PROD).
-- Make every "Needs Attention" row clickable and open the matching tab and filter. Today only 2 of 7 rows are.
+- Make every "Needs Attention" row clickable and open the matching tab and filter. Today only 2 of 7 rows are. (PR 1 opens the right tab; per-tab filters land with card 2. The Feeds row waits on card 4.)
 - The fallback stats path hardcodes "Stories need review" to 0. Query the real column, as the edge function does.
 
 **Acceptance criteria**
@@ -112,7 +112,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. No AI/API cost for any o
 ## 6. Cleanup: delete legacy admin pages + pin libraries
 
 **Changes**
-- Delete `public/admin-supabase.html`, `public/dashboard-legacy.html`, and root `ADMIN_IMPROVEMENTS.md` (it describes the old page).
+- Delete `public/admin-supabase.html` and `public/dashboard-legacy.html` (root `ADMIN_IMPROVEMENTS.md` exists only on `main`; it goes when PROD is synced).
 - Update `scripts/simple-server.js:77`, which still points to `admin-supabase.html`.
 - Pin exact library versions in `public/admin.html`. Today it loads `react@18`, `react-dom@18`, `@babel/standalone` (no version) and `@supabase/supabase-js@2`, so an upstream release can break admin without any change on our side.
 - Check `.claude/test-only-paths.md` and the PROD deploy checklist so the deletions also reach PROD.

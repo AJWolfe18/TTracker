@@ -258,7 +258,7 @@ If state becomes complex:
 
 ## Admin Dashboard Refactoring
 
-The admin dashboard (`admin-supabase.html`) should follow similar patterns if it exceeds 1000 lines. Currently it's manageable as a single file, but the same principles apply:
+The admin dashboard (`admin.html`) is a single ~6.7K-line file; the same principles apply if it is split:
 
 ### When to Split Admin Dashboard
 - If it exceeds 1000 lines
@@ -268,7 +268,7 @@ The admin dashboard (`admin-supabase.html`) should follow similar patterns if it
 ### Proposed Admin Structure (When Needed)
 ```
 public/
-├── admin-supabase.html
+├── admin.html
 ├── admin-main.js (orchestration)
 ├── admin-components.js (entry cards, forms)
 ├── admin-operations.js (CRUD operations)
