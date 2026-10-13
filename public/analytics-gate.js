@@ -44,11 +44,17 @@
   var POSTHOG_ASSET_HOST = 'https://us-assets.i.posthog.com';
 
   var host = (window.location.hostname || '').toLowerCase();
-  // ADO-607: our own automated browsers (Playwright, Puppeteer, Lighthouse)
-  // set navigator.webdriver and were most of PostHog's "people". Treat them
-  // exactly like a non-PROD host. Real browsers leave it false/undefined.
-  var automated = !!(window.navigator && window.navigator.webdriver === true);
-  var enabled = ANALYTICS_HOSTNAMES.indexOf(host) !== -1 && !automated;
+  // ADO-607: our own automated browsers were most of PostHog's "people". Treat
+  // them exactly like a non-PROD host. Playwright, Puppeteer and Lighthouse set
+  // navigator.webdriver; Lighthouse via chrome-launcher (CLI, PageSpeed
+  // Insights) may not, so its user agent counts too. Mirrored in
+  // public/shared.js and src/lib/analytics.ts (fallbacks for a missing gate).
+  function isAutomated(nav) {
+    if (!nav) return false;
+    if (nav.webdriver === true) return true;
+    return /HeadlessChrome|Chrome-Lighthouse/.test(nav.userAgent || '');
+  }
+  var enabled = ANALYTICS_HOSTNAMES.indexOf(host) !== -1 && !isAutomated(window.navigator);
 
   // Exposed so page scripts can branch without re-implementing the hostname
   // rule (public/shared.js keeps its own defensive check as well).

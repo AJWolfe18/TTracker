@@ -156,12 +156,21 @@ void _schemaMatchesTypes;
  * ------------------------------------------------------------------ */
 
 /**
- * True only on the production hostname, and never in an automated browser
- * (ADO-607: Playwright, Puppeteer and Lighthouse set `navigator.webdriver`).
+ * True only on the production hostname, and never in an automated browser.
+ *
+ * `window.TT_ANALYTICS_ENABLED` (set by `public/analytics-gate.js`) is the
+ * single source of truth. The local rule below is only a fallback for a page
+ * where the gate failed to load, mirroring `isAnalyticsEnvEnabled()` in
+ * `public/shared.js`.
  */
 export function isAnalyticsEnabled(): boolean {
   if (typeof window === 'undefined') return false;
-  if (window.navigator?.webdriver === true) return false;
+  if (typeof window.TT_ANALYTICS_ENABLED === 'boolean') return window.TT_ANALYTICS_ENABLED;
+  // ADO-607: same automation rule as isAutomated() in analytics-gate.js.
+  const nav = window.navigator;
+  if (nav && (nav.webdriver === true || /HeadlessChrome|Chrome-Lighthouse/.test(nav.userAgent || ''))) {
+    return false;
+  }
   return ANALYTICS_HOSTNAMES.includes((window.location.hostname || '').toLowerCase());
 }
 
