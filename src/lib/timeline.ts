@@ -5,6 +5,7 @@
 // rows it won't show (egress rule, CLAUDE.md #11).
 
 import { SEVERITY_TO_ALARM } from './adapter';
+import { TONE_SYSTEM } from '../tokens/tone-system';
 
 export type TimelineSource = 'stories' | 'eos' | 'scotus' | 'pardons';
 
@@ -49,6 +50,8 @@ export interface TimelineEntry {
   front?: { name: string; slug: string };
   /** stories.action_label (stories only, did_said flag); absent = not labeled yet */
   label?: ActionKind;
+  /** The case name under a plain-English SCOTUS headline (scotus only); absent when it IS the headline */
+  caseName?: string;
 }
 
 /**
@@ -69,7 +72,7 @@ export const SOURCE_LABELS: Record<TimelineSource, string> = {
 /** Per-entry type label on the spine (what a row IS: story, EO, ruling, pardon) */
 export const ENTRY_TYPE_LABELS: Record<TimelineSource, string> = {
   stories: 'Story',
-  scotus: 'Decision',
+  scotus: 'Supreme Court',
   eos: 'EO',
   pardons: 'Pardon',
 };
@@ -122,13 +125,33 @@ export function eoRowToEntry(raw: Raw): TimelineEntry {
   };
 }
 
+// Older rulings carry an impact-scale tag ("Institutional Sabotage") in
+// ruling_label instead of a description of the ruling; never a headline
+const SCOTUS_SCALE_LABELS = new Set(
+  [0, 1, 2, 3, 4, 5].flatMap(l => {
+    const t = TONE_SYSTEM.labels.scotus[l];
+    return t ? [t.spicy, t.neutral] : [];
+  }),
+);
+
+/**
+ * A ruling reads by what it did (ADO-609): the agent's plain-English
+ * media_says headline, else a descriptive ruling_label, else the case name.
+ * A case name alone ("Nelsen v. Pike") tells a reader nothing, so whenever
+ * the headline is something else the case name rides underneath.
+ */
 export function scotusRowToEntry(raw: Raw): TimelineEntry {
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const caseName = text(raw.case_name) || text(raw.case_name_short);
+  const label = text(raw.ruling_label);
+  const headline = text(raw.media_says) || (SCOTUS_SCALE_LABELS.has(label) ? '' : label) || caseName;
   return {
     id: raw.id as number,
     source: 'scotus',
     date: (raw.decided_at as string) || '',
-    headline: (raw.case_name as string) || (raw.case_name_short as string) || '',
+    headline,
     alarm: clampAlarm(raw.ruling_impact_level, 3),
+    ...(caseName && caseName !== headline ? { caseName } : {}),
   };
 }
 
@@ -206,7 +229,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   },
   scotus: {
     table: 'scotus_cases',
-    select: 'id,case_name,case_name_short,decided_at,ruling_impact_level',
+    select: 'id,case_name,case_name_short,media_says,ruling_label,decided_at,ruling_impact_level',
     base: `is_public=eq.true&decided_at=not.is.null&decided_at=gte.${TERM_START}`,
     dateCol: 'decided_at',
     limit: 25,
@@ -897,7 +920,7 @@ export function visibleEntries(entries: TimelineEntry[], opts: VisibleOptions): 
     && !opts.kindsOff?.has(entryKind(e))
     && e.alarm >= opts.min
     && (opts.frontier === null || e.date >= opts.frontier)
-    && (!q || e.headline.toLowerCase().includes(q)),
+    && (!q || e.headline.toLowerCase().includes(q) || !!e.caseName?.toLowerCase().includes(q)),
   );
   out.reverse();
   return out;
