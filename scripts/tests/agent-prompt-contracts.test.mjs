@@ -13,7 +13,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PROD_REF } from '../../lib/env-validation.js';
 
-const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+// CRLF -> LF: a Windows checkout (core.autocrlf) must not break the \n-anchored regexes below
+const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const stories = read('../../docs/features/stories-claude-agent/prompt-v1.md');
 const judge = read('../../docs/features/clustering-judge/prompt-v1.md');
 const mig117 = read('../../migrations/117_stories_needing_enrichment.sql');
