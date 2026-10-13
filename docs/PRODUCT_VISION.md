@@ -126,7 +126,7 @@ Progressive/liberal audience who:
 ## Related Documents
 
 - `CLAUDE.md` - Technical project instructions
-- `scripts/enrichment/prompts/` - AI prompt definitions (stories.js, executive-orders.js, pardons.js)
+- `docs/features/*-claude-agent/prompt-v1.md` - AI prompt definitions (Stories, EO, Pardons, SCOTUS cloud agents)
 - `docs/architecture/` - System architecture docs
 
 ---

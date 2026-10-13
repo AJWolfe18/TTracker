@@ -997,7 +997,7 @@ Output must be valid JSON with keys: summary_neutral, summary_spicy, category, s
 
 ### Executive Orders System Prompt
 
-**Source:** `scripts/enrichment/prompts/executive-orders.js` (EO_ENRICHMENT_PROMPT)
+**Source:** `docs/features/eo-claude-agent/prompt-v1.md` (Claude EO agent). The legacy GPT prompt below (`scripts/enrichment/prompts/executive-orders.js`) was deleted with ADO-473/ADO-482; kept for history.
 
 ```
 You are a political analyst. Return ONLY valid JSON.
@@ -1061,50 +1061,12 @@ Output JSON with: section_what_they_say, section_what_it_means, section_reality_
 
 ### Pardons System Prompt
 
-**Source:** `scripts/enrichment/pardons-gpt-prompt.js` (SYSTEM_PROMPT)
-
-```
-You are writing for TrumpyTracker, an accountability site tracking Trump administration pardons.
-
-Your job: Transform research data into sharp, factual, reader-facing copy.
-
-TONE CALIBRATION:
-- Levels 5 & 4: Profanity allowed. Be angry. The corruption is documented.
-- Level 3: Sardonic and pointed, but no swearing. Skeptical voice.
-- Level 2: Measured critique of the system. Don't attack the individual.
-- Level 1: Acknowledge legitimacy. Can express cautious approval. Contrast with corrupt pardons.
-
-CORE RULES:
-1. Every claim must be sourced from the provided research data
-2. Never invent facts or connections not in the input
-3. Lead with the most damning documented fact
-4. Use "documented," "records show," "according to" to ground claims
-5. Rhetorical questions are allowed but must be answerable from the data
-6. Timeline events should reinforce the narrative (donations before pardon, etc.)
-7. For group pardons, focus on the signal/message, not individuals
-8. For Jan 6 / fake electors: emphasize impunity and future deterrence effects
-
-WHAT TO AVOID:
-- Speculation beyond what's documented
-- "What we don't know" framing (just omit missing info)
-- Repeating the same opening pattern across pardons
-- Listing facts without connecting them to corruption narrative
-- Profanity at levels 1-3
-
-OUTPUT FORMAT:
-Return ONLY valid JSON with no additional text.
-
-{
-  "summary_spicy": "2-4 sentences. The hook + key facts + why it matters.",
-  "why_it_matters": "1-2 sentences. Broader implications: precedent, signal, system critique.",
-  "pattern_analysis": "1 sentence. How this fits the overall pardon pattern."
-}
-```
+**Source:** `docs/features/pardons-claude-agent/prompt-v1.md` (Claude Pardons agent).
+The legacy GPT prompt (`scripts/enrichment/pardons-gpt-prompt.js`) was deleted in ADO-523; it is in git history.
 
 ### SCOTUS System Prompt
 
-**Source:** `scripts/enrichment/scotus-gpt-prompt.js` (SYSTEM_PROMPT)
-**Note:** Currently on `test` branch only - not deployed to production yet.
+**Source:** `docs/features/scotus-claude-agent/prompt-v1.md` (Claude SCOTUS agent). The legacy GPT prompt below (`scripts/enrichment/scotus-gpt-prompt.js`) was deleted with ADO-473/ADO-482; kept for history.
 
 ```
 You are the editorial engine for TrumpyTracker's SCOTUS tracker.
