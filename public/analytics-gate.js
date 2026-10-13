@@ -5,7 +5,8 @@
  * only ever loaded on the production hostname. Off PROD (localhost, the Netlify
  * TEST site, branch/deploy previews) nothing is injected and ZERO network
  * requests are made to any analytics vendor -- callers get console logging
- * instead, so instrumentation is still observable while developing.
+ * instead, so instrumentation is still observable while developing. Automated
+ * browsers (navigator.webdriver) are treated as off PROD too (ADO-607).
  *
  * Loaded as a plain classic script from <head> by index.html (React app) and by
  * every legacy page in public/ that carries analytics. It is deliberately NOT a
@@ -43,7 +44,11 @@
   var POSTHOG_ASSET_HOST = 'https://us-assets.i.posthog.com';
 
   var host = (window.location.hostname || '').toLowerCase();
-  var enabled = ANALYTICS_HOSTNAMES.indexOf(host) !== -1;
+  // ADO-607: our own automated browsers (Playwright, Puppeteer, Lighthouse)
+  // set navigator.webdriver and were most of PostHog's "people". Treat them
+  // exactly like a non-PROD host. Real browsers leave it false/undefined.
+  var automated = !!(window.navigator && window.navigator.webdriver === true);
+  var enabled = ANALYTICS_HOSTNAMES.indexOf(host) !== -1 && !automated;
 
   // Exposed so page scripts can branch without re-implementing the hostname
   // rule (public/shared.js keeps its own defensive check as well).

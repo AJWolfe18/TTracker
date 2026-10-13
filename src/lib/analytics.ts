@@ -155,9 +155,13 @@ void _schemaMatchesTypes;
  * Environment gate
  * ------------------------------------------------------------------ */
 
-/** True only on the production hostname. */
+/**
+ * True only on the production hostname, and never in an automated browser
+ * (ADO-607: Playwright, Puppeteer and Lighthouse set `navigator.webdriver`).
+ */
 export function isAnalyticsEnabled(): boolean {
   if (typeof window === 'undefined') return false;
+  if (window.navigator?.webdriver === true) return false;
   return ANALYTICS_HOSTNAMES.includes((window.location.hostname || '').toLowerCase());
 }
 
