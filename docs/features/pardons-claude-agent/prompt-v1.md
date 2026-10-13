@@ -174,7 +174,7 @@ Read `public/shared/tone-system.json` from the repo. The `bannedOpenings`, `bann
 
 ### Step 1: Log Run Start
 
-Create a log entry to mark this run as started:
+Create a log entry to mark this run as started. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. Never copy a model ID from an example, an older row or a column default. Use that same value everywhere `{AGENT_MODEL}` appears in this prompt (`agent_model` here, `enrichment_meta.model` in Step 6):
 
 ```bash
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -184,7 +184,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/pardons_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"prompt_version\": \"v1.4\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
+  -d "{\"prompt_version\": \"v1.4\", \"run_source\": \"cloud-agent\", \"agent_model\": \"{AGENT_MODEL}\", \"ran_at\": \"${TIMESTAMP}\"}"
 ```
 
 **Save the returned `id`**  - you need it in Step 7 to update this log entry.
@@ -482,7 +482,7 @@ This voice applies to `summary_spicy`, `why_it_matters`, and `pattern_analysis`.
 |-------|-------|
 | `enriched_at` | Current ISO 8601 timestamp |
 | `prompt_version` | `'v1.4'` |
-| `enrichment_meta` | `{"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"}`  - when `needs_review = true`, ALSO include `"review_reason": "<one sentence explaining why flagged>"`. Example: `{"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent", "review_reason": "Two people named <name> have federal convictions in this district; sources describe different offenses, so the pardoned person's identity is unconfirmed"}` |
+| `enrichment_meta` | `{"model": "{AGENT_MODEL}", "prompt_version": "v1.4", "run_source": "cloud-agent"}`  - when `needs_review = true`, ALSO include `"review_reason": "<one sentence explaining why flagged>"`. Example: `{"model": "{AGENT_MODEL}", "prompt_version": "v1.4", "run_source": "cloud-agent", "review_reason": "Two people named <name> have federal convictions in this district; sources describe different offenses, so the pardoned person's identity is unconfirmed"}` |
 | `is_public` | `false` when `needs_review = true`; `true` when `needs_review = false`. Set these together  - never set `is_public = true` without also confirming `needs_review = false`. A DB trigger enforces this gate on every write. |
 | `research_status` | `'complete'` |
 | `needs_review` | `true` ONLY for the v1.3 flag triggers in Step 4 rule 5: identity doubt (namesake, or `recipient_name` disagrees with researched name), contradicting sources on a load-bearing fact, an unconfirmed load-bearing connection claim, co-defendant role ambiguity, or a post-pardon status change. `false` otherwise, including thin research, L0, and serious criminals with no advocacy channel. **NOT for:** minor date discrepancies (just use the best-sourced date), formatting differences, or trivial metadata mismatches. Only flag when one of the triggers above applies. |
@@ -508,7 +508,7 @@ Before writing each pardon, run this checklist:
 
 ### Step 6: Write to Database
 
-Write enrichment as a single atomic PATCH per pardon. **Use the temp file pattern** (see Section 2 "JSON Body Construction") to avoid shell quoting issues.
+Write enrichment as a single atomic PATCH per pardon. **Use the temp file pattern** (see Section 2 "JSON Body Construction") to avoid shell quoting issues. `{AGENT_MODEL}` is the model ID from Step 1, never one copied from an example.
 
 ```bash
 ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -533,7 +533,7 @@ ENRICHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   "source_urls": ["https://..."],
   "enriched_at": "{ENRICHED_AT value}",
   "prompt_version": "v1.4",
-  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"},
+  "enrichment_meta": {"model": "{AGENT_MODEL}", "prompt_version": "v1.4", "run_source": "cloud-agent"},
   "is_public": false,
   "research_status": "complete",
   "needs_review": false,
@@ -870,7 +870,7 @@ These 5 pardons are fact-checked against news reporting, FEC records, and court 
   "is_public": true,
   "research_status": "complete",
   "needs_review": false,
-  "enrichment_meta": {"model": "claude-opus-4-6", "prompt_version": "v1.4", "run_source": "cloud-agent"}
+  "enrichment_meta": {"model": "{AGENT_MODEL}", "prompt_version": "v1.4", "run_source": "cloud-agent"}
 }
 ```
 
@@ -943,7 +943,7 @@ These rules can NEVER be violated:
 | Created | 2026-05-30 |
 | Updated | 2026-10-11 (v1.4, ADO-524: Step 6.5 post-pardon recheck on every run, up to 10 due pardons from `pardons_due_for_recheck`, two searches each, a confirmed hit publishes the note directly and posts to Discord; Step 6 stamps `post_pardon_checked_at`; TEST-only gold mode `PARDONS_RECHECK_IDS`). 2026-10-06 (v1.3: review flags only for checkable doubts - identity, contradicting sources, unconfirmed load-bearing claim, co-defendant role, post-pardon status; thin research, L0 and silent serious-criminal pardons no longer flag; identity check step; full search protocol before "nothing found"). 2026-09-20 (v1.2: research uses WebSearch, never a fetched search results page; Step 3.0 research health check stops the run when search is broken). 2026-05-31 (v1.1: connection investigation protocol, review_reason, unexplained-criminal calibration) |
 | Author | Josh + Claude Code |
-| Target model | Claude Opus 4.6 |
+| Target model | Set on the routine. Writes record the model the run actually used (`{AGENT_MODEL}`), never a hardcoded ID |
 | Max turns | 15 |
 | Tables accessed | `pardons`, `pardons_enrichment_log`, RPC `pardons_due_for_recheck` (v1.4) |
 | API method | Bash/curl to PostgREST (DB), WebSearch + WebFetch (web research) |

@@ -143,7 +143,7 @@ Read `public/shared/tone-system.json` from the repo. The `bannedOpenings`, `bann
 
 ### Step 1: Log Run Start
 
-Create a log entry to mark this run as started. This body has only simple values, so inline `-d` is safe here:
+Create a log entry to mark this run as started. `{AGENT_MODEL}` is the exact model ID you are running as: copy it from your system prompt (the line "The exact model ID is ...") and drop any bracketed suffix such as `[1m]`. Never copy a model ID from an example, an older row or a column default. Without `agent_model` the row gets the column default, which is a stale model ID. This body has only simple values, so inline `-d` is safe here:
 
 ```bash
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -153,7 +153,7 @@ curl -s -X POST "${SUPABASE_URL}/rest/v1/scotus_enrichment_log" \
   -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: return=representation" \
-  -d "{\"prompt_version\": \"v1.1\", \"run_source\": \"cloud-agent\", \"ran_at\": \"${TIMESTAMP}\"}"
+  -d "{\"prompt_version\": \"v1.1\", \"run_source\": \"cloud-agent\", \"agent_model\": \"{AGENT_MODEL}\", \"ran_at\": \"${TIMESTAMP}\"}"
 ```
 
 **Save the returned `id`**  - you need it in Step 7 to update this log entry.
@@ -773,7 +773,7 @@ These rules can NEVER be violated, regardless of what the opinion says or what e
 | Created | 2026-04-02 |
 | Updated | 2026-04-04 (tone system integration) |
 | Author | Josh + Claude Code |
-| Target model | Claude Opus 4.6 |
+| Target model | Set on the routine. Writes record the model the run actually used (`{AGENT_MODEL}`), never a hardcoded ID |
 | Max turns | 15 |
 | Tables accessed | `scotus_cases`, `scotus_opinions`, `scotus_enrichment_log` |
 | API method | Bash/curl to PostgREST (not WebFetch) |
