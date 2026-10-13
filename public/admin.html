@@ -3614,6 +3614,33 @@
                 return { class: 'badge-archived', label: status || '-' };
             };
 
+            // ADO-495: why a case is flagged or still a draft, without opening Edit.
+            // Muted badges; red only for a QA verdict that blocks publishing.
+            // Hover shows the full reason text.
+            const getReasonBadges = (c) => {
+                const badges = [];
+                if (c.clamp_reason && !c.is_public) {
+                    badges.push({ class: 'badge-closed', label: c.clamp_reason.replace(/_/g, ' ') });
+                }
+                if (c.enrichment_status === 'enriched' && !c.is_public && c.qa_status) {
+                    const blocked = c.qa_status === 'flagged' || c.qa_status === 'rejected';
+                    badges.push({
+                        class: blocked ? 'badge-failed' : 'badge-closed',
+                        label: SCOTUS_QA_STATUSES.find(s => s.value === c.qa_status)?.label || c.qa_status
+                    });
+                }
+                const notes = [
+                    c.low_confidence_reason && `Low confidence: ${c.low_confidence_reason}`,
+                    c.manual_review_note && `Manual review: ${c.manual_review_note}`,
+                    c.qa_review_note && `QA: ${c.qa_review_note}`,
+                ].filter(Boolean);
+                // A note with nothing else to hang it on still gets a badge to hover
+                if (badges.length === 0 && notes.length > 0) {
+                    badges.push({ class: 'badge-archived', label: c.low_confidence_reason ? 'Low confidence' : 'Note' });
+                }
+                return { badges, title: notes.join('\n') };
+            };
+
             // Handle edit
             const handleEdit = (c) => setEditingCase(c);
 
@@ -4015,6 +4042,7 @@
                                             <th>Impact</th>
                                             <th>Vote</th>
                                             <th>Status</th>
+                                            <th>Reason</th>
                                             <th>Flags</th>
                                             <th>Actions</th>
                                         </tr>
@@ -4022,7 +4050,7 @@
                                     <tbody>
                                         {cases.length === 0 && (
                                             <tr>
-                                                <td colSpan={isDraftsTab ? 9 : 8} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                                <td colSpan={isDraftsTab ? 10 : 9} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                                                     No cases found matching your filters.
                                                 </td>
                                             </tr>
@@ -4030,6 +4058,7 @@
                                         {cases.map(c => {
                                             const impactBadge = getImpactBadge(c.ruling_impact_level);
                                             const enrichBadge = getEnrichmentBadge(c.enrichment_status);
+                                            const reason = getReasonBadges(c);
 
                                             return (
                                                 <tr key={c.id} className={c.needs_manual_review ? 'scotus-needs-review' : ''}>
@@ -4053,6 +4082,14 @@
                                                     </td>
                                                     <td>
                                                         <span className={`badge ${enrichBadge.class}`}>{enrichBadge.label}</span>
+                                                    </td>
+                                                    <td style={{ whiteSpace: 'nowrap' }} title={reason.title || undefined}>
+                                                        {reason.badges.length === 0
+                                                            ? <span style={{ color: '#64748b', fontSize: '13px' }}>-</span>
+                                                            : reason.badges.map((b, i) => (
+                                                                <span key={i} className={`badge ${b.class}`} style={{ marginRight: '4px', cursor: reason.title ? 'help' : 'default' }}>{b.label}</span>
+                                                            ))
+                                                        }
                                                     </td>
                                                     <td style={{ fontSize: '13px' }}>
                                                         {c.needs_manual_review && <span style={{ color: '#fbbf24' }} title="Needs manual review">&#9888;</span>}
