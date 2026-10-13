@@ -35,7 +35,7 @@ const SELECT_FIELDS = `
   ruling_impact_level, ruling_label, summary_spicy, who_wins, who_loses,
   why_it_matters, dissent_highlights, practical_effect, media_says, actually_means,
   evidence_anchors, substantive_winner,
-  fact_extraction_confidence, low_confidence_reason, needs_manual_review,
+  fact_extraction_confidence, low_confidence_reason, needs_manual_review, clamp_reason,
   enrichment_status, is_public, qa_status, qa_verdict, qa_review_note, qa_reviewed_at,
   manual_reviewed_at, manual_review_note,
   enriched_at, prompt_version, source_data_version, created_at, updated_at
