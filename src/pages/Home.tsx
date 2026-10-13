@@ -7,6 +7,8 @@ import { Card } from '@/components/Card';
 import { Kicker } from '@/components/Kicker';
 import { FilterBar } from '@/components/FilterBar';
 import { Pagination } from '@/components/Pagination';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { CrashNotice } from '@/edge-states/CrashNotice';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { LoadingSkeleton } from '@/edge-states/LoadingSkeleton';
 import { ErrorState } from '@/edge-states/ErrorState';
@@ -89,7 +91,11 @@ export function Home({
       />
       <Scorecard stats={stats} />
       <main id="main-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
-        {children}
+        {/* A card list crash keeps the header and paging; the next page of
+            items tries again (ADO-196) */}
+        <ErrorBoundary resetKey={items} fallback={<CrashNotice />}>
+          {children}
+        </ErrorBoundary>
         {totalPages != null && totalPages > 1 && onPageChange && (
           <Pagination page={currentPage ?? 1} totalPages={totalPages} onPageChange={(p) => {
             onPageChange(p);

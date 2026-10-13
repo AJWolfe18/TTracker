@@ -1,5 +1,8 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { ThemeContext, useThemeProvider } from '@/hooks/useTheme';
+import { ThemeContext, useTheme, useThemeProvider } from '@/hooks/useTheme';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Header } from '@/components/Header';
+import { CrashNotice } from '@/edge-states/CrashNotice';
 import { Route, Switch, useLocation } from 'wouter';
 import { Home } from '@/pages/Home';
 import { TrackerHome } from '@/pages/TrackerHome';
@@ -34,41 +37,57 @@ export function App() {
 
   return (
     <ThemeContext.Provider value={themeValue}>
-      <Suspense fallback={<LoadingSkeleton />}>
-        <Switch>
-          <Route path="/about">
-            <About />
-          </Route>
-          <Route path="/eos/:id">
-            {(params) => <DetailRoute id={params.id} fetcher={fetchEoDetail} onOpenItem={makeOpenHandler('eos')} />}
-          </Route>
-          <Route path="/scotus/:id">
-            {(params) => <DetailRoute id={params.id} fetcher={fetchScotusDetail} onOpenItem={makeOpenHandler('scotus')} />}
-          </Route>
-          <Route path="/pardons/:id">
-            {(params) => <DetailRoute id={params.id} fetcher={fetchPardonDetail} onOpenItem={makeOpenHandler('pardons')} />}
-          </Route>
-          <Route path="/detail/:id">
-            {(params) => <DetailRoute id={params.id} fetcher={fetchStoryDetail} onOpenItem={makeOpenHandler('detail')} />}
-          </Route>
-          <Route path="/eos">
-            <TypePage tabType="eos" onOpenItem={makeOpenHandler('eos')} />
-          </Route>
-          <Route path="/scotus">
-            <TypePage tabType="scotus" onOpenItem={makeOpenHandler('scotus')} />
-          </Route>
-          <Route path="/pardons">
-            <TypePage tabType="pardons" onOpenItem={makeOpenHandler('pardons')} />
-          </Route>
-          <Route path="/news">
-            <TypePage tabType="stories" onOpenItem={makeOpenHandler('detail')} />
-          </Route>
-          <Route path="/">
-            <HomeRoute onOpenItem={makeOpenHandler('detail')} />
-          </Route>
-        </Switch>
-      </Suspense>
+      {/* A crashed route (or a lazy chunk that failed to load) keeps the
+          header; navigating to another route tries again (ADO-196) */}
+      <ErrorBoundary resetKey={location} fallback={<RouteCrash />}>
+        <Suspense fallback={<LoadingSkeleton />}>
+          <Switch>
+            <Route path="/about">
+              <About />
+            </Route>
+            <Route path="/eos/:id">
+              {(params) => <DetailRoute id={params.id} fetcher={fetchEoDetail} onOpenItem={makeOpenHandler('eos')} />}
+            </Route>
+            <Route path="/scotus/:id">
+              {(params) => <DetailRoute id={params.id} fetcher={fetchScotusDetail} onOpenItem={makeOpenHandler('scotus')} />}
+            </Route>
+            <Route path="/pardons/:id">
+              {(params) => <DetailRoute id={params.id} fetcher={fetchPardonDetail} onOpenItem={makeOpenHandler('pardons')} />}
+            </Route>
+            <Route path="/detail/:id">
+              {(params) => <DetailRoute id={params.id} fetcher={fetchStoryDetail} onOpenItem={makeOpenHandler('detail')} />}
+            </Route>
+            <Route path="/eos">
+              <TypePage tabType="eos" onOpenItem={makeOpenHandler('eos')} />
+            </Route>
+            <Route path="/scotus">
+              <TypePage tabType="scotus" onOpenItem={makeOpenHandler('scotus')} />
+            </Route>
+            <Route path="/pardons">
+              <TypePage tabType="pardons" onOpenItem={makeOpenHandler('pardons')} />
+            </Route>
+            <Route path="/news">
+              <TypePage tabType="stories" onOpenItem={makeOpenHandler('detail')} />
+            </Route>
+            <Route path="/">
+              <HomeRoute onOpenItem={makeOpenHandler('detail')} />
+            </Route>
+          </Switch>
+        </Suspense>
+      </ErrorBoundary>
     </ThemeContext.Provider>
+  );
+}
+
+function RouteCrash() {
+  const { theme, headType } = useTheme();
+  return (
+    <div style={{ background: theme.bg, color: theme.ink, fontFamily: headType.sans, minHeight: '100vh' }}>
+      <Header />
+      <main id="main-content" style={{ maxWidth: 820, margin: '0 auto', padding: '0 20px' }}>
+        <CrashNotice />
+      </main>
+    </div>
   );
 }
 

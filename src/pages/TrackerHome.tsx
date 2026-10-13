@@ -2,6 +2,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { TrackerSpine } from '@/components/TrackerSpine';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { CrashNotice } from '@/edge-states/CrashNotice';
 
 // The homepage when the rap_sheet flag is on (ADO-545, PRD §12 Q7 resolved):
 // The Tracker IS the front page — tally + spine, per mockup rev 6. The story
@@ -15,7 +17,10 @@ export function TrackerHome() {
     <div style={{ background: theme.bg, color: theme.ink, fontFamily: headType.sans, minHeight: '100vh' }}>
       <Header current="Home" />
       <main id="main-content" style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
-        <TrackerSpine standalone />
+        {/* A spine crash keeps the header and footer (ADO-196) */}
+        <ErrorBoundary fallback={<CrashNotice />}>
+          <TrackerSpine standalone />
+        </ErrorBoundary>
         <Footer />
       </main>
     </div>
