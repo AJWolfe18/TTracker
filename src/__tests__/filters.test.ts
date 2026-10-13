@@ -58,7 +58,7 @@ describe('getFilterConfig', () => {
       expect(o.apiValue).toBe(o.urlValue);
       expect(o.label).toBe(TONE_SYSTEM.labels.pardons[Number(o.urlValue) as 0 | 1 | 2 | 3 | 4 | 5].spicy);
       // the shared JSON the legacy page and the agents read says the same thing
-      expect(o.label).toBe((toneJson.labels.pardons as Record<string, { spicy: string }>)[o.urlValue].spicy);
+      expect(o.label).toBe((toneJson.labels.pardons as unknown as Record<string, { spicy: string }>)[o.urlValue].spicy);
     }
     expect(pills.map(o => o.label)).toContain('Actual Mercy');
   });
