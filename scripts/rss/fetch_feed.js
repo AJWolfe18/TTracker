@@ -324,7 +324,8 @@ async function handleFetchFeed(job, db) {
       content_size_bytes: xmlContent.length
     });
 
-    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself, whatever we already stored
+    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself (not which articles we
+    // kept), stamped forward only (ADO-630)
     await stampFeedLiveness(db, url, feed.items);
 
     // 9) Apply RSS item limit protection (P1 requirement)
