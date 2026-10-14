@@ -30,6 +30,8 @@ export interface TimelineEntry {
   alarm: number;
   /** Published front this entry belongs to (stories only, via v_tracker_stories) */
   front?: { name: string; slug: string };
+  /** The case name under a plain-English SCOTUS headline (scotus only); absent when it IS the headline */
+  caseName?: string;
 }
 
 export const SOURCE_LABELS: Record<TimelineSource, string> = {
@@ -42,7 +44,7 @@ export const SOURCE_LABELS: Record<TimelineSource, string> = {
 /** Per-entry type label on the spine (what a row IS: story, EO, ruling, pardon) */
 export const ENTRY_TYPE_LABELS: Record<TimelineSource, string> = {
   stories: 'Story',
-  scotus: 'Decision',
+  scotus: 'Supreme Court',
   eos: 'EO',
   pardons: 'Pardon',
 };
@@ -93,13 +95,24 @@ export function eoRowToEntry(raw: Raw): TimelineEntry {
   };
 }
 
+/**
+ * A ruling reads by what it did (ADO-609): the agent's plain-English
+ * media_says headline, else the case name. Not ruling_label: older rows hold
+ * an impact-scale tag ("Institutional Sabotage") or a bare disposition
+ * ("Certiorari dismissed as improvidently granted") there, both worse than
+ * the case name. With a media_says headline the case name rides underneath.
+ */
 export function scotusRowToEntry(raw: Raw): TimelineEntry {
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const caseName = text(raw.case_name) || text(raw.case_name_short);
+  const headline = text(raw.media_says) || caseName;
   return {
     id: raw.id as number,
     source: 'scotus',
     date: (raw.decided_at as string) || '',
-    headline: (raw.case_name as string) || (raw.case_name_short as string) || '',
+    headline,
     alarm: clampAlarm(raw.ruling_impact_level, 3),
+    ...(caseName && caseName !== headline ? { caseName } : {}),
   };
 }
 
@@ -177,7 +190,7 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   },
   scotus: {
     table: 'scotus_cases',
-    select: 'id,case_name,case_name_short,decided_at,ruling_impact_level',
+    select: 'id,case_name,case_name_short,media_says,decided_at,ruling_impact_level',
     base: `is_public=eq.true&decided_at=not.is.null&decided_at=gte.${TERM_START}`,
     dateCol: 'decided_at',
     limit: 25,
@@ -738,7 +751,7 @@ export function visibleEntries(entries: TimelineEntry[], opts: VisibleOptions): 
     !opts.off.has(e.source)
     && e.alarm >= opts.min
     && (opts.frontier === null || e.date >= opts.frontier)
-    && (!q || e.headline.toLowerCase().includes(q)),
+    && (!q || e.headline.toLowerCase().includes(q) || !!e.caseName?.toLowerCase().includes(q)),
   );
   out.reverse();
   return out;

@@ -87,20 +87,33 @@ export function newestItemPublishedAt(items, now = Date.now()) {
   return newest === null ? null : new Date(newest).toISOString();
 }
 
-async function updateFeed(db, url, fields, what, log) {
+/** @returns {Promise<boolean>} false when the update failed (already logged) */
+async function updateFeed(db, url, fields, what, log, orFilter = null) {
   try {
-    const { error } = await db.from('feed_registry').update(fields).eq('feed_url', url);
-    if (error) log.warn(`⚠️ Could not stamp ${what} for ${url}: ${error.message}`);
+    let q = db.from('feed_registry').update(fields).eq('feed_url', url);
+    if (orFilter) q = q.or(orFilter);
+    const { error } = await q;
+    if (!error) return true;
+    log.warn(`⚠️ Could not stamp ${what} for ${url}: ${error.message}`);
   } catch (err) {
     log.warn(`⚠️ Could not stamp ${what} for ${url}: ${err.message}`);
   }
+  return false;
 }
 
-/** Stamp last_item_published_at; no-op when the feed carried no usable date. Never throws. */
+/**
+ * Stamp last_item_published_at; no-op when the feed carried no usable date. Never throws.
+ * Forward only, enforced in the UPDATE itself: a payload whose newest item is not newer than the
+ * stored stamp matches no row, so one fetch of back-dated items (Time's feed, October 13, 2026)
+ * cannot make a live feed look stale, and two overlapping runs cannot move it backward either.
+ * @returns {string|null} the newest item date, or null when there was none or the update failed
+ */
 export async function stampFeedLiveness(db, url, items, { now = Date.now(), log = console } = {}) {
   const newest = newestItemPublishedAt(items, now);
-  if (newest) await updateFeed(db, url, { last_item_published_at: newest }, 'last_item_published_at', log);
-  return newest;
+  if (!newest) return null;
+  const ok = await updateFeed(db, url, { last_item_published_at: newest }, 'last_item_published_at', log,
+    `last_item_published_at.is.null,last_item_published_at.lt.${newest}`);
+  return ok ? newest : null;
 }
 
 /** Stamp last_failed_at so a stopped feed is retried 24 hours later. Never throws. */

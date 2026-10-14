@@ -1,5 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { CrashNotice } from './edge-states/CrashNotice';
 import { prefetchFlags } from './hooks/useFeatureFlag';
 import { prefetchTrackerHome } from './lib/tracker-boot';
 import './styles/base.css';
@@ -13,5 +15,11 @@ if (window.location.pathname === '/') prefetchTrackerHome();
 // parallel with React startup, instead of after the first mount effect.
 prefetchFlags();
 
+// Last line of defense (ADO-196): App itself crashing shows a full-page
+// notice with a reload link instead of a blank page
 const root = createRoot(document.getElementById('root')!);
-root.render(<App />);
+root.render(
+  <ErrorBoundary fallback={<CrashNotice page />}>
+    <App />
+  </ErrorBoundary>,
+);

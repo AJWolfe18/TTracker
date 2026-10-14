@@ -10,8 +10,32 @@ import {
 } from '../lib/analytics';
 
 // Vitest runs node-env (no jsdom), so `window` is stubbed by hand.
+type FakeNavigator = { webdriver?: boolean; userAgent?: string };
+
+// ADO-607: a real browser leaves webdriver undefined (or false).
+const REAL_NAVIGATOR: FakeNavigator = {
+  userAgent:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+};
+const AUTOMATED_NAVIGATORS: FakeNavigator[] = [
+  // Playwright / Puppeteer
+  { webdriver: true, userAgent: REAL_NAVIGATOR.userAgent },
+  // Lighthouse via chrome-launcher (CLI, PageSpeed Insights): webdriver false
+  {
+    webdriver: false,
+    userAgent:
+      'Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36 Chrome-Lighthouse',
+  },
+  // Headless Chrome with no webdriver flag
+  {
+    userAgent:
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36',
+  },
+];
+
 type FakeWindow = {
   location: { hostname: string };
+  navigator?: FakeNavigator;
   gtag?: (...args: unknown[]) => void;
   TT_ANALYTICS_ENABLED?: boolean;
   dataLayer?: unknown[];
@@ -64,6 +88,31 @@ describe('src/lib/analytics gate', () => {
       setWindow(host);
       expect(isAnalyticsEnabled(), `expected ${host} to be gated off`).toBe(false);
     }
+  });
+
+  // ADO-607 fallback (gate not loaded): automated browsers stay off on PROD.
+  it('is disabled in an automated browser, even on the production hostname', () => {
+    for (const navigator of AUTOMATED_NAVIGATORS) {
+      setWindow(ANALYTICS_HOSTNAME, { navigator });
+      expect(isAnalyticsEnabled(), JSON.stringify(navigator)).toBe(false);
+    }
+
+    const gtag = vi.fn();
+    setWindow(ANALYTICS_HOSTNAME, { navigator: { webdriver: true }, gtag });
+    trackPageView('/news');
+    expect(gtag).not.toHaveBeenCalled();
+
+    setWindow(ANALYTICS_HOSTNAME, { navigator: REAL_NAVIGATOR });
+    expect(isAnalyticsEnabled(), 'a real browser stays enabled').toBe(true);
+  });
+
+  it('treats the gate verdict (TT_ANALYTICS_ENABLED) as the single source of truth', () => {
+    setWindow(ANALYTICS_HOSTNAME, { navigator: REAL_NAVIGATOR, TT_ANALYTICS_ENABLED: false });
+    expect(isAnalyticsEnabled()).toBe(false);
+
+    // e.g. webdriver flipped after the gate already decided: the gate wins.
+    setWindow(ANALYTICS_HOSTNAME, { navigator: { webdriver: true }, TT_ANALYTICS_ENABLED: true });
+    expect(isAnalyticsEnabled()).toBe(true);
   });
 
   it('sends the GA4 page_path config on PROD', () => {
@@ -119,7 +168,8 @@ function runGate(
     settle = true,
     readyState = 'loading',
     idle = true,
-  }: { settle?: boolean; readyState?: string; idle?: boolean } = {},
+    navigator,
+  }: { settle?: boolean; readyState?: string; idle?: boolean; navigator?: FakeNavigator } = {},
 ) {
   const appended: FakeScript[] = [];
   const created: FakeScript[] = [];
@@ -138,6 +188,7 @@ function runGate(
       return 0;
     },
   };
+  if (navigator) win.navigator = navigator;
   if (idle) {
     win.requestIdleCallback = (fn: () => void) => {
       idleQueue.push(fn);
@@ -246,6 +297,34 @@ describe('public/analytics-gate.js', () => {
       expect(created, `${host} must not create a script element`).toHaveLength(0);
       expect(appended, `${host} must not append a script element`).toHaveLength(0);
       expect(win.dataLayer, `${host} must not create a dataLayer`).toBeUndefined();
+    }
+  });
+
+  // ADO-607: our own Playwright/Puppeteer/Lighthouse runs were most of
+  // PostHog's "people" (webdriver flag, or a HeadlessChrome/Lighthouse UA).
+  it('treats an automated browser on PROD exactly like off PROD', () => {
+    for (const navigator of AUTOMATED_NAVIGATORS) {
+      const label = JSON.stringify(navigator);
+      const { win, appended, created, logs } = runGate(ANALYTICS_HOSTNAME, { navigator });
+
+      expect(win.TT_ANALYTICS_ENABLED, label).toBe(false);
+      expect(created, `${label} must not create a script element`).toHaveLength(0);
+      expect(appended, `${label} must not append a script element`).toHaveLength(0);
+      expect(win.dataLayer, label).toBeUndefined();
+      expect(win.posthog, label).toBeUndefined();
+
+      (win.gtag as (...args: unknown[]) => void)('event', 'outbound_click', {});
+      (win.TTAnalytics as { capture: (n: string, p: unknown) => void }).capture('card_open', {});
+      expect(logs, label).toEqual([]);
+      expect(appended, label).toHaveLength(0);
+    }
+  });
+
+  it('still loads on PROD in a real browser (webdriver undefined or false)', () => {
+    for (const navigator of [REAL_NAVIGATOR, { ...REAL_NAVIGATOR, webdriver: false }]) {
+      const { win, appended } = runGate(ANALYTICS_HOSTNAME, { navigator });
+      expect(win.TT_ANALYTICS_ENABLED).toBe(true);
+      expect(appended.map((s) => s.src)).toEqual([GA_SRC, POSTHOG_SRC]);
     }
   });
 

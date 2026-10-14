@@ -324,7 +324,8 @@ async function handleFetchFeed(job, db) {
       content_size_bytes: xmlContent.length
     });
 
-    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself, whatever we already stored
+    // 8b) Per-feed liveness (ADO-625): newest item date in the feed itself (not which articles we
+    // kept), stamped forward only (ADO-630)
     await stampFeedLiveness(db, url, feed.items);
 
     // 9) Apply RSS item limit protection (P1 requirement)
@@ -452,8 +453,7 @@ async function processArticleItemAtomic(item, feedUrl, sourceName, feedId, db, m
   // Parse published date using safe coercion (TTRC-268/269/270 final fix)
   const publishedAt = normalizePublishedAt(item);
 
-  // Check if article is within freshness window (3 days)
-  // TODO: Make this configurable via MAX_ARTICLE_AGE_HOURS env var (TTRC-170)
+  // Check if article is within freshness window (MAX_ARTICLE_AGE_HOURS, ADO-148)
   const maxAgeHours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || '96', 10); // Default 4 days
   const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
   const cutoffDate = new Date(Date.now() - maxAgeMs);

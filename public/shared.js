@@ -377,6 +377,11 @@
     if (typeof window.TT_ANALYTICS_ENABLED === 'boolean') {
       return window.TT_ANALYTICS_ENABLED;
     }
+    // Same automation rule as isAutomated() in analytics-gate.js (ADO-607).
+    const nav = window.navigator;
+    if (nav && (nav.webdriver === true || /HeadlessChrome|Chrome-Lighthouse/.test(nav.userAgent || ''))) {
+      return false;
+    }
     const host = (window.location.hostname || '').toLowerCase();
     return host === 'trumpytracker.com' || host === 'www.trumpytracker.com';
   }
