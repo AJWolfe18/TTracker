@@ -2,7 +2,7 @@
 
 **Cards:** `backlog.md` (same folder) has each card's changes and acceptance criteria. That file is the spec; this plan is the sequencing and handoff.
 **Started:** 2026-10-13 (cloud session, no ADO or Supabase access)
-**Status lives in ADO** once the cards are created. Until then, the checklists below are the status.
+**Status lives in ADO:** ADO-631 (cards 1, 3, 5, 6 combined; PR 1), ADO-632 (card 2), ADO-343 (card 4, existing card rescoped). Card 7 has no card (recommended drop).
 
 ## Why it's split across sessions
 
@@ -36,7 +36,7 @@ The cloud session that started this can edit code and open PRs. It **cannot** re
    ```
 3. Merge the PR into `test` → Netlify deploys the TEST site.
 4. Verify on TEST: Judge is the 2nd tab and opens on "Needs review". Dismiss a row: it disappears, and the "All verdicts" view shows a `keep`/`manual` row. The Home "Judge: N to review" count matches. Check a 375px phone screen.
-5. Create the ADO cards from `backlog.md` (`/ado create story ...`), then move cards 1/3/5/6 to **Testing**.
+5. ~~Create the ADO cards~~ Done October 13, 2026: ADO-631 (Testing), ADO-632, ADO-343.
 6. PROD later: follow the normal cherry-pick flow (`docs/guides/prod-deployment-checklist.md`), and deploy both edge functions to PROD **before** the page change reaches PROD.
    - The cherry-pick hits a modify/delete conflict on `public/dashboard-legacy.html` (main's copy differs). Resolve with `git rm`.
    - `ADMIN_IMPROVEMENTS.md` exists only on main. `git rm` it on the deploy branch.
@@ -44,7 +44,7 @@ The cloud session that started this can edit code and open PRs. It **cannot** re
 
 ---
 
-## Session 2 — desktop: Card 2, Stories needs-review queue
+## Session 2 — desktop: Card 2, Stories needs-review queue (ADO-632)
 
 **Finding (from reading migration 080):** `flag_story_for_review()` only ever **sets** `needs_review = TRUE`. It never clears the flag. So:
 - A story that was later fixed (re-enriched, failure count reset) stays flagged forever, so the Home count may be inflated with stale flags.
@@ -57,7 +57,7 @@ The cloud session that started this can edit code and open PRs. It **cannot** re
 4. Password-gated "mark reviewed" write (extend `admin-update-story`, or a small new function).
 5. Stories tab: a "Needs review" filter showing `review_reason`, a "Mark reviewed" button, and a link from the Home row.
 
-## Session 3 — cloud or desktop: Card 4, Feeds tab
+## Session 3 — cloud or desktop: Card 4, Feeds tab (ADO-343)
 Spec in `backlog.md`. New `admin-feeds` edge function (pattern: `admin-pipeline-skips`). Can be built in the cloud, but deploying and checking it needs desktop.
 
 ## Parked

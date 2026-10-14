@@ -11,7 +11,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 1. Judge tab: Dismiss button + "Needs review" view, move tab up
+## 1. Judge tab: Dismiss button + "Needs review" view, move tab up (ADO-631)
 
 **Why:** Uncertain pairs pile up in the Judge list with no way to clear them, and Judge is the tab Josh uses most but sits near the end.
 
@@ -34,7 +34,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 2. Stories: "Needs review" queue
+## 2. Stories: "Needs review" queue (ADO-632)
 
 **Why:** Home shows "Stories need review: N", but nothing lets you see or clear those stories.
 
@@ -53,7 +53,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 3. Home tab fixes
+## 3. Home tab fixes (ADO-631)
 
 **Changes**
 - **Trigger Pipeline** always opens the TEST workflow (`rss-tracker-test.yml`), even on PROD. Make it follow the environment (`rss-tracker-prod.yml` on PROD).
@@ -66,7 +66,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 4. Feeds tab (replace "Coming soon")
+## 4. Feeds tab (replace "Coming soon") (ADO-343)
 
 **Why:** Home says "Feeds failed: N" but doesn't say which feeds. Feed health is currently checked by hand in Supabase.
 
@@ -85,7 +85,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 5. Mobile-friendly admin
+## 5. Mobile-friendly admin (ADO-631)
 
 **Problems found**
 - The 8 tabs sit in one row that doesn't wrap or scroll, so they run off-screen on phones.
@@ -109,7 +109,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 6. Cleanup: delete legacy admin pages + pin libraries
+## 6. Cleanup: delete legacy admin pages + pin libraries (ADO-631)
 
 **Changes**
 - Delete `public/admin-supabase.html` and `public/dashboard-legacy.html` (root `ADMIN_IMPROVEMENTS.md` exists only on `main`; it goes when PROD is synced).
@@ -124,7 +124,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 ---
 
-## 7. (Proposed) Agent health on Home
+## 7. (Proposed, recommended drop) Agent health on Home
 
 **Why:** System Health only covers the RSS feed run. If the Stories, SCOTUS, Exec Orders, Pardons or Judge agents silently stop, Home stays green.
 
@@ -135,4 +135,4 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 - [ ] One row per agent, showing its last-run time and status.
 - [ ] Thresholds match each agent's schedule.
 
-**Status:** Not yet agreed. Confirm or drop.
+**Status:** Not yet agreed. Recommendation (October 13, 2026): drop. `scripts/monitoring/alert-routine-silence.js` (ADO-586/624) already posts to Discord every 6 hours when any agent goes quiet; a Home row would only repeat it, and only while admin is open.
