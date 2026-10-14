@@ -52,7 +52,9 @@ const QUERY_LIMIT = 50;
 const DAILY_QUERY_LIMIT = 500;
 // The slot ends this long before the check window opens. A log row is created when a story starts and
 // turns completed at the end (minutes later), so a slot that ended at the check hour would miss a row
-// still running when the digest ran, on both days (Codex, PR #190). Rows still running 6h on are stuck.
+// still running when the digest ran, on both days (Codex, PR #190). Known limit: a row that turns
+// completed more than 6h after its slot ends is never reported (the agent treats a run over 30 minutes
+// as dead). The root fix is a DB-set completion time on stories_enrichment_log, which needs a migration.
 const STORIES_SLOT_LAG_MS = 6 * 3600000;
 const DIGEST_BUDGET = 3800; // stay under discord.js MAX_DESCRIPTION (4000) so no name is cut off
 
@@ -123,8 +125,9 @@ const ageHours = (r, now) => (r.enriched_at ? (now - new Date(r.enriched_at).get
  * @param {object} [opts]
  * @param {number} [opts.total] - every still-flagged row (Content-Range); defaults to rows.length
  * @param {number} [opts.windowHours] - recent window, default 168
+ * @param {{start: Date, end: Date}} [opts.slot] - daily digests: the slot the rows were queried for
  */
-export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.now(), total = rows?.length ?? 0, windowHours = DEFAULT_WINDOW_HOURS } = {}) {
+export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.now(), total = rows?.length ?? 0, windowHours = DEFAULT_WINDOW_HOURS, slot = null } = {}) {
   const d = DOMAINS[domainKey];
   if (!d) throw new Error(`unknown domain ${domainKey}`);
   if (!rows || rows.length === 0) return null;
@@ -135,26 +138,35 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
     return `• ${prefix}${d.name(r)}${why ? ` - ${String(why).slice(0, 160)}` : ''}`.replace(/[—–]/g, '-');
   };
   if (d.daily) {
-    // Reported once and never again, so every flag is named: ten with their notes, the other stories
-    // by short name (once each), as many as fit the embed. Anything still unnamed gets a runnable query.
-    const { start, end } = (d.slot || dailySlot)(now);
+    // Reported once and never again, so every flag is named: ten with their notes, the remaining flags
+    // grouped by short name ("Story 123 (2 flags)"), as many as fit the embed. Any flags still unnamed
+    // are counted, with the filter that returns all `total` flags of the slot.
+    const { start, end } = slot || (d.slot || dailySlot)(now);
+    const short = d.shortName || d.name;
     const footer = `\n\nCheck the copy in ${origin}/admin.html (${d.adminTab} tab). Daily digest: each flag is reported once, there is nothing to mark as reviewed.`;
     const detailed = rows.slice(0, 10).map((r) => line(r));
-    const shown = new Set(rows.slice(0, 10).map(d.shortName));
-    const rest = [...new Set(rows.slice(10).map(d.shortName))].filter((n) => !shown.has(n));
+    const groups = new Map(); // short name -> flags beyond the first ten, in row order
+    for (const r of rows.slice(10)) groups.set(short(r), (groups.get(short(r)) || 0) + 1);
+    const rest = [...groups].map(([name, count]) => ({ label: count > 1 ? `${name} (${count} flags)` : name, count }));
+    const restFlags = rows.length - detailed.length + (total - rows.length);
     const compose = (named) => {
       const lines = [...detailed];
-      if (named.length) lines.push(`Also flagged: ${named.join(', ')}`);
-      const left = rest.length - named.length;
+      if (named.length) lines.push(`Also flagged: ${named.map((g) => g.label).join(', ')}`);
+      const left = restFlags - named.reduce((s, g) => s + g.count, 0);
       if (left > 0) {
-        lines.push(`… and ${left} more not listed here: ${d.table} rows with needs_manual_review=true, status=completed, created_at from ${start.toISOString()} to ${end.toISOString()}`);
+        lines.push(`… and ${left} more flag${left === 1 ? '' : 's'} not listed here. All ${total} are ${d.table || 'log'} rows with needs_manual_review=true, status=completed, created_at from ${start.toISOString()} to ${end.toISOString()}`);
       }
       return `${lines.join('\n')}${footer}`;
     };
-    // Exact fit: drop names from the end until the whole description is inside the budget
-    let n = rest.length;
-    let description = compose(rest);
-    while (n > 0 && description.length > DIGEST_BUDGET) description = compose(rest.slice(0, --n));
+    // Exact fit: add groups while the whole description stays inside the budget
+    const named = [];
+    let description = compose(named);
+    for (const g of rest) {
+      const next = compose([...named, g]);
+      if (next.length > DIGEST_BUDGET) break;
+      named.push(g);
+      description = next;
+    }
     const at = (t) => `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }).format(t)} ${t.getUTCHours()}:00 UTC`;
     return {
       title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (stories started ${at(start)} to ${at(end)})`,
@@ -221,7 +233,7 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
     if (total > rows.length) throw new Error(`${domainKey} digest hit its query cap (${total} flags, ${rows.length} fetched); not sending a partial digest`);
     log(`[needs-review] ${domainKey}: ${total} flagged, created ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
     if (total === 0) return { flagged: 0, due: false, posted: false };
-    const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
+    const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total, slot }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
     return { flagged: total, due: true, posted };
   }
   const recent = rows.filter((r) => ageHours(r, now) <= hours).length;

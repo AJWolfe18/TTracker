@@ -57,16 +57,22 @@ writes `needs_manual_review` and `notes` on its own `stories_enrichment_log` row
 completions). Stories have no reviewed state in admin, so an open queue would repeat forever.
 - Once a day (the RSS health check run starting 12:00-17:59 UTC, which is 7 AM to 12:59 PM CT in
   summer, or a manual run; push runs never check) the check lists the flagged, completed log rows
-  created in a fixed slot: yesterday 06:00 UTC to today 06:00 UTC (1 or 2 AM CT). The slot ends 6 hours
+  created in a fixed slot: yesterday 06:00 UTC to today 06:00 UTC (1 AM CT in summer, midnight in winter). The slot ends 6 hours
   before the check window opens because a log row is created when a story starts and only turns
   completed when it finishes: a slot ending at the check hour missed a story still running when the
   digest looked, on both days (Codex, PR #190). Six hours on, every story in the slot has finished
   (one takes minutes), and the bucketing uses only the database clock (`created_at`). Because the
   slot is fixed rather than "the last N hours", every flag appears in exactly one digest however late
-  in the window GitHub starts the run. A manual run before 12:00 UTC reports the last complete slot.
+  in the window GitHub starts the run. A manual run before 12:00 UTC re-reports the slot the previous
+  day's scheduled run covered, which is how a dropped run is recovered (if that run did happen, the
+  manual run repeats its digest).
+- Known limit: a story whose log row turns completed more than 6 hours after its slot ends is never
+  reported. The agent treats a run over 30 minutes as dead, so this needs a hung run that later
+  resumes. The root fix is a database-set completion time on `stories_enrichment_log` (a migration).
 - Every flag is named, because a slot is never reported again: the first ten with headline and note,
-  the rest by story id. If even the ids do not fit Discord's embed, the message says how many are left
-  and the exact log query to find them. If the query hits its 500-row cap, the check reports that it
+  the remaining flags by story id, grouped ("Story 123 (2 flags)"). If even the ids do not fit
+  Discord's embed, the message says how many flags are left, with the `stories_enrichment_log` filter
+  that returns all of the slot's flags. If the query hits its 500-row cap, the check reports that it
   could not run rather than send a partial digest.
 - Known gap: if a day's scheduled run never happens at all (GitHub drops it), that day's slot is
   skipped. A manual run of the health check on the same day recovers it.
