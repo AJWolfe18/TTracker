@@ -13,7 +13,7 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | Pipeline failed | `Discord alert (on failure)` step in every scheduled workflow: RSS Tracker PROD + TEST, Track Pardons, Judge Executor, and (ADO-349, same step copied from Track Pardons) Track Executive Orders, SCOTUS Tracker, Pipeline Skips Cleanup; RSS Health Check alerts when its silence check cannot run | the job fails or is cancelled | red |
 | New work landed (ADO-577) | `executive-orders-tracker-supabase.js`, `ingest/doj-pardons-scraper.js`, `scotus/fetch-cases.js` | a fetch inserts at least one new row; SCOTUS also posts when a later decision lands on an existing case and re-queues it (ADO-603) | blue |
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
-| Stories agent flagged its copy (ADO-602) | `monitoring/alert-needs-review.js --domain stories`, in RSS Pipeline Health Check (main only; the same once-a-day run as ingest health) | a completed Stories log row with `needs_manual_review = true` from yesterday 12:00 UTC to today 12:00 UTC; see rule 2b | amber |
+| Stories agent flagged its copy (ADO-602) | `monitoring/alert-needs-review.js --domain stories`, in RSS Pipeline Health Check (main only; the same once-a-day run as ingest health) | a completed Stories log row with `needs_manual_review = true`, created yesterday 06:00 UTC to today 06:00 UTC; see rule 2b | amber |
 | Routine went silent (ADO-586, ADO-624) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h; SCOTUS, EO, Pardons and Election front older than 30h (SCOTUS and EO count weekday hours only). EO and fronts read `routine_heartbeats` (migration 129), one row per run | red |
 | RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; the scheduled run starting 12:00-17:59 UTC, or a manual run) | no article from the last 24h stored `content`, articles with an empty excerpt, an active feed's source silent for `FEED_SILENT_DAYS` (default 7), feeds failing every fetch (5+ in a row, retried daily), or a working feed whose newest item is older than that window (ADO-625) | amber (red if every read failed) |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
@@ -57,11 +57,13 @@ writes `needs_manual_review` and `notes` on its own `stories_enrichment_log` row
 completions). Stories have no reviewed state in admin, so an open queue would repeat forever.
 - Once a day (the RSS health check run starting 12:00-17:59 UTC, which is 7 AM to 12:59 PM CT in
   summer, or a manual run; push runs never check) the check lists the flagged, completed log rows
-  that FINISHED in a fixed slot: yesterday 12:00 UTC to today 12:00 UTC (6 or 7 AM CT). Finished =
-  `created_at` (story start) + `duration_ms`, so a story that starts before 12:00 UTC and finishes
-  after lands in the next day's digest instead of neither (Codex, PR #190). Because the slot is fixed
-  rather than "the last N hours", every flag appears in exactly one digest however late in the window
-  GitHub starts the run. A manual run before 12:00 UTC reports the last complete slot.
+  created in a fixed slot: yesterday 06:00 UTC to today 06:00 UTC (1 or 2 AM CT). The slot ends 6 hours
+  before the check window opens because a log row is created when a story starts and only turns
+  completed when it finishes: a slot ending at the check hour missed a story still running when the
+  digest looked, on both days (Codex, PR #190). Six hours on, every story in the slot has finished
+  (one takes minutes), and the bucketing uses only the database clock (`created_at`). Because the
+  slot is fixed rather than "the last N hours", every flag appears in exactly one digest however late
+  in the window GitHub starts the run. A manual run before 12:00 UTC reports the last complete slot.
 - Every flag is named, because a slot is never reported again: the first ten with headline and note,
   the rest by story id. If even the ids do not fit Discord's embed, the message says how many are left
   and the exact log query to find them. If the query hits its 500-row cap, the check reports that it

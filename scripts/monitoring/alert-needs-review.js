@@ -20,11 +20,12 @@
  *
  * Stories (ADO-602) are different: the Stories agent flags its own log rows (stories_enrichment_log)
  * and there is no "reviewed" state, so an open queue would repeat forever. Instead it is a daily digest:
- * flagged, completed log rows that FINISHED in the fixed slot yesterday 12:00 UTC to today 12:00 UTC
- * (dailySlot, finishedAt), checked only on the once-a-day run of the RSS health check
- * (scripts/lib/daily-check-window.js), so each flag is reported exactly once, and every flag in the
- * digest is named. A scheduled run that never happens skips its slot.
- * Thin-source notes without the flag never alert.
+ * flagged, completed log rows CREATED in a fixed slot that ends 6 hours before the daily check window
+ * opens (storiesSlot: yesterday 06:00 UTC to today 06:00 UTC), checked only on the once-a-day run of
+ * the RSS health check (scripts/lib/daily-check-window.js). The 6-hour lag means every story in the
+ * slot has finished (a story takes minutes) before the digest looks, so each flag is reported exactly
+ * once, on the database's own clock. Every flag in the digest is named. A scheduled run that never
+ * happens skips its slot. Thin-source notes without the flag never alert.
  *
  * Usage: node scripts/monitoring/alert-needs-review.js --domain scotus|eo|pardons|stories
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or the SUPABASE_TEST_* names),
@@ -49,8 +50,17 @@ const NEW_HOURS = 26;
 const QUERY_LIMIT = 50;
 // Stories digest: a slot is reported once and never again, so every flag in it must be fetched and named
 const DAILY_QUERY_LIMIT = 500;
-const STORIES_LOOKBACK_MS = 6 * 3600000; // one story's enrichment takes minutes; 6h is ample
+// The slot ends this long before the check window opens. A log row is created when a story starts and
+// turns completed at the end (minutes later), so a slot that ended at the check hour would miss a row
+// still running when the digest ran, on both days (Codex, PR #190). Rows still running 6h on are stuck.
+const STORIES_SLOT_LAG_MS = 6 * 3600000;
 const DIGEST_BUDGET = 3800; // stay under discord.js MAX_DESCRIPTION (4000) so no name is cut off
+
+/** The Stories digest slot: dailySlot shifted STORIES_SLOT_LAG_MS earlier (06:00 to 06:00 UTC). */
+export function storiesSlot(now = Date.now()) {
+  const { start, end } = dailySlot(now);
+  return { start: new Date(start.getTime() - STORIES_SLOT_LAG_MS), end: new Date(end.getTime() - STORIES_SLOT_LAG_MS) };
+}
 const REMINDER_WEEKDAY = 'Mon'; // weekly reminder day for older flags, Central time
 const ORIGINS = Object.freeze({ prod: 'https://trumpytracker.com', test: 'https://test--taupe-capybara-0ff2ed.netlify.app' });
 
@@ -87,17 +97,16 @@ export const DOMAINS = Object.freeze({
     label: 'Stories',
     // A fixed daily slot, not an open queue: the log has no reviewed state (ADO-602). The flag alone
     // decides, so a thin_source note without needs_manual_review never alerts.
-    // A row belongs to the slot its enrichment FINISHED in (created_at + duration_ms, see finishedAt):
-    // the row is written when a story starts and only turns completed at the end, so one that starts
-    // before 12:00 UTC and finishes after would be missed by a created_at slot on both days. The query
-    // reaches back STORIES_LOOKBACK_MS before the slot for those rows; finishedAt does the bucketing.
+    // Slot by created_at (the database's clock), lagged by STORIES_SLOT_LAG_MS (see storiesSlot).
     daily: true,
-    path: ({ slot }) => `/stories_enrichment_log?select=id,story_id,notes,created_at,duration_ms,stories(primary_headline)`
+    slot: storiesSlot,
+    table: 'stories_enrichment_log',
+    path: ({ slot }) => `/stories_enrichment_log?select=id,story_id,notes,created_at,stories(primary_headline)`
       + `&needs_manual_review=eq.true&status=eq.completed`
-      + `&created_at=gte.${encodeURIComponent(new Date(slot.start.getTime() - STORIES_LOOKBACK_MS).toISOString())}`
-      + `&created_at=lt.${encodeURIComponent(slot.end.toISOString())}`
+      + `&created_at=gte.${encodeURIComponent(slot.start.toISOString())}&created_at=lt.${encodeURIComponent(slot.end.toISOString())}`
       + `&order=created_at.desc&limit=${DAILY_QUERY_LIMIT}`,
-    name: (r) => (r.story_id ? `Story ${r.story_id}` : `Log row ${r.id}`) + (r.stories?.primary_headline ? `: ${String(r.stories.primary_headline).slice(0, 80)}` : ''),
+    shortName: (r) => (r.story_id ? `Story ${r.story_id}` : `Log row ${r.id}`),
+    name: (r) => DOMAINS.stories.shortName(r) + (r.stories?.primary_headline ? `: ${String(r.stories.primary_headline).slice(0, 80)}` : ''),
     reason: (r) => r.notes,
     adminTab: 'Stories',
   },
@@ -109,12 +118,6 @@ export function isReminderDay(now = Date.now()) {
 }
 
 const ageHours = (r, now) => (r.enriched_at ? (now - new Date(r.enriched_at).getTime()) / 3600000 : Infinity);
-
-/** When a Stories log row's enrichment finished: created_at (story start) + duration_ms. */
-export function finishedAt(r) {
-  const ms = Number(r.duration_ms);
-  return new Date(r.created_at).getTime() + (Number.isFinite(ms) && ms > 0 ? ms : 0);
-}
 
 /**
  * @param {object} [opts]
@@ -132,29 +135,30 @@ export function buildAlert(domainKey, rows, { origin = ORIGINS.prod, now = Date.
     return `• ${prefix}${d.name(r)}${why ? ` - ${String(why).slice(0, 160)}` : ''}`.replace(/[—–]/g, '-');
   };
   if (d.daily) {
-    // Reported once and never again, so every flag is named: ten with their notes, the rest by name
-    // only, as many as fit the embed. Anything still unnamed points at the log with the exact slot.
-    const { start, end } = dailySlot(now);
+    // Reported once and never again, so every flag is named: ten with their notes, the other stories
+    // by short name (once each), as many as fit the embed. Anything still unnamed gets a runnable query.
+    const { start, end } = (d.slot || dailySlot)(now);
     const footer = `\n\nCheck the copy in ${origin}/admin.html (${d.adminTab} tab). Daily digest: each flag is reported once, there is nothing to mark as reviewed.`;
     const detailed = rows.slice(0, 10).map((r) => line(r));
-    const named = [];
-    let used = detailed.join('\n').length + footer.length + 200; // 200: the "Also flagged:" label and the "not listed here" line (~170 chars)
-    for (const r of rows.slice(10)) {
-      const n = (r.story_id ? `Story ${r.story_id}` : `Log row ${r.id}`);
-      if (used + n.length + 2 > DIGEST_BUDGET) break;
-      named.push(n);
-      used += n.length + 2;
-    }
-    const lines = [...detailed];
-    if (named.length) lines.push(`Also flagged: ${named.join(', ')}`);
-    const unnamed = total - detailed.length - named.length;
-    if (unnamed > 0) {
-      lines.push(`… and ${unnamed} more not listed here: stories_enrichment_log rows with needs_manual_review=true finishing ${start.toISOString()} to ${end.toISOString()}`);
-    }
+    const shown = new Set(rows.slice(0, 10).map(d.shortName));
+    const rest = [...new Set(rows.slice(10).map(d.shortName))].filter((n) => !shown.has(n));
+    const compose = (named) => {
+      const lines = [...detailed];
+      if (named.length) lines.push(`Also flagged: ${named.join(', ')}`);
+      const left = rest.length - named.length;
+      if (left > 0) {
+        lines.push(`… and ${left} more not listed here: ${d.table} rows with needs_manual_review=true, status=completed, created_at from ${start.toISOString()} to ${end.toISOString()}`);
+      }
+      return `${lines.join('\n')}${footer}`;
+    };
+    // Exact fit: drop names from the end until the whole description is inside the budget
+    let n = rest.length;
+    let description = compose(rest);
+    while (n > 0 && description.length > DIGEST_BUDGET) description = compose(rest.slice(0, --n));
     const at = (t) => `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric' }).format(t)} ${t.getUTCHours()}:00 UTC`;
     return {
-      title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (flags from ${at(start)} to ${at(end)})`,
-      description: `${lines.join('\n')}${footer}`,
+      title: `${d.label}: the agent flagged ${total} enrichment${total === 1 ? '' : 's'} for review (stories started ${at(start)} to ${at(end)})`,
+      description,
       color: COLORS.warning,
     };
   }
@@ -203,23 +207,22 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_TEST_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
   const hours = Number(env.ALERT_WINDOW_HOURS) > 0 ? Number(env.ALERT_WINDOW_HOURS) : DEFAULT_WINDOW_HOURS;
-  const slot = dailySlot(now);
+  const slot = (d.slot || dailySlot)(now);
   const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${d.path({ slot })}`, {
     headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
   });
   if (!res.ok) throw new Error(`query failed: ${res.status} ${await res.text()}`);
-  let rows = await res.json();
+  const rows = await res.json();
   const total = Math.max(contentRangeTotal(res.headers?.get?.('content-range')) ?? rows.length, rows.length);
   const envLabel = env.ALERT_ENV === 'test' ? 'test' : 'prod';
   const origin = env.SITE_ORIGIN || ORIGINS[envLabel];
   if (d.daily) {
-    // The query over-fetches by the lookback; keep the rows that finished inside the slot
-    if (total > rows.length) throw new Error(`stories digest hit its ${DAILY_QUERY_LIMIT}-row cap (${total} rows); flags would go unreported`);
-    rows = rows.filter((r) => { const t = finishedAt(r); return t >= slot.start.getTime() && t < slot.end.getTime(); });
-    log(`[needs-review] ${domainKey}: ${rows.length} flagged, finishing ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
-    if (rows.length === 0) return { flagged: 0, due: false, posted: false };
-    const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total: rows.length }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
-    return { flagged: rows.length, due: true, posted };
+    // A slot is never reported again, so a capped (partial) result is a could-not-run, not a digest
+    if (total > rows.length) throw new Error(`${domainKey} digest hit its query cap (${total} flags, ${rows.length} fetched); not sending a partial digest`);
+    log(`[needs-review] ${domainKey}: ${total} flagged, created ${slot.start.toISOString()} to ${slot.end.toISOString()}`);
+    if (total === 0) return { flagged: 0, due: false, posted: false };
+    const posted = await postDiscord(buildAlert(domainKey, rows, { origin, now, total }), { webhookUrl: env.DISCORD_WEBHOOK_URL, fetchImpl, envLabel });
+    return { flagged: total, due: true, posted };
   }
   const recent = rows.filter((r) => ageHours(r, now) <= hours).length;
   const reminderDay = isReminderDay(now);
