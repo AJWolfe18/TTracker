@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - TrumpyTracker</title>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@8.0.6/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2"></script>
     <script src="supabase-browser-config.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -87,7 +87,7 @@
         /* Dashboard Grid */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr));
             gap: 24px;
         }
 
@@ -756,12 +756,85 @@
             margin-top: 4px;
         }
 
+        .card-span-2 { grid-column: span 2; }
+        .attention-item-static { cursor: default; }
+        .attention-item-static:hover { transform: none; }
+        .judge-row-btn {
+            border: none;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .judge-row-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         /* Responsive */
         @media (max-width: 900px) {
             .dashboard-grid { grid-template-columns: 1fr; }
+            .card-span-2 { grid-column: auto; }
             .header { flex-direction: column; gap: 12px; }
             .quick-actions { flex-direction: column; }
             .action-btn { width: 100%; justify-content: center; }
+        }
+
+        /* Phones */
+        @media (max-width: 640px) {
+            .header { padding: 12px 16px; align-items: stretch; }
+            .header-title { font-size: 17px; text-align: center; }
+            .header-right { flex-wrap: wrap; justify-content: center; gap: 8px; }
+            .budget-indicator { padding: 6px 10px; font-size: 13px; }
+
+            /* Tabs scroll sideways instead of pushing the page wider */
+            .tab-nav {
+                padding: 8px 16px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+            .tab-nav::-webkit-scrollbar { display: none; }
+            .tab-btn { flex: 0 0 auto; padding: 10px 14px; min-height: 44px; white-space: nowrap; }
+
+            .main-content { padding: 16px; }
+            .dashboard-grid { gap: 16px; }
+            .card-header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+            .card-body { padding: 16px; }
+
+            /* Tables become stacked cards: one row = one block, cells flow underneath */
+            .stories-table thead, .mobile-stack thead { display: none; }
+            .stories-table, .stories-table tbody, .stories-table tr,
+            .mobile-stack, .mobile-stack tbody, .mobile-stack tr { display: block; width: 100%; }
+            .stories-table tr, .mobile-stack tr {
+                border-bottom: 1px solid #334155;
+                padding: 10px 0;
+            }
+            .stories-table td, .mobile-stack td {
+                display: inline-block;
+                border: none !important;
+                padding: 4px 8px 4px 0 !important;
+                max-width: none !important;
+                vertical-align: middle;
+            }
+            .stories-table td.headline-cell, .mobile-stack td.cell-wide {
+                display: block;
+                white-space: normal;
+                width: 100%;
+            }
+            .stories-table .story-detail-row td { display: block; width: 100%; }
+            .mobile-stack td[data-label]::before {
+                content: attr(data-label) ": ";
+                color: #64748b;
+                font-size: 0.75rem;
+            }
+            .mobile-stack td.cell-actions, .stories-table td:has(.row-actions) { display: block; width: 100%; }
+            .stories-table .row-actions { flex-wrap: wrap; }
+            .judge-row-btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; min-height: 40px; }
+
+            /* Modals go full-screen with the buttons always reachable */
+            .modal-overlay { padding: 0; align-items: stretch; }
+            .modal-content { max-width: none; max-height: none; height: 100%; border-radius: 0; display: flex; flex-direction: column; }
+            .modal-body { flex: 1; overflow-y: auto; padding: 16px; }
+            .modal-header { padding: 14px 16px; }
+            .modal-footer { flex-wrap: wrap; padding: 12px 16px; position: sticky; bottom: 0; background: #1e293b; }
         }
     </style>
 </head>
@@ -5778,7 +5851,7 @@
 
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
-        function JudgeTab({ password, supabase }) {
+        function JudgeTab({ password, supabase, onReviewCount }) {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -5787,6 +5860,8 @@
             const [sourceFilter, setSourceFilter] = useState('');
             const [storyInput, setStoryInput] = useState('');   // what's typed in the box
             const [storyFilter, setStoryFilter] = useState('');  // applied on Enter — drives the fetch
+            // 'needs_review' = uncertain pairs nobody has decided on yet (the to-do list); 'all' = full log
+            const [view, setView] = useState('needs_review');
             const fetchTokenRef = useRef(0);
 
             // Manual merge state (ADO-537) — human override for uncertain/missed Judge verdicts
@@ -5820,8 +5895,10 @@
                 setLoading(true);
                 setError(null);
                 try {
-                    const reqBody = { hours, limit: 100 };
-                    if (verdictFilter) reqBody.verdict = verdictFilter;
+                    // A story search always uses the full log (it's for finding an old merge).
+                    const reviewView = view === 'needs_review' && !storyFilter;
+                    const reqBody = reviewView ? { view: 'needs_review', limit: 100 } : { hours, limit: 100 };
+                    if (!reviewView && verdictFilter) reqBody.verdict = verdictFilter;
                     if (sourceFilter) reqBody.source = sourceFilter;
                     if (storyFilter) reqBody.story_id = Number(storyFilter); // server ignores the time window for story searches
 
@@ -5834,13 +5911,20 @@
                     );
                     if (fnError) throw new Error(fnError.message || 'Failed to load judge verdicts');
                     if (token !== fetchTokenRef.current) return;
+                    // An older admin-judge-log ignores view and returns the plain log; don't show that as the review list.
+                    if (reviewView && result?.view !== 'needs_review') {
+                        setData(null);
+                        throw new Error('The Needs review list needs the latest admin-judge-log edge function. Deploy it, then refresh.');
+                    }
                     setData(result);
+                    // Keep the Home "Judge pairs to review" count in step after a dismiss or merge.
+                    if (reviewView && !sourceFilter && onReviewCount) onReviewCount(result.total_count ?? 0);
                 } catch (err) {
                     if (token === fetchTokenRef.current) setError(err.message);
                 } finally {
                     if (token === fetchTokenRef.current) setLoading(false);
                 }
-            }, [hours, verdictFilter, sourceFilter, storyFilter, password, supabase]);
+            }, [view, hours, verdictFilter, sourceFilter, storyFilter, password, supabase, onReviewCount]);
 
             useEffect(() => {
                 fetchVerdicts();
@@ -5979,6 +6063,22 @@
                 }
             };
 
+            // Dismiss = "keep these separate": logs a manual 'keep' verdict (no story changes).
+            // The Judge treats it as settled, so the pair only comes back if a new article joins either story.
+            const handleDismiss = async (row) => {
+                if (manualBusyRef.current) return;
+                setManualError(null);
+                setManualResult(null);
+                const result = await callJudgeMerge('dismiss', row.story_id_a, row.story_id_b);
+                if (!result) return; // error already shown
+                if (result.ok) {
+                    setManualResult(`Dismissed — #${row.story_id_a} and #${row.story_id_b} stay separate. The Judge won't raise this pair again unless a new article joins either story.`);
+                    fetchVerdicts();
+                } else {
+                    setManualError(`Dismiss not executed: ${result.reason || 'unknown reason'}`);
+                }
+            };
+
             // Escape closes whichever confirm popup is open (matches the Edit modals)
             useEffect(() => {
                 if (!showMergeModal && !unmergeRow) return;
@@ -6026,137 +6126,81 @@
                 </div>
             );
 
+            const reviewView = view === 'needs_review' && !storyFilter;
+            const smallBtn = { padding: '0.25rem 0.75rem', fontSize: '0.85rem' };
+
             return (
                 <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
-                    {/* Manual merge card — ADO-537: human override for uncertain/missed Judge verdicts */}
-                    <div className="card">
-                        <div className="card-header">
-                            <h2 className="card-title"><span>Manual Merge</span></h2>
-                        </div>
-                        <div className="card-body">
-                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                Merge any two stories: click <strong style={{ color: '#e5e7eb' }}>use</strong> on a verdict row below (e.g. an <strong style={{ color: '#fbbf24' }}>uncertain</strong> one you've reviewed), or type two story ids. A confirmation popup shows exactly what will happen — nothing changes until you confirm there.
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
-                                <label style={{ fontSize: '0.8rem', color: '#4ade80', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
-                                    Keep
-                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle} placeholder="story id"
-                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualResult(null); }} />
-                                </label>
-                                <label style={{ fontSize: '0.8rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
-                                    Absorb
-                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle} placeholder="story id"
-                                        onChange={(e) => { setManualLoser(e.target.value); setManualResult(null); }} />
-                                </label>
-                                <button onClick={() => openMergeModal(manualSurvivor, manualLoser)} disabled={manualBusy || !manualSurvivor || !manualLoser}
-                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: (manualBusy || !manualSurvivor || !manualLoser) ? 'not-allowed' : 'pointer', opacity: (manualBusy || !manualSurvivor || !manualLoser) ? 0.5 : 1 }}>
-                                    {manualBusy ? '...' : 'Review & merge…'}
-                                </button>
-                            </div>
-                            {manualError && !showMergeModal && !unmergeRow && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                    {(manualResult || (manualError && !showMergeModal && !unmergeRow)) && (
+                        <div>
+                            {manualError && !showMergeModal && !unmergeRow && <div className="error-banner" style={{ marginBottom: 0 }}><strong>Error:</strong> {manualError}</div>}
                             {manualResult && (
-                                <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#4ade80', fontSize: '0.9rem' }}>
+                                <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid #4ade80', borderRadius: '6px', padding: '0.6rem 1rem', color: '#4ade80', fontSize: '0.9rem' }}>
                                     {manualResult}
                                 </div>
                             )}
-                            {showMergeModal && manualPreview && (
-                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeMergeModal(); }}>
-                                    <div className="modal-content">
-                                        <div className="modal-header">
-                                            <h3 className="modal-title">Confirm story merge</h3>
-                                            <button className="modal-close" onClick={closeMergeModal}>×</button>
-                                        </div>
-                                        <div className="modal-body">
-                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
-                                            {manualPreview.warnings && manualPreview.warnings.length > 0 && (
-                                                <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
-                                                    {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
-                                                </div>
-                                            )}
-                                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                                {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
-                                                {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
-                                            </div>
-                                            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#9ca3af' }}>
-                                                The <span style={{ color: '#f87171' }}>red</span> story's articles move into the <span style={{ color: '#4ade80' }}>green</span> story, and the red one becomes a redirect. There's no undo from the UI yet — double-check before confirming.
-                                            </div>
-                                        </div>
-                                        <div className="modal-footer">
-                                            <button onClick={swapManualIds} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>⇄ Swap keep/absorb</button>
-                                            <button onClick={closeMergeModal} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
-                                            {manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
-                                                <button onClick={handleManualMerge} disabled={manualBusy}
-                                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                    {manualBusy ? 'Merging…' : `Merge #${manualLoser} into #${manualSurvivor}`}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {unmergeRow && (
-                                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setUnmergeRow(null); }}>
-                                    <div className="modal-content">
-                                        <div className="modal-header">
-                                            <h3 className="modal-title">Undo this merge?</h3>
-                                            <button className="modal-close" onClick={() => setUnmergeRow(null)}>×</button>
-                                        </div>
-                                        <div className="modal-body">
-                                            {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
-                                            <div style={{ color: '#d1d5db', fontSize: '0.9rem', lineHeight: '1.6' }}>
-                                                <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_a}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_a || '—'}</strong></div>
-                                                <div style={{ marginBottom: '0.75rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_b}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_b || '—'}</strong></div>
-                                                The absorbed story gets its articles back and becomes its own live story again. The stats of both stories are recalculated.
-                                            </div>
-                                        </div>
-                                        <div className="modal-footer">
-                                            <button onClick={() => setUnmergeRow(null)} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
-                                            <button onClick={handleUnmerge} disabled={manualBusy}
-                                                style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                                                {manualBusy ? 'Unmerging…' : 'Unmerge these stories'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
-                    </div>
+                    )}
 
                     <div className="card">
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <h2 className="card-title"><span>Clustering Judge</span></h2>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                {TIME_RANGES.map(r => (
-                                    <button
-                                        key={r.value}
-                                        className={`tab-btn ${hours === r.value ? 'active' : ''}`}
-                                        onClick={() => setHours(r.value)}
-                                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
-                                    >
-                                        {r.label}
-                                    </button>
-                                ))}
-                                <button onClick={fetchVerdicts} disabled={loading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                <button className={`tab-btn ${reviewView ? 'active' : ''}`} onClick={() => { setView('needs_review'); setStoryInput(''); setStoryFilter(''); }} style={smallBtn}
+                                    title="Uncertain pairs nobody has decided on yet">
+                                    Needs review
+                                </button>
+                                <button className={`tab-btn ${!reviewView ? 'active' : ''}`} onClick={() => setView('all')} style={smallBtn}>
+                                    All verdicts
+                                </button>
+                                {!reviewView && (
+                                    <>
+                                        <span style={{ width: '1px', height: '20px', background: '#334155' }}></span>
+                                        {TIME_RANGES.map(r => (
+                                            <button
+                                                key={r.value}
+                                                className={`tab-btn ${hours === r.value ? 'active' : ''}`}
+                                                onClick={() => setHours(r.value)}
+                                                style={smallBtn}
+                                            >
+                                                {r.label}
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
+                                <button onClick={fetchVerdicts} disabled={loading} className="tab-btn" style={smallBtn} title="Refresh">
                                     {loading ? '...' : '↻'}
                                 </button>
                             </div>
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). Read headline A vs B side-by-side; if a merge looks wrong, hit <strong style={{ color: '#60a5fa' }}>unmerge</strong> on that row to reverse it.
+                                {reviewView ? (
+                                    <>
+                                        <strong style={{ color: '#e5e7eb' }}>Your to-do list.</strong> Pairs the Judge marked <strong style={{ color: '#fbbf24' }}>uncertain</strong> that nobody has decided on yet (last 30 days). For each one: <strong style={{ color: '#e5e7eb' }}>merge</strong> if they're the same event, or <strong style={{ color: '#e5e7eb' }}>dismiss</strong> to keep them separate. Either way it drops off this list.
+                                    </>
+                                ) : (
+                                    <>
+                                        <strong style={{ color: '#e5e7eb' }}>What is this?</strong> Every "same real-world event?" verdict from the Clustering Judge. <strong style={{ color: '#e5e7eb' }}>merge</strong> = fragments combined into one story (reversible — losers are tombstoned, never deleted), <strong style={{ color: '#e5e7eb' }}>keep</strong> = left as separate, <strong style={{ color: '#e5e7eb' }}>uncertain</strong> = flagged, not merged. <code>dry_run</code> rows are validation-only (no story was changed). If a merge looks wrong, hit <strong style={{ color: '#60a5fa' }}>unmerge</strong> on that row to reverse it.
+                                    </>
+                                )}
                             </div>
 
                             {/* filter chips */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Verdict:</span>
-                                {VERDICTS.map(v => (
-                                    <button key={v}
-                                        onClick={() => setVerdictFilter(verdictFilter === v ? '' : v)}
-                                        style={{ background: verdictFilter === v ? (VERDICT_COLOR[v] || '#3b82f6') : '#374151', color: verdictFilter === v ? '#111827' : '#e5e7eb', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
-                                        {v}
-                                    </button>
-                                ))}
-                                <span style={{ fontSize: '0.85rem', color: '#9ca3af', marginLeft: '0.5rem' }}>Source:</span>
+                                {!reviewView && (
+                                    <>
+                                        <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>Verdict:</span>
+                                        {VERDICTS.map(v => (
+                                            <button key={v}
+                                                onClick={() => setVerdictFilter(verdictFilter === v ? '' : v)}
+                                                style={{ background: verdictFilter === v ? (VERDICT_COLOR[v] || '#3b82f6') : '#374151', color: verdictFilter === v ? '#111827' : '#e5e7eb', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                                {v}
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
+                                <span style={{ fontSize: '0.85rem', color: '#9ca3af', marginLeft: reviewView ? 0 : '0.5rem' }}>Source:</span>
                                 {SOURCES.map(s => (
                                     <button key={s}
                                         onClick={() => setSourceFilter(sourceFilter === s ? '' : s)}
@@ -6182,28 +6226,39 @@
                             ) : data ? (
                                 <>
                                     <div style={{ marginBottom: '1rem', fontSize: '0.9rem', color: '#9ca3af' }}>
-                                        <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} {data.filters?.story_id ? <>touching story <strong style={{ color: '#e5e7eb' }}>#{data.filters.story_id}</strong> (all time)</> : <>in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}</>}
-                                        {data.by_verdict && (
-                                            <span style={{ marginLeft: '0.75rem' }}>
-                                                {data.by_verdict.map(v => (
-                                                    <span key={v.verdict} style={{ marginRight: '0.75rem', color: VERDICT_COLOR[v.verdict] || '#e5e7eb' }}>
-                                                        {v.verdict}: <strong>{v.count}</strong>
+                                        {data.view === 'needs_review' ? (
+                                            <>
+                                                <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> pair{data.total_count === 1 ? '' : 's'} to review (last 30 days)
+                                                {data.rows && data.rows.length < (data.total_count ?? 0) && <span style={{ marginLeft: '0.5rem' }}>· showing the newest {data.rows.length}</span>}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> verdict{data.total_count === 1 ? '' : 's'} {data.filters?.story_id ? <>touching story <strong style={{ color: '#e5e7eb' }}>#{data.filters.story_id}</strong> (all time)</> : <>in last {TIME_RANGES.find(r => r.value === data.time_range_hours)?.label || `${data.time_range_hours}h`}</>}
+                                                {data.by_verdict && (
+                                                    <span style={{ marginLeft: '0.75rem' }}>
+                                                        {data.by_verdict.map(v => (
+                                                            <span key={v.verdict} style={{ marginRight: '0.75rem', color: VERDICT_COLOR[v.verdict] || '#e5e7eb' }}>
+                                                                {v.verdict}: <strong>{v.count}</strong>
+                                                            </span>
+                                                        ))}
                                                     </span>
-                                                ))}
-                                            </span>
-                                        )}
-                                        {data.merged_count != null && (
-                                            <span style={{ marginLeft: '0.5rem', color: '#f87171' }}>· {data.merged_count} executed merge{data.merged_count === 1 ? '' : 's'}</span>
+                                                )}
+                                                {data.merged_count != null && (
+                                                    <span style={{ marginLeft: '0.5rem', color: '#f87171' }}>· {data.merged_count} executed merge{data.merged_count === 1 ? '' : 's'}</span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
 
                                     {(!data.rows || data.rows.length === 0) ? (
                                         <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                            {data.filters?.story_id ? `No verdicts touch story #${data.filters.story_id}.` : 'No verdicts recorded in this time range.'}
+                                            {data.view === 'needs_review'
+                                                ? 'Nothing to review. Every uncertain pair has been handled.'
+                                                : data.filters?.story_id ? `No verdicts touch story #${data.filters.story_id}.` : 'No verdicts recorded in this time range.'}
                                         </div>
                                     ) : (
                                         <div style={{ overflowX: 'auto' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                            <table className="judge-table mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                                                 <thead>
                                                     <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
                                                         <th style={{ padding: '0.5rem', color: '#9ca3af' }}>When</th>
@@ -6220,46 +6275,55 @@
                                                 <tbody>
                                                     {data.rows.map(row => (
                                                         <tr key={row.id} style={{ borderBottom: '1px solid #1f2937', background: row.merged ? 'rgba(248,113,113,0.06)' : 'transparent' }}>
-                                                            <td style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatTimestamp(row.created_at)}</td>
-                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>
+                                                            <td data-label="When" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatTimestamp(row.created_at)}</td>
+                                                            <td data-label="Source" style={{ padding: '0.5rem', color: '#9ca3af' }}>
                                                                 {row.source}{row.dry_run ? <span style={{ color: '#6b7280' }}> (dry)</span> : null}
                                                             </td>
                                                             {isHeartbeat(row) ? (
-                                                                <td colSpan={2} style={{ padding: '0.5rem', color: '#6b7280', fontStyle: 'italic' }}>heartbeat — 0 candidate pairs</td>
+                                                                <td className="cell-wide" colSpan={2} style={{ padding: '0.5rem', color: '#6b7280', fontStyle: 'italic' }}>heartbeat — 0 candidate pairs</td>
                                                             ) : (
                                                                 <>
-                                                                    <td style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
+                                                                    <td className="cell-wide" data-label="A" style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
                                                                         <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{row.story_id_a}</span> {row.headline_a || '—'}
                                                                     </td>
-                                                                    <td style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
+                                                                    <td className="cell-wide" data-label="B" style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '260px' }}>
                                                                         <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{row.story_id_b}</span> {row.headline_b || '—'}
                                                                     </td>
                                                                 </>
                                                             )}
-                                                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                            <td data-label="Verdict" style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
                                                                 {row.verdict && (
                                                                     <span style={{ color: VERDICT_COLOR[row.verdict] || '#e5e7eb', fontWeight: 700 }}>{row.verdict}</span>
                                                                 )}
                                                                 {row.merged && <span title="merge executed" style={{ marginLeft: '0.35rem', color: '#f87171' }}>●</span>}
                                                             </td>
-                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.confidence != null ? Number(row.confidence).toFixed(2) : '—'}</td>
-                                                            <td style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
-                                                            <td style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
-                                                            <td style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
-                                                                {!isHeartbeat(row) && row.merged && (
-                                                                    <button onClick={() => { setManualError(null); setManualResult(null); setUnmergeRow(row); }}
-                                                                        title="Reverse this merge — restores the absorbed story as its own story"
-                                                                        style={{ background: '#1e3a5f', color: '#60a5fa', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                                                                        unmerge
-                                                                    </button>
-                                                                )}
-                                                                {!isHeartbeat(row) && !row.merged && row.verdict !== 'unmerge' && (
-                                                                    <button onClick={() => prefillManual(row)}
-                                                                        title="Open the merge popup with this pair (A = kept, B = absorbed — swappable in the popup)"
-                                                                        style={{ background: '#374151', color: '#e5e7eb', border: 'none', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                                                                        use
-                                                                    </button>
-                                                                )}
+                                                            <td data-label="Conf" style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.confidence != null ? Number(row.confidence).toFixed(2) : '—'}</td>
+                                                            <td data-label="Sim" style={{ padding: '0.5rem', color: '#9ca3af' }}>{row.centroid_sim != null ? Number(row.centroid_sim).toFixed(3) : '—'}</td>
+                                                            <td className="cell-wide" data-label="Why" style={{ padding: '0.5rem', color: '#d1d5db', maxWidth: '340px' }}>{row.rationale || '—'}</td>
+                                                            <td className="cell-actions" style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                                                    {!isHeartbeat(row) && row.merged && (
+                                                                        <button onClick={() => { setManualError(null); setManualResult(null); setUnmergeRow(row); }}
+                                                                            title="Reverse this merge — restores the absorbed story as its own story"
+                                                                            className="judge-row-btn" style={{ background: '#1e3a5f', color: '#60a5fa' }}>
+                                                                            unmerge
+                                                                        </button>
+                                                                    )}
+                                                                    {!isHeartbeat(row) && !row.merged && row.verdict !== 'unmerge' && (
+                                                                        <button onClick={() => prefillManual(row)} disabled={manualBusy}
+                                                                            title="Open the merge popup with this pair (A = kept, B = absorbed — swappable in the popup)"
+                                                                            className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>
+                                                                            merge…
+                                                                        </button>
+                                                                    )}
+                                                                    {!isHeartbeat(row) && !row.merged && !row.dry_run && row.verdict === 'uncertain' && (
+                                                                        <button onClick={() => handleDismiss(row)} disabled={manualBusy}
+                                                                            title="Keep these as separate stories and clear this pair from the review list"
+                                                                            className="judge-row-btn" style={{ background: '#14532d', color: '#4ade80' }}>
+                                                                            dismiss
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -6271,6 +6335,95 @@
                             ) : null}
                         </div>
                     </div>
+
+                    {/* Manual merge card — ADO-537: human override for uncertain/missed Judge verdicts */}
+                    <div className="card">
+                        <div className="card-header">
+                            <h2 className="card-title"><span>Manual Merge</span></h2>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                Merge any two stories by id (for pairs the Judge never flagged). For pairs in the list above, use the row's <strong style={{ color: '#e5e7eb' }}>merge…</strong> button instead. A confirmation popup shows exactly what will happen — nothing changes until you confirm there.
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+                                <label style={{ fontSize: '0.8rem', color: '#4ade80', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
+                                    Keep
+                                    <input type="number" min="1" value={manualSurvivor} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualSurvivor(e.target.value); setManualResult(null); }} />
+                                </label>
+                                <label style={{ fontSize: '0.8rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', fontWeight: 600 }}>
+                                    Absorb
+                                    <input type="number" min="1" value={manualLoser} style={manualInputStyle} placeholder="story id"
+                                        onChange={(e) => { setManualLoser(e.target.value); setManualResult(null); }} />
+                                </label>
+                                <button onClick={() => openMergeModal(manualSurvivor, manualLoser)} disabled={manualBusy || !manualSurvivor || !manualLoser}
+                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: (manualBusy || !manualSurvivor || !manualLoser) ? 'not-allowed' : 'pointer', opacity: (manualBusy || !manualSurvivor || !manualLoser) ? 0.5 : 1 }}>
+                                    {manualBusy ? '...' : 'Review & merge…'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {showMergeModal && manualPreview && (
+                        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeMergeModal(); }}>
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h3 className="modal-title">Confirm story merge</h3>
+                                    <button className="modal-close" onClick={closeMergeModal}>×</button>
+                                </div>
+                                <div className="modal-body">
+                                    {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                    {manualPreview.warnings && manualPreview.warnings.length > 0 && (
+                                        <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid #fbbf24', borderRadius: '6px', padding: '0.6rem 1rem', marginBottom: '0.75rem', color: '#fbbf24', fontSize: '0.85rem' }}>
+                                            {manualPreview.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                        {renderPreviewStory(manualPreview.survivor, 'survivor', manualSurvivor)}
+                                        {renderPreviewStory(manualPreview.loser, 'loser', manualLoser)}
+                                    </div>
+                                    <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#9ca3af' }}>
+                                        The <span style={{ color: '#f87171' }}>red</span> story's articles move into the <span style={{ color: '#4ade80' }}>green</span> story, and the red one becomes a redirect. If it turns out wrong, <strong style={{ color: '#60a5fa' }}>unmerge</strong> on the merge row (All verdicts view) reverses it.
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button onClick={swapManualIds} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>⇄ Swap keep/absorb</button>
+                                    <button onClick={closeMergeModal} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                    {manualPreview.ok && manualPreview.survivor?.status !== 'merged_into' && (
+                                        <button onClick={handleManualMerge} disabled={manualBusy}
+                                            style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                            {manualBusy ? 'Merging…' : `Merge #${manualLoser} into #${manualSurvivor}`}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {unmergeRow && (
+                        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setUnmergeRow(null); }}>
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h3 className="modal-title">Undo this merge?</h3>
+                                    <button className="modal-close" onClick={() => setUnmergeRow(null)}>×</button>
+                                </div>
+                                <div className="modal-body">
+                                    {manualError && <div className="error-banner"><strong>Error:</strong> {manualError}</div>}
+                                    <div style={{ color: '#d1d5db', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                                        <div style={{ marginBottom: '0.5rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_a}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_a || '—'}</strong></div>
+                                        <div style={{ marginBottom: '0.75rem' }}><span style={{ color: '#6b7280', fontSize: '0.75rem' }}>#{unmergeRow.story_id_b}</span> <strong style={{ color: '#e5e7eb' }}>{unmergeRow.headline_b || '—'}</strong></div>
+                                        The absorbed story gets its articles back and becomes its own live story again. The stats of both stories are recalculated.
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button onClick={() => setUnmergeRow(null)} disabled={manualBusy} className="tab-btn" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}>Cancel</button>
+                                    <button onClick={handleUnmerge} disabled={manualBusy}
+                                        style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                                        {manualBusy ? 'Unmerging…' : 'Unmerge these stories'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -6282,6 +6435,7 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [lastRefresh, setLastRefresh] = useState(null);
+            const [judgeReviewCount, setJudgeReviewCount] = useState(null); // null = unknown (fetch failed)
             const refreshIntervalRef = useRef(null);
 
             // Auth state
@@ -6384,6 +6538,8 @@
                 try {
                     setError(null);
 
+                    fetchJudgeReviewCount();
+
                     // Call the admin-stats edge function with password header
                     const { data, error: fnError } = await supabase.functions.invoke('admin-stats', {
                         headers: { 'x-admin-password': password }
@@ -6416,6 +6572,21 @@
                 }
             }, [supabase, password]);
 
+            // Judge pairs waiting on a human decision (same list as the Judge tab's "Needs review" view)
+            const fetchJudgeReviewCount = async () => {
+                try {
+                    const { data, error: fnError } = await supabase.functions.invoke('admin-judge-log', {
+                        headers: { 'x-admin-password': password },
+                        body: { view: 'needs_review', limit: 1 }
+                    });
+                    if (fnError || data?.view !== 'needs_review') throw new Error(fnError?.message || 'needs_review view unavailable');
+                    setJudgeReviewCount(data.total_count ?? 0);
+                } catch (err) {
+                    console.error('Error fetching Judge review count:', err);
+                    setJudgeReviewCount(null);
+                }
+            };
+
             // Fallback: Direct database queries
             const fetchStatsDirect = async () => {
                 const now = new Date();
@@ -6424,6 +6595,7 @@
 
                 const [
                     storiesActive,
+                    storiesNeedsReview,
                     storiesEnrichFailed,
                     storiesToday,
                     articlesToday,
@@ -6436,6 +6608,7 @@
                     lastFetch
                 ] = await Promise.all([
                     supabase.from('stories').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+                    supabase.from('stories').select('id', { count: 'exact', head: true }).eq('needs_review', true),
                     supabase.from('stories').select('id', { count: 'exact', head: true }).gt('enrichment_failure_count', 0),
                     supabase.from('stories').select('id', { count: 'exact', head: true }).gte('first_seen_at', last24h),
                     supabase.from('articles').select('id', { count: 'exact', head: true }).gte('fetched_at', last24h),
@@ -6497,7 +6670,7 @@
                 setStats({
                     stories: {
                         active_count: storiesActive.count ?? 0,
-                        needs_review: 0, // Column may not exist yet
+                        needs_review: storiesNeedsReview.count ?? 0,
                         enrichment_failed: storiesEnrichFailed.count ?? 0,
                         created_today: storiesToday.count ?? 0
                     },
@@ -6546,9 +6719,9 @@
                         minutes_since_last_run: minutesSinceLastRun
                     },
                     needs_attention: {
-                        total: (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview + scotusNeedsReview + eosNeedsReview,
+                        total: (storiesNeedsReview.count ?? 0) + (storiesEnrichFailed.count ?? 0) + pardonsDraft + scotusDraft + feedsFailed + pardonsNeedsReview + scotusNeedsReview + eosNeedsReview,
                         breakdown: {
-                            stories_need_review: 0,
+                            stories_need_review: storiesNeedsReview.count ?? 0,
                             stories_enrichment_failed: storiesEnrichFailed.count ?? 0,
                             pardons_need_review: pardonsNeedsReview,
                             pardons_unpublished: pardonsDraft,
@@ -6610,18 +6783,20 @@
             // Render tabs
             const tabs = [
                 { id: 'home', label: 'Home' },
+                { id: 'judge', label: 'Judge' },
                 { id: 'stories', label: 'Stories' },
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders' },
                 { id: 'feeds', label: 'Feeds', disabled: true },
-                { id: 'judge', label: 'Judge' },
                 { id: 'skips', label: 'Failures' },
                 { id: 'social', label: 'Social' }
             ];
 
             const budgetStatus = getBudgetStatus();
             const pipelineStatus = getPipelineStatus();
+            const attentionTotal = (stats?.needs_attention?.total ?? 0) + (judgeReviewCount ?? 0);
+            const pipelineWorkflow = env.isProd ? 'rss-tracker-prod.yml' : 'rss-tracker-test.yml';
 
             // Login screen
             if (!isAuthenticated) {
@@ -6755,19 +6930,25 @@
                                     <div className="card-header">
                                         <h2 className="card-title">
                                             <span>Needs Attention</span>
-                                            {stats.needs_attention.total > 0 && (
-                                                <span className="attention-count">{stats.needs_attention.total}</span>
+                                            {attentionTotal > 0 && (
+                                                <span className="attention-count">{attentionTotal}</span>
                                             )}
                                         </h2>
                                     </div>
                                     <div className="card-body">
-                                        <div className="attention-item" title="Stories flagged for review">
+                                        <div className="attention-item" title="Uncertain Judge pairs waiting for you to merge or dismiss" onClick={() => setActiveTab('judge')}>
+                                            <span>Judge pairs to review</span>
+                                            <span className={`attention-count ${!judgeReviewCount ? 'zero' : ''}`}>
+                                                {judgeReviewCount ?? '—'}
+                                            </span>
+                                        </div>
+                                        <div className="attention-item" title="Stories flagged for review" onClick={() => setActiveTab('stories')}>
                                             <span>Stories need review</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.stories_need_review === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.stories_need_review}
                                             </span>
                                         </div>
-                                        <div className="attention-item" title="Stories where AI enrichment failed">
+                                        <div className="attention-item" title="Stories where AI enrichment failed" onClick={() => setActiveTab('stories')}>
                                             <span>Enrichment failures</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.stories_enrichment_failed === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.stories_enrichment_failed}
@@ -6779,13 +6960,13 @@
                                                 {stats.needs_attention?.breakdown?.pardons_need_review ?? 0}
                                             </span>
                                         </div>
-                                        <div className="attention-item" title="Pardons not yet published">
+                                        <div className="attention-item" title="Pardons not yet published" onClick={() => setActiveTab('pardons')}>
                                             <span>Pardons unpublished</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.pardons_unpublished === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.pardons_unpublished}
                                             </span>
                                         </div>
-                                        <div className="attention-item" title="SCOTUS cases not yet published">
+                                        <div className="attention-item" title="SCOTUS cases not yet published" onClick={() => setActiveTab('scotus')}>
                                             <span>SCOTUS unpublished</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.scotus_unpublished === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.scotus_unpublished}
@@ -6803,7 +6984,7 @@
                                                 {stats.needs_attention?.breakdown?.executive_orders_needs_review ?? 0}
                                             </span>
                                         </div>
-                                        <div className="attention-item" title="Feeds with 5+ consecutive failures">
+                                        <div className="attention-item attention-item-static" title="Feeds with 5+ consecutive failures (the Feeds tab is coming)">
                                             <span>Feeds failed</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.feeds_failed}
@@ -6851,7 +7032,7 @@
                                         <div className="quick-actions">
                                             <button
                                                 className="action-btn"
-                                                onClick={() => window.open('https://github.com/AJWolfe18/TTracker/actions/workflows/rss-tracker-test.yml', '_blank')}
+                                                onClick={() => window.open(`https://github.com/AJWolfe18/TTracker/actions/workflows/${pipelineWorkflow}`, '_blank')}
                                             >
                                                 🔄 Trigger Pipeline
                                             </button>
@@ -6879,7 +7060,7 @@
                                 </div>
 
                                 {/* Content Overview */}
-                                <div className="card" style={{ gridColumn: 'span 2' }}>
+                                <div className="card card-span-2">
                                     <div className="card-header">
                                         <h2 className="card-title">Content Overview</h2>
                                     </div>
@@ -6932,7 +7113,7 @@
                         )}
 
                         {activeTab === 'judge' && (
-                            <JudgeTab password={password} supabase={supabase} />
+                            <JudgeTab password={password} supabase={supabase} onReviewCount={setJudgeReviewCount} />
                         )}
 
                         {activeTab === 'eos' && (
