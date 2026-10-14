@@ -21,7 +21,7 @@ function fakeDb(rows, { retryError = null, updateError = null } = {}) {
       const q = { filters: [], orders: [], limitN: Infinity, orExpr: null, update: null };
       const run = () => {
         if (q.update) {
-          calls.push({ update: q.update, filters: q.filters });
+          calls.push({ update: q.update, filters: q.filters, or: q.orExpr });
           return { error: updateError };
         }
         if (q.orExpr && retryError) return { data: null, error: retryError };
@@ -141,6 +141,23 @@ const feed = (id, extra) => ({ id, is_active: true, failure_count: 0, last_fetch
   assert.match(warnings[0], /last_failed_at/);
   const throwing = { from: () => { throw new Error('network down'); } };
   await stampFeedFailure(throwing, 'https://f/rss', { now: NOW, log: quiet });
+}
+
+// --- the stamp only moves forward: a payload of older items (Time's site-wide feed served only
+//     back-dated TIME100 Next profiles on October 13, 2026) must not make a live feed look stale
+//     (ADO-630). The guard is in the UPDATE's filter, so the database decides and overlapping runs
+//     cannot race; the filter's own behavior was checked against TEST PostgREST, not this fake.
+{
+  const db = fakeDb([]);
+  await stampFeedLiveness(db, 'https://f/rss', [{ isoDate: '2026-09-20T09:00:00Z' }], { now: NOW, log: quiet });
+  assert.equal(db.calls.length, 1);
+  assert.deepEqual(db.calls[0].filters, [['eq', 'feed_url', 'https://f/rss']]);
+  assert.equal(db.calls[0].or, 'last_item_published_at.is.null,last_item_published_at.lt.2026-09-20T09:00:00.000Z',
+    'only an unstamped row or one with an older stamp is updated');
+
+  const failed = fakeDb([], { updateError: { message: 'column feed_registry.last_item_published_at does not exist' } });
+  assert.equal(await stampFeedLiveness(failed, 'https://f/rss', [{ isoDate: '2026-10-08T09:00:00Z' }], { now: NOW, log: quiet }),
+    null, 'a failed write returns null, not a date that was never stored');
 }
 
 // --- one unconditional fetch per unstamped feed after migration 131 (a 304-forever feed gets stamped);
