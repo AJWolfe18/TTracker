@@ -5851,7 +5851,7 @@
 
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
-        function JudgeTab({ password, supabase }) {
+        function JudgeTab({ password, supabase, onReviewCount }) {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -5911,13 +5911,20 @@
                     );
                     if (fnError) throw new Error(fnError.message || 'Failed to load judge verdicts');
                     if (token !== fetchTokenRef.current) return;
+                    // An older admin-judge-log ignores view and returns the plain log; don't show that as the review list.
+                    if (reviewView && result?.view !== 'needs_review') {
+                        setData(null);
+                        throw new Error('The Needs review list needs the latest admin-judge-log edge function. Deploy it, then refresh.');
+                    }
                     setData(result);
+                    // Keep the Home "Judge pairs to review" count in step after a dismiss or merge.
+                    if (reviewView && !sourceFilter && onReviewCount) onReviewCount(result.total_count ?? 0);
                 } catch (err) {
                     if (token === fetchTokenRef.current) setError(err.message);
                 } finally {
                     if (token === fetchTokenRef.current) setLoading(false);
                 }
-            }, [view, hours, verdictFilter, sourceFilter, storyFilter, password, supabase]);
+            }, [view, hours, verdictFilter, sourceFilter, storyFilter, password, supabase, onReviewCount]);
 
             useEffect(() => {
                 fetchVerdicts();
@@ -6222,6 +6229,7 @@
                                         {data.view === 'needs_review' ? (
                                             <>
                                                 <strong style={{ color: '#e5e7eb' }}>{(data.total_count ?? 0).toLocaleString()}</strong> pair{data.total_count === 1 ? '' : 's'} to review (last 30 days)
+                                                {data.rows && data.rows.length < (data.total_count ?? 0) && <span style={{ marginLeft: '0.5rem' }}>· showing the newest {data.rows.length}</span>}
                                             </>
                                         ) : (
                                             <>
@@ -7105,7 +7113,7 @@
                         )}
 
                         {activeTab === 'judge' && (
-                            <JudgeTab password={password} supabase={supabase} />
+                            <JudgeTab password={password} supabase={supabase} onReviewCount={setJudgeReviewCount} />
                         )}
 
                         {activeTab === 'eos' && (

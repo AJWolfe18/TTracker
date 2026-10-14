@@ -38,6 +38,9 @@ The cloud session that started this can edit code and open PRs. It **cannot** re
 4. Verify on TEST: Judge is the 2nd tab and opens on "Needs review". Dismiss a row: it disappears, and the "All verdicts" view shows a `keep`/`manual` row. The Home "Judge: N to review" count matches. Check a 375px phone screen.
 5. Create the ADO cards from `backlog.md` (`/ado create story ...`), then move cards 1/3/5/6 to **Testing**.
 6. PROD later: follow the normal cherry-pick flow (`docs/guides/prod-deployment-checklist.md`), and deploy both edge functions to PROD **before** the page change reaches PROD.
+   - The cherry-pick hits a modify/delete conflict on `public/dashboard-legacy.html` (main's copy differs). Resolve with `git rm`.
+   - `ADMIN_IMPROVEMENTS.md` exists only on main. `git rm` it on the deploy branch.
+   - `admin.html` on main is about 275 lines behind test (ADO-495, ADO-525, the Social tab), so ship those first or expect conflicts.
 
 ---
 

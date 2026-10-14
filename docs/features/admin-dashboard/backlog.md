@@ -62,7 +62,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 
 **Acceptance criteria**
 - [ ] On PROD, Trigger Pipeline opens the PROD workflow; on TEST, the TEST workflow.
-- [ ] Each Needs Attention row opens the right tab with the right filter.
+- [ ] Each Needs Attention row opens the right tab. (The Stories filter lands with card 2; the Feeds row with card 4.)
 
 ---
 
@@ -118,8 +118,8 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 - Check `.claude/test-only-paths.md` and the PROD deploy checklist so the deletions also reach PROD.
 
 **Acceptance criteria**
-- [ ] `/admin-supabase.html` and `/dashboard-legacy.html` return 404 on TEST, then on PROD.
-- [ ] No repo references to the deleted files remain.
+- [ ] `/admin-supabase.html` and `/dashboard-legacy.html` are no longer served on TEST, then PROD. (Netlify's SPA fallback answers unknown paths with the public homepage and a 200, so a 404 is not expected.)
+- [ ] No code or config references to the deleted files remain (old docs and handoffs can keep historical mentions).
 - [ ] Admin loads and works with the pinned versions.
 
 ---
