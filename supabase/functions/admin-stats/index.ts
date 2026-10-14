@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
     const feedsTotal = feeds.length
     const feedsActive = feeds.filter(f => f.is_active && f.failure_count < 5).length
     const feedsDegraded = feeds.filter(f => f.is_active && f.failure_count >= 1 && f.failure_count < 5).length
-    const feedsFailed = feeds.filter(f => f.failure_count >= 5).length
+    const feedsFailed = feeds.filter(f => f.is_active && f.failure_count >= 5).length // active only: an inactive feed is never fetched, so its count never resets (ADO-343)
 
     // Process pardons data
     const pardons = pardonsResult.data || []

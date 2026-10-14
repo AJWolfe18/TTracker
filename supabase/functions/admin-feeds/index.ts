@@ -11,21 +11,24 @@
 // list response:
 //   {
 //     feeds: [{ id, feed_name, feed_url, source_name, tier, is_active, is_opinion_source,
-//               failure_count, consecutive_successes, last_fetched_at, last_failed_at,
-//               last_item_published_at, last_response_time_ms,
+//               failure_count, last_fetched_at, last_failed_at, last_item_published_at,
 //               has_compliance_rule,   // true/false, or null when the rules table can't be read
 //               failing, silent }],
 //     counts: { all, failing, silent, inactive },
-//     compliance_available, silent_days, failing_threshold, timestamp
+//     compliance_available, compliance_status ('ok' | 'missing_table' | 'error'),
+//     silent_days, failing_threshold, timestamp
 //   }
 // set_active / reset_failures response: { ok, feed } (feed = the updated row, list columns only)
 //
 // Definitions match the rest of the system so the numbers agree:
-//   failing = failure_count >= 5 — same as admin-stats 'feeds_failed' (Home "Feeds failed") and the
-//             fetcher's quarantine (scripts/rss/feed-health.js: retried once a day while >= 5).
-//   silent  = active, and the newest item in the feed is older than 7 days — same as the daily
-//             ingest check's stale_feeds (scripts/monitoring/alert-ingest-health.js). NULL = not
-//             yet stamped since migration 131, so not counted.
+//   failing = active and failure_count >= 5 — same as admin-stats 'feeds_failed' (Home "Feeds
+//             failed"), the fetcher's quarantine (scripts/rss/feed-health.js: retried once a day
+//             while >= 5) and the daily ingest check's quarantined list. Inactive feeds are never
+//             fetched, so their count never resets; they show under Inactive instead.
+//   silent  = active, and the newest item in the feed is older than 7 days — the feed-level half
+//             of the daily ingest check's stale_feeds (scripts/monitoring/alert-ingest-health.js),
+//             without its "source still has fresh articles" condition, so a feed can be both
+//             failing and silent. NULL = not yet stamped since migration 131, so not counted.
 // reset_failures sets failure_count = 0, which puts a quarantined feed back on the normal schedule
 // on the next RSS run (last_failed_at is kept as history).
 //
@@ -36,7 +39,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { checkAdminPassword } from '../_shared/auth.ts'
 
-const FEED_FIELDS = 'id,feed_name,feed_url,source_name,tier,is_active,is_opinion_source,failure_count,consecutive_successes,last_fetched_at,last_failed_at,last_item_published_at,last_response_time_ms'
+const FEED_FIELDS = 'id,feed_name,feed_url,source_name,tier,is_active,is_opinion_source,failure_count,last_fetched_at,last_failed_at,last_item_published_at'
 const FAILING_THRESHOLD = 5
 const SILENT_DAYS = 7
 const MAX_FEEDS = 1000 // feed_registry is a few dozen rows; the cap only guards the response size
@@ -53,13 +56,17 @@ function parseFeedId(v: unknown): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null
 }
 
+function isMissingTable(err: { code?: string }): boolean {
+  return err.code === 'PGRST205' || err.code === '42P01'
+}
+
 // deno-lint-ignore no-explicit-any
 function withFlags(feed: any, now: number, complianceIds: Set<number> | null) {
   const newest = feed.last_item_published_at ? Date.parse(feed.last_item_published_at) : NaN
   return {
     ...feed,
     has_compliance_rule: complianceIds ? complianceIds.has(feed.id) : null,
-    failing: (feed.failure_count ?? 0) >= FAILING_THRESHOLD,
+    failing: !!feed.is_active && (feed.failure_count ?? 0) >= FAILING_THRESHOLD,
     silent: !!feed.is_active && Number.isFinite(newest) && now - newest > SILENT_DAYS * 24 * 60 * 60 * 1000
   }
 }
@@ -105,6 +112,12 @@ Deno.serve(async (req) => {
         console.error('feed_registry read failed:', feedsResult.error.message)
         return jsonResponse({ error: 'Feed list query failed' }, 500)
       }
+      // 'missing_table' (PGRST205 / 42P01, i.e. PROD today) vs any other read failure ('error'):
+      // only the first means "every feed is on the fetcher's default".
+      const complianceStatus = !rulesResult.error
+        ? 'ok'
+        : isMissingTable(rulesResult.error) ? 'missing_table' : 'error'
+      if (complianceStatus === 'error') console.error('feed_compliance_rules read failed:', rulesResult.error!.message)
       const complianceIds = rulesResult.error
         ? null
         : new Set<number>((rulesResult.data || []).map((r) => Number(r.feed_id)))
@@ -119,6 +132,7 @@ Deno.serve(async (req) => {
           inactive: feeds.filter((f) => !f.is_active).length
         },
         compliance_available: complianceIds !== null,
+        compliance_status: complianceStatus,
         silent_days: SILENT_DAYS,
         failing_threshold: FAILING_THRESHOLD,
         timestamp: new Date(now).toISOString()

@@ -5856,8 +5856,16 @@
             const [error, setError] = useState(null);
             const [notice, setNotice] = useState(null);
             const [busyId, setBusyId] = useState(null);
+            const [confirmOffId, setConfirmOffId] = useState(null); // feed waiting for the second deactivate tap
             const busyRef = useRef(false);
             const fetchTokenRef = useRef(0);
+
+            // The "tap again" state lapses after a few seconds so a stray later tap can't deactivate.
+            useEffect(() => {
+                if (confirmOffId == null) return;
+                const t = setTimeout(() => setConfirmOffId(null), 4000);
+                return () => clearTimeout(t);
+            }, [confirmOffId]);
 
             const FILTERS = [
                 { id: 'all', label: 'All' },
@@ -5962,12 +5970,14 @@
                         </div>
                         <div className="card-body">
                             <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
-                                <strong style={{ color: '#e5e7eb' }}>Failing</strong> = {data?.failing_threshold ?? 5}+ failed fetches in a row (the same count as Home's "Feeds failed"). The pipeline retries a failing feed once a day; <strong style={{ color: '#e5e7eb' }}>reset failures</strong> puts it back on the normal schedule from the next run. <strong style={{ color: '#e5e7eb' }}>Silent</strong> = active, but the newest item in the feed is more than {data?.silent_days ?? 7} days old (frozen or moved feed). Adding a feed is still a SQL task.
+                                <strong style={{ color: '#e5e7eb' }}>Failing</strong> = an active feed with {data?.failing_threshold ?? 5}+ failed fetches in a row (the same count as Home's "Feeds failed"; a deactivated feed shows under Inactive). The pipeline retries a failing feed once a day; <strong style={{ color: '#e5e7eb' }}>reset failures</strong> puts it back on the normal schedule from the next run. <strong style={{ color: '#e5e7eb' }}>Silent</strong> = active, but the newest item in the feed is more than {data?.silent_days ?? 7} days old (frozen or moved feed). Adding a feed is still a SQL task.
                             </div>
 
                             {data && !data.compliance_available && (
                                 <div style={{ background: '#422006', border: '1px solid #b45309', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#fde68a', lineHeight: '1.5' }}>
-                                    This database has no <code>feed_compliance_rules</code> table, so every feed uses the fetcher's default 5,000-character excerpt cap. The Rule column shows "—".
+                                    {data.compliance_status === 'error'
+                                        ? <>Couldn't read the compliance rules just now, so the Rule column shows "—". Refresh to try again.</>
+                                        : <>This database has no <code>feed_compliance_rules</code> table, so every feed uses the fetcher's default 5,000-character excerpt cap. The Rule column shows "—" (ADO-633).</>}
                                 </div>
                             )}
                             {missingRules > 0 && (
@@ -6028,11 +6038,18 @@
                                                                     <button
                                                                         className="judge-row-btn"
                                                                         disabled={busy || busyId != null}
-                                                                        onClick={() => runAction(f, { action: 'set_active', is_active: !f.is_active }, `${f.feed_name} ${f.is_active ? 'deactivated. The pipeline stops fetching it.' : 'activated. It is fetched on the next RSS run.'}`)}
-                                                                        style={{ background: f.is_active ? '#374151' : '#065f46', color: '#e5e7eb' }}
-                                                                        title={f.is_active ? 'Stop fetching this feed' : 'Start fetching this feed again'}
+                                                                        onClick={() => {
+                                                                            // Deactivate takes a second tap: it stops a source quietly (the feed also drops out of the Discord health checks).
+                                                                            if (f.is_active && confirmOffId !== f.id) { setConfirmOffId(f.id); return; }
+                                                                            setConfirmOffId(null);
+                                                                            runAction(f, { action: 'set_active', is_active: !f.is_active }, f.is_active
+                                                                                ? `${f.feed_name} deactivated. The pipeline stops fetching it and the health checks stop watching it.`
+                                                                                : `${f.feed_name} activated. ${f.failure_count >= 5 ? 'It still has 5+ failures, so it waits for the daily retry; reset failures to fetch it on the next run.' : 'It is fetched on the next RSS run.'}`);
+                                                                        }}
+                                                                        style={{ background: confirmOffId === f.id ? '#991b1b' : f.is_active ? '#374151' : '#065f46', color: '#e5e7eb' }}
+                                                                        title={f.is_active ? 'Stop fetching this feed (asks to confirm)' : 'Start fetching this feed again'}
                                                                     >
-                                                                        {busy ? '…' : f.is_active ? 'deactivate' : 'activate'}
+                                                                        {busy ? '…' : confirmOffId === f.id ? 'tap again to deactivate' : f.is_active ? 'deactivate' : 'activate'}
                                                                     </button>
                                                                     {f.failure_count > 0 && (
                                                                         <button
@@ -6837,7 +6854,7 @@
                 // Process feeds
                 const feeds = feedsData.data || [];
                 const feedsActive = feeds.filter(f => f.is_active && f.failure_count < 5).length;
-                const feedsFailed = feeds.filter(f => f.failure_count >= 5).length;
+                const feedsFailed = feeds.filter(f => f.is_active && f.failure_count >= 5).length; // active only, same as admin-stats
 
                 // Process pardons
                 const pardons = pardonsData.data || [];
@@ -7197,7 +7214,7 @@
                                                 {stats.needs_attention?.breakdown?.executive_orders_needs_review ?? 0}
                                             </span>
                                         </div>
-                                        <div className="attention-item" title="Feeds with 5+ consecutive failures" onClick={() => { setFeedsFilter('failing'); setActiveTab('feeds'); }}>
+                                        <div className="attention-item" title="Active feeds with 5+ failed fetches in a row" onClick={() => { setFeedsFilter('failing'); setActiveTab('feeds'); }}>
                                             <span>Feeds failed</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.feeds_failed}
