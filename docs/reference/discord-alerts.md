@@ -57,10 +57,15 @@ writes `needs_manual_review` and `notes` on its own `stories_enrichment_log` row
 completions). Stories have no reviewed state in admin, so an open queue would repeat forever.
 - Once a day (the RSS health check run starting 12:00-17:59 UTC, which is 7 AM to 12:59 PM CT in
   summer, or a manual run; push runs never check) the check lists the flagged, completed log rows
-  from a fixed slot: yesterday 12:00 UTC to today 12:00 UTC (6 or 7 AM CT). Each row shows the story
-  id, headline and the agent's note. Because the slot is fixed rather than "the last N hours", every
-  flag appears in exactly one digest however late in the window GitHub starts the run. A manual run
-  before 12:00 UTC reports the last complete slot.
+  that FINISHED in a fixed slot: yesterday 12:00 UTC to today 12:00 UTC (6 or 7 AM CT). Finished =
+  `created_at` (story start) + `duration_ms`, so a story that starts before 12:00 UTC and finishes
+  after lands in the next day's digest instead of neither (Codex, PR #190). Because the slot is fixed
+  rather than "the last N hours", every flag appears in exactly one digest however late in the window
+  GitHub starts the run. A manual run before 12:00 UTC reports the last complete slot.
+- Every flag is named, because a slot is never reported again: the first ten with headline and note,
+  the rest by story id. If even the ids do not fit Discord's embed, the message says how many are left
+  and the exact log query to find them. If the query hits its 500-row cap, the check reports that it
+  could not run rather than send a partial digest.
 - Known gap: if a day's scheduled run never happens at all (GitHub drops it), that day's slot is
   skipped. A manual run of the health check on the same day recovers it.
 - Only the flag counts. A `thin_source` note without the flag never alerts, and neither do `failed`
