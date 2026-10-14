@@ -337,17 +337,26 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   const many = seen.discord.at(-1).embeds[0].description;
   for (let i = 0; i < 40; i++) assert.ok(many.includes(`Story ${18000 + i}`), `Story ${18000 + i} named`);
   assert.ok(many.length <= 3800 && !many.includes('not listed here'), `${many.length} chars`);
-  // a story flagged on several runs is named once in the short list
+  // repeat flags on one story are grouped, not dropped: a second flag on a story already shown in the
+  // top ten is still listed, so the entries add up to the title's count
   const repeats = buildAlert('stories', [...Array.from({ length: 10 }, (_, i) => ({ id: i, story_id: 30000 + i, notes: 'n' })),
     { id: 20, story_id: 31000, notes: 'n' }, { id: 21, story_id: 31000, notes: 'n' }, { id: 22, story_id: 30000, notes: 'n' }], { now: DAILY });
-  assert.ok(repeats.description.includes('Also flagged: Story 31000\n'), repeats.description);
+  assert.ok(repeats.title.includes('flagged 13 enrichments'));
+  assert.ok(repeats.description.includes('Also flagged: Story 31000 (2 flags), Story 30000\n'), repeats.description);
+  assert.ok(!repeats.description.includes('not listed here'));
+  // the slot the rows were queried for is the one printed, not recomputed
+  const given = buildAlert('stories', [{ id: 1, story_id: 1, notes: 'n' }], { now: DAILY, slot: { start: new Date('2026-01-01T06:00:00Z'), end: new Date('2026-01-02T06:00:00Z') } });
+  assert.ok(given.title.includes('January 1 6:00 UTC to January 2 6:00 UTC'), given.title);
   // too many even for ids: the remainder is counted, with a query that finds exactly those rows, and
   // the whole message fits the budget even with a long site origin
   const longOrigin = `https://${'x'.repeat(90)}.netlify.app`;
   const huge = buildAlert('stories', Array.from({ length: 400 }, (_, i) => ({ id: i, story_id: 20000 + i, notes: 'n' })), { now: DAILY, total: 400, origin: longOrigin });
   assert.ok(huge.description.length <= 3800, `${huge.description.length} chars`);
   assert.ok(huge.description.endsWith('nothing to mark as reviewed.'), 'footer intact');
-  assert.match(huge.description, /… and \d+ more not listed here: stories_enrichment_log rows with needs_manual_review=true, status=completed, created_at from 2026-10-11T06:00:00.000Z to 2026-10-12T06:00:00.000Z/);
+  const m = /… and (\d+) more flags not listed here\. All 400 are stories_enrichment_log rows with needs_manual_review=true, status=completed, created_at from 2026-10-11T06:00:00.000Z to 2026-10-12T06:00:00.000Z/.exec(huge.description);
+  assert.ok(m, huge.description.slice(-400));
+  const listed = (huge.description.match(/Story \d+/g) || []).length;
+  assert.equal(listed + Number(m[1]), 400, 'listed + unlisted = every flag');
   // a capped query never sends a partial digest: it throws, and runCli posts "could not run"
   const capped = async (url, init) => (new URL(url).hostname === 'd.test' ? fetchImpl(url, init)
     : new Response('[]', { status: 200, headers: { 'Content-Range': '0-499/612' } }));
