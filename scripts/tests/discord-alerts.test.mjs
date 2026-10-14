@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, postDiscordReported, summarizeList, COLORS } from '../lib/discord.js';
-import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay, finishedAt } from '../monitoring/alert-needs-review.js';
+import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay, storiesSlot } from '../monitoring/alert-needs-review.js';
 import { dailySlot } from '../lib/daily-check-window.js';
 
 // --- postDiscord -----------------------------------------------------------
@@ -242,16 +242,21 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   // runs almost 30h apart (12:00 one day, 17:59 the next) still report adjacent slots: no gap
   assert.equal(dailySlot(Date.parse('2026-10-11T12:00:00Z')).end.getTime(), dailySlot(Date.parse('2026-10-12T17:59:00Z')).start.getTime());
 
+  // The Stories slot is dailySlot shifted 6h earlier (yesterday 06:00 to today 06:00 UTC): every story
+  // created in it has finished long before the 12:00-17:59 digest looks (Codex P2, PR #190)
+  assert.deepEqual(storiesSlot(Date.parse('2026-10-12T12:30:00Z')), { start: new Date('2026-10-11T06:00:00Z'), end: new Date('2026-10-12T06:00:00Z') });
+  assert.equal(storiesSlot(Date.parse('2026-10-11T12:00:00Z')).end.getTime(), storiesSlot(Date.parse('2026-10-12T17:59:00Z')).start.getTime(), 'adjacent slots, no gap');
+
   const DAILY = Date.parse('2026-10-12T12:30:00Z'); // inside the once-a-day health check window
   const at = (iso) => new Date(iso).toISOString();
   // Fake PostgREST that applies the flag, status and created_at filters, so the test proves the query
   // keeps unflagged thin_source rows, failed runs and rows outside the slot out
   const log = [
-    { id: 41, story_id: 17301, needs_manual_review: true, status: 'completed', notes: 'factual error: wrong vote count — 52-48, not 51-49', created_at: at('2026-10-12T09:30:00Z'), stories: { primary_headline: 'Senate passes the budget bill — barely' } },
-    { id: 40, story_id: 17300, needs_manual_review: false, status: 'completed', notes: 'thin_source', created_at: at('2026-10-12T08:30:00Z'), stories: { primary_headline: 'Thin story' } },
-    { id: 39, story_id: 17299, needs_manual_review: true, status: 'completed', notes: 'old flag', created_at: at('2026-10-11T06:30:00Z'), stories: { primary_headline: 'Day before story' } },
-    { id: 42, story_id: 17302, needs_manual_review: true, status: 'completed', notes: 'next slot', created_at: at('2026-10-12T12:10:00Z'), stories: { primary_headline: 'Tomorrow digest story' } },
-    { id: 38, story_id: 17298, needs_manual_review: true, status: 'failed', notes: 'run died', created_at: at('2026-10-12T07:00:00Z'), stories: { primary_headline: 'Failed run story' } },
+    { id: 41, story_id: 17301, needs_manual_review: true, status: 'completed', notes: 'factual error: wrong vote count — 52-48, not 51-49', created_at: at('2026-10-12T03:30:00Z'), stories: { primary_headline: 'Senate passes the budget bill — barely' } },
+    { id: 40, story_id: 17300, needs_manual_review: false, status: 'completed', notes: 'thin_source', created_at: at('2026-10-12T02:30:00Z'), stories: { primary_headline: 'Thin story' } },
+    { id: 39, story_id: 17299, needs_manual_review: true, status: 'completed', notes: 'old flag', created_at: at('2026-10-11T00:30:00Z'), stories: { primary_headline: 'Day before story' } },
+    { id: 42, story_id: 17302, needs_manual_review: true, status: 'completed', notes: 'next slot', created_at: at('2026-10-12T06:10:00Z'), stories: { primary_headline: 'Tomorrow digest story' } },
+    { id: 38, story_id: 17298, needs_manual_review: true, status: 'failed', notes: 'run died', created_at: at('2026-10-12T01:00:00Z'), stories: { primary_headline: 'Failed run story' } },
   ];
   const seen = { queries: [], discord: [] };
   let table = log;
@@ -277,13 +282,11 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   const q = seen.queries[0];
   assert.equal(q.searchParams.get('needs_manual_review'), 'eq.true');
   assert.equal(q.searchParams.get('status'), 'eq.completed');
-  // reaches 6h back for rows that started before the slot and finished inside it
-  assert.deepEqual(q.searchParams.getAll('created_at'), ['gte.2026-10-11T06:00:00.000Z', 'lt.2026-10-12T12:00:00.000Z']);
-  assert.ok(q.searchParams.get('select').includes('duration_ms'));
+  assert.deepEqual(q.searchParams.getAll('created_at'), ['gte.2026-10-11T06:00:00.000Z', 'lt.2026-10-12T06:00:00.000Z']);
   assert.ok(q.searchParams.get('select').includes('stories(primary_headline)'));
   assert.ok(!q.searchParams.get('select').includes('*'));
   const embed = seen.discord[0].embeds[0];
-  assert.equal(embed.title, 'Stories: the agent flagged 1 enrichment for review (flags from October 11 12:00 UTC to October 12 12:00 UTC)');
+  assert.equal(embed.title, 'Stories: the agent flagged 1 enrichment for review (stories started October 11 6:00 UTC to October 12 6:00 UTC)');
   assert.ok(embed.description.includes('• Story 17301: Senate passes the budget bill - barely - factual error: wrong vote count - 52-48, not 51-49'), embed.description);
   for (const left of ['Thin story', 'thin_source', 'Day before story', 'Tomorrow digest story', 'Failed run story']) assert.ok(!embed.description.includes(left), left);
   assert.ok(embed.description.includes('https://trumpytracker.com/admin.html (Stories tab)'));
@@ -312,40 +315,43 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   // a flagged run-level row (no story) still names something
   assert.ok(buildAlert('stories', [{ id: 5, story_id: null, notes: 'n' }]).description.includes('• Log row 5 - n'));
 
-  // Codex P2 (PR #190): a row belongs to the slot it FINISHED in. One that starts at 11:55 UTC and
-  // finishes at 12:05 is still running at the 12:00 boundary: not in that day's digest, in the next one.
-  // One that started at 11:58 the day before and finished at 12:03 is in this slot despite its created_at.
-  table = [
-    { id: 50, story_id: 17400, needs_manual_review: true, status: 'completed', notes: 'late', duration_ms: 600000, created_at: at('2026-10-12T11:55:00Z'), stories: { primary_headline: 'Straddles the boundary' } },
-    { id: 51, story_id: 17401, needs_manual_review: true, status: 'completed', notes: 'early', duration_ms: 300000, created_at: at('2026-10-11T11:58:00Z'), stories: { primary_headline: 'Started before the slot' } },
-    { id: 52, story_id: 17402, needs_manual_review: true, status: 'completed', notes: 'prior', duration_ms: 60000, created_at: at('2026-10-11T08:00:00Z'), stories: { primary_headline: 'Finished in the prior slot' } },
-  ];
-  assert.equal(finishedAt(table[0]), Date.parse('2026-10-12T12:05:00Z'));
-  assert.equal(finishedAt({ created_at: at('2026-10-12T11:55:00Z'), duration_ms: null }), Date.parse('2026-10-12T11:55:00Z'), 'no duration -> start time');
-  let before = seen.discord.length;
+  // Codex P2 (PR #190): a story that starts just before 12:00 UTC is still running when that day's
+  // digest looks. It belongs to the NEXT slot (created after 06:00), so it is reported once it has
+  // finished, on the next day, instead of being missed by both.
+  const straddle = { id: 50, story_id: 17400, needs_manual_review: true, status: 'running', notes: 'late', created_at: at('2026-10-12T11:55:00Z'), stories: { primary_headline: 'Still running at the digest' } };
+  const justIn = { id: 51, story_id: 17401, needs_manual_review: true, status: 'completed', notes: 'edge', created_at: at('2026-10-12T05:59:00Z'), stories: { primary_headline: 'Started 05:59' } };
+  table = [straddle, justIn];
+  const before = seen.discord.length;
   assert.deepEqual(await run(), { flagged: 1, due: true, posted: true });
-  let d1 = seen.discord.at(-1).embeds[0].description;
-  assert.ok(d1.includes('Started before the slot') && !d1.includes('Straddles the boundary') && !d1.includes('Finished in the prior slot'), d1);
+  assert.ok(seen.discord.at(-1).embeds[0].description.includes('Started 05:59'));
+  straddle.status = 'completed'; // finished at 12:05, after the digest above
   assert.deepEqual(await run(Date.parse('2026-10-13T12:30:00Z')), { flagged: 1, due: true, posted: true });
-  d1 = seen.discord.at(-1).embeds[0].description;
-  assert.ok(d1.includes('Straddles the boundary') && !d1.includes('Started before the slot'), 'the late finisher is in the next day\'s digest');
+  const nextDay = seen.discord.at(-1).embeds[0].description;
+  assert.ok(nextDay.includes('Still running at the digest') && !nextDay.includes('Started 05:59'), 'reported once, the next day');
   assert.equal(seen.discord.length, before + 2);
 
   // Codex P2 (PR #190): every flag in a slot is named, since the slot is never reported again
   table = Array.from({ length: 40 }, (_, i) => ({ id: 100 + i, story_id: 18000 + i, needs_manual_review: true, status: 'completed',
-    notes: 'x'.repeat(200), duration_ms: 1000, created_at: at(`2026-10-12T0${i % 10}:${String(10 + i).padStart(2, '0')}:00Z`), stories: { primary_headline: 'h'.repeat(120) } }));
+    notes: 'x'.repeat(200), created_at: at(`2026-10-12T0${i % 6}:${String(10 + i).padStart(2, '0')}:00Z`), stories: { primary_headline: 'h'.repeat(120) } }));
   assert.deepEqual(await run(), { flagged: 40, due: true, posted: true });
   const many = seen.discord.at(-1).embeds[0].description;
   for (let i = 0; i < 40; i++) assert.ok(many.includes(`Story ${18000 + i}`), `Story ${18000 + i} named`);
   assert.ok(many.length <= 3800 && !many.includes('not listed here'), `${many.length} chars`);
-  // too many even for ids: the remainder is counted and the query to find them is given
-  const huge = buildAlert('stories', Array.from({ length: 400 }, (_, i) => ({ id: i, story_id: 20000 + i, notes: 'n' })), { now: DAILY, total: 400 });
+  // a story flagged on several runs is named once in the short list
+  const repeats = buildAlert('stories', [...Array.from({ length: 10 }, (_, i) => ({ id: i, story_id: 30000 + i, notes: 'n' })),
+    { id: 20, story_id: 31000, notes: 'n' }, { id: 21, story_id: 31000, notes: 'n' }, { id: 22, story_id: 30000, notes: 'n' }], { now: DAILY });
+  assert.ok(repeats.description.includes('Also flagged: Story 31000\n'), repeats.description);
+  // too many even for ids: the remainder is counted, with a query that finds exactly those rows, and
+  // the whole message fits the budget even with a long site origin
+  const longOrigin = `https://${'x'.repeat(90)}.netlify.app`;
+  const huge = buildAlert('stories', Array.from({ length: 400 }, (_, i) => ({ id: i, story_id: 20000 + i, notes: 'n' })), { now: DAILY, total: 400, origin: longOrigin });
   assert.ok(huge.description.length <= 3800, `${huge.description.length} chars`);
-  assert.match(huge.description, /… and \d+ more not listed here: stories_enrichment_log rows with needs_manual_review=true finishing 2026-10-11T12:00:00.000Z to 2026-10-12T12:00:00.000Z/);
+  assert.ok(huge.description.endsWith('nothing to mark as reviewed.'), 'footer intact');
+  assert.match(huge.description, /… and \d+ more not listed here: stories_enrichment_log rows with needs_manual_review=true, status=completed, created_at from 2026-10-11T06:00:00.000Z to 2026-10-12T06:00:00.000Z/);
   // a capped query never sends a partial digest: it throws, and runCli posts "could not run"
   const capped = async (url, init) => (new URL(url).hostname === 'd.test' ? fetchImpl(url, init)
     : new Response('[]', { status: 200, headers: { 'Content-Range': '0-499/612' } }));
-  await assert.rejects(runNeedsReviewAlert({ env, argv: ['--domain', 'stories'], fetchImpl: capped, log: () => {}, now: DAILY }), /500-row cap/);
+  await assert.rejects(runNeedsReviewAlert({ env, argv: ['--domain', 'stories'], fetchImpl: capped, log: () => {}, now: DAILY }), /query cap/);
 
   // wired into the once-a-day RSS health check on main (reads PROD), with a follow-up so a dead digest is never silent
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
