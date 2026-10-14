@@ -74,7 +74,7 @@ server.listen(PORT, () => {
 
 📍 Main URLs:
    Dashboard: http://localhost:${PORT}/
-   Admin Panel: http://localhost:${PORT}/admin-supabase.html
+   Admin Panel: http://localhost:${PORT}/admin.html
    
 📊 Test Tools:
    Test Features: http://localhost:${PORT}/test-admin-features.html
