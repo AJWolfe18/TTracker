@@ -58,7 +58,7 @@ The cloud session that started this can edit code and open PRs. It **cannot** re
 5. Stories tab: a "Needs review" filter showing `review_reason`, a "Mark reviewed" button, and a link from the Home row.
 
 ## Session 3 — cloud or desktop: Card 4, Feeds tab (ADO-343)
-Spec in `backlog.md`. New `admin-feeds` edge function (pattern: `admin-pipeline-skips`). Can be built in the cloud, but deploying and checking it needs desktop.
+Built October 13, 2026 in PR #191 (desktop). `admin-feeds` + `admin-stats` deployed to TEST; **deploy both to PROD before admin.html**. Failing is now active-only everywhere (admin-stats, Home fallback, Feeds tab). PROD has no `feed_compliance_rules` table: the tab shows a notice there; fix is ADO-633.
 
 ## Parked
 - Cost/budget display: skipped by Josh (2026-10-13). Context: the header "Budget" only tracks OpenAI spend, which is now small since story enrichment moved to the Claude agent. It shows today only, not month-to-date against the $50/month limit.

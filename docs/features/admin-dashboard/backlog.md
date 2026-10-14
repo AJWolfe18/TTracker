@@ -73,7 +73,7 @@ Suggested order: 1 → 2 → 3 → 4 → 5 → 6 → 7. **Sequencing and handoff
 **Changes**
 - New password-gated edge function `admin-feeds` (list + update), following the `admin-pipeline-skips` pattern.
 - Feeds table: name, source, tier, active, `failure_count`, `last_fetched_at`, `last_failed_at`, `last_item_published_at` (silent-feed signal, ADO-625), and whether a `feed_compliance_rules` row exists.
-- Filters: All / Failing (failure_count ≥ 5) / Silent (newest item > 7 days old) / Inactive.
+- Filters: All / Failing (active and failure_count ≥ 5; Home's count changed to active-only to match) / Silent (active, newest item > 7 days old) / Inactive.
 - Actions: activate/deactivate, reset failure count.
 - Adding feeds stays a SQL task for now. That could be a follow-up card.
 
