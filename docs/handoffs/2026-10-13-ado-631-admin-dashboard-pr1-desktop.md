@@ -33,3 +33,27 @@
 ## Gotchas
 - Admin edge functions authenticate with `x-admin-password` (`ADMIN_DASHBOARD_PASSWORD` secret), which is not in local `.env`, so they can't be curl-tested from here; verify through the signed-in page. Local `.env` names the anon key `SUPABASE_TEST_ANON_KEY`, not `SUPABASE_ANON_KEY`.
 - The Chrome MCP `resize_window` did not shrink the viewport (stayed 2560px); a same-origin iframe at 375px shares sessionStorage, so it loads already signed in and gives a real phone-width layout.
+
+---
+
+# Later the same session — ADO-343 Feeds tab (PR #191, open)
+
+**State:** PR #191 (`feat/ado-343-feeds-tab` → test) is open for Josh's local Codex; ADO-343 in **Review**. Built in a separate worktree (`C:\Users\Josh\GitHub\TTracker-feeds`) because another session was deploying PR #190 from the main folder. Remove the worktree after merge: `git worktree remove ../TTracker-feeds`.
+
+## What was built
+- New password-gated edge function **`admin-feeds`** (`list` / `set_active` / `reset_failures`); writes only `is_active` or `failure_count = 0`, built server-side.
+- **Feeds tab** replaces "Coming soon": status, tier, failures, last fetch/failure, newest item, compliance-rule flag; All / Failing / Silent / Inactive filters with counts; deactivate needs a second tap (lapses after 4s); stacked cards on phones.
+- Home "Feeds failed" row opens the Feeds tab on Failing.
+- **Definition change:** Failing = **active** feeds with `failure_count >= 5` in `admin-stats`, the Home fallback and the tab (matches the fetcher's quarantine and the ingest check). Before, deactivating a dead feed left Home red forever.
+- `admin-feeds` and `admin-stats` are **deployed to TEST**. PROD order: deploy both (plus the two Judge functions from PR #189) **before** admin.html.
+
+## Verified on TEST (live DB)
+Home "Feeds failed" 1 = Failing (1) (Time Politics, fc 6). Reset failures, activate, two-tap deactivate all work and counts update; TEST rows restored afterwards (Time Politics active fc 6, Reuters inactive). No horizontal scroll at 371px. Two-pass review: 0 critical; fixed confirm-on-deactivate, active-only failing, missing-table vs transient error, unused columns, notice wording.
+
+## Findings
+- **ADO-633 (Bug, new):** PROD has no `feed_compliance_rules` table (PGRST205; no migration creates it). `fetch_feed.js` silently defaults to 5,000 chars. TEST feed 177 ProPublica has no rule row. The Feeds tab shows a notice on PROD.
+- Pre-existing (comment on ADO-631): Home's fallback stats path reads `feed_registry` with the anon key, which can't read it, so if `admin-stats` fails Home shows 0 failed feeds.
+- Minor, left as is: edge-function errors surface as the generic "non-2xx" text (same as other tabs).
+
+## Testing gotcha
+Loading an unmerged admin.html in a `srcdoc` iframe inside the signed-in TEST tab works (shares sessionStorage), but `srcdoc` has no hostname, so `supabase-browser-config.js` picks **PROD**. Inline the config with `isTestEnvironment = true` and assert `SUPABASE_URL` is TEST before clicking. (The first attempt hit PROD read-only; no writes, Josh stayed signed in.)
