@@ -68,11 +68,31 @@ memory entity — session 2 wires the cron.)
 
 ## 2. Supabase PostgREST API Reference
 
-All database access is **read-only** PostgREST HTTP calls via `curl` in Bash: the candidate RPC and
-GETs. **Do NOT use WebFetch for any database call** — it cannot set custom headers. You never POST,
-PATCH or DELETE against the database and never call `merge_stories` (ADO-583; the executor workflow
-does the writes). The agent's only other network action is the `git push` in Step 7 — there is no other
-external-web surface.
+All database access is **read-only**: the candidate fetch goes through the Judge script (Step 2), and
+the per-story evidence reads are PostgREST GETs via `curl` in Bash. **Do NOT use WebFetch for any
+database call** — it cannot set custom headers. You never POST, PATCH or DELETE against the database
+and never call `merge_stories` (ADO-583; the executor workflow does the writes). The agent's only
+other network action is the push the Judge script makes in Step 7 — there is no other external-web
+surface.
+
+### The Judge script (ADO-634) — the only way to fetch candidates and publish
+
+Two steps go through one committed script, `scripts/clustering/judge-publish.js`, which the repo's
+settings approve by exact command prefix:
+
+```bash
+node scripts/clustering/judge-publish.js candidates
+node scripts/clustering/judge-publish.js publish <decisions_path>
+```
+
+Rules for these calls (the approval matches the command text exactly, so anything else is screened
+by the sandbox and may be denied):
+
+- Each call is its own Bash command that **starts with `node scripts/clustering/judge-publish.js`**.
+  No `cd` first, no `VAR=value` prefix, no pipes, `&&`, `;` or redirects around it.
+- **Never write your own script, heredoc, `jq` pipeline or `node -e` to build, convert, commit or push
+  the verdict file.** That improvised code is exactly what the sandbox denied on October 12 and 15,
+  2026. The only file you write is the decisions file (Step 6), with the Write tool.
 
 ### Authentication Headers (required on every request)
 
@@ -84,16 +104,9 @@ external-web surface.
 `get_clustering_judge_candidates` is a `service_role`-only RPC (migration 100) — it only works with
 the service key above, never the anon key. (`merge_stories` is too, but only the executor calls it.)
 
-### GET (read) and RPC (candidate fetch) — the only two shapes you use
+### GET (read) — the only `curl` shape you use
 
 ```bash
-# RPC call (candidate generation)
-curl -s -X POST "${API_BASE}/rpc/get_clustering_judge_candidates" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"p_min_sim": 0.83, "p_days": 7, "p_max_pairs": 30}'
-
 # GET read
 curl -s "${API_BASE}/stories?select=id,primary_headline&id=eq.123" \
   -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -104,16 +117,16 @@ curl -s "${API_BASE}/stories?select=id,primary_headline&id=eq.123" \
 
 **Never build agent-generated text (headline snapshots, rationale) inside a Bash command** — with
 `jq --arg`, `echo`, or a single-quoted `-d '...'`: an apostrophe in a headline ("Nation's") breaks
-shell quoting and silently corrupts the JSON. The verdict file (Step 6) is written with the Write
-tool, which has no shell quoting at all. Inline `-d '{...}'` is only acceptable for bodies with
-entirely static/known-safe values (the RPC call above).
+shell quoting and silently corrupts the JSON. Your decisions file (Step 6) is written with the Write
+tool, which has no shell quoting at all; the Judge script turns it into the verdict file.
 
 ### Timestamps
 
-You never generate a timestamp. `evidence_as_of` on every verdict is the `membership_seen_at` value
-the candidate RPC returned for that pair (Step 2), echoed verbatim as a JSON string; if the RPC did
-not include it, omit `evidence_as_of` for that pair. `clustering_judge_log.created_at` is set
-server-side when the executor inserts the row.
+You never generate a timestamp. The run id comes from the Judge script (Step 2). `evidence_as_of` on
+every verdict is the `membership_seen_at` value the candidate RPC returned for that pair; the Judge
+script saves the RPC rows and echoes it into the verdict file verbatim (or omits it when the RPC did
+not return it), so you never see or copy it. `clustering_judge_log.created_at` is set server-side
+when the executor inserts the row.
 
 ---
 
@@ -121,23 +134,26 @@ server-side when the executor inserts the row.
 
 Execute in order on every run.
 
-### Step 1: Generate Run ID
+### Step 1: Run ID
 
-```bash
-RUN_ID="judge-$(date -u +%Y-%m-%dT%H-%M-%S.%3NZ)"
-```
-
-Millisecond precision matters: `clustering_judge_log` has a unique index on `run_id` for heartbeat
-rows (both `story_id_a` and `story_id_b` NULL), so two runs launched in the same second must not
-collide. Every log row this run writes shares this `run_id`.
+The Judge script generates it in Step 2 (`judge-YYYY-MM-DDTHH-MM-SS.mmmZ`, millisecond precision:
+`clustering_judge_log` has a unique index on `run_id` for heartbeat rows, so two runs launched in the
+same second must not collide). Every log row this run writes shares this `run_id`. Do not generate
+one yourself.
 
 ### Step 2: Fetch candidate pairs
 
-Call the candidate RPC (Section 2). It returns up to `p_max_pairs` (default 30) story pairs from the
-last `p_days` days with centroid cosine ≥ `p_min_sim`, each with `story_id_a`, `story_id_b`,
-`headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`, and
-`membership_seen_at` (the DB's membership watermark for the pair — you will echo it back verbatim as
-`evidence_as_of` in Step 6; treat it as an opaque string, never parse or regenerate it).
+```bash
+node scripts/clustering/judge-publish.js candidates
+```
+
+It calls `get_clustering_judge_candidates` with the production knobs (`p_min_sim` 0.83, `p_days` 7,
+`p_max_pairs` 30), saves the raw rows for Step 7, and prints one JSON object: `run_id`,
+`environment`, `dry_run`, `decisions_path` (where you write Step 6's file), `count`, and `pairs` — up
+to 30 story pairs from the last 7 days with centroid cosine ≥ 0.83, each with `story_id_a`,
+`story_id_b`, `headline_a`, `headline_b`, `centroid_sim`, `shared_entities`, `shared_slugs`. (The
+DB's membership watermark per pair stays in the saved rows; the script writes it into the verdict
+file as `evidence_as_of` itself.) Keep `run_id` and `decisions_path` for Steps 6 and 7.
 
 **Recall-first, by design:** the RPC does NOT require a shared entity or slug — the flagship July 4th
 fragments share only `US-TRUMP` (a stopword) / `LOC-DC` with no overlapping slugs, so an entity gate
@@ -146,20 +162,19 @@ your judgment, not a precondition. The 7-day window already removes the 100+-day
 collisions that are the main false-merge risk — but your default-DENY judgment is still the real
 precision guard.
 
-**If 0 pairs are returned:** write the verdict file with `"verdicts": []` and `"candidates": 0`
-(Step 6) and publish it (Step 7). The executor inserts the run's single heartbeat row — the ONLY log
-row with both `story_id_a` and `story_id_b` NULL. After the push, the run is complete — stop.
+**If 0 pairs are returned:** write the decisions file with `"decisions": []` (Step 6) and publish it
+(Step 7); the script writes a verdict file with `"verdicts": []` and `"candidates": 0`. The executor
+inserts the run's single heartbeat row — the ONLY log row with both `story_id_a` and `story_id_b`
+NULL. After the publish, the run is complete — stop.
+
+**If the call prints `"ok": false`** (RPC or network error): publish nothing, stop. Next run retries.
 
 ### Step 3: Per pair — fetch summaries + member ARTICLE titles (BOTH sides)
 
-Process pairs **one at a time**. Each Step 2 candidate carries a `membership_seen_at` field — the
-database's own watermark of the newest article attachment across both stories at fetch time. That
-value goes in the Step 6 verdict entry as `evidence_as_of`, **echoed exactly as the RPC returned it**
-(including a literal `"-infinity"` if that is what came back). Do NOT generate a timestamp yourself
-(`date -u` etc.) — verdict memory compares it against `article_story.matched_at`, and only the
-DB-issued value stays in the same clock family; a sandbox clock a few seconds fast would fake
-coverage of an article you never saw. If `membership_seen_at` is missing from the RPC response
-(database not yet migrated), OMIT `evidence_as_of` from that verdict entirely — NULL degrades safely.
+Process pairs **one at a time**. (Each pair's `evidence_as_of` — the DB's own membership watermark,
+which verdict memory compares against `article_story.matched_at` — is handled by the Judge script
+from the saved RPC rows. Never generate a timestamp yourself: a sandbox clock a few seconds fast would
+fake coverage of an article you never saw.)
 
 For each pair, do NOT judge on the two `primary_headline`s alone —
 `primary_headline` is whatever the FIRST article in a story said, and is frequently misleading (a story
@@ -201,8 +216,8 @@ the pair's two ids).
 
 **You do NOT call `merge_stories`** — not with `curl`, not with any other tool, in either mode
 (ADO-583: the cloud sandbox denies a routine's own database writes, so the executor workflow does
-them from GitHub secrets). The executor executes your `merge` verdicts in file order under these
-rules, so **order your `merge` verdicts by confidence, highest first**:
+them from GitHub secrets). The executor executes `merge` verdicts in file order (the Judge script
+puts them first, highest confidence first) under these rules:
 
 - at most **10** executed merges per run (the DB enforces the same cap via `p_run_id`, migration 101);
   merges past the cap are logged `merged=false` with a `deferred:` rationale and retried next run;
@@ -219,29 +234,21 @@ rules, so **order your `merge` verdicts by confidence, highest first**:
 
 Nothing else changes in your judging: default-DENY, criteria in Section 4.
 
-### Step 6: Write the verdict file (one file, the Write tool)
+### Step 6: Write the decisions file (one file, the Write tool)
 
-Write `judge-inbox/<RUN_ID>.json` in the repo working tree with the **Write tool** — never `jq --arg`
-or `echo` inside a Bash command: headlines and rationale contain apostrophes and backticks, and a file
-written by the Write tool has no shell quoting at all. One file per run, exactly this shape:
+Write the file at the `decisions_path` that Step 2 printed, with the **Write tool** — never `jq --arg`,
+`echo`, a heredoc or a script inside a Bash command: rationales contain apostrophes and backticks, and
+a file written by the Write tool has no shell quoting at all. One file per run, exactly this shape:
 
 ```json
 {
-  "schema": "judge-verdicts/v1",
-  "run_id": "<RUN_ID>",
-  "environment": "<test|prod>",
-  "dry_run": <true|false>,
-  "prompt_version": "judge-v1.2",
-  "candidates": <number of pairs Step 2 returned>,
-  "verdicts": [
+  "run_id": "<run_id from Step 2>",
+  "decisions": [
     {
       "story_id_a": <A>, "story_id_b": <B>,
-      "headline_a": "<A primary_headline snapshot>", "headline_b": "<B primary_headline snapshot>",
       "verdict": "merge|keep|uncertain",
       "confidence": 0.0,
       "rationale": "<one sentence>",
-      "centroid_sim": <from Step 2>,
-      "evidence_as_of": "<membership_seen_at from Step 2 for THIS pair, echoed verbatim — omit the key if the RPC did not return it>",
       "survivor_id": <older story id — merge verdicts only>,
       "loser_id": <newer story id — merge verdicts only>
     }
@@ -249,56 +256,47 @@ written by the Write tool has no shell quoting at all. One file per run, exactly
 }
 ```
 
-Rules the executor enforces — a file that breaks one is **rejected whole and nothing is written** (you
-get a failed-workflow Discord alert, never a partial run):
-
-- `environment` is `test` when `SUPABASE_URL` contains `wnrjrywpcadwutfykflu` (the TEST project),
-  otherwise `prod`. It must match the branch name in Step 7 and the database the workflow is wired to.
-- `dry_run` is `false` only when `JUDGE_DRY_RUN` is exactly the string `false` (Section 0).
 - **Every candidate pair from Step 2 appears exactly once** — `merge`, `keep` and `uncertain` alike. A
   pair you looked at and did NOT merge is exactly as important to record as one you did (audit trail
-  in the admin Judge tab, gold-set training data, and the verdict memory of the candidate RPC). No
-  duplicates, `story_id_a` ≠ `story_id_b`.
-- `merge` verdicts carry `survivor_id` / `loser_id` (Step 5); other verdicts omit them.
-- `confidence` is 0–1, `rationale` non-empty, headlines are **snapshots** taken now (after a merge the
-  loser's headline still lives in the log for review, even though the story row is tombstoned).
-- `candidates` is an integer and **equals the number of verdicts** — a file with fewer verdicts than
-  candidates (a run cut short) is rejected, not half-executed.
-- 0 candidates → `"verdicts": []` (the executor writes the run's heartbeat row).
+  in the admin Judge tab, gold-set training data, and the verdict memory of the candidate RPC). Use
+  the pair's ids exactly as Step 2 printed them.
+- `merge` decisions carry `survivor_id` / `loser_id` (Step 5); other decisions omit them.
+- `confidence` is 0–1 and `rationale` is one non-empty sentence.
+- 0 candidates → `"decisions": []`.
 
-Check it before publishing (`jq` reads only):
+Everything else in the executor's verdict file is filled in by the script, never by you: `schema`
+`judge-verdicts/v1`, `environment` (`test` when `SUPABASE_URL` contains `wnrjrywpcadwutfykflu`, the
+TEST project, otherwise `prod`), `dry_run` (`false` only when `JUDGE_DRY_RUN` is exactly `false`),
+`prompt_version`, `candidates` (which equals the number of verdicts: the executor rejects a file cut
+short, so the script refuses to publish while any pair lacks a decision), the headline **snapshots** and `centroid_sim` from the saved RPC rows,
+and each pair's `evidence_as_of` echoed verbatim. The script also puts `merge` verdicts first, highest
+confidence first, because the executor runs merges in file order under its cap.
 
-```bash
-jq '.verdicts | length' "judge-inbox/${RUN_ID}.json"                                   # = candidates
-jq '[.verdicts[] | select(.verdict=="merge")] | length' "judge-inbox/${RUN_ID}.json"   # merges you expect
-```
-
-### Step 7: Publish the verdict file (the only "write" you make)
-
-Commit the file on its own branch and push it. The branch name is the contract: the executor workflow
-(`.github/workflows/judge-executor.yml`) polls the `judge-run/**` branches on a schedule (three polls
-in the 90 minutes after each Judge run, but GitHub often starts them hours late, so never promise a
-time in a notification), reads the environment from the second path segment and the verdict file
-from the third. It runs from the default branch and copies **only that JSON file** out of your branch —
-nothing else on the branch is read or executed, so adding or changing any other file achieves nothing.
+### Step 7: Publish (the only "write" you make)
 
 ```bash
-# Clustering Judge hand-off (ADO-583): one verdict file on its own branch. The executor workflow
-# (.github/workflows/judge-executor.yml) performs the database writes with the service key from
-# GitHub secrets and deletes this branch when it is done. Nothing here touches the database.
-ENV_NAME=$([[ "${SUPABASE_URL}" == *wnrjrywpcadwutfykflu* ]] && echo test || echo prod)
-BRANCH="judge-run/${ENV_NAME}/${RUN_ID}"
-git checkout -q -b "${BRANCH}"
-git add "judge-inbox/${RUN_ID}.json"
-git -c user.name="Clustering Judge" -c user.email="judge@trumpytracker.local" commit -q -m "judge: verdicts ${RUN_ID} (${ENV_NAME})"
-git push -q origin "${BRANCH}"
-echo "published ${BRANCH}"
+node scripts/clustering/judge-publish.js publish <decisions_path>
 ```
 
-Expect `published judge-run/...` and a zero exit. Do not open a pull request, do not push to `main` or
-`test`, do not add or change any other file. If the push fails (network, auth), retry the `git push`
-ONCE; if it fails again, stop and send ONE push notification naming the branch and the error. Never
-try to write the verdicts to the database yourself instead.
+The script builds `judge-inbox/<run_id>.json` in the executor's schema, checks it with the executor's
+own validator, commits that one file on its own branch `judge-run/<env>/<run_id>` and pushes it (it
+retries the push once itself). It prints one JSON object:
+
+- `"ok": true, "published": "judge-run/..."` with the merge/keep/uncertain counts → done, go to Step 8.
+- `"ok": false` with `problems` (exit 2) → your decisions file is wrong (a missing or extra pair, a
+  merge without survivor/loser, a bad confidence...). **Nothing was written.** Fix the decisions file
+  with the Write tool and run the same `publish` command again. This is a validation answer, not a
+  sandbox denial, so fixing and re-running is expected.
+- `"ok": false` with a git or push error (exit 1) → stop and send ONE push notification naming the
+  branch and the error text. Never try to write the verdicts to the database yourself instead.
+
+The branch name is the contract: the executor workflow (`.github/workflows/judge-executor.yml`) polls
+the `judge-run/**` branches on a schedule (three polls in the 90 minutes after each Judge run, but
+GitHub often starts them hours late, so never promise a time in a notification), reads the
+environment from the second path segment and the verdict file from the third. It runs from the
+default branch and copies **only that JSON file** out of the branch — nothing else on the branch is
+read or executed. Do not open a pull request, do not push to `main` or `test`, do not add or change
+any other file.
 
 You do not wait for the workflow (it picks the branch up at its next poll, not at once). Its result shows in the repo's Actions tab ("Clustering Judge
 Executor"); `uncertain` verdicts arrive as a Discord digest, and a failed execution posts a Discord
@@ -385,9 +383,11 @@ sequence → keep, even if they share entities and sit minutes apart.
 - **RPC / network error on candidate fetch:** publish nothing, stop. Next run retries (idempotent).
 - **A single pair's article fetch fails:** record that pair as `uncertain`, rationale
   `"could not fetch member articles"`; continue to the next pair. Do not merge on missing evidence.
-- **`git push` fails (non-zero exit):** retry the push ONCE as-is. If it fails again, stop and send ONE
-  push notification that names the branch and the error text. Never fall back to writing the database
+- **`publish` reports a git or push error (exit 1; it already retried the push once):** stop and send
+  ONE push notification that names the branch and the error text. Never fall back to writing the database
   yourself — that is exactly the write the platform denies, and the executor is the only writer.
+- **`publish` rejects your decisions file (exit 2, `problems` listed):** nothing was written; fix the
+  file with the Write tool and run the same command again.
 - **The sandbox denies a command** (a tool result saying the action was denied by a permission
   classifier): do NOT rephrase, split, loop, or route the same action through another tool — that is
   exactly the workaround the denial forbids. Stop and send ONE push notification that names the denied
@@ -404,7 +404,8 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 - Service key for reads only; never echo it. All RPCs are `service_role`-locked (migration 100).
 - **This agent makes no database writes.** Its only side effect is one commit of
-  `judge-inbox/<RUN_ID>.json` pushed to `judge-run/<env>/<RUN_ID>` (Step 7). The executor workflow
+  `judge-inbox/<RUN_ID>.json` pushed to `judge-run/<env>/<RUN_ID>` by the Judge script (Step 7), plus
+  the decisions file it reads from the gitignored `.judge-work/` folder (never committed). The executor workflow
   writes `clustering_judge_log` (+ `merge_stories` in live mode) and posts the Discord digest using
   GitHub secrets. Neither writes editorial content, alarm levels, or `is_public`.
 - Never commit anything but the verdict file; never modify this prompt, the gold set, or a workflow
@@ -438,7 +439,7 @@ sequence → keep, even if they share entities and sit minutes apart.
 
 ## 8. Prompt Metadata
 
-- `prompt_version`: `judge-v1.2`
+- `prompt_version`: `judge-v1.3`
 - v1.1 (ADO-539): licensed-inference + format-variant merge rules; verdict memory moved into the
   candidate RPC (migration 106).
 - 2026-09-18 (ADO-583): write steps reshaped for the cloud sandbox's command screening — one labeled
@@ -450,6 +451,13 @@ sequence → keep, even if they share entities and sit minutes apart.
   `.github/workflows/judge-executor.yml` + `scripts/clustering/execute-judge-verdicts.js` execute the
   merges (cap 10, no chained merges in a run, a pair that fails twice → `uncertain`), log every
   verdict, write the heartbeat and post the Discord digest from GitHub secrets. Verdict rules unchanged.
+- 2026-10-15 (ADO-634, v1.3): the cloud classifier denied 6 of about 42 PROD runs (October 2-15) on
+  the improvised heredoc/node code the agent wrote to build the verdict file. Candidate fetch and
+  publish now go through one committed script, `scripts/clustering/judge-publish.js`, approved by the
+  exact rule `Bash(node scripts/clustering/judge-publish.js *)` in `.claude/settings.json` (playbook
+  option 2). The agent writes only a decisions file with the Write tool; the script fills in
+  headlines, `centroid_sim`, `evidence_as_of`, environment and mode, validates with the executor's own
+  validator, and pushes. Verdict rules and the executor are unchanged.
 - Model: Claude Sonnet (exact model id set at cron creation, session 2).
 - Log table: `clustering_judge_log` (migration 100). Merge machinery:
   `merge_stories(p_loser_id, p_survivor_id, p_run_id)` (migration 101 added `p_run_id` + a DB-side hard

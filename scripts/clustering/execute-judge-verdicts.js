@@ -70,7 +70,7 @@ export function envFromSupabaseUrl(url) {
 }
 
 const isPosInt = (n) => Number.isInteger(n) && n > 0;
-const pairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+export const pairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 
 /**
  * Validate the agent-written verdict file. Returns a list of problems (empty = valid).
