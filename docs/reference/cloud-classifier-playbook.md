@@ -37,7 +37,7 @@ does not run; the `!` has to be typed.
 ## Routine exposure, as of September 20, 2026 (election front row added October 1, 2026)
 | Routine (PROD) | Writes it makes | Under the September classifier |
 |---|---|---|
-| Clustering Judge `trig_01DDXZkpC9PkgTzU8wDdL9QM` | pushes one verdict branch | Denied September 16-19; passes since the `auto_mode_*` fields were set (hand-fired + scheduled run, both clean) |
+| Clustering Judge `trig_01DDXZkpC9PkgTzU8wDdL9QM` | pushes one verdict branch | Denied September 16-19; passed with the `auto_mode_*` fields until 6 of about 42 runs (October 2-15) were denied again on the agent's improvised verdict-file code ("Blind Apply", "Modify Shared Resources"). ADO-634 (PR #192): candidates + publish go through `scripts/clustering/judge-publish.js` under one exact allow rule (option 2) |
 | Stories `trig_0182WcUVyjF7Q5o2GWJMxbo1` | single-row PATCH to `stories`, log rows | Passing every 2 hours, 0 denials (last read: 10:26 PM CT September 19, 36 enriched) |
 | Pardons `trig_018LUznaUWwijFhMZLp8kYE2` | log POST/PATCH, content PATCH | Log writes pass. Content PATCH UNPROVEN: queue empty on every run since September 16 |
 | SCOTUS `trig_019eD3JTVeSajL4qTJJSC6tq` (weekdays) | log rows, content PATCH | Same: no denials, content PATCH UNPROVEN (empty queue) |
