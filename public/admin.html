@@ -757,8 +757,6 @@
         }
 
         .card-span-2 { grid-column: span 2; }
-        .attention-item-static { cursor: default; }
-        .attention-item-static:hover { transform: none; }
         .judge-row-btn {
             border: none;
             padding: 0.2rem 0.5rem;
@@ -5849,6 +5847,248 @@
             );
         }
 
+        // FeedsTab Component — RSS feed health + activate/deactivate + reset failures (ADO-343).
+        // Password-gated edge function (admin-feeds, service_role); feed_registry is not anon-readable.
+        // "Failing" uses the same rule as Home's "Feeds failed" (failure_count >= 5), so the counts match.
+        function FeedsTab({ password, supabase, filter, onFilterChange, onFeedsChanged }) {
+            const [data, setData] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [busyId, setBusyId] = useState(null);
+            const [confirmOffId, setConfirmOffId] = useState(null); // feed waiting for the second deactivate tap
+            const busyRef = useRef(false);
+            const fetchTokenRef = useRef(0);
+
+            // The "tap again" state lapses after a few seconds so a stray later tap can't deactivate.
+            useEffect(() => {
+                if (confirmOffId == null) return;
+                const t = setTimeout(() => setConfirmOffId(null), 4000);
+                return () => clearTimeout(t);
+            }, [confirmOffId]);
+
+            const FILTERS = [
+                { id: 'all', label: 'All' },
+                { id: 'failing', label: 'Failing' },
+                { id: 'silent', label: 'Silent' },
+                { id: 'inactive', label: 'Inactive' }
+            ];
+
+            const fetchFeeds = useCallback(async () => {
+                const token = ++fetchTokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const { data: result, error: fnError } = await supabase.functions.invoke('admin-feeds', {
+                        headers: { 'x-admin-password': password },
+                        body: { action: 'list' }
+                    });
+                    if (fnError) throw new Error(fnError.message || 'Failed to load feeds');
+                    if (token !== fetchTokenRef.current) return;
+                    setData(result);
+                } catch (err) {
+                    if (token === fetchTokenRef.current) setError(err.message);
+                } finally {
+                    if (token === fetchTokenRef.current) setLoading(false);
+                }
+            }, [password, supabase]);
+
+            useEffect(() => {
+                fetchFeeds();
+            }, [fetchFeeds]);
+
+            const runAction = async (feed, body, doneMessage) => {
+                if (busyRef.current) return;
+                busyRef.current = true;
+                setBusyId(feed.id);
+                setError(null);
+                setNotice(null);
+                try {
+                    const { data: result, error: fnError } = await supabase.functions.invoke('admin-feeds', {
+                        headers: { 'x-admin-password': password },
+                        body: { ...body, feed_id: feed.id }
+                    });
+                    if (fnError) {
+                        // Supabase-js wraps non-2xx as FunctionsHttpError — read the body so a 404's reason reaches the admin
+                        let errBody = null;
+                        try { if (fnError.context) errBody = await fnError.context.json(); } catch (_) {}
+                        if (errBody?.reason === 'feed_not_found') throw new Error('feed not found (deleted elsewhere?) - refresh the list');
+                        throw new Error(errBody?.error || errBody?.reason || fnError.message || 'Feed update failed');
+                    }
+                    if (!result?.ok) throw new Error(result?.reason || 'Feed update failed');
+                    setNotice(doneMessage);
+                    // Refetch so the filter counts (and the row's flags) stay exact, and refresh Home's
+                    // "Feeds failed" count too (it would otherwise wait for the 5-minute stats poll).
+                    await fetchFeeds();
+                    onFeedsChanged?.();
+                } catch (err) {
+                    setError(`${feed.feed_name}: ${err.message}`);
+                } finally {
+                    busyRef.current = false;
+                    setBusyId(null);
+                }
+            };
+
+            const formatAgo = (iso) => {
+                if (!iso) return '—';
+                const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+                if (mins < 1) return 'just now';
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 48) return `${hrs}h ago`;
+                return `${Math.floor(hrs / 24)}d ago`;
+            };
+
+            const feedStatus = (f) => {
+                if (f.failing) return { label: 'Failing', color: '#f87171' };
+                if (!f.is_active) return { label: 'Inactive', color: '#6b7280' };
+                if (f.silent) return { label: 'Silent', color: '#fbbf24' };
+                if (f.failure_count > 0) return { label: 'Degraded', color: '#fbbf24' };
+                return { label: 'OK', color: '#4ade80' };
+            };
+
+            const feeds = data?.feeds || [];
+            const failingThreshold = data?.failing_threshold ?? 5; // the server's rule, not a copy of it
+            const shown = feeds.filter(f =>
+                filter === 'failing' ? f.failing :
+                filter === 'silent' ? f.silent :
+                filter === 'inactive' ? !f.is_active : true
+            );
+            const missingRules = data?.compliance_available ? feeds.filter(f => f.is_active && !f.has_compliance_rule).length : 0;
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>RSS Feeds</span></h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {FILTERS.map(fl => (
+                                    <button
+                                        key={fl.id}
+                                        className={`tab-btn ${filter === fl.id ? 'active' : ''}`}
+                                        onClick={() => onFilterChange(fl.id)}
+                                        style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
+                                    >
+                                        {fl.label}{data ? ` (${data.counts[fl.id]})` : ''}
+                                    </button>
+                                ))}
+                                <button onClick={fetchFeeds} disabled={loading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    {loading ? '...' : '↻'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ background: '#111827', border: '1px solid #374151', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1d5db', lineHeight: '1.5' }}>
+                                <strong style={{ color: '#e5e7eb' }}>Failing</strong> = an active feed with {data?.failing_threshold ?? 5}+ failed fetches in a row (the same count as Home's "Feeds failed"; a deactivated feed shows under Inactive). The pipeline retries a failing feed once a day; <strong style={{ color: '#e5e7eb' }}>reset failures</strong> puts it back on the normal schedule from the next run. <strong style={{ color: '#e5e7eb' }}>Silent</strong> = active, but the newest item in the feed is more than {data?.silent_days ?? 7} days old (frozen or moved feed). Adding a feed is still a SQL task.
+                            </div>
+
+                            {data && !data.compliance_available && (
+                                <div style={{ background: '#422006', border: '1px solid #b45309', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#fde68a', lineHeight: '1.5' }}>
+                                    {data.compliance_status === 'error'
+                                        ? <>Couldn't read the compliance rules just now, so the Rule column shows "—". Refresh to try again.</>
+                                        : <>This database has no <code>feed_compliance_rules</code> table, so every feed uses the fetcher's default 5,000-character excerpt cap. The Rule column shows "—" (ADO-633).</>}
+                                </div>
+                            )}
+                            {missingRules > 0 && (
+                                <div style={{ background: '#422006', border: '1px solid #b45309', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#fde68a' }}>
+                                    {missingRules} active feed{missingRules === 1 ? ' has' : 's have'} no compliance rule (marked <strong>missing</strong> below). Every feed needs one; see docs/database/database-schema.md.
+                                </div>
+                            )}
+
+                            {notice && <div style={{ background: '#064e3b', border: '1px solid #10b981', borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', color: '#d1fae5' }}>{notice}</div>}
+                            {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                            {loading && !data ? (
+                                <div className="loading"><div className="spinner"></div>Loading…</div>
+                            ) : data ? (
+                                shown.length === 0 ? (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                                        {filter === 'failing' ? 'No failing feeds.' : filter === 'silent' ? 'No silent feeds.' : filter === 'inactive' ? 'No inactive feeds.' : 'No feeds.'}
+                                    </div>
+                                ) : (
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                            <thead>
+                                                <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Feed</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Status</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Tier</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Failures</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Last fetch</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Last failure</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Newest item</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Rule</th>
+                                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {shown.map(f => {
+                                                    const st = feedStatus(f);
+                                                    const busy = busyId === f.id;
+                                                    return (
+                                                        <tr key={f.id} style={{ borderBottom: '1px solid #1f2937' }}>
+                                                            <td className="cell-wide" data-label="Feed" style={{ padding: '0.5rem', color: '#e5e7eb', maxWidth: '280px' }}>
+                                                                <div><span style={{ color: '#6b7280' }}>#{f.id}</span> {f.feed_name}</div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.feed_url}>
+                                                                    {f.source_name || '—'}{f.is_opinion_source ? ' · opinion' : ''} · {f.feed_url}
+                                                                </div>
+                                                            </td>
+                                                            <td data-label="Status" style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: st.color, fontWeight: 600 }}>{st.label}</td>
+                                                            <td data-label="Tier" style={{ padding: '0.5rem', color: '#9ca3af' }}>{f.tier ?? '—'}</td>
+                                                            <td data-label="Failures" style={{ padding: '0.5rem', color: f.failure_count > 0 ? '#fbbf24' : '#9ca3af' }}>{f.failure_count ?? 0}</td>
+                                                            <td data-label="Last fetch" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatAgo(f.last_fetched_at)}</td>
+                                                            <td data-label="Last failure" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{formatAgo(f.last_failed_at)}</td>
+                                                            <td data-label="Newest item" style={{ padding: '0.5rem', color: f.silent ? '#fbbf24' : '#d1d5db', whiteSpace: 'nowrap' }}>{formatAgo(f.last_item_published_at)}</td>
+                                                            <td data-label="Rule" style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: f.has_compliance_rule === false ? '#f87171' : '#9ca3af' }}>
+                                                                {f.has_compliance_rule == null ? '—' : f.has_compliance_rule ? '✓' : 'missing'}
+                                                            </td>
+                                                            <td className="cell-actions" style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                                                <div className="row-actions" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                                                    <button
+                                                                        className="judge-row-btn"
+                                                                        disabled={busy || busyId != null}
+                                                                        onClick={() => {
+                                                                            // Deactivate takes a second tap: it stops a source quietly (the feed also drops out of the Discord health checks).
+                                                                            if (f.is_active && confirmOffId !== f.id) { setConfirmOffId(f.id); return; }
+                                                                            setConfirmOffId(null);
+                                                                            runAction(f, { action: 'set_active', is_active: !f.is_active }, f.is_active
+                                                                                ? `${f.feed_name} deactivated. The pipeline stops fetching it and the health checks stop watching it.`
+                                                                                : `${f.feed_name} activated. ${f.failure_count >= failingThreshold ? `It still has ${failingThreshold}+ failures, so it is fetched only by the once-a-day retry; reset failures to fetch it on every run.` : 'It is fetched on the next RSS run.'}`);
+                                                                        }}
+                                                                        style={{ background: confirmOffId === f.id ? '#991b1b' : f.is_active ? '#374151' : '#065f46', color: '#e5e7eb' }}
+                                                                        title={f.is_active ? 'Stop fetching this feed (asks to confirm)' : 'Start fetching this feed again'}
+                                                                    >
+                                                                        {busy ? '…' : confirmOffId === f.id ? 'tap again to deactivate' : f.is_active ? 'deactivate' : 'activate'}
+                                                                    </button>
+                                                                    {f.failure_count > 0 && (
+                                                                        <button
+                                                                            className="judge-row-btn"
+                                                                            disabled={busy || busyId != null}
+                                                                            onClick={() => runAction(f, { action: 'reset_failures' }, f.is_active
+                                                                                ? `${f.feed_name}: failure count reset. It is fetched normally from the next RSS run.`
+                                                                                : `${f.feed_name}: failure count reset. It is still inactive, so it is not fetched until you activate it.`)}
+                                                                            style={{ background: '#1e3a8a', color: '#dbeafe' }}
+                                                                            title="Set the failure count to 0 so the feed is fetched on the normal schedule again"
+                                                                        >
+                                                                            reset failures
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
         function JudgeTab({ password, supabase, onReviewCount }) {
@@ -6436,6 +6676,7 @@
             const [error, setError] = useState(null);
             const [lastRefresh, setLastRefresh] = useState(null);
             const [judgeReviewCount, setJudgeReviewCount] = useState(null); // null = unknown (fetch failed)
+            const [feedsFilter, setFeedsFilter] = useState('all'); // Feeds tab filter; Home's "Feeds failed" row opens 'failing'
             const refreshIntervalRef = useRef(null);
 
             // Auth state
@@ -6624,7 +6865,7 @@
                 // Process feeds
                 const feeds = feedsData.data || [];
                 const feedsActive = feeds.filter(f => f.is_active && f.failure_count < 5).length;
-                const feedsFailed = feeds.filter(f => f.failure_count >= 5).length;
+                const feedsFailed = feeds.filter(f => f.is_active && f.failure_count >= 5).length; // active only, same as admin-stats
 
                 // Process pardons
                 const pardons = pardonsData.data || [];
@@ -6788,7 +7029,7 @@
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders' },
-                { id: 'feeds', label: 'Feeds', disabled: true },
+                { id: 'feeds', label: 'Feeds' },
                 { id: 'skips', label: 'Failures' },
                 { id: 'social', label: 'Social' }
             ];
@@ -6854,7 +7095,12 @@
                             <button
                                 key={tab.id}
                                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                                onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                                onClick={() => {
+                                    if (tab.disabled) return;
+                                    // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
+                                    if (tab.id === 'feeds' && activeTab !== 'feeds') setFeedsFilter('all');
+                                    setActiveTab(tab.id);
+                                }}
                                 disabled={tab.disabled}
                                 title={tab.disabled ? 'Coming soon' : ''}
                             >
@@ -6984,7 +7230,7 @@
                                                 {stats.needs_attention?.breakdown?.executive_orders_needs_review ?? 0}
                                             </span>
                                         </div>
-                                        <div className="attention-item attention-item-static" title="Feeds with 5+ consecutive failures (the Feeds tab is coming)">
+                                        <div className="attention-item" title="Active feeds with 5+ failed fetches in a row" onClick={() => { setFeedsFilter('failing'); setActiveTab('feeds'); }}>
                                             <span>Feeds failed</span>
                                             <span className={`attention-count ${stats.needs_attention.breakdown.feeds_failed === 0 ? 'zero' : ''}`}>
                                                 {stats.needs_attention.breakdown.feeds_failed}
@@ -7104,6 +7350,10 @@
                             <PardonsTab password={password} supabase={supabase} />
                         )}
 
+                        {activeTab === 'feeds' && (
+                            <FeedsTab password={password} supabase={supabase} filter={feedsFilter} onFilterChange={setFeedsFilter} onFeedsChanged={fetchStats} />
+                        )}
+
                         {activeTab === 'skips' && (
                             <SkipsTab password={password} supabase={supabase} />
                         )}
@@ -7124,7 +7374,7 @@
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'social' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'social' && activeTab !== 'feeds' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
