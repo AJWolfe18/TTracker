@@ -91,6 +91,9 @@ Deno.serve(async (req) => {
     } catch (_) {
       return jsonResponse({ error: 'Invalid JSON body' }, 400)
     }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return jsonResponse({ error: 'Body must be a JSON object' }, 400)
+    }
 
     const action = String(body.action || 'list').trim()
     if (action !== 'list' && action !== 'set_active' && action !== 'reset_failures') {

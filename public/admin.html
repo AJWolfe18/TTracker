@@ -5908,7 +5908,13 @@
                         headers: { 'x-admin-password': password },
                         body: { ...body, feed_id: feed.id }
                     });
-                    if (fnError) throw new Error(fnError.message || 'Feed update failed');
+                    if (fnError) {
+                        // Supabase-js wraps non-2xx as FunctionsHttpError — read the body so a 404's reason reaches the admin
+                        let errBody = null;
+                        try { if (fnError.context) errBody = await fnError.context.json(); } catch (_) {}
+                        if (errBody?.reason === 'feed_not_found') throw new Error('feed not found (deleted elsewhere?) - refresh the list');
+                        throw new Error(errBody?.error || errBody?.reason || fnError.message || 'Feed update failed');
+                    }
                     if (!result?.ok) throw new Error(result?.reason || 'Feed update failed');
                     setNotice(doneMessage);
                     // Refetch so the filter counts (and the row's flags) stay exact.
@@ -5940,6 +5946,7 @@
             };
 
             const feeds = data?.feeds || [];
+            const failingThreshold = data?.failing_threshold ?? 5; // the server's rule, not a copy of it
             const shown = feeds.filter(f =>
                 filter === 'failing' ? f.failing :
                 filter === 'silent' ? f.silent :
@@ -6044,7 +6051,7 @@
                                                                             setConfirmOffId(null);
                                                                             runAction(f, { action: 'set_active', is_active: !f.is_active }, f.is_active
                                                                                 ? `${f.feed_name} deactivated. The pipeline stops fetching it and the health checks stop watching it.`
-                                                                                : `${f.feed_name} activated. ${f.failure_count >= 5 ? 'It still has 5+ failures, so it waits for the daily retry; reset failures to fetch it on the next run.' : 'It is fetched on the next RSS run.'}`);
+                                                                                : `${f.feed_name} activated. ${f.failure_count >= failingThreshold ? `It still has ${failingThreshold}+ failures, so it is fetched only by the once-a-day retry; reset failures to fetch it on every run.` : 'It is fetched on the next RSS run.'}`);
                                                                         }}
                                                                         style={{ background: confirmOffId === f.id ? '#991b1b' : f.is_active ? '#374151' : '#065f46', color: '#e5e7eb' }}
                                                                         title={f.is_active ? 'Stop fetching this feed (asks to confirm)' : 'Start fetching this feed again'}
@@ -6055,7 +6062,9 @@
                                                                         <button
                                                                             className="judge-row-btn"
                                                                             disabled={busy || busyId != null}
-                                                                            onClick={() => runAction(f, { action: 'reset_failures' }, `${f.feed_name}: failure count reset. It is fetched normally from the next RSS run.`)}
+                                                                            onClick={() => runAction(f, { action: 'reset_failures' }, f.is_active
+                                                                                ? `${f.feed_name}: failure count reset. It is fetched normally from the next RSS run.`
+                                                                                : `${f.feed_name}: failure count reset. It is still inactive, so it is not fetched until you activate it.`)}
                                                                             style={{ background: '#1e3a8a', color: '#dbeafe' }}
                                                                             title="Set the failure count to 0 so the feed is fetched on the normal schedule again"
                                                                         >
@@ -7084,7 +7093,12 @@
                             <button
                                 key={tab.id}
                                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                                onClick={() => !tab.disabled && setActiveTab(tab.id)}
+                                onClick={() => {
+                                    if (tab.disabled) return;
+                                    // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
+                                    if (tab.id === 'feeds' && activeTab !== 'feeds') setFeedsFilter('all');
+                                    setActiveTab(tab.id);
+                                }}
                                 disabled={tab.disabled}
                                 title={tab.disabled ? 'Coming soon' : ''}
                             >
