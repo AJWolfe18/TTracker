@@ -5850,7 +5850,7 @@
         // FeedsTab Component — RSS feed health + activate/deactivate + reset failures (ADO-343).
         // Password-gated edge function (admin-feeds, service_role); feed_registry is not anon-readable.
         // "Failing" uses the same rule as Home's "Feeds failed" (failure_count >= 5), so the counts match.
-        function FeedsTab({ password, supabase, filter, onFilterChange }) {
+        function FeedsTab({ password, supabase, filter, onFilterChange, onFeedsChanged }) {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -5917,8 +5917,10 @@
                     }
                     if (!result?.ok) throw new Error(result?.reason || 'Feed update failed');
                     setNotice(doneMessage);
-                    // Refetch so the filter counts (and the row's flags) stay exact.
+                    // Refetch so the filter counts (and the row's flags) stay exact, and refresh Home's
+                    // "Feeds failed" count too (it would otherwise wait for the 5-minute stats poll).
                     await fetchFeeds();
+                    onFeedsChanged?.();
                 } catch (err) {
                     setError(`${feed.feed_name}: ${err.message}`);
                 } finally {
@@ -7349,7 +7351,7 @@
                         )}
 
                         {activeTab === 'feeds' && (
-                            <FeedsTab password={password} supabase={supabase} filter={feedsFilter} onFilterChange={setFeedsFilter} />
+                            <FeedsTab password={password} supabase={supabase} filter={feedsFilter} onFilterChange={setFeedsFilter} onFeedsChanged={fetchStats} />
                         )}
 
                         {activeTab === 'skips' && (
