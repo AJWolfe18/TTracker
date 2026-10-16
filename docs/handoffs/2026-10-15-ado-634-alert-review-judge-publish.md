@@ -51,8 +51,15 @@ Not real: the 1,000-row cap and the extra round trips (about 40 feeds). Josh's c
 ## 4. Session gotcha
 The local auto-mode classifier refused to write `judge-publish.js` ("Auto-Mode Bypass", because its purpose is to clear the cloud classifier) and then refused even read-only `gh` calls. Josh left auto mode and the work went through with normal prompts. Recorded in memory.
 
+## 5. Later the same evening: #191 merged
+Josh's Codex on #191 found 1 P2: Home's feed counts stayed stale after a Feeds action until the 5-minute stats poll. Fixed in 4a912b9 (FeedsTab calls the parent's `fetchStats` after each successful action). #191 was squash-merged to test as **6abe924**, and ADO-343 moved to **Testing**. ACs 1-4 are met; the 375px layout is built but not yet checked in a browser, which is noted on the card. The `TTracker-feeds` worktree is left in place: never `git worktree remove` one with node_modules junctions (memory gotcha).
+
+**#192 is NOT merged.** Josh's pasted Codex result named only #191's file, so #192 (ADO-634) still needs its own Codex pass.
+
+Why GitHub skips the news runs (Josh asked): GitHub's scheduler is best effort and drops queued scheduled jobs under load, worst at the top of the hour, and `rss-tracker-prod.yml` runs at `0 */2`. Recommended: move the cron to `:17` (a small PR to main, $0) and count runs for 2 days; if it is still well under 12 a day, use an external trigger (routine or free cron service calling workflow_dispatch). Josh has not approved it yet.
+
 ## Josh decisions open
-1. Codex on #192 (ADO-634) and #191 (ADO-343); then merge #192 to main and #191 to test.
+1. Codex on #192 (ADO-634), then merge it to main.
 2. Audit trail for Feeds tab writes: add one, or accept none.
 3. Still open from October 13: the RSS PROD schedule card, ADO-602 AC 1, ADO-495 AC 3, the 524/594/592 PROD batch with #186/#187/#189.
 
