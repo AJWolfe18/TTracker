@@ -8,6 +8,7 @@
     "allow": [
       "Bash(*)",
       "Bash(node scripts/fronts/front-agent-db.js *)",
+      "Bash(node scripts/clustering/judge-publish.js *)",
       "PowerShell(*)",
       "mcp__memory-global__read_graph",
       "mcp__memory-global__search_nodes",

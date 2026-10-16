@@ -112,3 +112,6 @@ TEST_FILES_DO_NOT_DEPLOY.md
 
 # Local Netlify folder
 .netlify
+
+# Clustering Judge scratch (ADO-634): saved candidates + the agent's decisions file, never committed
+.judge-work/
