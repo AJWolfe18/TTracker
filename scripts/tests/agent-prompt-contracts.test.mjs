@@ -86,15 +86,23 @@ assert.ok(!judge.includes('rpc/merge_stories'), 'the prompt must not show a merg
 assert.ok(!/-X POST "\$\{API_BASE\}\/clustering_judge_log"/.test(judge), 'the prompt must not show a clustering_judge_log insert');
 assert.ok(!judge.includes('-X PATCH') && !judge.includes('-X DELETE'), 'no PATCH/DELETE shapes in the prompt');
 assert.ok(judge.includes('You do NOT call `merge_stories`'), 'Step 5 forbids the merge call outright');
-assert.ok(judge.includes('judge-inbox/<RUN_ID>.json') && judge.includes('"schema": "judge-verdicts/v1"'), 'Step 6 writes the verdict file in the executor schema');
+assert.ok(judge.includes('judge-inbox/<run_id>.json') && judge.includes('`judge-verdicts/v1`'), 'the Judge script writes the verdict file in the executor schema');
 assert.ok(judge.includes('"survivor_id"') && judge.includes('"loser_id"'), 'merge verdicts carry survivor/loser for the executor');
-assert.ok(judge.includes('BRANCH="judge-run/${ENV_NAME}/${RUN_ID}"') && judge.includes('git push -q origin "${BRANCH}"'), 'Step 7 publishes on the judge-run/<env>/<run_id> branch the workflow listens to');
 assert.ok(judge.includes('wnrjrywpcadwutfykflu'), 'environment is derived from the TEST project ref, never a PROD ref');
-assert.ok(judge.includes('with the **Write tool**'), 'verdict file is written with the Write tool, not jq --arg in Bash');
+assert.ok(judge.includes('with the **Write tool**'), 'decisions file is written with the Write tool, not jq --arg in Bash');
+// ADO-634: candidate fetch + publish go through one committed script under one exact allow rule
+const judgePublish = read('../clustering/judge-publish.js');
+const settings = JSON.parse(read('../../.claude/settings.json'));
+assert.ok(settings.permissions.allow.includes('Bash(node scripts/clustering/judge-publish.js *)'), 'settings approve the Judge script by exact prefix');
+assert.ok(judge.includes('node scripts/clustering/judge-publish.js candidates') && judge.includes('node scripts/clustering/judge-publish.js publish <decisions_path>'), 'Steps 2 and 7 call the Judge script');
+assert.ok(!judge.includes('rpc/get_clustering_judge_candidates') && !/git (push|commit|checkout)/.test(judge), 'the prompt shows no candidate curl and no git write of its own');
+assert.ok(judge.includes('Never write your own script, heredoc'), 'the prompt forbids improvised build/publish code');
+assert.ok(judgePublish.includes("'judge-run/") || judgePublish.includes('`judge-run/${'), 'the script publishes on the judge-run/<env>/<run_id> branch the workflow listens to');
+assert.ok(!/^import .* from '(?!node:|\.)/m.test(judgePublish), 'the Judge script is dependency-free (the cloud sandbox has no npm install)');
 assert.ok(judge.includes('do NOT rephrase, split, loop, or route the same action'), 'denial rule must forbid workarounds');
 assert.ok(/Never fall back to writing the database\s+yourself/.test(judge), 'a failed push never turns into a direct DB write');
 assert.ok(judge.includes('`"verdicts": []`'), '0 candidates still publishes a file so the executor writes the heartbeat');
-assert.ok(judge.includes('`prompt_version`: `judge-v1.2`'), 'prompt version bumped for the executor hand-off');
+assert.ok(judge.includes('`prompt_version`: `judge-v1.3`') && judgePublish.includes("PROMPT_VERSION = 'judge-v1.3'"), 'prompt version bumped for the Judge script (ADO-634), and the script stamps the same one');
 // executor + workflow implement the same contract
 assert.ok(executor.includes("SCHEMA = 'judge-verdicts/v1'"), 'executor validates the schema the prompt writes');
 assert.ok(executor.includes("'merge_stories'") && executor.includes('p_run_id: runId'), 'executor merges through merge_stories with the DB cap');
