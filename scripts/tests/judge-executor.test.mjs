@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  SCHEMA, MERGE_CAP, validateVerdictFile, mergeDecision, buildLogRow, heartbeatRow,
+  SCHEMA, MERGE_CAP, RUN_ID_RE, validateVerdictFile, mergeDecision, buildLogRow, heartbeatRow,
   deferredRationale, buildDigest, envFromSupabaseUrl, executeVerdicts, chooseSurvivor, makeClient,
 } from '../clustering/execute-judge-verdicts.js';
 import { parseInboxBranch, actionForExit, MAX_FILE_BYTES } from '../clustering/process-judge-inbox.js';
@@ -397,6 +397,72 @@ const quiet = () => {};
   const prompt = readFileSync(new URL('../../docs/features/clustering-judge/prompt-v1.md', import.meta.url), 'utf8');
   assert.ok(!prompt.includes('DISCORD_WEBHOOK_SET') && !prompt.includes('pings a human (Step 7)') && !prompt.includes('no DB writes, no log rows'));
   assert.ok(prompt.includes('equals the number of verdicts'), 'prompt states the candidates rule the executor enforces');
+}
+
+// --- ADO-634: judge-publish.js builds the executor's file from the saved RPC rows + agent decisions ---
+{
+  const { buildVerdictFile, newRunId, runDir, PROMPT_VERSION, RPC_ARGS } = await import('../clustering/judge-publish.js');
+  const { spawnSync } = await import('node:child_process');
+  const TEST_URL = 'https://wnrjrywpcadwutfykflu.supabase.co';
+  const PROD_URL = 'https://example-prod.supabase.co';
+  const cand = (a, b, extra = {}) => ({ story_id_a: a, story_id_b: b, headline_a: `Nation's A${a}`, headline_b: `B${b}`,
+    centroid_sim: 0.9, shared_entities: [], shared_slugs: [], membership_seen_at: '2026-10-15T05:00:00.123+00:00', ...extra });
+  const dec = (a, b, verdict, extra = {}) => ({ story_id_a: a, story_id_b: b, verdict, confidence: 0.8, rationale: `r ${a}/${b}`, ...extra });
+  const cands = [cand(1, 2), cand(3, 4), cand(5, 6, { membership_seen_at: null }), cand(7, 8)];
+  const decisions = { run_id: RUN, decisions: [
+    dec(2, 1, 'keep'), // reversed ids still match the candidate pair
+    dec(3, 4, 'merge', { confidence: 0.7, survivor_id: 3, loser_id: 4 }),
+    dec(5, 6, 'uncertain'),
+    dec(7, 8, 'merge', { confidence: 0.95, survivor_id: 7, loser_id: 8 }),
+  ] };
+
+  const { doc: d, problems } = buildVerdictFile(cands, decisions, { supabaseUrl: TEST_URL, judgeDryRun: 'false' });
+  assert.deepEqual(problems, []);
+  assert.equal(d.schema, SCHEMA); assert.equal(d.environment, 'test'); assert.equal(d.dry_run, false);
+  assert.equal(d.prompt_version, PROMPT_VERSION); assert.equal(d.candidates, 4); assert.equal(d.verdicts.length, 4);
+  // merges first, highest confidence first; the rest keep RPC order
+  assert.deepEqual(d.verdicts.map((v) => `${v.story_id_a}-${v.story_id_b}:${v.verdict}`), ['7-8:merge', '3-4:merge', '1-2:keep', '5-6:uncertain']);
+  // headlines, sim and evidence come from the RPC rows (ids in RPC orientation); a null watermark is omitted
+  const keep12 = d.verdicts[2];
+  assert.equal(keep12.headline_a, "Nation's A1"); assert.equal(keep12.evidence_as_of, '2026-10-15T05:00:00.123+00:00'); assert.equal(keep12.centroid_sim, 0.9);
+  assert.ok(!('evidence_as_of' in d.verdicts[3])); assert.ok(!('survivor_id' in keep12));
+  assert.deepEqual(validateVerdictFile(d, { expectedEnv: 'test', supabaseUrl: TEST_URL }), [], 'the built file passes the executor validator');
+  // mode and environment come from the environment, never the agent
+  assert.equal(buildVerdictFile(cands, decisions, { supabaseUrl: TEST_URL, judgeDryRun: undefined }).doc.dry_run, true);
+  assert.equal(buildVerdictFile(cands, decisions, { supabaseUrl: TEST_URL, judgeDryRun: 'FALSE' }).doc.dry_run, true);
+  assert.equal(buildVerdictFile(cands, decisions, { supabaseUrl: PROD_URL, judgeDryRun: 'false' }).doc.environment, 'prod');
+
+  const probs = (ds, c = cands) => buildVerdictFile(c, { run_id: RUN, decisions: ds }, { supabaseUrl: TEST_URL, judgeDryRun: 'false' }).problems;
+  assert.ok(probs(decisions.decisions.slice(1)).some((p) => p.includes('no decision for 1') && p.includes('1:2')), 'a missing pair blocks publishing');
+  assert.ok(probs([...decisions.decisions, dec(9, 10, 'keep')]).some((p) => p.includes('not one of this run')), 'an invented pair blocks publishing');
+  assert.ok(probs([...decisions.decisions, dec(1, 2, 'keep')]).some((p) => p.includes('more than one decision')));
+  assert.ok(probs([dec(1, 2, 'merge'), ...decisions.decisions.slice(1)]).some((p) => p.includes('survivor_id')), 'merge without survivor/loser is caught by the executor validator');
+  assert.ok(probs([dec(1, 2, 'keep', { confidence: 2 }), ...decisions.decisions.slice(1)]).some((p) => p.includes('confidence')));
+  assert.ok(probs([dec(1, 2, 'keep', { rationale: '' }), ...decisions.decisions.slice(1)]).some((p) => p.includes('rationale')));
+  assert.ok(buildVerdictFile(cands, { run_id: RUN }, { supabaseUrl: TEST_URL }).problems[0].includes('decisions file must be'));
+  assert.ok(buildVerdictFile(cands, { run_id: 'judge-x', decisions: decisions.decisions }, { supabaseUrl: TEST_URL }).problems.some((p) => p.includes('run_id')));
+  // 0 candidates -> empty verdicts, heartbeat-shaped file
+  const empty = buildVerdictFile([], { run_id: RUN, decisions: [] }, { supabaseUrl: TEST_URL, judgeDryRun: 'false' });
+  assert.deepEqual(empty.problems, []); assert.equal(empty.doc.candidates, 0); assert.deepEqual(empty.doc.verdicts, []);
+
+  assert.match(newRunId(new Date('2026-10-15T05:12:42.669Z')), /^judge-2026-10-15T05-12-42\.669Z$/);
+  assert.ok(RUN_ID_RE.test(newRunId()));
+  assert.ok(runDir(RUN, '/w').replace(/\\/g, '/').endsWith(`/w/${RUN}`));
+  assert.ok(runDir(RUN).replace(/\\/g, '/').includes('/.judge-work/'), 'scratch lives in the gitignored repo folder, not /tmp');
+  assert.ok(readFileSync(new URL('../../.gitignore', import.meta.url), 'utf8').includes('.judge-work/'));
+  // review fixes: string ids are named as such; validator problems name the pair, not a sorted index
+  assert.ok(probs([dec('1', '2', 'keep'), ...decisions.decisions.slice(1)]).some((p) => p.includes('JSON numbers')));
+  assert.ok(probs([...decisions.decisions.slice(0, 3), dec(7, 8, 'merge', { survivor_id: 7, loser_id: 7 })]).some((p) => p.startsWith('pair 7:8:')));
+  assert.deepEqual({ ...RPC_ARGS }, { p_min_sim: 0.83, p_days: 7, p_max_pairs: 30 }, 'production knobs are fixed in the script');
+
+  // CLI: usage and validation errors exit 2 before touching git or the network
+  const { fileURLToPath } = await import('node:url');
+  const cli = (args, env = {}) => spawnSync(process.execPath, [fileURLToPath(new URL('../clustering/judge-publish.js', import.meta.url)), ...args],
+    { encoding: 'utf8', env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, ...env } });
+  assert.equal(cli([]).status, 2);
+  assert.equal(cli(['candidates']).status, 2, 'missing SUPABASE env is a usage error');
+  const r = cli(['publish', 'no-such-file.json'], { SUPABASE_URL: TEST_URL, SUPABASE_SERVICE_ROLE_KEY: 'x' });
+  assert.equal(r.status, 2); assert.ok(JSON.parse(r.stdout).error.includes('cannot read'));
 }
 
 console.log('judge-executor: all checks passed');
