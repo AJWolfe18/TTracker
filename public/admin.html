@@ -5877,7 +5877,7 @@
 
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
-        function JudgeTab({ password, supabase, onReviewCount }) {
+        function JudgeTab({ password, supabase, onReviewCount, onReviewChanged }) {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -5975,6 +5975,14 @@
                 return { survivor, loser };
             };
 
+            // After a successful dismiss/merge/unmerge: reload this list AND Home's global count.
+            // The list's own count only covers the unfiltered review view, so a filtered action
+            // (e.g. source = judge-agent) would otherwise leave Home stale.
+            const refreshAfterAction = () => {
+                fetchVerdicts();
+                onReviewChanged?.();
+            };
+
             const callJudgeMerge = async (action, survivorId, loserId) => {
                 manualBusyRef.current = true;
                 setManualBusy(true);
@@ -6032,14 +6040,14 @@
                 if (result.ok && result.skipped) {
                     // Double-submit or already-merged loser: the merge already happened — report as done, not as an error.
                     setManualResult(`Story was already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do.`);
-                    fetchVerdicts();
+                    refreshAfterAction();
                     return;
                 }
                 if (result.ok && !result.skipped) {
                     setManualResult(`Merged #${result.loser_id} into #${result.survivor_id} — ${result.articles_moved} article${result.articles_moved === 1 ? '' : 's'} moved, survivor now has ${result.survivor_source_count} source${result.survivor_source_count === 1 ? '' : 's'}.${result.log_error ? ' (Warning: Judge log write failed — merge itself succeeded.)' : ''}`);
                     setManualSurvivor('');
                     setManualLoser('');
-                    fetchVerdicts();
+                    refreshAfterAction();
                 } else {
                     setManualError(`Merge not executed: ${result.reason || 'unknown reason'}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
                 }
@@ -6075,7 +6083,7 @@
                 setUnmergeRow(null);
                 if (result.ok) {
                     setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.`);
-                    fetchVerdicts();
+                    refreshAfterAction();
                 } else {
                     const reasons = {
                         not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
@@ -6099,7 +6107,7 @@
                 if (!result) return; // error already shown
                 if (result.ok) {
                     setManualResult(`Dismissed — #${row.story_id_a} and #${row.story_id_b} stay separate. The Judge won't raise this pair again unless a new article joins either story.`);
-                    fetchVerdicts();
+                    refreshAfterAction();
                 } else {
                     setManualError(`Dismiss not executed: ${result.reason || 'unknown reason'}`);
                 }
@@ -7144,7 +7152,7 @@
                         )}
 
                         {activeTab === 'judge' && (
-                            <JudgeTab password={password} supabase={supabase} onReviewCount={setJudgeReviewCount} />
+                            <JudgeTab password={password} supabase={supabase} onReviewCount={setJudgeReviewCount} onReviewChanged={fetchJudgeReviewCount} />
                         )}
 
                         {activeTab === 'eos' && (
