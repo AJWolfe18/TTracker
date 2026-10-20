@@ -6091,7 +6091,7 @@
 
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
-        function JudgeTab({ password, supabase, onReviewCount, onReviewChanged }) {
+        function JudgeTab({ password, supabase, onReviewChanged }) {
             const [data, setData] = useState(null);
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
@@ -6157,14 +6157,12 @@
                         throw new Error('The Needs review list needs the latest admin-judge-log edge function. Deploy it, then refresh.');
                     }
                     setData(result);
-                    // Keep the Home "Judge pairs to review" count in step after a dismiss or merge.
-                    if (reviewView && !sourceFilter && onReviewCount) onReviewCount(result.total_count ?? 0);
                 } catch (err) {
                     if (token === fetchTokenRef.current) setError(err.message);
                 } finally {
                     if (token === fetchTokenRef.current) setLoading(false);
                 }
-            }, [view, hours, verdictFilter, sourceFilter, storyFilter, password, supabase, onReviewCount]);
+            }, [view, hours, verdictFilter, sourceFilter, storyFilter, password, supabase]);
 
             useEffect(() => {
                 fetchVerdicts();
@@ -6189,9 +6187,8 @@
                 return { survivor, loser };
             };
 
-            // After a successful dismiss/merge/unmerge: reload this list AND Home's global count.
-            // The list's own count only covers the unfiltered review view, so a filtered action
-            // (e.g. source = judge-agent) would otherwise leave Home stale.
+            // After a successful dismiss/merge/unmerge: reload this list AND Home's global count
+            // (Home's count is always the unfiltered total, whatever filter this list has on).
             const refreshAfterAction = () => {
                 fetchVerdicts();
                 onReviewChanged?.();
@@ -6686,6 +6683,7 @@
             const [judgeReviewCount, setJudgeReviewCount] = useState(null); // null = unknown (fetch failed)
             const [feedsFilter, setFeedsFilter] = useState('all'); // Feeds tab filter; Home's "Feeds failed" row opens 'failing'
             const refreshIntervalRef = useRef(null);
+            const judgeCountTokenRef = useRef(0); // only the newest Judge-count request may set the count
 
             // Auth state
             const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -6822,17 +6820,20 @@
             }, [supabase, password]);
 
             // Judge pairs waiting on a human decision (same list as the Judge tab's "Needs review" view)
+            // Called by the stats poll and after Judge-tab actions; a stale poll reply landing after an
+            // action's refresh must not put the old count back, so older responses are dropped.
             const fetchJudgeReviewCount = async () => {
+                const token = ++judgeCountTokenRef.current;
                 try {
                     const { data, error: fnError } = await supabase.functions.invoke('admin-judge-log', {
                         headers: { 'x-admin-password': password },
                         body: { view: 'needs_review', limit: 1 }
                     });
                     if (fnError || data?.view !== 'needs_review') throw new Error(fnError?.message || 'needs_review view unavailable');
-                    setJudgeReviewCount(data.total_count ?? 0);
+                    if (token === judgeCountTokenRef.current) setJudgeReviewCount(data.total_count ?? 0);
                 } catch (err) {
                     console.error('Error fetching Judge review count:', err);
-                    setJudgeReviewCount(null);
+                    if (token === judgeCountTokenRef.current) setJudgeReviewCount(null);
                 }
             };
 
@@ -7371,7 +7372,7 @@
                         )}
 
                         {activeTab === 'judge' && (
-                            <JudgeTab password={password} supabase={supabase} onReviewCount={setJudgeReviewCount} onReviewChanged={fetchJudgeReviewCount} />
+                            <JudgeTab password={password} supabase={supabase} onReviewChanged={fetchJudgeReviewCount} />
                         )}
 
                         {activeTab === 'eos' && (
