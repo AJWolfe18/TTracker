@@ -284,7 +284,7 @@ const SUPABASE_ANON_KEY = 'your-test-anon-key';
 
 **Production:**
 - Dashboard: `https://your-site.netlify.app/`
-- Admin: `https://your-site.netlify.app/admin-supabase.html`
+- Admin: `https://your-site.netlify.app/admin.html`
 - Health Check: `https://your-site.netlify.app/check-counts.html`
 
 **Test Environment:**

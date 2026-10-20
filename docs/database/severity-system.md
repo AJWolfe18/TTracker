@@ -101,7 +101,7 @@ The AI analyzes content more deeply and can upgrade severity based on context:
 - Just being an asshole
 
 ### 3. Admin Dashboard Display
-Location: `public/admin-supabase.html`
+Location: `public/admin.html`
 
 The admin panel should display both the database value and the user-facing label:
 
