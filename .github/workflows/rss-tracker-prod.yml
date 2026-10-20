@@ -3,7 +3,7 @@ name: RSS Tracker - PROD
 on:
   # Auto schedule: Every 2 hours
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '17 */2 * * *'  # off-peak minute: GitHub drops top-of-hour slots
 
   # Manual trigger (for testing/emergency runs)
   workflow_dispatch:

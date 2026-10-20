@@ -3,7 +3,7 @@ name: SCOTUS Tracker (PROD scheduled)
 on:
   schedule:
     # 18:00 UTC = 12:00 CT (standard time) / 13:00 ET (standard time). DST will shift.
-    - cron: "0 18 * * *"
+    - cron: "47 18 * * *"
   workflow_dispatch:
     inputs:
       skip_fetch:

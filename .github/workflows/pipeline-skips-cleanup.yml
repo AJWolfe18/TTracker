@@ -6,7 +6,7 @@ name: Pipeline Skips Cleanup (PROD scheduled)
 
 on:
   schedule:
-    - cron: "0 4 * * *"
+    - cron: "13 4 * * *"
   workflow_dispatch:
     inputs:
       retention_days:

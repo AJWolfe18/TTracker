@@ -2,7 +2,7 @@
 name: Track Executive Orders
 on:
   schedule:
-    - cron: '0 16 * * *'  # 11:00 AM EST daily (2 hours after main tracker)
+    - cron: '7 16 * * *'  # daily ~11 AM CT (off-peak minute)
   workflow_dispatch:      # Manual trigger
     inputs:
       lookback_days:

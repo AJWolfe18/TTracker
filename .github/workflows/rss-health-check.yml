@@ -7,7 +7,7 @@ on:
       - 'scripts/rss/**'
       - 'migrations/**'
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '41 */6 * * *'  # Every 6 hours (off-peak minute)
   workflow_dispatch:
 
 jobs:
