@@ -137,6 +137,8 @@ const CASES = [
   [167, 'Measles cases surge in Ontario', '-'],                                    // invented
   [168, 'Trump does not rule out demolishing the Kennedy Center', '-'],
   [169, 'FDA Commissioner Makary orders new safety review of abortion pill mifepristone', '-'],  // invented: pending Josh, agent only
+  [170, 'RFK Jr. orders HHS review of abortion pill', '-'],                                     // invented: no FDA-type extra, pill extras reach the agent
+  [178, 'RFK Jr.\'s vaccine panel stacked with anti-abortion activists, CDC staff say', 'rfk-hhs'],  // invented: "anti-abortion" is not the pill
   // hegseth-pentagon
   [171, 'US military strikes another boat in Pacific, bringing death toll above 200', 'hegseth-pentagon'],
   [172, 'Two Survivors Left at Sea After U.S. Attacks Boat in Pacific', 'hegseth-pentagon'],
@@ -325,6 +327,7 @@ out('front-definitions-sql-pglite');
   check(JSON.stringify(pf[130]) === '["the-courts"]', `a "judge blocks" ruling reaches the agent through the Courts extras: ${JSON.stringify(pf[130])}`);
   check(pf[168] === undefined, 'the Kennedy Center no longer reaches the RFK pool (bare kennedy dropped)');
   check(JSON.stringify(pf[169]) === '["rfk-hhs"]', `an abortion-pill story is not swept but reaches the RFK agent (pending Josh): ${JSON.stringify(pf[169])}`);
+  check(JSON.stringify(pf[170]) === '["rfk-hhs"]', `an RFK/HHS abortion-pill story with no FDA-type word still reaches the RFK agent: ${JSON.stringify(pf[170])}`);
 
   // 5. Definitions
   const defs = Object.fromEntries((await db.query(`select slug, agent_definition d from public.events where slug = any($1)`, [NINE])).rows.map((r) => [r.slug, r.d]));
