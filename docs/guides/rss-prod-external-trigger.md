@@ -40,7 +40,7 @@ Sign up free at cron-job.org → **Create cronjob**:
 - Save, then **Test run**. Expect **HTTP 204** (no body).
 
 ### 3. Check
-`gh run list --workflow rss-tracker-prod.yml --limit 5` shows a new run with event `workflow_dispatch`. After a day, count runs per day: expect about 12 from the external job plus GitHub's 4-5 late ones, so 15-17. The extra runs are cheap (a feed with nothing new costs no OpenAI call; Actions minutes are free on this public repo). If GitHub's late runs ever crowd the external ones, drop the `schedule:` block in a PR and keep only the external trigger.
+`gh run list --workflow rss-tracker-prod.yml --limit 5` shows a new run with event `workflow_dispatch`. After a day, count runs per day: expect about 12 from the external job plus GitHub's 4-5 late ones, so 15-17. A run that was waiting and got replaced by a newer one shows as **cancelled**: that is expected, not a trigger failure (count only `success` runs). The extra runs are cheap (a feed with nothing new costs no OpenAI call; Actions minutes are free on this public repo). If GitHub's late runs ever crowd the external ones, drop the `schedule:` block in a PR and keep only the external trigger.
 
 ## Turning it off
 Pause the job in cron-job.org (or set `ENABLE_PROD_SCHEDULES` to anything but `true`, which stops both). To kill the token: GitHub → Fine-grained tokens → Revoke.

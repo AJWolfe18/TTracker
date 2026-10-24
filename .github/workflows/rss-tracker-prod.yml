@@ -17,6 +17,7 @@ on:
 jobs:
   rss-tracker-prod:
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # a hung setup/upload step must not hold the concurrency group for GitHub's 6-hour default
 
     # Branch lock + kill-switch: Only run on main, schedule blocked unless ENABLE_PROD_SCHEDULES=true
     # TTRC-362: workflow_dispatch still works when kill-switch is off, except the external scheduler's (scheduled=true)
