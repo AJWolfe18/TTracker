@@ -13,9 +13,15 @@
 // tombstoned into the other (agent-sourced log rows don't guarantee which column was the loser)
 // and reverses that merge via the unmerge_story RPC (migration 105).
 //
-// preview response: { ok, survivor: {...}, loser: {...}, warnings: [...] }
-// merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error? }
-// unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored? }
+//   via:         optional 'stories_combine' (ADO-60: the Stories tab Combine dialog) — only changes the
+//                judge-log rationale text; the merge path is identical to the Judge tab's.
+//
+// preview response: { ok, survivor: {...}, loser: {...}, warnings: [...], fronts_checked }
+//   (each story also carries article_count = article_story rows, and front = {event_id,name}|null)
+// merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error?, refresh_error? }
+// unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored?, refresh_error? }
+// After an executed merge/unmerge, refresh_tracker_derived() runs (best-effort) so the Tracker
+// main line and masthead tally don't wait for the next pipeline run.
 //   (the 'unmerge' judge-log row is written atomically by the unmerge_story RPC — migration 107)
 // dismiss response: { ok, run_id }
 //
@@ -41,6 +47,19 @@ function jsonResponse(body: unknown, status = 200): Response {
     JSON.stringify(body),
     { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
+}
+
+// A merge tombstones a story and an unmerge revives one; both change stories.status, which the Tracker
+// main-line rule and the masthead tally read from stored columns (migration 113). Refresh them now
+// instead of waiting for the next pipeline run. Best-effort: the merge/unmerge is already committed.
+// deno-lint-ignore no-explicit-any
+async function refreshTracker(supabase: any): Promise<string | undefined> {
+  const { error } = await supabase.rpc('refresh_tracker_derived')
+  if (error) {
+    console.error('refresh_tracker_derived failed (merge/unmerge already committed):', error.message)
+    return error.message
+  }
+  return undefined
 }
 
 function parseStoryId(value: unknown): number | null {
@@ -73,6 +92,8 @@ Deno.serve(async (req) => {
     const action = String(body.action || '').trim()
     const survivorId = parseStoryId(body.survivor_id)
     const loserId = parseStoryId(body.loser_id)
+    // Which admin screen asked (audit text only). ADO-60: the Stories tab Combine loops 'merge' per story.
+    const fromStoriesCombine = body.via === 'stories_combine'
 
     if (action !== 'preview' && action !== 'merge' && action !== 'unmerge' && action !== 'dismiss') {
       return jsonResponse({ error: "action must be 'preview', 'merge', 'unmerge' or 'dismiss'" }, 400)
@@ -115,7 +136,53 @@ Deno.serve(async (req) => {
       if (loser?.status === 'merged_into') {
         warnings.push(`Loser #${loserId} was already merged into #${loser.merged_into_story_id} — merge will be a no-op`)
       }
-      return jsonResponse({ ok: !!(survivor && loser), survivor, loser, warnings })
+
+      // ADO-60: real article counts (article_story rows; stories.source_count can drift) and front
+      // membership, for the Stories tab "Combine" dialog. merge_stories does NOT move story_event,
+      // so a loser's front is flagged rather than silently left on the tombstone. Best-effort:
+      // a failed lookup leaves the fields off and fronts_checked=false (the merge itself is unaffected).
+      const found = [survivor, loser].filter((s): s is NonNullable<typeof s> => !!s)
+      const extra: Record<number, { article_count?: number; front?: { event_id: number; name: string } | null }> = {}
+      let frontsChecked = false
+      try {
+        const counts = await Promise.all(found.map((s) =>
+          supabase.from('article_story').select('article_id', { count: 'exact', head: true }).eq('story_id', s.id)
+        ))
+        counts.forEach((c, i) => {
+          if (!c.error && typeof c.count === 'number') extra[found[i].id] = { article_count: c.count }
+        })
+
+        const { data: members, error: memberError } = await supabase
+          .from('story_event')
+          .select('story_id,event_id')
+          .in('story_id', found.map((s) => s.id))
+        if (memberError) throw memberError
+        const eventIds = [...new Set((members || []).map((m) => m.event_id))]
+        const names: Record<number, string> = {}
+        if (eventIds.length > 0) {
+          const { data: events, error: eventError } = await supabase.from('events').select('id,name').in('id', eventIds)
+          if (eventError) throw eventError
+          for (const e of events || []) names[e.id] = e.name
+        }
+        for (const s of found) {
+          const m = (members || []).find((row) => row.story_id === s.id)
+          extra[s.id] = { ...extra[s.id], front: m ? { event_id: m.event_id, name: names[m.event_id] || `front #${m.event_id}` } : null }
+        }
+        frontsChecked = true
+      } catch (lookupError) {
+        console.error('Preview count/front lookup failed:', (lookupError as Error)?.message || lookupError)
+      }
+
+      const survivorOut = survivor ? { ...survivor, ...extra[survivor.id] } : null
+      const loserOut = loser ? { ...loser, ...extra[loser.id] } : null
+      if (frontsChecked && loserOut?.front && loserOut.status !== 'merged_into') {
+        if (!survivorOut?.front) {
+          warnings.push(`Loser #${loserId} is on the front "${loserOut.front.name}" but survivor #${survivorId} is on no front. Merging does not move front membership.`)
+        } else if (survivorOut.front.event_id !== loserOut.front.event_id) {
+          warnings.push(`Loser #${loserId} is on the front "${loserOut.front.name}"; survivor #${survivorId} stays on "${survivorOut.front.name}".`)
+        }
+      }
+      return jsonResponse({ ok: !!(survivor && loser), survivor: survivorOut, loser: loserOut, warnings, fronts_checked: frontsChecked })
     }
 
     if (action === 'unmerge') {
@@ -146,7 +213,8 @@ Deno.serve(async (req) => {
       // unmerge transaction (migration 107). It is the Judge's verdict memory (migration 106) —
       // a best-effort insert here could fail after commit and leave the Judge free to re-merge
       // a human unmerge, so this function no longer writes it.
-      return jsonResponse({ ...result, run_id: runId })
+      const refreshError = await refreshTracker(supabase)
+      return jsonResponse({ ...result, run_id: runId, refresh_error: refreshError })
     }
 
     if (action === 'dismiss') {
@@ -206,7 +274,9 @@ Deno.serve(async (req) => {
       headline_a: survivor.primary_headline,
       headline_b: loser.primary_headline,
       verdict: 'merge',
-      rationale: `Manual merge via admin Judge tab: #${loserId} merged into #${survivorId}`,
+      rationale: fromStoriesCombine
+        ? `Manual merge via admin Stories tab (Combine): #${loserId} merged into #${survivorId}`
+        : `Manual merge via admin Judge tab: #${loserId} merged into #${survivorId}`,
       merged: true,
       dry_run: false,
       run_id: runId
@@ -215,10 +285,13 @@ Deno.serve(async (req) => {
       console.error('clustering_judge_log insert failed (merge already executed):', logError.message)
     }
 
+    const refreshError = await refreshTracker(supabase)
+
     return jsonResponse({
       ...result,
       run_id: runId,
-      log_error: logError ? logError.message : undefined
+      log_error: logError ? logError.message : undefined,
+      refresh_error: refreshError
     })
   } catch (error) {
     console.error('Error in admin-judge-merge:', error)

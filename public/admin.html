@@ -567,6 +567,81 @@
             transition: background 0.2s;
         }
         .btn-secondary:hover { background: #475569; }
+        .btn-danger {
+            padding: 10px 20px;
+            background: #dc2626;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Stories tab: tick boxes + Combine (ADO-60) */
+        .stories-table .select-cell { width: 36px; padding-right: 0; }
+        .select-hit {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            min-height: 32px;
+            margin: -6px 0;
+            cursor: pointer;
+        }
+        .select-hit input { width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6; }
+        .combine-bar {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            background: #1e3a5f;
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .combine-bar-hint { color: #94a3b8; font-size: 13px; }
+        .combine-bar .btn-danger, .combine-bar .btn-secondary { padding: 8px 14px; }
+        .combine-hint { color: #94a3b8; font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
+        .combine-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .combine-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .combine-row input[type="radio"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; accent-color: #4ade80; }
+        .combine-row.is-keeper { border-color: #4ade80; }
+        .combine-row.is-gone { opacity: 0.6; cursor: default; }
+        .combine-row-text { flex: 1; min-width: 0; }
+        .combine-row-headline { color: #e2e8f0; font-size: 14px; overflow-wrap: anywhere; }
+        .combine-row-meta { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+        .combine-id { color: #64748b; font-size: 12px; }
+        .combine-box {
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: rgba(59, 130, 246, 0.08);
+            color: #e2e8f0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .combine-box-block { border-color: #f87171; background: rgba(248, 113, 113, 0.08); color: #fca5a5; }
+        .combine-box-warn { border-color: #fbbf24; background: rgba(251, 191, 36, 0.08); color: #fbbf24; font-size: 13px; }
+        .combine-box-note { color: #94a3b8; font-size: 13px; background: transparent; }
 
         /* Toast Styles */
         .toast-container {
@@ -825,6 +900,8 @@
             }
             .mobile-stack td.cell-actions, .stories-table td:has(.row-actions) { display: block; width: 100%; }
             .stories-table .row-actions { flex-wrap: wrap; }
+            .select-hit { min-width: 44px; min-height: 44px; margin: -10px 0 -10px -8px; }
+            .combine-bar .btn-danger, .combine-bar .btn-secondary { min-height: 44px; }
             .judge-row-btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; min-height: 40px; }
 
             /* Modals go full-screen with the buttons always reachable */
@@ -1673,8 +1750,329 @@
             );
         }
 
+        // bulkCombine:start
+        // ADO-60: pure helpers for the Stories tab "Combine" dialog (bulk merge of duplicate stories).
+        // Plain functions between these markers so scripts/tests/admin-bulk-combine.test.mjs can run them.
+        const COMBINE_MAX_STORIES = 20;
+
+        // Why a merge/unmerge was refused, in plain words. Shared by the Judge tab and the Stories tab Combine.
+        // Keys are the reason codes merge_stories (migration 102), unmerge_story (105) and admin-judge-merge return.
+        const MERGE_REASON_TEXT = {
+            invalid_ids: 'The story ids were not valid',
+            missing_run_id: 'Internal error: no run id was sent',
+            loser_not_found: 'That story no longer exists',
+            survivor_not_found: 'The story to keep no longer exists',
+            survivor_is_merged: 'The story to keep has itself been merged into another story',
+            run_merge_cap_reached: 'Hit the safety cap on merges for one run; try again',
+            loser_already_merged: 'Already merged',
+            not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
+            no_merge_snapshot: 'No reversible snapshot exists for this merge',
+            not_merged: 'That story is not currently merged away',
+            snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
+            snapshot_changed: 'The merge record changed mid-request — refresh and try again',
+            survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
+        };
+        const mergeReasonText = (reason) => MERGE_REASON_TEXT[reason] || reason || 'unknown reason';
+
+        const isMergedAway = (s) => !!s && (s.status === 'merged_into' || s.merged_into_story_id != null);
+
+        // Default story to keep: most articles (article_story rows, not source_count), then the oldest
+        // (first seen), then the lowest id. Stories already merged away, or not found, never qualify.
+        function pickDefaultKeeper(stories) {
+            const live = stories.filter(s => s && !s.missing && !isMergedAway(s));
+            if (live.length === 0) return null;
+            const seen = (s) => { const t = Date.parse(s.first_seen_at || ''); return Number.isNaN(t) ? Infinity : t; };
+            return [...live].sort((a, b) =>
+                (b.article_count ?? 0) - (a.article_count ?? 0) || seen(a) - seen(b) || a.id - b.id
+            )[0].id;
+        }
+
+        // What Combine will do with the chosen keeper. blocker = why it can't run (null = ok to run).
+        function buildCombinePlan(stories, keeperId) {
+            const keeper = stories.find(s => s.id === keeperId) || null;
+            const toMerge = [];
+            const skipped = [];
+            const warnings = [];
+            for (const s of stories) {
+                if (s.id === keeperId) continue;
+                if (s.missing) skipped.push({ id: s.id, text: 'Not found — skipped' });
+                else if (isMergedAway(s)) {
+                    skipped.push({
+                        id: s.id,
+                        text: s.merged_into_story_id === keeperId
+                            ? `Already part of #${keeperId} — nothing to do`
+                            : `Already merged into #${s.merged_into_story_id} — left as is (combine #${s.merged_into_story_id} instead to bring it in)`
+                    });
+                } else toMerge.push(s);
+            }
+            let blocker = null;
+            if (!keeper) blocker = 'Pick the story to keep.';
+            else if (keeper.missing) blocker = `#${keeper.id} was not found — pick another story to keep.`;
+            else if (isMergedAway(keeper)) blocker = `#${keeper.id} is already merged into #${keeper.merged_into_story_id}, so it can't be the one to keep. Pick a live story.`;
+            else if (toMerge.length === 0) blocker = 'Need at least 2 live stories to combine.';
+            const articles = toMerge.reduce((n, s) => n + (s.article_count ?? 0), 0);
+            // merge_stories does not move front membership (story_event): say so instead of dropping it silently.
+            if (keeper && !blocker) {
+                for (const s of toMerge) {
+                    if (!s.front) continue;
+                    if (!keeper.front) {
+                        warnings.push(`#${s.id} is on the front "${s.front.name}" but #${keeper.id} is on no front. Combining does not move front membership; add #${keeper.id} to that front by hand if it belongs there.`);
+                    } else if (s.front.event_id !== keeper.front.event_id) {
+                        warnings.push(`#${s.id} is on the front "${s.front.name}"; #${keeper.id} stays on "${keeper.front.name}".`);
+                    }
+                }
+            }
+            return { keeper, toMerge, skipped, articles, warnings, blocker };
+        }
+
+        // One admin-judge-merge 'merge' reply (or a request error) -> a result row.
+        function classifyMergeResult(loserId, result, errorMessage) {
+            if (errorMessage) return { id: loserId, kind: 'failed', text: `Failed: ${errorMessage}` };
+            if (!result) return { id: loserId, kind: 'failed', text: 'Failed: no reply from the server' };
+            if (result.ok && result.skipped) {
+                return { id: loserId, kind: 'already', text: `Already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do` };
+            }
+            if (result.ok) {
+                const n = result.articles_moved ?? 0;
+                return {
+                    id: loserId,
+                    kind: 'merged',
+                    text: `Merged — ${n} article${n === 1 ? '' : 's'} moved${result.log_error ? ' (warning: the Judge log entry failed to save, so it can\'t be undone from the Judge tab)' : ''}`
+                };
+            }
+            return {
+                id: loserId,
+                kind: 'failed',
+                text: `Failed: ${mergeReasonText(result.reason)}${result.survivor_points_to ? ` (#${result.survivor_points_to})` : ''}`
+            };
+        }
+        // bulkCombine:end
+
+        // ADO-60: "Combine" dialog — merge several duplicate stories into one, through the same audited
+        // admin-judge-merge 'merge' action the Judge tab uses (one call per story, so each merge is logged
+        // and individually undoable from the Judge tab).
+        function CombineStoriesModal({ stories, password, supabase, onClose, onFinished }) {
+            const [info, setInfo] = useState(null);         // [{...story, article_count, front, missing}]
+            const [frontsChecked, setFrontsChecked] = useState(true);
+            const [loadError, setLoadError] = useState(null);
+            const [keeperId, setKeeperId] = useState(null);
+            const [running, setRunning] = useState(false);
+            const [results, setResults] = useState(null);   // null until Combine starts
+            const busyRef = useRef(false);                  // sync double-click guard (state updates are async)
+
+            const invokeMerge = async (body) => {
+                const { data, error: fnError } = await supabase.functions.invoke('admin-judge-merge', {
+                    headers: { 'x-admin-password': password },
+                    body
+                });
+                if (fnError) {
+                    let detail = fnError.message;
+                    try {
+                        const errBody = fnError.context ? await fnError.context.json() : data;
+                        if (errBody?.detail || errBody?.error) detail = errBody.detail || errBody.error;
+                    } catch (_) {}
+                    throw new Error(detail || 'Request failed');
+                }
+                return data;
+            };
+
+            // One preview per extra story, anchored on the first: each reply carries both stories,
+            // so N-1 calls give fresh status, article count and front for all N.
+            const loadInfo = useCallback(async () => {
+                setLoadError(null);
+                setInfo(null);
+                const ids = stories.map(s => s.id);
+                const anchor = ids[0];
+                const byId = {};
+                let checked = true;
+                try {
+                    const others = ids.slice(1);
+                    for (let i = 0; i < others.length; i += 5) {
+                        const chunk = others.slice(i, i + 5);
+                        const replies = await Promise.all(chunk.map(id => invokeMerge({ action: 'preview', survivor_id: anchor, loser_id: id })));
+                        replies.forEach((r) => {
+                            if (r?.survivor) byId[r.survivor.id] = r.survivor;
+                            if (r?.loser) byId[r.loser.id] = r.loser;
+                            if (r?.fronts_checked !== true) checked = false;
+                        });
+                    }
+                } catch (err) {
+                    setLoadError(err.message);
+                    return;
+                }
+                const merged = stories.map(row => {
+                    const fresh = byId[row.id];
+                    if (!fresh) return { ...row, missing: true };
+                    // Older admin-judge-merge has no article_count: fall back to the list's count (also article_story rows).
+                    return { ...row, ...fresh, article_count: fresh.article_count ?? row.article_count ?? 0, front: fresh.front ?? null };
+                });
+                setFrontsChecked(checked);
+                setInfo(merged);
+                setKeeperId(pickDefaultKeeper(merged));
+            }, [stories, password, supabase]);
+
+            useEffect(() => { loadInfo(); }, [loadInfo]);
+
+            const plan = useMemo(() => (info ? buildCombinePlan(info, keeperId) : null), [info, keeperId]);
+            const done = results !== null && !running;
+
+            const handleClose = () => { if (!busyRef.current) onClose(); };
+
+            useEffect(() => {
+                const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            });
+
+            const runCombine = async () => {
+                if (busyRef.current || !plan || plan.blocker || results) return;
+                busyRef.current = true;
+                setRunning(true);
+                const out = [];
+                setResults([]);
+                // Sequential on purpose: each merge locks the keeper row, and a failure on one story
+                // must not stop the rest. Every reply is shown as it lands.
+                for (const s of plan.toMerge) {
+                    let row;
+                    try {
+                        const r = await invokeMerge({ action: 'merge', survivor_id: plan.keeper.id, loser_id: s.id, via: 'stories_combine' });
+                        row = classifyMergeResult(s.id, r);
+                    } catch (err) {
+                        row = classifyMergeResult(s.id, null, err.message);
+                    }
+                    out.push(row);
+                    setResults([...out]);
+                }
+                for (const sk of plan.skipped) out.push({ id: sk.id, kind: 'skipped', text: sk.text });
+                setResults([...out]);
+                busyRef.current = false;
+                setRunning(false);
+                onFinished(plan.keeper.id, out);
+            };
+
+            const headlineOf = (id) => (info || stories).find(s => s.id === id)?.primary_headline || '(No headline)';
+            const fmtWhen = (iso) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-';
+            const RESULT_COLOR = { merged: '#4ade80', already: '#94a3b8', skipped: '#94a3b8', failed: '#f87171' };
+            const counts = (results || []).reduce((c, r) => { c[r.kind] = (c[r.kind] || 0) + 1; return c; }, {});
+            const doneCount = (results || []).filter(r => r.kind !== 'skipped').length;
+
+            return (
+                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h3 className="modal-title">Combine {stories.length} stories</h3>
+                            <button className="modal-close" onClick={handleClose} disabled={running} aria-label="Close">×</button>
+                        </div>
+                        <div className="modal-body">
+                            {loadError && (
+                                <div className="error-banner">
+                                    <strong>Couldn't load the selected stories:</strong> {loadError}{' '}
+                                    <button className="btn-icon" onClick={loadInfo}>Try again</button>
+                                </div>
+                            )}
+                            {!info && !loadError && (
+                                <div className="loading"><div className="spinner"></div>Checking the selected stories...</div>
+                            )}
+
+                            {info && results === null && (
+                                <>
+                                    <div className="combine-hint">Pick the story to keep. The others are merged into it: their articles move over and each becomes a redirect to it.</div>
+                                    <div className="combine-list">
+                                        {info.map(s => {
+                                            const gone = s.missing || isMergedAway(s);
+                                            const isKeeper = keeperId === s.id;
+                                            return (
+                                                <label key={s.id} className={`combine-row${isKeeper ? ' is-keeper' : ''}${gone ? ' is-gone' : ''}`}>
+                                                    <input type="radio" name="combine-keeper" checked={isKeeper} disabled={gone}
+                                                        onChange={() => setKeeperId(s.id)} aria-label={`Keep story ${s.id}`} />
+                                                    <div className="combine-row-text">
+                                                        <div className="combine-row-headline">
+                                                            <span className="combine-id">#{s.id}</span> {s.primary_headline || '(No headline)'}
+                                                            {isKeeper && <span className="badge badge-enriched" style={{ marginLeft: '6px' }}>Keep</span>}
+                                                        </div>
+                                                        <div className="combine-row-meta">
+                                                            {s.missing ? <span style={{ color: '#f87171' }}>Not found</span> : (
+                                                                <>
+                                                                    {s.article_count} article{s.article_count === 1 ? '' : 's'}
+                                                                    {' · updated '}{fmtWhen(s.last_updated_at)}
+                                                                    {s.front ? <> · front: {s.front.name}</> : null}
+                                                                    {isMergedAway(s) ? <span style={{ color: '#fbbf24' }}> · already merged into #{s.merged_into_story_id}</span> : null}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {plan?.blocker ? (
+                                        <div className="combine-box combine-box-block">{plan.blocker}</div>
+                                    ) : plan && (
+                                        <div className="combine-box">
+                                            <strong>{plan.toMerge.length} {plan.toMerge.length === 1 ? 'story' : 'stories'} merged into #{plan.keeper.id}, {plan.articles} article{plan.articles === 1 ? '' : 's'} moved.</strong>
+                                            {' '}#{plan.keeper.id} will have {(plan.keeper.article_count ?? 0) + plan.articles} articles.
+                                        </div>
+                                    )}
+                                    {plan && plan.skipped.length > 0 && (
+                                        <div className="combine-box combine-box-note">
+                                            {plan.skipped.map(sk => <div key={sk.id}>#{sk.id}: {sk.text}</div>)}
+                                        </div>
+                                    )}
+                                    {plan && plan.warnings.length > 0 && (
+                                        <div className="combine-box combine-box-warn">
+                                            {plan.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                        </div>
+                                    )}
+                                    {!frontsChecked && (
+                                        <div className="combine-box combine-box-warn">Couldn't check which fronts these stories are on (the admin-judge-merge function may need redeploying). Combining never moves front membership.</div>
+                                    )}
+                                    <div className="combine-hint">Each merge is logged on the Judge tab (All verdicts) and can be undone there one story at a time with <strong>unmerge</strong>.</div>
+                                </>
+                            )}
+
+                            {results !== null && (
+                                <>
+                                    <div className="combine-hint">
+                                        {running
+                                            ? `Combining into #${plan.keeper.id}... ${doneCount} of ${plan.toMerge.length} done.`
+                                            : `Finished: ${counts.merged || 0} merged, ${(counts.already || 0) + (counts.skipped || 0)} already merged or skipped, ${counts.failed || 0} failed.`}
+                                    </div>
+                                    <div className="combine-list">
+                                        {results.map(r => (
+                                            <div key={r.id} className="combine-row" style={{ cursor: 'default' }}>
+                                                <div className="combine-row-text">
+                                                    <div className="combine-row-headline"><span className="combine-id">#{r.id}</span> {headlineOf(r.id)}</div>
+                                                    <div className="combine-row-meta" style={{ color: RESULT_COLOR[r.kind] }}>{r.text}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {done && counts.failed > 0 && (
+                                        <div className="combine-hint">The failed stories and #{plan.keeper.id} stay ticked, so you can try again.</div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            {results === null ? (
+                                <>
+                                    <button className="btn-secondary" onClick={handleClose}>Cancel</button>
+                                    <button className="btn-danger" onClick={runCombine} disabled={!plan || !!plan.blocker}>
+                                        {plan && !plan.blocker ? `Combine ${plan.toMerge.length} into #${plan.keeper.id}` : 'Combine'}
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="btn-primary" onClick={handleClose} disabled={running}>{running ? 'Combining...' : 'Close'}</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Stories Tab Component
-        function StoriesTab({ password, supabase }) {
+        function StoriesTab({ password, supabase, onReviewChanged }) {
             const [stories, setStories] = useState([]);
             const [loading, setLoading] = useState(true);
             const [loadingMore, setLoadingMore] = useState(false);
@@ -1707,6 +2105,52 @@
 
             // Toast context
             const toast = useToast();
+
+            // ADO-60 Combine: ticked stories (id -> list row), kept across searches and filter changes
+            // so duplicates found under different searches can be combined together.
+            const [selected, setSelected] = useState(() => new Map());
+            const [combineStories, setCombineStories] = useState(null); // snapshot while the dialog is open
+
+            const toggleSelect = (story) => {
+                setSelected(prev => {
+                    const next = new Map(prev);
+                    if (next.has(story.id)) {
+                        next.delete(story.id);
+                    } else {
+                        if (next.size >= COMBINE_MAX_STORIES) {
+                            toast?.addToast(`You can combine up to ${COMBINE_MAX_STORIES} stories at once.`, 'error');
+                            return prev;
+                        }
+                        next.set(story.id, story);
+                    }
+                    return next;
+                });
+            };
+
+            const openCombine = () => {
+                if (selected.size < 2) return;
+                setCombineStories([...selected.values()]);
+            };
+
+            // After the batch: reload the list and Home's Judge count (same refresh the Judge tab does after
+            // a merge). Keep the keeper + failed stories ticked so a retry is one click; clear the rest.
+            const handleCombineFinished = (keeperId, results) => {
+                fetchStories(false, null, null);
+                onReviewChanged?.();
+                const failedIds = results.filter(r => r.kind === 'failed').map(r => r.id);
+                setSelected(prev => {
+                    const next = new Map();
+                    if (failedIds.length > 0) {
+                        for (const id of [keeperId, ...failedIds]) if (prev.has(id)) next.set(id, prev.get(id));
+                    }
+                    return next;
+                });
+                const merged = results.filter(r => r.kind === 'merged').length;
+                toast?.addToast(
+                    `Combine finished: ${merged} merged into #${keeperId}${failedIds.length ? `, ${failedIds.length} failed` : ''}`,
+                    failedIds.length ? 'error' : 'success'
+                );
+            };
 
             // Poll enriching stories until last_enriched_at changes (or 2 min timeout)
             const hasEnriching = enrichingIds.size > 0;
@@ -1904,6 +2348,7 @@
                 if (status === 'active') return { class: 'badge-active', label: 'Active' };
                 if (status === 'closed') return { class: 'badge-closed', label: 'Closed' };
                 if (status === 'archived') return { class: 'badge-archived', label: 'Archived' };
+                if (status === 'merged_into') return { class: 'badge-closed', label: 'Merged' };
                 return { class: 'badge-closed', label: status || 'Unknown' };
             };
 
@@ -2179,6 +2624,22 @@
                         </select>
                     </div>
 
+                    {/* ADO-60: selection bar for combining duplicate stories */}
+                    {selected.size > 0 && (
+                        <div className="combine-bar">
+                            <strong>{selected.size} selected</strong>
+                            <button className="btn-danger" onClick={openCombine} disabled={selected.size < 2}>
+                                Combine…
+                            </button>
+                            <button className="btn-secondary" onClick={() => setSelected(new Map())}>Clear</button>
+                            <span className="combine-bar-hint">
+                                {selected.size < 2
+                                    ? 'Tick at least 2 duplicate stories to combine them.'
+                                    : 'Ticks stay while you search, so you can gather duplicates from different searches.'}
+                            </span>
+                        </div>
+                    )}
+
                     {error && (
                         <div className="error-banner">
                             <strong>Error:</strong> {error}
@@ -2203,6 +2664,7 @@
                                 <table className="stories-table">
                                     <thead>
                                         <tr>
+                                            <th className="select-cell" title="Tick duplicate stories, then Combine"></th>
                                             <th>ID</th>
                                             <th>Headline</th>
                                             <th>Alarm Level</th>
@@ -2229,6 +2691,16 @@
 
                                             return React.createElement(React.Fragment, { key: story.id },
                                                 <tr>
+                                                    <td className="select-cell">
+                                                        <label className="select-hit" title="Select to combine with other duplicates">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selected.has(story.id)}
+                                                                onChange={() => toggleSelect(story)}
+                                                                aria-label={`Select story ${story.id}`}
+                                                            />
+                                                        </label>
+                                                    </td>
                                                     <td style={{ color: '#64748b', fontSize: '13px' }}>{story.id}</td>
                                                     <td
                                                         className="headline-cell"
@@ -2297,7 +2769,7 @@
                                                 </tr>,
                                                 isExpanded && (
                                                     <tr className="story-detail-row">
-                                                        <td colSpan={9}>
+                                                        <td colSpan={10}>
                                                             <div className="story-detail-content">
                                                                 <div>
                                                                     <dt>Category</dt>
@@ -2336,6 +2808,17 @@
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* ADO-60: Combine dialog */}
+                    {combineStories && (
+                        <CombineStoriesModal
+                            stories={combineStories}
+                            password={password}
+                            supabase={supabase}
+                            onClose={() => setCombineStories(null)}
+                            onFinished={handleCombineFinished}
+                        />
                     )}
 
                     {/* Edit Story Modal */}
@@ -6260,7 +6743,7 @@
                     setManualLoser('');
                     refreshAfterAction();
                 } else {
-                    setManualError(`Merge not executed: ${result.reason || 'unknown reason'}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
+                    setManualError(`Merge not executed: ${mergeReasonText(result.reason)}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
                 }
             };
 
@@ -6296,15 +6779,7 @@
                     setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.`);
                     refreshAfterAction();
                 } else {
-                    const reasons = {
-                        not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
-                        no_merge_snapshot: 'No reversible snapshot exists for this merge',
-                        not_merged: 'That story is not currently merged away',
-                        snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
-                        snapshot_changed: 'The merge record changed mid-request — refresh and try again',
-                        survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
-                    };
-                    setManualError(`Unmerge not executed: ${reasons[result.reason] || result.reason || 'unknown reason'}`);
+                    setManualError(`Unmerge not executed: ${mergeReasonText(result.reason)}`);
                 }
             };
 
@@ -6360,7 +6835,10 @@
                             </div>
                             <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
                                 status: <strong style={{ color: story.status === 'active' ? '#4ade80' : '#fbbf24' }}>{story.status}</strong>
-                                {' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}
+                                {story.article_count != null
+                                    ? <>{' · '}{story.article_count} article{story.article_count === 1 ? '' : 's'}</>
+                                    : <>{' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}</>}
+                                {story.front ? <>{' · front: '}{story.front.name}</> : null}
                                 {story.first_seen_at ? ` · first seen ${new Date(story.first_seen_at).toLocaleDateString()}` : ''}
                                 {story.merged_into_story_id ? <span style={{ color: '#f87171' }}> · already merged into #{story.merged_into_story_id}</span> : null}
                             </div>
@@ -7352,7 +7830,7 @@
                         )}
 
                         {activeTab === 'stories' && (
-                            <StoriesTab password={password} supabase={supabase} />
+                            <StoriesTab password={password} supabase={supabase} onReviewChanged={fetchJudgeReviewCount} />
                         )}
 
                         {activeTab === 'pardons' && (
