@@ -14,8 +14,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
-const adminHtml = readFileSync(`${repoRoot}public/admin.html`, 'utf8');
-const mergeFn = readFileSync(`${repoRoot}supabase/functions/admin-judge-merge/index.ts`, 'utf8');
+// CRLF-safe: the regexes below expect \n, and autocrlf checkouts (Windows worktrees) give \r\n.
+const adminHtml = readFileSync(`${repoRoot}public/admin.html`, 'utf8').replace(/\r\n/g, '\n');
+const mergeFn = readFileSync(`${repoRoot}supabase/functions/admin-judge-merge/index.ts`, 'utf8').replace(/\r\n/g, '\n');
 
 const helperSrc = adminHtml.match(/\/\/ bulkCombine:start([\s\S]*?)\/\/ bulkCombine:end/);
 assert.ok(helperSrc, 'bulkCombine:start/end markers not found in admin.html');
