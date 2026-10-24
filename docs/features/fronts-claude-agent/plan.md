@@ -58,6 +58,66 @@ The migration 116 seed also matched `elections?`, `electoral`, `votes?`, `midter
 
 - **Other fronts.** Same shape works for any front with an `agent_pattern`; the prompt is single-front by design. A second front = new prompt file + `UPDATE events SET agent_pattern`. Not in 582.
 
+## All fronts (ADO-592)
+
+**Files:** `migrations/127_all_fronts_agent.sql`, `scripts/fronts/front-agent-db.js`, `prompt-v1.md` (same path, so the routines need no config change; content is now prompt version `fronts-v2`). Tests: `scripts/tests/front-agent-prompt.test.mjs` (in `qa:fronts`) and `scripts/tests/all-fronts-agent-sql-pglite.test.mjs` (PGlite, run by hand).
+
+**How it works.** One routine, one pass over the pool, one front (or none) per story.
+- **Agent fronts** are events that are published AND have `agent_pattern` AND have `agent_definition` (new column, migration 127). The definition is the plain rubric the agent judges a front against (what belongs, what does not, calibration examples). It is data: a new front, or a sharper definition, is an `UPDATE`, never a prompt edit, and admin can edit it later (ADO-547). A front without a definition is invisible to the agent, so a pattern can be set before its definition is ready.
+- **Election carries over unchanged.** Migration 127 seeds `election-suppression.agent_definition` with the fronts-v1 Section 4 rubric verbatim (only when NULL, so a re-run never undoes an edit). Until the other definitions land (a follow-up maintenance file built from `front-reviews/<slug>.md`), election is the only agent front and the pool is the election pool.
+- **Pool:** `front_agent_candidates_all(p_limit)`: active, enriched, no `story_event` row, NOT `action_label = 'coverage'` (unlabeled stays in: fail open, PRD 14.6), headline or summary matches ANY agent front's pattern. Each row carries `action_label`, `action_actor` (hints) and `matched_fronts` (the fronts whose pattern matched, lowest sweep priority first).
+- **Script:** a new `fronts` verb prints the agent fronts with their definitions once per run; `candidates` calls the new RPC; every `assign` (and every record-file assign entry) names a front slug, which the script checks against the agent fronts before ANY write (one unknown front refuses the whole file). The single allow rule is unchanged and covers every call.
+- **Declines mean "fits no front"**: `pipeline_skips` with `metadata.front = 'none'` and `metadata.judged_fronts` (the agent fronts at write time). The story is hidden from exactly those fronts until it gains articles, so a front whose definition lands later (the planned order) still gets one look at every active story its pattern matches. Old election-only declines (`metadata.front = 'election-suppression'`) hide the story from election only, so a story the v1 agent declined still reaches ICE, Hegseth and the rest when it matches their patterns; an election-only match stays hidden (no re-judging the ~1,000 PROD election declines).
+- **Tie-break:** the definitions' own rules first, then lower `sweep_priority` wins (same as the sweep).
+- **Notes** are `fronts-v2: <slug>: <rationale>`. Any future election pattern gate should match `note LIKE 'fronts-v%'` (the 2026-09-30 file checks `fronts-v1%` only).
+
+**Deploy order.** (1) Migration 123 must already be on the environment (127 reads `stories.action_label`; on October 4, 2026 TEST did not have it yet). (2) Migration 127 on TEST and PROD. (3) The definitions maintenance file. (4) Only then the prompt and script reach `main`: PROD's routine resets to `origin/main`, and the old prompt keeps using `front_agent_candidates(p_slug)` (116, untouched) until then. The ADO-592 agent-pattern files must also be applied for those fronts to have a pool. **Never apply a definitions change while a fronts run is in progress** (PROD daily at 14:00 UTC, 9:00 AM CT, a few minutes): `judged_fronts` is read when each decline is written, so a front that gains a definition mid-run would hide that run's later declines from it without the agent ever judging them (code review, October 4, 2026, low). Apply outside the run window.
+
+**TEST pool (October 4, 2026, before coverage and declines; PostgREST `imatch`, ids only):** election 37 (almost all already declined by fronts-v1, so hidden), ICE 38, Israel & Gaza 12, RFK 9, Hegseth 9 (2 overlap ICE), 3 election stories also match ICE. Trump Corruption not measured (its pattern is too long to pass through a URL filter). Rough first pool once every definition is set: about 70 plus Trump Corruption. The 127 result query reports the real `pool_size`.
+
+**Cost.** $0 cash: plan usage on the existing routine, no OpenAI. The pool is bigger than election-only (more fronts), and the coverage filter shrinks it (PRD 14.6 measured 62.5% of a sample as coverage). Egress per run stays at headline + summary for at most `FRONTS_MAX_PER_RUN` (80) stories plus the definitions once (a few KB each), about 100-150 KB.
+
+**Rollback.** Revert the prompt and script commit on `main` (the old prompt uses the untouched 116 RPC). Assignments: `DELETE FROM story_event WHERE assigned_by = 'agent' AND note LIKE 'fronts-v2:%'`, then `SELECT refresh_tracker_derived()`. Migration 127 is additive and harmless to leave.
+
+### Definitions file (October 4, 2026)
+
+**File:** `scripts/maintenance/2026-10-04-ado-592-front-definitions.sql`. It supersedes the October 1 draft `2026-10-01-ado-592-agent-patterns.sql`, which must not be applied. **Not applied anywhere.** Run it after migration 127 and before the fronts-v2 prompt reaches `main`, outside the 14:00 UTC run (it refuses if the agent wrote anything in the last 15 minutes). One transaction: guards (each value must be the old value it expects or already the new one, so a hand edit is never overwritten; no member lost; no shared sweep priority; each agent_pattern starts with its sweep; all nine fronts join the agent), a backup of the old values (`front_merge_backup_events`, tag `ado-592-defs`), the writes, a full sweep whose rows carry `note = 'ado-592-defs: keyword sweep'` (so the rollback finds them), and the refresh. Same file on TEST and PROD (fronts by slug). Test: `scripts/tests/front-definitions-sql-pglite.test.mjs` (PGlite, by hand; it checks every regex against its review). **Cost:** $0 cash; the agent pool grows (plan usage only).
+
+Per front ("filed" = the review's PROD headline simulation; overlaps can shift a few):
+
+| Front | What changes | Filed on PROD |
+|---|---|---|
+| Trump Corruption | Definition only | 0 |
+| Election Suppression | Sweep adds SAVE America Act, mail-voting limits, voter lists and records, Fulton County, election-office raids, troops at polls, election orders, emergency powers before elections; co-word takes the SAVE act name. agent_pattern unchanged. Definition = the 127 seed plus three additions, tie-breaks and 5 calibration rows | ~39 |
+| The Epstein Files | Sweep adds rare names, Maxwell next to a custody or clemency word, the Clintons next to contempt or deposition (not Prince Andrew); agent_pattern set (Andrew, Maxwell, Mandelson, survivors); definition | ~15 |
+| The Courts | Co-word folded into the sweep, plus judges with US attorneys, rebukes of the government's lawyers, Trump attacking judges, defied orders; agent_pattern set (tight: no Supreme Court phrase); definition | ~33 |
+| ICE & Deportations | Kilmar Abrego Garcia in the sweep (and the agent_pattern); definition | ~6 |
+| Israel & Gaza | Sweep adds Board of Peace, Francesca Albanese, the ICC next to a US actor; co-word excludes East Palestine, adds three push verbs; agent extras swapped (war powers, Epic Fury, Midnight Hammer, bare Albanese out); definition | ~28 |
+| Iran | Sweep adds Iranians, Hormuz, Tehran, Khamenei, Kharg, Epic Fury, Midnight Hammer, the IRGC, the nuclear sites, "Middle East war"; agent_pattern set; definition | ~79 |
+| RFK Jr.'s HHS | Sweep adds R.F.K., FDA and NIH leaders, surgeon general picks, vaccine policy phrases, measles (not Canada or Mexico), Kennedy next to a health word; bare "kennedy" out of the agent_pattern; definition | ~46 |
+| Hegseth's Pentagon | Sweep adds the "illegal orders" video, service secretaries, transgender troops, General Caine, court-martial, boat strikes not called that; agent extras add DOD, Quantico, press credentials, SOUTHCOM; definition | ~29 |
+
+**Claude's calls (one-line changes if Josh disagrees):** Prince Andrew is left to the agent, not swept (Josh's open question). The Courts' agent_pattern is the tight variant. Election's agent_pattern is unchanged (the review's extras were not tested, and a new value also means repointing `front-agent-prompt.test.mjs`). ICE's agent_pattern gains the three Abrego words so it stays a superset of its sweep. The Anthropic (Hegseth) and abortion-pill (RFK) questions are held in the definitions as `uncertain` declines (`borderline <slug>: ... pending`), not decided. Election's 2020 addition leaves out "old prosecutions winding down" (that is the Tina Peters question). Calibration rows carry headlines only (PROD story ids differ on TEST).
+
+**Open for Josh** (none of these is in the SQL):
+1. Epstein: should UK and royal fallout be on the front, and should the sweep file Prince Andrew stories? Today the agent judges them and the definition keeps only fallout tied to the US files or US officials. (`front-reviews/epstein-files.md`, Q1)
+2. Epstein: keep jokes, protest art and celebrity spats on the front? (`epstein-files.md`, Q2)
+3. Epstein: move `started_at` to February 27, 2025? (`epstein-files.md`, Q3)
+4. Iran: Iran only, or all of Trump's wars (Venezuela, Cuba, Greenland)? (`iran.md`, Q1)
+5. Iran: the Houthis, only when tied to the Iran war? (`iran.md`, Q2)
+6. Iran: move `started_at` to June 21, 2025? (`iran.md`, Q3)
+7. Israel & Gaza: hand-move the 10 "Israel pulled the US into Iran" stories from Iran (724, 3107, 3854, 4124, 4387, 4402, 6760, 7037, 7116, 12061)? (`israel-gaza.md`; `iran.md`, Q4)
+8. The Courts: every "judge blocks Trump" ruling on this front? The definition takes them through the agent (the dek says "blocked orders"); none are swept. (`the-courts.md`, Q1)
+9. The Courts: Supreme Court tight (shipped), middle or wide? Middle = append the review's `supreme court|justices ... ruled/blocked/...` branch to the agent_pattern. (`the-courts.md`, Q2)
+10. The Courts: court losses in DOJ cases against critics (Comey, Letitia James), or a separate "Retribution" front? (`the-courts.md`, Q3)
+11. Election: were the Fulton County raid, the voting-rights group search and DOJ's voter-data push declined or still waiting? One service-role `pipeline_skips` query. (`election-suppression.md`, Q1)
+12. Election: Tina Peters and the fake electors, out unless a federal action now? (`election-suppression.md`, Q2)
+13. Election: the sweep now files every SAVE America Act headline, horse race included (accepted here, as the review recommends; ADO-594's coverage label keeps analysis off the main line). (`election-suppression.md`, Q3)
+14. RFK: the abortion pill, FDA or HHS actions only? Held as uncertain declines until then. (`rfk-hhs.md`)
+15. Hegseth: the Pentagon's dispute with Anthropic (D4). Held as uncertain declines; Claude takes no view. (`hegseth-pentagon.md`)
+16. Hegseth: hand-move 6596 (General George's ouster) from Iran? (`hegseth-pentagon.md`)
+17. Trump Corruption: hand-move the 10 envoy-diplomacy members (6 to Iran, 4 to no front) before the agent goes live? (`trump-corruption.md`)
+
 ## Verification
 
 - TEST: migration 116 via SQL editor, push prompt to `test`, create the TEST trigger (env `env_01YRYGLu8C8ijpVWdPAwgVSQ`, branch `test`, no cron), run once, read `story_event.note` + `pipeline_skips` rows, spot-check 30 (AC 1).

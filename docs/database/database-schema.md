@@ -44,6 +44,9 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | top_entities | TEXT[] | Top entities in story |
 | enrichment_status | TEXT | Enrichment pipeline status |
 | enrichment_failure_count | INTEGER | Failed enrichment attempts |
+| action_label | TEXT | ADO-594 (migration 123): `did` / `said` / `coverage`; NULL = not labeled yet. Definitions: events-tracker PRD 14.2 |
+| action_actor | TEXT | ADO-594: `trump` / `administration` / `ally` / `other` (whose action; a different job from primary_actor) |
+| action_label_source | TEXT | ADO-594: `agent` / `backfill` / `human`. Trigger `stories_action_label_lock` keeps a human label: a write that does not come through `set_story_action_label()` gets the three label fields restored (the rest of the write goes through), and a label sent without a source gets `agent` |
 
 **Key Indexes:**
 - `stories_pkey` - Primary key on `id`
@@ -187,6 +190,7 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 | research_status | TEXT | 'complete', 'in_progress', 'pending' |
 | post_pardon_status | TEXT | 'quiet', 'under_investigation', 're_offended' |
 | post_pardon_notes | TEXT | What happened after pardon |
+| post_pardon_checked_at | TIMESTAMPTZ | Last post-pardon news check (migration 132, ADO-524): set at enrichment and by every daily recheck, hit or not |
 | trump_connection_detail | TEXT | Connection explanation |
 | donation_amount_usd | NUMERIC(14,2) | Donation amount if applicable |
 | receipts_timeline | JSONB | Array of timeline events |
@@ -210,6 +214,8 @@ TrumpyTracker uses Supabase (PostgreSQL) with the RSS v2 story clustering archit
 - `pardons_donation_nonnegative` - Donation >= 0
 - `pardons_receipts_timeline_is_array` - JSONB array check
 - Partial unique: `(source_system, source_key) WHERE source_key IS NOT NULL`
+
+**RPC `pardons_due_for_recheck(p_limit int default 10)`** (migration 132, ADO-524, service_role only): the pardons agent's daily recheck pool (prompt v1.4 Step 6.5). Published, enriched person pardons (not id 3, no group cards) whose `post_pardon_checked_at` is NULL or older than 14 days (pardoned within 180 days, or Jan 6: `primary_connection_type = 'jan6_defendant'`, `crime_category = 'jan6'`, or January 20, 2025 with a Capitol / January 6 offense) or 60 days (otherwise). Never-checked first, then oldest check; 1-10 rows with identity columns, `source_urls` and `pool_size`.
 
 **Key Indexes:**
 - `idx_pardons_search` - GIN on search_vector
@@ -268,6 +274,7 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 | sweep_summary | BOOLEAN | (115) also try `sweep_pattern` on `summary_neutral`, but ONLY for headlines matching `sweep_coword` (ungated summary matching on "midterm" pulled in every political summary) |
 | main_line_alarm_floor | SMALLINT | RETIRED by rule v1.3 (migration 122, ADO-608): no longer read, all NULL. Was (115) rule v1.2: a member with `alarm_eff >= floor` is on the main line. CHECK 1-5. Kept so a rollback to 115 needs no DDL |
 | agent_pattern | TEXT | (116, ADO-582) case-insensitive regex; a story whose headline **or** `summary_neutral` matches is a candidate for the front assignment agent (`front_agent_candidates`). Broader than `sweep_pattern` on purpose (the agent judges, the regex only bounds the pool). NULL = no agent pass. Seeded for Election Suppression only; tightened September 30, 2026 (current value + rollback: `scripts/maintenance/2026-09-30-ado-582-tighten-agent-pattern.sql`). Never re-run 116 PART D, it resets the seed |
+| agent_definition | TEXT | (127, ADO-592) plain-language rubric the all-fronts assignment agent judges this front against. A front joins the agent only when published with both `agent_pattern` and `agent_definition`. Data, edited with UPDATE (definitions file `scripts/maintenance/2026-10-04-ado-592-front-definitions.sql`); apply changes outside the daily fronts run |
 | created_at / updated_at | TIMESTAMPTZ | updated_at via set_updated_at() trigger |
 
 **RLS:** `events_anon_select` — anon sees `publish_state='published'` only. Writes are service_role only.
@@ -337,7 +344,9 @@ Stored boolean, `NOT NULL DEFAULT false`. Written ONLY by `refresh_tracker_deriv
 ### `tracker_stats` (table, migration 113)
 One row (`id = 1`, CHECK-enforced): `developments`, `alarm5_last30`, `open_fronts`, `refreshed_at`. The masthead tally; replaces 9 `HEAD count=exact` requests per page load. Counts are as of `refreshed_at`. Anon SELECT (explicit grant + RLS policy); service_role write.
 
-### `v_tracker_main_line_rule` (view, migration 113, v1.2 in 115, v1.3 in 122) — service_role only
+### `v_tracker_main_line_rule` (view, migration 113, v1.2 in 115, v1.3 in 122, v2 in 126) — service_role only
+**Rule v2 (migration 126, ADO-594 S4):** pins win; `action_label = coverage` is off; a published-front member is on at alarm_eff 4+ (any other label); an unlabeled loose end needs alarm_eff 5 (v1.3, while the label backfill runs); a loose end `did` by trump/administration is on at 3+, `said` at 4+; ally/other loose ends are off at every level. With no labels written v2 equals v1.3. Rollback = re-run 122.
+
 **The single definition of the rule** (moved verbatim from the 112 `v_tracker_stories`; 115 added the per-front floor clause). Returns `id, main_line`. NOT `security_invoker`: it carries `events.publish_state = 'published'` explicitly so the refresh (SECURITY DEFINER, bypasses RLS) scores draft-front members as loose ends exactly as anon saw them. Edit the rule here and nowhere else.
 
 ### `refresh_tracker_derived()` (function, migration 113) — service_role only
@@ -349,13 +358,24 @@ Deterministic regex sweep of active stories with **no** `story_event` row into f
 ### `stories_needing_enrichment(p_limit INTEGER DEFAULT 40, p_cooldown_hours INTEGER DEFAULT 12, p_max_failures INTEGER DEFAULT 3)` (function, migration 117 v5 — ADO-584) — service_role only
 The candidate pool for the **Stories Enrichment Agent** (`docs/features/stories-claude-agent/prompt-v1.md` Step 2, the 2-hourly claude.ai routine). Returns active stories with at least one `article_story` row, each with a `reason`: **`never_enriched`** (`last_enriched_at IS NULL`), or Claude-agent-enriched (`enrichment_meta->>'source' = 'claude-agent'`) past the cooldown and one of **`new_articles`** (an `article_story.matched_at` after the evidence watermark), **`merged`** (a `story_merge_audit` merge/unmerge on this survivor after the watermark — `merge_stories` repoints rows without touching `matched_at`), or **`retry_failed`** (last attempt failed or still no `summary_neutral`, under `p_max_failures`). The **evidence watermark** is DB-issued: the RPC returns `evidence_as_of` = the later of the newest `matched_at` and the newest merge/unmerge time, the agent echoes it verbatim into `enrichment_meta.evidence_as_of` on every **successful** write, and the next call compares against it (falls back to `last_enriched_at`). A **failed** attempt must not move the watermark (v4): the RPC also returns `prior_evidence_as_of` (the watermark it used), the failure write echoes that into `evidence_as_of` and records what it saw in `enrichment_meta.attempt_evidence_as_of`. A key that is present with JSON `null` (first attempt failed, v5) means nothing has been seen: watermark NULL, every article is new; only a missing key falls back to `last_enriched_at`. Pending evidence therefore stays in `new_article_ids` until a success; the uncapped `new_articles`/`merged` branches fire only on evidence newer than the last attempt, so `p_max_failures` still stops a story that keeps failing on the same evidence. It must cover merge times too, or a merged survivor re-qualifies every cooldown forever. `new_article_ids` (all of it, newest first — no cap since v4, because the watermark advances past every listed article) names the evidence that re-qualified the story — post-watermark attaches plus the articles a still-standing merge brought in — and the prompt's Step 3B fetches them by id (newest 6 in full, the rest at title/source/excerpt level), because its top-6-by-similarity read can miss them while the watermark advances past them. Excludes legacy GPT output (no `source` marker) and stories with no linked articles. Oldest-enriched first, never-enriched first of all; rows also carry `new_article_count`, `pool_size` (total before `LIMIT`) and the exact `last_enriched_at` the Step 6 concurrency guard needs. Replaced the prompt's inline `stories?...or=(last_enriched_at...)` filter, which re-enriched every Claude-enriched story older than 12 hours regardless of change — with ~15,000 active stories that never close, that rewrote July/August stories forever (September 18, 2026). `qa:agent-prompts` guards the prompt/RPC contract.
 
+**Migration 124 (ADO-594 S2):** also returns `action_label_source` (last column). The Stories agent (claude-v1.1) leaves `action_label`, `action_actor` and `action_label_source` out of its PATCH when it is `human`; on success it writes both labels with source `agent`, on failure none of the three. The prompt stops with no writes if the column is missing.
+
 ### `front_agent_candidates(p_slug TEXT, p_limit INTEGER DEFAULT 25)` (function, migration 116 — ADO-582) — service_role only
 The candidate pool for the **front assignment agent** (`docs/features/fronts-claude-agent/prompt-v1.md`, a daily claude.ai routine, Election Suppression only for now). Returns active, enriched (`summary_neutral IS NOT NULL`) stories with **no** `story_event` row whose headline or `summary_neutral` matches `events.agent_pattern` for `p_slug`, **excluding** stories the agent already declined since their last update (a `pipeline_skips` row with `pipeline='front_assignment'`, `reason='agent_declined'`, `entity_type='story'`, `metadata->>'front' = p_slug`, `created_at >= last_updated_at`). Newest first; every row carries `pool_size` (total before `LIMIT`) and the front's `event_id` so the prompt never hardcodes an id. Paging is by exhaustion: each judged story leaves a `story_event` or `pipeline_skips` row, so the next call returns only what is left (no OFFSET). The agent ends its run with `refresh_tracker_derived()` so assignments reach the main line the same day. Decline rows use the exact `PIPELINES.FRONT_ASSIGNMENT` / `REASONS.AGENT_DECLINED` strings from `scripts/lib/skip-reasons.js`; `qa:fronts` asserts the prompt, the constants and this function's filter agree.
 
-### `v_tracker_stories` (view)
-**Purpose:** The Tracker spine's stories read path with the server-computed `main_line` rule (ADO-554, PRD §12 anchor principle)
+### `front_agent_candidates_all(p_limit INTEGER DEFAULT 25)` (function, migration 127 — ADO-592) — service_role only
+Pool for the all-fronts assignment agent: active enriched stories with no `story_event` row, not labeled `coverage` (unlabeled stay in, ADO-594 S7), whose headline or `summary_neutral` matches the `agent_pattern` of at least one agent front. Returns `matched_fronts` (slugs by sweep priority) plus the labels. Declines (`pipeline_skips` front_assignment/agent_declined since the story last changed) hide it per front: `metadata.front = 'none'` hides it from each front in `metadata.judged_fronts`; old ADO-582 declines (`metadata.front = <slug>`) from that front only. The election-only `front_agent_candidates` (116) stays until the fronts-v2 prompt is on main.
 
-`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, front_opening, tracker_pin, alarm_eff, main_line`
+### `label_backfill_candidates(p_limit)` / `record_action_labels(p_run_id, p_rows)` (functions, migration 125 — ADO-594 S3) — service_role only
+The one-time label backfill: pool of unlabeled active enriched stories (headline, summary, primary_actor, alarm; never content), newest first, 1-50 rows; and the atomic page writer, which checks every row first, writes source `backfill` only where `action_label IS NULL`, and logs skipped (`already_labeled`, `story_not_found`) and uncertain rows to `pipeline_skips` (`label_backfill`). Writer: `scripts/maintenance/label-backfill-db.js`; prompt: `docs/features/events-tracker/label-backfill-prompt.md`.
+
+### `set_story_action_label(p_story_id BIGINT, p_label TEXT, p_actor TEXT, p_unlock BOOLEAN DEFAULT false)` (function, migration 123 — ADO-594 S1) — service_role only
+The ONLY way to set a human action label (source becomes `human`) or unlock one (`p_unlock = true`: label kept, source back to `agent`, so the next re-enrichment relabels). Sets the transaction-local flag `app.label_admin` around its own UPDATE and switches it off again. Admin only (S8); no agent prompt may call it. Guards against accidental overwrites, not against service-key code.
+
+### `v_tracker_stories` (view)
+**Purpose:** The Tracker spine's stories read path (ADO-554, PRD §12 anchor principle). Since migration 113 it reads the STORED `main_line` flag through a plain front join — no window function, no rule logic.
+
+`id, primary_headline, first_seen_at, alarm_level, severity, front_id, front_name, front_slug, tracker_pin, main_line, action_label, action_actor` (123 appended the two labels; 113 dropped `front_opening` and `alarm_eff`; nothing read them)
 
 **The rule (v1.3, migration 122 — ADO-608, October 3, 2026)** (evaluated by `v_tracker_main_line_rule`, applied by the refresh): `force_show` pin → true; `force_hide` → false; no published front (loose end) → `alarm_eff = 5`; member of a published front → `alarm_eff >= 4`. Nothing else: the v1.1/v1.2 front opening, new-peak and per-front floor clauses are retired (on PROD they put 63 alarm-3 Election Suppression items on the September homepage while hiding every later alarm-4 Iran development). Alarm-3 front members live on their front page (ADO-548). `alarm_eff` = COALESCE(alarm_level, severity map, 2) — same fallback as the adapters and `v_event_stats`. Bakes in `status = 'active' AND summary_neutral IS NOT NULL`; term scoping stays client-side. EO/SCOTUS/pardon rows: the frontend bar is `MAIN_LINE_SOURCE_ALARM` (4) in `src/lib/timeline.ts`.
 

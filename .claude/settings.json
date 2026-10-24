@@ -10,6 +10,7 @@
     ],
     "allow": [
       "Bash(node scripts/fronts/front-agent-db.js *)",
+      "Bash(node scripts/maintenance/label-backfill-db.js *)",
       "Bash(node scripts/clustering/judge-publish.js *)",
       "Bash(npm install *)",
       "Bash(npm run *)",

@@ -5,8 +5,13 @@
 // writes the cloud sandbox denies) or loses the review fixes (evidence watermark,
 // merge re-qualification, failed-attempt retry) and the Judge -> executor hand-off
 // (the agent writes one verdict file, .github/workflows/judge-executor.yml writes the DB).
+// ADO-594 S2: the Stories action labels (success-only, human lock, gold-check mode writes nothing)
+// and the rule that no agent prompt names the admin-only human-label door.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PROD_REF } from '../../lib/env-validation.js';
 
 // CRLF -> LF: a Windows checkout (core.autocrlf) must not break the \n-anchored regexes below
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -79,6 +84,50 @@ for (const col of ['id', 'primary_headline', 'last_enriched_at', 'enrichment_fai
   assert.ok(new RegExp(`^\\s+${col}\\s`, 'm').test(mig117), `RPC must return ${col}`);
 }
 
+// --- Stories agent v1.1 (ADO-594 S2): action labels, the human lock, the gold check ---
+const mig124 = read('../../migrations/124_stories_needing_enrichment_label_source.sql');
+const jsonBlock = (s) => { const a = s.indexOf('```json'); return a < 0 ? '' : s.slice(a, s.indexOf('```', a + 7)); };
+const successJson = jsonBlock(successBody);
+const failureJson = jsonBlock(failureBody);
+assert.ok(successJson.includes('"action_label":') && successJson.includes('"action_actor":'), 'success PATCH writes both action labels');
+assert.ok(successJson.includes('"action_label_source": "agent"'), 'success PATCH writes action_label_source = agent with the labels');
+assert.ok(failureJson.length > 0 && !failureJson.includes('action_'), 'failure PATCH writes no label field');
+assert.ok(/leave all three keys out/.test(successBody) && successBody.includes("`action_label_source = 'human'`"), 'Step 6 leaves the labels out when a human locked them');
+const step2 = stories.slice(stories.indexOf('### Step 2'), stories.indexOf('### Step 3'));
+assert.ok(step2.includes('action_label_source}') && /`human` means Josh locked the label/.test(step2), 'Step 2 reads action_label_source and explains the human lock');
+assert.ok(/no `action_label_source` key at all/.test(step2), 'Step 2 stops when migration 124 is missing instead of failing every PATCH');
+assert.ok(step4.includes('| `action_label` | text |') && step4.includes('| `action_actor` | text |'), 'Step 4 output table has both labels');
+for (let n = 1; n <= 12; n++) assert.ok(new RegExp(`^${n}\\. \\*\\*`, 'm').test(step4.slice(step4.indexOf('#### Action labels'))), `Step 4 carries action-label edge case ${n}`);
+assert.ok(step4.includes('whichever way it goes') && step4.includes('label_uncertain'), 'court-ruling rule and the unsure rule are present');
+assert.ok(step5.includes('`action_label` is exactly') && /not from how angry the headline sounds/.test(step5), 'Step 5 checks the label values and their basis');
+assert.ok(stories.includes('| Prompt version | claude-v1.1 |') && !/"claude-v1"|\\"claude-v1\\"/.test(stories), 'prompt_version is claude-v1.1 everywhere');
+const goldFixture = JSON.parse(read('./fixtures/action-label-gold.json')).stories;
+for (const id of [17240, 17216, 17248, 17233, 17231, 17246]) {
+  const g = goldFixture.find((x) => x.id === id);
+  assert.ok(new RegExp(`^\\| ${id} \\|[^\\n]*\\| \`${g.action_label}\` / \`${g.action_actor}\` \\|`, 'm').test(step4), `gold example ${id} matches the fixture (${g.action_label}/${g.action_actor})`);
+}
+const gold = stories.slice(stories.indexOf('### Gold-Check Mode'), stories.indexOf('### Step 0a'));
+assert.ok(gold.length > 0 && gold.includes('explicit list of numeric story ids') && gold.includes('gold-check refused: an explicit list of story ids is required'), 'gold-check mode refuses without an explicit id list');
+assert.ok(gold.includes('Do **not** fall back to a normal run'), 'a refused gold check never turns into a normal (writing) run');
+assert.ok(gold.includes('wnrjrywpcadwutfykflu') && gold.includes('TEST only'), 'gold-check mode is TEST only');
+assert.ok(gold.includes('**no PATCH to `stories`**') && !/-X (PATCH|POST|DELETE)/.test(gold), 'gold-check mode writes no PATCH and shows no write call');
+assert.ok(gold.includes('/tmp/action-label-gold-results.json') && gold.includes('action-label-gold-check.js --file'), 'gold-check output is the results file the gold-check script reads');
+assert.ok(mig124.includes('DROP FUNCTION IF EXISTS public.stories_needing_enrichment(INTEGER, INTEGER, INTEGER);'), 'migration 124 drops the exact signature before changing the return type');
+assert.ok(/pool_size\s+INTEGER,\s+action_label_source\s+TEXT\s+\)/.test(mig124) && mig124.includes('k.action_label_source'), 'migration 124 returns action_label_source as the last column');
+assert.ok(mig124.includes('TO service_role') && mig124.includes('FROM PUBLIC, anon, authenticated'), 'migration 124 keeps the RPC service_role only');
+// The human-label door is admin-only (PRD 14.7): no agent prompt may name it.
+const promptFiles = [];
+const walk = (dir) => {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p);
+    else if (/^prompt.*\.md$/i.test(e.name)) promptFiles.push(p);
+  }
+};
+walk(fileURLToPath(new URL('../../docs/features/', import.meta.url)));
+assert.ok(promptFiles.length > 0, 'found the agent prompt files');
+for (const f of promptFiles) assert.ok(!readFileSync(f, 'utf8').includes('set_story_action_label'), `${f} must not name set_story_action_label`);
+
 // --- Judge agent (v1.2, ADO-583): the agent never writes to the database; the executor does ---
 const workflow = read('../../.github/workflows/judge-executor.yml');
 const executor = read('../clustering/execute-judge-verdicts.js');
@@ -110,5 +159,73 @@ assert.ok(executor.includes('MERGE_CAP = 10'), 'executor cap mirrors migration 1
 assert.ok(executor.includes("'clustering_judge_log'"), 'executor writes the audit log');
 assert.ok(!/^\s+push:/m.test(workflow) && workflow.includes('scripts/clustering/process-judge-inbox.js') && read('../clustering/process-judge-inbox.js').includes('refs/heads/judge-run/*'), 'workflow listens on judge-run/** and runs the executor');
 assert.ok(workflow.includes('secrets.SUPABASE_SERVICE_KEY') && workflow.includes('secrets.SUPABASE_TEST_SERVICE_KEY'), 'workflow injects both service keys from secrets');
+
+// --- Pardons agent (v1.4, ADO-524): the post-pardon recheck rotation ---
+const pardons = read('../../docs/features/pardons-claude-agent/prompt-v1.md');
+const mig132 = read('../../migrations/132_pardons_post_pardon_recheck.sql');
+const step65 = pardons.slice(pardons.indexOf('### Step 6.5'), pardons.indexOf('### Step 7'));
+assert.ok(step65.length > 0, 'Step 6.5 (post-pardon recheck) exists, before Step 7');
+assert.ok(step65.includes('rpc/pardons_due_for_recheck') && mig132.includes('FUNCTION public.pardons_due_for_recheck('), 'recheck pool comes from the migration 132 RPC');
+assert.ok(step65.includes('"p_limit": 10') && mig132.includes('LEAST(GREATEST(COALESCE(p_limit, 10), 1), 10)'), 'up to 10 rechecks per run, clamped in the DB too');
+assert.ok(step65.includes('PGRST202'), 'a missing RPC skips the recheck instead of failing the run (deploy order)');
+assert.ok(/Healthy empty run for enrichment[\s\S]{0,200}Step 6\.5/.test(pardons), 'a run with nothing to enrich still runs the recheck');
+assert.ok(step65.includes('Step 3.0 research health check') && /stamp nothing/.test(step65), 'a broken search never stamps a pardon as checked');
+// the recheck writes only the post-pardon fields: no needs_review/is_public/editorial keys in its bodies
+const recheckBodies = [...step65.matchAll(/```json\n([\s\S]*?)```/g)].map((m) => m[1]).filter((b) => b.includes('post_pardon_checked_at'));
+assert.ok(recheckBodies.length >= 2, 'Step 6.5 shows its no-hit and hit PATCH bodies');
+for (const b of recheckBodies) {
+  for (const k of ['needs_review', 'is_public', 'corruption_level', 'summary_spicy', 'summary_neutral', 'enriched_at', 'prompt_version']) {
+    assert.ok(!b.includes(`"${k}"`), `a recheck PATCH body must not write ${k}`);
+  }
+}
+assert.ok(/NEVER writes\*\* `needs_review`, `is_public`/.test(step65), 'Step 6.5 forbids needs_review/is_public (Josh, October 11: a hit publishes directly)');
+assert.ok(/only moves up, never back/.test(step65), 'status escalates only');
+assert.ok(step65.includes('After the pardon') && step65.includes('Same person'), 'a hit needs identity and post-pardon timing before any write');
+assert.ok(step65.includes('DISCORD_WEBHOOK_URL') && /never fails the run/.test(step65), 'hits are reported on Discord, never fatally');
+assert.ok(pardons.includes(PROD_REF) && /PARDONS_RECHECK_IDS is TEST only/.test(pardons), 'gold mode refuses on PROD');
+assert.ok(/"post_pardon_checked_at": "\{ENRICHED_AT value\}"/.test(pardons), 'first enrichment stamps the first check (Step 6)');
+assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"prompt_version": "v1.3"'), 'pardons writes are tagged v1.4');
+// review fixes (b9c32d0 /code-review medium)
+assert.ok(/source_urls\s+JSONB/.test(mig132) && step65.includes('source_urls, post_pardon_checked_at'), 'the RPC and gold select return source_urls, so a hit never wipes the existing sources');
+assert.ok(/search TOOL ERROR is NOT "no hit"/.test(step65) && /EMPTY result list is different/.test(step65), 'a tool error is never stamped as checked; an empty result is a real no-hit (else obscure pardons block the rotation)');
+assert.ok(/If EITHER of a pardon's two searches returns an error/.test(step65) && /two pardons in a row are `failed`/.test(step65), 'any error fails that pardon; the stop rule counts pardons, not searches');
+assert.ok(/Degraded-search guard/.test(step65) && /stamp none of them/.test(step65), 'a search that quietly returns empty lists cannot stamp a run of pardons');
+// whole WebSearch(...) lines, so an escaped \" inside the query cannot end the match early
+const recheckQueries = step65.split('\n').filter((l) => l.startsWith('WebSearch(query='));
+assert.ok(recheckQueries.length === 2, 'Step 6.5 shows exactly its two recheck queries');
+assert.ok(recheckQueries.every((l) => !/\bOR\b/.test(l) && !/\b20\d\d\b/.test(l)), 'the recheck searches use plain words: no OR, no years');
+assert.ok(recheckQueries.every((l) => l.includes('<news name>')) && step65.includes('drop middle names') && step65.includes('keep a multi-word surname whole'), 'searches use the short news name (keeping multi-word surnames and Jr./Sr.), not the formal full name');
+assert.ok(pardons.includes('Deploy-order guard (v1.4)') && pardons.includes('PGRST204'), 'Step 6 survives a missing migration 132');
+// TEST gold run, October 12, 2026: one plain-name search missed William Goodman's arrest
+assert.ok(/Two searches per pardon, always both/.test(step65) && step65.includes('<distinguishing term> arrested'), 'every recheck runs the plain search AND the distinguishing-term search');
+
+// --- ADO-626: writes record the model the run actually used, never a model ID copied from the prompt ---
+// (PROD pardons rows said claude-opus-4-6 while the routine ran a newer model)
+const agentPrompts = [...promptFiles, fileURLToPath(new URL('../../docs/features/events-tracker/label-backfill-prompt.md', import.meta.url))];
+for (const f of agentPrompts) {
+  const text = readFileSync(f, 'utf8');
+  assert.ok(!/claude-(opus|sonnet|haiku)-\d/.test(text), `${f} must not hardcode a Claude model ID (write {AGENT_MODEL})`);
+  assert.ok(!/Claude (Opus|Sonnet|Haiku) \d/.test(text), `${f} must not name a model version (the routine sets it)`);
+  if (text.includes('{AGENT_MODEL}')) {
+    assert.ok(text.includes('The exact model ID is'), `${f} uses {AGENT_MODEL}, so it must say where the agent reads it`);
+    assert.ok(text.includes('starts with `claude-` and is never the literal text `{AGENT_MODEL}`') && text.includes('write `unknown`; never guess'), `${f} guards the placeholder (claude- prefix, no literal, unknown when missing)`);
+  }
+}
+const scotus = read('../../docs/features/scotus-claude-agent/prompt-v1.md');
+const eo = read('../../docs/features/eo-claude-agent/prompt-v1.md');
+// every log insert, Section 2 examples included (migration 133 drops the stale column default)
+for (const [name, p] of [['pardons', pardons], ['scotus', scotus]]) {
+  const inserts = p.split(/-X POST "\$\{SUPABASE_URL\}\/rest\/v1\/\w+_enrichment_log"/).slice(1).map((s) => s.slice(0, s.indexOf('```')));
+  assert.ok(inserts.length >= 2, `${name} shows its log inserts`);
+  for (const ins of inserts) assert.ok(/\\?"agent_model\\?": \\?"\{AGENT_MODEL\}\\?"/.test(ins), `every ${name} log insert sets agent_model`);
+}
+assert.ok(!pardons.slice(pardons.indexOf('## 4. Gold Set'), pardons.indexOf('## 5.')).includes('{AGENT_MODEL}'), 'gold calibration examples carry no run provenance');
+const mig133 = read('../../migrations/133_drop_stale_agent_model_default.sql');
+for (const t of ['scotus_enrichment_log', 'pardons_enrichment_log']) {
+  assert.ok(mig133.includes(`${t} ALTER COLUMN agent_model DROP DEFAULT`) && mig133.includes(`${t} ALTER COLUMN agent_model DROP NOT NULL`), `migration 133 drops the default and NOT NULL on ${t}`);
+}
+for (const [name, p] of [['pardons', pardons], ['eo', eo], ['stories', stories]]) {
+  assert.ok(p.includes('"model": "{AGENT_MODEL}"'), `${name} enrichment_meta.model is the running model`);
+}
 
 console.log('agent-prompt-contracts: all checks passed');

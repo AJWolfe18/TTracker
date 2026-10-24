@@ -1,0 +1,245 @@
+{
+ "source": "docs/features/events-tracker/prd.md section 14.3 (Josh confirmed as the gold set October 1, 2026, ADO-594 D1). TEST story ids.",
+ "stories": [
+  {
+   "id": 17254,
+   "headline": "Midterms kick into high gear",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17253,
+   "headline": "Can Democrats flip Florida?",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17252,
+   "headline": "Trump suggests renaming New Mexico",
+   "action_label": "said",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17251,
+   "headline": "Keith and Walter on GOP midterm challenges",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17250,
+   "headline": "Trump pledged lower prices: risen or fallen?",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17249,
+   "headline": "Data centers are bringing Americans together",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17248,
+   "headline": "\"The most anti-union president\"",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17247,
+   "headline": "Democrats try moving to the left",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17246,
+   "headline": "Worker injured in White House construction",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17245,
+   "headline": "Legal veterans fight his election orders",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17244,
+   "headline": "The DSA's problem isn't media training",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17243,
+   "headline": "Charges dropped, damage done (Huerta)",
+   "action_label": "coverage",
+   "action_actor": "administration"
+  },
+  {
+   "id": 17242,
+   "headline": "GOP convention will be \"Trumpist pageantry\"",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17241,
+   "headline": "AI hacking tool breaches phones",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17240,
+   "headline": "Rare charges against ICE agent; DOJ retreats from shooting probes",
+   "action_label": "did",
+   "action_actor": "administration"
+  },
+  {
+   "id": 17239,
+   "headline": "Watch live: GOP convention night 1",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17238,
+   "headline": "Prediction markets and the 2026 races",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17237,
+   "headline": "How Christians can fight Christian nationalism",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17236,
+   "headline": "9/11 memories at Guantanamo",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17235,
+   "headline": "Why Iowa is a state to watch",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17234,
+   "headline": "US destroys Iranian tankers after missile attacks",
+   "action_label": "did",
+   "action_actor": "administration"
+  },
+  {
+   "id": 17233,
+   "headline": "Carney: retaliation was unavoidable",
+   "action_label": "said",
+   "action_actor": "other"
+  },
+  {
+   "id": 17232,
+   "headline": "The mystery at the heart of the trade war",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17231,
+   "headline": "DHS asks Supreme Court for Social Security data on voters",
+   "action_label": "did",
+   "action_actor": "administration"
+  },
+  {
+   "id": 17230,
+   "headline": "Court: no constitutional right to clean water",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17229,
+   "headline": "How Canada decided to hurt its own economy",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17228,
+   "headline": "Senate candidates skipping his convention",
+   "action_label": "coverage",
+   "action_actor": "ally"
+  },
+  {
+   "id": 17227,
+   "headline": "Attorney faces discipline over 2020 Fulton suit",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17226,
+   "headline": "Paxton whistle-blower in rival's ad",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17225,
+   "headline": "Space Force uniform makeover",
+   "action_label": "said",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17224,
+   "headline": "Renames places, poses as superhero",
+   "action_label": "said",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17223,
+   "headline": "Last test of dynastic politics",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17222,
+   "headline": "Marshall's challenger criticizes him",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17221,
+   "headline": "House candidate helped imprison a Democrat",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17220,
+   "headline": "No charges for false report on Buttigieg",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17219,
+   "headline": "Live results: Rhode Island primaries",
+   "action_label": "coverage",
+   "action_actor": "other"
+  },
+  {
+   "id": 17218,
+   "headline": "Ohio governor's race turns violent",
+   "action_label": "did",
+   "action_actor": "other"
+  },
+  {
+   "id": 17217,
+   "headline": "Approval falls as his fortune grows",
+   "action_label": "coverage",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17216,
+   "headline": "Trump threatens to bar Bombardier",
+   "action_label": "said",
+   "action_actor": "trump"
+  },
+  {
+   "id": 17215,
+   "headline": "Democratic PAC wants to catch up on AI",
+   "action_label": "coverage",
+   "action_actor": "other"
+  }
+ ]
+}

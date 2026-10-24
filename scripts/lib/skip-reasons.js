@@ -33,6 +33,7 @@ export const PIPELINES = Object.freeze({
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
   TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
   SCOTUS_FETCH:       'scotus_fetch',       // scripts/scotus/fetch-cases.js — cluster skipped before processing (ADO-493)
+  LABEL_BACKFILL:     'label_backfill',     // record_action_labels() RPC (migration 125) — backfill label not written, or written but uncertain (ADO-594)
 });
 
 export const REASONS = Object.freeze({
@@ -51,6 +52,9 @@ export const REASONS = Object.freeze({
   CLEMENCY_TYPE_UNKNOWN: 'clemency_type_unknown', // DOJ mixed pardon/commutation section row whose warrant named no type; inserted as 'pardon' (ADO-590)
   MALFORMED_DECIDED_AT:  'malformed_decided_at',  // SCOTUS cluster date_filed missing, invalid, before the run's since date or in the future (ADO-493)
   OLDER_DECISION:        'older_decision',        // SCOTUS cluster is an earlier decision on a docket whose row already holds a later one (ADO-603)
+  ALREADY_LABELED:       'already_labeled',       // label backfill: story got an agent or human action label after the page was read; kept (ADO-594)
+  STORY_NOT_FOUND:       'story_not_found',       // label backfill: story id no longer exists (merged or deleted) when the page was recorded (ADO-594)
+  LABEL_UNCERTAIN:       'label_uncertain',       // label backfill: label written, but the agent was unsure (PRD 14.2 edge case 12); review these first (ADO-594)
 });
 
 /**
