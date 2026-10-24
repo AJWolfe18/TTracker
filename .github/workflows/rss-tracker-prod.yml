@@ -5,16 +5,28 @@ on:
   schedule:
     - cron: '17 */2 * * *'  # off-peak minute: GitHub drops top-of-hour slots
 
-  # Manual trigger (for testing/emergency runs)
+  # Manual trigger (for testing/emergency runs). Also fired every 2 hours by an external
+  # scheduler (cron-job.org), because GitHub runs the schedule above only 4-5 times a day.
   workflow_dispatch:
+    inputs:
+      scheduled:
+        description: "'true' only from the external scheduler: obeys the ENABLE_PROD_SCHEDULES kill-switch like the cron"
+        required: false
+        default: 'false'
+
+# The external trigger and a late GitHub schedule can land together: queue, never overlap,
+# so two runs never cluster the same articles at once.
+concurrency:
+  group: rss-tracker-prod-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   rss-tracker-prod:
     runs-on: ubuntu-latest
 
     # Branch lock + kill-switch: Only run on main, schedule blocked unless ENABLE_PROD_SCHEDULES=true
-    # TTRC-362: workflow_dispatch still works when kill-switch is off
-    if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || vars.ENABLE_PROD_SCHEDULES == 'true')
+    # TTRC-362: workflow_dispatch still works when kill-switch is off, except the external scheduler's (scheduled=true)
+    if: github.ref == 'refs/heads/main' && ((github.event_name != 'schedule' && inputs.scheduled != 'true') || vars.ENABLE_PROD_SCHEDULES == 'true')
 
     steps:
       - name: Checkout code

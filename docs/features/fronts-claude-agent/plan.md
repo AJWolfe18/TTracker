@@ -177,7 +177,7 @@ Per front ("filed" = the review's PROD headline simulation; overlaps can shift a
 11. Election: were the Fulton County raid, the voting-rights group search and DOJ's voter-data push declined or still waiting? One service-role `pipeline_skips` query. (`election-suppression.md`, Q1)
 12. Election: Tina Peters and the fake electors, out unless a federal action now? (`election-suppression.md`, Q2)
 13. Election: the sweep now files every SAVE America Act headline, horse race included (accepted here, as the review recommends; ADO-594's coverage label keeps analysis off the main line). (`election-suppression.md`, Q3)
-14. RFK: the abortion pill, FDA or HHS actions only? Held as uncertain declines until then. (`rfk-hhs.md`)
+14. ~~RFK: the abortion pill, FDA or HHS actions only?~~ **Decided October 24, 2026 (Josh): yes, on the RFK front.** FDA/HHS actions on the pill, and court or Congress action on those decisions, belong; lawsuits over state bans and mail access with no FDA/HHS decision at issue do not. The sweep guard stays, so the agent decides each one. Definition edit: `scripts/maintenance/2026-10-24-ado-592-front-definition-edits.sql`. (`rfk-hhs.md`)
 15. Hegseth: the Pentagon's dispute with Anthropic (D4). Held as uncertain declines; Claude takes no view. (`hegseth-pentagon.md`)
 16. Hegseth: hand-move 6596 (General George's ouster) from Iran? (`hegseth-pentagon.md`)
 17. Trump Corruption: hand-move the 10 envoy-diplomacy members (6 to Iran, 4 to no front) before the agent goes live? (`trump-corruption.md`)
