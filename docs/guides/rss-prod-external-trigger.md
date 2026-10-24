@@ -5,7 +5,7 @@
 **Cost:** $0 (cron-job.org free tier, GitHub Actions minutes are free on this public repo).
 
 **Safety built into the workflow:**
-- `concurrency` group: a late GitHub schedule and the external call queue instead of running together.
+- `concurrency` group: a late GitHub schedule and the external call never run together. GitHub keeps at most one waiting run (a newer one replaces it), which loses nothing because every run fetches everything new.
 - The external call sends `scheduled=true`, so it obeys the `ENABLE_PROD_SCHEDULES` kill switch like the cron. A manual "Run workflow" click (input left at `false`) still runs when the switch is off (TTRC-362).
 - Only runs on `main` (the existing branch lock).
 
@@ -21,7 +21,7 @@ GitHub → profile picture → Settings → Developer settings → Personal acce
 - Permissions → Repository permissions → **Actions: Read and write**. Nothing else.
 - Generate, then copy the token (it starts `github_pat_`).
 
-This token can start, rerun or cancel workflows on this one repo. It cannot read secrets, read or push code, or touch other repos.
+Treat it as a real credential. GitHub has no "start this one workflow" permission, so Actions write covers every workflow on this repo: it can start any of the manual (`workflow_dispatch`) workflows on `main`, which run with PROD secrets and can spend AI budget (pardons, EO, SCOTUS, enrichment), and it can cancel or delete runs and logs or disable a workflow. It cannot read secrets, read or push code, or touch other repos. Keep it only in cron-job.org, turn on two-factor login there, and revoke it at once if that account is ever in doubt.
 
 ### 2. cron-job.org job
 Sign up free at cron-job.org → **Create cronjob**:
@@ -40,7 +40,7 @@ Sign up free at cron-job.org → **Create cronjob**:
 - Save, then **Test run**. Expect **HTTP 204** (no body).
 
 ### 3. Check
-`gh run list --workflow rss-tracker-prod.yml --limit 5` shows a new run with event `workflow_dispatch`. After a day, count runs per day: expect about 12 or more.
+`gh run list --workflow rss-tracker-prod.yml --limit 5` shows a new run with event `workflow_dispatch`. After a day, count runs per day: expect about 12 from the external job plus GitHub's 4-5 late ones, so 15-17. The extra runs are cheap (a feed with nothing new costs no OpenAI call; Actions minutes are free on this public repo). If GitHub's late runs ever crowd the external ones, drop the `schedule:` block in a PR and keep only the external trigger.
 
 ## Turning it off
 Pause the job in cron-job.org (or set `ENABLE_PROD_SCHEDULES` to anything but `true`, which stops both). To kill the token: GitHub → Fine-grained tokens → Revoke.

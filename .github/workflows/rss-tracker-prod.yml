@@ -14,12 +14,6 @@ on:
         required: false
         default: 'false'
 
-# The external trigger and a late GitHub schedule can land together: queue, never overlap,
-# so two runs never cluster the same articles at once.
-concurrency:
-  group: rss-tracker-prod-${{ github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
   rss-tracker-prod:
     runs-on: ubuntu-latest
@@ -27,6 +21,14 @@ jobs:
     # Branch lock + kill-switch: Only run on main, schedule blocked unless ENABLE_PROD_SCHEDULES=true
     # TTRC-362: workflow_dispatch still works when kill-switch is off, except the external scheduler's (scheduled=true)
     if: github.ref == 'refs/heads/main' && ((github.event_name != 'schedule' && inputs.scheduled != 'true') || vars.ENABLE_PROD_SCHEDULES == 'true')
+
+    # The external trigger and a late GitHub schedule can land together: never run two at once
+    # (both would cluster the same articles). GitHub keeps at most ONE waiting run per group; a
+    # newer arrival replaces it, which is fine here because any run fetches everything new.
+    # Job-level, so a run the kill-switch skips never takes the waiting slot.
+    concurrency:
+      group: rss-tracker-prod-${{ github.ref_name }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
