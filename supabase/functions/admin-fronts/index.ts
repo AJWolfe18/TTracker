@@ -19,8 +19,8 @@
 //                                          -> { total_matches, on_this_front, on_other_front, unassigned, samples[] }
 //   updates    { event_id, cursor? }       -> { updates: [... + stories[]], next_cursor }   (newest first)
 //   save_update { event_id, update_id?, fields, story_ids? }
-//                                          -> { ok, update, links, refresh? }   (no update_id = create, approved)
-//   delete_update { event_id, update_id }  -> { ok, refresh }
+//                                          -> { ok, update, links }   (no update_id = create, approved)
+//   delete_update { event_id, update_id }  -> { ok }
 //   pins                                   -> { pins: [... + item, dead, reason], truncated }
 //   pin_lookup { source, entity_id }       -> { item, pin, dead, reason }
 //   pin_set    { source, entity_id, pin, note? } -> { ok, pin, item, dead, reason, refresh }
@@ -30,8 +30,9 @@
 // decided_at); the anon RLS policy (migration 111) shows an approved update only while its front
 // is published, so nothing here gates visibility. Fields are whitelisted in updates-pins.ts.
 // Linking stories writes story_event.event_update_id (the composite FK keeps the link on the
-// same front); those writes refresh the Tracker like every other story_event write. The update
-// text itself feeds no stored Tracker column, so a text-only save does not refresh.
+// same front). Nothing derived reads event_updates or event_update_id (main_line and
+// tracker_stats use story_event.story_id/event_id only, migrations 113/126), so update writes do
+// not run refresh_tracker_derived(); v_event_stats is a live view.
 // Pins (AC6): tracker_pin rows for any of the four sources; every pin write refreshes the
 // Tracker (stories.main_line is stored). A pin on an item that can never show on the Tracker
 // (closed, merged, unpublished, before the term) is flagged "dead" in pins / pin_set.
@@ -207,11 +208,8 @@ async function linkStories(supabase: SupabaseClient, eventId: number, updateId: 
   const onFrontIds = onFront.map((r) => r.story_id)
   const notOnFront = ids.filter((id) => !onFrontIds.includes(id))
 
-  let unq = supabase.from('story_event').update({ event_update_id: null }).eq('event_update_id', updateId)
-  if (onFrontIds.length) unq = unq.not('story_id', 'in', `(${onFrontIds.join(',')})`)
-  const { data: unlinked, error: unErr } = await unq.select('story_id')
-  if (unErr) throw new Error(`unlink failed: ${unErr.message}`)
-
+  // Link first, unlink second: two PostgREST writes cannot share a transaction, and if the second
+  // one fails, an extra old link left behind is easier to fix than requested links that were lost.
   let linked: number[] = []
   if (onFrontIds.length) {
     // eq(event_id) again: a story moved to another front since the read is skipped, not linked
@@ -221,9 +219,13 @@ async function linkStories(supabase: SupabaseClient, eventId: number, updateId: 
     if (error) throw new Error(`link failed: ${error.message}`)
     linked = (data || []).map((r) => Number(r.story_id))
   }
-  const changed = (unlinked || []).length > 0 || onFront.some((r) => r.event_update_id !== updateId && linked.includes(r.story_id))
+
+  let unq = supabase.from('story_event').update({ event_update_id: null }).eq('event_update_id', updateId)
+  if (onFrontIds.length) unq = unq.not('story_id', 'in', `(${onFrontIds.join(',')})`)
+  const { data: unlinked, error: unErr } = await unq.select('story_id')
+  if (unErr) throw new Error(`unlink failed: ${unErr.message}`)
+
   return {
-    changed,
     result: {
       linked,
       not_on_front: [...notOnFront, ...onFrontIds.filter((id) => !linked.includes(id))],
@@ -241,8 +243,18 @@ const ITEM_SPECS = {
   pardons: { table: 'pardons', select: 'id,recipient_name,pardon_date,is_public,corruption_level', title: 'recipient_name', date: 'pardon_date', alarm: 'corruption_level' }
 } as const
 
-// The pinned items, normalized (PinItem). Missing ids are simply absent from the map.
+// The pinned items, normalized (PinItem). Missing ids are simply absent from the map. Ids go in
+// chunks so a long pin list never builds a URL PostgREST or the gateway rejects (414).
+const ID_CHUNK = 150
 async function describeItems(supabase: SupabaseClient, source: PinSource, ids: string[]): Promise<Map<string, PinItem>> {
+  const out = new Map<string, PinItem>()
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    for (const [k, v] of await describeChunk(supabase, source, ids.slice(i, i + ID_CHUNK))) out.set(k, v)
+  }
+  return out
+}
+
+async function describeChunk(supabase: SupabaseClient, source: PinSource, ids: string[]): Promise<Map<string, PinItem>> {
   const out = new Map<string, PinItem>()
   const numeric = ids.filter((i) => /^\d{1,18}$/.test(i))
   if (source === 'stories') {
@@ -684,11 +696,8 @@ Deno.serve(async (req) => {
             if (error) throw new Error(`update read failed: ${error.message}`)
             if (!data) return jsonResponse({ ok: false, reason: 'update_not_found', error: 'That update no longer exists on this front. Reload the list.' }, 404)
             current = data
-          } else {
-            const { data, error } = await supabase.from('events').select('id').eq('id', eventId).maybeSingle()
-            if (error) throw new Error(`events read failed: ${error.message}`)
-            if (!data) return jsonResponse({ ok: false, reason: 'front_not_found' }, 404)
           }
+          // (a create on a missing front fails the event_id FK: 23503 -> front_not_found below)
 
           const patch = buildUpdatePatch(fields as Record<string, unknown>, current)
           const wrote = !current || Object.keys(patch).length > 0
@@ -710,32 +719,28 @@ Deno.serve(async (req) => {
 
           // deno-lint-ignore no-explicit-any
           let links: any = null
-          // deno-lint-ignore no-explicit-any
-          let refreshRes: any = null
           if (storyIds !== undefined) {
             try {
-              const r = await linkStories(supabase, eventId, Number(saved.id), storyIds)
-              links = r.result
-              if (r.changed) refreshRes = await refresh(supabase)
+              links = (await linkStories(supabase, eventId, Number(saved.id), storyIds)).result
             } catch (err) {
               console.error('linking stories failed:', err)
-              links = { error: 'The update was saved, but linking its stories failed. Try saving again.' }
+              links = {
+                error: `The update was saved, but setting its stories failed. Open it with Edit and set the stories again${storyIds.length ? `: ${storyIds.map((i) => `#${i}`).join(', ')}` : ' (none)'}.`
+              }
             }
           }
           const stories = (await updateStories(supabase, [Number(saved.id)])).get(Number(saved.id)) || []
-          return jsonResponse({ ok: true, created: !current, changed: wrote, update: { ...saved, stories }, links, refresh: refreshRes })
+          return jsonResponse({ ok: true, created: !current, changed: wrote, update: { ...saved, stories }, links })
         }
 
         case 'delete_update': {
           const eventId = posInt(body.event_id, 'event_id')
           const updateId = posInt(body.update_id, 'update_id')
-          // Linked stories lose the link (story_event.event_update_id ON DELETE SET NULL): a story_event write.
-          const { data: had, error: hadErr } = await supabase.from('story_event').select('story_id').eq('event_update_id', updateId).limit(1)
-          if (hadErr) throw new Error(`story_event read failed: ${hadErr.message}`)
+          // Linked stories just lose the link (story_event.event_update_id ON DELETE SET NULL).
           const { data, error } = await supabase.from('event_updates').delete().eq('id', updateId).eq('event_id', eventId).select('id')
           if (error) throw new Error(`update delete failed: ${error.message}`)
           if (!data || !data.length) return jsonResponse({ ok: false, reason: 'update_not_found', error: 'That update no longer exists on this front. Reload the list.' }, 404)
-          return jsonResponse({ ok: true, refresh: had && had.length ? await refresh(supabase) : null })
+          return jsonResponse({ ok: true })
         }
 
         // ---------------- Tracker pins (AC6) ----------------

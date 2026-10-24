@@ -168,7 +168,8 @@ export function pinEntityId(source: PinSource, v: unknown): string {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(s)) bad('enter the executive order\'s id')
     return s
   }
-  if (!/^\d{1,18}$/.test(s) || Number(s) <= 0) bad('enter the item\'s number')
+  // 15 digits keeps Number() exact (2^53 has 16), so the id pinned is the id typed
+  if (!/^\d{1,15}$/.test(s) || Number(s) <= 0) bad('enter the item\'s number')
   return String(Number(s))
 }
 
@@ -222,9 +223,10 @@ export function pinStatus(source: PinSource, pin: string, item: PinItem | null):
   return { dead: false, reason: null }
 }
 
-/** Effective story alarm: alarm_level, else the migration-064 severity map, else 2 (v_event_stats). */
+/** Effective story alarm as the site shows it: alarm_level, else SEVERITY_TO_ALARM in src/lib/adapter.ts, else 2. Display only. */
+const SEVERITY_TO_ALARM: Record<string, number> = { critical: 5, severe: 4, moderate: 3, minor: 2, low: 1, positive: 0 }
 export function storyAlarm(alarmLevel: number | null, severity: string | null): number {
   if (alarmLevel != null) return alarmLevel
-  const map: Record<string, number> = { critical: 5, severe: 4, moderate: 3, minor: 2 }
-  return (severity && map[severity]) || 2
+  if (severity && SEVERITY_TO_ALARM[severity] != null) return SEVERITY_TO_ALARM[severity]
+  return 2
 }

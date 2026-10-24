@@ -18,6 +18,7 @@ const H = await import(new URL('../../supabase/functions/admin-fronts/updates-pi
 const fnSrc = readFileSync(`${repoRoot}supabase/functions/admin-fronts/index.ts`, 'utf8').replace(/\r\n/g, '\n');
 const adminHtml = readFileSync(`${repoRoot}public/admin.html`, 'utf8').replace(/\r\n/g, '\n');
 const timelineSrc = readFileSync(`${repoRoot}src/lib/timeline.ts`, 'utf8');
+const adapterSrc = readFileSync(`${repoRoot}src/lib/adapter.ts`, 'utf8');
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -139,6 +140,8 @@ test('pin inputs: sources, ids and values are validated', () => {
   assert.equal(H.pinEntityId('eos', '5'), '5');
   throwsBad(() => H.pinEntityId('stories', 'eo_1'), /number/);
   throwsBad(() => H.pinEntityId('stories', '0'), /number/);
+  assert.equal(H.pinEntityId('stories', '999999999999999'), '999999999999999');
+  throwsBad(() => H.pinEntityId('stories', '1234567890123456'), /number/);   // past 2^53 Number() would round
   throwsBad(() => H.pinEntityId('eos', 'a,b'), /executive order/);
   assert.equal(H.pinEntityKey('0123'), '0123');   // clearing matches the stored text exactly
   throwsBad(() => H.pinEntityKey('1)'), /not valid/);
@@ -182,9 +185,16 @@ test('helper constants mirror src/lib/timeline.ts', () => {
   assert.match(timelineSrc, new RegExp(`MAIN_LINE_SOURCE_ALARM = ${H.MAIN_LINE_SOURCE_ALARM};`));
   assert.match(timelineSrc, new RegExp(`tracker_pin\\?select=source,entity_id,pin&order=updated_at.desc&limit=${H.MAX_PINS}`));
   assert.deepEqual([...H.PIN_SOURCES].sort(), ['eos', 'pardons', 'scotus', 'stories']);
-  assert.equal(H.storyAlarm(null, 'severe'), 4);
   assert.equal(H.storyAlarm(3, 'critical'), 3);
   assert.equal(H.storyAlarm(null, null), 2);
+});
+
+test('storyAlarm uses the same severity map as src/lib/adapter.ts (SEVERITY_TO_ALARM)', () => {
+  const block = adapterSrc.match(/SEVERITY_TO_ALARM[^=]*=\s*\{([\s\S]*?)\}/);
+  assert.ok(block, 'SEVERITY_TO_ALARM not found in src/lib/adapter.ts');
+  const pairs = [...block[1].matchAll(/['"]?(\w+)['"]?\s*:\s*(\d+)/g)];
+  assert.ok(pairs.length >= 4, 'expected at least four severities');
+  for (const [, sev, n] of pairs) assert.equal(H.storyAlarm(null, sev), Number(n), `severity ${sev}`);
 });
 
 // ---------------- edge function contract ----------------
@@ -199,12 +209,13 @@ test('every pin write refreshes the Tracker main line', () => {
   assert.match(caseBody('pin_clear'), /removed \? await refresh\(supabase\)/);
 });
 
-test('update writes go through the whitelist; story links refresh the Tracker', () => {
+test('update writes go through the whitelist; links write the requested stories before unlinking', () => {
   const save = caseBody('save_update');
   assert.match(save, /buildUpdatePatch\(fields as Record<string, unknown>, current\)/);
   assert.doesNotMatch(save, /\.\.\.fields|\.\.\.body/);
   assert.match(save, /insert\(\{ \.\.\.patch, event_id: eventId \}\)/);
-  assert.match(save, /if \(r\.changed\) refreshRes = await refresh\(supabase\)/);
+  const link = fnSrc.match(/async function linkStories[\s\S]*?\n\}\n/)[0];
+  assert.ok(link.indexOf('event_update_id: updateId') < link.indexOf('event_update_id: null'), 'link must run before unlink');
   // edits are scoped to the front in the request, so a stale screen cannot edit another front's update
   assert.match(save, /\.eq\('id', updateId!\)\.eq\('event_id', eventId\)/);
   assert.match(caseBody('delete_update'), /\.eq\('id', updateId\)\.eq\('event_id', eventId\)/);

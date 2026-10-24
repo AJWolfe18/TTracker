@@ -6740,9 +6740,10 @@
                                                     <option value="force_hide">{PIN_LABELS.force_hide}</option>
                                                 </select>
                                                 {pinBusyId === s.id && <span style={{ color: '#9ca3af', fontSize: '0.75rem', marginLeft: '0.4rem' }}>saving…</span>}
-                                                {pinBusyId !== s.id && s.pin === 'force_show' && !s.main_line && (
-                                                    // after a refresh, force_show only fails for stories out of the rule's scope
-                                                    <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '2px' }}>This pin does nothing yet: the story is not published (no summary) or not active.</div>
+                                                {pinBusyId !== s.id && s.pin === 'force_show' && (s.pin_dead ?? !s.main_line) && (
+                                                    // pin_dead/pin_reason come back from pin_set; on a fresh load, a refreshed
+                                                    // force_show is off the main line only when the story is out of the rule's scope
+                                                    <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '2px' }}>{s.pin_reason || 'This pin does nothing yet: the story is closed, combined into another, or not published yet.'}</div>
                                                 )}
                                             </div>
                                         )}
@@ -7351,9 +7352,14 @@
                     const res = value
                         ? await api({ action: 'pin_set', source: 'stories', entity_id: s.id, pin: value })
                         : await api({ action: 'pin_clear', source: 'stories', entity_id: String(s.id) });
-                    page.patchStory(s.id, { pin: value, ...(res.item ? { main_line: !!res.item.main_line } : {}) });
+                    // main_line only when the refresh ran (else it is the stale value); dead/reason come
+                    // from the story's own status, so they hold either way
+                    page.patchStory(s.id, {
+                        pin: value, pin_dead: value ? !!res.dead : false, pin_reason: value && res.dead ? res.reason : null,
+                        ...(res.item && res.refresh?.ok ? { main_line: !!res.item.main_line } : {})
+                    });
                     const parts = [value ? `#${s.id}: ${PIN_LABELS[value]}.` : `#${s.id}: back to automatic (the homepage rule decides).`];
-                    if (res.item) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (res.item && res.refresh?.ok) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
                     if (value && res.dead) parts.push(res.reason);
                     if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
                     setNotice({ kind: (value && res.dead) || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
@@ -7703,6 +7709,7 @@
             const [found, setFound] = useState(null); // pin_lookup result
             const [note, setNote] = useState('');
             const tokenRef = useRef(0);
+            const findTokenRef = useRef(0); // a slow lookup must not replace a newer one (wrong item pinned)
 
             const load = useCallback(async () => {
                 const token = ++tokenRef.current;
@@ -7726,14 +7733,16 @@
 
             const find = async (e) => {
                 e.preventDefault();
+                const token = ++findTokenRef.current;
                 setFound(null); setNotice(null); setError(null);
                 const id = idText.trim().replace(/^#/, '');
                 if (!id) { setError('Enter the id: the # number shown for it in its own tab.'); return; }
                 try {
                     const res = await api({ action: 'pin_lookup', source, entity_id: id });
+                    if (token !== findTokenRef.current) return;
                     setFound(res);
                     setNote(res.pin?.note || '');
-                } catch (err) { setError(err.message); }
+                } catch (err) { if (token === findTokenRef.current) setError(err.message); }
             };
 
             const pinIt = async (pin) => {
@@ -7781,10 +7790,10 @@
 
                     <h4 style={{ margin: '0 0 0.5rem', color: '#e5e7eb' }}>Pin something</h4>
                     <form className="stories-toolbar" onSubmit={find}>
-                        <select className="stories-select" value={source} onChange={e => { setSource(e.target.value); setFound(null); }} style={{ padding: '6px 10px' }} aria-label="What to pin">
+                        <select className="stories-select" value={source} onChange={e => { findTokenRef.current++; setSource(e.target.value); setFound(null); }} style={{ padding: '6px 10px' }} aria-label="What to pin">
                             {Object.entries(PIN_SOURCE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
-                        <input className="stories-search" style={{ maxWidth: '220px' }} placeholder="Its id (#)" value={idText} onChange={e => { setIdText(e.target.value); setFound(null); }} />
+                        <input className="stories-search" style={{ maxWidth: '220px' }} placeholder="Its id (#)" value={idText} onChange={e => { findTokenRef.current++; setIdText(e.target.value); setFound(null); }} />
                         <button type="submit" className="judge-row-btn" style={btn}>Find</button>
                     </form>
                     {found && (
