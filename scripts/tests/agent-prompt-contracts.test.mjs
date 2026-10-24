@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PROD_REF } from '../../lib/env-validation.js';
 
 // CRLF -> LF: a Windows checkout (core.autocrlf) must not break the \n-anchored regexes below
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -181,7 +182,7 @@ assert.ok(/NEVER writes\*\* `needs_review`, `is_public`/.test(step65), 'Step 6.5
 assert.ok(/only moves up, never back/.test(step65), 'status escalates only');
 assert.ok(step65.includes('After the pardon') && step65.includes('Same person'), 'a hit needs identity and post-pardon timing before any write');
 assert.ok(step65.includes('DISCORD_WEBHOOK_URL') && /never fails the run/.test(step65), 'hits are reported on Discord, never fatally');
-assert.ok(pardons.includes('osjbulmltfpcoldydexg') && /PARDONS_RECHECK_IDS is TEST only/.test(pardons), 'gold mode refuses on PROD');
+assert.ok(pardons.includes(PROD_REF) && /PARDONS_RECHECK_IDS is TEST only/.test(pardons), 'gold mode refuses on PROD');
 assert.ok(/"post_pardon_checked_at": "\{ENRICHED_AT value\}"/.test(pardons), 'first enrichment stamps the first check (Step 6)');
 assert.ok(pardons.includes('"prompt_version": "v1.4"') && !pardons.includes('"prompt_version": "v1.3"'), 'pardons writes are tagged v1.4');
 // review fixes (b9c32d0 /code-review medium)

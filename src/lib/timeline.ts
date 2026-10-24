@@ -47,10 +47,10 @@ export interface TimelineEntry {
   alarm: number;
   /** Published front this entry belongs to (stories only, via v_tracker_stories) */
   front?: { name: string; slug: string };
-  /** The case name under a plain-English SCOTUS headline (scotus only); absent when it IS the headline */
-  caseName?: string;
   /** stories.action_label (stories only, did_said flag); absent = not labeled yet */
   label?: ActionKind;
+  /** The case name under a plain-English SCOTUS headline (scotus only); absent when it IS the headline */
+  caseName?: string;
 }
 
 /**
