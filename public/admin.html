@@ -6598,6 +6598,8 @@
             name: '', slug: '', dek: '', alarm_level: '3', tier: 'standard', lifecycle: 'open', publish_state: 'draft', started_at: '',
             sweep_pattern: '', sweep_coword: '', sweep_priority: '100', sweep_summary: false, agent_pattern: '', agent_definition: ''
         };
+        // Preview window choices; admin_preview_front_rule (migration 134) accepts 1-90 days.
+        const FRONT_PREVIEW_DAYS = [30, 60, 90];
         // The daily fronts agent runs at 14:00 UTC for a few minutes; the window has margin.
         // In Central time that is 9:00 AM in summer and 8:00 AM in winter, so the copy is computed.
         const frontsAgentRunCT = (minute = 0) => {
@@ -6835,7 +6837,8 @@
             return { stories, cursor, loading, error, setError, selected, setSelected, fetchPage, toggle, toggleAll, dropIds, patchStory, pinsAvailable };
         }
 
-        function FrontsTab({ password, supabase }) {
+        // leaveGuardRef / confirmLeave come from AdminDashboard (unsaved-edits prompt).
+        function FrontsTab({ password, supabase, leaveGuardRef, confirmLeave }) {
             const api = useFrontsApi(password, supabase);
             const [view, setView] = useState('list'); // 'list' | 'pool' | 'pins' | 'front'
             const [fronts, setFronts] = useState([]);
@@ -6862,7 +6865,9 @@
             useEffect(() => { loadFronts(); }, [loadFronts]);
 
             const frontsById = useMemo(() => Object.fromEntries(fronts.map(f => [f.id, f])), [fronts]);
-            const openFront = (id) => { setOpenId(id); setEditorKey(k => k + 1); setView('front'); };
+            // Every way off a front's page asks first when it has unsaved edits.
+            const openFront = (id) => confirmLeave(() => { setOpenId(id); setEditorKey(k => k + 1); setView('front'); });
+            const goView = (v) => confirmLeave(() => setView(v));
 
             return (
                 <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -6870,13 +6875,13 @@
                         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <h2 className="card-title"><span>Fronts</span></h2>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                                <button className={`tab-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                <button className={`tab-btn ${view === 'list' ? 'active' : ''}`} onClick={() => goView('list')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
                                     All fronts{fronts.length ? ` (${fronts.length})` : ''}
                                 </button>
-                                <button className={`tab-btn ${view === 'pool' ? 'active' : ''}`} onClick={() => setView('pool')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                <button className={`tab-btn ${view === 'pool' ? 'active' : ''}`} onClick={() => goView('pool')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
                                     Stories with no front
                                 </button>
-                                <button className={`tab-btn ${view === 'pins' ? 'active' : ''}`} onClick={() => setView('pins')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                <button className={`tab-btn ${view === 'pins' ? 'active' : ''}`} onClick={() => goView('pins')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
                                     Homepage pins
                                 </button>
                                 <button className="tab-btn" onClick={() => openFront(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: '#065f46', color: '#d1fae5' }}>
@@ -6901,7 +6906,9 @@
                                     frontsById={frontsById}
                                     onSaved={(id) => { loadFronts(); if (id !== openId) setOpenId(id); }}
                                     onChanged={loadFronts}
-                                    onBack={() => setView('list')}
+                                    onBack={() => goView('list')}
+                                    leaveGuardRef={leaveGuardRef}
+                                    confirmLeave={confirmLeave}
                                 />
                             )}
                         </div>
@@ -7068,7 +7075,7 @@
             );
         }
 
-        function FrontEditor({ api, eventId, fronts, frontsById, onSaved, onChanged, onBack }) {
+        function FrontEditor({ api, eventId, fronts, frontsById, onSaved, onChanged, onBack, leaveGuardRef, confirmLeave }) {
             const isNew = eventId == null;
             const [loaded, setLoaded] = useState(null); // the row as last read/saved
             const [form, setForm] = useState(FRONT_EMPTY_FORM);
@@ -7080,6 +7087,9 @@
             const [preview, setPreview] = useState({});
             const [slugTouched, setSlugTouched] = useState(false);
             const [pane, setPane] = useState('settings'); // 'settings' | 'updates'
+            const [previewDays, setPreviewDays] = useState(30);
+            const formDirtyRef = useRef(false);
+            const updateDirtyRef = useRef(false); // an open update form on the Updates pane has edits
 
             const toForm = (f) => ({
                 name: f.name || '', slug: f.slug || '', dek: f.dek || '', alarm_level: String(f.alarm_level ?? 3), tier: f.tier, lifecycle: f.lifecycle,
@@ -7106,6 +7116,16 @@
                 return () => { alive = false; };
             }, [api, eventId, isNew]);
 
+            // Unsaved edits: the form against the row as last read/saved (the empty form for a new front).
+            // A save or retire resets the form from the server row, so the page is clean again after either.
+            const savedForm = loaded ? toForm(loaded) : FRONT_EMPTY_FORM;
+            formDirtyRef.current = Object.keys(FRONT_EMPTY_FORM).some(k => form[k] !== savedForm[k]);
+            useEffect(() => {
+                const check = () => formDirtyRef.current || updateDirtyRef.current;
+                leaveGuardRef.current = check;
+                return () => { if (leaveGuardRef.current === check) leaveGuardRef.current = null; };
+            }, [leaveGuardRef]);
+
             const set = (k, v) => setForm(prev => {
                 const next = { ...prev, [k]: v };
                 if (k === 'name' && isNew && !slugTouched) next.slug = frontsSlugify(v);
@@ -7128,7 +7148,7 @@
                 if (!pattern) { setPreview(p => ({ ...p, [kind]: { error: 'Enter a pattern first.' } })); return; }
                 setPreview(p => ({ ...p, [kind]: { error: null, loading: true, samples: [] } }));
                 try {
-                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() || null, summary: form.sweep_summary, days: 30, event_id: eventId });
+                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() || null, summary: form.sweep_summary, days: previewDays, event_id: eventId });
                     setPreview(p => ({ ...p, [kind]: res }));
                 } catch (err) {
                     setPreview(p => ({ ...p, [kind]: { error: err.message } }));
@@ -7209,6 +7229,13 @@
             const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 1rem' };
             const section = { borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '0.5rem' };
             const agentOn = form.publish_state === 'published' && form.agent_pattern.trim() && form.agent_definition.trim();
+            // One look-back window for both previews (TEST's newest stories can be older than 30 days).
+            const previewRow = { display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' };
+            const previewWindow = (
+                <select className="stories-select" value={previewDays} onChange={e => setPreviewDays(Number(e.target.value))} aria-label="How far back the preview looks" style={{ padding: '4px 8px', fontSize: '0.85rem' }}>
+                    {FRONT_PREVIEW_DAYS.map(d => <option key={d} value={d}>last {d} days</option>)}
+                </select>
+            );
 
             return (
                 <div>
@@ -7216,7 +7243,7 @@
                     <h3 style={{ margin: '0 0 1rem', color: '#f8fafc' }}>{isNew ? 'New front' : loaded.name}</h3>
                     {!isNew && (
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                            <button className={`tab-btn ${pane === 'settings' ? 'active' : ''}`} onClick={() => setPane('settings')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                            <button className={`tab-btn ${pane === 'settings' ? 'active' : ''}`} onClick={() => pane !== 'settings' && confirmLeave(() => setPane('settings'), updateDirtyRef.current)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
                                 Settings and stories
                             </button>
                             <button className={`tab-btn ${pane === 'updates' ? 'active' : ''}`} onClick={() => setPane('updates')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
@@ -7225,7 +7252,7 @@
                         </div>
                     )}
 
-                    {pane === 'updates' && !isNew ? <FrontUpdates api={api} eventId={eventId} front={loaded} onChanged={onChanged} /> : (<>
+                    {pane === 'updates' && !isNew ? <FrontUpdates api={api} eventId={eventId} front={loaded} onChanged={onChanged} dirtyRef={updateDirtyRef} /> : (<>
                     {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
                     {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
 
@@ -7295,9 +7322,12 @@
                                 </label>
                             </div>
                         </div>
-                        <button className="judge-row-btn" onClick={() => runPreview('sweep')} disabled={preview.sweep?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
-                            {preview.sweep?.loading ? 'Checking…' : 'Preview matches (last 30 days)'}
-                        </button>
+                        <div style={previewRow}>
+                            <button className="judge-row-btn" onClick={() => runPreview('sweep')} disabled={preview.sweep?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                                {preview.sweep?.loading ? 'Checking…' : 'Preview matches'}
+                            </button>
+                            {previewWindow}
+                        </div>
                         <FrontsPreview result={preview.sweep?.loading ? null : preview.sweep} />
                     </div>
 
@@ -7315,9 +7345,12 @@
                             <label className="form-label">Definition (what belongs on this front and what does not, in plain words)</label>
                             <textarea className="form-textarea" rows={8} value={form.agent_definition} onChange={e => set('agent_definition', e.target.value)} />
                         </div>
-                        <button className="judge-row-btn" onClick={() => runPreview('agent')} disabled={preview.agent?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
-                            {preview.agent?.loading ? 'Checking…' : 'Preview candidates (last 30 days)'}
-                        </button>
+                        <div style={previewRow}>
+                            <button className="judge-row-btn" onClick={() => runPreview('agent')} disabled={preview.agent?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                                {preview.agent?.loading ? 'Checking…' : 'Preview candidates'}
+                            </button>
+                            {previewWindow}
+                        </div>
                         <FrontsPreview result={preview.agent?.loading ? null : preview.agent} />
                     </div>
 
@@ -7489,7 +7522,7 @@
         // A front's updates (event_updates, ADO-547 AC5): the dated developments on the front's page.
         // Written here = approved at once (decided by a human). The database only shows approved
         // updates of Live fronts to the public (RLS, migration 111), so nothing here gates visibility.
-        function FrontUpdates({ api, eventId, front, onChanged }) {
+        function FrontUpdates({ api, eventId, front, onChanged, dirtyRef }) {
             const [updates, setUpdates] = useState([]);
             const [cursor, setCursor] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -7553,7 +7586,7 @@
                     {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
 
                     {editing === 'new' ? (
-                        <FrontUpdateForm api={api} eventId={eventId} update={null} onSaved={onSaved} onCancel={() => setEditing(null)} />
+                        <FrontUpdateForm api={api} eventId={eventId} update={null} onSaved={onSaved} onCancel={() => setEditing(null)} dirtyRef={dirtyRef} />
                     ) : (
                         <button className="judge-row-btn" disabled={editing != null} onClick={() => { setNotice(null); setEditing('new'); }} style={{ background: '#065f46', color: '#d1fae5', marginBottom: '1rem' }}>
                             + Add an update
@@ -7565,7 +7598,7 @@
                     ) : updates.length === 0 ? (
                         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No updates on this front yet.</div>
                     ) : updates.map(u => editing === u.id ? (
-                        <FrontUpdateForm key={u.id} api={api} eventId={eventId} update={u} onSaved={onSaved} onDeleted={onDeleted} onCancel={() => setEditing(null)} />
+                        <FrontUpdateForm key={u.id} api={api} eventId={eventId} update={u} onSaved={onSaved} onDeleted={onDeleted} onCancel={() => setEditing(null)} dirtyRef={dirtyRef} />
                     ) : (
                         <div key={u.id} style={{ border: '1px solid #374151', borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '0.6rem', opacity: u.approval_state === 'approved' ? 1 : 0.8 }}>
                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', fontSize: '0.8rem', color: '#9ca3af' }}>
@@ -7592,17 +7625,25 @@
         }
 
         // New / edit form for one update. Only changed fields are sent; the server whitelists them.
-        function FrontUpdateForm({ api, eventId, update, onSaved, onDeleted, onCancel }) {
+        // dirtyRef.current is true while the form differs from what it opened with (unsaved-edits prompt).
+        function FrontUpdateForm({ api, eventId, update, onSaved, onDeleted, onCancel, dirtyRef }) {
             const isNew = !update;
             const initDate = isNew ? frontsToday() : frontsLocalDate(update.happened_at);
             const initIds = isNew ? [] : (update.stories || []).map(s => String(s.id));
-            const [form, setForm] = useState(() => ({
+            const [initForm] = useState(() => ({
                 headline: update?.headline || '', body: update?.body || '', date: initDate,
                 significance: update?.significance || 'minor', approval_state: update?.approval_state || 'approved', stories: initIds.join(', ')
             }));
+            const [form, setForm] = useState(initForm);
             const [busy, setBusy] = useState(false);
             const [error, setError] = useState(null);
             const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+            // Story numbers compare as a sorted set, so "2, 1" after "1, 2" is not an edit.
+            const idKey = (s) => JSON.stringify([...new Set(s.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean))].sort());
+            const dirty = Object.keys(initForm).some(k => k === 'stories' ? idKey(form[k]) !== idKey(initForm[k]) : form[k] !== initForm[k]);
+            useEffect(() => { dirtyRef.current = dirty; }, [dirty, dirtyRef]);
+            useEffect(() => () => { dirtyRef.current = false; }, [dirtyRef]);
 
             const save = async (e) => {
                 e.preventDefault();
@@ -8471,6 +8512,31 @@
             const refreshIntervalRef = useRef(null);
             const judgeCountTokenRef = useRef(0); // only the newest Judge-count request may set the count
 
+            // Unsaved edits (ADO-547, a front's page in the Fronts tab): the page puts a check in
+            // leaveGuardRef. Switching tab, signing out or moving around the Fronts tab asks first in an
+            // in-page dialog; closing or reloading the browser tab gets the browser's own prompt.
+            const leaveGuardRef = useRef(null);
+            const [leavePrompt, setLeavePrompt] = useState(null); // { go } while the dialog is open
+            const confirmLeave = useCallback((go, dirty = !!leaveGuardRef.current?.()) => {
+                if (dirty) setLeavePrompt({ go });
+                else go();
+            }, []);
+            useEffect(() => {
+                const onBeforeUnload = (e) => {
+                    if (!leaveGuardRef.current?.()) return;
+                    e.preventDefault();
+                    e.returnValue = ''; // older browsers only show the prompt with this set
+                };
+                window.addEventListener('beforeunload', onBeforeUnload);
+                return () => window.removeEventListener('beforeunload', onBeforeUnload);
+            }, []);
+            useEffect(() => {
+                if (!leavePrompt) return;
+                const onKey = (e) => { if (e.key === 'Escape') setLeavePrompt(null); };
+                document.addEventListener('keydown', onKey);
+                return () => document.removeEventListener('keydown', onKey);
+            }, [leavePrompt]);
+
             // Auth state
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [password, setPassword] = useState('');
@@ -8881,7 +8947,7 @@
                                 <span>Budget:</span>
                                 <span style={{ fontWeight: 600 }}>{budgetStatus.label}</span>
                             </div>
-                            <button className="signout-btn" onClick={handleSignOut}>Sign out</button>
+                            <button className="signout-btn" onClick={() => confirmLeave(handleSignOut)}>Sign out</button>
                         </div>
                     </header>
 
@@ -8892,10 +8958,12 @@
                                 key={tab.id}
                                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => {
-                                    if (tab.disabled) return;
-                                    // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
-                                    if (tab.id === 'feeds' && activeTab !== 'feeds') setFeedsFilter('all');
-                                    setActiveTab(tab.id);
+                                    if (tab.disabled || tab.id === activeTab) return;
+                                    confirmLeave(() => {
+                                        // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
+                                        if (tab.id === 'feeds') setFeedsFilter('all');
+                                        setActiveTab(tab.id);
+                                    });
                                 }}
                                 disabled={tab.disabled}
                                 title={tab.disabled ? 'Coming soon' : ''}
@@ -9151,7 +9219,7 @@
                         )}
 
                         {activeTab === 'fronts' && (
-                            <FrontsTab password={password} supabase={supabase} />
+                            <FrontsTab password={password} supabase={supabase} leaveGuardRef={leaveGuardRef} confirmLeave={confirmLeave} />
                         )}
 
                         {activeTab === 'skips' && (
@@ -9186,6 +9254,23 @@
                             </div>
                         )}
                     </main>
+
+                    {leavePrompt && (
+                        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setLeavePrompt(null); }}>
+                            <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="leave-prompt-title" style={{ maxWidth: '440px' }}>
+                                <div className="modal-header">
+                                    <h3 className="modal-title" id="leave-prompt-title">Leave without saving?</h3>
+                                </div>
+                                <div className="modal-body" style={{ color: '#cbd5e1' }}>
+                                    This page has changes you have not saved. If you leave now, they are lost.
+                                </div>
+                                <div className="modal-footer">
+                                    <button className="btn-secondary" autoFocus onClick={() => setLeavePrompt(null)}>Stay</button>
+                                    <button className="btn-danger" onClick={() => { const { go } = leavePrompt; setLeavePrompt(null); go(); }}>Leave without saving</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
