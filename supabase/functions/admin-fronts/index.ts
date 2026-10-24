@@ -17,6 +17,24 @@
 //   check_pattern { pattern }              -> { ok, error }
 //   preview    { pattern, coword?, summary?, kind: 'sweep'|'agent', days?, event_id? }
 //                                          -> { total_matches, on_this_front, on_other_front, unassigned, samples[] }
+//   updates    { event_id, cursor? }       -> { updates: [... + stories[]], next_cursor }   (newest first)
+//   save_update { event_id, update_id?, fields, story_ids? }
+//                                          -> { ok, update, links, refresh? }   (no update_id = create, approved)
+//   delete_update { event_id, update_id }  -> { ok, refresh }
+//   pins                                   -> { pins: [... + item, dead, reason], truncated }
+//   pin_lookup { source, entity_id }       -> { item, pin, dead, reason }
+//   pin_set    { source, entity_id, pin, note? } -> { ok, pin, item, dead, reason, refresh }
+//   pin_clear  { source, entity_id }       -> { ok, removed, item, refresh }
+//
+// Updates (AC5): the admin writes updates straight in as approved (decided_by 'human' +
+// decided_at); the anon RLS policy (migration 111) shows an approved update only while its front
+// is published, so nothing here gates visibility. Fields are whitelisted in updates-pins.ts.
+// Linking stories writes story_event.event_update_id (the composite FK keeps the link on the
+// same front); those writes refresh the Tracker like every other story_event write. The update
+// text itself feeds no stored Tracker column, so a text-only save does not refresh.
+// Pins (AC6): tracker_pin rows for any of the four sources; every pin write refreshes the
+// Tracker (stories.main_line is stored). A pin on an item that can never show on the Tracker
+// (closed, merged, unpublished, before the term) is flagged "dead" in pins / pin_set.
 //
 // Every write that changes a front or a membership calls refresh_tracker_derived() afterwards
 // (stories.main_line is a stored column; without it the change waits for the next pipeline run).
@@ -39,6 +57,11 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { checkAdminPassword } from '../_shared/auth.ts'
+import {
+  BadRequest, bad, buildUpdatePatch, optStoryIds, encodeUpdateCursor, parseUpdateCursor, updateCursorFilter,
+  UPDATE_FIELDS, UPDATE_PAGE, pinSource, pinEntityId, pinEntityKey, pinValue, pinStatus, storyAlarm, MAX_PINS,
+  type PinItem, type PinSource
+} from './updates-pins.ts'
 
 const LIST_FIELDS = 'id,slug,name,tier,lifecycle,publish_state,published_at,alarm_level,sweep_priority,sweep_pattern,agent_pattern,updated_at'
 const FULL_FIELDS = 'id,slug,name,dek,alarm_level,tier,lifecycle,publish_state,published_at,started_at,resolved_at,created_by,sweep_pattern,sweep_coword,sweep_priority,sweep_summary,agent_pattern,agent_definition,created_at,updated_at'
@@ -63,9 +86,6 @@ function jsonResponse(body: unknown, status = 200): Response {
     { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
 }
-
-class BadRequest extends Error {}
-const bad = (msg: string): never => { throw new BadRequest(msg) }
 
 function posInt(v: unknown, name: string): number {
   const n = typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN
@@ -149,6 +169,136 @@ function withAgentFlag(f: any, hasDef: boolean) {
     // the same three conditions front_agent_candidates_all() uses (migration 127)
     agent_active: f.publish_state === 'published' && !!f.agent_pattern && hasDef
   }
+}
+
+// ---- updates (AC5) ----
+
+// Member stories folded into each update (story_event.event_update_id), headline only.
+async function updateStories(supabase: SupabaseClient, updateIds: number[]) {
+  const out = new Map<number, { id: number; headline: string | null }[]>()
+  if (!updateIds.length) return out
+  const { data, error } = await supabase.from('story_event')
+    .select('story_id,event_update_id,stories!inner(primary_headline)')
+    .in('event_update_id', updateIds)
+    .order('story_id', { ascending: false })
+    .limit(1000)
+  if (error) throw new Error(`update stories read failed: ${error.message}`)
+  // deno-lint-ignore no-explicit-any
+  for (const r of (data || []) as any[]) {
+    const k = Number(r.event_update_id)
+    if (!out.has(k)) out.set(k, [])
+    out.get(k)!.push({ id: Number(r.story_id), headline: r.stories?.primary_headline ?? null })
+  }
+  return out
+}
+
+// Sets exactly `ids` as the stories of update `updateId` (on front `eventId`). Stories that are
+// not on this front are reported, never filed (filing is the members list's job). A story
+// belongs to at most one update (one story_event row), so linking takes it from another update.
+async function linkStories(supabase: SupabaseClient, eventId: number, updateId: number, ids: number[]) {
+  let rows: { story_id: number; event_id: number; event_update_id: number | null }[] = []
+  if (ids.length) {
+    const { data, error } = await supabase.from('story_event').select('story_id,event_id,event_update_id').in('story_id', ids).limit(ids.length)
+    if (error) throw new Error(`story_event read failed: ${error.message}`)
+    // deno-lint-ignore no-explicit-any
+    rows = ((data || []) as any[]).map((r) => ({ story_id: Number(r.story_id), event_id: Number(r.event_id), event_update_id: r.event_update_id == null ? null : Number(r.event_update_id) }))
+  }
+  const onFront = rows.filter((r) => r.event_id === eventId)
+  const onFrontIds = onFront.map((r) => r.story_id)
+  const notOnFront = ids.filter((id) => !onFrontIds.includes(id))
+
+  let unq = supabase.from('story_event').update({ event_update_id: null }).eq('event_update_id', updateId)
+  if (onFrontIds.length) unq = unq.not('story_id', 'in', `(${onFrontIds.join(',')})`)
+  const { data: unlinked, error: unErr } = await unq.select('story_id')
+  if (unErr) throw new Error(`unlink failed: ${unErr.message}`)
+
+  let linked: number[] = []
+  if (onFrontIds.length) {
+    // eq(event_id) again: a story moved to another front since the read is skipped, not linked
+    // across fronts (the composite FK would reject that anyway).
+    const { data, error } = await supabase.from('story_event').update({ event_update_id: updateId })
+      .eq('event_id', eventId).in('story_id', onFrontIds).select('story_id')
+    if (error) throw new Error(`link failed: ${error.message}`)
+    linked = (data || []).map((r) => Number(r.story_id))
+  }
+  const changed = (unlinked || []).length > 0 || onFront.some((r) => r.event_update_id !== updateId && linked.includes(r.story_id))
+  return {
+    changed,
+    result: {
+      linked,
+      not_on_front: [...notOnFront, ...onFrontIds.filter((id) => !linked.includes(id))],
+      taken_from_other_update: onFront.filter((r) => r.event_update_id != null && r.event_update_id !== updateId && linked.includes(r.story_id)).map((r) => r.story_id),
+      unlinked: (unlinked || []).map((r) => Number(r.story_id))
+    }
+  }
+}
+
+// ---- pins (AC6) ----
+
+const ITEM_SPECS = {
+  eos: { table: 'executive_orders', select: 'id,title,date,is_public,alarm_level', title: 'title', date: 'date', alarm: 'alarm_level' },
+  scotus: { table: 'scotus_cases', select: 'id,case_name,case_name_short,decided_at,is_public,ruling_impact_level', title: 'case_name_short', date: 'decided_at', alarm: 'ruling_impact_level' },
+  pardons: { table: 'pardons', select: 'id,recipient_name,pardon_date,is_public,corruption_level', title: 'recipient_name', date: 'pardon_date', alarm: 'corruption_level' }
+} as const
+
+// The pinned items, normalized (PinItem). Missing ids are simply absent from the map.
+async function describeItems(supabase: SupabaseClient, source: PinSource, ids: string[]): Promise<Map<string, PinItem>> {
+  const out = new Map<string, PinItem>()
+  const numeric = ids.filter((i) => /^\d{1,18}$/.test(i))
+  if (source === 'stories') {
+    if (!numeric.length) return out
+    // "enriched" is a second id-only read so summary text never leaves the database
+    const [rows, enriched] = await Promise.all([
+      supabase.from('stories').select('id,primary_headline,status,merged_into_story_id,main_line,first_seen_at,alarm_level,severity').in('id', numeric).limit(numeric.length),
+      supabase.from('stories').select('id').in('id', numeric).not('summary_neutral', 'is', null).limit(numeric.length)
+    ])
+    if (rows.error) throw new Error(`stories read failed: ${rows.error.message}`)
+    if (enriched.error) throw new Error(`stories read failed: ${enriched.error.message}`)
+    const enr = new Set((enriched.data || []).map((r) => String(r.id)))
+    // deno-lint-ignore no-explicit-any
+    for (const r of (rows.data || []) as any[]) {
+      out.set(String(r.id), {
+        title: r.primary_headline, date: r.first_seen_at, alarm: storyAlarm(r.alarm_level, r.severity),
+        status: r.status, merged_into_story_id: r.merged_into_story_id, enriched: enr.has(String(r.id)), main_line: !!r.main_line
+      })
+    }
+    return out
+  }
+  const spec = ITEM_SPECS[source]
+  // EO ids are INTEGER on TEST and text on PROD (migration 108 drift); a text id against an
+  // integer column is 22P02, so retry with the numeric ids alone.
+  let ask = source === 'eos' ? ids : numeric
+  if (!ask.length) return out
+  let res = await supabase.from(spec.table).select(spec.select).in('id', ask).limit(ask.length)
+  if (res.error?.code === '22P02' && source === 'eos') {
+    ask = numeric
+    if (!ask.length) return out
+    res = await supabase.from(spec.table).select(spec.select).in('id', ask).limit(ask.length)
+  }
+  if (res.error) throw new Error(`${spec.table} read failed: ${res.error.message}`)
+  // deno-lint-ignore no-explicit-any
+  for (const r of (res.data || []) as any[]) {
+    out.set(String(r.id), {
+      title: r[spec.title] ?? (source === 'scotus' ? r.case_name : null),
+      date: r[spec.date] ?? null,
+      alarm: r[spec.alarm] ?? null,
+      is_public: r.is_public
+    })
+  }
+  return out
+}
+
+// null = the pins could not be read (the members list still loads; the tab hides the pin menus)
+async function storyPins(supabase: SupabaseClient, ids: number[]): Promise<Map<number, string> | null> {
+  const out = new Map<number, string>()
+  if (!ids.length) return out
+  const { data, error } = await supabase.from('tracker_pin').select('entity_id,pin').eq('source', 'stories').in('entity_id', ids.map(String)).limit(ids.length)
+  if (error) {
+    console.error('tracker_pin read failed:', error.message)
+    return null
+  }
+  for (const r of data || []) out.set(Number(r.entity_id), r.pin)
+  return out
 }
 
 // Validates the editable fields present in `fields` against the current row (null on create).
@@ -381,10 +531,13 @@ Deno.serve(async (req) => {
           if (error) throw new Error(`members read failed: ${error.message}`)
           const rows = data || []
           const page = rows.slice(0, PAGE)
+          // deno-lint-ignore no-explicit-any
+          const pins = await storyPins(supabase, page.map((r: any) => Number(r.story_id)))
           return jsonResponse({
             // deno-lint-ignore no-explicit-any
-            stories: page.map((r: any) => ({ ...r.stories, assigned_by: r.assigned_by, confidence: r.confidence, assigned_at: r.assigned_at, reassigned_at: r.reassigned_at, reassigned_from_event_id: r.reassigned_from_event_id, note: r.note })),
-            next_cursor: rows.length > PAGE ? page[page.length - 1].story_id : null
+            stories: page.map((r: any) => ({ ...r.stories, assigned_by: r.assigned_by, confidence: r.confidence, assigned_at: r.assigned_at, reassigned_at: r.reassigned_at, reassigned_from_event_id: r.reassigned_from_event_id, note: r.note, pin: pins?.get(Number(r.story_id)) ?? null })),
+            next_cursor: rows.length > PAGE ? page[page.length - 1].story_id : null,
+            pins_available: pins !== null
           })
         }
 
@@ -492,6 +645,169 @@ Deno.serve(async (req) => {
             unassigned: head.unassigned ?? 0,
             samples: rows.filter((r) => r.sample_story_id != null).map((r) => ({ id: r.sample_story_id, headline: r.sample_headline, front: r.sample_front }))
           })
+        }
+
+        // ---------------- updates (AC5) ----------------
+        case 'updates': {
+          const id = posInt(body.event_id, 'event_id')
+          const cur = parseUpdateCursor(body.cursor)
+          let q = supabase.from('event_updates').select(UPDATE_FIELDS)
+            .eq('event_id', id)
+            .order('happened_at', { ascending: false })
+            .order('sort_key', { ascending: false })
+            .order('id', { ascending: false })
+            .limit(UPDATE_PAGE + 1)
+          if (cur) q = q.or(updateCursorFilter(cur))
+          const { data, error } = await q
+          if (error) throw new Error(`updates read failed: ${error.message}`)
+          // deno-lint-ignore no-explicit-any
+          const rows = (data || []) as any[]
+          const page = rows.slice(0, UPDATE_PAGE)
+          const linked = await updateStories(supabase, page.map((u) => Number(u.id)))
+          return jsonResponse({
+            updates: page.map((u) => ({ ...u, stories: linked.get(Number(u.id)) || [] })),
+            next_cursor: rows.length > UPDATE_PAGE ? encodeUpdateCursor(page[page.length - 1]) : null
+          })
+        }
+
+        case 'save_update': {
+          const eventId = posInt(body.event_id, 'event_id')
+          const fields = body.fields
+          if (!fields || typeof fields !== 'object' || Array.isArray(fields)) bad('fields must be an object')
+          const storyIds = optStoryIds(body.story_ids)
+          const updateId = body.update_id == null ? null : posInt(body.update_id, 'update_id')
+
+          // deno-lint-ignore no-explicit-any
+          let current: any = null
+          if (updateId != null) {
+            const { data, error } = await supabase.from('event_updates').select(UPDATE_FIELDS).eq('id', updateId).eq('event_id', eventId).maybeSingle()
+            if (error) throw new Error(`update read failed: ${error.message}`)
+            if (!data) return jsonResponse({ ok: false, reason: 'update_not_found', error: 'That update no longer exists on this front. Reload the list.' }, 404)
+            current = data
+          } else {
+            const { data, error } = await supabase.from('events').select('id').eq('id', eventId).maybeSingle()
+            if (error) throw new Error(`events read failed: ${error.message}`)
+            if (!data) return jsonResponse({ ok: false, reason: 'front_not_found' }, 404)
+          }
+
+          const patch = buildUpdatePatch(fields as Record<string, unknown>, current)
+          const wrote = !current || Object.keys(patch).length > 0
+          // deno-lint-ignore no-explicit-any
+          let saved: any = current
+          if (wrote) {
+            const q = current
+              ? supabase.from('event_updates').update(patch).eq('id', updateId!).eq('event_id', eventId).select(UPDATE_FIELDS).maybeSingle()
+              : supabase.from('event_updates').insert({ ...patch, event_id: eventId }).select(UPDATE_FIELDS).maybeSingle()
+            const { data, error } = await q
+            if (error) {
+              if (error.code === '23514') return jsonResponse({ ok: false, reason: 'check_failed', error: error.message }, 400)
+              if (error.code === '23503') return jsonResponse({ ok: false, reason: 'front_not_found' }, 404)
+              throw new Error(`update save failed: ${error.message}`)
+            }
+            if (!data) return jsonResponse({ ok: false, reason: 'update_not_found', error: 'That update no longer exists on this front. Reload the list.' }, 404)
+            saved = data
+          }
+
+          // deno-lint-ignore no-explicit-any
+          let links: any = null
+          // deno-lint-ignore no-explicit-any
+          let refreshRes: any = null
+          if (storyIds !== undefined) {
+            try {
+              const r = await linkStories(supabase, eventId, Number(saved.id), storyIds)
+              links = r.result
+              if (r.changed) refreshRes = await refresh(supabase)
+            } catch (err) {
+              console.error('linking stories failed:', err)
+              links = { error: 'The update was saved, but linking its stories failed. Try saving again.' }
+            }
+          }
+          const stories = (await updateStories(supabase, [Number(saved.id)])).get(Number(saved.id)) || []
+          return jsonResponse({ ok: true, created: !current, changed: wrote, update: { ...saved, stories }, links, refresh: refreshRes })
+        }
+
+        case 'delete_update': {
+          const eventId = posInt(body.event_id, 'event_id')
+          const updateId = posInt(body.update_id, 'update_id')
+          // Linked stories lose the link (story_event.event_update_id ON DELETE SET NULL): a story_event write.
+          const { data: had, error: hadErr } = await supabase.from('story_event').select('story_id').eq('event_update_id', updateId).limit(1)
+          if (hadErr) throw new Error(`story_event read failed: ${hadErr.message}`)
+          const { data, error } = await supabase.from('event_updates').delete().eq('id', updateId).eq('event_id', eventId).select('id')
+          if (error) throw new Error(`update delete failed: ${error.message}`)
+          if (!data || !data.length) return jsonResponse({ ok: false, reason: 'update_not_found', error: 'That update no longer exists on this front. Reload the list.' }, 404)
+          return jsonResponse({ ok: true, refresh: had && had.length ? await refresh(supabase) : null })
+        }
+
+        // ---------------- Tracker pins (AC6) ----------------
+        case 'pins': {
+          const { data, error } = await supabase.from('tracker_pin')
+            .select('source,entity_id,pin,note,created_at,updated_at')
+            .order('updated_at', { ascending: false })
+            .limit(MAX_PINS + 1)
+          if (error) throw new Error(`tracker_pin read failed: ${error.message}`)
+          // deno-lint-ignore no-explicit-any
+          const rows = ((data || []) as any[]).slice(0, MAX_PINS)
+          const bySource = new Map<PinSource, string[]>()
+          for (const r of rows) {
+            if (!bySource.has(r.source)) bySource.set(r.source, [])
+            bySource.get(r.source)!.push(r.entity_id)
+          }
+          const items = new Map<string, PinItem>()
+          await Promise.all([...bySource].map(async ([src, ids]) => {
+            for (const [k, v] of await describeItems(supabase, src, ids)) items.set(`${src}:${k}`, v)
+          }))
+          const pins = rows.map((r) => {
+            const item = items.get(`${r.source}:${r.entity_id}`) ?? null
+            return { ...r, item, ...pinStatus(r.source, r.pin, item) }
+          })
+          return jsonResponse({ pins, truncated: (data || []).length > MAX_PINS })
+        }
+
+        case 'pin_lookup': {
+          const source = pinSource(body.source)
+          const entityId = pinEntityId(source, body.entity_id)
+          const [items, pinRes] = await Promise.all([
+            describeItems(supabase, source, [entityId]),
+            supabase.from('tracker_pin').select('pin,note,updated_at').eq('source', source).eq('entity_id', entityId).maybeSingle()
+          ])
+          if (pinRes.error) throw new Error(`tracker_pin read failed: ${pinRes.error.message}`)
+          const item = items.get(entityId) ?? null
+          if (!item && !pinRes.data) return jsonResponse({ ok: false, reason: 'item_not_found', error: `Nothing with id ${entityId} in that list.` }, 404)
+          return jsonResponse({
+            source, entity_id: entityId, item, pin: pinRes.data,
+            show: pinStatus(source, 'force_show', item), hide: pinStatus(source, 'force_hide', item)
+          })
+        }
+
+        case 'pin_set': {
+          const source = pinSource(body.source)
+          const entityId = pinEntityId(source, body.entity_id)
+          const pin = pinValue(body.pin)
+          const row: Record<string, unknown> = { source, entity_id: entityId, pin }
+          // note only when sent, so changing the setting keeps an existing note
+          if (Object.prototype.hasOwnProperty.call(body, 'note')) row.note = optText(body.note, 'note', 300)
+          const item = (await describeItems(supabase, source, [entityId])).get(entityId) ?? null
+          if (!item) return jsonResponse({ ok: false, reason: 'item_not_found', error: `Nothing with id ${entityId} in that list, so there is nothing to pin.` }, 404)
+          const { data, error } = await supabase.from('tracker_pin')
+            .upsert(row, { onConflict: 'source,entity_id' })
+            .select('source,entity_id,pin,note,updated_at')
+            .maybeSingle()
+          if (error) throw new Error(`pin save failed: ${error.message}`)
+          const refreshRes = await refresh(supabase)
+          // stories: re-read so the response carries main_line after the refresh
+          const after = source === 'stories' ? ((await describeItems(supabase, source, [entityId])).get(entityId) ?? item) : item
+          return jsonResponse({ ok: true, pin: data, item: after, ...pinStatus(source, pin, after), refresh: refreshRes })
+        }
+
+        case 'pin_clear': {
+          const source = pinSource(body.source)
+          const entityId = pinEntityKey(body.entity_id)
+          const { data, error } = await supabase.from('tracker_pin').delete().eq('source', source).eq('entity_id', entityId).select('pin')
+          if (error) throw new Error(`pin clear failed: ${error.message}`)
+          const removed = !!data && data.length > 0
+          const refreshRes = removed ? await refresh(supabase) : null
+          const item = source === 'stories' ? ((await describeItems(supabase, source, [entityId])).get(entityId) ?? null) : null
+          return jsonResponse({ ok: true, removed, item, refresh: refreshRes })
         }
 
         default:
