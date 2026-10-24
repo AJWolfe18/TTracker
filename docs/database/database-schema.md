@@ -399,6 +399,15 @@ The candidate pool for the **Stories Enrichment Agent** (`docs/features/stories-
 ### `front_agent_candidates_all(p_limit INTEGER DEFAULT 25)` (function, migration 127 — ADO-592) — service_role only
 Pool for the all-fronts assignment agent: active enriched stories with no `story_event` row, not labeled `coverage` (unlabeled stay in, ADO-594 S7), whose headline or `summary_neutral` matches the `agent_pattern` of at least one agent front. Returns `matched_fronts` (slugs by sweep priority) plus the labels. Declines (`pipeline_skips` front_assignment/agent_declined since the story last changed) hide it per front: `metadata.front = 'none'` hides it from each front in `metadata.judged_fronts`; old ADO-582 declines (`metadata.front = <slug>`) from that front only. The election-only `front_agent_candidates` (116) stays until the fronts-v2 prompt is on main.
 
+### Admin Fronts tab RPCs (migration 134 — ADO-547) — service_role only
+Called only by the password-gated `admin-fronts` edge function (the admin Fronts tab), which runs `refresh_tracker_derived()` after every membership or pin write.
+- `admin_assign_stories_to_front(p_story_ids BIGINT[], p_event_id BIGINT, p_move BOOLEAN DEFAULT false)`: files up to 200 stories, one result row each (`assigned | moved | already_on_front | on_other_front | story_not_found | story_not_active`). A move sets `reassigned_at`, keeps the FIRST `reassigned_from_event_id`, and clears `event_update_id` (composite FK) and `confidence`. Merged or closed stories are refused.
+- `admin_unassign_stories(p_story_ids BIGINT[], p_event_id BIGINT)`: removes from ONE front only (`removed | not_on_front`), plus `sweep_would_refile`. A removal is not sticky: the sweep or the agent can file the story again.
+- `admin_check_front_pattern(p_pattern TEXT)`: NULL when the pattern compiles as a `~*` regex, else the Postgres error text. Used before saving `sweep_pattern`, `sweep_coword` and `agent_pattern`.
+- `admin_preview_front_rule(p_pattern, p_coword, p_summary, p_kind, p_days, p_event_id)`: read-only counts (this front / other front / none) and up to 10 sample headlines for a sweep or agent rule over active enriched stories first seen in the last 1-90 days. It has no statement timeout of its own; admin-only.
+
+Front updates (`event_updates`) and `tracker_pin` rows are written by the same edge function through plain service-role writes (whitelisted fields, ADO-547 AC5/AC6), not RPCs.
+
 ### `label_backfill_candidates(p_limit)` / `record_action_labels(p_run_id, p_rows)` (functions, migration 125 — ADO-594 S3) — service_role only
 The one-time label backfill: pool of unlabeled active enriched stories (headline, summary, primary_actor, alarm; never content), newest first, 1-50 rows; and the atomic page writer, which checks every row first, writes source `backfill` only where `action_label IS NULL`, and logs skipped (`already_labeled`, `story_not_found`) and uncertain rows to `pipeline_skips` (`label_backfill`). Writer: `scripts/maintenance/label-backfill-db.js`; prompt: `docs/features/events-tracker/label-backfill-prompt.md`.
 
