@@ -5,15 +5,15 @@
 // anon-readable). Same auth + CORS shape as admin-feeds.
 //
 // POST /admin-fronts   body: { action, ... }
-//   list                                   -> { fronts: [...], now_utc }
+//   list                                   -> { fronts: [...], stats_available }
 //   get        { event_id }                -> { front }
 //   save       { event_id?, fields }       -> { ok, front, warnings[], refresh }   (no event_id = create)
-//   retire     { event_id }                -> { ok, front, previous: {sweep_pattern, sweep_coword, agent_pattern}, refresh }
+//   retire     { event_id }                -> { ok, front, previous: {sweep_*, agent_pattern}, warnings[], refresh }
 //   members    { event_id, cursor?, search? } -> { stories: [...], next_cursor }
 //   pool       { cursor?, search? }        -> { stories: [...], next_cursor }
 //   lookup     { story_id }                -> { story }   (any story: its front, so the tab can offer a move)
 //   assign     { event_id, story_ids[], move? } -> { ok, results: [{story_id, status, from_event_id}], refresh }
-//   unassign   { event_id, story_ids[] }   -> { ok, results: [{story_id, status, sweep_would_refile}], refresh }
+//   unassign   { event_id, story_ids[] }   -> { ok, results: [{story_id, status, sweep_would_refile, agent_may_refile}], refresh }
 //   check_pattern { pattern }              -> { ok, error }
 //   preview    { pattern, coword?, summary?, kind: 'sweep'|'agent', days?, event_id? }
 //                                          -> { total_matches, on_this_front, on_other_front, unassigned, samples[] }
@@ -25,9 +25,11 @@
 // Rules (sweep_pattern, sweep_coword, agent_pattern) are compiled by admin_check_front_pattern
 // (migration 134, same ~* operator as the sweep) before anything is written, so a bad regex fails
 // here and never in the 2-hourly sweep or the daily agent run.
-// Retire = take a front off the site and stop new stories reaching it: publish_state draft, sweep
-// and agent patterns cleared (the ADO-610 convention for merged fronts). Members are kept. The old
-// patterns come back in the response so the admin can restore them.
+// Retire = take a front off the site and stop new stories reaching it: publish_state draft, the
+// whole sweep rule and the agent pattern cleared (the ADO-610 convention for merged fronts; the
+// agent definition stays, it is inert without a pattern). Members are kept. The old rule comes
+// back in the response so the admin can restore it.
+// Pattern text is never trimmed (leading/trailing spaces are part of a regex).
 // Slugs are fixed after create: public URLs and the agent's decline records use them.
 //
 // Needs migration 134 for assign / unassign / check_pattern / preview and for saving a rule; until
@@ -95,6 +97,16 @@ function optText(v: unknown, name: string, max: number): string | null {
   const s = (v as string).trim()
   if (s.length > max) bad(`${name} is too long (${s.length} characters, limit ${max})`)
   return s === '' ? null : s
+}
+
+// Regex text is NOT trimmed: ' ice ' (spaces to skip "police") means something different from
+// 'ice'. Blank = no rule; line breaks are dropped (a pattern is one line).
+function optPattern(v: unknown, name: string): string | null {
+  if (v === null || v === undefined) return null
+  if (typeof v !== 'string') bad(`${name} must be text`)
+  const s = (v as string).replace(/[\r\n]+/g, '')
+  if (s.length > 4000) bad(`${name} is too long (${s.length} characters, limit 4000)`)
+  return s.trim() === '' ? null : s
 }
 
 function inRunWindow(d = new Date()): boolean {
@@ -193,7 +205,7 @@ function buildPatch(fields: Record<string, unknown>, current: any | null) {
     // publishing stamps published_at (the CHECK requires it); unpublishing keeps the old stamp
     if (ps === 'published' && current?.publish_state !== 'published') patch.published_at = new Date().toISOString()
   }
-  for (const k of RULE_FIELDS) if (has(k)) patch[k] = optText(fields[k], k, 4000)
+  for (const k of RULE_FIELDS) if (has(k)) patch[k] = optPattern(fields[k], k)
   if (has('sweep_priority')) {
     const n = Number(fields.sweep_priority)
     if (!Number.isInteger(n) || n < 1 || n > 32767) bad('sweep priority must be a whole number from 1 to 32767')
@@ -263,7 +275,7 @@ Deno.serve(async (req) => {
               update_count: s ? s.update_count : null
             }
           })
-          return jsonResponse({ fronts, stats_available: !statsRes.error, now_utc: new Date().toISOString(), in_run_window: inRunWindow() })
+          return jsonResponse({ fronts, stats_available: !statsRes.error })
         }
 
         case 'get': {
@@ -329,7 +341,7 @@ Deno.serve(async (req) => {
           }
           const agentTouched = AGENT_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(patch, k) && patch[k] !== (current?.[k] ?? null))
           if (agentTouched && inRunWindow()) {
-            warnings.push('Saved during the daily fronts agent run (14:00-14:15 UTC, 9:00-9:15 AM CT). Check the next run looks right.')
+            warnings.push('Saved during the daily fronts agent run (14:00-14:15 UTC). Check the next run looks right.')
           }
 
           return jsonResponse({ ok: true, created: !current, front: saved, warnings, refresh: await refresh(supabase) })
@@ -337,17 +349,19 @@ Deno.serve(async (req) => {
 
         case 'retire': {
           const id = posInt(body.event_id, 'event_id')
-          const { data: cur, error: curErr } = await supabase.from('events').select('id,sweep_pattern,sweep_coword,agent_pattern').eq('id', id).maybeSingle()
+          const { data: cur, error: curErr } = await supabase.from('events').select('id,sweep_pattern,sweep_coword,sweep_summary,agent_pattern').eq('id', id).maybeSingle()
           if (curErr) throw new Error(`events read failed: ${curErr.message}`)
           if (!cur) return jsonResponse({ ok: false, reason: 'front_not_found' }, 404)
+          // the whole sweep rule goes (a stale required word would silently gate a later new pattern)
           const { data: saved, error } = await supabase.from('events')
-            .update({ publish_state: 'draft', sweep_pattern: null, agent_pattern: null })
+            .update({ publish_state: 'draft', sweep_pattern: null, sweep_coword: null, sweep_summary: false, agent_pattern: null })
             .eq('id', id).select(FULL_FIELDS).maybeSingle()
           if (error) throw new Error(`retire failed: ${error.message}`)
           return jsonResponse({
             ok: true,
             front: saved,
-            previous: { sweep_pattern: cur.sweep_pattern, sweep_coword: cur.sweep_coword, agent_pattern: cur.agent_pattern },
+            previous: { sweep_pattern: cur.sweep_pattern, sweep_coword: cur.sweep_coword, sweep_summary: cur.sweep_summary, agent_pattern: cur.agent_pattern },
+            warnings: inRunWindow() ? ['Retired during the daily fronts agent run (14:00-14:15 UTC). Check the next run looks right.'] : [],
             refresh: await refresh(supabase)
           })
         }
@@ -357,7 +371,7 @@ Deno.serve(async (req) => {
           const cursor = optCursor(body.cursor)
           const term = searchTerm(body.search)
           let q = supabase.from('story_event')
-            .select(`story_id,assigned_by,confidence,assigned_at,reassigned_at,note,stories!inner(${STORY_FIELDS})`)
+            .select(`story_id,assigned_by,confidence,assigned_at,reassigned_at,reassigned_from_event_id,note,stories!inner(${STORY_FIELDS})`)
             .eq('event_id', id)
             .order('story_id', { ascending: false })
             .limit(PAGE + 1)
@@ -369,7 +383,7 @@ Deno.serve(async (req) => {
           const page = rows.slice(0, PAGE)
           return jsonResponse({
             // deno-lint-ignore no-explicit-any
-            stories: page.map((r: any) => ({ ...r.stories, assigned_by: r.assigned_by, confidence: r.confidence, assigned_at: r.assigned_at, reassigned_at: r.reassigned_at, note: r.note })),
+            stories: page.map((r: any) => ({ ...r.stories, assigned_by: r.assigned_by, confidence: r.confidence, assigned_at: r.assigned_at, reassigned_at: r.reassigned_at, reassigned_from_event_id: r.reassigned_from_event_id, note: r.note })),
             next_cursor: rows.length > PAGE ? page[page.length - 1].story_id : null
           })
         }
@@ -401,14 +415,16 @@ Deno.serve(async (req) => {
 
         case 'lookup': {
           const id = posInt(body.story_id, 'story_id')
-          const { data, error } = await supabase.from('stories')
-            .select(`${STORY_FIELDS},summary_neutral_set:summary_neutral,story_event(event_id)`)
-            .eq('id', id).maybeSingle()
-          if (error) throw new Error(`story read failed: ${error.message}`)
-          if (!data) return jsonResponse({ ok: false, reason: 'story_not_found' }, 404)
+          // "enriched" is a second id-only read so the summary text never leaves the database
+          const [storyRes, enrichedRes] = await Promise.all([
+            supabase.from('stories').select(`${STORY_FIELDS},story_event(event_id)`).eq('id', id).maybeSingle(),
+            supabase.from('stories').select('id').eq('id', id).not('summary_neutral', 'is', null).maybeSingle()
+          ])
+          if (storyRes.error) throw new Error(`story read failed: ${storyRes.error.message}`)
+          if (!storyRes.data) return jsonResponse({ ok: false, reason: 'story_not_found' }, 404)
           // deno-lint-ignore no-explicit-any
-          const { story_event: se, summary_neutral_set, ...s } = data as any
-          return jsonResponse({ story: { ...s, enriched: summary_neutral_set != null, event_id: se?.event_id ?? null } })
+          const { story_event: se, ...s } = storyRes.data as any
+          return jsonResponse({ story: { ...s, enriched: !enrichedRes.error && !!enrichedRes.data, event_id: se?.event_id ?? null } })
         }
 
         case 'assign': {
@@ -440,17 +456,17 @@ Deno.serve(async (req) => {
         }
 
         case 'check_pattern': {
-          const pattern = optText(body.pattern, 'pattern', 4000)
+          const pattern = optPattern(body.pattern, 'pattern')
           if (!pattern) return jsonResponse({ ok: true, error: null })
           const err = await checkPattern(supabase, pattern)
           return jsonResponse({ ok: err == null, error: err })
         }
 
         case 'preview': {
-          const pattern = optText(body.pattern, 'pattern', 4000)
+          const pattern = optPattern(body.pattern, 'pattern')
           if (!pattern) bad('enter a pattern to preview')
           const kind = body.kind === 'agent' ? 'agent' : 'sweep'
-          const coword = kind === 'sweep' ? optText(body.coword, 'required word', 4000) : null
+          const coword = kind === 'sweep' ? optPattern(body.coword, 'required word') : null
           for (const p of [pattern, coword]) {
             if (p) {
               const err = await checkPattern(supabase, p)

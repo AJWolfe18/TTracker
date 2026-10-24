@@ -6598,7 +6598,13 @@
             name: '', slug: '', dek: '', alarm_level: '3', tier: 'standard', lifecycle: 'open', publish_state: 'draft', started_at: '',
             sweep_pattern: '', sweep_coword: '', sweep_priority: '100', sweep_summary: false, agent_pattern: '', agent_definition: ''
         };
-        // The daily fronts agent runs at 14:00 UTC (9:00 AM CT) for a few minutes; the window has margin.
+        // The daily fronts agent runs at 14:00 UTC for a few minutes; the window has margin.
+        // In Central time that is 9:00 AM in summer and 8:00 AM in winter, so the copy is computed.
+        const frontsAgentRunCT = (minute = 0) => {
+            const d = new Date();
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 14, minute))
+                .toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+        };
         const frontsInAgentWindow = () => {
             const d = new Date();
             const m = d.getUTCHours() * 60 + d.getUTCMinutes();
@@ -6650,7 +6656,10 @@
                 if (removed.length) parts.push(`Removed ${removed.length} from ${frontName}.`);
                 if (by('not_on_front').length) parts.push(`${by('not_on_front').length} were not on it any more.`);
                 const back = removed.filter(r => r.sweep_would_refile).length;
-                if (back) parts.push(`${back} ${back === 1 ? 'matches' : 'match'} a keyword rule, so the automatic sweep may file ${back === 1 ? 'it' : 'them'} again (on whichever front has that rule). To stop that, move ${back === 1 ? 'it' : 'them'} to the right front instead, or tighten the rule.`);
+                if (back) parts.push(`${back} ${back === 1 ? 'matches' : 'match'} a keyword rule, so the automatic sweep may file ${back === 1 ? 'it' : 'them'} again (on whichever front has that rule).`);
+                const agentBack = removed.filter(r => r.agent_may_refile && !r.sweep_would_refile).length;
+                if (agentBack) parts.push(`${agentBack} ${agentBack === 1 ? 'matches' : 'match'} an assignment-agent pattern, so the daily agent will look at ${agentBack === 1 ? 'it' : 'them'} again.`);
+                if (back || agentBack) parts.push('Removing does not stop that. To keep a story off a front, move it to the right front instead, or tighten the rule.');
             } else {
                 if (by('assigned').length) parts.push(`Filed ${by('assigned').length} on ${frontName}.`);
                 if (by('moved').length) parts.push(`Moved ${by('moved').length} to ${frontName}.`);
@@ -6669,7 +6678,7 @@
         }
 
         // Checkbox story list shared by the unassigned pool and a front's member list.
-        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded }) {
+        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded, frontsById }) {
             const allOn = stories.length > 0 && stories.every(s => selected.has(s.id));
             return (
                 <div style={{ overflowX: 'auto' }}>
@@ -6717,7 +6726,7 @@
                                     <td data-label="First seen" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{frontsFmtDate(s.first_seen_at)}</td>
                                     {showAdded && (
                                         <td data-label="Added" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }} title={s.note || ''}>
-                                            {frontsFmtDate(s.assigned_at)} · {s.assigned_by === 'human' ? 'by hand' : 'automatic'}{s.reassigned_at ? ' · moved here' : ''}
+                                            {frontsFmtDate(s.assigned_at)} · {s.assigned_by === 'human' ? 'by hand' : 'automatic'}{s.reassigned_at ? ` · moved here by hand${s.reassigned_from_event_id && frontsById?.[s.reassigned_from_event_id] ? ` (first on ${frontsById[s.reassigned_from_event_id].name})` : ''}` : ''}
                                         </td>
                                     )}
                                 </tr>
@@ -6873,7 +6882,7 @@
             return (
                 <>
                     <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                        A <strong style={{ color: '#e5e7eb' }}>front</strong> is an ongoing topic that groups stories. Only <strong style={{ color: '#e5e7eb' }}>Live</strong> fronts show on the site. Stories reach a front three ways: the <strong style={{ color: '#e5e7eb' }}>keyword sweep</strong> (every 2 hours, by headline), the <strong style={{ color: '#e5e7eb' }}>assignment agent</strong> (daily at 9 AM CT, Live fronts with a definition), or by hand here. Open a front to edit it, change its rules, or file and move its stories.
+                        A <strong style={{ color: '#e5e7eb' }}>front</strong> is an ongoing topic that groups stories. Only <strong style={{ color: '#e5e7eb' }}>Live</strong> fronts show on the site. Stories reach a front three ways: the <strong style={{ color: '#e5e7eb' }}>keyword sweep</strong> (every 2 hours, by headline), the <strong style={{ color: '#e5e7eb' }}>assignment agent</strong> (daily at {frontsAgentRunCT()} CT, Live fronts with a definition), or by hand here. Open a front to edit it, change its rules, or file and move its stories.
                     </div>
                     <div style={{ overflowX: 'auto' }}>
                         <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -7013,6 +7022,7 @@
                     <div style={{ marginBottom: '0.35rem' }}>
                         Matches <strong style={{ color: '#e5e7eb' }}>{result.total_matches}</strong> published stories from the last {result.days} days:
                         {' '}{result.on_this_front} already on this front, {result.on_other_front} on other fronts, {result.unassigned} on no front.
+                        <span style={{ color: '#64748b' }}> A rough guide: when two fronts match, the lower priority number wins, and the agent skips stories it already turned down.</span>
                     </div>
                     {result.samples.length > 0 && (
                         <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#9ca3af' }}>
@@ -7067,8 +7077,8 @@
             });
 
             const checkRule = async (k) => {
-                const v = form[k].trim();
-                if (!v || v === (loaded?.[k] || '')) { setRuleErrors(p => ({ ...p, [k]: null })); return; }
+                const v = form[k]; // untrimmed: spaces are part of a pattern
+                if (!v.trim() || v === (loaded?.[k] || '')) { setRuleErrors(p => ({ ...p, [k]: null })); return; }
                 try {
                     const res = await api({ action: 'check_pattern', pattern: v });
                     setRuleErrors(p => ({ ...p, [k]: res.error || null }));
@@ -7110,7 +7120,7 @@
                 const fields = changedFields();
                 if (!Object.keys(fields).length) { setNotice({ kind: 'info', text: 'Nothing changed.' }); return; }
                 const agentTouched = ['agent_pattern', 'agent_definition', 'publish_state'].some(k => k in fields);
-                if (agentTouched && frontsInAgentWindow() && !confirm('The daily fronts agent runs right now (14:00-14:15 UTC, 9:00-9:15 AM CT). Changing a front\'s agent rules or Live status mid-run can make that run skip stories for this front. Save anyway? (Waiting until 9:20 AM CT is safer.)')) return;
+                if (agentTouched && frontsInAgentWindow() && !confirm(`The daily fronts agent is running right now (${frontsAgentRunCT()}-${frontsAgentRunCT(15)} CT). Changing a front's agent rules or Live status mid-run can make that run skip stories for this front. Save anyway? (Waiting until ${frontsAgentRunCT(20)} CT is safer.)`)) return;
                 if (fields.publish_state === 'published' && loaded?.publish_state !== 'published' && !confirm(`Make "${form.name}" Live? It appears on the public site, and its stories count toward the Tracker.`)) return;
                 setSaving(true);
                 setError(null);
@@ -7132,6 +7142,7 @@
             };
 
             const retire = async () => {
+                if (frontsInAgentWindow() && !confirm(`The daily fronts agent is running right now (${frontsAgentRunCT()}-${frontsAgentRunCT(15)} CT). Retiring a front mid-run can make that run skip stories. Retire anyway? (Waiting until ${frontsAgentRunCT(20)} CT is safer.)`)) return;
                 if (!confirm(`Retire "${loaded.name}"?\n\nIt goes back to Draft (off the public site) and its keyword sweep and agent pattern are cleared, so no new stories are filed to it. Its ${frontsById[eventId]?.story_count ?? ''} stories stay on it. You can edit it and make it Live again later.`)) return;
                 setSaving(true);
                 setError(null);
@@ -7141,8 +7152,13 @@
                     setLoaded(res.front);
                     setForm(toForm(res.front));
                     const prev = res.previous || {};
-                    const kept = [prev.sweep_pattern && `old keyword pattern: ${prev.sweep_pattern}`, prev.agent_pattern && `old agent pattern: ${prev.agent_pattern}`].filter(Boolean);
-                    setNotice({ kind: 'ok', text: `Retired. ${kept.length ? `Copy these if you may want them back - ${kept.join(' | ')}` : ''} ${res.refresh && !res.refresh.ok ? res.refresh.error : ''}` });
+                    const kept = [
+                        prev.sweep_pattern && `old keyword pattern: ${prev.sweep_pattern}`,
+                        prev.sweep_coword && `old required word: ${prev.sweep_coword}${prev.sweep_summary ? ' (also searched summaries)' : ''}`,
+                        prev.agent_pattern && `old agent pattern: ${prev.agent_pattern}`
+                    ].filter(Boolean);
+                    const warn = [...(res.warnings || []), ...(res.refresh && !res.refresh.ok ? [res.refresh.error] : [])];
+                    setNotice({ kind: warn.length ? 'warn' : 'ok', text: [`Retired.`, kept.length ? `Copy these if you may want them back - ${kept.join(' | ')}` : '', ...warn].filter(Boolean).join(' ') });
                     onChanged();
                 } catch (err) {
                     setError(err.message);
@@ -7239,13 +7255,13 @@
                     </div>
 
                     <div style={section}>
-                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Assignment agent (runs daily at 9:00 AM CT)</h4>
+                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Assignment agent (runs daily at {frontsAgentRunCT()} CT)</h4>
                         <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
                             Claude reads stories the sweep missed and decides which front, if any, they belong on. It only considers this front when it is <strong>Live</strong> and has <strong>both</strong> a candidate pattern and a definition.
                             {' '}Currently: <strong style={{ color: agentOn ? '#4ade80' : '#fbbf24' }}>{agentOn ? 'on' : 'off'}</strong>.
                         </p>
                         <div style={{ ...frontsBox('warn'), borderRadius: '6px', padding: '0.5rem 0.9rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
-                            Don't save changes here between 9:00 and 9:15 AM CT (14:00-14:15 UTC) while the daily agent run is going; it can make that run skip stories for this front.
+                            Don't save changes here (or retire the front) between {frontsAgentRunCT()} and {frontsAgentRunCT(15)} CT (14:00-14:15 UTC) while the daily agent run is going; it can make that run skip stories for this front.
                         </div>
                         <FrontsPatternField label="Candidate pattern (headline or summary)" hint="Broader than the sweep on purpose: it only decides which stories the agent looks at." value={form.agent_pattern} onChange={v => set('agent_pattern', v)} error={ruleErrors.agent_pattern} onBlur={() => checkRule('agent_pattern')} />
                         <div className="form-group">
@@ -7385,7 +7401,7 @@
                     ) : page.stories.length === 0 ? (
                         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No stories on this front match that search.' : 'No stories on this front yet.'}</div>
                     ) : (
-                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded />
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded frontsById={frontsById} />
                     )}
                     {page.cursor != null && (
                         <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>

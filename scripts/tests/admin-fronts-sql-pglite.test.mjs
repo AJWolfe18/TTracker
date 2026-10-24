@@ -43,7 +43,7 @@ create table public.events(
   id bigint generated always as identity primary key, slug text not null unique, name text not null,
   publish_state text not null default 'draft', sweep_pattern text, sweep_coword text,
   sweep_priority smallint not null default 100, sweep_summary boolean not null default false,
-  agent_pattern text);
+  agent_pattern text, agent_definition text);
 create table public.event_updates(
   id bigint generated always as identity primary key,
   event_id bigint not null references public.events(id) on delete cascade,
@@ -51,7 +51,7 @@ create table public.event_updates(
 create table public.stories(
   id bigint primary key, status text, merged_into_story_id bigint, primary_headline text,
   summary_neutral text, first_seen_at timestamptz default now(), last_updated_at timestamptz default now(),
-  last_enriched_at timestamptz);
+  last_enriched_at timestamptz, action_label text);
 create table public.story_event(
   story_id bigint primary key references public.stories(id) on delete cascade,
   event_id bigint not null references public.events(id) on delete cascade,
@@ -61,11 +61,11 @@ create table public.story_event(
   reassigned_from_event_id bigint references public.events(id) on delete set null, note text,
   constraint story_event_update_same_event_fkey foreign key (event_update_id, event_id)
     references public.event_updates(id, event_id));
-insert into public.events(slug, name, publish_state, sweep_pattern, sweep_coword, sweep_priority, sweep_summary, agent_pattern) overriding system value values
- ('epstein-files', 'The Epstein Files', 'published', 'epstein', null, 60, false, 'epstein|maxwell'),
- ('iran', 'Iran', 'published', '\miran(ian)?\M', '^(?!.*iranian revolution)', 80, false, null),
- ('rfk-hhs', 'RFK Jr.''s HHS', 'draft', null, null, 85, false, null),
- ('election-suppression', 'Election Suppression', 'published', '(usps|mail ballot)', '(election|vote|ballot)', 50, true, null);
+insert into public.events(slug, name, publish_state, sweep_pattern, sweep_coword, sweep_priority, sweep_summary, agent_pattern, agent_definition) overriding system value values
+ ('epstein-files', 'The Epstein Files', 'published', 'epstein', null, 60, false, 'epstein|maxwell', 'def'),
+ ('iran', 'Iran', 'published', '\miran(ian)?\M', '^(?!.*iranian revolution)', 80, false, null, null),
+ ('rfk-hhs', 'RFK Jr.''s HHS', 'draft', null, null, 85, false, 'budget', 'def'),
+ ('election-suppression', 'Election Suppression', 'published', '(usps|mail ballot)', '(election|vote|ballot)', 50, true, null, null);
 insert into public.event_updates(event_id) values (1);
 insert into public.stories(id, status, merged_into_story_id, primary_headline, summary_neutral, first_seen_at) values
  (1, 'active', null, 'Epstein estate releases new documents', 's', now() - interval '2 days'),
@@ -77,9 +77,11 @@ insert into public.stories(id, status, merged_into_story_id, primary_headline, s
  (7, 'active', null, 'Election board changes ballot rules', 'The USPS will stop', now() - interval '1 day'),
  (8, 'active', null, 'Old Epstein story', 's', now() - interval '200 days'),
  (9, 'active', null, 'Epstein survivor testifies', null, now() - interval '1 day');
-insert into public.story_event(story_id, event_id, assigned_by, confidence, event_update_id) values
- (2, 2, 'agent', 0.8, null),
- (1, 1, 'agent', 0.8, 1);
+insert into public.stories(id, status, primary_headline, summary_neutral, first_seen_at, action_label) values
+ (10, 'active', 'Maxwell interview recap', 's', now() - interval '1 day', 'coverage');
+insert into public.story_event(story_id, event_id, assigned_by, confidence, event_update_id, note) values
+ (2, 2, 'agent', 0.8, null, null),
+ (1, 1, 'agent', 0.8, 1, 'fronts-v2: epstein-files: names Epstein');
 `;
 
 let failures = 0;
@@ -118,23 +120,30 @@ check('move reports from_event_id', r[0]?.status === 'moved' && Number(r[0]?.fro
 check('move writes reassigned_at + from', row.reassigned_at !== null && Number(row.reassigned_from_event_id) === 1 && Number(row.event_id) === 3);
 check('move clears the old front update link', row.event_update_id === null);
 check('move keeps the original assigned_by', row.assigned_by === 'agent');
+check('move clears the old confidence', row.confidence === null);
+check('move note keeps the first reason', row.note === 'moved by hand in admin; first filed as: fronts-v2: epstein-files: names Epstein', row.note);
 
 r = await assign([1], 2, true);
 row = await se(1);
 check('second move keeps the FIRST reassigned_from_event_id', Number(row.reassigned_from_event_id) === 1 && Number(row.event_id) === 2, JSON.stringify(row));
+check('second move keeps the note (no double prefix)', row.note === 'moved by hand in admin; first filed as: fronts-v2: epstein-files: names Epstein', row.note);
 
 check('unknown front raises', (await fails('select * from public.admin_assign_stories_to_front(array[6]::bigint[], 4242, false)'))?.includes('not found'));
 check('more than 200 ids raises', (await fails('select * from public.admin_assign_stories_to_front((select array_agg(g)::bigint[] from generate_series(1,201) g), 1, false)'))?.includes('at most 200'));
 check('empty array returns nothing', (await assign([], 1)).length === 0);
 
 // --- unassign + sweep agreement ------------------------------------------------------------
-await assign([4, 6, 7], 3);            // all three filed by hand onto rfk-hhs (no sweep rule)
-r = await rowsOf('select * from public.admin_unassign_stories(array[4, 6, 7, 2]::bigint[], 3)');
+await assign([4, 6, 7, 10], 3);        // filed by hand onto rfk-hhs (no sweep rule; a draft, so not an agent front)
+r = await rowsOf('select * from public.admin_unassign_stories(array[4, 6, 7, 10, 2]::bigint[], 3)');
 check('unassign removes from the named front', byStory(r, 4)?.status === 'removed' && byStory(r, 6)?.status === 'removed' && byStory(r, 7)?.status === 'removed');
 check('unassign leaves another front alone', byStory(r, 2)?.status === 'not_on_front' && Number((await se(2)).event_id) === 2);
 check('headline match flagged for re-file (4: "Maxwell" is agent-only, so no)', byStory(r, 4)?.sweep_would_refile === false, JSON.stringify(byStory(r, 4)));
 check('summary match behind a coword flagged (7)', byStory(r, 7)?.sweep_would_refile === true);
 check('no rule match not flagged (6)', byStory(r, 6)?.sweep_would_refile === false);
+check('agent pattern on a live agent front flagged (4)', byStory(r, 4)?.agent_may_refile === true, JSON.stringify(byStory(r, 4)));
+check('coverage-labeled story not flagged for the agent (10)', byStory(r, 10)?.agent_may_refile === false);
+check('a draft front agent pattern is ignored (6 matches rfk "budget")', byStory(r, 6)?.agent_may_refile === false);
+check('a row that was not removed carries false flags (2)', byStory(r, 2)?.agent_may_refile === false && byStory(r, 2)?.sweep_would_refile === false);
 await rowsOf('select * from public.assign_fronts_sweep(null)');
 check('sweep agrees: 7 re-filed', Number((await se(7))?.event_id) === 4);
 check('sweep agrees: 4 and 6 stay unfiled', !(await se(4)) && !(await se(6)));

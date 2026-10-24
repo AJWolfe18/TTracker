@@ -100,14 +100,25 @@ BEGIN
     END IF;
 
     -- A row exists: lock it so a concurrent move/remove can't interleave.
-    SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id INTO v_cur
+    SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id, se.note INTO v_cur
       FROM public.story_event se WHERE se.story_id = v_id FOR UPDATE;
     IF NOT FOUND THEN
-      -- removed between our insert attempt and the lock: file it now
+      -- removed between our insert attempt and the lock: try once more. If a sweep or the
+      -- agent won that race too, report where the story is now; never claim a filing
+      -- that did not happen, and never move on a race (the admin can retry the move).
       INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
       VALUES (v_id, p_event_id, 'human', NULL)
       ON CONFLICT ON CONSTRAINT story_event_pkey DO NOTHING;
-      story_id := v_id; status := 'assigned'; from_event_id := NULL; RETURN NEXT; CONTINUE;
+      GET DIAGNOSTICS v_inserted = ROW_COUNT;
+      IF v_inserted = 1 THEN
+        story_id := v_id; status := 'assigned'; from_event_id := NULL; RETURN NEXT; CONTINUE;
+      END IF;
+      SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id INTO v_cur
+        FROM public.story_event se WHERE se.story_id = v_id;
+      story_id := v_id;
+      status := CASE WHEN v_cur.event_id = p_event_id THEN 'already_on_front' ELSE 'on_other_front' END;
+      from_event_id := CASE WHEN v_cur.event_id = p_event_id THEN NULL ELSE v_cur.event_id END;
+      RETURN NEXT; CONTINUE;
     END IF;
 
     IF v_cur.event_id = p_event_id THEN
@@ -117,9 +128,17 @@ BEGIN
       story_id := v_id; status := 'on_other_front'; from_event_id := v_cur.event_id; RETURN NEXT; CONTINUE;
     END IF;
 
+    -- assigned_by / assigned_at stay (they record who made the ORIGINAL call, which
+    -- the precision metric needs). confidence described the old front, so it is
+    -- cleared; the note says what happened and keeps the old reason
+    -- (why the first front was picked is what a precision review wants to read).
     UPDATE public.story_event se
        SET event_id                 = p_event_id,
            event_update_id          = NULL,
+           confidence               = NULL,
+           note                     = CASE WHEN v_cur.note LIKE 'moved by hand in admin%' THEN v_cur.note  -- 2nd+ move: keep it
+                                           ELSE left('moved by hand in admin'
+                                                     || COALESCE('; first filed as: ' || v_cur.note, ''), 500) END,
            reassigned_at            = NOW(),
            reassigned_from_event_id = CASE WHEN v_cur.reassigned_at IS NULL
                                            THEN v_cur.event_id
@@ -141,11 +160,20 @@ COMMENT ON FUNCTION public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLE
 -- would file again into ANY front on its next run that sees it (the sweep looks
 -- at stories touched in the last 48 hours, and at everything on a full backfill).
 -- Same matching rule as the sweep, kept in step by the PGlite test.
+-- agent_may_refile = an active, enriched story, not labeled coverage, whose
+-- headline or summary matches the agent_pattern of an agent front (published,
+-- pattern + definition): the daily agent will look at it again (the 127 pool
+-- rule, minus declines). Removal is NOT sticky; these two flags are how the
+-- admin is told. A durable "never file this story here" needs the sweep and the
+-- agent pool to honor an exclusion (open decision, ADO-547 report).
+-- DROP first: a re-run over an earlier revision of this file (fewer OUT columns)
+-- cannot CREATE OR REPLACE a different return type.
+DROP FUNCTION IF EXISTS public.admin_unassign_stories(BIGINT[], BIGINT);
 CREATE OR REPLACE FUNCTION public.admin_unassign_stories(
   p_story_ids BIGINT[],
   p_event_id  BIGINT
 )
-RETURNS TABLE (story_id BIGINT, status TEXT, sweep_would_refile BOOLEAN)
+RETURNS TABLE (story_id BIGINT, status TEXT, sweep_would_refile BOOLEAN, agent_may_refile BOOLEAN)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -182,6 +210,20 @@ BEGIN
             WHERE st.id = ids.sid
               AND st.status = 'active'
               AND st.primary_headline IS NOT NULL
+         ) END,
+         CASE WHEN d.story_id IS NULL THEN false ELSE EXISTS (
+           SELECT 1
+             FROM public.stories st
+             JOIN public.events a
+               ON a.publish_state = 'published'
+              AND a.agent_pattern IS NOT NULL
+              AND NULLIF(btrim(a.agent_definition), '') IS NOT NULL
+              AND (st.primary_headline ~* a.agent_pattern OR st.summary_neutral ~* a.agent_pattern)
+            WHERE st.id = ids.sid
+              AND st.status = 'active'
+              AND st.primary_headline IS NOT NULL
+              AND st.summary_neutral IS NOT NULL
+              AND st.action_label IS DISTINCT FROM 'coverage'
          ) END
     FROM ids
     LEFT JOIN del d ON d.story_id = ids.sid
@@ -190,7 +232,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.admin_unassign_stories(BIGINT[], BIGINT) IS
-  'ADO-547: admin Fronts tab. Removes up to 200 stories from ONE front (removed | not_on_front). sweep_would_refile = the keyword sweep would file the story again (any front) next time it sees it. Caller runs refresh_tracker_derived() after. service_role only.';
+  'ADO-547: admin Fronts tab. Removes up to 200 stories from ONE front (removed | not_on_front). sweep_would_refile = the keyword sweep would file the story again (any front) next time it sees it; agent_may_refile = the daily assignment agent will judge it again. Removal is not sticky. Caller runs refresh_tracker_derived() after. service_role only.';
 
 -- ----------------------------------------------------------------------------
 -- C) admin_check_front_pattern: NULL = valid, else the Postgres error text
@@ -222,8 +264,12 @@ COMMENT ON FUNCTION public.admin_check_front_pattern(TEXT) IS
 -- ----------------------------------------------------------------------------
 -- p_kind 'sweep': the migration-115 rule (coword on the headline gates; pattern
 --                 on the headline, or on the summary when p_summary + coword).
--- p_kind 'agent': the migration-127 pool rule (pattern on headline OR summary).
--- Pool: active, enriched stories first seen in the last p_days (1-90).
+-- p_kind 'agent': the migration-127 pool rule (pattern on headline OR summary,
+--                 stories labeled coverage never count).
+-- Pool: active, enriched (published) stories first seen in the last p_days
+-- (1-90). An approximation on purpose, and the admin copy says so: it does not
+-- model sweep_priority competition between fronts, the sweep also files
+-- not-yet-enriched stories, and the agent skips stories it already declined.
 -- Returns one row per sample story (newest first, at most 10) plus totals that
 -- repeat on every row; a zero-match preview returns a single row with NULL
 -- story fields so the counts still arrive.
@@ -267,6 +313,7 @@ BEGIN
        AND st.primary_headline IS NOT NULL
        AND st.summary_neutral IS NOT NULL
        AND st.first_seen_at >= NOW() - make_interval(days => v_days)
+       AND (p_kind <> 'agent' OR st.action_label IS DISTINCT FROM 'coverage')   -- ADO-594 S7
   ), hits AS (
     SELECT p.id, p.h, se.event_id
       FROM pool p
