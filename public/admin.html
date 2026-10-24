@@ -7090,6 +7090,7 @@
             const [previewDays, setPreviewDays] = useState(30);
             const formDirtyRef = useRef(false);
             const updateDirtyRef = useRef(false); // an open update form on the Updates pane has edits
+            const createdIdRef = useRef(null);
 
             const toForm = (f) => ({
                 name: f.name || '', slug: f.slug || '', dek: f.dek || '', alarm_level: String(f.alarm_level ?? 3), tier: f.tier, lifecycle: f.lifecycle,
@@ -7099,7 +7100,8 @@
             });
 
             useEffect(() => {
-                if (isNew) return;
+                // a create already returned the saved row; refetching it for the new id could wipe edits typed since
+                if (isNew || createdIdRef.current === eventId) return;
                 let alive = true;
                 (async () => {
                     try {
@@ -7117,7 +7119,8 @@
             }, [api, eventId, isNew]);
 
             // Unsaved edits: the form against the row as last read/saved (the empty form for a new front).
-            // A save or retire resets the form from the server row, so the page is clean again after either.
+            // A save resets the form from the server row, so the page is clean again after it (so does a
+            // retire, whose confirm says when it throws unsaved edits away).
             const savedForm = loaded ? toForm(loaded) : FRONT_EMPTY_FORM;
             formDirtyRef.current = Object.keys(FRONT_EMPTY_FORM).some(k => form[k] !== savedForm[k]);
             useEffect(() => {
@@ -7188,6 +7191,7 @@
                     setRuleErrors({});
                     const warn = [...(res.warnings || []), ...(res.refresh && !res.refresh.ok ? [res.refresh.error] : [])];
                     setNotice({ kind: warn.length ? 'warn' : 'ok', text: [res.created ? `Created "${res.front.name}".` : 'Saved.', ...warn].join(' ') });
+                    if (res.created) createdIdRef.current = res.front.id;
                     onSaved(res.front.id);
                 } catch (err) {
                     if (err.body?.rule_errors) setRuleErrors(err.body.rule_errors);
@@ -7199,7 +7203,7 @@
 
             const retire = async () => {
                 if (frontsInAgentWindow() && !confirm(`The daily fronts agent is running right now (${frontsAgentRunCT()}-${frontsAgentRunCT(15)} CT). Retiring a front mid-run can make that run skip stories. Retire anyway? (Waiting until ${frontsAgentRunCT(20)} CT is safer.)`)) return;
-                if (!confirm(`Retire "${loaded.name}"?\n\nIt goes back to Draft (off the public site) and its keyword sweep and agent pattern are cleared, so no new stories are filed to it. Its ${frontsById[eventId]?.story_count ?? ''} stories stay on it. You can edit it and make it Live again later.`)) return;
+                if (!confirm(`Retire "${loaded.name}"?\n\nIt goes back to Draft (off the public site) and its keyword sweep and agent pattern are cleared, so no new stories are filed to it. Its ${frontsById[eventId]?.story_count ?? ''} stories stay on it. You can edit it and make it Live again later.${formDirtyRef.current ? '\n\nYour unsaved changes on this page are thrown away.' : ''}`)) return;
                 setSaving(true);
                 setError(null);
                 setNotice(null);
@@ -8619,6 +8623,7 @@
 
             // Handle sign out
             const handleSignOut = () => {
+                setLeavePrompt(null); // a 401 sign-out can land while the dialog is open
                 sessionStorage.removeItem(AUTH_STORAGE_KEY);
                 setIsAuthenticated(false);
                 setPassword('');
