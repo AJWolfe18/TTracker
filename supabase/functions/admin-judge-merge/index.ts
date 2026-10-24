@@ -20,8 +20,10 @@
 //   (each story also carries article_count = article_story rows, and front = {event_id,name}|null)
 // merge response:   { ok, skipped?, reason?, run_id, articles_moved?, survivor_source_count?, log_error?, refresh_error? }
 // unmerge response: { ok, reason?, run_id, loser_id?, survivor_id?, articles_restored?, refresh_error? }
+// refresh response: { ok, refresh_error? }   (no story ids needed)
 // After an executed merge/unmerge, refresh_tracker_derived() runs (best-effort) so the Tracker
-// main line and masthead tally don't wait for the next pipeline run.
+// main line and masthead tally don't wait for the next pipeline run. Merges sent with
+// via='stories_combine' skip it; the Combine dialog sends one 'refresh' after the whole batch.
 //   (the 'unmerge' judge-log row is written atomically by the unmerge_story RPC — migration 107)
 // dismiss response: { ok, run_id }
 //
@@ -92,23 +94,31 @@ Deno.serve(async (req) => {
     const action = String(body.action || '').trim()
     const survivorId = parseStoryId(body.survivor_id)
     const loserId = parseStoryId(body.loser_id)
-    // Which admin screen asked (audit text only). ADO-60: the Stories tab Combine loops 'merge' per story.
+    // Which admin screen asked. ADO-60: the Stories tab Combine loops 'merge' per story; it changes the
+    // judge-log rationale text, and skips the per-merge Tracker refresh (Combine sends one 'refresh' at the end).
     const fromStoriesCombine = body.via === 'stories_combine'
 
-    if (action !== 'preview' && action !== 'merge' && action !== 'unmerge' && action !== 'dismiss') {
-      return jsonResponse({ error: "action must be 'preview', 'merge', 'unmerge' or 'dismiss'" }, 400)
-    }
-    if (survivorId == null || loserId == null) {
-      return jsonResponse({ error: 'survivor_id and loser_id must be positive integers' }, 400)
-    }
-    if (survivorId === loserId) {
-      return jsonResponse({ error: 'survivor_id and loser_id must be different stories' }, 400)
+    if (action !== 'preview' && action !== 'merge' && action !== 'unmerge' && action !== 'dismiss' && action !== 'refresh') {
+      return jsonResponse({ error: "action must be 'preview', 'merge', 'unmerge', 'dismiss' or 'refresh'" }, 400)
     }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    // 'refresh' takes no story ids: one Tracker refresh after a whole Combine batch.
+    if (action === 'refresh') {
+      const refreshError = await refreshTracker(supabase)
+      return jsonResponse({ ok: !refreshError, refresh_error: refreshError })
+    }
+
+    if (survivorId == null || loserId == null) {
+      return jsonResponse({ error: 'survivor_id and loser_id must be positive integers' }, 400)
+    }
+    if (survivorId === loserId) {
+      return jsonResponse({ error: 'survivor_id and loser_id must be different stories' }, 400)
+    }
 
     // Both actions need the two story rows: preview displays them; merge snapshots the
     // headlines for the clustering_judge_log row (headlines survive the merge unchanged,
@@ -139,8 +149,8 @@ Deno.serve(async (req) => {
 
       // ADO-60: real article counts (article_story rows; stories.source_count can drift) and front
       // membership, for the Stories tab "Combine" dialog. merge_stories does NOT move story_event,
-      // so a loser's front is flagged rather than silently left on the tombstone. Best-effort:
-      // a failed lookup leaves the fields off and fronts_checked=false (the merge itself is unaffected).
+      // so a loser's front is flagged rather than silently left on the tombstone. Best-effort, all or
+      // nothing: if any count or front lookup fails, both fields are left off and fronts_checked=false.
       const found = [survivor, loser].filter((s): s is NonNullable<typeof s> => !!s)
       const extra: Record<number, { article_count?: number; front?: { event_id: number; name: string } | null }> = {}
       let frontsChecked = false
@@ -149,7 +159,8 @@ Deno.serve(async (req) => {
           supabase.from('article_story').select('article_id', { count: 'exact', head: true }).eq('story_id', s.id)
         ))
         counts.forEach((c, i) => {
-          if (!c.error && typeof c.count === 'number') extra[found[i].id] = { article_count: c.count }
+          if (c.error || typeof c.count !== 'number') throw c.error || new Error('article count unavailable')
+          extra[found[i].id] = { article_count: c.count }
         })
 
         const { data: members, error: memberError } = await supabase
@@ -171,6 +182,7 @@ Deno.serve(async (req) => {
         frontsChecked = true
       } catch (lookupError) {
         console.error('Preview count/front lookup failed:', (lookupError as Error)?.message || lookupError)
+        for (const k of Object.keys(extra)) delete extra[Number(k)] // all-or-nothing: no half-filled counts
       }
 
       const survivorOut = survivor ? { ...survivor, ...extra[survivor.id] } : null
@@ -285,7 +297,8 @@ Deno.serve(async (req) => {
       console.error('clustering_judge_log insert failed (merge already executed):', logError.message)
     }
 
-    const refreshError = await refreshTracker(supabase)
+    // A Combine batch refreshes once at the end (action 'refresh'), not once per story.
+    const refreshError = fromStoriesCombine ? undefined : await refreshTracker(supabase)
 
     return jsonResponse({
       ...result,

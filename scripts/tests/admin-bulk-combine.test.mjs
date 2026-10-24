@@ -89,6 +89,13 @@ test('plan: a story already merged into the keeper says so (nothing to do)', () 
   assert.match(plan.skipped[0].text, /Already part of #1/);
 });
 
+test('plan: a story merged into another story in this Combine comes along (no misleading advice)', () => {
+  const plan = buildCombinePlan([story(5), story(6), story(7, { status: 'merged_into', merged_into_story_id: 6 })], 5);
+  assert.deepEqual(plan.toMerge.map((s) => s.id), [6]);
+  assert.match(plan.skipped[0].text, /merged into #6, which is being combined into #5/);
+  assert.doesNotMatch(plan.skipped[0].text, /instead/);
+});
+
 test('plan: a missing story is skipped', () => {
   const plan = buildCombinePlan([story(1), story(2), story(3, { missing: true })], 1);
   assert.deepEqual(plan.toMerge.map((s) => s.id), [2]);
@@ -157,10 +164,13 @@ test('admin-judge-merge preview returns article_count, front and fronts_checked;
   assert.match(adminHtml, /via: 'stories_combine'/);
 });
 
-test('every executed merge/unmerge refreshes the Tracker derived columns', () => {
+test('Tracker refresh: after a single merge/unmerge, and once per Combine batch (not per story)', () => {
   const calls = mergeFn.match(/await refreshTracker\(supabase\)/g) || [];
-  assert.equal(calls.length, 2, 'expected refreshTracker after merge and after unmerge');
+  assert.equal(calls.length, 3, 'expected refreshTracker in the refresh action, after unmerge, and after a non-Combine merge');
   assert.match(mergeFn, /rpc\('refresh_tracker_derived'\)/);
+  assert.match(mergeFn, /fromStoriesCombine \? undefined : await refreshTracker\(supabase\)/);
+  assert.match(mergeFn, /action === 'refresh'/);
+  assert.match(adminHtml, /invokeMerge\(\{ action: 'refresh' \}\)/);
 });
 
 test('the Combine dialog goes through admin-judge-merge, one merge per story (no new batch endpoint)', () => {

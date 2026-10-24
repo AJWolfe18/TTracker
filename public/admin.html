@@ -1793,15 +1793,19 @@
             const toMerge = [];
             const skipped = [];
             const warnings = [];
+            const liveIds = new Set(stories.filter(s => !s.missing && !isMergedAway(s)).map(s => s.id));
             for (const s of stories) {
                 if (s.id === keeperId) continue;
                 if (s.missing) skipped.push({ id: s.id, text: 'Not found — skipped' });
                 else if (isMergedAway(s)) {
+                    const target = s.merged_into_story_id;
                     skipped.push({
                         id: s.id,
-                        text: s.merged_into_story_id === keeperId
+                        text: target === keeperId
                             ? `Already part of #${keeperId} — nothing to do`
-                            : `Already merged into #${s.merged_into_story_id} — left as is (combine #${s.merged_into_story_id} instead to bring it in)`
+                            : liveIds.has(target)
+                                ? `Already merged into #${target}, which is being combined into #${keeperId} — it comes along`
+                                : `Already merged into #${target} — left as is (combine #${target} instead to bring it in)`
                     });
                 } else toMerge.push(s);
             }
@@ -1917,12 +1921,14 @@
             const done = results !== null && !running;
 
             const handleClose = () => { if (!busyRef.current) onClose(); };
+            const closeRef = useRef(handleClose);
+            closeRef.current = handleClose;
 
             useEffect(() => {
-                const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+                const onKey = (e) => { if (e.key === 'Escape') closeRef.current(); };
                 window.addEventListener('keydown', onKey);
                 return () => window.removeEventListener('keydown', onKey);
-            });
+            }, []);
 
             const runCombine = async () => {
                 if (busyRef.current || !plan || plan.blocker || results) return;
@@ -1939,12 +1945,23 @@
                         row = classifyMergeResult(s.id, r);
                     } catch (err) {
                         row = classifyMergeResult(s.id, null, err.message);
+                        // A timeout or dropped reply can land after the merge committed: re-check before calling it failed.
+                        try {
+                            const check = await invokeMerge({ action: 'preview', survivor_id: plan.keeper.id, loser_id: s.id });
+                            if (check?.loser?.merged_into_story_id === plan.keeper.id) {
+                                row = { id: s.id, kind: 'merged', text: 'Merged (the reply was lost, but the story is now part of the keeper)' };
+                            }
+                        } catch (_) { /* keep the original failure */ }
                     }
                     out.push(row);
                     setResults([...out]);
                 }
                 for (const sk of plan.skipped) out.push({ id: sk.id, kind: 'skipped', text: sk.text });
                 setResults([...out]);
+                // One Tracker refresh for the whole batch (merges sent with via='stories_combine' skip their own).
+                if (out.some(r => r.kind === 'merged')) {
+                    try { await invokeMerge({ action: 'refresh' }); } catch (_) { /* the next pipeline run refreshes anyway */ }
+                }
                 busyRef.current = false;
                 setRunning(false);
                 onFinished(plan.keeper.id, out);
@@ -2025,7 +2042,7 @@
                                         </div>
                                     )}
                                     {!frontsChecked && (
-                                        <div className="combine-box combine-box-warn">Couldn't check which fronts these stories are on (the admin-judge-merge function may need redeploying). Combining never moves front membership.</div>
+                                        <div className="combine-box combine-box-warn">Couldn't check the article counts and fronts (the admin-judge-merge function may need redeploying), so the counts above are from the list. Combining never moves front membership.</div>
                                     )}
                                     <div className="combine-hint">Each merge is logged on the Judge tab (All verdicts) and can be undone there one story at a time with <strong>unmerge</strong>.</div>
                                 </>
@@ -2112,17 +2129,14 @@
             const [combineStories, setCombineStories] = useState(null); // snapshot while the dialog is open
 
             const toggleSelect = (story) => {
+                if (!selected.has(story.id) && selected.size >= COMBINE_MAX_STORIES) {
+                    toast?.addToast(`You can combine up to ${COMBINE_MAX_STORIES} stories at once.`, 'error');
+                    return;
+                }
                 setSelected(prev => {
                     const next = new Map(prev);
-                    if (next.has(story.id)) {
-                        next.delete(story.id);
-                    } else {
-                        if (next.size >= COMBINE_MAX_STORIES) {
-                            toast?.addToast(`You can combine up to ${COMBINE_MAX_STORIES} stories at once.`, 'error');
-                            return prev;
-                        }
-                        next.set(story.id, story);
-                    }
+                    if (next.has(story.id)) next.delete(story.id);
+                    else if (next.size < COMBINE_MAX_STORIES) next.set(story.id, story);
                     return next;
                 });
             };
