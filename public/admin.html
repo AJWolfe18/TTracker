@@ -6621,6 +6621,15 @@
         };
         const frontsAlarmClass = (lvl) => lvl >= 5 ? 'badge-critical' : lvl === 4 ? 'badge-severe' : lvl === 3 ? 'badge-moderate' : lvl === 2 ? 'badge-minor' : 'badge-closed';
         const frontsSlugify = (s) => s.toLowerCase().replace(/&/g, ' and ').replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
+        // Tracker pins (tracker_pin, ADO-554): the values stay internal; Josh sees "homepage" words.
+        const PIN_LABELS = { force_show: 'Always show on homepage', force_hide: 'Never show on homepage' };
+        const PIN_SOURCE_LABELS = { stories: 'Story', eos: 'Executive order', scotus: 'Supreme Court case', pardons: 'Pardon' };
+        // Updates on a front (event_updates): 'pending' only exists for AI drafts.
+        const UPDATE_STATE_LABELS = { approved: 'Shown', rejected: 'Hidden', pending: 'Waiting for review' };
+        const frontsToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+        const frontsLocalDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA') : '';
+        // DATE columns (EO date, pardon_date) parse as UTC midnight and would show a day early in US time.
+        const frontsFmtDay = (d) => frontsFmtDate(d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T12:00:00Z` : d);
         const frontsBox = (kind) => ({
             ok: { background: '#064e3b', border: '1px solid #10b981', color: '#d1fae5' },
             warn: { background: '#422006', border: '1px solid #b45309', color: '#fde68a' },
@@ -6637,7 +6646,7 @@
                 if (fnError) {
                     let errBody = null;
                     try { if (fnError.context) errBody = await fnError.context.json(); } catch (_) {}
-                    const reasons = { front_not_found: 'that front no longer exists - refresh the list', story_not_found: 'no story with that number' };
+                    const reasons = { front_not_found: 'that front no longer exists - refresh the list', story_not_found: 'no story with that number', update_not_found: 'that update no longer exists - reload the list', item_not_found: 'nothing with that id' };
                     const err = new Error(errBody?.error || reasons[errBody?.reason] || errBody?.reason || fnError.message || 'Request failed');
                     err.body = errBody;
                     throw err;
@@ -6678,7 +6687,8 @@
         }
 
         // Checkbox story list shared by the unassigned pool and a front's member list.
-        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded, frontsById }) {
+        // onPin(story, 'force_show' | 'force_hide' | null) adds the homepage menu to each row.
+        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded, frontsById, onPin, pinBusyId }) {
             const allOn = stories.length > 0 && stories.every(s => selected.has(s.id));
             return (
                 <div style={{ overflowX: 'auto' }}>
@@ -6709,7 +6719,7 @@
                                         <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>
                                             {s.category ? s.category.replace(/_/g, ' ') : 'no category'}
                                             {s.action_label ? ` · ${s.action_label}` : ''}
-                                            {s.main_line ? ' · on the Tracker main line' : ''}
+                                            {s.main_line ? ' · on the homepage (Tracker main line)' : ''}
                                             {s.status && s.status !== 'active' && !s.merged_into_story_id ? ` · ${s.status}` : ''}
                                         </div>
                                         {s.merged_into_story_id && (
@@ -6717,6 +6727,24 @@
                                             // the survivor needs filing by hand and this tombstone removing.
                                             <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '2px' }}>
                                                 Combined into #{s.merged_into_story_id}. Remove this one, then add #{s.merged_into_story_id} with "Add a story by its number".
+                                            </div>
+                                        )}
+                                        {onPin && (
+                                            // stopPropagation: a click on the menu must not tick the row
+                                            <div onClick={e => e.stopPropagation()} style={{ marginTop: '4px' }}>
+                                                <select className="stories-select" value={s.pin || ''} disabled={pinBusyId === s.id} onChange={e => onPin(s, e.target.value || null)}
+                                                    aria-label={`Homepage setting for story ${s.id}`}
+                                                    style={{ padding: '3px 6px', fontSize: '0.75rem', color: s.pin === 'force_show' ? '#4ade80' : s.pin === 'force_hide' ? '#f87171' : undefined }}>
+                                                    <option value="">Homepage: automatic</option>
+                                                    <option value="force_show">{PIN_LABELS.force_show}</option>
+                                                    <option value="force_hide">{PIN_LABELS.force_hide}</option>
+                                                </select>
+                                                {pinBusyId === s.id && <span style={{ color: '#9ca3af', fontSize: '0.75rem', marginLeft: '0.4rem' }}>saving…</span>}
+                                                {pinBusyId !== s.id && s.pin === 'force_show' && (s.pin_dead ?? !s.main_line) && (
+                                                    // pin_dead/pin_reason come back from pin_set; on a fresh load, a refreshed
+                                                    // force_show is off the main line only when the story is out of the rule's scope
+                                                    <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '2px' }}>{s.pin_reason || 'This pin does nothing yet: the story is closed, combined into another, or not published yet.'}</div>
+                                                )}
                                             </div>
                                         )}
                                     </td>
@@ -6770,6 +6798,7 @@
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [selected, setSelected] = useState(() => new Set());
+            const [pinsAvailable, setPinsAvailable] = useState(true);
             const tokenRef = useRef(0);
             const searchRef = useRef('');
 
@@ -6785,6 +6814,7 @@
                     if (token !== tokenRef.current) return;
                     setStories(prev => append ? [...prev, ...(res.stories || [])] : (res.stories || []));
                     setCursor(res.next_cursor ?? null);
+                    setPinsAvailable(res.pins_available !== false);
                     if (!append) setSelected(new Set());
                 } catch (err) {
                     if (token === tokenRef.current) setError(err.message);
@@ -6801,12 +6831,13 @@
                 setStories(prev => prev.filter(s => !gone.has(s.id)));
                 setSelected(prev => { const n = new Set(prev); ids.forEach(i => n.delete(i)); return n; });
             };
-            return { stories, cursor, loading, error, setError, selected, setSelected, fetchPage, toggle, toggleAll, dropIds };
+            const patchStory = (id, patch) => setStories(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+            return { stories, cursor, loading, error, setError, selected, setSelected, fetchPage, toggle, toggleAll, dropIds, patchStory, pinsAvailable };
         }
 
         function FrontsTab({ password, supabase }) {
             const api = useFrontsApi(password, supabase);
-            const [view, setView] = useState('list'); // 'list' | 'pool' | 'front'
+            const [view, setView] = useState('list'); // 'list' | 'pool' | 'pins' | 'front'
             const [fronts, setFronts] = useState([]);
             const [listLoading, setListLoading] = useState(true);
             const [listError, setListError] = useState(null);
@@ -6845,6 +6876,9 @@
                                 <button className={`tab-btn ${view === 'pool' ? 'active' : ''}`} onClick={() => setView('pool')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
                                     Stories with no front
                                 </button>
+                                <button className={`tab-btn ${view === 'pins' ? 'active' : ''}`} onClick={() => setView('pins')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    Homepage pins
+                                </button>
                                 <button className="tab-btn" onClick={() => openFront(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: '#065f46', color: '#d1fae5' }}>
                                     + New front
                                 </button>
@@ -6857,6 +6891,7 @@
                             {listError && <div className="error-banner"><strong>Error:</strong> {listError}</div>}
                             {view === 'list' && <FrontsList fronts={fronts} loading={listLoading} onOpen={openFront} />}
                             {view === 'pool' && <FrontsPool api={api} fronts={fronts} frontsById={frontsById} onChanged={loadFronts} />}
+                            {view === 'pins' && <FrontsPins api={api} />}
                             {view === 'front' && (
                                 <FrontEditor
                                     key={editorKey}
@@ -7044,6 +7079,7 @@
             const [ruleErrors, setRuleErrors] = useState({});
             const [preview, setPreview] = useState({});
             const [slugTouched, setSlugTouched] = useState(false);
+            const [pane, setPane] = useState('settings'); // 'settings' | 'updates'
 
             const toForm = (f) => ({
                 name: f.name || '', slug: f.slug || '', dek: f.dek || '', alarm_level: String(f.alarm_level ?? 3), tier: f.tier, lifecycle: f.lifecycle,
@@ -7178,7 +7214,18 @@
                 <div>
                     <button className="judge-row-btn" onClick={onBack} style={{ background: '#374151', color: '#e5e7eb', marginBottom: '1rem' }}>← All fronts</button>
                     <h3 style={{ margin: '0 0 1rem', color: '#f8fafc' }}>{isNew ? 'New front' : loaded.name}</h3>
+                    {!isNew && (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                            <button className={`tab-btn ${pane === 'settings' ? 'active' : ''}`} onClick={() => setPane('settings')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                Settings and stories
+                            </button>
+                            <button className={`tab-btn ${pane === 'updates' ? 'active' : ''}`} onClick={() => setPane('updates')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                Updates{frontsById[eventId]?.update_count ? ` (${frontsById[eventId].update_count} shown)` : ''}
+                            </button>
+                        </div>
+                    )}
 
+                    {pane === 'updates' && !isNew ? <FrontUpdates api={api} eventId={eventId} front={loaded} onChanged={onChanged} /> : (<>
                     {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
                     {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
 
@@ -7282,6 +7329,7 @@
                     </div>
 
                     {!isNew && <FrontMembers api={api} eventId={eventId} front={loaded} fronts={fronts} frontsById={frontsById} onChanged={onChanged} />}
+                    </>)}
                 </div>
             );
         }
@@ -7293,7 +7341,30 @@
             const [notice, setNotice] = useState(null);
             const [addId, setAddId] = useState('');
             const [found, setFound] = useState(null); // lookup result for "add by number"
+            const [pinBusyId, setPinBusyId] = useState(null);
             const page = useFrontsStoryPage((cursor, q) => api({ action: 'members', event_id: eventId, cursor, search: q }), [api, eventId]);
+
+            // Homepage menu on a member row: pin_set / pin_clear (both refresh the Tracker server-side).
+            const setPin = async (s, value) => {
+                if (pinBusyId) return;
+                setPinBusyId(s.id); setNotice(null); page.setError(null);
+                try {
+                    const res = value
+                        ? await api({ action: 'pin_set', source: 'stories', entity_id: s.id, pin: value })
+                        : await api({ action: 'pin_clear', source: 'stories', entity_id: String(s.id) });
+                    // main_line only when the refresh ran (else it is the stale value); dead/reason come
+                    // from the story's own status, so they hold either way
+                    page.patchStory(s.id, {
+                        pin: value, pin_dead: value ? !!res.dead : false, pin_reason: value && res.dead ? res.reason : null,
+                        ...(res.item && res.refresh?.ok ? { main_line: !!res.item.main_line } : {})
+                    });
+                    const parts = [value ? `#${s.id}: ${PIN_LABELS[value]}.` : `#${s.id}: back to automatic (the homepage rule decides).`];
+                    if (res.item && res.refresh?.ok) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (value && res.dead) parts.push(res.reason);
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: (value && res.dead) || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                } catch (err) { page.setError(err.message); } finally { setPinBusyId(null); }
+            };
 
             useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
 
@@ -7351,7 +7422,10 @@
 
             return (
                 <div style={{ borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '1.5rem' }}>
-                    <h4 style={{ margin: '0 0 0.75rem', color: '#e5e7eb' }}>Stories on this front{frontsById[eventId]?.story_count != null ? ` (${frontsById[eventId].story_count})` : ''}</h4>
+                    <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Stories on this front{frontsById[eventId]?.story_count != null ? ` (${frontsById[eventId].story_count})` : ''}</h4>
+                    <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                        Each story's <strong>Homepage</strong> menu overrides the automatic homepage rule for that one story. Leave it on automatic unless the rule gets it wrong. All pins are listed under "Homepage pins".
+                    </p>
 
                     <form className="stories-toolbar" onSubmit={lookup}>
                         <input className="stories-search" style={{ maxWidth: '260px' }} inputMode="numeric" placeholder="Add a story by its number (#)" value={addId} onChange={e => { setAddId(e.target.value); setFound(null); }} />
@@ -7401,7 +7475,8 @@
                     ) : page.stories.length === 0 ? (
                         <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No stories on this front match that search.' : 'No stories on this front yet.'}</div>
                     ) : (
-                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded frontsById={frontsById} />
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded frontsById={frontsById}
+                            onPin={page.pinsAvailable ? setPin : undefined} pinBusyId={pinBusyId} />
                     )}
                     {page.cursor != null && (
                         <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>
@@ -7409,6 +7484,398 @@
                         </button>
                     )}
                 </div>
+            );
+        }
+        // A front's updates (event_updates, ADO-547 AC5): the dated developments on the front's page.
+        // Written here = approved at once (decided by a human). The database only shows approved
+        // updates of Live fronts to the public (RLS, migration 111), so nothing here gates visibility.
+        function FrontUpdates({ api, eventId, front, onChanged }) {
+            const [updates, setUpdates] = useState([]);
+            const [cursor, setCursor] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [editing, setEditing] = useState(null); // null | 'new' | update id
+            const tokenRef = useRef(0);
+
+            const load = useCallback(async (fromCursor) => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'updates', event_id: eventId, cursor: fromCursor || null });
+                    if (token !== tokenRef.current) return;
+                    setUpdates(prev => fromCursor ? [...prev, ...(res.updates || [])] : (res.updates || []));
+                    setCursor(res.next_cursor ?? null);
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            }, [api, eventId]);
+
+            useEffect(() => { load(null); }, [load]);
+
+            const live = front?.publish_state === 'published';
+
+            const onSaved = (res, wasNew) => {
+                const parts = [wasNew ? 'Update added.' : res.changed ? 'Update saved.' : 'The text was unchanged.'];
+                const l = res.links;
+                if (l?.error) parts.push(l.error);
+                else if (l) {
+                    if (l.linked.length) parts.push(`It covers ${l.linked.length} ${l.linked.length === 1 ? 'story' : 'stories'}.`);
+                    if (l.unlinked.length) parts.push(`${l.unlinked.length} ${l.unlinked.length === 1 ? 'story is' : 'stories are'} no longer linked to it.`);
+                    if (l.taken_from_other_update.length) parts.push(`${l.taken_from_other_update.map(i => `#${i}`).join(', ')} moved over from another update (a story belongs to one update at most).`);
+                    if (l.not_on_front.length) parts.push(`Not on this front, so not linked: ${l.not_on_front.map(i => `#${i}`).join(', ')}. File ${l.not_on_front.length === 1 ? 'it' : 'them'} on this front first (Settings and stories).`);
+                }
+                if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                if (wasNew && !live) parts.push('This front is not Live, so the update is not public yet.');
+                setNotice({ kind: l?.error || l?.not_on_front?.length || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                setEditing(null);
+                load(null);
+                onChanged();
+            };
+
+            const onDeleted = (res) => {
+                setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: ['Update deleted.', res.refresh?.ok === false ? res.refresh.error : ''].filter(Boolean).join(' ') });
+                setEditing(null);
+                load(null);
+                onChanged();
+            };
+
+            return (
+                <div>
+                    <div style={{ ...frontsBox(live ? 'info' : 'warn'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Updates are the dated developments on this front's page, newest first. What you write here goes straight in as approved; there is no review step.
+                        {' '}{live ? 'This front is Live, so updates set to Shown are public.' : <strong>This front is not Live, so nobody outside the admin sees its updates yet.</strong>}
+                    </div>
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                    {editing === 'new' ? (
+                        <FrontUpdateForm api={api} eventId={eventId} update={null} onSaved={onSaved} onCancel={() => setEditing(null)} />
+                    ) : (
+                        <button className="judge-row-btn" disabled={editing != null} onClick={() => { setNotice(null); setEditing('new'); }} style={{ background: '#065f46', color: '#d1fae5', marginBottom: '1rem' }}>
+                            + Add an update
+                        </button>
+                    )}
+
+                    {loading && !updates.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : updates.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No updates on this front yet.</div>
+                    ) : updates.map(u => editing === u.id ? (
+                        <FrontUpdateForm key={u.id} api={api} eventId={eventId} update={u} onSaved={onSaved} onDeleted={onDeleted} onCancel={() => setEditing(null)} />
+                    ) : (
+                        <div key={u.id} style={{ border: '1px solid #374151', borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '0.6rem', opacity: u.approval_state === 'approved' ? 1 : 0.8 }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', fontSize: '0.8rem', color: '#9ca3af' }}>
+                                <span>{frontsFmtDate(u.happened_at)}</span>
+                                <span className={`badge ${u.significance === 'major' ? 'badge-severe' : 'badge-minor'}`}>{u.significance === 'major' ? 'Major' : 'Minor'}</span>
+                                <span style={{ fontWeight: 600, color: u.approval_state === 'approved' ? '#4ade80' : u.approval_state === 'rejected' ? '#f87171' : '#fbbf24' }}>{UPDATE_STATE_LABELS[u.approval_state] || u.approval_state}</span>
+                                <span>{u.created_by === 'agent' ? `drafted by AI${u.was_edited ? ', edited by hand' : ''}` : 'written by hand'}</span>
+                                <button className="judge-row-btn" disabled={editing != null} onClick={() => { setNotice(null); setEditing(u.id); }} style={{ marginLeft: 'auto', background: '#374151', color: '#e5e7eb' }}>Edit</button>
+                            </div>
+                            <div style={{ color: '#f8fafc', fontWeight: 600, marginTop: '0.35rem' }}>{u.headline}</div>
+                            {u.body && <div style={{ color: '#d1d5db', whiteSpace: 'pre-wrap', marginTop: '0.25rem', fontSize: '0.9rem' }}>{u.body}</div>}
+                            {u.stories?.length > 0 && (
+                                <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '0.4rem' }}>
+                                    Covers: {u.stories.map(s => <div key={s.id}><span style={{ color: '#6b7280' }}>#{s.id}</span> {s.headline}</div>)}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {cursor != null && (
+                        <button className="load-more-btn" disabled={loading} onClick={() => load(cursor)}>{loading ? 'Loading…' : 'Load more'}</button>
+                    )}
+                </div>
+            );
+        }
+
+        // New / edit form for one update. Only changed fields are sent; the server whitelists them.
+        function FrontUpdateForm({ api, eventId, update, onSaved, onDeleted, onCancel }) {
+            const isNew = !update;
+            const initDate = isNew ? frontsToday() : frontsLocalDate(update.happened_at);
+            const initIds = isNew ? [] : (update.stories || []).map(s => String(s.id));
+            const [form, setForm] = useState(() => ({
+                headline: update?.headline || '', body: update?.body || '', date: initDate,
+                significance: update?.significance || 'minor', approval_state: update?.approval_state || 'approved', stories: initIds.join(', ')
+            }));
+            const [busy, setBusy] = useState(false);
+            const [error, setError] = useState(null);
+            const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+            const save = async (e) => {
+                e.preventDefault();
+                if (busy) return;
+                if (!form.headline.trim()) { setError('Write a headline.'); return; }
+                if (!form.date) { setError('Pick the date it happened.'); return; }
+                const ids = [...new Set(form.stories.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean))];
+                if (ids.some(x => !/^\d+$/.test(x))) { setError('Stories: numbers only, separated by commas (for example 17254, 17260).'); return; }
+                const fields = {};
+                if (isNew || form.headline.trim() !== update.headline) fields.headline = form.headline;
+                if (isNew || form.body.trim() !== (update.body || '')) fields.body = form.body;
+                // noon UTC: the same calendar day in every US time zone
+                if (isNew || form.date !== initDate) fields.happened_at = `${form.date}T12:00:00Z`;
+                if (isNew || form.significance !== update.significance) fields.significance = form.significance;
+                if (!isNew && form.approval_state !== update.approval_state) fields.approval_state = form.approval_state;
+                const storiesChanged = ids.length !== initIds.length || ids.some(x => !initIds.includes(x));
+                if (!isNew && !Object.keys(fields).length && !storiesChanged) { onCancel(); return; }
+                setBusy(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'save_update', event_id: eventId, update_id: update?.id ?? null, fields, ...(storiesChanged ? { story_ids: ids.map(Number) } : {}) });
+                    onSaved(res, isNew);
+                } catch (err) {
+                    setError(err.message);
+                    setBusy(false);
+                }
+            };
+
+            const del = async () => {
+                if (busy) return;
+                if (!confirm(`Delete this update?\n\n"${update.headline}"\n\nIt disappears from the front's page for good. To keep it but take it off the page, set it to Hidden instead.`)) return;
+                setBusy(true);
+                setError(null);
+                try {
+                    onDeleted(await api({ action: 'delete_update', event_id: eventId, update_id: update.id }));
+                } catch (err) {
+                    setError(err.message);
+                    setBusy(false);
+                }
+            };
+
+            const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 1rem' };
+            return (
+                <form onSubmit={save} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', background: 'rgba(30,58,138,0.15)' }}>
+                    <h4 style={{ margin: '0 0 0.75rem', color: '#e5e7eb' }}>{isNew ? 'New update' : 'Edit update'}</h4>
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+                    <div className="form-group">
+                        <label className="form-label">Headline</label>
+                        <input className="form-input" value={form.headline} maxLength={300} onChange={e => set('headline', e.target.value)} placeholder="Judge blocks the order nationwide" />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">What happened (optional)</label>
+                        <textarea className="form-textarea" rows={4} value={form.body} maxLength={5000} onChange={e => set('body', e.target.value)} />
+                    </div>
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Date it happened</label>
+                            <input type="date" className="form-input" value={form.date} max={frontsToday()} onChange={e => set('date', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Importance</label>
+                            <select className="form-select" value={form.significance} onChange={e => set('significance', e.target.value)}>
+                                <option value="major">Major (a turning point)</option>
+                                <option value="minor">Minor (a routine step)</option>
+                            </select>
+                        </div>
+                        {!isNew && (
+                            <div className="form-group">
+                                <label className="form-label">On the front's page?</label>
+                                <select className="form-select" value={form.approval_state} onChange={e => set('approval_state', e.target.value)}>
+                                    {update.approval_state === 'pending' && <option value="pending">Waiting for review (not shown)</option>}
+                                    <option value="approved">Shown</option>
+                                    <option value="rejected">Hidden</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Stories it covers (optional)</label>
+                        <input className="form-input" inputMode="numeric" value={form.stories} onChange={e => set('stories', e.target.value)} placeholder="Story numbers, e.g. 17254, 17260" />
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>Only stories already on this front. A story can belong to one update; linking it here takes it off any other.</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Add update' : 'Save update'}</button>
+                        <button type="button" className="judge-row-btn" disabled={busy} onClick={onCancel} style={{ background: '#374151', color: '#e5e7eb' }}>Cancel</button>
+                        {!isNew && <button type="button" className="judge-row-btn" disabled={busy} onClick={del} style={{ background: '#7f1d1d', color: '#fee2e2', marginLeft: 'auto' }}>Delete</button>}
+                    </div>
+                </form>
+            );
+        }
+
+        // Every Tracker pin across stories, executive orders, Supreme Court cases and pardons
+        // (tracker_pin, ADO-547 AC6), with a finder to pin any item by its id. Pins that can do
+        // nothing (closed / combined / unpublished items, ADO-554 design note) are flagged red.
+        function FrontsPins({ api }) {
+            const [pins, setPins] = useState([]);
+            const [truncated, setTruncated] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [busy, setBusy] = useState(false);
+            const [source, setSource] = useState('stories');
+            const [idText, setIdText] = useState('');
+            const [found, setFound] = useState(null); // pin_lookup result
+            const [note, setNote] = useState('');
+            const tokenRef = useRef(0);
+            const findTokenRef = useRef(0); // a slow lookup must not replace a newer one (wrong item pinned)
+
+            const load = useCallback(async () => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'pins' });
+                    if (token !== tokenRef.current) return;
+                    setPins(res.pins || []);
+                    setTruncated(!!res.truncated);
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            }, [api]);
+
+            useEffect(() => { load(); }, [load]);
+
+            const itemName = (src, id) => `${PIN_SOURCE_LABELS[src] || src} #${id}`;
+
+            const find = async (e) => {
+                e.preventDefault();
+                const token = ++findTokenRef.current;
+                setFound(null); setNotice(null); setError(null);
+                const id = idText.trim().replace(/^#/, '');
+                if (!id) { setError('Enter the id: the # number shown for it in its own tab.'); return; }
+                try {
+                    const res = await api({ action: 'pin_lookup', source, entity_id: id });
+                    if (token !== findTokenRef.current) return;
+                    setFound(res);
+                    setNote(res.pin?.note || '');
+                } catch (err) { if (token === findTokenRef.current) setError(err.message); }
+            };
+
+            const pinIt = async (pin) => {
+                if (!found || busy) return;
+                setBusy(true); setError(null); setNotice(null);
+                try {
+                    const res = await api({ action: 'pin_set', source: found.source, entity_id: found.entity_id, pin, note: note.trim() || null });
+                    const parts = [`${itemName(found.source, found.entity_id)}: ${PIN_LABELS[pin]}.`];
+                    if (found.source === 'stories' && res.item && !res.dead) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (res.reason) parts.push(res.reason);
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: res.dead || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                    setFound(null); setIdText(''); setNote('');
+                    load();
+                } catch (err) { setError(err.message); } finally { setBusy(false); }
+            };
+
+            const clear = async (src, id) => {
+                if (busy) return;
+                if (!confirm(`Clear the pin on ${itemName(src, id)}? The automatic homepage rule decides again.`)) return;
+                setBusy(true); setError(null); setNotice(null);
+                try {
+                    const res = await api({ action: 'pin_clear', source: src, entity_id: String(id) });
+                    const parts = [res.removed ? `Cleared. ${itemName(src, id)} follows the automatic homepage rule again.` : 'That pin was already gone.'];
+                    if (src === 'stories' && res.item) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                    if (found && found.source === src && String(found.entity_id) === String(id)) setFound(null);
+                    load();
+                } catch (err) { setError(err.message); } finally { setBusy(false); }
+            };
+
+            // dead pins first (they need a look), then newest first as the server sent them
+            const sorted = useMemo(() => [...pins].sort((a, b) => (b.dead ? 1 : 0) - (a.dead ? 1 : 0)), [pins]);
+            const deadCount = pins.filter(p => p.dead).length;
+            const curPin = found?.pin?.pin || null;
+            const btn = { background: '#374151', color: '#e5e7eb' };
+
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        The homepage (the Tracker's main line) picks items automatically. A pin overrides that for one item: <strong style={{ color: '#e5e7eb' }}>{PIN_LABELS.force_show}</strong> puts it on, <strong style={{ color: '#e5e7eb' }}>{PIN_LABELS.force_hide}</strong> keeps it off. Either way it stays in the full record. Changes reach the homepage at once.
+                        {' '}A pin cannot bring back a story that is closed, combined into another, or not published yet; pins like that do nothing and are flagged red.
+                    </div>
+
+                    <h4 style={{ margin: '0 0 0.5rem', color: '#e5e7eb' }}>Pin something</h4>
+                    <form className="stories-toolbar" onSubmit={find}>
+                        <select className="stories-select" value={source} onChange={e => { findTokenRef.current++; setSource(e.target.value); setFound(null); }} style={{ padding: '6px 10px' }} aria-label="What to pin">
+                            {Object.entries(PIN_SOURCE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <input className="stories-search" style={{ maxWidth: '220px' }} placeholder="Its id (#)" value={idText} onChange={e => { findTokenRef.current++; setIdText(e.target.value); setFound(null); }} />
+                        <button type="submit" className="judge-row-btn" style={btn}>Find</button>
+                    </form>
+                    {found && (
+                        <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            <div><span style={{ color: '#6b7280' }}>{itemName(found.source, found.entity_id)}</span> {found.item ? (found.item.title || '(no title)') : <em>no longer exists</em>}</div>
+                            {found.item && (
+                                <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '2px' }}>
+                                    {frontsFmtDay(found.item.date)}{found.item.alarm != null ? ` · alarm ${found.item.alarm}` : ''}
+                                    {found.source === 'stories' && !found.show.dead ? (found.item.main_line ? ' · on the homepage now' : ' · not on the homepage now') : ''}
+                                </div>
+                            )}
+                            <div style={{ marginTop: '0.35rem' }}>Now: <strong>{curPin ? PIN_LABELS[curPin] : 'automatic (no pin)'}</strong></div>
+                            {found.show.dead && <div style={{ color: '#fbbf24', marginTop: '0.35rem' }}>{found.show.reason} A pin here would do nothing.</div>}
+                            {found.item && (
+                                <>
+                                    <input className="form-input" style={{ marginTop: '0.5rem' }} maxLength={300} placeholder="Why? (optional, only admins see this)" value={note} onChange={e => setNote(e.target.value)} />
+                                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <button className="judge-row-btn" disabled={busy} onClick={() => pinIt('force_show')} style={{ background: '#065f46', color: '#d1fae5' }}>
+                                            {curPin === 'force_show' ? 'Save note' : PIN_LABELS.force_show}
+                                        </button>
+                                        <button className="judge-row-btn" disabled={busy} onClick={() => pinIt('force_hide')} style={{ background: '#7f1d1d', color: '#fee2e2' }}>
+                                            {curPin === 'force_hide' ? 'Save note' : PIN_LABELS.force_hide}
+                                        </button>
+                                        {curPin && <button className="judge-row-btn" disabled={busy} onClick={() => clear(found.source, found.entity_id)} style={btn}>Clear pin</button>}
+                                    </div>
+                                </>
+                            )}
+                            {!found.item && curPin && (
+                                <div style={{ marginTop: '0.5rem' }}><button className="judge-row-btn" disabled={busy} onClick={() => clear(found.source, found.entity_id)} style={btn}>Clear pin</button></div>
+                            )}
+                        </div>
+                    )}
+
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', margin: '1.25rem 0 0.5rem' }}>
+                        <h4 style={{ margin: 0, color: '#e5e7eb' }}>
+                            Current pins{pins.length ? ` (${pins.length})` : ''}
+                            {deadCount > 0 && <span style={{ color: '#f87171', fontWeight: 400, fontSize: '0.85rem' }}> · {deadCount} {deadCount === 1 ? 'does' : 'do'} nothing</span>}
+                        </h4>
+                        <button className="judge-row-btn" disabled={loading} onClick={load} style={btn}>{loading ? '…' : '↻ Reload'}</button>
+                    </div>
+                    {truncated && <div style={{ ...frontsBox('warn'), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>Showing the newest 1000 pins only; the homepage also reads only the newest 1000.</div>}
+                    {loading && !pins.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : pins.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No pins. The homepage is fully automatic.</div>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Item</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Pin</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Check</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Changed</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sorted.map(p => (
+                                        <tr key={`${p.source}:${p.entity_id}`} style={{ borderBottom: '1px solid #1f2937', background: p.dead ? 'rgba(127,29,29,0.18)' : 'transparent' }}>
+                                            <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb' }}>
+                                                <span style={{ color: '#6b7280' }}>{itemName(p.source, p.entity_id)}</span> {p.item ? (p.item.title || '(no title)') : <em style={{ color: '#9ca3af' }}>no longer exists</em>}
+                                                {p.note && <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>Why: {p.note}</div>}
+                                            </td>
+                                            <td data-label="Pin" style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontWeight: 600, color: p.pin === 'force_show' ? '#4ade80' : '#f87171' }}>{PIN_LABELS[p.pin] || p.pin}</td>
+                                            <td data-label="Check" style={{ padding: '0.5rem', color: p.dead ? '#f87171' : '#9ca3af' }}>
+                                                {p.dead ? <><strong>Does nothing.</strong> {p.reason}</> : (p.reason || <span style={{ color: '#4ade80' }}>Working</span>)}
+                                            </td>
+                                            <td data-label="Changed" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>{frontsFmtDate(p.updated_at)}</td>
+                                            <td className="cell-actions" style={{ padding: '0.5rem' }}>
+                                                <button className="judge-row-btn" disabled={busy} onClick={() => clear(p.source, p.entity_id)} style={btn}>Clear</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
             );
         }
         // ===================== end Fronts tab =====================
