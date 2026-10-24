@@ -6586,6 +6586,817 @@
             );
         }
 
+        // ===================== Fronts tab (ADO-547) =====================
+        // Run fronts without SQL: list + edit fronts, tune the keyword sweep and the assignment agent,
+        // file / move / remove stories (one at a time or in bulk), and the unassigned pool.
+        // All reads and writes go through the password-gated admin-fronts edge function (service_role);
+        // every write there refreshes the Tracker main line (refresh_tracker_derived).
+        const FRONT_TIER_LABELS = { flagship: 'Primary (flagship)', major: 'Active (major)', standard: 'Watch (standard)' };
+        const FRONT_PUBLISH_LABELS = { draft: 'Draft', review: 'In review', published: 'Live' };
+        const FRONT_LIFECYCLE_LABELS = { open: 'Still open', dormant: 'Quiet (set by the daily job)', resolved: 'Resolved' };
+        const FRONT_EMPTY_FORM = {
+            name: '', slug: '', dek: '', alarm_level: '3', tier: 'standard', lifecycle: 'open', publish_state: 'draft', started_at: '',
+            sweep_pattern: '', sweep_coword: '', sweep_priority: '100', sweep_summary: false, agent_pattern: '', agent_definition: ''
+        };
+        // The daily fronts agent runs at 14:00 UTC (9:00 AM CT) for a few minutes; the window has margin.
+        const frontsInAgentWindow = () => {
+            const d = new Date();
+            const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+            return m >= 13 * 60 + 55 && m <= 14 * 60 + 20;
+        };
+        const frontsFmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+        const frontsAgo = (iso) => {
+            if (!iso) return '—';
+            const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+            if (mins < 60) return mins < 1 ? 'just now' : `${mins}m ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 48) return `${hrs}h ago`;
+            return `${Math.floor(hrs / 24)}d ago`;
+        };
+        const frontsAlarmClass = (lvl) => lvl >= 5 ? 'badge-critical' : lvl === 4 ? 'badge-severe' : lvl === 3 ? 'badge-moderate' : lvl === 2 ? 'badge-minor' : 'badge-closed';
+        const frontsSlugify = (s) => s.toLowerCase().replace(/&/g, ' and ').replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
+        const frontsBox = (kind) => ({
+            ok: { background: '#064e3b', border: '1px solid #10b981', color: '#d1fae5' },
+            warn: { background: '#422006', border: '1px solid #b45309', color: '#fde68a' },
+            info: { background: '#111827', border: '1px solid #374151', color: '#d1d5db' }
+        }[kind] || {});
+
+        // One call shape for every action; a non-2xx body's message reaches the admin.
+        function useFrontsApi(password, supabase) {
+            return useCallback(async (body) => {
+                const { data, error: fnError } = await supabase.functions.invoke('admin-fronts', {
+                    headers: { 'x-admin-password': password },
+                    body
+                });
+                if (fnError) {
+                    let errBody = null;
+                    try { if (fnError.context) errBody = await fnError.context.json(); } catch (_) {}
+                    const reasons = { front_not_found: 'that front no longer exists - refresh the list', story_not_found: 'no story with that number' };
+                    const err = new Error(errBody?.error || reasons[errBody?.reason] || errBody?.reason || fnError.message || 'Request failed');
+                    err.body = errBody;
+                    throw err;
+                }
+                return data;
+            }, [password, supabase]);
+        }
+
+        // Plain-language summary of an assign/unassign result list.
+        function frontsSummarize(res, frontName, frontsById, mode) {
+            const results = res?.results || [];
+            const by = (s) => results.filter(r => r.status === s);
+            const parts = [];
+            if (mode === 'unassign') {
+                const removed = by('removed');
+                if (removed.length) parts.push(`Removed ${removed.length} from ${frontName}.`);
+                if (by('not_on_front').length) parts.push(`${by('not_on_front').length} were not on it any more.`);
+                const back = removed.filter(r => r.sweep_would_refile).length;
+                if (back) parts.push(`${back} ${back === 1 ? 'matches' : 'match'} a keyword rule, so the automatic sweep may file ${back === 1 ? 'it' : 'them'} again (on whichever front has that rule). To stop that, move ${back === 1 ? 'it' : 'them'} to the right front instead, or tighten the rule.`);
+            } else {
+                if (by('assigned').length) parts.push(`Filed ${by('assigned').length} on ${frontName}.`);
+                if (by('moved').length) parts.push(`Moved ${by('moved').length} to ${frontName}.`);
+                if (by('already_on_front').length) parts.push(`${by('already_on_front').length} were already there.`);
+                const other = by('on_other_front');
+                if (other.length) {
+                    const names = {};
+                    other.forEach(r => { const n = frontsById[r.from_event_id]?.name || `front #${r.from_event_id}`; names[n] = (names[n] || 0) + 1; });
+                    parts.push(`${other.length} ${other.length === 1 ? 'is' : 'are'} already on another front (${Object.entries(names).map(([n, c]) => `${n}: ${c}`).join(', ')}); nothing changed for ${other.length === 1 ? 'it' : 'them'}.`);
+                }
+                if (by('story_not_found').length) parts.push(`${by('story_not_found').length} not found.`);
+                if (by('story_not_active').length) parts.push(`${by('story_not_active').length} skipped (merged or closed stories can't be filed).`);
+            }
+            if (res?.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+            return parts.join(' ') || 'Nothing changed.';
+        }
+
+        // Checkbox story list shared by the unassigned pool and a front's member list.
+        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded }) {
+            const allOn = stories.length > 0 && stories.every(s => selected.has(s.id));
+            return (
+                <div style={{ overflowX: 'auto' }}>
+                    {/* The header checkbox is hidden on phones (stacked rows), so select-all is also a button. */}
+                    <button className="judge-row-btn" onClick={() => onToggleAll(!allOn)} style={{ background: '#374151', color: '#e5e7eb', marginBottom: '0.5rem' }}>
+                        {allOn ? 'Clear selection' : `Select all ${stories.length} shown`}
+                    </button>
+                    <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                            <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                <th style={{ padding: '0.5rem', width: '32px' }}>
+                                    <input type="checkbox" className="bulk-checkbox" checked={allOn} onChange={() => onToggleAll(!allOn)} title="Select every story on this page" />
+                                </th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Story</th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Alarm</th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>First seen</th>
+                                {showAdded && <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Added</th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {stories.map(s => (
+                                <tr key={s.id} style={{ borderBottom: '1px solid #1f2937', background: selected.has(s.id) ? 'rgba(59,130,246,0.08)' : 'transparent' }}>
+                                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                                        <input type="checkbox" className="bulk-checkbox" checked={selected.has(s.id)} onChange={() => onToggle(s.id)} aria-label={`Select story ${s.id}`} />
+                                    </td>
+                                    <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb' }} onClick={() => onToggle(s.id)}>
+                                        <span style={{ color: '#6b7280' }}>#{s.id}</span> {s.primary_headline}
+                                        <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>
+                                            {s.category ? s.category.replace(/_/g, ' ') : 'no category'}
+                                            {s.action_label ? ` · ${s.action_label}` : ''}
+                                            {s.main_line ? ' · on the Tracker main line' : ''}
+                                            {s.status && s.status !== 'active' && !s.merged_into_story_id ? ` · ${s.status}` : ''}
+                                        </div>
+                                        {s.merged_into_story_id && (
+                                            // Combine/merge does not carry the front over (story_event is not repointed):
+                                            // the survivor needs filing by hand and this tombstone removing.
+                                            <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '2px' }}>
+                                                Combined into #{s.merged_into_story_id}. Remove this one, then add #{s.merged_into_story_id} with "Add a story by its number".
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td data-label="Alarm" style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                        {s.alarm_level != null ? <span className={`badge ${frontsAlarmClass(s.alarm_level)}`}>{s.alarm_level}</span> : '—'}
+                                    </td>
+                                    <td data-label="First seen" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{frontsFmtDate(s.first_seen_at)}</td>
+                                    {showAdded && (
+                                        <td data-label="Added" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }} title={s.note || ''}>
+                                            {frontsFmtDate(s.assigned_at)} · {s.assigned_by === 'human' ? 'by hand' : 'automatic'}{s.reassigned_at ? ' · moved here' : ''}
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            );
+        }
+
+        // Bulk action bar: "File / Move N selected to [front]" (+ optional remove).
+        function FrontsBulkBar({ count, fronts, excludeId, verb, busy, onApply, onRemove, onClear }) {
+            const [target, setTarget] = useState('');
+            const options = fronts.filter(f => f.id !== excludeId).slice().sort((a, b) => a.name.localeCompare(b.name));
+            if (!count) return null;
+            return (
+                <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', background: '#1e3a8a', border: '1px solid #3b82f6', borderRadius: '6px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem', color: '#dbeafe', fontSize: '0.9rem' }}>
+                    <strong>{count} selected</strong>
+                    <span>{verb} to</span>
+                    <select className="stories-select" value={target} onChange={e => setTarget(e.target.value)} style={{ padding: '6px 10px', minWidth: '180px' }}>
+                        <option value="">choose a front…</option>
+                        {options.map(f => <option key={f.id} value={f.id}>{f.name}{f.publish_state !== 'published' ? ` (${FRONT_PUBLISH_LABELS[f.publish_state]})` : ''}</option>)}
+                    </select>
+                    <button className="judge-row-btn" disabled={busy || !target} onClick={() => onApply(Number(target))} style={{ background: '#2563eb', color: '#fff' }}>
+                        {busy ? '…' : verb}
+                    </button>
+                    {onRemove && (
+                        <button className="judge-row-btn" disabled={busy} onClick={onRemove} style={{ background: '#7f1d1d', color: '#fee2e2' }}>
+                            Remove from this front
+                        </button>
+                    )}
+                    <button className="judge-row-btn" disabled={busy} onClick={onClear} style={{ background: '#374151', color: '#e5e7eb' }}>Clear</button>
+                </div>
+            );
+        }
+
+        // Paged, searchable story list with selection. load(cursor, search) -> { stories, next_cursor }.
+        function useFrontsStoryPage(load, deps) {
+            const [stories, setStories] = useState([]);
+            const [cursor, setCursor] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [selected, setSelected] = useState(() => new Set());
+            const tokenRef = useRef(0);
+            const searchRef = useRef('');
+
+            const fetchPage = useCallback(async (search, append, fromCursor) => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    // "Load more" keeps the search the first page used, not whatever is typed now
+                    const q = append ? searchRef.current : search;
+                    searchRef.current = q;
+                    const res = await load(append ? fromCursor : null, q);
+                    if (token !== tokenRef.current) return;
+                    setStories(prev => append ? [...prev, ...(res.stories || [])] : (res.stories || []));
+                    setCursor(res.next_cursor ?? null);
+                    if (!append) setSelected(new Set());
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, deps);
+
+            const toggle = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+            const toggleAll = (on) => setSelected(on ? new Set(stories.map(s => s.id)) : new Set());
+            const dropIds = (ids) => {
+                const gone = new Set(ids);
+                setStories(prev => prev.filter(s => !gone.has(s.id)));
+                setSelected(prev => { const n = new Set(prev); ids.forEach(i => n.delete(i)); return n; });
+            };
+            return { stories, cursor, loading, error, setError, selected, setSelected, fetchPage, toggle, toggleAll, dropIds };
+        }
+
+        function FrontsTab({ password, supabase }) {
+            const api = useFrontsApi(password, supabase);
+            const [view, setView] = useState('list'); // 'list' | 'pool' | 'front'
+            const [fronts, setFronts] = useState([]);
+            const [listLoading, setListLoading] = useState(true);
+            const [listError, setListError] = useState(null);
+            const [openId, setOpenId] = useState(null); // null + view 'front' = new front
+            const [editorKey, setEditorKey] = useState(0); // new key per open, kept when a create assigns the id
+            const tokenRef = useRef(0);
+
+            const loadFronts = useCallback(async () => {
+                const token = ++tokenRef.current;
+                setListLoading(true);
+                setListError(null);
+                try {
+                    const res = await api({ action: 'list' });
+                    if (token === tokenRef.current) setFronts(res.fronts || []);
+                } catch (err) {
+                    if (token === tokenRef.current) setListError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setListLoading(false);
+                }
+            }, [api]);
+
+            useEffect(() => { loadFronts(); }, [loadFronts]);
+
+            const frontsById = useMemo(() => Object.fromEntries(fronts.map(f => [f.id, f])), [fronts]);
+            const openFront = (id) => { setOpenId(id); setEditorKey(k => k + 1); setView('front'); };
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>Fronts</span></h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button className={`tab-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    All fronts{fronts.length ? ` (${fronts.length})` : ''}
+                                </button>
+                                <button className={`tab-btn ${view === 'pool' ? 'active' : ''}`} onClick={() => setView('pool')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    Stories with no front
+                                </button>
+                                <button className="tab-btn" onClick={() => openFront(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: '#065f46', color: '#d1fae5' }}>
+                                    + New front
+                                </button>
+                                <button onClick={loadFronts} disabled={listLoading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }} title="Reload">
+                                    {listLoading ? '...' : '↻'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            {listError && <div className="error-banner"><strong>Error:</strong> {listError}</div>}
+                            {view === 'list' && <FrontsList fronts={fronts} loading={listLoading} onOpen={openFront} />}
+                            {view === 'pool' && <FrontsPool api={api} fronts={fronts} frontsById={frontsById} onChanged={loadFronts} />}
+                            {view === 'front' && (
+                                <FrontEditor
+                                    key={editorKey}
+                                    api={api}
+                                    eventId={openId}
+                                    fronts={fronts}
+                                    frontsById={frontsById}
+                                    onSaved={(id) => { loadFronts(); if (id !== openId) setOpenId(id); }}
+                                    onChanged={loadFronts}
+                                    onBack={() => setView('list')}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function FrontsList({ fronts, loading, onOpen }) {
+            if (loading && !fronts.length) return <div className="loading"><div className="spinner"></div>Loading…</div>;
+            if (!fronts.length) return <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No fronts yet. Use + New front.</div>;
+            const live = (f) => f.publish_state === 'published';
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        A <strong style={{ color: '#e5e7eb' }}>front</strong> is an ongoing topic that groups stories. Only <strong style={{ color: '#e5e7eb' }}>Live</strong> fronts show on the site. Stories reach a front three ways: the <strong style={{ color: '#e5e7eb' }}>keyword sweep</strong> (every 2 hours, by headline), the <strong style={{ color: '#e5e7eb' }}>assignment agent</strong> (daily at 9 AM CT, Live fronts with a definition), or by hand here. Open a front to edit it, change its rules, or file and move its stories.
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <thead>
+                                <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Front</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Status</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Tier</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Stories</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Last activity</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Filed automatically by</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {fronts.map(f => (
+                                    <tr key={f.id} style={{ borderBottom: '1px solid #1f2937', opacity: live(f) ? 1 : 0.75 }}>
+                                        <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb', cursor: 'pointer' }} onClick={() => onOpen(f.id)}>
+                                            <div style={{ fontWeight: 600 }}>{f.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{f.slug} · alarm {f.alarm_level}</div>
+                                        </td>
+                                        <td data-label="Status" style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: live(f) ? '#4ade80' : '#9ca3af', fontWeight: 600 }}>
+                                            {FRONT_PUBLISH_LABELS[f.publish_state] || f.publish_state}{f.lifecycle !== 'open' ? ` · ${f.lifecycle}` : ''}
+                                        </td>
+                                        <td data-label="Tier" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{(FRONT_TIER_LABELS[f.tier] || f.tier).split(' ')[0]}</td>
+                                        <td data-label="Stories" style={{ padding: '0.5rem', color: '#d1d5db' }}>{f.story_count ?? '—'}</td>
+                                        <td data-label="Last activity" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{frontsAgo(f.last_activity_at)}</td>
+                                        <td data-label="Filed by" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                                            {[f.has_sweep ? 'sweep' : null, f.agent_active ? 'agent' : (f.has_agent_pattern || f.has_agent_definition) ? 'agent (off)' : null].filter(Boolean).join(' + ') || 'hand only'}
+                                        </td>
+                                        <td className="cell-actions" style={{ padding: '0.5rem' }}>
+                                            <button className="judge-row-btn" onClick={() => onOpen(f.id)} style={{ background: '#374151', color: '#e5e7eb' }}>Open</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            );
+        }
+
+        // Stories with no front: active, enriched, newest first. Bulk file.
+        function FrontsPool({ api, fronts, frontsById, onChanged }) {
+            const [search, setSearch] = useState('');
+            const [busy, setBusy] = useState(false);
+            const [notice, setNotice] = useState(null);
+            const [pendingMove, setPendingMove] = useState(null); // { ids, eventId } offered after an on_other_front result
+            const page = useFrontsStoryPage((cursor, q) => api({ action: 'pool', cursor, search: q }), [api]);
+
+            useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
+
+            const file = async (eventId, ids, move) => {
+                if (busy) return;
+                setBusy(true);
+                setNotice(null);
+                setPendingMove(null);
+                page.setError(null);
+                try {
+                    const res = await api({ action: 'assign', event_id: eventId, story_ids: ids, move });
+                    const name = frontsById[eventId]?.name || 'the front';
+                    setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, 'assign') });
+                    const done = (res.results || []).filter(r => r.status !== 'on_other_front').map(r => Number(r.story_id));
+                    page.dropIds(done);
+                    const other = (res.results || []).filter(r => r.status === 'on_other_front').map(r => Number(r.story_id));
+                    if (other.length) setPendingMove({ ids: other, eventId });
+                    onChanged();
+                } catch (err) {
+                    page.setError(err.message);
+                } finally {
+                    setBusy(false);
+                }
+            };
+
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Published stories that are on no front, newest first. Tick the ones that belong together, pick a front, and file them in one go. This is also where a new topic shows up first: if you see a run of related stories, make a front for them.
+                    </div>
+                    <form className="stories-toolbar" onSubmit={e => { e.preventDefault(); page.fetchPage(search, false); }}>
+                        <input className="stories-search" placeholder="Search headlines (press Enter)" value={search} onChange={e => setSearch(e.target.value)} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Search</button>
+                        {search && <button type="button" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }} onClick={() => { setSearch(''); page.fetchPage('', false); }}>Clear</button>}
+                    </form>
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                        {notice.text}
+                        {pendingMove && (
+                            <button className="judge-row-btn" disabled={busy} onClick={() => file(pendingMove.eventId, pendingMove.ids, true)} style={{ marginLeft: '0.5rem', background: '#b45309', color: '#fff' }}>
+                                Move {pendingMove.ids.length === 1 ? 'it' : `those ${pendingMove.ids.length}`} to {frontsById[pendingMove.eventId]?.name}
+                            </button>
+                        )}
+                    </div>}
+                    {page.error && <div className="error-banner"><strong>Error:</strong> {page.error}</div>}
+                    <FrontsBulkBar
+                        count={page.selected.size}
+                        fronts={fronts}
+                        verb="File"
+                        busy={busy}
+                        onApply={(eventId) => file(eventId, [...page.selected], false)}
+                        onClear={() => page.setSelected(new Set())}
+                    />
+                    {page.loading && !page.stories.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : page.stories.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No unfiled stories match that search.' : 'Every published story is on a front.'}</div>
+                    ) : (
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} />
+                    )}
+                    {page.cursor != null && (
+                        <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>
+                            {page.loading ? 'Loading…' : 'Load 50 more'}
+                        </button>
+                    )}
+                </>
+            );
+        }
+
+        // Pattern input with an on-blur compile check (same ~* the sweep uses).
+        function FrontsPatternField({ label, hint, value, onChange, error, onBlur }) {
+            // One element type for every length (swapping input/textarea mid-typing lost focus).
+            const [rows] = useState(() => value.length > 80 ? 3 : 1);
+            return (
+                <div className="form-group">
+                    <label className="form-label">{label}</label>
+                    <textarea className="form-textarea" rows={rows} value={value} onChange={e => onChange(e.target.value.replace(/[\r\n]+/g, ''))} onBlur={onBlur} spellCheck={false} style={{ fontFamily: 'monospace', fontSize: '13px', minHeight: 0, borderColor: error ? '#ef4444' : undefined }} />
+                    {error ? <div style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '4px' }}>Not a valid pattern: {error}</div>
+                        : hint ? <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{hint}</div> : null}
+                </div>
+            );
+        }
+
+        function FrontsPreview({ result }) {
+            if (!result) return null;
+            if (result.error) return <div className="error-banner" style={{ marginTop: '0.5rem' }}>{result.error}</div>;
+            return (
+                <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', margin: '0.5rem 0 1rem', fontSize: '0.85rem' }}>
+                    <div style={{ marginBottom: '0.35rem' }}>
+                        Matches <strong style={{ color: '#e5e7eb' }}>{result.total_matches}</strong> published stories from the last {result.days} days:
+                        {' '}{result.on_this_front} already on this front, {result.on_other_front} on other fronts, {result.unassigned} on no front.
+                    </div>
+                    {result.samples.length > 0 && (
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#9ca3af' }}>
+                            {result.samples.map(s => <li key={s.id}><span style={{ color: '#6b7280' }}>#{s.id}</span> {s.headline}{s.front ? <em> ({s.front})</em> : ''}</li>)}
+                        </ul>
+                    )}
+                </div>
+            );
+        }
+
+        function FrontEditor({ api, eventId, fronts, frontsById, onSaved, onChanged, onBack }) {
+            const isNew = eventId == null;
+            const [loaded, setLoaded] = useState(null); // the row as last read/saved
+            const [form, setForm] = useState(FRONT_EMPTY_FORM);
+            const [loading, setLoading] = useState(!isNew);
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [ruleErrors, setRuleErrors] = useState({});
+            const [preview, setPreview] = useState({});
+            const [slugTouched, setSlugTouched] = useState(false);
+
+            const toForm = (f) => ({
+                name: f.name || '', slug: f.slug || '', dek: f.dek || '', alarm_level: String(f.alarm_level ?? 3), tier: f.tier, lifecycle: f.lifecycle,
+                publish_state: f.publish_state, started_at: f.started_at ? f.started_at.slice(0, 10) : '',
+                sweep_pattern: f.sweep_pattern || '', sweep_coword: f.sweep_coword || '', sweep_priority: String(f.sweep_priority ?? 100),
+                sweep_summary: !!f.sweep_summary, agent_pattern: f.agent_pattern || '', agent_definition: f.agent_definition || ''
+            });
+
+            useEffect(() => {
+                if (isNew) return;
+                let alive = true;
+                (async () => {
+                    try {
+                        const res = await api({ action: 'get', event_id: eventId });
+                        if (!alive) return;
+                        setLoaded(res.front);
+                        setForm(toForm(res.front));
+                    } catch (err) {
+                        if (alive) setError(err.message);
+                    } finally {
+                        if (alive) setLoading(false);
+                    }
+                })();
+                return () => { alive = false; };
+            }, [api, eventId, isNew]);
+
+            const set = (k, v) => setForm(prev => {
+                const next = { ...prev, [k]: v };
+                if (k === 'name' && isNew && !slugTouched) next.slug = frontsSlugify(v);
+                return next;
+            });
+
+            const checkRule = async (k) => {
+                const v = form[k].trim();
+                if (!v || v === (loaded?.[k] || '')) { setRuleErrors(p => ({ ...p, [k]: null })); return; }
+                try {
+                    const res = await api({ action: 'check_pattern', pattern: v });
+                    setRuleErrors(p => ({ ...p, [k]: res.error || null }));
+                } catch (err) {
+                    setRuleErrors(p => ({ ...p, [k]: null })); // the save re-checks; don't block on a failed check call
+                }
+            };
+
+            const runPreview = async (kind) => {
+                const pattern = (kind === 'agent' ? form.agent_pattern : form.sweep_pattern).trim();
+                if (!pattern) { setPreview(p => ({ ...p, [kind]: { error: 'Enter a pattern first.' } })); return; }
+                setPreview(p => ({ ...p, [kind]: { error: null, loading: true, samples: [] } }));
+                try {
+                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() || null, summary: form.sweep_summary, days: 30, event_id: eventId });
+                    setPreview(p => ({ ...p, [kind]: res }));
+                } catch (err) {
+                    setPreview(p => ({ ...p, [kind]: { error: err.message } }));
+                }
+            };
+
+            // Only changed fields go to the server (all of them for a new front).
+            const changedFields = () => {
+                const out = {};
+                const base = loaded ? toForm(loaded) : null;
+                for (const k of Object.keys(FRONT_EMPTY_FORM)) {
+                    if (!isNew && k === 'slug') continue;
+                    if (base && base[k] === form[k]) continue;
+                    let v = form[k];
+                    if (k === 'alarm_level' || k === 'sweep_priority') v = Number(v);
+                    else if (k === 'started_at') v = v ? `${v}T00:00:00Z` : null;
+                    else if (typeof v === 'string') v = v.trim() === '' ? null : v;
+                    if (isNew && v === null) continue;
+                    out[k] = v;
+                }
+                return out;
+            };
+
+            const save = async () => {
+                const fields = changedFields();
+                if (!Object.keys(fields).length) { setNotice({ kind: 'info', text: 'Nothing changed.' }); return; }
+                const agentTouched = ['agent_pattern', 'agent_definition', 'publish_state'].some(k => k in fields);
+                if (agentTouched && frontsInAgentWindow() && !confirm('The daily fronts agent runs right now (14:00-14:15 UTC, 9:00-9:15 AM CT). Changing a front\'s agent rules or Live status mid-run can make that run skip stories for this front. Save anyway? (Waiting until 9:20 AM CT is safer.)')) return;
+                if (fields.publish_state === 'published' && loaded?.publish_state !== 'published' && !confirm(`Make "${form.name}" Live? It appears on the public site, and its stories count toward the Tracker.`)) return;
+                setSaving(true);
+                setError(null);
+                setNotice(null);
+                try {
+                    const res = await api({ action: 'save', event_id: eventId, fields });
+                    setLoaded(res.front);
+                    setForm(toForm(res.front));
+                    setRuleErrors({});
+                    const warn = [...(res.warnings || []), ...(res.refresh && !res.refresh.ok ? [res.refresh.error] : [])];
+                    setNotice({ kind: warn.length ? 'warn' : 'ok', text: [res.created ? `Created "${res.front.name}".` : 'Saved.', ...warn].join(' ') });
+                    onSaved(res.front.id);
+                } catch (err) {
+                    if (err.body?.rule_errors) setRuleErrors(err.body.rule_errors);
+                    setError(err.body?.rule_errors ? 'One of the patterns is not valid (see the red message below). Nothing was saved.' : err.message);
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            const retire = async () => {
+                if (!confirm(`Retire "${loaded.name}"?\n\nIt goes back to Draft (off the public site) and its keyword sweep and agent pattern are cleared, so no new stories are filed to it. Its ${frontsById[eventId]?.story_count ?? ''} stories stay on it. You can edit it and make it Live again later.`)) return;
+                setSaving(true);
+                setError(null);
+                setNotice(null);
+                try {
+                    const res = await api({ action: 'retire', event_id: eventId });
+                    setLoaded(res.front);
+                    setForm(toForm(res.front));
+                    const prev = res.previous || {};
+                    const kept = [prev.sweep_pattern && `old keyword pattern: ${prev.sweep_pattern}`, prev.agent_pattern && `old agent pattern: ${prev.agent_pattern}`].filter(Boolean);
+                    setNotice({ kind: 'ok', text: `Retired. ${kept.length ? `Copy these if you may want them back - ${kept.join(' | ')}` : ''} ${res.refresh && !res.refresh.ok ? res.refresh.error : ''}` });
+                    onChanged();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            if (loading) return <div className="loading"><div className="spinner"></div>Loading…</div>;
+            if (!isNew && !loaded) return <div>{error && <div className="error-banner"><strong>Error:</strong> {error}</div>}<button className="judge-row-btn" onClick={onBack}>Back</button></div>;
+
+            const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 1rem' };
+            const section = { borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '0.5rem' };
+            const agentOn = form.publish_state === 'published' && form.agent_pattern.trim() && form.agent_definition.trim();
+
+            return (
+                <div>
+                    <button className="judge-row-btn" onClick={onBack} style={{ background: '#374151', color: '#e5e7eb', marginBottom: '1rem' }}>← All fronts</button>
+                    <h3 style={{ margin: '0 0 1rem', color: '#f8fafc' }}>{isNew ? 'New front' : loaded.name}</h3>
+
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Name</label>
+                            <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="The Epstein Files" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Web address name (slug)</label>
+                            <input className="form-input" value={form.slug} disabled={!isNew} onChange={e => { setSlugTouched(true); set('slug', e.target.value); }} style={{ opacity: isNew ? 1 : 0.6 }} />
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{isNew ? 'Lowercase and hyphens. Fixed once created.' : 'Fixed: links and agent records use it.'}</div>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Summary (one paragraph, shown on the front's page)</label>
+                        <textarea className="form-textarea" rows={3} value={form.dek} onChange={e => set('dek', e.target.value)} />
+                    </div>
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Status</label>
+                            <select className="form-select" value={form.publish_state} onChange={e => set('publish_state', e.target.value)}>
+                                {Object.entries(FRONT_PUBLISH_LABELS).map(([v, l]) => <option key={v} value={v}>{l}{v === 'published' ? ' (on the site)' : ' (hidden)'}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Tier</label>
+                            <select className="form-select" value={form.tier} onChange={e => set('tier', e.target.value)}>
+                                {Object.entries(FRONT_TIER_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Alarm (0-5)</label>
+                            <select className="form-select" value={form.alarm_level} onChange={e => set('alarm_level', e.target.value)}>
+                                {[5, 4, 3, 2, 1, 0].map(n => <option key={n} value={String(n)}>{n}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Still going?</label>
+                            <select className="form-select" value={form.lifecycle} onChange={e => set('lifecycle', e.target.value)}>
+                                {Object.entries(FRONT_LIFECYCLE_LABELS).filter(([v]) => v !== 'dormant' || form.lifecycle === 'dormant' || loaded?.lifecycle === 'dormant').map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Started</label>
+                            <input type="date" className="form-input" value={form.started_at} onChange={e => set('started_at', e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div style={section}>
+                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Keyword sweep (runs every 2 hours)</h4>
+                        <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                            Files any story on no front whose headline matches the pattern. Case does not matter; use | for "or", e.g. <code>(epstein|maxwell)</code>. Leave empty for no sweep. It never moves a story that is already on a front.
+                        </p>
+                        <FrontsPatternField label="Headline pattern" value={form.sweep_pattern} onChange={v => set('sweep_pattern', v)} error={ruleErrors.sweep_pattern} onBlur={() => checkRule('sweep_pattern')} />
+                        <FrontsPatternField label="Required word (optional)" hint="If set, the headline must ALSO match this, e.g. (election|vote|ballot). Stops false hits." value={form.sweep_coword} onChange={v => set('sweep_coword', v)} error={ruleErrors.sweep_coword} onBlur={() => checkRule('sweep_coword')} />
+                        <div style={grid}>
+                            <div className="form-group">
+                                <label className="form-label">Priority (lower wins)</label>
+                                <input type="number" min="1" max="32767" className="form-input" value={form.sweep_priority} onChange={e => set('sweep_priority', e.target.value)} />
+                                <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>When two fronts match one story, the lower number gets it.</div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-checkbox-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '1.6rem', color: '#d1d5db', fontSize: '0.9rem' }}>
+                                    <input type="checkbox" className="bulk-checkbox" checked={form.sweep_summary} onChange={e => set('sweep_summary', e.target.checked)} />
+                                    Also search summaries (only when the headline has the required word)
+                                </label>
+                            </div>
+                        </div>
+                        <button className="judge-row-btn" onClick={() => runPreview('sweep')} disabled={preview.sweep?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                            {preview.sweep?.loading ? 'Checking…' : 'Preview matches (last 30 days)'}
+                        </button>
+                        <FrontsPreview result={preview.sweep?.loading ? null : preview.sweep} />
+                    </div>
+
+                    <div style={section}>
+                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Assignment agent (runs daily at 9:00 AM CT)</h4>
+                        <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                            Claude reads stories the sweep missed and decides which front, if any, they belong on. It only considers this front when it is <strong>Live</strong> and has <strong>both</strong> a candidate pattern and a definition.
+                            {' '}Currently: <strong style={{ color: agentOn ? '#4ade80' : '#fbbf24' }}>{agentOn ? 'on' : 'off'}</strong>.
+                        </p>
+                        <div style={{ ...frontsBox('warn'), borderRadius: '6px', padding: '0.5rem 0.9rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                            Don't save changes here between 9:00 and 9:15 AM CT (14:00-14:15 UTC) while the daily agent run is going; it can make that run skip stories for this front.
+                        </div>
+                        <FrontsPatternField label="Candidate pattern (headline or summary)" hint="Broader than the sweep on purpose: it only decides which stories the agent looks at." value={form.agent_pattern} onChange={v => set('agent_pattern', v)} error={ruleErrors.agent_pattern} onBlur={() => checkRule('agent_pattern')} />
+                        <div className="form-group">
+                            <label className="form-label">Definition (what belongs on this front and what does not, in plain words)</label>
+                            <textarea className="form-textarea" rows={8} value={form.agent_definition} onChange={e => set('agent_definition', e.target.value)} />
+                        </div>
+                        <button className="judge-row-btn" onClick={() => runPreview('agent')} disabled={preview.agent?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                            {preview.agent?.loading ? 'Checking…' : 'Preview candidates (last 30 days)'}
+                        </button>
+                        <FrontsPreview result={preview.agent?.loading ? null : preview.agent} />
+                    </div>
+
+                    <div style={{ ...section, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create front' : 'Save changes'}</button>
+                        {!isNew && (loaded.publish_state === 'published' || loaded.sweep_pattern || loaded.agent_pattern) && (
+                            <button className="judge-row-btn" onClick={retire} disabled={saving} style={{ background: '#7f1d1d', color: '#fee2e2' }} title="Take it off the site and stop new stories reaching it">Retire front</button>
+                        )}
+                    </div>
+
+                    {!isNew && <FrontMembers api={api} eventId={eventId} front={loaded} fronts={fronts} frontsById={frontsById} onChanged={onChanged} />}
+                </div>
+            );
+        }
+
+        // A front's stories: add one by number, bulk move / remove.
+        function FrontMembers({ api, eventId, front, fronts, frontsById, onChanged }) {
+            const [search, setSearch] = useState('');
+            const [busy, setBusy] = useState(false);
+            const [notice, setNotice] = useState(null);
+            const [addId, setAddId] = useState('');
+            const [found, setFound] = useState(null); // lookup result for "add by number"
+            const page = useFrontsStoryPage((cursor, q) => api({ action: 'members', event_id: eventId, cursor, search: q }), [api, eventId]);
+
+            useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
+
+            const after = (res, name, mode) => {
+                setNotice({ kind: res.refresh?.ok === false || (mode === 'unassign' && (res.results || []).some(r => r.sweep_would_refile)) ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, mode) });
+                onChanged();
+            };
+
+            const move = async (targetId, ids) => {
+                if (busy) return;
+                setBusy(true); setNotice(null); page.setError(null);
+                try {
+                    const res = await api({ action: 'assign', event_id: targetId, story_ids: ids, move: true });
+                    page.dropIds((res.results || []).filter(r => r.status === 'moved').map(r => Number(r.story_id)));
+                    after(res, frontsById[targetId]?.name || 'the front', 'assign');
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const remove = async (ids) => {
+                if (busy) return;
+                if (!confirm(`Remove ${ids.length} ${ids.length === 1 ? 'story' : 'stories'} from ${front.name}? ${ids.length === 1 ? 'It goes' : 'They go'} back to "Stories with no front". To put ${ids.length === 1 ? 'it' : 'them'} on another front, use Move instead.`)) return;
+                setBusy(true); setNotice(null); page.setError(null);
+                try {
+                    const res = await api({ action: 'unassign', event_id: eventId, story_ids: ids });
+                    page.dropIds((res.results || []).filter(r => r.status === 'removed').map(r => Number(r.story_id)));
+                    after(res, front.name, 'unassign');
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const lookup = async (e) => {
+                e.preventDefault();
+                setFound(null); setNotice(null); page.setError(null);
+                const id = Number(addId.trim().replace(/^#/, ''));
+                if (!Number.isSafeInteger(id) || id <= 0) { page.setError('Enter a story number, e.g. 17254'); return; }
+                try {
+                    const res = await api({ action: 'lookup', story_id: id });
+                    setFound(res.story);
+                } catch (err) { page.setError(err.message); }
+            };
+
+            const fileFound = async (moveIt) => {
+                if (busy || !found) return;
+                setBusy(true); page.setError(null);
+                try {
+                    const res = await api({ action: 'assign', event_id: eventId, story_ids: [found.id], move: moveIt });
+                    after(res, front.name, 'assign');
+                    if ((res.results || []).some(r => r.status === 'assigned' || r.status === 'moved')) {
+                        setFound(null); setAddId('');
+                        page.fetchPage(search, false);
+                    }
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const foundFront = found?.event_id ? frontsById[found.event_id] : null;
+
+            return (
+                <div style={{ borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '1.5rem' }}>
+                    <h4 style={{ margin: '0 0 0.75rem', color: '#e5e7eb' }}>Stories on this front{frontsById[eventId]?.story_count != null ? ` (${frontsById[eventId].story_count})` : ''}</h4>
+
+                    <form className="stories-toolbar" onSubmit={lookup}>
+                        <input className="stories-search" style={{ maxWidth: '260px' }} inputMode="numeric" placeholder="Add a story by its number (#)" value={addId} onChange={e => { setAddId(e.target.value); setFound(null); }} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Find</button>
+                    </form>
+                    {found && (
+                        <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            <div><span style={{ color: '#6b7280' }}>#{found.id}</span> {found.primary_headline}</div>
+                            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {found.status !== 'active' ? <span style={{ color: '#fbbf24' }}>This story is {found.status}; only active stories can be filed.</span>
+                                    : found.event_id === eventId ? <span style={{ color: '#4ade80' }}>Already on this front.</span>
+                                    : found.event_id ? (
+                                        <>
+                                            <span style={{ color: '#fbbf24' }}>Already on {foundFront?.name || `front #${found.event_id}`}.</span>
+                                            <button className="judge-row-btn" disabled={busy} onClick={() => fileFound(true)} style={{ background: '#b45309', color: '#fff' }}>Move it here</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {!found.enriched && <span style={{ color: '#fbbf24' }}>Not published yet (no summary), so it won't show until it is.</span>}
+                                            <button className="judge-row-btn" disabled={busy} onClick={() => fileFound(false)} style={{ background: '#2563eb', color: '#fff' }}>File it here</button>
+                                        </>
+                                    )}
+                            </div>
+                        </div>
+                    )}
+
+                    <form className="stories-toolbar" onSubmit={e => { e.preventDefault(); page.fetchPage(search, false); }}>
+                        <input className="stories-search" placeholder="Search this front's headlines (press Enter)" value={search} onChange={e => setSearch(e.target.value)} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Search</button>
+                        {search && <button type="button" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }} onClick={() => { setSearch(''); page.fetchPage('', false); }}>Clear</button>}
+                    </form>
+
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>{notice.text}</div>}
+                    {page.error && <div className="error-banner"><strong>Error:</strong> {page.error}</div>}
+                    <FrontsBulkBar
+                        count={page.selected.size}
+                        fronts={fronts}
+                        excludeId={eventId}
+                        verb="Move"
+                        busy={busy}
+                        onApply={(targetId) => move(targetId, [...page.selected])}
+                        onRemove={() => remove([...page.selected])}
+                        onClear={() => page.setSelected(new Set())}
+                    />
+                    {page.loading && !page.stories.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : page.stories.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No stories on this front match that search.' : 'No stories on this front yet.'}</div>
+                    ) : (
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded />
+                    )}
+                    {page.cursor != null && (
+                        <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>
+                            {page.loading ? 'Loading…' : 'Load 50 more'}
+                        </button>
+                    )}
+                </div>
+            );
+        }
+        // ===================== end Fronts tab =====================
+
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
         function JudgeTab({ password, supabase, onReviewChanged }) {
@@ -7530,6 +8341,7 @@
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders' },
+                { id: 'fronts', label: 'Fronts' },
                 { id: 'feeds', label: 'Feeds' },
                 { id: 'skips', label: 'Failures' },
                 { id: 'social', label: 'Social' }
@@ -7855,6 +8667,10 @@
                             <FeedsTab password={password} supabase={supabase} filter={feedsFilter} onFilterChange={setFeedsFilter} onFeedsChanged={fetchStats} />
                         )}
 
+                        {activeTab === 'fronts' && (
+                            <FrontsTab password={password} supabase={supabase} />
+                        )}
+
                         {activeTab === 'skips' && (
                             <SkipsTab password={password} supabase={supabase} />
                         )}
@@ -7875,7 +8691,7 @@
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'social' && activeTab !== 'feeds' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'social' && activeTab !== 'feeds' && activeTab !== 'fronts' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
