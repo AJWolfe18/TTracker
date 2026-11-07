@@ -201,9 +201,15 @@ async function updateStories(supabase: SupabaseClient, updateIds: number[]) {
 // belongs to at most one update (one story_event row), so linking takes it from another update.
 // One RPC (migration 134 E): link + unlink share a transaction and saves of one update are
 // serialized, so two concurrent saves cannot each remove the other's stories.
+// A failure the admin cannot fix by retrying (missing RPC, update gone) keeps its reason, so
+// save_update can say what actually happened instead of "set the stories again".
+class LinkError extends Error {
+  constructor(message: string, readonly reason: 'needs_migration' | 'update_not_found') { super(message) }
+}
 async function linkStories(supabase: SupabaseClient, eventId: number, updateId: number, ids: number[]) {
   const { data, error } = await supabase.rpc('admin_set_update_stories', { p_event_id: eventId, p_update_id: updateId, p_story_ids: ids })
-  if (isMissingFn(error)) throw new Error(NEEDS_134.error)
+  if (isMissingFn(error)) throw new LinkError(NEEDS_134.error, 'needs_migration')
+  if (error?.code === 'P0002') throw new LinkError('That update no longer exists on this front (it may have been deleted meanwhile). Reload the list.', 'update_not_found')
   if (error) throw new Error(`setting the update's stories failed: ${error.message}`)
   // deno-lint-ignore no-explicit-any
   const r = (data || {}) as any
@@ -727,12 +733,27 @@ Deno.serve(async (req) => {
               links = (await linkStories(supabase, eventId, Number(saved.id), storyIds)).result
             } catch (err) {
               console.error('linking stories failed:', err)
-              links = {
-                error: `The update was saved, but setting its stories failed. Open it with Edit and set the stories again${storyIds.length ? `: ${storyIds.map((i) => `#${i}`).join(', ')}` : ' (none)'}.`
+              const detail = wrote ? 'The update details were saved. ' : ''
+              if (err instanceof LinkError) {
+                if (err.reason === 'update_not_found') {
+                  const error = wrote ? `The detail changes were written before the update disappeared. ${err.message}` : err.message
+                  return jsonResponse({ ok: false, reason: err.reason, details_written: wrote, error }, 404)
+                }
+                links = { ...NEEDS_134, reason: err.reason, error: `${detail}The story links could not be saved. ${err.message}` }
+              } else {
+                const wanted = storyIds.length ? `: ${storyIds.map((i) => `#${i}`).join(', ')}` : ' (none)'
+                links = { error: `${detail}The story links could not be saved. Open the update with Edit and set the stories again${wanted}.` }
               }
             }
           }
-          const stories = (await updateStories(supabase, [Number(saved.id)])).get(Number(saved.id)) || []
+          let stories
+          try {
+            stories = (await updateStories(supabase, [Number(saved.id)])).get(Number(saved.id)) || []
+          } catch (err) {
+            if (!links?.error) throw err
+            // Keep the link warning even when the current links cannot be read back.
+            console.error('reading update stories after linking failed:', err)
+          }
           return jsonResponse({ ok: true, created: !current, changed: wrote, update: { ...saved, stories }, links })
         }
 

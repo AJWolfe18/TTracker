@@ -143,6 +143,15 @@ check('mixed-source move: each story checked against its own source (first entry
   && byStory(r, 3)?.status === 'on_other_front' && Number((await se(3)).event_id) === 3 && r.length === 2, JSON.stringify(r));
 await assign([1], 2, true, [1]);   // put story 1 back on front 2 for the checks below
 
+// a stale move of a story whose membership was removed meanwhile never files it (Codex P1 on f458994)
+await assign([6], 3);
+await rowsOf('select * from public.admin_unassign_stories(array[6]::bigint[], 3)');
+r = await assign([6], 1, true, [3]);
+check('stale move of a removed story: no_longer_on_front, nothing filed', r[0]?.status === 'no_longer_on_front' && r[0]?.from_event_id === null && !(await se(6)), JSON.stringify(r));
+r = await assign([6, 1], 1, true, [3, 2]);
+check('a removed story does not block the rest of the move', byStory(r, 6)?.status === 'no_longer_on_front' && byStory(r, 1)?.status === 'moved' && !(await se(6)), JSON.stringify(r));
+await assign([1], 2, true, [1]);   // back on front 2 again
+
 check('unknown front raises', (await fails('select * from public.admin_assign_stories_to_front(array[6]::bigint[], 4242, false)'))?.includes('not found'));
 check('more than 200 ids raises', (await fails('select * from public.admin_assign_stories_to_front((select array_agg(g)::bigint[] from generate_series(1,201) g), 1, false)'))?.includes('at most 200'));
 check('empty array returns nothing', (await assign([], 1)).length === 0);

@@ -6681,6 +6681,8 @@
                     other.forEach(r => { const n = frontsById[r.from_event_id]?.name || `front #${r.from_event_id}`; names[n] = (names[n] || 0) + 1; });
                     parts.push(`${other.length} ${other.length === 1 ? 'is' : 'are'} already on another front (${Object.entries(names).map(([n, c]) => `${n}: ${c}`).join(', ')}); nothing changed for ${other.length === 1 ? 'it' : 'them'}.`);
                 }
+                const gone = by('no_longer_on_front').length;
+                if (gone) parts.push(`Skipped ${gone} ${gone === 1 ? 'story' : 'stories'} with no current front. Use File to assign ${gone === 1 ? 'it' : 'them'} to a front.`);
                 if (by('story_not_found').length) parts.push(`${by('story_not_found').length} not found.`);
                 if (by('story_not_active').length) parts.push(`${by('story_not_active').length} skipped (merged or closed stories can't be filed).`);
             }
@@ -6991,7 +6993,8 @@
                         : { action: 'assign', event_id: eventId, story_ids: ids, move: false });
                     const name = frontsById[eventId]?.name || 'the front';
                     setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, 'assign') });
-                    const done = (res.results || []).filter(r => r.status !== 'on_other_front').map(r => Number(r.story_id));
+                    // stories still on another front, or on none (a move never files), stay in the list
+                    const done = (res.results || []).filter(r => r.status !== 'on_other_front' && r.status !== 'no_longer_on_front').map(r => Number(r.story_id));
                     page.dropIds(done);
                     // a NULL front (the story left its front mid-call) cannot be offered as a move
                     const other = (res.results || []).filter(r => r.status === 'on_other_front' && r.from_event_id != null)
@@ -7426,7 +7429,8 @@
                 setBusy(true); setNotice(null); page.setError(null);
                 try {
                     const res = await api({ action: 'assign', event_id: targetId, story_ids: ids, move: true, from_event_id: eventId });
-                    page.dropIds((res.results || []).filter(r => r.status === 'moved').map(r => Number(r.story_id)));
+                    // a story found on no front is not on this one either: drop it from the list too
+                    page.dropIds((res.results || []).filter(r => r.status === 'moved' || r.status === 'no_longer_on_front').map(r => Number(r.story_id)));
                     after(res, frontsById[targetId]?.name || 'the front', 'assign');
                 } catch (err) { page.setError(err.message); } finally { setBusy(false); }
             };
@@ -7462,6 +7466,10 @@
                     if ((res.results || []).some(r => r.status === 'assigned' || r.status === 'moved')) {
                         setFound(null); setAddId('');
                         page.fetchPage(search, false);
+                    } else if ((res.results || []).some(r => r.status === 'no_longer_on_front' || r.status === 'on_other_front')) {
+                        // the story changed front meanwhile: look it up again so the buttons match where it is now
+                        const fresh = await api({ action: 'lookup', story_id: found.id });
+                        setFound(fresh.story);
                     }
                 } catch (err) { page.setError(err.message); } finally { setBusy(false); }
             };
@@ -7567,10 +7575,9 @@
             const live = front?.publish_state === 'published';
 
             const onSaved = (res, wasNew) => {
-                const parts = [wasNew ? 'Update added.' : res.changed ? 'Update saved.' : 'The text was unchanged.'];
                 const l = res.links;
-                if (l?.error) parts.push(l.error);
-                else if (l) {
+                const parts = [l?.error || (wasNew ? 'Update added.' : res.changed ? 'Update saved.' : 'The text was unchanged.')];
+                if (l && !l.error) {
                     if (l.linked.length) parts.push(`It covers ${l.linked.length} ${l.linked.length === 1 ? 'story' : 'stories'}.`);
                     if (l.unlinked.length) parts.push(`${l.unlinked.length} ${l.unlinked.length === 1 ? 'story is' : 'stories are'} no longer linked to it.`);
                     if (l.taken_from_other_update.length) parts.push(`${l.taken_from_other_update.map(i => `#${i}`).join(', ')} moved over from another update (a story belongs to one update at most).`);

@@ -57,6 +57,9 @@
 --   on_other_front    on another front and p_move = false, or a move whose story is no
 --                     longer on its p_from_event_ids entry (a stale screen); nothing changed
 --                     (from_event_id says where it is now, so the admin can offer a move)
+--   no_longer_on_front  a move whose story is on NO front now (removed meanwhile); a move
+--                     never files, so nothing changed (from_event_id NULL). Also the rare
+--                     filing that lost every race and found no row at the end.
 --   story_not_found   no such story
 --   story_not_active  merged away / closed / archived; never filed
 -- A move clears event_update_id: the composite FK (migration 111 PART H) only
@@ -121,21 +124,7 @@ BEGIN
       story_id := v_id; status := 'story_not_active'; from_event_id := NULL; RETURN NEXT; CONTINUE;
     END IF;
 
-    INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
-    VALUES (v_id, p_event_id, 'human', NULL)
-    ON CONFLICT ON CONSTRAINT story_event_pkey DO NOTHING;
-    GET DIAGNOSTICS v_inserted = ROW_COUNT;
-    IF v_inserted = 1 THEN
-      story_id := v_id; status := 'assigned'; from_event_id := NULL; RETURN NEXT; CONTINUE;
-    END IF;
-
-    -- A row exists: lock it so a concurrent move/remove can't interleave.
-    SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id, se.note INTO v_cur
-      FROM public.story_event se WHERE se.story_id = v_id FOR UPDATE;
-    IF NOT FOUND THEN
-      -- removed between our insert attempt and the lock: try once more. If a sweep or the
-      -- agent won that race too, report where the story is now; never claim a filing
-      -- that did not happen, and never move on a race (the admin can retry the move).
+    IF NOT COALESCE(p_move, false) THEN
       INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
       VALUES (v_id, p_event_id, 'human', NULL)
       ON CONFLICT ON CONSTRAINT story_event_pkey DO NOTHING;
@@ -143,8 +132,27 @@ BEGIN
       IF v_inserted = 1 THEN
         story_id := v_id; status := 'assigned'; from_event_id := NULL; RETURN NEXT; CONTINUE;
       END IF;
-      SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id INTO v_cur
-        FROM public.story_event se WHERE se.story_id = v_id;
+    END IF;
+
+    -- Read and lock the current membership before checking a move's source.
+    SELECT se.event_id, se.reassigned_at, se.reassigned_from_event_id, se.note INTO v_cur
+      FROM public.story_event se WHERE se.story_id = v_id FOR UPDATE;
+    IF NOT FOUND THEN
+      IF COALESCE(p_move, false) THEN
+        story_id := v_id; status := 'no_longer_on_front'; from_event_id := NULL; RETURN NEXT; CONTINUE;
+      END IF;
+      -- A membership disappeared between the filing attempt and the lock. Retry the filing once.
+      INSERT INTO public.story_event (story_id, event_id, assigned_by, confidence)
+      VALUES (v_id, p_event_id, 'human', NULL)
+      ON CONFLICT ON CONSTRAINT story_event_pkey DO NOTHING;
+      GET DIAGNOSTICS v_inserted = ROW_COUNT;
+      IF v_inserted = 1 THEN
+        story_id := v_id; status := 'assigned'; from_event_id := NULL; RETURN NEXT; CONTINUE;
+      END IF;
+      SELECT se.event_id INTO v_cur FROM public.story_event se WHERE se.story_id = v_id;
+      IF NOT FOUND THEN
+        story_id := v_id; status := 'no_longer_on_front'; from_event_id := NULL; RETURN NEXT; CONTINUE;
+      END IF;
       story_id := v_id;
       status := CASE WHEN v_cur.event_id = p_event_id THEN 'already_on_front' ELSE 'on_other_front' END;
       from_event_id := CASE WHEN v_cur.event_id = p_event_id THEN NULL ELSE v_cur.event_id END;
@@ -181,7 +189,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN, BIGINT[]) IS
-  'ADO-547: admin Fronts tab. Files up to 200 stories on one front, one result row per story (assigned | moved | already_on_front | on_other_front | story_not_found | story_not_active). p_move = true moves each story that is still on its p_from_event_ids entry (required for a move, one per story, same order; a story found elsewhere is reported on_other_front, not moved); a move sets reassigned_at, keeps the first reassigned_from_event_id, clears event_update_id. Caller runs refresh_tracker_derived() after. service_role only.';
+  'ADO-547: admin Fronts tab. Files up to 200 stories on one front, one result row per story (assigned | moved | already_on_front | on_other_front | no_longer_on_front | story_not_found | story_not_active). p_move = true moves each story that is still on its p_from_event_ids entry (required for a move, one per story, same order; a story found elsewhere is reported on_other_front, one on no front no_longer_on_front, never filed); a move sets reassigned_at, keeps the first reassigned_from_event_id, clears event_update_id. Caller runs refresh_tracker_derived() after. service_role only.';
 
 -- ----------------------------------------------------------------------------
 -- B) admin_unassign_stories

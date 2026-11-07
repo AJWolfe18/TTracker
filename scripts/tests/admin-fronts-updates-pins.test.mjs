@@ -218,6 +218,11 @@ test('update writes go through the whitelist; setting its stories is ONE transac
   // two PostgREST writes let concurrent saves each unlink the other's stories (Codex P1, November 7)
   assert.match(link, /rpc\('admin_set_update_stories', \{ p_event_id: eventId, p_update_id: updateId, p_story_ids: ids \}\)/);
   assert.doesNotMatch(link, /from\('story_event'\)/);
+  // a missing RPC or a deleted update keeps its reason; only unknown errors get "set them again" (Codex P2)
+  assert.match(link, /isMissingFn\(error\)\) throw new LinkError\(NEEDS_134\.error, 'needs_migration'\)/);
+  assert.match(link, /error\?\.code === 'P0002'\) throw new LinkError\(.*, 'update_not_found'\)\n/);
+  assert.match(save, /err instanceof LinkError/);
+  assert.match(save, /reason: err\.reason/);
   // edits are scoped to the front in the request, so a stale screen cannot edit another front's update
   assert.match(save, /\.eq\('id', updateId!\)\.eq\('event_id', eventId\)/);
   assert.match(caseBody('delete_update'), /\.eq\('id', updateId\)\.eq\('event_id', eventId\)/);
@@ -246,6 +251,8 @@ test('admin: every move call sends from_event_id; preview sends patterns untrimm
   assert.match(tab, /move: true, from_event_ids: items\.map\(it => it\.from\)/, 'the pool move names each story\'s source in one call');
   assert.doesNotMatch(tab, /form\.(agent_pattern|sweep_pattern)\)\.trim\(\)|sweep_coword\.trim\(\) \|\| null/);
   assert.match(tab, /<fieldset disabled=\{saving\}/);
+  assert.match(tab, /by\('no_longer_on_front'\)/, 'the summary explains a move that found the story on no front');
+  assert.match(tab, /r\.status !== 'on_other_front' && r\.status !== 'no_longer_on_front'/, 'the pool keeps such stories listed');
 });
 
 test('admin labels say "homepage", not force_show/force_hide', () => {
