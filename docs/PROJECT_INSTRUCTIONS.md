@@ -4,7 +4,7 @@
 
 **Josh** - Product Manager (non-developer)
 - **Communication:** Business impact first, simple language, single recommendations
-- **Budget:** <$50/month hard limit (current: ~$20)
+- **Budget:** <$100/month hard limit (raised from $50 on November 7, 2026; current spend: query the `budgets` table)
 - **Workflow:** Propose → Confirm → Implement → Auto-QA → Report
 
 ---
@@ -39,7 +39,7 @@
 - [ ] Feature working
 - [ ] Edge cases handled
 - [ ] No regressions
-- [ ] Cost <$50/month
+- [ ] Cost <$100/month
 - [ ] ADO updated
 - [ ] Handoff created
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
-**Budget**: <$50/month HARD LIMIT
+**Budget**: <$100/month HARD LIMIT (raised from $50 on November 7, 2026 to fit Supabase Pro)
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
 **Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
 **Source of Truth**: ADO for status, plans for implementation details only
@@ -285,14 +285,14 @@ docs/features/
 
 **Owner:** Josh (Product Manager, non-developer) - Prefers business impact explanations and single recommendations with cost implications stated clearly.
 
-**Budget:** <$50/month hard limit
+**Budget:** <$100/month hard limit
 
 ---
 
 ## 💰 Budget Enforcement
 
 **Hard Limits:**
-- Total: $50/month across all services
+- Total: $100/month across all services (Josh, November 7, 2026; was $50 - doubled so Supabase Pro at $25/month fits, ADO-585)
 - Daily pipeline cap: $5/day for story enrichment
 - Supabase egress: 5GB/month free tier (overages: $0.09/GB)
 - Current spend: query the `budgets` table (don't trust a number hardcoded here)
