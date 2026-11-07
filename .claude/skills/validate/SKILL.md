@@ -22,6 +22,10 @@ Pass 2: Agent(superpowers:code-reviewer): "Review for production readiness, arch
 **Skip BOTH only for:** typo fixes, single-line changes, config tweaks
 **If issues found:** Fix Critical/Important findings before proceeding.
 
+### 1b. Josh's Codex — before any push, TEST migration or TEST deploy
+
+For non-trivial code, migrations or edge functions: hand Josh a Codex brief and wait for his results before committing to `test`, pushing, applying TEST SQL or deploying TEST functions. TEST is shared (Netlify site, database, edge functions); see CLAUDE.md "For TEST". READY TO COMMIT is NO until Codex is clean (docs-only and trivial changes excepted).
+
 ### 2. ADO Status Update (Required)
 
 **Update ADO via the `ado` skill:**

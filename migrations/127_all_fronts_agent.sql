@@ -24,7 +24,9 @@
 -- ROLLBACK; alone before retrying. The last statement is a read-only check
 -- whose first column is `agent_fronts` (1 until other definitions are set).
 -- DEPENDENCIES: 115, 116 (agent_pattern, story_event.note), 123 (labels).
--- ROLLBACK: DROP FUNCTION public.front_agent_candidates_all(integer);
+-- SUPERSEDED (PART C) by 135: do NOT re-run this file once 135 is applied
+-- (two versions of the RPC make PostgREST refuse the agent's call, PGRST203).
+-- ROLLBACK (before 135 only; after 135 use 135's ROLLBACK): DROP FUNCTION public.front_agent_candidates_all(integer);
 --   ALTER TABLE public.events DROP COLUMN agent_definition;
 -- ============================================================================
 

@@ -185,6 +185,40 @@ const last = (await db.query(M127.slice(M127.search(/^SELECT\r?$/m)))).rows[0]; 
 check('final check query first column is agent_fronts', Object.keys(last)[0] === 'agent_fronts', JSON.stringify(last));
 check('final check counts the three agent fronts', Number(last.agent_fronts) === 3 && last.election_definition === true && Number(last.candidates_fn) === 1, JSON.stringify(last));
 
+// 8. Migration 135: a recency window (default 30 days) on the same pool
+const M135 = read('135_front_candidates_window.sql');
+await db.exec(`insert into public.stories(id, status, primary_headline, summary_neutral, first_seen_at, last_updated_at, alarm_level, category) values
+  (20, 'active', 'ICE raid from last spring', 'sum', now() - interval '200 day', now() - interval '200 day', 3, 'immigration'),
+  (21, 'active', 'Old ICE story with new articles', 'sum', now() - interval '200 day', now() - interval '2 day', 3, 'immigration'),
+  (22, 'active', 'ICE raid, no update stamp', 'sum', now() - interval '40 day', null, 3, 'immigration'),
+  (23, 'active', 'ICE raid, recent, no update stamp', 'sum', now() - interval '5 day', null, 3, 'immigration')`);
+const v127all = ids(await pool(100));
+check('127 pool sees the old stories (control)', [20, 21, 22, 23].every((i) => v127all.includes(i)), JSON.stringify(v127all));
+await db.exec(M135);
+const pool135 = async (sql, args = []) => ids((await db.query(sql, args)).rows);
+const def = await pool135('select * from public.front_agent_candidates_all(100)');
+check('135: one function, two arguments', (await db.query("select pronargs from pg_proc where proname = 'front_agent_candidates_all'")).rows.map((r) => r.pronargs).join() === '2');
+check('135: default window drops stories untouched for 30+ days (20, 22)', !def.includes(20) && !def.includes(22), JSON.stringify(def));
+check('135: an old story with a recent update stays in (21)', def.includes(21), JSON.stringify(def));
+check('135: a recent story without last_updated_at stays in (23)', def.includes(23), JSON.stringify(def));
+check('135: the {p_limit} call shape the agent uses still works', JSON.stringify(await pool135('select * from public.front_agent_candidates_all(p_limit => 100)')) === JSON.stringify(def));
+const all = await pool135('select * from public.front_agent_candidates_all(100, null)');
+const sorted = (a) => JSON.stringify([...a].sort((x, y) => x - y));
+check('135: p_days null holds the same stories as the 127 pool', sorted(all) === sorted(v127all), `${JSON.stringify(all)} vs ${JSON.stringify(v127all)}`);
+// 21 was first seen 200 days ago (127 would sort it last) but changed 2 days ago: it must beat 8 (3 days) and 23 (5 days)
+check('135: newest change first, so an old story with new articles is judged early (21)', def.indexOf(21) > -1 && def.indexOf(21) < def.indexOf(8) && def.indexOf(21) < def.indexOf(23), JSON.stringify(def));
+const wide = await pool135('select * from public.front_agent_candidates_all(100, 45)');
+check('135: p_days 45 reaches the 40-day story but not the 200-day one', wide.includes(22) && !wide.includes(20), JSON.stringify(wide));
+check('135: p_days below 1 is treated as 1 day', JSON.stringify(await pool135('select * from public.front_agent_candidates_all(100, 0)')) === JSON.stringify(await pool135('select * from public.front_agent_candidates_all(100, 1)')));
+check('135: pool_size counts the windowed pool', (await db.query('select max(pool_size)::int as n from public.front_agent_candidates_all(1)')).rows[0].n === def.length);
+const exec135 = async (role) => (await db.query(`select has_function_privilege('${role}', 'public.front_agent_candidates_all(integer, integer)', 'execute') as g`)).rows[0].g;
+check('135: service_role only', await exec135('service_role') === true && await exec135('anon') === false && await exec135('authenticated') === false);
+await db.exec(M135);
+check('135: re-run is idempotent', JSON.stringify(await pool135('select * from public.front_agent_candidates_all(100)')) === JSON.stringify(def)
+  && (await db.query("select count(*)::int as n from pg_proc where proname = 'front_agent_candidates_all'")).rows[0].n === 1);
+const last135 = (await db.query(M135.slice(M135.search(/^SELECT\r?$/m)))).rows[0];
+check('135: final check first column is candidates_fn = 1', Object.keys(last135)[0] === 'candidates_fn' && Number(last135.candidates_fn) === 1 && Number(last135.pool_30d) === def.length, JSON.stringify(last135));
+
 await db.close();
 out(failures ? `all-fronts-agent-sql-pglite: ${failures} FAILED` : 'all-fronts-agent-sql-pglite: all passed');
 process.exit(failures ? 1 : 0);

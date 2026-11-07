@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Project**: TrumpyTracker - AI-powered political accountability tracker (RSS feeds → Stories → AI summaries)
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
-**Budget**: <$50/month HARD LIMIT
+**Budget**: <$100/month HARD LIMIT (raised from $50 on November 7, 2026 to fit Supabase Pro)
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
-**Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
+**Workflow**: Code → local tests → in-session two-pass review → Josh's Codex → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
 **Source of Truth**: ADO for status, plans for implementation details only
-**Tools Available**: Supabase MCP, Azure DevOps MCP, Filesystem MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
+**Tools Available**: Supabase MCP, Azure DevOps MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
 
 ---
@@ -121,10 +121,11 @@ docs/features/
 
 **For TEST (normal work):**
 1. Always work on `test` branch
-2. Commit to `test` branch
-3. Push to `test` branch (`git push origin test`)
-4. Auto-deploys to Netlify TEST site
-5. **Note:** No Codex review on direct pushes (review only runs on PRs)
+2. Fix + local tests (unit, PGlite, `npm run qa:smoke`) - these touch nothing shared
+3. In-session two-pass code review (see "During Work"; `/code-review medium` or higher counts), fix real findings
+4. Hand Josh the Codex brief and WAIT for his results; fix and re-run Codex if needed
+5. Only then: commit + push to `test` (auto-deploys to Netlify TEST), apply TEST migrations, deploy TEST edge functions
+6. **Why this order (November 7, 2026):** pushing first was left over from when Codex reviewed PRs on GitHub (retired August 25, 2026). Codex now runs locally on unpushed code, and TEST's database, edge functions and site are shared, so an unreviewed push can break TEST (it did: ADO-547 moves, November 7)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -132,7 +133,7 @@ docs/features/
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. **Codex reviews the PR automatically** (ChatGPT subscription; comment `@codex review` to re-run) - check with `gh pr view`
+6. **Review is done locally BEFORE the PR** (two-pass review + Josh runs Codex locally). GitHub `@codex review` was retired August 25, 2026 — do NOT comment it on PRs
 7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
@@ -147,7 +148,7 @@ docs/features/
 ### Before Creating PR to Main:
 - [ ] Changes tested on TEST environment
 - [ ] `npm run qa:smoke` passes
-- [ ] Codex review passed (P1/P2 findings addressed)
+- [ ] Local code review passed (two-pass; Critical/P1/P2 findings addressed)
 - [ ] Security quick-check: `/docs/guides/security-checklist.md`
 - [ ] **PROD deployment checklist:** `/docs/guides/prod-deployment-checklist.md`
   - Migrations, edge functions, workflows, secrets all accounted for
@@ -177,11 +178,11 @@ docs/features/
 
 3. **Check available MCP tools FIRST** - Never claim "I can't" without verifying
 
-4. **ADO Operations via `/ado` command** - Isolates 20K+ context cost
-   - ADO MCP tools return full work item dumps
-   - Use `/ado` command to query/update work items
+4. **ADO Operations via `/ado` command** - Avoids 20K+ context cost
+   - ADO MCP tools return full work item dumps (20-30K tokens each) - never call them directly for one item
+   - Use `/ado` command to query/update work items: REST + jq reads (~0.5-2K tokens) and REST JSON Patch writes (~0.1-0.5K), both in the main session
+   - No subagent for ADO. Agents are allowed again (October 1, 2026), but only for specific cases: autonomous multi-lane sessions, advisor passes, and parallel independent work. Work inline by default
    - See `.claude/skills/ado/SKILL.md` for syntax
-   - **Context savings: 99.5% (20K → 100 tokens)**
 
 5. **Auto-QA always** - Check edge cases, regressions, cost after every change
 
@@ -190,12 +191,12 @@ docs/features/
 7. **State cost implications** - Always mention $ impact for new features
 
 8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR process
-   - **PR code review:** Comment `@codex review` on the PR (uses OpenAI Codex, included in ChatGPT Plus)
-   - Codex follows guidelines in `AGENTS.md`
+   - **PR code review is LOCAL:** two-pass review in-session + Josh runs Codex locally (guidelines in `AGENTS.md`)
+   - GitHub `@codex review` comments were retired August 25, 2026 — never post them
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **Codex review only runs on PRs** - Direct pushes to test don't trigger review. Check review status with `gh pr view` (inline findings: `gh api repos/AJWolfe18/TTracker/pulls/<n>/comments`)
+10. **All code review is local** - the GPT-4o API review workflow was removed (no OpenAI credits) and GitHub `@codex review` was retired August 25, 2026. Review = in-session two-pass + Josh's local Codex. Nothing reviews PRs on GitHub anymore
 
 11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB
@@ -222,7 +223,7 @@ docs/features/
 - ❌ `git push origin main` - BLOCKED by branch protection (use PRs)
 - ❌ `git merge test` into main - WRONG (use cherry-pick from test to deployment branch)
 - ❌ Direct edits on main branch - BLOCKED (must use PR workflow)
-- ❌ Expecting AI review on test pushes - Review only runs on PRs (not direct pushes)
+- ❌ Posting `@codex review` on PRs - Retired August 25, 2026; review happens locally before the PR
 
 ### CI Workflows
 - ❌ Ignoring "Lint PROD References" failures - This workflow prevents hardcoded PROD URLs in test code
@@ -242,7 +243,6 @@ docs/features/
 - See Critical Rule #11 above for the full egress rules — don't duplicate here.
 
 ### Code
-- ❌ `str_replace` for file edits - FAILS (use `mcp__filesystem__edit_file` tool)
 - ❌ Object references in `useEffect` dependencies - Causes infinite loops
 - ❌ Missing CORS headers in Edge Functions - Breaks frontend calls
 - ❌ `console.log` in production - Remove before commit
@@ -270,7 +270,7 @@ docs/features/
 ### Cost/Budget
 - ❌ Propose features without stating cost - Always mention $ impact
 - ❌ Ignore daily budget limits - Check `budgets` table before OpenAI calls
-- ❌ Use expensive models unnecessarily - GPT-4o-mini is sufficient for enrichment
+- ❌ Use expensive models unnecessarily - GPT-4o-mini for mechanical tasks (entity extraction); editorial enrichment uses Claude agents (mini-era editorial output caused the SCOTUS/EO quality failures — see `docs/decisions/0001-claude-agents-over-gpt-pipelines.md`)
 
 ### Language/Runtime
 - ❌ **Using Python in this project** - NO PYTHON IN THIS REPO
@@ -286,42 +286,19 @@ docs/features/
 
 **Owner:** Josh (Product Manager, non-developer) - Prefers business impact explanations and single recommendations with cost implications stated clearly.
 
-**Budget:** <$50/month hard limit
+**Budget:** <$100/month hard limit
 
 ---
 
 ## 💰 Budget Enforcement
 
 **Hard Limits:**
-- Total: $50/month across all services
+- Total: $100/month across all services (Josh, November 7, 2026; was $50 - doubled so Supabase Pro at $25/month fits, ADO-585)
 - Daily pipeline cap: $5/day for story enrichment
 - Supabase egress: 5GB/month free tier (overages: $0.09/GB)
 - Current spend: query the `budgets` table (don't trust a number hardcoded here)
 
-**Cost per Operation:**
-- Story enrichment: ~$0.003/story (GPT-4o-mini)
-- AI code review: $0.30-$1.00/PR (GPT-4o)
-- Article scraping: Free (no API costs)
-- Database queries: Free (within Supabase free tier)
-- **Re-cluster job (1800 articles):** ~5-7GB egress ($0.18-0.63 overage)
-- **MCP query (articles with content):** ~5KB per row
-- **MCP query (articles with embeddings):** ~6KB per row
-
-**Before Making OpenAI Calls:**
-```sql
--- Check today's spend via Supabase MCP
-SELECT spent_usd, openai_calls 
-FROM budgets 
-WHERE day = CURRENT_DATE;
-
--- If spent_usd > $5.00, HALT enrichment
--- Log warning and skip enrichment job
-```
-
-**Budget Monitoring:**
-- Daily budget tracked in `budgets` table
-- Auto-enforced in `rss-tracker-supabase.js`
-- Manual check: Query budgets table before proposing new AI features
+**Per-operation costs, spend-check SQL, and monitoring:** `/docs/guides/budget-enforcement.md`. Before any OpenAI call, check today's `spent_usd` in the `budgets` table — if over $5.00, HALT enrichment.
 
 **CRITICAL RULE: Always state cost implications before proposing new features or suggesting additional AI calls.**
 
@@ -342,37 +319,15 @@ WHERE day = CURRENT_DATE;
 
 **NEVER merge test→main. Always cherry-pick tested commits.**
 
-### GitHub Secrets (EXACT names)
-| Secret | Purpose |
-|--------|---------|
-| `SUPABASE_URL` | PROD Supabase URL |
-| `SUPABASE_SERVICE_KEY` | PROD service role key |
-| `SUPABASE_ANON_KEY` | PROD anon key |
-| `SUPABASE_TEST_URL` | TEST Supabase URL |
-| `SUPABASE_TEST_SERVICE_KEY` | TEST service role key |
-| `SUPABASE_TEST_ANON_KEY` | TEST anon key |
-| `OPENAI_API_KEY` | OpenAI (shared) |
-| `PERPLEXITY_API_KEY` | Perplexity (shared) |
-| `EDGE_CRON_TOKEN` | Edge function auth (TEST) |
-| `EDGE_CRON_TOKEN_PROD` | Edge function auth (PROD) |
-| `DISCORD_WEBHOOK_URL` | Discord alerts (shared) — used by rss-tracker-test/prod + pardons-tracker workflows; alerts are non-blocking if unset |
-| `COURTLISTENER_API_TOKEN` | SCOTUS case fetch (CourtListener API) |
+### GitHub Secrets
+Full table of exact secret names: `/docs/guides/prod-deployment-checklist.md`.
 
-**Important:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
+**Gotcha:** Workflows inject secrets into `SUPABASE_SERVICE_ROLE_KEY`. The secret NAME is `SUPABASE_SERVICE_KEY` but scripts read `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Development Commands
 
-### Local Development
-```bash
-# Frontend local server
-npm run server
-
-# Run QA smoke tests
-npm run qa:smoke
-```
-
-### Individual QA Tests
-See the `qa:*` scripts in `package.json` for the full suite list.
+### QA Tests
+See the `qa:*` scripts in `package.json` for the full suite list (`npm run qa:smoke` for the smoke suite).
 
 ### Supabase Edge Functions
 ```bash
@@ -454,35 +409,7 @@ Frontend (Vite + React app)
 UI labels → Database enum values: see the mapping in `scripts/enrichment/enrich-stories-inline.js` (11 categories, 'Corruption & Scandals' → 'corruption_scandals' style).
 
 ### RSS Feed Compliance Rules
-**IMPORTANT:** All RSS feeds MUST have compliance rules configured in the database.
-
-**Current Standard:**
-- Content limit: 5000 chars (matches article scraping limit from TTRC-258/260)
-- Full text: `allow_full_text = false` (excerpts only for fair use)
-- Enforcement: Automatic via RSS fetcher (`scripts/rss/fetch_feed.js`)
-
-**When Adding New Feeds:**
-```sql
--- Add compliance rule (REQUIRED)
-INSERT INTO feed_compliance_rules (feed_id, max_chars, allow_full_text, source_name, notes)
-VALUES (
-  <feed_id>,
-  5000,
-  false,
-  '<Source Name>',
-  '5K char limit for RSS content - matches article scraping limit'
-);
-```
-
-**How It Works:**
-1. RSS fetcher queries `feed_compliance_rules` at fetch start
-2. Extracts content from RSS fields: `content:encoded` OR `description` OR `summary`
-3. Truncates to `max_chars` limit (5000) before database insert
-4. Falls back to 5000 if no rule exists
-
-**RSS Content Fields Priority:** see extraction order in `scripts/rss/fetch_feed.js` (`content:encoded` → `description` → `summary`).
-
-**Note:** Even with 5K RSS limit, we also scrape full articles (TTRC-258/260) for better AI summaries.
+**IMPORTANT:** Every RSS feed MUST have a `feed_compliance_rules` row (5K char limit, excerpts only). SQL template and mechanics: `/docs/database/database-schema.md` → `feed_compliance_rules`.
 
 ## MCP Tools Available
 
@@ -494,9 +421,6 @@ VALUES (
 - **Use `/ado` command** for all work item operations
 - See `/docs/guides/ado-workflow.md` for states, types, and workflow
 - **If ADO MCP reports "PAT expired" but the PAT is new — STOP.** Read `/docs/guides/mcp-pat-troubleshooting.md` FIRST. The MCP token lives in `~/.claude.json`, NOT `settings.json`. Updating settings files does nothing. Don't waste time on `/mcp reconnect` or restarts until you've run the 30-second diagnostic in that doc.
-
-**Filesystem Access:** Direct file operations in project directory
-- **ALWAYS use `mcp__filesystem__edit_file` for edits** - NEVER use str_replace (it fails)
 
 **Memory MCP (Knowledge Graph):** 3-tier knowledge graph. **Full rules live in `docs/memory-policy.md`** — this is a summary, don't duplicate the policy here.
 - **`memory-global`** — identity, preferences, cross-project context. Shared across ALL projects. Always read.
@@ -519,7 +443,7 @@ VALUES (
 
 - **Backend:** Supabase (PostgreSQL + Edge Functions)
 - **Frontend:** Vite + React + TypeScript (Tailwind CSS). Admin dashboard (`admin.html`) is standalone vanilla JS.
-- **AI:** OpenAI GPT-4o-mini (RSS/story enrichment); Claude cloud agents (SCOTUS/EO/Pardons enrichment)
+- **AI:** Claude cloud agents (Stories/SCOTUS/EO/Pardons enrichment — all editorial copy); OpenAI GPT-4o-mini (article entity extraction only, inline in RSS tracker). Legacy GPT story enrichment is OFF (`ENABLE_LEGACY_STORY_ENRICHMENT`, ADO-528).
 - **RSS Parsing:** rss-parser npm package
 - **Deployment:** Netlify (static site + branch deploys)
 - **Automation:** GitHub Actions (scheduled jobs)
@@ -554,7 +478,7 @@ VALUES (
 ## Common Tasks
 
 ### Adding RSS Feeds
-Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL above in RSS Feed Compliance Rules).
+Insert into `feed_registry` (see `/docs/database/database-schema.md` for columns), **and always add the required `feed_compliance_rules` row** (SQL template in that same doc).
 
 ### Manual Article Submission
 POST a `{"url": ...}` body to the `articles-manual` edge function with the anon key (see `supabase/functions/articles-manual/`).
@@ -578,6 +502,7 @@ gh run watch
 
 ### Fetch SCOTUS Cases (CourtListener API)
 Use the `scotus-fetch` skill (`.claude/skills/scotus-fetch/SKILL.md`) — commands, dry-run/resume flags, and gotchas (`is_public` default, sync state, rate limits).
+**Note:** `scotus-fetch`/`scotus-review` may be disabled locally via `skillOverrides` in `.claude/settings.local.json` — remove those entries to re-enable when SCOTUS work resumes (the SKILL.md is still readable as a doc either way).
 
 ## Feature-Dev Plugin Usage
 

@@ -77,3 +77,5 @@ Tie-breaks: Trump Corruption (15) takes money for official action ("A $5 Million
 | How Louisiana's New Surgeon General Wants to Transform Public Health (13947) | decline | State official, no HHS action |
 
 **Most important open question:** the abortion pill. The FDA's mifepristone review is an HHS action under Kennedy, but 18 PROD loose ends on it are mostly Supreme Court and Louisiana litigation over mail access. Recommendation: the front takes only FDA or HHS actions on the pill (label changes, the safety review); the court fights stay loose ends.
+
+**Decided October 24, 2026 (Josh): the pill goes on this front**, as recommended: FDA, HHS or Kennedy actions on the pill, and a court or Congress acting on those decisions; lawsuits over state bans and mail access with no FDA/HHS decision at issue stay off. The sweep guard is kept (keywords cannot tell an agency action from a lawsuit), so the agent decides each story. Definition edit: `scripts/maintenance/2026-10-24-ado-592-front-definition-edits.sql` (applied on TEST October 24).

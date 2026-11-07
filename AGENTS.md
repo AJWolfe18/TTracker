@@ -7,7 +7,7 @@ This file configures OpenAI Codex code review for TrumpyTracker.
 ### Project Context
 - **Project:** TrumpyTracker - AI-powered political accountability tracker
 - **Stack:** Node.js (ESM), Supabase (PostgreSQL), vanilla JS frontend, Netlify static hosting
-- **Budget:** <$50/month - flag any changes that increase API costs
+- **Budget:** <$100/month - flag any changes that increase API costs
 
 ### P0 (Blockers - Must Fix)
 - Security vulnerabilities (SQL injection, XSS, exposed secrets)

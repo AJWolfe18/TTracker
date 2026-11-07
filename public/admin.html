@@ -567,6 +567,81 @@
             transition: background 0.2s;
         }
         .btn-secondary:hover { background: #475569; }
+        .btn-danger {
+            padding: 10px 20px;
+            background: #dc2626;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Stories tab: tick boxes + Combine (ADO-60) */
+        .stories-table .select-cell { width: 36px; padding-right: 0; }
+        .select-hit {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            min-height: 32px;
+            margin: -6px 0;
+            cursor: pointer;
+        }
+        .select-hit input { width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6; }
+        .combine-bar {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            background: #1e3a5f;
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .combine-bar-hint { color: #94a3b8; font-size: 13px; }
+        .combine-bar .btn-danger, .combine-bar .btn-secondary { padding: 8px 14px; }
+        .combine-hint { color: #94a3b8; font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
+        .combine-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+        .combine-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .combine-row input[type="radio"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; accent-color: #4ade80; }
+        .combine-row.is-keeper { border-color: #4ade80; }
+        .combine-row.is-gone { opacity: 0.6; cursor: default; }
+        .combine-row-text { flex: 1; min-width: 0; }
+        .combine-row-headline { color: #e2e8f0; font-size: 14px; overflow-wrap: anywhere; }
+        .combine-row-meta { color: #94a3b8; font-size: 12px; margin-top: 4px; }
+        .combine-id { color: #64748b; font-size: 12px; }
+        .combine-box {
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: rgba(59, 130, 246, 0.08);
+            color: #e2e8f0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .combine-box-block { border-color: #f87171; background: rgba(248, 113, 113, 0.08); color: #fca5a5; }
+        .combine-box-warn { border-color: #fbbf24; background: rgba(251, 191, 36, 0.08); color: #fbbf24; font-size: 13px; }
+        .combine-box-note { color: #94a3b8; font-size: 13px; background: transparent; }
 
         /* Toast Styles */
         .toast-container {
@@ -825,6 +900,8 @@
             }
             .mobile-stack td.cell-actions, .stories-table td:has(.row-actions) { display: block; width: 100%; }
             .stories-table .row-actions { flex-wrap: wrap; }
+            .select-hit { min-width: 44px; min-height: 44px; margin: -10px 0 -10px -8px; }
+            .combine-bar .btn-danger, .combine-bar .btn-secondary { min-height: 44px; }
             .judge-row-btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; min-height: 40px; }
 
             /* Modals go full-screen with the buttons always reachable */
@@ -1673,8 +1750,346 @@
             );
         }
 
+        // bulkCombine:start
+        // ADO-60: pure helpers for the Stories tab "Combine" dialog (bulk merge of duplicate stories).
+        // Plain functions between these markers so scripts/tests/admin-bulk-combine.test.mjs can run them.
+        const COMBINE_MAX_STORIES = 20;
+
+        // Why a merge/unmerge was refused, in plain words. Shared by the Judge tab and the Stories tab Combine.
+        // Keys are the reason codes merge_stories (migration 102), unmerge_story (105) and admin-judge-merge return.
+        const MERGE_REASON_TEXT = {
+            invalid_ids: 'The story ids were not valid',
+            missing_run_id: 'Internal error: no run id was sent',
+            loser_not_found: 'That story no longer exists',
+            survivor_not_found: 'The story to keep no longer exists',
+            survivor_is_merged: 'The story to keep has itself been merged into another story',
+            run_merge_cap_reached: 'Hit the safety cap on merges for one run; try again',
+            loser_already_merged: 'Already merged',
+            not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
+            no_merge_snapshot: 'No reversible snapshot exists for this merge',
+            not_merged: 'That story is not currently merged away',
+            snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
+            snapshot_changed: 'The merge record changed mid-request — refresh and try again',
+            survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
+        };
+        const mergeReasonText = (reason) => MERGE_REASON_TEXT[reason] || reason || 'unknown reason';
+
+        const isMergedAway = (s) => !!s && (s.status === 'merged_into' || s.merged_into_story_id != null);
+
+        // Default story to keep: most articles (article_story rows, not source_count), then the oldest
+        // (first seen), then the lowest id. Stories already merged away, or not found, never qualify.
+        function pickDefaultKeeper(stories) {
+            const live = stories.filter(s => s && !s.missing && !isMergedAway(s));
+            if (live.length === 0) return null;
+            const seen = (s) => { const t = Date.parse(s.first_seen_at || ''); return Number.isNaN(t) ? Infinity : t; };
+            return [...live].sort((a, b) =>
+                (b.article_count ?? 0) - (a.article_count ?? 0) || seen(a) - seen(b) || a.id - b.id
+            )[0].id;
+        }
+
+        // What Combine will do with the chosen keeper. blocker = why it can't run (null = ok to run).
+        function buildCombinePlan(stories, keeperId) {
+            const keeper = stories.find(s => s.id === keeperId) || null;
+            const toMerge = [];
+            const skipped = [];
+            const warnings = [];
+            const liveIds = new Set(stories.filter(s => !s.missing && !isMergedAway(s)).map(s => s.id));
+            for (const s of stories) {
+                if (s.id === keeperId) continue;
+                if (s.missing) skipped.push({ id: s.id, text: 'Not found — skipped' });
+                else if (isMergedAway(s)) {
+                    const target = s.merged_into_story_id;
+                    skipped.push({
+                        id: s.id,
+                        text: target === keeperId
+                            ? `Already part of #${keeperId} — nothing to do`
+                            : liveIds.has(target)
+                                ? `Already merged into #${target}, which is being combined into #${keeperId} — it comes along`
+                                : `Already merged into #${target} — left as is (combine #${target} instead to bring it in)`
+                    });
+                } else toMerge.push(s);
+            }
+            let blocker = null;
+            if (!keeper) blocker = 'Pick the story to keep.';
+            else if (keeper.missing) blocker = `#${keeper.id} was not found — pick another story to keep.`;
+            else if (isMergedAway(keeper)) blocker = `#${keeper.id} is already merged into #${keeper.merged_into_story_id}, so it can't be the one to keep. Pick a live story.`;
+            else if (toMerge.length === 0) blocker = 'Need at least 2 live stories to combine.';
+            const articles = toMerge.reduce((n, s) => n + (s.article_count ?? 0), 0);
+            // merge_stories does not move front membership (story_event): say so instead of dropping it silently.
+            if (keeper && !blocker) {
+                for (const s of toMerge) {
+                    if (!s.front) continue;
+                    if (!keeper.front) {
+                        warnings.push(`#${s.id} is on the front "${s.front.name}" but #${keeper.id} is on no front. Combining does not move front membership; add #${keeper.id} to that front by hand if it belongs there.`);
+                    } else if (s.front.event_id !== keeper.front.event_id) {
+                        warnings.push(`#${s.id} is on the front "${s.front.name}"; #${keeper.id} stays on "${keeper.front.name}".`);
+                    }
+                }
+            }
+            return { keeper, toMerge, skipped, articles, warnings, blocker };
+        }
+
+        // One admin-judge-merge 'merge' reply (or a request error) -> a result row.
+        function classifyMergeResult(loserId, result, errorMessage) {
+            if (errorMessage) return { id: loserId, kind: 'failed', text: `Failed: ${errorMessage}` };
+            if (!result) return { id: loserId, kind: 'failed', text: 'Failed: no reply from the server' };
+            if (result.ok && result.skipped) {
+                return { id: loserId, kind: 'already', text: `Already merged${result.survivor_id ? ` into #${result.survivor_id}` : ''} — nothing to do` };
+            }
+            if (result.ok) {
+                const n = result.articles_moved ?? 0;
+                return {
+                    id: loserId,
+                    kind: 'merged',
+                    text: `Merged — ${n} article${n === 1 ? '' : 's'} moved${result.log_error ? ' (warning: the Judge log entry failed to save, so it can\'t be undone from the Judge tab)' : ''}`
+                };
+            }
+            return {
+                id: loserId,
+                kind: 'failed',
+                text: `Failed: ${mergeReasonText(result.reason)}${result.survivor_points_to ? ` (#${result.survivor_points_to})` : ''}`
+            };
+        }
+        // bulkCombine:end
+
+        // ADO-60: "Combine" dialog — merge several duplicate stories into one, through the same audited
+        // admin-judge-merge 'merge' action the Judge tab uses (one call per story, so each merge is logged
+        // and individually undoable from the Judge tab).
+        function CombineStoriesModal({ stories, password, supabase, onClose, onFinished }) {
+            const [info, setInfo] = useState(null);         // [{...story, article_count, front, missing}]
+            const [frontsChecked, setFrontsChecked] = useState(true);
+            const [loadError, setLoadError] = useState(null);
+            const [keeperId, setKeeperId] = useState(null);
+            const [running, setRunning] = useState(false);
+            const [results, setResults] = useState(null);   // null until Combine starts
+            const busyRef = useRef(false);                  // sync double-click guard (state updates are async)
+
+            const invokeMerge = async (body) => {
+                const { data, error: fnError } = await supabase.functions.invoke('admin-judge-merge', {
+                    headers: { 'x-admin-password': password },
+                    body
+                });
+                if (fnError) {
+                    let detail = fnError.message;
+                    try {
+                        const errBody = fnError.context ? await fnError.context.json() : data;
+                        if (errBody?.detail || errBody?.error) detail = errBody.detail || errBody.error;
+                    } catch (_) {}
+                    throw new Error(detail || 'Request failed');
+                }
+                return data;
+            };
+
+            // One preview per extra story, anchored on the first: each reply carries both stories,
+            // so N-1 calls give fresh status, article count and front for all N.
+            const loadInfo = useCallback(async () => {
+                setLoadError(null);
+                setInfo(null);
+                const ids = stories.map(s => s.id);
+                const anchor = ids[0];
+                const byId = {};
+                let checked = true;
+                try {
+                    const others = ids.slice(1);
+                    for (let i = 0; i < others.length; i += 5) {
+                        const chunk = others.slice(i, i + 5);
+                        const replies = await Promise.all(chunk.map(id => invokeMerge({ action: 'preview', survivor_id: anchor, loser_id: id })));
+                        replies.forEach((r) => {
+                            if (r?.survivor) byId[r.survivor.id] = r.survivor;
+                            if (r?.loser) byId[r.loser.id] = r.loser;
+                            if (r?.fronts_checked !== true) checked = false;
+                        });
+                    }
+                } catch (err) {
+                    setLoadError(err.message);
+                    return;
+                }
+                const merged = stories.map(row => {
+                    const fresh = byId[row.id];
+                    if (!fresh) return { ...row, missing: true };
+                    // Older admin-judge-merge has no article_count: fall back to the list's count (also article_story rows).
+                    return { ...row, ...fresh, article_count: fresh.article_count ?? row.article_count ?? 0, front: fresh.front ?? null };
+                });
+                setFrontsChecked(checked);
+                setInfo(merged);
+                setKeeperId(pickDefaultKeeper(merged));
+            }, [stories, password, supabase]);
+
+            useEffect(() => { loadInfo(); }, [loadInfo]);
+
+            const plan = useMemo(() => (info ? buildCombinePlan(info, keeperId) : null), [info, keeperId]);
+            const done = results !== null && !running;
+
+            const handleClose = () => { if (!busyRef.current) onClose(); };
+            const closeRef = useRef(handleClose);
+            closeRef.current = handleClose;
+
+            useEffect(() => {
+                const onKey = (e) => { if (e.key === 'Escape') closeRef.current(); };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, []);
+
+            const runCombine = async () => {
+                if (busyRef.current || !plan || plan.blocker || results) return;
+                busyRef.current = true;
+                setRunning(true);
+                const out = [];
+                setResults([]);
+                // Sequential on purpose: each merge locks the keeper row, and a failure on one story
+                // must not stop the rest. Every reply is shown as it lands.
+                for (const s of plan.toMerge) {
+                    let row;
+                    try {
+                        const r = await invokeMerge({ action: 'merge', survivor_id: plan.keeper.id, loser_id: s.id, via: 'stories_combine' });
+                        row = classifyMergeResult(s.id, r);
+                    } catch (err) {
+                        row = classifyMergeResult(s.id, null, err.message);
+                        // A timeout or dropped reply can land after the merge committed: re-check before calling it failed.
+                        try {
+                            const check = await invokeMerge({ action: 'preview', survivor_id: plan.keeper.id, loser_id: s.id });
+                            if (check?.loser?.merged_into_story_id === plan.keeper.id) {
+                                row = { id: s.id, kind: 'merged', text: 'Merged (the reply was lost, but the story is now part of the keeper)' };
+                            }
+                        } catch (_) { /* keep the original failure */ }
+                    }
+                    out.push(row);
+                    setResults([...out]);
+                }
+                for (const sk of plan.skipped) out.push({ id: sk.id, kind: 'skipped', text: sk.text });
+                setResults([...out]);
+                // One Tracker refresh for the whole batch (merges sent with via='stories_combine' skip their own).
+                if (out.some(r => r.kind === 'merged')) {
+                    try { await invokeMerge({ action: 'refresh' }); } catch (_) { /* the next pipeline run refreshes anyway */ }
+                }
+                busyRef.current = false;
+                setRunning(false);
+                onFinished(plan.keeper.id, out);
+            };
+
+            const headlineOf = (id) => (info || stories).find(s => s.id === id)?.primary_headline || '(No headline)';
+            const fmtWhen = (iso) => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-';
+            const RESULT_COLOR = { merged: '#4ade80', already: '#94a3b8', skipped: '#94a3b8', failed: '#f87171' };
+            const counts = (results || []).reduce((c, r) => { c[r.kind] = (c[r.kind] || 0) + 1; return c; }, {});
+            const doneCount = (results || []).filter(r => r.kind !== 'skipped').length;
+
+            return (
+                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h3 className="modal-title">Combine {stories.length} stories</h3>
+                            <button className="modal-close" onClick={handleClose} disabled={running} aria-label="Close">×</button>
+                        </div>
+                        <div className="modal-body">
+                            {loadError && (
+                                <div className="error-banner">
+                                    <strong>Couldn't load the selected stories:</strong> {loadError}{' '}
+                                    <button className="btn-icon" onClick={loadInfo}>Try again</button>
+                                </div>
+                            )}
+                            {!info && !loadError && (
+                                <div className="loading"><div className="spinner"></div>Checking the selected stories...</div>
+                            )}
+
+                            {info && results === null && (
+                                <>
+                                    <div className="combine-hint">Pick the story to keep. The others are merged into it: their articles move over and each becomes a redirect to it.</div>
+                                    <div className="combine-list">
+                                        {info.map(s => {
+                                            const gone = s.missing || isMergedAway(s);
+                                            const isKeeper = keeperId === s.id;
+                                            return (
+                                                <label key={s.id} className={`combine-row${isKeeper ? ' is-keeper' : ''}${gone ? ' is-gone' : ''}`}>
+                                                    <input type="radio" name="combine-keeper" checked={isKeeper} disabled={gone}
+                                                        onChange={() => setKeeperId(s.id)} aria-label={`Keep story ${s.id}`} />
+                                                    <div className="combine-row-text">
+                                                        <div className="combine-row-headline">
+                                                            <span className="combine-id">#{s.id}</span> {s.primary_headline || '(No headline)'}
+                                                            {isKeeper && <span className="badge badge-enriched" style={{ marginLeft: '6px' }}>Keep</span>}
+                                                        </div>
+                                                        <div className="combine-row-meta">
+                                                            {s.missing ? <span style={{ color: '#f87171' }}>Not found</span> : (
+                                                                <>
+                                                                    {s.article_count} article{s.article_count === 1 ? '' : 's'}
+                                                                    {' · updated '}{fmtWhen(s.last_updated_at)}
+                                                                    {s.front ? <> · front: {s.front.name}</> : null}
+                                                                    {isMergedAway(s) ? <span style={{ color: '#fbbf24' }}> · already merged into #{s.merged_into_story_id}</span> : null}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {plan?.blocker ? (
+                                        <div className="combine-box combine-box-block">{plan.blocker}</div>
+                                    ) : plan && (
+                                        <div className="combine-box">
+                                            <strong>{plan.toMerge.length} {plan.toMerge.length === 1 ? 'story' : 'stories'} merged into #{plan.keeper.id}, {plan.articles} article{plan.articles === 1 ? '' : 's'} moved.</strong>
+                                            {' '}#{plan.keeper.id} will have {(plan.keeper.article_count ?? 0) + plan.articles} articles.
+                                        </div>
+                                    )}
+                                    {plan && plan.skipped.length > 0 && (
+                                        <div className="combine-box combine-box-note">
+                                            {plan.skipped.map(sk => <div key={sk.id}>#{sk.id}: {sk.text}</div>)}
+                                        </div>
+                                    )}
+                                    {plan && plan.warnings.length > 0 && (
+                                        <div className="combine-box combine-box-warn">
+                                            {plan.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                                        </div>
+                                    )}
+                                    {!frontsChecked && (
+                                        <div className="combine-box combine-box-warn">Couldn't check the article counts and fronts (the admin-judge-merge function may need redeploying), so the counts above are from the list. Combining never moves front membership.</div>
+                                    )}
+                                    <div className="combine-hint">Each merge is logged on the Judge tab (All verdicts) and can be undone there one story at a time with <strong>unmerge</strong>.</div>
+                                </>
+                            )}
+
+                            {results !== null && (
+                                <>
+                                    <div className="combine-hint">
+                                        {running
+                                            ? `Combining into #${plan.keeper.id}... ${doneCount} of ${plan.toMerge.length} done.`
+                                            : `Finished: ${counts.merged || 0} merged, ${(counts.already || 0) + (counts.skipped || 0)} already merged or skipped, ${counts.failed || 0} failed.`}
+                                    </div>
+                                    <div className="combine-list">
+                                        {results.map(r => (
+                                            <div key={r.id} className="combine-row" style={{ cursor: 'default' }}>
+                                                <div className="combine-row-text">
+                                                    <div className="combine-row-headline"><span className="combine-id">#{r.id}</span> {headlineOf(r.id)}</div>
+                                                    <div className="combine-row-meta" style={{ color: RESULT_COLOR[r.kind] }}>{r.text}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {done && counts.failed > 0 && (
+                                        <div className="combine-hint">The failed stories and #{plan.keeper.id} stay ticked, so you can try again.</div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            {results === null ? (
+                                <>
+                                    <button className="btn-secondary" onClick={handleClose}>Cancel</button>
+                                    <button className="btn-danger" onClick={runCombine} disabled={!plan || !!plan.blocker}>
+                                        {plan && !plan.blocker ? `Combine ${plan.toMerge.length} into #${plan.keeper.id}` : 'Combine'}
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="btn-primary" onClick={handleClose} disabled={running}>{running ? 'Combining...' : 'Close'}</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // Stories Tab Component
-        function StoriesTab({ password, supabase }) {
+        function StoriesTab({ password, supabase, onReviewChanged }) {
             const [stories, setStories] = useState([]);
             const [loading, setLoading] = useState(true);
             const [loadingMore, setLoadingMore] = useState(false);
@@ -1707,6 +2122,49 @@
 
             // Toast context
             const toast = useToast();
+
+            // ADO-60 Combine: ticked stories (id -> list row), kept across searches and filter changes
+            // so duplicates found under different searches can be combined together.
+            const [selected, setSelected] = useState(() => new Map());
+            const [combineStories, setCombineStories] = useState(null); // snapshot while the dialog is open
+
+            const toggleSelect = (story) => {
+                if (!selected.has(story.id) && selected.size >= COMBINE_MAX_STORIES) {
+                    toast?.addToast(`You can combine up to ${COMBINE_MAX_STORIES} stories at once.`, 'error');
+                    return;
+                }
+                setSelected(prev => {
+                    const next = new Map(prev);
+                    if (next.has(story.id)) next.delete(story.id);
+                    else if (next.size < COMBINE_MAX_STORIES) next.set(story.id, story);
+                    return next;
+                });
+            };
+
+            const openCombine = () => {
+                if (selected.size < 2) return;
+                setCombineStories([...selected.values()]);
+            };
+
+            // After the batch: reload the list and Home's Judge count (same refresh the Judge tab does after
+            // a merge). Keep the keeper + failed stories ticked so a retry is one click; clear the rest.
+            const handleCombineFinished = (keeperId, results) => {
+                fetchStories(false, null, null);
+                onReviewChanged?.();
+                const failedIds = results.filter(r => r.kind === 'failed').map(r => r.id);
+                setSelected(prev => {
+                    const next = new Map();
+                    if (failedIds.length > 0) {
+                        for (const id of [keeperId, ...failedIds]) if (prev.has(id)) next.set(id, prev.get(id));
+                    }
+                    return next;
+                });
+                const merged = results.filter(r => r.kind === 'merged').length;
+                toast?.addToast(
+                    `Combine finished: ${merged} merged into #${keeperId}${failedIds.length ? `, ${failedIds.length} failed` : ''}`,
+                    failedIds.length ? 'error' : 'success'
+                );
+            };
 
             // Poll enriching stories until last_enriched_at changes (or 2 min timeout)
             const hasEnriching = enrichingIds.size > 0;
@@ -1904,6 +2362,7 @@
                 if (status === 'active') return { class: 'badge-active', label: 'Active' };
                 if (status === 'closed') return { class: 'badge-closed', label: 'Closed' };
                 if (status === 'archived') return { class: 'badge-archived', label: 'Archived' };
+                if (status === 'merged_into') return { class: 'badge-closed', label: 'Merged' };
                 return { class: 'badge-closed', label: status || 'Unknown' };
             };
 
@@ -2179,6 +2638,22 @@
                         </select>
                     </div>
 
+                    {/* ADO-60: selection bar for combining duplicate stories */}
+                    {selected.size > 0 && (
+                        <div className="combine-bar">
+                            <strong>{selected.size} selected</strong>
+                            <button className="btn-danger" onClick={openCombine} disabled={selected.size < 2}>
+                                Combine…
+                            </button>
+                            <button className="btn-secondary" onClick={() => setSelected(new Map())}>Clear</button>
+                            <span className="combine-bar-hint">
+                                {selected.size < 2
+                                    ? 'Tick at least 2 duplicate stories to combine them.'
+                                    : 'Ticks stay while you search, so you can gather duplicates from different searches.'}
+                            </span>
+                        </div>
+                    )}
+
                     {error && (
                         <div className="error-banner">
                             <strong>Error:</strong> {error}
@@ -2203,6 +2678,7 @@
                                 <table className="stories-table">
                                     <thead>
                                         <tr>
+                                            <th className="select-cell" title="Tick duplicate stories, then Combine"></th>
                                             <th>ID</th>
                                             <th>Headline</th>
                                             <th>Alarm Level</th>
@@ -2229,6 +2705,16 @@
 
                                             return React.createElement(React.Fragment, { key: story.id },
                                                 <tr>
+                                                    <td className="select-cell">
+                                                        <label className="select-hit" title="Select to combine with other duplicates">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selected.has(story.id)}
+                                                                onChange={() => toggleSelect(story)}
+                                                                aria-label={`Select story ${story.id}`}
+                                                            />
+                                                        </label>
+                                                    </td>
                                                     <td style={{ color: '#64748b', fontSize: '13px' }}>{story.id}</td>
                                                     <td
                                                         className="headline-cell"
@@ -2297,7 +2783,7 @@
                                                 </tr>,
                                                 isExpanded && (
                                                     <tr className="story-detail-row">
-                                                        <td colSpan={9}>
+                                                        <td colSpan={10}>
                                                             <div className="story-detail-content">
                                                                 <div>
                                                                     <dt>Category</dt>
@@ -2336,6 +2822,17 @@
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* ADO-60: Combine dialog */}
+                    {combineStories && (
+                        <CombineStoriesModal
+                            stories={combineStories}
+                            password={password}
+                            supabase={supabase}
+                            onClose={() => setCombineStories(null)}
+                            onFinished={handleCombineFinished}
+                        />
                     )}
 
                     {/* Edit Story Modal */}
@@ -5875,6 +6372,1363 @@
             );
         }
 
+        // ===================== Fronts tab (ADO-547) =====================
+        // Run fronts without SQL: list + edit fronts, tune the keyword sweep and the assignment agent,
+        // file / move / remove stories (one at a time or in bulk), and the unassigned pool.
+        // All reads and writes go through the password-gated admin-fronts edge function (service_role);
+        // every write there refreshes the Tracker main line (refresh_tracker_derived).
+        const FRONT_TIER_LABELS = { flagship: 'Primary (flagship)', major: 'Active (major)', standard: 'Watch (standard)' };
+        const FRONT_PUBLISH_LABELS = { draft: 'Draft', review: 'In review', published: 'Live' };
+        const FRONT_LIFECYCLE_LABELS = { open: 'Still open', dormant: 'Quiet (set by the daily job)', resolved: 'Resolved' };
+        const FRONT_EMPTY_FORM = {
+            name: '', slug: '', dek: '', alarm_level: '3', tier: 'standard', lifecycle: 'open', publish_state: 'draft', started_at: '',
+            sweep_pattern: '', sweep_coword: '', sweep_priority: '100', sweep_summary: false, agent_pattern: '', agent_definition: ''
+        };
+        // Preview window choices; admin_preview_front_rule (migration 134) accepts 1-90 days.
+        const FRONT_PREVIEW_DAYS = [30, 60, 90];
+        // The daily fronts agent runs at 14:00 UTC for a few minutes; the window has margin.
+        // In Central time that is 9:00 AM in summer and 8:00 AM in winter, so the copy is computed.
+        const frontsAgentRunCT = (minute = 0) => {
+            const d = new Date();
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 14, minute))
+                .toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+        };
+        const frontsInAgentWindow = () => {
+            const d = new Date();
+            const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+            return m >= 13 * 60 + 55 && m <= 14 * 60 + 20;
+        };
+        const frontsFmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+        const frontsAgo = (iso) => {
+            if (!iso) return '—';
+            const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+            if (mins < 60) return mins < 1 ? 'just now' : `${mins}m ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 48) return `${hrs}h ago`;
+            return `${Math.floor(hrs / 24)}d ago`;
+        };
+        const frontsAlarmClass = (lvl) => lvl >= 5 ? 'badge-critical' : lvl === 4 ? 'badge-severe' : lvl === 3 ? 'badge-moderate' : lvl === 2 ? 'badge-minor' : 'badge-closed';
+        const frontsSlugify = (s) => s.toLowerCase().replace(/&/g, ' and ').replace(/['’.]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63);
+        // Tracker pins (tracker_pin, ADO-554): the values stay internal; Josh sees "homepage" words.
+        const PIN_LABELS = { force_show: 'Always show on homepage', force_hide: 'Never show on homepage' };
+        const PIN_SOURCE_LABELS = { stories: 'Story', eos: 'Executive order', scotus: 'Supreme Court case', pardons: 'Pardon' };
+        // Updates on a front (event_updates): 'pending' only exists for AI drafts.
+        const UPDATE_STATE_LABELS = { approved: 'Shown', rejected: 'Hidden', pending: 'Waiting for review' };
+        const frontsToday = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+        const frontsLocalDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-CA') : '';
+        // DATE columns (EO date, pardon_date) parse as UTC midnight and would show a day early in US time.
+        const frontsFmtDay = (d) => frontsFmtDate(d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T12:00:00Z` : d);
+        const frontsBox = (kind) => ({
+            ok: { background: '#064e3b', border: '1px solid #10b981', color: '#d1fae5' },
+            warn: { background: '#422006', border: '1px solid #b45309', color: '#fde68a' },
+            info: { background: '#111827', border: '1px solid #374151', color: '#d1d5db' }
+        }[kind] || {});
+
+        // One call shape for every action; a non-2xx body's message reaches the admin.
+        function useFrontsApi(password, supabase) {
+            return useCallback(async (body) => {
+                const { data, error: fnError } = await supabase.functions.invoke('admin-fronts', {
+                    headers: { 'x-admin-password': password },
+                    body
+                });
+                if (fnError) {
+                    let errBody = null;
+                    try { if (fnError.context) errBody = await fnError.context.json(); } catch (_) {}
+                    const reasons = { front_not_found: 'that front no longer exists - refresh the list', story_not_found: 'no story with that number', update_not_found: 'that update no longer exists - reload the list', item_not_found: 'nothing with that id' };
+                    const err = new Error(errBody?.error || reasons[errBody?.reason] || errBody?.reason || fnError.message || 'Request failed');
+                    err.body = errBody;
+                    throw err;
+                }
+                return data;
+            }, [password, supabase]);
+        }
+
+        // Plain-language summary of an assign/unassign result list.
+        function frontsSummarize(res, frontName, frontsById, mode) {
+            const results = res?.results || [];
+            const by = (s) => results.filter(r => r.status === s);
+            const parts = [];
+            if (mode === 'unassign') {
+                const removed = by('removed');
+                if (removed.length) parts.push(`Removed ${removed.length} from ${frontName}.`);
+                if (by('not_on_front').length) parts.push(`${by('not_on_front').length} were not on it any more.`);
+                const back = removed.filter(r => r.sweep_would_refile).length;
+                if (back) parts.push(`${back} ${back === 1 ? 'matches' : 'match'} a keyword rule, so the automatic sweep may file ${back === 1 ? 'it' : 'them'} again (on whichever front has that rule).`);
+                const agentBack = removed.filter(r => r.agent_may_refile && !r.sweep_would_refile).length;
+                if (agentBack) parts.push(`${agentBack} ${agentBack === 1 ? 'matches' : 'match'} an assignment-agent pattern, so the daily agent will look at ${agentBack === 1 ? 'it' : 'them'} again.`);
+                if (back || agentBack) parts.push('Removing does not stop that. To keep a story off a front, move it to the right front instead, or tighten the rule.');
+            } else {
+                if (by('assigned').length) parts.push(`Filed ${by('assigned').length} on ${frontName}.`);
+                if (by('moved').length) parts.push(`Moved ${by('moved').length} to ${frontName}.`);
+                if (by('already_on_front').length) parts.push(`${by('already_on_front').length} were already there.`);
+                const other = by('on_other_front');
+                if (other.length) {
+                    const names = {};
+                    other.forEach(r => { const n = frontsById[r.from_event_id]?.name || `front #${r.from_event_id}`; names[n] = (names[n] || 0) + 1; });
+                    parts.push(`${other.length} ${other.length === 1 ? 'is' : 'are'} already on another front (${Object.entries(names).map(([n, c]) => `${n}: ${c}`).join(', ')}); nothing changed for ${other.length === 1 ? 'it' : 'them'}.`);
+                }
+                const gone = by('no_longer_on_front').length;
+                if (gone) parts.push(`Skipped ${gone} ${gone === 1 ? 'story' : 'stories'} with no current front. Use File to assign ${gone === 1 ? 'it' : 'them'} to a front.`);
+                if (by('story_not_found').length) parts.push(`${by('story_not_found').length} not found.`);
+                if (by('story_not_active').length) parts.push(`${by('story_not_active').length} skipped (merged or closed stories can't be filed).`);
+            }
+            if (res?.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+            return parts.join(' ') || 'Nothing changed.';
+        }
+
+        // Checkbox story list shared by the unassigned pool and a front's member list.
+        // onPin(story, 'force_show' | 'force_hide' | null) adds the homepage menu to each row.
+        function FrontsStoryRows({ stories, selected, onToggle, onToggleAll, showAdded, frontsById, onPin, pinBusyId }) {
+            const allOn = stories.length > 0 && stories.every(s => selected.has(s.id));
+            return (
+                <div style={{ overflowX: 'auto' }}>
+                    {/* The header checkbox is hidden on phones (stacked rows), so select-all is also a button. */}
+                    <button className="judge-row-btn" onClick={() => onToggleAll(!allOn)} style={{ background: '#374151', color: '#e5e7eb', marginBottom: '0.5rem' }}>
+                        {allOn ? 'Clear selection' : `Select all ${stories.length} shown`}
+                    </button>
+                    <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                            <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                <th style={{ padding: '0.5rem', width: '32px' }}>
+                                    <input type="checkbox" className="bulk-checkbox" checked={allOn} onChange={() => onToggleAll(!allOn)} title="Select every story on this page" />
+                                </th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Story</th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Alarm</th>
+                                <th style={{ padding: '0.5rem', color: '#9ca3af' }}>First seen</th>
+                                {showAdded && <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Added</th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {stories.map(s => (
+                                <tr key={s.id} style={{ borderBottom: '1px solid #1f2937', background: selected.has(s.id) ? 'rgba(59,130,246,0.08)' : 'transparent' }}>
+                                    <td style={{ padding: '0.5rem', verticalAlign: 'top' }}>
+                                        <input type="checkbox" className="bulk-checkbox" checked={selected.has(s.id)} onChange={() => onToggle(s.id)} aria-label={`Select story ${s.id}`} />
+                                    </td>
+                                    <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb' }} onClick={() => onToggle(s.id)}>
+                                        <span style={{ color: '#6b7280' }}>#{s.id}</span> {s.primary_headline}
+                                        <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>
+                                            {s.category ? s.category.replace(/_/g, ' ') : 'no category'}
+                                            {s.action_label ? ` · ${s.action_label}` : ''}
+                                            {s.main_line ? ' · on the homepage (Tracker main line)' : ''}
+                                            {s.status && s.status !== 'active' && !s.merged_into_story_id ? ` · ${s.status}` : ''}
+                                        </div>
+                                        {s.merged_into_story_id && (
+                                            // Combine/merge does not carry the front over (story_event is not repointed):
+                                            // the survivor needs filing by hand and this tombstone removing.
+                                            <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '2px' }}>
+                                                Combined into #{s.merged_into_story_id}. Remove this one, then add #{s.merged_into_story_id} with "Add a story by its number".
+                                            </div>
+                                        )}
+                                        {onPin && (
+                                            // stopPropagation: a click on the menu must not tick the row
+                                            <div onClick={e => e.stopPropagation()} style={{ marginTop: '4px' }}>
+                                                <select className="stories-select" value={s.pin || ''} disabled={pinBusyId === s.id} onChange={e => onPin(s, e.target.value || null)}
+                                                    aria-label={`Homepage setting for story ${s.id}`}
+                                                    style={{ padding: '3px 6px', fontSize: '0.75rem', color: s.pin === 'force_show' ? '#4ade80' : s.pin === 'force_hide' ? '#f87171' : undefined }}>
+                                                    <option value="">Homepage: automatic</option>
+                                                    <option value="force_show">{PIN_LABELS.force_show}</option>
+                                                    <option value="force_hide">{PIN_LABELS.force_hide}</option>
+                                                </select>
+                                                {pinBusyId === s.id && <span style={{ color: '#9ca3af', fontSize: '0.75rem', marginLeft: '0.4rem' }}>saving…</span>}
+                                                {pinBusyId !== s.id && s.pin === 'force_show' && (s.pin_dead ?? !s.main_line) && (
+                                                    // pin_dead/pin_reason come back from pin_set; on a fresh load, a refreshed
+                                                    // force_show is off the main line only when the story is out of the rule's scope
+                                                    <div style={{ color: '#f87171', fontSize: '0.75rem', marginTop: '2px' }}>{s.pin_reason || 'This pin does nothing yet: the story is closed, combined into another, or not published yet.'}</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td data-label="Alarm" style={{ padding: '0.5rem', whiteSpace: 'nowrap' }}>
+                                        {s.alarm_level != null ? <span className={`badge ${frontsAlarmClass(s.alarm_level)}`}>{s.alarm_level}</span> : '—'}
+                                    </td>
+                                    <td data-label="First seen" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{frontsFmtDate(s.first_seen_at)}</td>
+                                    {showAdded && (
+                                        <td data-label="Added" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }} title={s.note || ''}>
+                                            {frontsFmtDate(s.assigned_at)} · {s.assigned_by === 'human' ? 'by hand' : 'automatic'}{s.reassigned_at ? ` · moved here by hand${s.reassigned_from_event_id && frontsById?.[s.reassigned_from_event_id] ? ` (first on ${frontsById[s.reassigned_from_event_id].name})` : ''}` : ''}
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            );
+        }
+
+        // Bulk action bar: "File / Move N selected to [front]" (+ optional remove).
+        function FrontsBulkBar({ count, fronts, excludeId, verb, busy, onApply, onRemove, onClear }) {
+            const [target, setTarget] = useState('');
+            const options = fronts.filter(f => f.id !== excludeId).slice().sort((a, b) => a.name.localeCompare(b.name));
+            if (!count) return null;
+            return (
+                <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', background: '#1e3a8a', border: '1px solid #3b82f6', borderRadius: '6px', padding: '0.5rem 0.75rem', marginBottom: '0.75rem', color: '#dbeafe', fontSize: '0.9rem' }}>
+                    <strong>{count} selected</strong>
+                    <span>{verb} to</span>
+                    <select className="stories-select" value={target} onChange={e => setTarget(e.target.value)} style={{ padding: '6px 10px', minWidth: '180px' }}>
+                        <option value="">choose a front…</option>
+                        {options.map(f => <option key={f.id} value={f.id}>{f.name}{f.publish_state !== 'published' ? ` (${FRONT_PUBLISH_LABELS[f.publish_state]})` : ''}</option>)}
+                    </select>
+                    <button className="judge-row-btn" disabled={busy || !target} onClick={() => onApply(Number(target))} style={{ background: '#2563eb', color: '#fff' }}>
+                        {busy ? '…' : verb}
+                    </button>
+                    {onRemove && (
+                        <button className="judge-row-btn" disabled={busy} onClick={onRemove} style={{ background: '#7f1d1d', color: '#fee2e2' }}>
+                            Remove from this front
+                        </button>
+                    )}
+                    <button className="judge-row-btn" disabled={busy} onClick={onClear} style={{ background: '#374151', color: '#e5e7eb' }}>Clear</button>
+                </div>
+            );
+        }
+
+        // Paged, searchable story list with selection. load(cursor, search) -> { stories, next_cursor }.
+        function useFrontsStoryPage(load, deps) {
+            const [stories, setStories] = useState([]);
+            const [cursor, setCursor] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [selected, setSelected] = useState(() => new Set());
+            const [pinsAvailable, setPinsAvailable] = useState(true);
+            const tokenRef = useRef(0);
+            const searchRef = useRef('');
+
+            const fetchPage = useCallback(async (search, append, fromCursor) => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    // "Load more" keeps the search the first page used, not whatever is typed now
+                    const q = append ? searchRef.current : search;
+                    searchRef.current = q;
+                    const res = await load(append ? fromCursor : null, q);
+                    if (token !== tokenRef.current) return;
+                    setStories(prev => append ? [...prev, ...(res.stories || [])] : (res.stories || []));
+                    setCursor(res.next_cursor ?? null);
+                    setPinsAvailable(res.pins_available !== false);
+                    if (!append) setSelected(new Set());
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, deps);
+
+            const toggle = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+            const toggleAll = (on) => setSelected(on ? new Set(stories.map(s => s.id)) : new Set());
+            const dropIds = (ids) => {
+                const gone = new Set(ids);
+                setStories(prev => prev.filter(s => !gone.has(s.id)));
+                setSelected(prev => { const n = new Set(prev); ids.forEach(i => n.delete(i)); return n; });
+            };
+            const patchStory = (id, patch) => setStories(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+            return { stories, cursor, loading, error, setError, selected, setSelected, fetchPage, toggle, toggleAll, dropIds, patchStory, pinsAvailable };
+        }
+
+        // leaveGuardRef / confirmLeave come from AdminDashboard (unsaved-edits prompt).
+        function FrontsTab({ password, supabase, leaveGuardRef, confirmLeave }) {
+            const api = useFrontsApi(password, supabase);
+            const [view, setView] = useState('list'); // 'list' | 'pool' | 'pins' | 'front'
+            const [fronts, setFronts] = useState([]);
+            const [listLoading, setListLoading] = useState(true);
+            const [listError, setListError] = useState(null);
+            const [openId, setOpenId] = useState(null); // null + view 'front' = new front
+            const [editorKey, setEditorKey] = useState(0); // new key per open, kept when a create assigns the id
+            const tokenRef = useRef(0);
+
+            const loadFronts = useCallback(async () => {
+                const token = ++tokenRef.current;
+                setListLoading(true);
+                setListError(null);
+                try {
+                    const res = await api({ action: 'list' });
+                    if (token === tokenRef.current) setFronts(res.fronts || []);
+                } catch (err) {
+                    if (token === tokenRef.current) setListError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setListLoading(false);
+                }
+            }, [api]);
+
+            useEffect(() => { loadFronts(); }, [loadFronts]);
+
+            const frontsById = useMemo(() => Object.fromEntries(fronts.map(f => [f.id, f])), [fronts]);
+            // Every way off a front's page asks first when it has unsaved edits.
+            const openFront = (id) => confirmLeave(() => { setOpenId(id); setEditorKey(k => k + 1); setView('front'); });
+            const goView = (v) => confirmLeave(() => setView(v));
+
+            return (
+                <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <div className="card">
+                        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <h2 className="card-title"><span>Fronts</span></h2>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button className={`tab-btn ${view === 'list' ? 'active' : ''}`} onClick={() => goView('list')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    All fronts{fronts.length ? ` (${fronts.length})` : ''}
+                                </button>
+                                <button className={`tab-btn ${view === 'pool' ? 'active' : ''}`} onClick={() => goView('pool')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    Stories with no front
+                                </button>
+                                <button className={`tab-btn ${view === 'pins' ? 'active' : ''}`} onClick={() => goView('pins')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                    Homepage pins
+                                </button>
+                                <button className="tab-btn" onClick={() => openFront(null)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem', background: '#065f46', color: '#d1fae5' }}>
+                                    + New front
+                                </button>
+                                <button onClick={loadFronts} disabled={listLoading} className="tab-btn" style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }} title="Reload">
+                                    {listLoading ? '...' : '↻'}
+                                </button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            {listError && <div className="error-banner"><strong>Error:</strong> {listError}</div>}
+                            {view === 'list' && <FrontsList fronts={fronts} loading={listLoading} onOpen={openFront} />}
+                            {view === 'pool' && <FrontsPool api={api} fronts={fronts} frontsById={frontsById} onChanged={loadFronts} />}
+                            {view === 'pins' && <FrontsPins api={api} />}
+                            {view === 'front' && (
+                                <FrontEditor
+                                    key={editorKey}
+                                    api={api}
+                                    eventId={openId}
+                                    fronts={fronts}
+                                    frontsById={frontsById}
+                                    onSaved={(id) => { loadFronts(); if (id !== openId) setOpenId(id); }}
+                                    onChanged={loadFronts}
+                                    onBack={() => goView('list')}
+                                    leaveGuardRef={leaveGuardRef}
+                                    confirmLeave={confirmLeave}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function FrontsList({ fronts, loading, onOpen }) {
+            if (loading && !fronts.length) return <div className="loading"><div className="spinner"></div>Loading…</div>;
+            if (!fronts.length) return <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No fronts yet. Use + New front.</div>;
+            const live = (f) => f.publish_state === 'published';
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        A <strong style={{ color: '#e5e7eb' }}>front</strong> is an ongoing topic that groups stories. Only <strong style={{ color: '#e5e7eb' }}>Live</strong> fronts show on the site. Stories reach a front three ways: the <strong style={{ color: '#e5e7eb' }}>keyword sweep</strong> (every 2 hours, by headline), the <strong style={{ color: '#e5e7eb' }}>assignment agent</strong> (daily at {frontsAgentRunCT()} CT, Live fronts with a definition), or by hand here. Open a front to edit it, change its rules, or file and move its stories.
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                            <thead>
+                                <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Front</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Status</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Tier</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Stories</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Last activity</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Filed automatically by</th>
+                                    <th style={{ padding: '0.5rem', color: '#9ca3af' }}></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {fronts.map(f => (
+                                    <tr key={f.id} style={{ borderBottom: '1px solid #1f2937', opacity: live(f) ? 1 : 0.75 }}>
+                                        <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb', cursor: 'pointer' }} onClick={() => onOpen(f.id)}>
+                                            <div style={{ fontWeight: 600 }}>{f.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{f.slug} · alarm {f.alarm_level}</div>
+                                        </td>
+                                        <td data-label="Status" style={{ padding: '0.5rem', whiteSpace: 'nowrap', color: live(f) ? '#4ade80' : '#9ca3af', fontWeight: 600 }}>
+                                            {FRONT_PUBLISH_LABELS[f.publish_state] || f.publish_state}{f.lifecycle !== 'open' ? ` · ${f.lifecycle}` : ''}
+                                        </td>
+                                        <td data-label="Tier" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{(FRONT_TIER_LABELS[f.tier] || f.tier).split(' ')[0]}</td>
+                                        <td data-label="Stories" style={{ padding: '0.5rem', color: '#d1d5db' }}>{f.story_count ?? '—'}</td>
+                                        <td data-label="Last activity" style={{ padding: '0.5rem', color: '#d1d5db', whiteSpace: 'nowrap' }}>{frontsAgo(f.last_activity_at)}</td>
+                                        <td data-label="Filed by" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                                            {[f.has_sweep ? 'sweep' : null, f.agent_active ? 'agent' : (f.has_agent_pattern || f.has_agent_definition) ? 'agent (off)' : null].filter(Boolean).join(' + ') || 'hand only'}
+                                        </td>
+                                        <td className="cell-actions" style={{ padding: '0.5rem' }}>
+                                            <button className="judge-row-btn" onClick={() => onOpen(f.id)} style={{ background: '#374151', color: '#e5e7eb' }}>Open</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            );
+        }
+
+        // Stories with no front: active, enriched, newest first. Bulk file.
+        function FrontsPool({ api, fronts, frontsById, onChanged }) {
+            const [search, setSearch] = useState('');
+            const [busy, setBusy] = useState(false);
+            const [notice, setNotice] = useState(null);
+            const [pendingMove, setPendingMove] = useState(null); // { items: [{ id, from }], eventId } offered after an on_other_front result
+            const page = useFrontsStoryPage((cursor, q) => api({ action: 'pool', cursor, search: q }), [api]);
+
+            useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
+
+            // move = false: file `ids`. move = true: move `items` ({ id, from }) in one call; each story
+            // names the front it was seen on, and the server only moves it if it is still there.
+            const file = async (eventId, ids, move, items) => {
+                if (busy) return;
+                setBusy(true);
+                setNotice(null);
+                setPendingMove(null);
+                page.setError(null);
+                try {
+                    const res = await api(move
+                        ? { action: 'assign', event_id: eventId, story_ids: items.map(it => it.id), move: true, from_event_ids: items.map(it => it.from) }
+                        : { action: 'assign', event_id: eventId, story_ids: ids, move: false });
+                    const name = frontsById[eventId]?.name || 'the front';
+                    setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, 'assign') });
+                    // stories still on another front, or on none (a move never files), stay in the list
+                    const done = (res.results || []).filter(r => r.status !== 'on_other_front' && r.status !== 'no_longer_on_front').map(r => Number(r.story_id));
+                    page.dropIds(done);
+                    // a NULL front (the story left its front mid-call) cannot be offered as a move
+                    const other = (res.results || []).filter(r => r.status === 'on_other_front' && r.from_event_id != null)
+                        .map(r => ({ id: Number(r.story_id), from: Number(r.from_event_id) }));
+                    if (other.length) setPendingMove({ items: other, eventId });
+                    onChanged();
+                } catch (err) {
+                    page.setError(err.message);
+                } finally {
+                    setBusy(false);
+                }
+            };
+
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Published stories that are on no front, newest first. Tick the ones that belong together, pick a front, and file them in one go. This is also where a new topic shows up first: if you see a run of related stories, make a front for them.
+                    </div>
+                    <form className="stories-toolbar" onSubmit={e => { e.preventDefault(); page.fetchPage(search, false); }}>
+                        <input className="stories-search" placeholder="Search headlines (press Enter)" value={search} onChange={e => setSearch(e.target.value)} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Search</button>
+                        {search && <button type="button" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }} onClick={() => { setSearch(''); page.fetchPage('', false); }}>Clear</button>}
+                    </form>
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                        {notice.text}
+                        {pendingMove && (
+                            <button className="judge-row-btn" disabled={busy} onClick={() => file(pendingMove.eventId, null, true, pendingMove.items)} style={{ marginLeft: '0.5rem', background: '#b45309', color: '#fff' }}>
+                                Move {pendingMove.items.length === 1 ? 'it' : `those ${pendingMove.items.length}`} to {frontsById[pendingMove.eventId]?.name}
+                            </button>
+                        )}
+                    </div>}
+                    {page.error && <div className="error-banner"><strong>Error:</strong> {page.error}</div>}
+                    <FrontsBulkBar
+                        count={page.selected.size}
+                        fronts={fronts}
+                        verb="File"
+                        busy={busy}
+                        onApply={(eventId) => file(eventId, [...page.selected], false)}
+                        onClear={() => page.setSelected(new Set())}
+                    />
+                    {page.loading && !page.stories.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : page.stories.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No unfiled stories match that search.' : 'Every published story is on a front.'}</div>
+                    ) : (
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} />
+                    )}
+                    {page.cursor != null && (
+                        <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>
+                            {page.loading ? 'Loading…' : 'Load 50 more'}
+                        </button>
+                    )}
+                </>
+            );
+        }
+
+        // Pattern input with an on-blur compile check (same ~* the sweep uses).
+        function FrontsPatternField({ label, hint, value, onChange, error, onBlur }) {
+            // One element type for every length (swapping input/textarea mid-typing lost focus).
+            const [rows] = useState(() => value.length > 80 ? 3 : 1);
+            return (
+                <div className="form-group">
+                    <label className="form-label">{label}</label>
+                    <textarea className="form-textarea" rows={rows} value={value} onChange={e => onChange(e.target.value.replace(/[\r\n]+/g, ''))} onBlur={onBlur} spellCheck={false} style={{ fontFamily: 'monospace', fontSize: '13px', minHeight: 0, borderColor: error ? '#ef4444' : undefined }} />
+                    {error ? <div style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '4px' }}>Not a valid pattern: {error}</div>
+                        : hint ? <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{hint}</div> : null}
+                </div>
+            );
+        }
+
+        function FrontsPreview({ result }) {
+            if (!result) return null;
+            if (result.error) return <div className="error-banner" style={{ marginTop: '0.5rem' }}>{result.error}</div>;
+            return (
+                <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', margin: '0.5rem 0 1rem', fontSize: '0.85rem' }}>
+                    <div style={{ marginBottom: '0.35rem' }}>
+                        Matches <strong style={{ color: '#e5e7eb' }}>{result.total_matches}</strong> published stories from the last {result.days} days:
+                        {' '}{result.on_this_front} already on this front, {result.on_other_front} on other fronts, {result.unassigned} on no front.
+                        <span style={{ color: '#64748b' }}> A rough guide: when two fronts match, the lower priority number wins, and the agent skips stories it already turned down.</span>
+                    </div>
+                    {result.samples.length > 0 && (
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', color: '#9ca3af' }}>
+                            {result.samples.map(s => <li key={s.id}><span style={{ color: '#6b7280' }}>#{s.id}</span> {s.headline}{s.front ? <em> ({s.front})</em> : ''}</li>)}
+                        </ul>
+                    )}
+                </div>
+            );
+        }
+
+        function FrontEditor({ api, eventId, fronts, frontsById, onSaved, onChanged, onBack, leaveGuardRef, confirmLeave }) {
+            const isNew = eventId == null;
+            const [loaded, setLoaded] = useState(null); // the row as last read/saved
+            const [form, setForm] = useState(FRONT_EMPTY_FORM);
+            const [loading, setLoading] = useState(!isNew);
+            const [saving, setSaving] = useState(false);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [ruleErrors, setRuleErrors] = useState({});
+            const [preview, setPreview] = useState({});
+            const [slugTouched, setSlugTouched] = useState(false);
+            const [pane, setPane] = useState('settings'); // 'settings' | 'updates'
+            const [previewDays, setPreviewDays] = useState(30);
+            const formDirtyRef = useRef(false);
+            const updateDirtyRef = useRef(false); // an open update form on the Updates pane has edits
+            const createdIdRef = useRef(null);
+
+            const toForm = (f) => ({
+                name: f.name || '', slug: f.slug || '', dek: f.dek || '', alarm_level: String(f.alarm_level ?? 3), tier: f.tier, lifecycle: f.lifecycle,
+                publish_state: f.publish_state, started_at: f.started_at ? f.started_at.slice(0, 10) : '',
+                sweep_pattern: f.sweep_pattern || '', sweep_coword: f.sweep_coword || '', sweep_priority: String(f.sweep_priority ?? 100),
+                sweep_summary: !!f.sweep_summary, agent_pattern: f.agent_pattern || '', agent_definition: f.agent_definition || ''
+            });
+
+            useEffect(() => {
+                // a create already returned the saved row; refetching it for the new id could wipe edits typed since
+                if (isNew || createdIdRef.current === eventId) return;
+                let alive = true;
+                (async () => {
+                    try {
+                        const res = await api({ action: 'get', event_id: eventId });
+                        if (!alive) return;
+                        setLoaded(res.front);
+                        setForm(toForm(res.front));
+                    } catch (err) {
+                        if (alive) setError(err.message);
+                    } finally {
+                        if (alive) setLoading(false);
+                    }
+                })();
+                return () => { alive = false; };
+            }, [api, eventId, isNew]);
+
+            // Unsaved edits: the form against the row as last read/saved (the empty form for a new front).
+            // A save resets the form from the server row, so the page is clean again after it (so does a
+            // retire, whose confirm says when it throws unsaved edits away).
+            const savedForm = loaded ? toForm(loaded) : FRONT_EMPTY_FORM;
+            formDirtyRef.current = Object.keys(FRONT_EMPTY_FORM).some(k => form[k] !== savedForm[k]);
+            useEffect(() => {
+                const check = () => formDirtyRef.current || updateDirtyRef.current;
+                leaveGuardRef.current = check;
+                return () => { if (leaveGuardRef.current === check) leaveGuardRef.current = null; };
+            }, [leaveGuardRef]);
+
+            const set = (k, v) => setForm(prev => {
+                const next = { ...prev, [k]: v };
+                if (k === 'name' && isNew && !slugTouched) next.slug = frontsSlugify(v);
+                return next;
+            });
+
+            const checkRule = async (k) => {
+                const v = form[k]; // untrimmed: spaces are part of a pattern
+                if (!v.trim() || v === (loaded?.[k] || '')) { setRuleErrors(p => ({ ...p, [k]: null })); return; }
+                try {
+                    const res = await api({ action: 'check_pattern', pattern: v });
+                    setRuleErrors(p => ({ ...p, [k]: res.error || null }));
+                } catch (err) {
+                    setRuleErrors(p => ({ ...p, [k]: null })); // the save re-checks; don't block on a failed check call
+                }
+            };
+
+            const runPreview = async (kind) => {
+                // untrimmed, as saved: spaces are part of a pattern (trim only detects a blank field)
+                const pattern = kind === 'agent' ? form.agent_pattern : form.sweep_pattern;
+                if (!pattern.trim()) { setPreview(p => ({ ...p, [kind]: { error: 'Enter a pattern first.' } })); return; }
+                setPreview(p => ({ ...p, [kind]: { error: null, loading: true, samples: [] } }));
+                try {
+                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() ? form.sweep_coword : null, summary: form.sweep_summary, days: previewDays, event_id: eventId });
+                    setPreview(p => ({ ...p, [kind]: res }));
+                } catch (err) {
+                    setPreview(p => ({ ...p, [kind]: { error: err.message } }));
+                }
+            };
+
+            // Only changed fields go to the server (all of them for a new front).
+            const changedFields = () => {
+                const out = {};
+                const base = loaded ? toForm(loaded) : null;
+                for (const k of Object.keys(FRONT_EMPTY_FORM)) {
+                    if (!isNew && k === 'slug') continue;
+                    if (base && base[k] === form[k]) continue;
+                    let v = form[k];
+                    if (k === 'alarm_level' || k === 'sweep_priority') v = Number(v);
+                    else if (k === 'started_at') v = v ? `${v}T00:00:00Z` : null;
+                    else if (typeof v === 'string') v = v.trim() === '' ? null : v;
+                    if (isNew && v === null) continue;
+                    out[k] = v;
+                }
+                return out;
+            };
+
+            const save = async () => {
+                const fields = changedFields();
+                if (!Object.keys(fields).length) { setNotice({ kind: 'info', text: 'Nothing changed.' }); return; }
+                const agentTouched = ['agent_pattern', 'agent_definition', 'publish_state'].some(k => k in fields);
+                if (agentTouched && frontsInAgentWindow() && !confirm(`The daily fronts agent is running right now (${frontsAgentRunCT()}-${frontsAgentRunCT(15)} CT). Changing a front's agent rules or Live status mid-run can make that run skip stories for this front. Save anyway? (Waiting until ${frontsAgentRunCT(20)} CT is safer.)`)) return;
+                if (fields.publish_state === 'published' && loaded?.publish_state !== 'published' && !confirm(`Make "${form.name}" Live? It appears on the public site, and its stories count toward the Tracker.`)) return;
+                setSaving(true);
+                setError(null);
+                setNotice(null);
+                try {
+                    const res = await api({ action: 'save', event_id: eventId, fields });
+                    setLoaded(res.front);
+                    setForm(toForm(res.front));
+                    setRuleErrors({});
+                    const warn = [...(res.warnings || []), ...(res.refresh && !res.refresh.ok ? [res.refresh.error] : [])];
+                    setNotice({ kind: warn.length ? 'warn' : 'ok', text: [res.created ? `Created "${res.front.name}".` : 'Saved.', ...warn].join(' ') });
+                    if (res.created) createdIdRef.current = res.front.id;
+                    onSaved(res.front.id);
+                } catch (err) {
+                    if (err.body?.rule_errors) setRuleErrors(err.body.rule_errors);
+                    setError(err.body?.rule_errors ? 'One of the patterns is not valid (see the red message below). Nothing was saved.' : err.message);
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            const retire = async () => {
+                if (frontsInAgentWindow() && !confirm(`The daily fronts agent is running right now (${frontsAgentRunCT()}-${frontsAgentRunCT(15)} CT). Retiring a front mid-run can make that run skip stories. Retire anyway? (Waiting until ${frontsAgentRunCT(20)} CT is safer.)`)) return;
+                if (!confirm(`Retire "${loaded.name}"?\n\nIt goes back to Draft (off the public site) and its keyword sweep and agent pattern are cleared, so no new stories are filed to it. Its ${frontsById[eventId]?.story_count ?? ''} stories stay on it. You can edit it and make it Live again later.${formDirtyRef.current ? '\n\nYour unsaved changes on this page are thrown away.' : ''}`)) return;
+                setSaving(true);
+                setError(null);
+                setNotice(null);
+                try {
+                    const res = await api({ action: 'retire', event_id: eventId });
+                    setLoaded(res.front);
+                    setForm(toForm(res.front));
+                    const prev = res.previous || {};
+                    const kept = [
+                        prev.sweep_pattern && `old keyword pattern: ${prev.sweep_pattern}`,
+                        prev.sweep_coword && `old required word: ${prev.sweep_coword}${prev.sweep_summary ? ' (also searched summaries)' : ''}`,
+                        prev.agent_pattern && `old agent pattern: ${prev.agent_pattern}`
+                    ].filter(Boolean);
+                    const warn = [...(res.warnings || []), ...(res.refresh && !res.refresh.ok ? [res.refresh.error] : [])];
+                    setNotice({ kind: warn.length ? 'warn' : 'ok', text: [`Retired.`, kept.length ? `Copy these if you may want them back - ${kept.join(' | ')}` : '', ...warn].filter(Boolean).join(' ') });
+                    onChanged();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setSaving(false);
+                }
+            };
+
+            if (loading) return <div className="loading"><div className="spinner"></div>Loading…</div>;
+            if (!isNew && !loaded) return <div>{error && <div className="error-banner"><strong>Error:</strong> {error}</div>}<button className="judge-row-btn" onClick={onBack}>Back</button></div>;
+
+            const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 1rem' };
+            const section = { borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '0.5rem' };
+            const agentOn = form.publish_state === 'published' && form.agent_pattern.trim() && form.agent_definition.trim();
+            // One look-back window for both previews (TEST's newest stories can be older than 30 days).
+            const previewRow = { display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' };
+            const previewWindow = (
+                <select className="stories-select" value={previewDays} onChange={e => setPreviewDays(Number(e.target.value))} aria-label="How far back the preview looks" style={{ padding: '4px 8px', fontSize: '0.85rem' }}>
+                    {FRONT_PREVIEW_DAYS.map(d => <option key={d} value={d}>last {d} days</option>)}
+                </select>
+            );
+
+            return (
+                <div>
+                    <button className="judge-row-btn" onClick={onBack} style={{ background: '#374151', color: '#e5e7eb', marginBottom: '1rem' }}>← All fronts</button>
+                    <h3 style={{ margin: '0 0 1rem', color: '#f8fafc' }}>{isNew ? 'New front' : loaded.name}</h3>
+                    {!isNew && (
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                            <button className={`tab-btn ${pane === 'settings' ? 'active' : ''}`} onClick={() => pane !== 'settings' && confirmLeave(() => setPane('settings'), updateDirtyRef.current)} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                Settings and stories
+                            </button>
+                            <button className={`tab-btn ${pane === 'updates' ? 'active' : ''}`} onClick={() => setPane('updates')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+                                Updates{frontsById[eventId]?.update_count ? ` (${frontsById[eventId].update_count} shown)` : ''}
+                            </button>
+                        </div>
+                    )}
+
+                    {pane === 'updates' && !isNew ? <FrontUpdates api={api} eventId={eventId} front={loaded} onChanged={onChanged} dirtyRef={updateDirtyRef} /> : (<>
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+
+                    {/* locked while saving: the save replaces the whole form with the server row, so an
+                        edit typed mid-request would be lost and the page would look clean */}
+                    <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Name</label>
+                            <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="The Epstein Files" />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Web address name (slug)</label>
+                            <input className="form-input" value={form.slug} disabled={!isNew} onChange={e => { setSlugTouched(true); set('slug', e.target.value); }} style={{ opacity: isNew ? 1 : 0.6 }} />
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>{isNew ? 'Lowercase and hyphens. Fixed once created.' : 'Fixed: links and agent records use it.'}</div>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Summary (one paragraph, shown on the front's page)</label>
+                        <textarea className="form-textarea" rows={3} value={form.dek} onChange={e => set('dek', e.target.value)} />
+                    </div>
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Status</label>
+                            <select className="form-select" value={form.publish_state} onChange={e => set('publish_state', e.target.value)}>
+                                {Object.entries(FRONT_PUBLISH_LABELS).map(([v, l]) => <option key={v} value={v}>{l}{v === 'published' ? ' (on the site)' : ' (hidden)'}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Tier</label>
+                            <select className="form-select" value={form.tier} onChange={e => set('tier', e.target.value)}>
+                                {Object.entries(FRONT_TIER_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Alarm (0-5)</label>
+                            <select className="form-select" value={form.alarm_level} onChange={e => set('alarm_level', e.target.value)}>
+                                {[5, 4, 3, 2, 1, 0].map(n => <option key={n} value={String(n)}>{n}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Still going?</label>
+                            <select className="form-select" value={form.lifecycle} onChange={e => set('lifecycle', e.target.value)}>
+                                {Object.entries(FRONT_LIFECYCLE_LABELS).filter(([v]) => v !== 'dormant' || form.lifecycle === 'dormant' || loaded?.lifecycle === 'dormant').map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Started</label>
+                            <input type="date" className="form-input" value={form.started_at} onChange={e => set('started_at', e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div style={section}>
+                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Keyword sweep (runs every 2 hours)</h4>
+                        <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                            Files any story on no front whose headline matches the pattern. Case does not matter; use | for "or", e.g. <code>(epstein|maxwell)</code>. Leave empty for no sweep. It never moves a story that is already on a front.
+                        </p>
+                        <FrontsPatternField label="Headline pattern" value={form.sweep_pattern} onChange={v => set('sweep_pattern', v)} error={ruleErrors.sweep_pattern} onBlur={() => checkRule('sweep_pattern')} />
+                        <FrontsPatternField label="Required word (optional)" hint="If set, the headline must ALSO match this, e.g. (election|vote|ballot). Stops false hits." value={form.sweep_coword} onChange={v => set('sweep_coword', v)} error={ruleErrors.sweep_coword} onBlur={() => checkRule('sweep_coword')} />
+                        <div style={grid}>
+                            <div className="form-group">
+                                <label className="form-label">Priority (lower wins)</label>
+                                <input type="number" min="1" max="32767" className="form-input" value={form.sweep_priority} onChange={e => set('sweep_priority', e.target.value)} />
+                                <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>When two fronts match one story, the lower number gets it.</div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-checkbox-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '1.6rem', color: '#d1d5db', fontSize: '0.9rem' }}>
+                                    <input type="checkbox" className="bulk-checkbox" checked={form.sweep_summary} onChange={e => set('sweep_summary', e.target.checked)} />
+                                    Also search summaries (only when the headline has the required word)
+                                </label>
+                            </div>
+                        </div>
+                        <div style={previewRow}>
+                            <button className="judge-row-btn" onClick={() => runPreview('sweep')} disabled={preview.sweep?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                                {preview.sweep?.loading ? 'Checking…' : 'Preview matches'}
+                            </button>
+                            {previewWindow}
+                        </div>
+                        <FrontsPreview result={preview.sweep?.loading ? null : preview.sweep} />
+                    </div>
+
+                    <div style={section}>
+                        <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Assignment agent (runs daily at {frontsAgentRunCT()} CT)</h4>
+                        <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                            Claude reads stories the sweep missed and decides which front, if any, they belong on. It only considers this front when it is <strong>Live</strong> and has <strong>both</strong> a candidate pattern and a definition.
+                            {' '}Currently: <strong style={{ color: agentOn ? '#4ade80' : '#fbbf24' }}>{agentOn ? 'on' : 'off'}</strong>.
+                        </p>
+                        <div style={{ ...frontsBox('warn'), borderRadius: '6px', padding: '0.5rem 0.9rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                            Don't save changes here (or retire the front) between {frontsAgentRunCT()} and {frontsAgentRunCT(15)} CT (14:00-14:15 UTC) while the daily agent run is going; it can make that run skip stories for this front.
+                        </div>
+                        <FrontsPatternField label="Candidate pattern (headline or summary)" hint="Broader than the sweep on purpose: it only decides which stories the agent looks at." value={form.agent_pattern} onChange={v => set('agent_pattern', v)} error={ruleErrors.agent_pattern} onBlur={() => checkRule('agent_pattern')} />
+                        <div className="form-group">
+                            <label className="form-label">Definition (what belongs on this front and what does not, in plain words)</label>
+                            <textarea className="form-textarea" rows={8} value={form.agent_definition} onChange={e => set('agent_definition', e.target.value)} />
+                        </div>
+                        <div style={previewRow}>
+                            <button className="judge-row-btn" onClick={() => runPreview('agent')} disabled={preview.agent?.loading} style={{ background: '#1e3a8a', color: '#dbeafe' }}>
+                                {preview.agent?.loading ? 'Checking…' : 'Preview candidates'}
+                            </button>
+                            {previewWindow}
+                        </div>
+                        <FrontsPreview result={preview.agent?.loading ? null : preview.agent} />
+                    </div>
+                    </fieldset>
+
+                    <div style={{ ...section, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create front' : 'Save changes'}</button>
+                        {!isNew && (loaded.publish_state === 'published' || loaded.sweep_pattern || loaded.agent_pattern) && (
+                            <button className="judge-row-btn" onClick={retire} disabled={saving} style={{ background: '#7f1d1d', color: '#fee2e2' }} title="Take it off the site and stop new stories reaching it">Retire front</button>
+                        )}
+                    </div>
+
+                    {!isNew && <FrontMembers api={api} eventId={eventId} front={loaded} fronts={fronts} frontsById={frontsById} onChanged={onChanged} />}
+                    </>)}
+                </div>
+            );
+        }
+
+        // A front's stories: add one by number, bulk move / remove.
+        function FrontMembers({ api, eventId, front, fronts, frontsById, onChanged }) {
+            const [search, setSearch] = useState('');
+            const [busy, setBusy] = useState(false);
+            const [notice, setNotice] = useState(null);
+            const [addId, setAddId] = useState('');
+            const [found, setFound] = useState(null); // lookup result for "add by number"
+            const [pinBusyId, setPinBusyId] = useState(null);
+            const page = useFrontsStoryPage((cursor, q) => api({ action: 'members', event_id: eventId, cursor, search: q }), [api, eventId]);
+
+            // Homepage menu on a member row: pin_set / pin_clear (both refresh the Tracker server-side).
+            const setPin = async (s, value) => {
+                if (pinBusyId) return;
+                setPinBusyId(s.id); setNotice(null); page.setError(null);
+                try {
+                    const res = value
+                        ? await api({ action: 'pin_set', source: 'stories', entity_id: s.id, pin: value })
+                        : await api({ action: 'pin_clear', source: 'stories', entity_id: String(s.id) });
+                    // main_line only when the refresh ran (else it is the stale value); dead/reason come
+                    // from the story's own status, so they hold either way
+                    page.patchStory(s.id, {
+                        pin: value, pin_dead: value ? !!res.dead : false, pin_reason: value && res.dead ? res.reason : null,
+                        ...(res.item && res.refresh?.ok ? { main_line: !!res.item.main_line } : {})
+                    });
+                    const parts = [value ? `#${s.id}: ${PIN_LABELS[value]}.` : `#${s.id}: back to automatic (the homepage rule decides).`];
+                    if (res.item && res.refresh?.ok) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (value && res.dead) parts.push(res.reason);
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: (value && res.dead) || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                } catch (err) { page.setError(err.message); } finally { setPinBusyId(null); }
+            };
+
+            useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
+
+            const after = (res, name, mode) => {
+                setNotice({ kind: res.refresh?.ok === false || (mode === 'unassign' && (res.results || []).some(r => r.sweep_would_refile)) ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, mode) });
+                onChanged();
+            };
+
+            const move = async (targetId, ids) => {
+                if (busy) return;
+                setBusy(true); setNotice(null); page.setError(null);
+                try {
+                    const res = await api({ action: 'assign', event_id: targetId, story_ids: ids, move: true, from_event_id: eventId });
+                    // a story found on no front is not on this one either: drop it from the list too
+                    page.dropIds((res.results || []).filter(r => r.status === 'moved' || r.status === 'no_longer_on_front').map(r => Number(r.story_id)));
+                    after(res, frontsById[targetId]?.name || 'the front', 'assign');
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const remove = async (ids) => {
+                if (busy) return;
+                if (!confirm(`Remove ${ids.length} ${ids.length === 1 ? 'story' : 'stories'} from ${front.name}? ${ids.length === 1 ? 'It goes' : 'They go'} back to "Stories with no front". To put ${ids.length === 1 ? 'it' : 'them'} on another front, use Move instead.`)) return;
+                setBusy(true); setNotice(null); page.setError(null);
+                try {
+                    const res = await api({ action: 'unassign', event_id: eventId, story_ids: ids });
+                    page.dropIds((res.results || []).filter(r => r.status === 'removed').map(r => Number(r.story_id)));
+                    after(res, front.name, 'unassign');
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const lookup = async (e) => {
+                e.preventDefault();
+                setFound(null); setNotice(null); page.setError(null);
+                const id = Number(addId.trim().replace(/^#/, ''));
+                if (!Number.isSafeInteger(id) || id <= 0) { page.setError('Enter a story number, e.g. 17254'); return; }
+                try {
+                    const res = await api({ action: 'lookup', story_id: id });
+                    setFound(res.story);
+                } catch (err) { page.setError(err.message); }
+            };
+
+            const fileFound = async (moveIt) => {
+                if (busy || !found) return;
+                setBusy(true); page.setError(null);
+                try {
+                    const res = await api({ action: 'assign', event_id: eventId, story_ids: [found.id], move: moveIt, ...(moveIt ? { from_event_id: found.event_id } : {}) });
+                    after(res, front.name, 'assign');
+                    if ((res.results || []).some(r => r.status === 'assigned' || r.status === 'moved')) {
+                        setFound(null); setAddId('');
+                        page.fetchPage(search, false);
+                    } else if ((res.results || []).some(r => r.status === 'no_longer_on_front' || r.status === 'on_other_front')) {
+                        // the story changed front meanwhile: look it up again so the buttons match where it is now
+                        const fresh = await api({ action: 'lookup', story_id: found.id });
+                        setFound(fresh.story);
+                    }
+                } catch (err) { page.setError(err.message); } finally { setBusy(false); }
+            };
+
+            const foundFront = found?.event_id ? frontsById[found.event_id] : null;
+
+            return (
+                <div style={{ borderTop: '1px solid #334155', paddingTop: '1rem', marginTop: '1.5rem' }}>
+                    <h4 style={{ margin: '0 0 0.25rem', color: '#e5e7eb' }}>Stories on this front{frontsById[eventId]?.story_count != null ? ` (${frontsById[eventId].story_count})` : ''}</h4>
+                    <p style={{ margin: '0 0 0.75rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                        Each story's <strong>Homepage</strong> menu overrides the automatic homepage rule for that one story. Leave it on automatic unless the rule gets it wrong. All pins are listed under "Homepage pins".
+                    </p>
+
+                    <form className="stories-toolbar" onSubmit={lookup}>
+                        <input className="stories-search" style={{ maxWidth: '260px' }} inputMode="numeric" placeholder="Add a story by its number (#)" value={addId} onChange={e => { setAddId(e.target.value); setFound(null); }} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Find</button>
+                    </form>
+                    {found && (
+                        <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            <div><span style={{ color: '#6b7280' }}>#{found.id}</span> {found.primary_headline}</div>
+                            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                {found.status !== 'active' ? <span style={{ color: '#fbbf24' }}>This story is {found.status}; only active stories can be filed.</span>
+                                    : found.event_id === eventId ? <span style={{ color: '#4ade80' }}>Already on this front.</span>
+                                    : found.event_id ? (
+                                        <>
+                                            <span style={{ color: '#fbbf24' }}>Already on {foundFront?.name || `front #${found.event_id}`}.</span>
+                                            <button className="judge-row-btn" disabled={busy} onClick={() => fileFound(true)} style={{ background: '#b45309', color: '#fff' }}>Move it here</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {!found.enriched && <span style={{ color: '#fbbf24' }}>Not published yet (no summary), so it won't show until it is.</span>}
+                                            <button className="judge-row-btn" disabled={busy} onClick={() => fileFound(false)} style={{ background: '#2563eb', color: '#fff' }}>File it here</button>
+                                        </>
+                                    )}
+                            </div>
+                        </div>
+                    )}
+
+                    <form className="stories-toolbar" onSubmit={e => { e.preventDefault(); page.fetchPage(search, false); }}>
+                        <input className="stories-search" placeholder="Search this front's headlines (press Enter)" value={search} onChange={e => setSearch(e.target.value)} />
+                        <button type="submit" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }}>Search</button>
+                        {search && <button type="button" className="judge-row-btn" style={{ background: '#374151', color: '#e5e7eb' }} onClick={() => { setSearch(''); page.fetchPage('', false); }}>Clear</button>}
+                    </form>
+
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>{notice.text}</div>}
+                    {page.error && <div className="error-banner"><strong>Error:</strong> {page.error}</div>}
+                    <FrontsBulkBar
+                        count={page.selected.size}
+                        fronts={fronts}
+                        excludeId={eventId}
+                        verb="Move"
+                        busy={busy}
+                        onApply={(targetId) => move(targetId, [...page.selected])}
+                        onRemove={() => remove([...page.selected])}
+                        onClear={() => page.setSelected(new Set())}
+                    />
+                    {page.loading && !page.stories.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : page.stories.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>{search ? 'No stories on this front match that search.' : 'No stories on this front yet.'}</div>
+                    ) : (
+                        <FrontsStoryRows stories={page.stories} selected={page.selected} onToggle={page.toggle} onToggleAll={page.toggleAll} showAdded frontsById={frontsById}
+                            onPin={page.pinsAvailable ? setPin : undefined} pinBusyId={pinBusyId} />
+                    )}
+                    {page.cursor != null && (
+                        <button className="load-more-btn" disabled={page.loading} onClick={() => page.fetchPage(search, true, page.cursor)}>
+                            {page.loading ? 'Loading…' : 'Load 50 more'}
+                        </button>
+                    )}
+                </div>
+            );
+        }
+        // A front's updates (event_updates, ADO-547 AC5): the dated developments on the front's page.
+        // Written here = approved at once (decided by a human). The database only shows approved
+        // updates of Live fronts to the public (RLS, migration 111), so nothing here gates visibility.
+        function FrontUpdates({ api, eventId, front, onChanged, dirtyRef }) {
+            const [updates, setUpdates] = useState([]);
+            const [cursor, setCursor] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [editing, setEditing] = useState(null); // null | 'new' | update id
+            const tokenRef = useRef(0);
+
+            const load = useCallback(async (fromCursor) => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'updates', event_id: eventId, cursor: fromCursor || null });
+                    if (token !== tokenRef.current) return;
+                    setUpdates(prev => fromCursor ? [...prev, ...(res.updates || [])] : (res.updates || []));
+                    setCursor(res.next_cursor ?? null);
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            }, [api, eventId]);
+
+            useEffect(() => { load(null); }, [load]);
+
+            const live = front?.publish_state === 'published';
+
+            const onSaved = (res, wasNew) => {
+                const l = res.links;
+                const parts = [l?.error || (wasNew ? 'Update added.' : res.changed ? 'Update saved.' : 'The text was unchanged.')];
+                if (l && !l.error) {
+                    if (l.linked.length) parts.push(`It covers ${l.linked.length} ${l.linked.length === 1 ? 'story' : 'stories'}.`);
+                    if (l.unlinked.length) parts.push(`${l.unlinked.length} ${l.unlinked.length === 1 ? 'story is' : 'stories are'} no longer linked to it.`);
+                    if (l.taken_from_other_update.length) parts.push(`${l.taken_from_other_update.map(i => `#${i}`).join(', ')} moved over from another update (a story belongs to one update at most).`);
+                    if (l.not_on_front.length) parts.push(`Not on this front, so not linked: ${l.not_on_front.map(i => `#${i}`).join(', ')}. File ${l.not_on_front.length === 1 ? 'it' : 'them'} on this front first (Settings and stories).`);
+                }
+                if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                if (wasNew && !live) parts.push('This front is not Live, so the update is not public yet.');
+                setNotice({ kind: l?.error || l?.not_on_front?.length || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                setEditing(null);
+                load(null);
+                onChanged();
+            };
+
+            const onDeleted = (res) => {
+                setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: ['Update deleted.', res.refresh?.ok === false ? res.refresh.error : ''].filter(Boolean).join(' ') });
+                setEditing(null);
+                load(null);
+                onChanged();
+            };
+
+            return (
+                <div>
+                    <div style={{ ...frontsBox(live ? 'info' : 'warn'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        Updates are the dated developments on this front's page, newest first. What you write here goes straight in as approved; there is no review step.
+                        {' '}{live ? 'This front is Live, so updates set to Shown are public.' : <strong>This front is not Live, so nobody outside the admin sees its updates yet.</strong>}
+                    </div>
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                    {editing === 'new' ? (
+                        <FrontUpdateForm api={api} eventId={eventId} update={null} onSaved={onSaved} onCancel={() => setEditing(null)} dirtyRef={dirtyRef} />
+                    ) : (
+                        <button className="judge-row-btn" disabled={editing != null} onClick={() => { setNotice(null); setEditing('new'); }} style={{ background: '#065f46', color: '#d1fae5', marginBottom: '1rem' }}>
+                            + Add an update
+                        </button>
+                    )}
+
+                    {loading && !updates.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : updates.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No updates on this front yet.</div>
+                    ) : updates.map(u => editing === u.id ? (
+                        <FrontUpdateForm key={u.id} api={api} eventId={eventId} update={u} onSaved={onSaved} onDeleted={onDeleted} onCancel={() => setEditing(null)} dirtyRef={dirtyRef} />
+                    ) : (
+                        <div key={u.id} style={{ border: '1px solid #374151', borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '0.6rem', opacity: u.approval_state === 'approved' ? 1 : 0.8 }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', fontSize: '0.8rem', color: '#9ca3af' }}>
+                                <span>{frontsFmtDate(u.happened_at)}</span>
+                                <span className={`badge ${u.significance === 'major' ? 'badge-severe' : 'badge-minor'}`}>{u.significance === 'major' ? 'Major' : 'Minor'}</span>
+                                <span style={{ fontWeight: 600, color: u.approval_state === 'approved' ? '#4ade80' : u.approval_state === 'rejected' ? '#f87171' : '#fbbf24' }}>{UPDATE_STATE_LABELS[u.approval_state] || u.approval_state}</span>
+                                <span>{u.created_by === 'agent' ? `drafted by AI${u.was_edited ? ', edited by hand' : ''}` : 'written by hand'}</span>
+                                <button className="judge-row-btn" disabled={editing != null} onClick={() => { setNotice(null); setEditing(u.id); }} style={{ marginLeft: 'auto', background: '#374151', color: '#e5e7eb' }}>Edit</button>
+                            </div>
+                            <div style={{ color: '#f8fafc', fontWeight: 600, marginTop: '0.35rem' }}>{u.headline}</div>
+                            {u.body && <div style={{ color: '#d1d5db', whiteSpace: 'pre-wrap', marginTop: '0.25rem', fontSize: '0.9rem' }}>{u.body}</div>}
+                            {u.stories?.length > 0 && (
+                                <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '0.4rem' }}>
+                                    Covers: {u.stories.map(s => <div key={s.id}><span style={{ color: '#6b7280' }}>#{s.id}</span> {s.headline}</div>)}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {cursor != null && (
+                        <button className="load-more-btn" disabled={loading} onClick={() => load(cursor)}>{loading ? 'Loading…' : 'Load more'}</button>
+                    )}
+                </div>
+            );
+        }
+
+        // New / edit form for one update. Only changed fields are sent; the server whitelists them.
+        // dirtyRef.current is true while the form differs from what it opened with (unsaved-edits prompt).
+        function FrontUpdateForm({ api, eventId, update, onSaved, onDeleted, onCancel, dirtyRef }) {
+            const isNew = !update;
+            const initDate = isNew ? frontsToday() : frontsLocalDate(update.happened_at);
+            const initIds = isNew ? [] : (update.stories || []).map(s => String(s.id));
+            const [initForm] = useState(() => ({
+                headline: update?.headline || '', body: update?.body || '', date: initDate,
+                significance: update?.significance || 'minor', approval_state: update?.approval_state || 'approved', stories: initIds.join(', ')
+            }));
+            const [form, setForm] = useState(initForm);
+            const [busy, setBusy] = useState(false);
+            const [error, setError] = useState(null);
+            const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+            // Story numbers compare as a sorted set, so "2, 1" after "1, 2" is not an edit.
+            const idKey = (s) => JSON.stringify([...new Set(s.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean))].sort());
+            const dirty = Object.keys(initForm).some(k => k === 'stories' ? idKey(form[k]) !== idKey(initForm[k]) : form[k] !== initForm[k]);
+            useEffect(() => { dirtyRef.current = dirty; }, [dirty, dirtyRef]);
+            useEffect(() => () => { dirtyRef.current = false; }, [dirtyRef]);
+
+            const save = async (e) => {
+                e.preventDefault();
+                if (busy) return;
+                if (!form.headline.trim()) { setError('Write a headline.'); return; }
+                if (!form.date) { setError('Pick the date it happened.'); return; }
+                const ids = [...new Set(form.stories.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean))];
+                if (ids.some(x => !/^\d+$/.test(x))) { setError('Stories: numbers only, separated by commas (for example 17254, 17260).'); return; }
+                const fields = {};
+                if (isNew || form.headline.trim() !== update.headline) fields.headline = form.headline;
+                if (isNew || form.body.trim() !== (update.body || '')) fields.body = form.body;
+                // noon UTC: the same calendar day in every US time zone
+                if (isNew || form.date !== initDate) fields.happened_at = `${form.date}T12:00:00Z`;
+                if (isNew || form.significance !== update.significance) fields.significance = form.significance;
+                if (!isNew && form.approval_state !== update.approval_state) fields.approval_state = form.approval_state;
+                const storiesChanged = ids.length !== initIds.length || ids.some(x => !initIds.includes(x));
+                if (!isNew && !Object.keys(fields).length && !storiesChanged) { onCancel(); return; }
+                setBusy(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'save_update', event_id: eventId, update_id: update?.id ?? null, fields, ...(storiesChanged ? { story_ids: ids.map(Number) } : {}) });
+                    onSaved(res, isNew);
+                } catch (err) {
+                    setError(err.message);
+                    setBusy(false);
+                }
+            };
+
+            const del = async () => {
+                if (busy) return;
+                if (!confirm(`Delete this update?\n\n"${update.headline}"\n\nIt disappears from the front's page for good. To keep it but take it off the page, set it to Hidden instead.`)) return;
+                setBusy(true);
+                setError(null);
+                try {
+                    onDeleted(await api({ action: 'delete_update', event_id: eventId, update_id: update.id }));
+                } catch (err) {
+                    setError(err.message);
+                    setBusy(false);
+                }
+            };
+
+            const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0 1rem' };
+            return (
+                <form onSubmit={save} style={{ border: '1px solid #3b82f6', borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', background: 'rgba(30,58,138,0.15)' }}>
+                    <h4 style={{ margin: '0 0 0.75rem', color: '#e5e7eb' }}>{isNew ? 'New update' : 'Edit update'}</h4>
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+                    <div className="form-group">
+                        <label className="form-label">Headline</label>
+                        <input className="form-input" value={form.headline} maxLength={300} onChange={e => set('headline', e.target.value)} placeholder="Judge blocks the order nationwide" />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">What happened (optional)</label>
+                        <textarea className="form-textarea" rows={4} value={form.body} maxLength={5000} onChange={e => set('body', e.target.value)} />
+                    </div>
+                    <div style={grid}>
+                        <div className="form-group">
+                            <label className="form-label">Date it happened</label>
+                            <input type="date" className="form-input" value={form.date} max={frontsToday()} onChange={e => set('date', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Importance</label>
+                            <select className="form-select" value={form.significance} onChange={e => set('significance', e.target.value)}>
+                                <option value="major">Major (a turning point)</option>
+                                <option value="minor">Minor (a routine step)</option>
+                            </select>
+                        </div>
+                        {!isNew && (
+                            <div className="form-group">
+                                <label className="form-label">On the front's page?</label>
+                                <select className="form-select" value={form.approval_state} onChange={e => set('approval_state', e.target.value)}>
+                                    {update.approval_state === 'pending' && <option value="pending">Waiting for review (not shown)</option>}
+                                    <option value="approved">Shown</option>
+                                    <option value="rejected">Hidden</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Stories it covers (optional)</label>
+                        <input className="form-input" inputMode="numeric" value={form.stories} onChange={e => set('stories', e.target.value)} placeholder="Story numbers, e.g. 17254, 17260" />
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '4px' }}>Only stories already on this front. A story can belong to one update; linking it here takes it off any other.</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : isNew ? 'Add update' : 'Save update'}</button>
+                        <button type="button" className="judge-row-btn" disabled={busy} onClick={onCancel} style={{ background: '#374151', color: '#e5e7eb' }}>Cancel</button>
+                        {!isNew && <button type="button" className="judge-row-btn" disabled={busy} onClick={del} style={{ background: '#7f1d1d', color: '#fee2e2', marginLeft: 'auto' }}>Delete</button>}
+                    </div>
+                </form>
+            );
+        }
+
+        // Every Tracker pin across stories, executive orders, Supreme Court cases and pardons
+        // (tracker_pin, ADO-547 AC6), with a finder to pin any item by its id. Pins that can do
+        // nothing (closed / combined / unpublished items, ADO-554 design note) are flagged red.
+        function FrontsPins({ api }) {
+            const [pins, setPins] = useState([]);
+            const [truncated, setTruncated] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [notice, setNotice] = useState(null);
+            const [busy, setBusy] = useState(false);
+            const [source, setSource] = useState('stories');
+            const [idText, setIdText] = useState('');
+            const [found, setFound] = useState(null); // pin_lookup result
+            const [note, setNote] = useState('');
+            const tokenRef = useRef(0);
+            const findTokenRef = useRef(0); // a slow lookup must not replace a newer one (wrong item pinned)
+
+            const load = useCallback(async () => {
+                const token = ++tokenRef.current;
+                setLoading(true);
+                setError(null);
+                try {
+                    const res = await api({ action: 'pins' });
+                    if (token !== tokenRef.current) return;
+                    setPins(res.pins || []);
+                    setTruncated(!!res.truncated);
+                } catch (err) {
+                    if (token === tokenRef.current) setError(err.message);
+                } finally {
+                    if (token === tokenRef.current) setLoading(false);
+                }
+            }, [api]);
+
+            useEffect(() => { load(); }, [load]);
+
+            const itemName = (src, id) => `${PIN_SOURCE_LABELS[src] || src} #${id}`;
+
+            const find = async (e) => {
+                e.preventDefault();
+                const token = ++findTokenRef.current;
+                setFound(null); setNotice(null); setError(null);
+                const id = idText.trim().replace(/^#/, '');
+                if (!id) { setError('Enter the id: the # number shown for it in its own tab.'); return; }
+                try {
+                    const res = await api({ action: 'pin_lookup', source, entity_id: id });
+                    if (token !== findTokenRef.current) return;
+                    setFound(res);
+                    setNote(res.pin?.note || '');
+                } catch (err) { if (token === findTokenRef.current) setError(err.message); }
+            };
+
+            const pinIt = async (pin) => {
+                if (!found || busy) return;
+                setBusy(true); setError(null); setNotice(null);
+                try {
+                    const res = await api({ action: 'pin_set', source: found.source, entity_id: found.entity_id, pin, note: note.trim() || null });
+                    const parts = [`${itemName(found.source, found.entity_id)}: ${PIN_LABELS[pin]}.`];
+                    if (found.source === 'stories' && res.item && !res.dead) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (res.reason) parts.push(res.reason);
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: res.dead || res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                    setFound(null); setIdText(''); setNote('');
+                    load();
+                } catch (err) { setError(err.message); } finally { setBusy(false); }
+            };
+
+            const clear = async (src, id) => {
+                if (busy) return;
+                if (!confirm(`Clear the pin on ${itemName(src, id)}? The automatic homepage rule decides again.`)) return;
+                setBusy(true); setError(null); setNotice(null);
+                try {
+                    const res = await api({ action: 'pin_clear', source: src, entity_id: String(id) });
+                    const parts = [res.removed ? `Cleared. ${itemName(src, id)} follows the automatic homepage rule again.` : 'That pin was already gone.'];
+                    if (src === 'stories' && res.item) parts.push(res.item.main_line ? 'It is on the homepage now.' : 'It is off the homepage now.');
+                    if (res.refresh && !res.refresh.ok) parts.push(res.refresh.error);
+                    setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: parts.join(' ') });
+                    if (found && found.source === src && String(found.entity_id) === String(id)) setFound(null);
+                    load();
+                } catch (err) { setError(err.message); } finally { setBusy(false); }
+            };
+
+            // dead pins first (they need a look), then newest first as the server sent them
+            const sorted = useMemo(() => [...pins].sort((a, b) => (b.dead ? 1 : 0) - (a.dead ? 1 : 0)), [pins]);
+            const deadCount = pins.filter(p => p.dead).length;
+            const curPin = found?.pin?.pin || null;
+            const btn = { background: '#374151', color: '#e5e7eb' };
+
+            return (
+                <>
+                    <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                        The homepage (the Tracker's main line) picks items automatically. A pin overrides that for one item: <strong style={{ color: '#e5e7eb' }}>{PIN_LABELS.force_show}</strong> puts it on, <strong style={{ color: '#e5e7eb' }}>{PIN_LABELS.force_hide}</strong> keeps it off. Either way it stays in the full record. Changes reach the homepage at once.
+                        {' '}A pin cannot bring back a story that is closed, combined into another, or not published yet; pins like that do nothing and are flagged red.
+                    </div>
+
+                    <h4 style={{ margin: '0 0 0.5rem', color: '#e5e7eb' }}>Pin something</h4>
+                    <form className="stories-toolbar" onSubmit={find}>
+                        <select className="stories-select" value={source} onChange={e => { findTokenRef.current++; setSource(e.target.value); setFound(null); }} style={{ padding: '6px 10px' }} aria-label="What to pin">
+                            {Object.entries(PIN_SOURCE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <input className="stories-search" style={{ maxWidth: '220px' }} placeholder="Its id (#)" value={idText} onChange={e => { findTokenRef.current++; setIdText(e.target.value); setFound(null); }} />
+                        <button type="submit" className="judge-row-btn" style={btn}>Find</button>
+                    </form>
+                    {found && (
+                        <div style={{ ...frontsBox('info'), borderRadius: '6px', padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            <div><span style={{ color: '#6b7280' }}>{itemName(found.source, found.entity_id)}</span> {found.item ? (found.item.title || '(no title)') : <em>no longer exists</em>}</div>
+                            {found.item && (
+                                <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '2px' }}>
+                                    {frontsFmtDay(found.item.date)}{found.item.alarm != null ? ` · alarm ${found.item.alarm}` : ''}
+                                    {found.source === 'stories' && !found.show.dead ? (found.item.main_line ? ' · on the homepage now' : ' · not on the homepage now') : ''}
+                                </div>
+                            )}
+                            <div style={{ marginTop: '0.35rem' }}>Now: <strong>{curPin ? PIN_LABELS[curPin] : 'automatic (no pin)'}</strong></div>
+                            {found.show.dead && <div style={{ color: '#fbbf24', marginTop: '0.35rem' }}>{found.show.reason} A pin here would do nothing.</div>}
+                            {found.item && (
+                                <>
+                                    <input className="form-input" style={{ marginTop: '0.5rem' }} maxLength={300} placeholder="Why? (optional, only admins see this)" value={note} onChange={e => setNote(e.target.value)} />
+                                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <button className="judge-row-btn" disabled={busy} onClick={() => pinIt('force_show')} style={{ background: '#065f46', color: '#d1fae5' }}>
+                                            {curPin === 'force_show' ? 'Save note' : PIN_LABELS.force_show}
+                                        </button>
+                                        <button className="judge-row-btn" disabled={busy} onClick={() => pinIt('force_hide')} style={{ background: '#7f1d1d', color: '#fee2e2' }}>
+                                            {curPin === 'force_hide' ? 'Save note' : PIN_LABELS.force_hide}
+                                        </button>
+                                        {curPin && <button className="judge-row-btn" disabled={busy} onClick={() => clear(found.source, found.entity_id)} style={btn}>Clear pin</button>}
+                                    </div>
+                                </>
+                            )}
+                            {!found.item && curPin && (
+                                <div style={{ marginTop: '0.5rem' }}><button className="judge-row-btn" disabled={busy} onClick={() => clear(found.source, found.entity_id)} style={btn}>Clear pin</button></div>
+                            )}
+                        </div>
+                    )}
+
+                    {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
+                    {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', margin: '1.25rem 0 0.5rem' }}>
+                        <h4 style={{ margin: 0, color: '#e5e7eb' }}>
+                            Current pins{pins.length ? ` (${pins.length})` : ''}
+                            {deadCount > 0 && <span style={{ color: '#f87171', fontWeight: 400, fontSize: '0.85rem' }}> · {deadCount} {deadCount === 1 ? 'does' : 'do'} nothing</span>}
+                        </h4>
+                        <button className="judge-row-btn" disabled={loading} onClick={load} style={btn}>{loading ? '…' : '↻ Reload'}</button>
+                    </div>
+                    {truncated && <div style={{ ...frontsBox('warn'), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>Showing the newest 1000 pins only; the homepage also reads only the newest 1000.</div>}
+                    {loading && !pins.length ? (
+                        <div className="loading"><div className="spinner"></div>Loading…</div>
+                    ) : pins.length === 0 ? (
+                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No pins. The homepage is fully automatic.</div>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="mobile-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Item</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Pin</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Check</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}>Changed</th>
+                                        <th style={{ padding: '0.5rem', color: '#9ca3af' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sorted.map(p => (
+                                        <tr key={`${p.source}:${p.entity_id}`} style={{ borderBottom: '1px solid #1f2937', background: p.dead ? 'rgba(127,29,29,0.18)' : 'transparent' }}>
+                                            <td className="cell-wide" style={{ padding: '0.5rem', color: '#e5e7eb' }}>
+                                                <span style={{ color: '#6b7280' }}>{itemName(p.source, p.entity_id)}</span> {p.item ? (p.item.title || '(no title)') : <em style={{ color: '#9ca3af' }}>no longer exists</em>}
+                                                {p.note && <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>Why: {p.note}</div>}
+                                            </td>
+                                            <td data-label="Pin" style={{ padding: '0.5rem', whiteSpace: 'nowrap', fontWeight: 600, color: p.pin === 'force_show' ? '#4ade80' : '#f87171' }}>{PIN_LABELS[p.pin] || p.pin}</td>
+                                            <td data-label="Check" style={{ padding: '0.5rem', color: p.dead ? '#f87171' : '#9ca3af' }}>
+                                                {p.dead ? <><strong>Does nothing.</strong> {p.reason}</> : (p.reason || <span style={{ color: '#4ade80' }}>Working</span>)}
+                                            </td>
+                                            <td data-label="Changed" style={{ padding: '0.5rem', color: '#9ca3af', whiteSpace: 'nowrap' }}>{frontsFmtDate(p.updated_at)}</td>
+                                            <td className="cell-actions" style={{ padding: '0.5rem' }}>
+                                                <button className="judge-row-btn" disabled={busy} onClick={() => clear(p.source, p.entity_id)} style={btn}>Clear</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
+            );
+        }
+        // ===================== end Fronts tab =====================
+
         // JudgeTab Component — Clustering Judge verdict observability (ADO-533)
         // Mirrors SkipsTab: password-gated edge function (admin-judge-log, service_role), no anon exposure.
         function JudgeTab({ password, supabase, onReviewChanged }) {
@@ -6046,7 +7900,7 @@
                     setManualLoser('');
                     refreshAfterAction();
                 } else {
-                    setManualError(`Merge not executed: ${result.reason || 'unknown reason'}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
+                    setManualError(`Merge not executed: ${mergeReasonText(result.reason)}${result.survivor_points_to ? ` (that story is merged into #${result.survivor_points_to})` : ''}`);
                 }
             };
 
@@ -6082,15 +7936,7 @@
                     setManualResult(`Unmerged #${result.loser_id} from #${result.survivor_id} — ${result.articles_restored} article${result.articles_restored === 1 ? '' : 's'} restored, story is live again.`);
                     refreshAfterAction();
                 } else {
-                    const reasons = {
-                        not_merged_pair: 'Neither story is currently merged into the other (maybe already unmerged?)',
-                        no_merge_snapshot: 'No reversible snapshot exists for this merge',
-                        not_merged: 'That story is not currently merged away',
-                        snapshot_mismatch: 'The merge snapshot does not match the current tombstone — needs a manual look',
-                        snapshot_changed: 'The merge record changed mid-request — refresh and try again',
-                        survivor_moved: 'The surviving story was later merged into another story — undo that newer merge first'
-                    };
-                    setManualError(`Unmerge not executed: ${reasons[result.reason] || result.reason || 'unknown reason'}`);
+                    setManualError(`Unmerge not executed: ${mergeReasonText(result.reason)}`);
                 }
             };
 
@@ -6146,7 +7992,10 @@
                             </div>
                             <div style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
                                 status: <strong style={{ color: story.status === 'active' ? '#4ade80' : '#fbbf24' }}>{story.status}</strong>
-                                {' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}
+                                {story.article_count != null
+                                    ? <>{' · '}{story.article_count} article{story.article_count === 1 ? '' : 's'}</>
+                                    : <>{' · '}{story.source_count ?? 0} source{story.source_count === 1 ? '' : 's'}</>}
+                                {story.front ? <>{' · front: '}{story.front.name}</> : null}
                                 {story.first_seen_at ? ` · first seen ${new Date(story.first_seen_at).toLocaleDateString()}` : ''}
                                 {story.merged_into_story_id ? <span style={{ color: '#f87171' }}> · already merged into #{story.merged_into_story_id}</span> : null}
                             </div>
@@ -6471,6 +8320,31 @@
             const refreshIntervalRef = useRef(null);
             const judgeCountTokenRef = useRef(0); // only the newest Judge-count request may set the count
 
+            // Unsaved edits (ADO-547, a front's page in the Fronts tab): the page puts a check in
+            // leaveGuardRef. Switching tab, signing out or moving around the Fronts tab asks first in an
+            // in-page dialog; closing or reloading the browser tab gets the browser's own prompt.
+            const leaveGuardRef = useRef(null);
+            const [leavePrompt, setLeavePrompt] = useState(null); // { go } while the dialog is open
+            const confirmLeave = useCallback((go, dirty = !!leaveGuardRef.current?.()) => {
+                if (dirty) setLeavePrompt({ go });
+                else go();
+            }, []);
+            useEffect(() => {
+                const onBeforeUnload = (e) => {
+                    if (!leaveGuardRef.current?.()) return;
+                    e.preventDefault();
+                    e.returnValue = ''; // older browsers only show the prompt with this set
+                };
+                window.addEventListener('beforeunload', onBeforeUnload);
+                return () => window.removeEventListener('beforeunload', onBeforeUnload);
+            }, []);
+            useEffect(() => {
+                if (!leavePrompt) return;
+                const onKey = (e) => { if (e.key === 'Escape') setLeavePrompt(null); };
+                document.addEventListener('keydown', onKey);
+                return () => document.removeEventListener('keydown', onKey);
+            }, [leavePrompt]);
+
             // Auth state
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [password, setPassword] = useState('');
@@ -6553,6 +8427,7 @@
 
             // Handle sign out
             const handleSignOut = () => {
+                setLeavePrompt(null); // a 401 sign-out can land while the dialog is open
                 sessionStorage.removeItem(AUTH_STORAGE_KEY);
                 setIsAuthenticated(false);
                 setPassword('');
@@ -6824,6 +8699,7 @@
                 { id: 'pardons', label: 'Pardons' },
                 { id: 'scotus', label: 'SCOTUS' },
                 { id: 'eos', label: 'Exec Orders' },
+                { id: 'fronts', label: 'Fronts' },
                 { id: 'feeds', label: 'Feeds' },
                 { id: 'skips', label: 'Failures' }
             ];
@@ -6879,7 +8755,7 @@
                                 <span>Budget:</span>
                                 <span style={{ fontWeight: 600 }}>{budgetStatus.label}</span>
                             </div>
-                            <button className="signout-btn" onClick={handleSignOut}>Sign out</button>
+                            <button className="signout-btn" onClick={() => confirmLeave(handleSignOut)}>Sign out</button>
                         </div>
                     </header>
 
@@ -6890,10 +8766,12 @@
                                 key={tab.id}
                                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => {
-                                    if (tab.disabled) return;
-                                    // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
-                                    if (tab.id === 'feeds' && activeTab !== 'feeds') setFeedsFilter('all');
-                                    setActiveTab(tab.id);
+                                    if (tab.disabled || tab.id === activeTab) return;
+                                    confirmLeave(() => {
+                                        // The nav opens Feeds unfiltered; only Home's "Feeds failed" row opens it on 'failing'.
+                                        if (tab.id === 'feeds') setFeedsFilter('all');
+                                        setActiveTab(tab.id);
+                                    });
                                 }}
                                 disabled={tab.disabled}
                                 title={tab.disabled ? 'Coming soon' : ''}
@@ -7137,7 +9015,7 @@
                         )}
 
                         {activeTab === 'stories' && (
-                            <StoriesTab password={password} supabase={supabase} />
+                            <StoriesTab password={password} supabase={supabase} onReviewChanged={fetchJudgeReviewCount} />
                         )}
 
                         {activeTab === 'pardons' && (
@@ -7146,6 +9024,10 @@
 
                         {activeTab === 'feeds' && (
                             <FeedsTab password={password} supabase={supabase} filter={feedsFilter} onFilterChange={setFeedsFilter} onFeedsChanged={fetchStats} />
+                        )}
+
+                        {activeTab === 'fronts' && (
+                            <FrontsTab password={password} supabase={supabase} leaveGuardRef={leaveGuardRef} confirmLeave={confirmLeave} />
                         )}
 
                         {activeTab === 'skips' && (
@@ -7164,7 +9046,7 @@
                             <ScotusTab password={password} supabase={supabase} />
                         )}
 
-                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'feeds' && (
+                        {activeTab !== 'home' && activeTab !== 'stories' && activeTab !== 'pardons' && activeTab !== 'scotus' && activeTab !== 'eos' && activeTab !== 'skips' && activeTab !== 'judge' && activeTab !== 'feeds' && activeTab !== 'fronts' && (
                             <div className="card">
                                 <div className="card-body" style={{ textAlign: 'center', padding: '60px 20px' }}>
                                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚧</div>
@@ -7176,6 +9058,23 @@
                             </div>
                         )}
                     </main>
+
+                    {leavePrompt && (
+                        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setLeavePrompt(null); }}>
+                            <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="leave-prompt-title" style={{ maxWidth: '440px' }}>
+                                <div className="modal-header">
+                                    <h3 className="modal-title" id="leave-prompt-title">Leave without saving?</h3>
+                                </div>
+                                <div className="modal-body" style={{ color: '#cbd5e1' }}>
+                                    This page has changes you have not saved. If you leave now, they are lost.
+                                </div>
+                                <div className="modal-footer">
+                                    <button className="btn-secondary" autoFocus onClick={() => setLeavePrompt(null)}>Stay</button>
+                                    <button className="btn-danger" onClick={() => { const { go } = leavePrompt; setLeavePrompt(null); go(); }}>Leave without saving</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
