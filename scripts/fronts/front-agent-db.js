@@ -53,6 +53,9 @@
 // with a status so the agent moves on to the next story; usage errors exit 2; a failed
 // fronts/candidates/refresh call (or a failed front lookup before a write) exits 1.
 // FRONTS_DRY_RUN=true makes every write a no-op (reads still run).
+// FRONTS_POOL_DAYS (migration 135) widens `candidates` past the RPC's 30-day window:
+// a number of days, or 'all' (TEST only: on PROD the full pool times out, 57014).
+// Needs migration 135: before it, any FRONTS_POOL_DAYS makes the RPC call fail (PGRST202).
 // Dependency-free on purpose: the cloud sandbox has no npm install step.
 import { readFileSync, statSync } from 'node:fs';
 import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
@@ -234,7 +237,17 @@ async function fronts() {
 async function candidates([limitRaw]) {
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) usage(`limit must be 1-${MAX_PAGE}, got "${limitRaw}"`);
-  const r = await rest('rpc/front_agent_candidates_all', { method: 'POST', body: { p_limit: limit } });
+  // FRONTS_POOL_DAYS (optional, migration 135): unset = the RPC's 30-day window;
+  // N (1-3650) = the last N days; 'all' = no window (TEST only; times out on PROD).
+  const daysRaw = (process.env.FRONTS_POOL_DAYS || '').trim();
+  const body = { p_limit: limit };
+  if (daysRaw === 'all') body.p_days = null;
+  else if (daysRaw) {
+    const days = Number(daysRaw);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) usage(`FRONTS_POOL_DAYS must be 1-3650 or "all", got "${daysRaw}"`);
+    body.p_days = days;
+  }
+  const r = await rest('rpc/front_agent_candidates_all', { method: 'POST', body });
   if (r.status !== 200 || !Array.isArray(r.json)) fail(1, `front_agent_candidates_all failed: HTTP ${r.status} ${r.text.slice(0, 300)}`);
   process.stdout.write(`${JSON.stringify(r.json)}\n`);
 }

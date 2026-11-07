@@ -143,7 +143,7 @@ const run = (args, extraEnv = {}) => {
   const r = spawnSync(process.execPath, ['--import', mockUrl, scriptPath, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
-    env: { ...process.env, SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', DISCORD_WEBHOOK_URL: '', FRONTS_DRY_RUN: '', FRONT_AGENT_MOCK_LOG: logPath, FRONT_AGENT_MOCK_EVENTS: '', ...extraEnv },
+    env: { ...process.env, SUPABASE_URL: 'https://example.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-key', DISCORD_WEBHOOK_URL: '', FRONTS_DRY_RUN: '', FRONTS_POOL_DAYS: '', FRONT_AGENT_MOCK_LOG: logPath, FRONT_AGENT_MOCK_EVENTS: '', ...extraEnv },
   });
   return { code: r.status, json: JSON.parse(r.stdout.trim().split('\n').pop()), requests: requests() };
 };
@@ -189,6 +189,16 @@ try {
   r = run(['candidates', '25']);
   assert.equal(r.code, 0);
   assert.deepEqual(r.requests.map((q) => [q.path, q.body]), [['rpc/front_agent_candidates_all', { p_limit: 25 }]], 'candidates calls the all-fronts RPC with p_limit only');
+  // FRONTS_POOL_DAYS (migration 135): unset keeps the RPC's 30-day default
+  r = run(['candidates', '25'], { FRONTS_POOL_DAYS: 'all' });
+  assert.deepEqual(r.requests.map((q) => q.body), [{ p_limit: 25, p_days: null }], "FRONTS_POOL_DAYS=all sends p_days null");
+  r = run(['candidates', '10'], { FRONTS_POOL_DAYS: '90' });
+  assert.deepEqual(r.requests.map((q) => q.body), [{ p_limit: 10, p_days: 90 }], 'FRONTS_POOL_DAYS=90 sends p_days 90');
+  for (const bad of ['0', '3651', '7.5', 'abc', '-3']) {
+    r = run(['candidates', '25'], { FRONTS_POOL_DAYS: bad });
+    assert.equal(r.code, 2, `FRONTS_POOL_DAYS=${bad} is refused`);
+    assert.equal(r.requests.length, 0, `a refused FRONTS_POOL_DAYS=${bad} sends nothing`);
+  }
 
   // live single-story writes
   r = run(['assign', '12', 'ice-deportations', '0.9', 'ICE raided a plant']);
