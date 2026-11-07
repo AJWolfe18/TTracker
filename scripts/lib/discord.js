@@ -21,6 +21,15 @@ export const COLORS = Object.freeze({
 });
 
 const MAX_DESCRIPTION = 4000; // Discord embed description cap is 4096
+
+/** Remove a webhook URL (exact value, trimmed value, and any discord webhook path) from text. */
+export function redactWebhook(text, webhookUrl) {
+  let s = String(text ?? '');
+  for (const v of [webhookUrl, String(webhookUrl ?? '').trim()]) {
+    if (v) s = s.split(v).join('[webhook]');
+  }
+  return s.replace(/(?:https?:\/\/)?[\w.-]*discord(?:app)?\.com\/api\/webhooks\/[^\s"'<>]+/gi, '[webhook]');
+}
 // A webhook call that never answers must not hold a pipeline step until the job timeout:
 // the fetchers await their alerts before the refresh and failure-alert steps run.
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -69,7 +78,9 @@ export async function postDiscord(embed, { webhookUrl = process.env.DISCORD_WEBH
     }
     return true;
   } catch (err) {
-    const why = err?.name === 'TimeoutError' ? `no answer after ${timeoutMs}ms` : err?.message;
+    // The webhook URL IS the credential, and fetch errors can quote it ("Failed to parse URL from
+    // https://discord.com/api/webhooks/<id>/<token>"): scrub it before anything reaches a log.
+    const why = err?.name === 'TimeoutError' ? `no answer after ${timeoutMs}ms` : redactWebhook(err?.message, webhookUrl);
     console.warn(`[discord] webhook failed: ${why} (non-blocking)`);
     return false;
   } finally {
