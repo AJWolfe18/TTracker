@@ -77,10 +77,16 @@ Before any state change:
 - Verify EVERY AC bullet as MET/NOT MET
 - Do NOT advance with unmet AC
 
+### 4b. Josh's Codex (BEFORE the push)
+- For any non-trivial code, migration or edge-function change: hand Josh a Codex brief (commit range or files, what to check) and WAIT for his results. Fix findings and re-run until clean.
+- Pushing to `test` deploys the TEST site, and TEST migrations / edge functions are shared, so none of that happens before Codex (CLAUDE.md "For TEST", November 7, 2026).
+- Skip only for docs-only or trivial changes.
+
 ### 5. Commit and Push
 - Stage relevant files
 - Commit with clear message
-- Push to test branch
+- Push to test branch (only after 4b)
+- Then apply any TEST migrations and deploy any changed TEST edge functions (also only after 4b)
 
 ### 6. Update ADO
 - Move ticket to appropriate state (only after AC verification)

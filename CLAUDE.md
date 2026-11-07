@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
 **Budget**: <$100/month HARD LIMIT (raised from $50 on November 7, 2026 to fit Supabase Pro)
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
-**Workflow**: Code → Code Review → QA → `/end-work` (saves memory, commits, pushes, updates ADO)
+**Workflow**: Code → local tests → in-session two-pass review → Josh's Codex → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
 **Source of Truth**: ADO for status, plans for implementation details only
 **Tools Available**: Supabase MCP, Azure DevOps MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
@@ -121,10 +121,11 @@ docs/features/
 
 **For TEST (normal work):**
 1. Always work on `test` branch
-2. Commit to `test` branch
-3. Push to `test` branch (`git push origin test`)
-4. Auto-deploys to Netlify TEST site
-5. **Note:** Code review happens locally (two-pass review + Josh's local Codex), not on GitHub
+2. Fix + local tests (unit, PGlite, `npm run qa:smoke`) - these touch nothing shared
+3. In-session two-pass code review (see "During Work"; `/code-review medium` or higher counts), fix real findings
+4. Hand Josh the Codex brief and WAIT for his results; fix and re-run Codex if needed
+5. Only then: commit + push to `test` (auto-deploys to Netlify TEST), apply TEST migrations, deploy TEST edge functions
+6. **Why this order (November 7, 2026):** pushing first was left over from when Codex reviewed PRs on GitHub (retired August 25, 2026). Codex now runs locally on unpushed code, and TEST's database, edge functions and site are shared, so an unreviewed push can break TEST (it did: ADO-547 moves, November 7)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`

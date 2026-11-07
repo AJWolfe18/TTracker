@@ -34,15 +34,18 @@ Settings → Branches → Add rule for `main`:
 # 1. Always work on test branch (or feature branch from test)
 git checkout test
 
-# 2. Make changes, commit
+# 2. Make changes; run local tests (unit, PGlite, npm run qa:smoke) - nothing shared yet
+
+# 3. Review BEFORE anything shared: in-session /code-review medium, then Josh's local Codex
+#    (see section 3). Fix findings and re-review until clean.
+
+# 4. Only then commit and push to test, apply TEST migrations, deploy TEST edge functions
 git add <files>
 git commit -m "fix: description of change"
-
-# 3. Push to test
 git push origin test
 # → Auto-deploys to Netlify TEST site
 
-# 4. For PROD deployment: review locally first, then create the PR
+# 5. For PROD deployment: cherry-pick the reviewed commits, then create the PR
 git checkout -b deploy/feature-name main
 git cherry-pick <commit-from-test>
 git push origin deploy/feature-name
@@ -63,11 +66,13 @@ Nothing reviews PRs on GitHub anymore:
 - GitHub `@codex review` comments and automatic Codex PR reviews were retired August 25, 2026. Do not comment `@codex review` on a PR.
 - The GPT API review workflow (`.github/workflows/ai-code-review.yml`) was deleted August 24, 2026.
 
-Review happens **before** the PR is opened:
+Review happens **before the change is pushed to `test`** (and so before any PR):
 1. **In-session two-pass review** by Claude Code: pattern compliance and bugs, then production readiness. State the level run (medium or higher for non-trivial work).
-2. **Josh runs Codex locally** on the change. Codex reads `AGENTS.md` at the repo root for the P0/P1/P2 rules.
+2. **Josh runs Codex locally** on the unpushed change (Claude hands him a brief and waits). Codex reads `AGENTS.md` at the repo root for the P0/P1/P2 rules.
 
-Fix P0 and P1 findings before the PR. A PR to `main` is opened only after both passes are clean.
+Fix P0 and P1 findings, re-run the review, and only then push to `test` and touch the TEST database or edge functions. A PR to `main` carries only reviewed commits.
+
+**Why before `test` (November 7, 2026):** pushing first was left over from GitHub `@codex review`, which needed a pushed PR. Local Codex reviews unpushed code, and TEST's database, edge functions and Netlify site are shared, so an unreviewed push can break TEST (it broke ADO-547 story moves on November 7).
 
 **Cost:** $0 extra. Codex runs on Josh's ChatGPT subscription and the Claude review on the Claude plan; neither uses API credits.
 
