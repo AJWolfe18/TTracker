@@ -5,12 +5,13 @@ on:
   schedule:
     - cron: '17 */2 * * *'  # off-peak minute: GitHub drops top-of-hour slots
 
-  # Manual trigger (for testing/emergency runs). Also fired every 2 hours by an external
-  # scheduler (cron-job.org), because GitHub runs the schedule above only 4-5 times a day.
+  # Manual trigger (for testing/emergency runs). Also fired every 2 hours by the Netlify scheduled
+  # function netlify/functions/rss-prod-trigger.mjs (ADO-637), because since August 27, 2026 GitHub
+  # runs the schedule above only 4-6 times a day.
   workflow_dispatch:
     inputs:
       scheduled:
-        description: "'true' only from the external scheduler: obeys the ENABLE_PROD_SCHEDULES kill-switch like the cron"
+        description: "'true' only from the Netlify scheduled trigger (rss-prod-trigger): obeys the ENABLE_PROD_SCHEDULES kill-switch like the cron"
         required: false
         default: 'false'
 
@@ -20,10 +21,10 @@ jobs:
     timeout-minutes: 20  # a hung setup/upload step must not hold the concurrency group for GitHub's 6-hour default
 
     # Branch lock + kill-switch: Only run on main, schedule blocked unless ENABLE_PROD_SCHEDULES=true
-    # TTRC-362: workflow_dispatch still works when kill-switch is off, except the external scheduler's (scheduled=true)
+    # TTRC-362: workflow_dispatch still works when kill-switch is off, except the Netlify trigger's (scheduled=true)
     if: github.ref == 'refs/heads/main' && ((github.event_name != 'schedule' && inputs.scheduled != 'true') || vars.ENABLE_PROD_SCHEDULES == 'true')
 
-    # The external trigger and a late GitHub schedule can land together: never run two at once
+    # The Netlify trigger and a late GitHub schedule can land together: never run two at once
     # (both would cluster the same articles). GitHub keeps at most ONE waiting run per group; a
     # newer arrival replaces it, which is fine here because any run fetches everything new.
     # Job-level, so a run the kill-switch skips never takes the waiting slot.
