@@ -6972,25 +6972,31 @@
             const [search, setSearch] = useState('');
             const [busy, setBusy] = useState(false);
             const [notice, setNotice] = useState(null);
-            const [pendingMove, setPendingMove] = useState(null); // { ids, eventId } offered after an on_other_front result
+            const [pendingMove, setPendingMove] = useState(null); // { items: [{ id, from }], eventId } offered after an on_other_front result
             const page = useFrontsStoryPage((cursor, q) => api({ action: 'pool', cursor, search: q }), [api]);
 
             useEffect(() => { page.fetchPage('', false); }, [page.fetchPage]);
 
-            const file = async (eventId, ids, move) => {
+            // move = false: file `ids`. move = true: move `items` ({ id, from }) in one call; each story
+            // names the front it was seen on, and the server only moves it if it is still there.
+            const file = async (eventId, ids, move, items) => {
                 if (busy) return;
                 setBusy(true);
                 setNotice(null);
                 setPendingMove(null);
                 page.setError(null);
                 try {
-                    const res = await api({ action: 'assign', event_id: eventId, story_ids: ids, move });
+                    const res = await api(move
+                        ? { action: 'assign', event_id: eventId, story_ids: items.map(it => it.id), move: true, from_event_ids: items.map(it => it.from) }
+                        : { action: 'assign', event_id: eventId, story_ids: ids, move: false });
                     const name = frontsById[eventId]?.name || 'the front';
                     setNotice({ kind: res.refresh?.ok === false ? 'warn' : 'ok', text: frontsSummarize(res, name, frontsById, 'assign') });
                     const done = (res.results || []).filter(r => r.status !== 'on_other_front').map(r => Number(r.story_id));
                     page.dropIds(done);
-                    const other = (res.results || []).filter(r => r.status === 'on_other_front').map(r => Number(r.story_id));
-                    if (other.length) setPendingMove({ ids: other, eventId });
+                    // a NULL front (the story left its front mid-call) cannot be offered as a move
+                    const other = (res.results || []).filter(r => r.status === 'on_other_front' && r.from_event_id != null)
+                        .map(r => ({ id: Number(r.story_id), from: Number(r.from_event_id) }));
+                    if (other.length) setPendingMove({ items: other, eventId });
                     onChanged();
                 } catch (err) {
                     page.setError(err.message);
@@ -7012,8 +7018,8 @@
                     {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem' }}>
                         {notice.text}
                         {pendingMove && (
-                            <button className="judge-row-btn" disabled={busy} onClick={() => file(pendingMove.eventId, pendingMove.ids, true)} style={{ marginLeft: '0.5rem', background: '#b45309', color: '#fff' }}>
-                                Move {pendingMove.ids.length === 1 ? 'it' : `those ${pendingMove.ids.length}`} to {frontsById[pendingMove.eventId]?.name}
+                            <button className="judge-row-btn" disabled={busy} onClick={() => file(pendingMove.eventId, null, true, pendingMove.items)} style={{ marginLeft: '0.5rem', background: '#b45309', color: '#fff' }}>
+                                Move {pendingMove.items.length === 1 ? 'it' : `those ${pendingMove.items.length}`} to {frontsById[pendingMove.eventId]?.name}
                             </button>
                         )}
                     </div>}
@@ -7147,11 +7153,12 @@
             };
 
             const runPreview = async (kind) => {
-                const pattern = (kind === 'agent' ? form.agent_pattern : form.sweep_pattern).trim();
-                if (!pattern) { setPreview(p => ({ ...p, [kind]: { error: 'Enter a pattern first.' } })); return; }
+                // untrimmed, as saved: spaces are part of a pattern (trim only detects a blank field)
+                const pattern = kind === 'agent' ? form.agent_pattern : form.sweep_pattern;
+                if (!pattern.trim()) { setPreview(p => ({ ...p, [kind]: { error: 'Enter a pattern first.' } })); return; }
                 setPreview(p => ({ ...p, [kind]: { error: null, loading: true, samples: [] } }));
                 try {
-                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() || null, summary: form.sweep_summary, days: previewDays, event_id: eventId });
+                    const res = await api({ action: 'preview', kind, pattern, coword: form.sweep_coword.trim() ? form.sweep_coword : null, summary: form.sweep_summary, days: previewDays, event_id: eventId });
                     setPreview(p => ({ ...p, [kind]: res }));
                 } catch (err) {
                     setPreview(p => ({ ...p, [kind]: { error: err.message } }));
@@ -7260,6 +7267,9 @@
                     {error && <div className="error-banner"><strong>Error:</strong> {error}</div>}
                     {notice && <div style={{ ...frontsBox(notice.kind), borderRadius: '6px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.9rem', wordBreak: 'break-word' }}>{notice.text}</div>}
 
+                    {/* locked while saving: the save replaces the whole form with the server row, so an
+                        edit typed mid-request would be lost and the page would look clean */}
+                    <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
                     <div style={grid}>
                         <div className="form-group">
                             <label className="form-label">Name</label>
@@ -7357,6 +7367,7 @@
                         </div>
                         <FrontsPreview result={preview.agent?.loading ? null : preview.agent} />
                     </div>
+                    </fieldset>
 
                     <div style={{ ...section, display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create front' : 'Save changes'}</button>
@@ -7414,7 +7425,7 @@
                 if (busy) return;
                 setBusy(true); setNotice(null); page.setError(null);
                 try {
-                    const res = await api({ action: 'assign', event_id: targetId, story_ids: ids, move: true });
+                    const res = await api({ action: 'assign', event_id: targetId, story_ids: ids, move: true, from_event_id: eventId });
                     page.dropIds((res.results || []).filter(r => r.status === 'moved').map(r => Number(r.story_id)));
                     after(res, frontsById[targetId]?.name || 'the front', 'assign');
                 } catch (err) { page.setError(err.message); } finally { setBusy(false); }
@@ -7446,7 +7457,7 @@
                 if (busy || !found) return;
                 setBusy(true); page.setError(null);
                 try {
-                    const res = await api({ action: 'assign', event_id: eventId, story_ids: [found.id], move: moveIt });
+                    const res = await api({ action: 'assign', event_id: eventId, story_ids: [found.id], move: moveIt, ...(moveIt ? { from_event_id: found.event_id } : {}) });
                     after(res, front.name, 'assign');
                     if ((res.results || []).some(r => r.status === 'assigned' || r.status === 'moved')) {
                         setFound(null); setAddId('');

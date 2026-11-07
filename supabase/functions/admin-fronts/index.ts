@@ -12,7 +12,8 @@
 //   members    { event_id, cursor?, search? } -> { stories: [...], next_cursor }
 //   pool       { cursor?, search? }        -> { stories: [...], next_cursor }
 //   lookup     { story_id }                -> { story }   (any story: its front, so the tab can offer a move)
-//   assign     { event_id, story_ids[], move? } -> { ok, results: [{story_id, status, from_event_id}], refresh }
+//   assign     { event_id, story_ids[], move?, from_event_id? | from_event_ids[]? (one is required with move) }
+//                                          -> { ok, results: [{story_id, status, from_event_id}], refresh }
 //   unassign   { event_id, story_ids[] }   -> { ok, results: [{story_id, status, sweep_would_refile, agent_may_refile}], refresh }
 //   check_pattern { pattern }              -> { ok, error }
 //   preview    { pattern, coword?, summary?, kind: 'sweep'|'agent', days?, event_id? }
@@ -139,7 +140,9 @@ function isMissingFn(err: { code?: string; message?: string } | null): boolean {
   return !!err && (err.code === 'PGRST202' || err.code === '42883')
 }
 
-const NEEDS_134 = { error: 'This needs database migration 134 (admin fronts), which is not applied yet.', needs_migration: '134' }
+// PGRST202 also when revision 1 of 134 is applied but not revision 2 (new assign signature,
+// admin_set_update_stories): the whole file is idempotent, so re-running it fixes both.
+const NEEDS_134 = { error: 'This needs the current version of database migration 134 (admin fronts). Paste the whole migrations/134_admin_fronts.sql file into the SQL Editor again, even if 134 was applied before.', needs_migration: '134' }
 
 async function refresh(supabase: SupabaseClient) {
   const { data, error } = await supabase.rpc('refresh_tracker_derived')
@@ -196,41 +199,21 @@ async function updateStories(supabase: SupabaseClient, updateIds: number[]) {
 // Sets exactly `ids` as the stories of update `updateId` (on front `eventId`). Stories that are
 // not on this front are reported, never filed (filing is the members list's job). A story
 // belongs to at most one update (one story_event row), so linking takes it from another update.
+// One RPC (migration 134 E): link + unlink share a transaction and saves of one update are
+// serialized, so two concurrent saves cannot each remove the other's stories.
 async function linkStories(supabase: SupabaseClient, eventId: number, updateId: number, ids: number[]) {
-  let rows: { story_id: number; event_id: number; event_update_id: number | null }[] = []
-  if (ids.length) {
-    const { data, error } = await supabase.from('story_event').select('story_id,event_id,event_update_id').in('story_id', ids).limit(ids.length)
-    if (error) throw new Error(`story_event read failed: ${error.message}`)
-    // deno-lint-ignore no-explicit-any
-    rows = ((data || []) as any[]).map((r) => ({ story_id: Number(r.story_id), event_id: Number(r.event_id), event_update_id: r.event_update_id == null ? null : Number(r.event_update_id) }))
-  }
-  const onFront = rows.filter((r) => r.event_id === eventId)
-  const onFrontIds = onFront.map((r) => r.story_id)
-  const notOnFront = ids.filter((id) => !onFrontIds.includes(id))
-
-  // Link first, unlink second: two PostgREST writes cannot share a transaction, and if the second
-  // one fails, an extra old link left behind is easier to fix than requested links that were lost.
-  let linked: number[] = []
-  if (onFrontIds.length) {
-    // eq(event_id) again: a story moved to another front since the read is skipped, not linked
-    // across fronts (the composite FK would reject that anyway).
-    const { data, error } = await supabase.from('story_event').update({ event_update_id: updateId })
-      .eq('event_id', eventId).in('story_id', onFrontIds).select('story_id')
-    if (error) throw new Error(`link failed: ${error.message}`)
-    linked = (data || []).map((r) => Number(r.story_id))
-  }
-
-  let unq = supabase.from('story_event').update({ event_update_id: null }).eq('event_update_id', updateId)
-  if (onFrontIds.length) unq = unq.not('story_id', 'in', `(${onFrontIds.join(',')})`)
-  const { data: unlinked, error: unErr } = await unq.select('story_id')
-  if (unErr) throw new Error(`unlink failed: ${unErr.message}`)
-
+  const { data, error } = await supabase.rpc('admin_set_update_stories', { p_event_id: eventId, p_update_id: updateId, p_story_ids: ids })
+  if (isMissingFn(error)) throw new Error(NEEDS_134.error)
+  if (error) throw new Error(`setting the update's stories failed: ${error.message}`)
+  // deno-lint-ignore no-explicit-any
+  const r = (data || {}) as any
+  const nums = (v: unknown) => (Array.isArray(v) ? v.map(Number) : [])
   return {
     result: {
-      linked,
-      not_on_front: [...notOnFront, ...onFrontIds.filter((id) => !linked.includes(id))],
-      taken_from_other_update: onFront.filter((r) => r.event_update_id != null && r.event_update_id !== updateId && linked.includes(r.story_id)).map((r) => r.story_id),
-      unlinked: (unlinked || []).map((r) => Number(r.story_id))
+      linked: nums(r.linked),
+      not_on_front: nums(r.not_on_front),
+      taken_from_other_update: nums(r.taken_from_other_update),
+      unlinked: nums(r.unlinked)
     }
   }
 }
@@ -596,7 +579,27 @@ Deno.serve(async (req) => {
           const id = posInt(body.event_id, 'event_id')
           const ids = idList(body.story_ids)
           const move = body.move === true
-          const { data, error } = await supabase.rpc('admin_assign_stories_to_front', { p_story_ids: ids, p_event_id: id, p_move: move })
+          // A move names, per story, the front the admin saw it on (from_event_id for all, or
+          // from_event_ids with one entry per story_ids entry); the RPC skips any story that has
+          // moved elsewhere since (reported as on_other_front).
+          let fromIds: number[] | null = null
+          if (move) {
+            if (Array.isArray(body.from_event_ids)) {
+              const rawIds = body.story_ids as unknown[]
+              const rawFrom = body.from_event_ids as unknown[]
+              if (rawFrom.length !== rawIds.length) bad('from_event_ids must have one entry per story')
+              const fromOf = new Map<number, number>()
+              rawIds.forEach((s, i) => {
+                const sid = posInt(s, 'story_ids[]')
+                if (!fromOf.has(sid)) fromOf.set(sid, posInt(rawFrom[i], 'from_event_ids[]'))
+              })
+              fromIds = ids.map((sid) => fromOf.get(sid)!)
+            } else {
+              const fromId = posInt(body.from_event_id, 'from_event_id')
+              fromIds = ids.map(() => fromId)
+            }
+          }
+          const { data, error } = await supabase.rpc('admin_assign_stories_to_front', { p_story_ids: ids, p_event_id: id, p_move: move, p_from_event_ids: fromIds })
           if (isMissingFn(error)) return jsonResponse(NEEDS_134, 503)
           if (error) {
             if (error.code === 'P0002') return jsonResponse({ ok: false, reason: 'front_not_found' }, 404)

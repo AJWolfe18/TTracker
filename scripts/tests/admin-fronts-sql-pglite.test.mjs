@@ -4,8 +4,10 @@
 //   assign: new / already on front / on another front (no move) / move (reassign columns, the
 //           FIRST reassigned_from_event_id kept on a second move, event_update_id cleared) /
 //           missing / merged / duplicate ids / unknown front / the 200 cap
+//           a move needs the source front, and a story no longer on it is reported, not moved
 //   unassign: removes from the named front only; sweep_would_refile agrees with what the real
 //           sweep then does
+//   set_update_stories: link + unlink as one replace, other fronts reported, missing update raises
 //   check_front_pattern: valid -> NULL, broken -> message; preview: sweep + agent rules, counts
 //   grants: anon/authenticated cannot execute, service_role can; idempotent re-run.
 // Not part of qa:smoke: @electric-sql/pglite is not a declared dependency, so the test SKIPS
@@ -91,7 +93,7 @@ const check = (name, ok, detail = '') => {
 };
 const rowsOf = async (sql, params) => (await db.query(sql, params)).rows;
 const se = async (id) => (await rowsOf('select * from public.story_event where story_id = $1', [id]))[0];
-const assign = (ids, ev, move = false) => rowsOf('select * from public.admin_assign_stories_to_front($1::bigint[], $2, $3)', [ids, ev, move]);
+const assign = (ids, ev, move = false, from = null) => rowsOf('select * from public.admin_assign_stories_to_front($1::bigint[], $2, $3, $4::bigint[])', [ids, ev, move, from]);
 const byStory = (rows, id) => rows.find((r) => Number(r.story_id) === id);
 const fails = async (sql, params) => { try { await db.query(sql, params); return null; } catch (e) { return e.message; } };
 
@@ -114,7 +116,13 @@ check('no-move left story 1 alone', Number((await se(1)).event_id) === 1);
 r = await assign([3], 3);
 check('re-filing is already_on_front', r[0]?.status === 'already_on_front');
 
-r = await assign([1], 3, true);
+check('a move without the source fronts raises', (await fails('select * from public.admin_assign_stories_to_front(array[1]::bigint[], 3, true)'))?.includes('p_from_event_ids'));
+check('a move with too few source fronts raises', (await fails('select * from public.admin_assign_stories_to_front(array[1,2]::bigint[], 3, true, array[1]::bigint[])'))?.includes('p_from_event_ids'));
+check('a move with a NULL source front raises', (await fails('select * from public.admin_assign_stories_to_front(array[1]::bigint[], 3, true, array[null]::bigint[])'))?.includes('p_from_event_ids'));
+r = await assign([1], 3, true, [2]);   // the screen thinks story 1 is on front 2; it is on 1
+check('stale move is reported where the story really is, not moved', r[0]?.status === 'on_other_front' && Number(r[0]?.from_event_id) === 1 && Number((await se(1)).event_id) === 1, JSON.stringify(r));
+
+r = await assign([1], 3, true, [1]);
 row = await se(1);
 check('move reports from_event_id', r[0]?.status === 'moved' && Number(r[0]?.from_event_id) === 1);
 check('move writes reassigned_at + from', row.reassigned_at !== null && Number(row.reassigned_from_event_id) === 1 && Number(row.event_id) === 3);
@@ -123,10 +131,17 @@ check('move keeps the original assigned_by', row.assigned_by === 'agent');
 check('move clears the old confidence', row.confidence === null);
 check('move note keeps the first reason', row.note === 'moved by hand in admin; first filed as: fronts-v2: epstein-files: names Epstein', row.note);
 
-r = await assign([1], 2, true);
+r = await assign([1], 2, true, [3]);
 row = await se(1);
 check('second move keeps the FIRST reassigned_from_event_id', Number(row.reassigned_from_event_id) === 1 && Number(row.event_id) === 2, JSON.stringify(row));
 check('second move keeps the note (no double prefix)', row.note === 'moved by hand in admin; first filed as: fronts-v2: epstein-files: names Epstein', row.note);
+
+// one call, two source fronts (a pool move): story 1 is on 2, story 3 on 3; 3's entry is stale
+r = await assign([3, 1, 1], 1, true, [2, 2, 9]);
+check('mixed-source move: each story checked against its own source (first entry wins on repeats)',
+  byStory(r, 1)?.status === 'moved' && Number(byStory(r, 1)?.from_event_id) === 2 && Number((await se(1)).event_id) === 1
+  && byStory(r, 3)?.status === 'on_other_front' && Number((await se(3)).event_id) === 3 && r.length === 2, JSON.stringify(r));
+await assign([1], 2, true, [1]);   // put story 1 back on front 2 for the checks below
 
 check('unknown front raises', (await fails('select * from public.admin_assign_stories_to_front(array[6]::bigint[], 4242, false)'))?.includes('not found'));
 check('more than 200 ids raises', (await fails('select * from public.admin_assign_stories_to_front((select array_agg(g)::bigint[] from generate_series(1,201) g), 1, false)'))?.includes('at most 200'));
@@ -172,18 +187,50 @@ p = await rowsOf("select * from public.admin_preview_front_rule('epstein', null,
 check('days are capped at 90 (200-day story stays out)', p[0]?.total_matches === 1, JSON.stringify(p));
 check('bad kind raises', (await fails("select * from public.admin_preview_front_rule('x', null, false, 'nope', 30, 1)"))?.includes('kind'));
 
+// --- set_update_stories ----------------------------------------------------------------------
+// fresh fixture: stories 20-23 on front 1 (21 on update A), 24 on front 2; updates A and B on front 1
+await db.exec(`
+  insert into public.stories(id, status, primary_headline, summary_neutral) values
+    (20,'active','Epstein a','s'),(21,'active','Epstein b','s'),(22,'active','Epstein c','s'),(23,'active','Epstein d','s'),(24,'active','Iran e','s');
+  insert into public.event_updates(event_id) values (1), (1), (2);`);
+const [uA, uB, uIran] = (await rowsOf('select id from public.event_updates order by id desc limit 3')).map((x) => Number(x.id)).reverse();
+await db.exec(`insert into public.story_event(story_id, event_id, assigned_by, event_update_id) values
+  (20,1,'human',null),(21,1,'human',${uA}),(22,1,'human',null),(23,1,'human',${uB}),(24,2,'human',null);`);
+const setU = async (ev, u, ids) => (await rowsOf('select public.admin_set_update_stories($1, $2, $3::bigint[]) as r', [ev, u, ids]))[0].r;
+const linksOf = async (u) => (await rowsOf('select story_id from public.story_event where event_update_id = $1 order by story_id', [u])).map((x) => Number(x.story_id));
+
+let L = await setU(1, uB, [20, 21, 24, 999]);
+check('set: links the stories on this front', JSON.stringify(L.linked) === '[20,21]', JSON.stringify(L));
+check('set: other-front and missing stories reported, not filed', JSON.stringify(L.not_on_front) === '[24,999]' && Number((await se(24)).event_id) === 2, JSON.stringify(L));
+check('set: reports a story taken from another update', JSON.stringify(L.taken_from_other_update) === '[21]', JSON.stringify(L));
+check('set: unlinks what is no longer requested', JSON.stringify(L.unlinked) === '[23]', JSON.stringify(L));
+check('set: the update holds exactly the requested set', JSON.stringify(await linksOf(uB)) === '[20,21]' && (await linksOf(uA)).length === 0);
+L = await setU(1, uB, [22]);
+check('set: a second save replaces the whole set', JSON.stringify(await linksOf(uB)) === '[22]' && JSON.stringify(L.unlinked) === '[20,21]', JSON.stringify(L));
+L = await setU(1, uB, []);
+check('set: an empty list clears the update', (await linksOf(uB)).length === 0 && JSON.stringify(L.unlinked) === '[22]', JSON.stringify(L));
+check('set: an update on another front raises', (await fails('select public.admin_set_update_stories(1, $1, array[20]::bigint[])', [uIran]))?.includes('not found'));
+check('set: failure leaves links untouched (one transaction)', (await linksOf(uIran)).length === 0);
+
 // --- grants --------------------------------------------------------------------------------
+const FNS = `('admin_assign_stories_to_front','admin_unassign_stories','admin_check_front_pattern','admin_preview_front_rule','admin_set_update_stories')`;
 const priv = await rowsOf(`select p.proname,
     has_function_privilege('anon', p.oid, 'EXECUTE') as anon,
     has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth,
     has_function_privilege('service_role', p.oid, 'EXECUTE') as svc
-  from pg_proc p where p.proname in ('admin_assign_stories_to_front','admin_unassign_stories','admin_check_front_pattern','admin_preview_front_rule')`);
-check('four functions created', priv.length === 4, JSON.stringify(priv));
+  from pg_proc p where p.proname in ${FNS}`);
+check('five functions created', priv.length === 5, JSON.stringify(priv));
 check('anon/authenticated cannot execute, service_role can', priv.every((x) => !x.anon && !x.auth && x.svc), JSON.stringify(priv));
 
-// --- idempotent ----------------------------------------------------------------------------
+// --- idempotent, and over the first revision (3-argument assign) ----------------------------
+await db.exec(`create function public.admin_assign_stories_to_front(p_story_ids bigint[], p_event_id bigint, p_move boolean default false)
+  returns table (story_id bigint, status text, from_event_id bigint) language sql as $$ select null::bigint, null::text, null::bigint where false $$;`);
 let rerun = null; try { await db.exec(M134); } catch (e) { rerun = e.message; }
 check('re-run is clean', rerun === null, rerun);
+const versions = await rowsOf(`select pg_get_function_identity_arguments(oid) as args from pg_proc where proname = 'admin_assign_stories_to_front'`);
+check('re-run over the first revision leaves ONE assign (per-story source fronts)', versions.length === 1 && versions[0].args.endsWith('p_from_event_ids bigint[]'), JSON.stringify(versions));
+// deadlock guard: the unlinked rows are locked up front with the requested ones
+check('set_update_stories locks unlinked rows before writing', /OR se\.event_update_id = p_update_id\s+ORDER BY se\.story_id\s+FOR UPDATE/.test(M134));
 
 await db.close();
 out(failures ? `admin-fronts-sql-pglite: ${failures} FAILED` : 'admin-fronts-sql-pglite: all passed');

@@ -5,11 +5,21 @@
 -- has been hand-written SQL. The admin Fronts tab (public/admin.html) and its
 -- edge function (supabase/functions/admin-fronts) do it instead. Three jobs need
 -- the database itself, so they are RPCs:
---   A) admin_assign_stories_to_front(ids[], event_id, move)
+--   A) admin_assign_stories_to_front(ids[], event_id, move, from_event_ids[])
 --        file many stories at once, one result per story. Each story is its own
 --        step (insert, or lock the existing row and move it), so a race with the
 --        sweep or the agent can never error the batch, and a move always writes
---        reassigned_at + reassigned_from_event_id together.
+--        reassigned_at + reassigned_from_event_id together. A move names, per
+--        story, the front the admin saw it on; a story that is somewhere else by
+--        then is reported (on_other_front), never moved (Codex P1, November 7).
+--   E) admin_set_update_stories(event_id, update_id, ids[])
+--        sets exactly these stories on one front update, link + unlink in ONE
+--        transaction, serialized per update by locking its event_updates row, so
+--        two saves of the same update cannot each remove the other's links
+--        (Codex P1, November 7). Only the story set: the update's own fields are
+--        a separate earlier write (last write wins per field).
+-- REVISION 2 (November 7, 2026): the assign signature changed and E was added. TEST
+-- had revision 1 applied: re-run this whole file there (it is idempotent).
 --   B) admin_unassign_stories(ids[], event_id)
 --        take stories off ONE front (a stale screen can't remove a story that
 --        was moved elsewhere meanwhile). Says per story whether the keyword
@@ -30,7 +40,8 @@
 -- DEPENDENCIES: 111 (events, story_event), 115 (sweep_* columns), 116/127
 -- (agent_pattern).
 -- ROLLBACK:
---   DROP FUNCTION IF EXISTS public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN);
+--   DROP FUNCTION IF EXISTS public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN, BIGINT[]);
+--   DROP FUNCTION IF EXISTS public.admin_set_update_stories(BIGINT, BIGINT, BIGINT[]);
 --   DROP FUNCTION IF EXISTS public.admin_unassign_stories(BIGINT[], BIGINT);
 --   DROP FUNCTION IF EXISTS public.admin_check_front_pattern(TEXT);
 --   DROP FUNCTION IF EXISTS public.admin_preview_front_rule(TEXT, TEXT, BOOLEAN, TEXT, INTEGER, BIGINT);
@@ -41,10 +52,11 @@
 -- ----------------------------------------------------------------------------
 -- status per story:
 --   assigned          new membership written (assigned_by = 'human')
---   moved             was on another front and p_move = true; reassign columns set
+--   moved             was on its p_from_event_ids entry and p_move = true; reassign columns set
 --   already_on_front  already on this front, nothing changed
---   on_other_front    on another front and p_move = false; nothing changed
---                     (from_event_id says which, so the admin can offer a move)
+--   on_other_front    on another front and p_move = false, or a move whose story is no
+--                     longer on its p_from_event_ids entry (a stale screen); nothing changed
+--                     (from_event_id says where it is now, so the admin can offer a move)
 --   story_not_found   no such story
 --   story_not_active  merged away / closed / archived; never filed
 -- A move clears event_update_id: the composite FK (migration 111 PART H) only
@@ -52,10 +64,16 @@
 -- front. reassigned_from_event_id keeps the FIRST front a story was on before a
 -- human moved it (PRD 7.3 precision: "the front the agent originally chose"), so
 -- a second move does not overwrite it.
+-- p_from_event_ids is required when p_move is true: one non-NULL front id per entry
+-- of p_story_ids, same order (a pool move can span several source fronts in one
+-- call). The 3-argument version (first revision of this file) is dropped: two
+-- versions would make PostgREST calls ambiguous (PGRST203).
+DROP FUNCTION IF EXISTS public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.admin_assign_stories_to_front(
-  p_story_ids BIGINT[],
-  p_event_id  BIGINT,
-  p_move      BOOLEAN DEFAULT false
+  p_story_ids      BIGINT[],
+  p_event_id       BIGINT,
+  p_move           BOOLEAN  DEFAULT false,
+  p_from_event_ids BIGINT[] DEFAULT NULL
 )
 RETURNS TABLE (story_id BIGINT, status TEXT, from_event_id BIGINT)
 LANGUAGE plpgsql
@@ -65,6 +83,7 @@ AS $$
 #variable_conflict use_column
 DECLARE
   v_id       BIGINT;
+  v_from     BIGINT;
   v_status   TEXT;
   v_merged   BIGINT;
   v_inserted INTEGER;
@@ -79,9 +98,20 @@ BEGIN
   IF cardinality(p_story_ids) > 200 THEN
     RAISE EXCEPTION 'at most 200 stories per call, got %', cardinality(p_story_ids) USING ERRCODE = '22023';
   END IF;
+  IF COALESCE(p_move, false) AND (p_from_event_ids IS NULL
+       OR cardinality(p_from_event_ids) <> cardinality(p_story_ids)
+       OR array_position(p_from_event_ids, NULL) IS NOT NULL) THEN
+    RAISE EXCEPTION 'a move must name the front each story is on (p_from_event_ids, one per story)' USING ERRCODE = '22023';
+  END IF;
 
-  -- every reference is table-qualified: the OUT columns are plpgsql variables (42702)
-  FOR v_id IN SELECT DISTINCT u.sid FROM unnest(p_story_ids) AS u(sid) WHERE u.sid IS NOT NULL ORDER BY u.sid LOOP
+  -- every reference is table-qualified: the OUT columns are plpgsql variables (42702).
+  -- unnest of two arrays zips them by position; a repeated id keeps its first entry.
+  FOR v_id, v_from IN
+    SELECT DISTINCT ON (u.sid) u.sid, u.fid
+      FROM unnest(p_story_ids, COALESCE(p_from_event_ids, '{}'::BIGINT[])) WITH ORDINALITY AS u(sid, fid, ord)
+     WHERE u.sid IS NOT NULL
+     ORDER BY u.sid, u.ord
+  LOOP
     SELECT st.status, st.merged_into_story_id INTO v_status, v_merged
       FROM public.stories st WHERE st.id = v_id;
     IF NOT FOUND THEN
@@ -124,7 +154,8 @@ BEGIN
     IF v_cur.event_id = p_event_id THEN
       story_id := v_id; status := 'already_on_front'; from_event_id := NULL; RETURN NEXT; CONTINUE;
     END IF;
-    IF NOT COALESCE(p_move, false) THEN
+    -- no move asked, or the story is no longer where the admin saw it (checked under the row lock)
+    IF NOT COALESCE(p_move, false) OR v_cur.event_id IS DISTINCT FROM v_from THEN
       story_id := v_id; status := 'on_other_front'; from_event_id := v_cur.event_id; RETURN NEXT; CONTINUE;
     END IF;
 
@@ -149,8 +180,8 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN) IS
-  'ADO-547: admin Fronts tab. Files up to 200 stories on one front, one result row per story (assigned | moved | already_on_front | on_other_front | story_not_found | story_not_active). p_move = true moves stories that are on another front (sets reassigned_at, keeps the first reassigned_from_event_id, clears event_update_id). Caller runs refresh_tracker_derived() after. service_role only.';
+COMMENT ON FUNCTION public.admin_assign_stories_to_front(BIGINT[], BIGINT, BOOLEAN, BIGINT[]) IS
+  'ADO-547: admin Fronts tab. Files up to 200 stories on one front, one result row per story (assigned | moved | already_on_front | on_other_front | story_not_found | story_not_active). p_move = true moves each story that is still on its p_from_event_ids entry (required for a move, one per story, same order; a story found elsewhere is reported on_other_front, not moved); a move sets reassigned_at, keeps the first reassigned_from_event_id, clears event_update_id. Caller runs refresh_tracker_derived() after. service_role only.';
 
 -- ----------------------------------------------------------------------------
 -- B) admin_unassign_stories
@@ -350,6 +381,84 @@ COMMENT ON FUNCTION public.admin_preview_front_rule(TEXT, TEXT, BOOLEAN, TEXT, I
   'ADO-547: read-only preview for the admin Fronts tab. Counts active enriched stories first seen in the last p_days (1-90) that a sweep rule (p_kind sweep: migration 115 matching) or an agent pattern (p_kind agent: migration 127 matching) would catch, split into on this front / on another front / unassigned, plus up to 10 newest sample headlines. service_role only.';
 
 -- ----------------------------------------------------------------------------
+-- E) admin_set_update_stories: exactly these stories on one front update
+-- ----------------------------------------------------------------------------
+-- One transaction: link the requested stories that are on p_event_id, unlink every
+-- other story from the update. The event_updates row is locked first, so two saves
+-- of the same update run one after the other and the last one's story set wins whole
+-- (two separate PostgREST writes let each save unlink the other's stories).
+-- Stories not on this front are reported, never filed. A story belongs to at most
+-- one update (one story_event row), so linking takes it from another update.
+-- Returns {linked, not_on_front, taken_from_other_update, unlinked}, each a sorted
+-- array of story ids. Raises P0002 when the update is not on that front.
+CREATE OR REPLACE FUNCTION public.admin_set_update_stories(
+  p_event_id  BIGINT,
+  p_update_id BIGINT,
+  p_story_ids BIGINT[]
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_ids      BIGINT[];
+  v_taken    BIGINT[];
+  v_linked   BIGINT[];
+  v_unlinked BIGINT[];
+BEGIN
+  v_ids := ARRAY(SELECT DISTINCT u.sid FROM unnest(COALESCE(p_story_ids, '{}'::BIGINT[])) AS u(sid)
+                  WHERE u.sid IS NOT NULL ORDER BY u.sid);
+  IF cardinality(v_ids) > 1000 THEN
+    RAISE EXCEPTION 'at most 1000 stories per update, got %', cardinality(v_ids) USING ERRCODE = '22023';
+  END IF;
+
+  PERFORM 1 FROM public.event_updates eu
+    WHERE eu.id = p_update_id AND eu.event_id = p_event_id
+    FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'update % not found on front %', p_update_id, p_event_id USING ERRCODE = 'P0002';
+  END IF;
+
+  -- lock every row this call writes (requested ones + the ones it unlinks) up front, in
+  -- id order, so two saves of different updates that trade stories cannot deadlock
+  PERFORM 1 FROM public.story_event se
+    WHERE (se.story_id = ANY (v_ids) AND se.event_id = p_event_id)
+       OR se.event_update_id = p_update_id
+    ORDER BY se.story_id
+    FOR UPDATE;
+  v_taken := ARRAY(SELECT se.story_id FROM public.story_event se
+                    WHERE se.story_id = ANY (v_ids) AND se.event_id = p_event_id
+                      AND se.event_update_id IS NOT NULL AND se.event_update_id <> p_update_id
+                    ORDER BY se.story_id);
+
+  WITH u AS (
+    UPDATE public.story_event se SET event_update_id = p_update_id
+     WHERE se.story_id = ANY (v_ids) AND se.event_id = p_event_id
+    RETURNING se.story_id
+  )
+  SELECT COALESCE(array_agg(u.story_id ORDER BY u.story_id), '{}') INTO v_linked FROM u;
+
+  WITH u AS (
+    UPDATE public.story_event se SET event_update_id = NULL
+     WHERE se.event_update_id = p_update_id AND NOT (se.story_id = ANY (v_ids))
+    RETURNING se.story_id
+  )
+  SELECT COALESCE(array_agg(u.story_id ORDER BY u.story_id), '{}') INTO v_unlinked FROM u;
+
+  RETURN jsonb_build_object(
+    'linked', to_jsonb(v_linked),
+    'not_on_front', to_jsonb(ARRAY(SELECT x FROM unnest(v_ids) AS x WHERE NOT (x = ANY (v_linked)) ORDER BY x)),
+    'taken_from_other_update', to_jsonb(v_taken),
+    'unlinked', to_jsonb(v_unlinked)
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.admin_set_update_stories(BIGINT, BIGINT, BIGINT[]) IS
+  'ADO-547: admin Fronts tab. Sets exactly p_story_ids (those on p_event_id) as the stories of front update p_update_id: link + unlink in one transaction, serialized per update (locks the event_updates row). Returns {linked, not_on_front, taken_from_other_update, unlinked}. P0002 when the update is not on that front. service_role only.';
+
+-- ----------------------------------------------------------------------------
 -- Grants: service_role only (by name + argument count, the 095/096 pattern)
 -- ----------------------------------------------------------------------------
 DO $$
@@ -360,10 +469,11 @@ BEGIN
     SELECT p.oid
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public' AND (
-       (p.proname = 'admin_assign_stories_to_front' AND p.pronargs = 3) OR
+       (p.proname = 'admin_assign_stories_to_front' AND p.pronargs = 4) OR
        (p.proname = 'admin_unassign_stories'        AND p.pronargs = 2) OR
        (p.proname = 'admin_check_front_pattern'     AND p.pronargs = 1) OR
-       (p.proname = 'admin_preview_front_rule'      AND p.pronargs = 6)
+       (p.proname = 'admin_preview_front_rule'      AND p.pronargs = 6) OR
+       (p.proname = 'admin_set_update_stories'      AND p.pronargs = 3)
      )
   LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', r.oid::regprocedure);
@@ -376,11 +486,12 @@ NOTIFY pgrst, 'reload schema';
 -- ============================================================================
 -- Verification (read-only; run after applying)
 -- ============================================================================
--- 1. Privileges: anon/authenticated f, service_role t for all four.
---    SELECT p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+-- 1. Privileges: anon/authenticated f, service_role t for all five, and ONE
+--    admin_assign_stories_to_front (4 arguments, the last BIGINT[]).
+--    SELECT p.proname, p.pronargs, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
 --           has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth,
 --           has_function_privilege('service_role', p.oid, 'EXECUTE') AS service_role
---      FROM pg_proc p WHERE p.proname LIKE 'admin\_%front%' OR p.proname = 'admin_unassign_stories';
+--      FROM pg_proc p WHERE p.proname LIKE 'admin\_%front%' OR p.proname IN ('admin_unassign_stories', 'admin_set_update_stories');
 -- 2. SELECT public.admin_check_front_pattern('(ok|fine)');   -- NULL
 --    SELECT public.admin_check_front_pattern('(broken');     -- error text
 -- 3. SELECT * FROM public.admin_preview_front_rule('epstein', NULL, false, 'sweep', 30,

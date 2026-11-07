@@ -209,13 +209,15 @@ test('every pin write refreshes the Tracker main line', () => {
   assert.match(caseBody('pin_clear'), /removed \? await refresh\(supabase\)/);
 });
 
-test('update writes go through the whitelist; links write the requested stories before unlinking', () => {
+test('update writes go through the whitelist; setting its stories is ONE transactional RPC', () => {
   const save = caseBody('save_update');
   assert.match(save, /buildUpdatePatch\(fields as Record<string, unknown>, current\)/);
   assert.doesNotMatch(save, /\.\.\.fields|\.\.\.body/);
   assert.match(save, /insert\(\{ \.\.\.patch, event_id: eventId \}\)/);
   const link = fnSrc.match(/async function linkStories[\s\S]*?\n\}\n/)[0];
-  assert.ok(link.indexOf('event_update_id: updateId') < link.indexOf('event_update_id: null'), 'link must run before unlink');
+  // two PostgREST writes let concurrent saves each unlink the other's stories (Codex P1, November 7)
+  assert.match(link, /rpc\('admin_set_update_stories', \{ p_event_id: eventId, p_update_id: updateId, p_story_ids: ids \}\)/);
+  assert.doesNotMatch(link, /from\('story_event'\)/);
   // edits are scoped to the front in the request, so a stale screen cannot edit another front's update
   assert.match(save, /\.eq\('id', updateId!\)\.eq\('event_id', eventId\)/);
   assert.match(caseBody('delete_update'), /\.eq\('id', updateId\)\.eq\('event_id', eventId\)/);
@@ -228,7 +230,24 @@ test('updates list is keyset-paged in timeline order, never OFFSET', () => {
   assert.doesNotMatch(fnSrc, /\.range\(|offset/i);
 });
 
+test('a move always names the source front per story (server requires it)', () => {
+  const body = caseBody('assign');
+  assert.match(body, /posInt\(body\.from_event_id, 'from_event_id'\)/);
+  assert.match(body, /posInt\(rawFrom\[i\], 'from_event_ids\[\]'\)/);
+  assert.match(body, /p_from_event_ids: fromIds/);
+});
+
 // ---------------- admin.html contract ----------------
+test('admin: every move call sends from_event_id; preview sends patterns untrimmed; the form locks while saving', () => {
+  const tab = adminHtml.match(/===================== Fronts tab \(ADO-547\)([\s\S]*?)===================== end Fronts tab/)[1];
+  const moveCalls = tab.match(/action: 'assign'[^\n]*move: (true|moveIt)[^\n]*/g) || [];
+  assert.ok(moveCalls.length >= 2, `expected the member-list and lookup move calls, found ${moveCalls.length}`);
+  for (const c of moveCalls) assert.match(c, /from_event_id/, c);
+  assert.match(tab, /move: true, from_event_ids: items\.map\(it => it\.from\)/, 'the pool move names each story\'s source in one call');
+  assert.doesNotMatch(tab, /form\.(agent_pattern|sweep_pattern)\)\.trim\(\)|sweep_coword\.trim\(\) \|\| null/);
+  assert.match(tab, /<fieldset disabled=\{saving\}/);
+});
+
 test('admin labels say "homepage", not force_show/force_hide', () => {
   const tab = adminHtml.match(/===================== Fronts tab \(ADO-547\)([\s\S]*?)===================== end Fronts tab/);
   assert.ok(tab, 'Fronts tab markers not found');
