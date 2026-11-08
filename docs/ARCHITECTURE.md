@@ -74,7 +74,7 @@ Neither vendor runs on TEST or localhost, so analytics are only observable on tr
 | `did_said` in `public/shared/flags-prod.json` | Did / Said / Analysis markers and chips on the Tracker (ADO-594 S6) | `false` (TEST `true`) |
 
 ## Components (what each owns)
-- **RSS pipeline** (`rss-tracker-supabase.js`): fetch → cluster, inline. Budget-capped ($5/day), runs every 2h on PROD via GitHub Actions.
+- **RSS pipeline** (`rss-tracker-supabase.js`): fetch → cluster, inline. Budget-capped ($5/day), runs every 2h on PROD via GitHub Actions, started by the Netlify scheduled function `rss-prod-trigger` (GitHub's own cron has fired only 4-6 times a day since August 27, 2026 and stays as a backup; see `docs/guides/rss-prod-external-trigger.md`).
 - **Claude cloud scheduled agents**: Stories, Judge, SCOTUS, EO, Pardons — all LIVE. Single-pass fact+editorial. $0 marginal (Anthropic subscription).
 - **Tracker main line + fronts**: `refresh_tracker_derived()` applies the one rule view `v_tracker_main_line_rule` to `stories.main_line` after every pipeline run. Stories join fronts by a keyword sweep (`events.sweep_*`, data) and a daily Claude front agent (14:00 UTC). Built on test October 4, 2026, not yet applied: every story gets an action label (did / said / coverage + actor) from the Stories agent and a one-time backfill (ADO-594), rule v2 keeps coverage off the main line (migration 126), and the front agent judges every front against its stored `events.agent_definition` (ADO-592, migration 127). Design: `docs/features/events-tracker/prd.md` section 14, `docs/features/fronts-claude-agent/plan.md`.
 - **Supabase**: Postgres + Edge Functions + RLS. Separate TEST and PROD projects.

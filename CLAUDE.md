@@ -367,7 +367,7 @@ Frontend (Vite + React app)
 
 **Trigger Methods:**
 - **TEST:** `gh workflow run "RSS Tracker - TEST" --ref test`
-- **PROD:** Auto-runs every 2 hours via `rss-tracker-prod.yml`
+- **PROD:** Auto-runs every 2 hours via `rss-tracker-prod.yml`, started by the Netlify scheduled function `rss-prod-trigger` (GitHub's cron is a degraded backup since August 27, 2026). Setup/troubleshooting: `docs/guides/rss-prod-external-trigger.md`
 
 ### Database Schema (Summary)
 
