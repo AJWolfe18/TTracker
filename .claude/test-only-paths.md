@@ -37,6 +37,9 @@ Migration scripts were deleted 2026-01-10. If similar one-time scripts are creat
 - `scripts/maintenance/2026-10-01-ado-580-trump-v-california-dissenters.sql` - one-time PROD fix of
   case 26A124's dissenters (adds Kagan) and impact level 3 to 4 (keyed on the docket, guarded to 1 row). Josh runs it
   manually in the PROD SQL Editor; never deployed.
+- `scripts/maintenance/2026-11-25-prod-refresh-tracker-catchup.sql` - one-time PROD catch-up of the
+  ~2,760 main_line flags the label backfill left pending (refresh_tracker_derived with a 120 s
+  statement timeout). Josh runs it manually in the PROD SQL Editor; never deployed.
 - `scripts/maintenance/2026-10-01-ado-580-scotus-2399-2099-reset.sql` - one-time PROD re-queue of
   SCOTUS 2099 and 2399 for the full-opinion re-run (ADO-580 AC 2). Josh runs it manually in the PROD
   SQL Editor AFTER PR #165 merges and migration 120 is applied; never deployed.
