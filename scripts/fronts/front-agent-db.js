@@ -59,6 +59,7 @@
 // Dependency-free on purpose: the cloud sandbox has no npm install step.
 import { readFileSync, statSync } from 'node:fs';
 import { PIPELINES, REASONS } from '../lib/skip-reasons.js';
+import { refreshTracker } from '../lib/tracker-refresh.js';
 
 const NO_FRONT = 'none';
 const PROMPT_VERSION = 'fronts-v2';
@@ -337,10 +338,22 @@ async function record([path]) {
 async function refresh() {
   env();
   if (isDryRun()) return out({ ok: true, status: 'dry_run' });
-  const r = await rest('rpc/refresh_tracker_derived', { method: 'POST', body: {} });
-  const row = Array.isArray(r.json) ? r.json[0] : r.json;
-  if (r.status !== 200 || !row) fail(1, `refresh_tracker_derived failed: HTTP ${r.status} ${r.text.slice(0, 300)}`);
-  return out({ ok: true, status: 'refreshed', rows_changed: row.rows_changed, took_ms: row.took_ms });
+  // ADO-638: batched like the pipelines (scripts/lib/tracker-refresh.js), so a main_line backlog
+  // never times out this call (the API cancels a statement after ~8 seconds). The adapter turns the
+  // REST helper into the rpc(fn, args) shape the loop expects; {} = the no-argument call.
+  const rpc = async (fn, args) => {
+    const r = await rest(`rpc/${fn}`, { method: 'POST', body: args ?? {} });
+    const row = Array.isArray(r.json) ? r.json[0] : r.json;
+    if (r.status === 200 && row) return { data: r.json, error: null };
+    return { data: null, error: { code: r.json?.code, message: `HTTP ${r.status} ${r.text.slice(0, 300)}` } };
+  };
+  let res;
+  try {
+    res = await refreshTracker({ rpc });
+  } catch (err) {
+    return fail(1, `refresh_tracker_derived failed: ${err.message}`);
+  }
+  return out({ ok: true, status: res.pending ? 'refreshed_partly' : 'refreshed', rows_changed: res.rows_changed, took_ms: res.took_ms, calls: res.calls });
 }
 
 async function notify([message]) {
