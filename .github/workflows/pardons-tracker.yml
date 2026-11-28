@@ -60,8 +60,11 @@ jobs:
       # ADO-570: new pardons count toward the homepage tally only after this refresh.
       - name: Refresh Tracker main line + tally
         if: always()
+        # Job-level env supplies DISCORD_WEBHOOK_URL and ALERT_ENV.
+        # ADO-638: batched (each call under the API's ~8 s limit); up to 4 minutes to drain a backlog,
+        # then a Discord alert if it failed or fell behind.
         run: node scripts/maintenance/refresh-tracker.js
-        timeout-minutes: 2
+        timeout-minutes: 5
 
       # ADO-577: pardons the agent flagged (needs_review) ping Discord. Never fails the job.
       - name: Alert flagged enrichments (Discord)
