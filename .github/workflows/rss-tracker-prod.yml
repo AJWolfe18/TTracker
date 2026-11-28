@@ -74,8 +74,12 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ALERT_ENV: prod
+        # ADO-638: batched (each call under the API's ~8 s limit); up to 4 minutes to drain a backlog,
+        # then a Discord alert if it failed or fell behind.
         run: node scripts/maintenance/refresh-tracker.js
-        timeout-minutes: 2
+        timeout-minutes: 5
 
       - name: Upload run logs (on failure)
         if: failure()

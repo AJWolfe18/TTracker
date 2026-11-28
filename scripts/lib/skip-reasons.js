@@ -47,6 +47,7 @@ export const REASONS = Object.freeze({
   API_ERROR:             'api_error',             // external API call errored
   STALENESS_TRIPWIRE:    'staleness_tripwire',    // source has newer data than DB but run inserted nothing
   REFRESH_FAILED:        'refresh_failed',        // refresh_tracker_derived() RPC errored; previous flags left in place (ADO-570)
+  REFRESH_BEHIND:        'refresh_behind',        // refresh-tracker.js ran out of time with main_line rows still pending; next run continues (ADO-638)
   SWEEP_FAILED:          'sweep_failed',          // assign_fronts_sweep() RPC errored; no assignments made this cycle (ADO-581)
   AGENT_DECLINED:        'agent_declined',        // front assignment agent judged a candidate and declined; metadata.front + rationale (ADO-582)
   CLEMENCY_TYPE_UNKNOWN: 'clemency_type_unknown', // DOJ mixed pardon/commutation section row whose warrant named no type; inserted as 'pardon' (ADO-590)
