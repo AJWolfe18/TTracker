@@ -6,7 +6,8 @@ import { runIngestHealth, buildIngestAlert, shouldCheck } from '../monitoring/al
 
 const NOON = Date.parse('2026-10-03T12:00:00Z');
 const silent = () => {};
-const env = { SUPABASE_URL: 'https://db.test/', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
+// The daily run (ADO-639): the Netlify-started workflow_dispatch run
+const env = { SUPABASE_URL: 'https://db.test/', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h', GITHUB_EVENT_NAME: 'workflow_dispatch' };
 
 // fetchImpl: `route(url)` returns rows (or an Error / {status, body}); records every call.
 // The per-feed stale read (ADO-625) goes to `stale(url)` instead, healthy (no rows) by default.
@@ -168,20 +169,30 @@ const healthy = (u) => {
   assert.match(r2.findings.readErrors.join(' '), /stale-feed check \(500 boom\)/);
 }
 
-// --- once a day: the scheduled run starting 12:00-17:59 UTC checks (late starts included),
-//     manual runs always do, push-triggered runs never do
-assert.equal(shouldCheck({ env: {}, now: NOON }), true);
-assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'schedule' }, now: Date.parse('2026-10-03T13:05:00Z') }), true, 'a 12:00 run GitHub started late still checks');
-assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'schedule' }, now: Date.parse('2026-10-03T11:59:00Z') }), false);
-assert.equal(shouldCheck({ env: {}, now: Date.parse('2026-10-03T18:00:00Z') }), false);
-assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'push' }, now: Date.parse('2026-10-03T12:30:00Z') }), false, 'a push inside the window must not post a second time');
-assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'workflow_dispatch' }, now: Date.parse('2026-10-03T18:00:00Z') }), true);
-assert.equal(shouldCheck({ env: { INGEST_HEALTH_FORCE: '1' }, now: Date.parse('2026-10-03T06:00:00Z') }), true);
-{
+// --- once a day (ADO-639): only a workflow_dispatch run checks (the Netlify daily start at 13:23 UTC,
+//     or a manual run), whatever the hour. GitHub's scheduled runs never do, even inside the old
+//     12:00-17:59 UTC window (a late one would post a second time); push runs and local runs never do.
+assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'workflow_dispatch' } }), true);
+assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'schedule' } }), false, 'a scheduled run never checks, even a late one at 13:05 UTC');
+assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'push' } }), false, 'a push must not post a second time');
+assert.equal(shouldCheck({ env: {} }), false, 'a local run without the override does not check');
+assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'schedule', INGEST_HEALTH_FORCE: '1' } }), true, 'INGEST_HEALTH_FORCE=1 still forces a check');
+assert.equal(shouldCheck({ env: { INGEST_HEALTH_FORCE: '1' } }), true);
+assert.equal(shouldCheck({ env: { GITHUB_EVENT_NAME: 'schedule', INGEST_HEALTH_FORCE: 'true' } }), false, 'only the exact value 1 forces');
+for (const [event, hour] of [['schedule', '13:05'], ['schedule', '07:02'], ['push', '13:30']]) {
   const { seen, fetchImpl } = harness(healthy);
-  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: Date.parse('2026-10-03T06:00:00Z') });
-  assert.equal(r.state, 'skipped');
+  const logged = [];
+  const r = await runIngestHealth({ env: { ...env, GITHUB_EVENT_NAME: event }, fetchImpl, log: (l) => logged.push(l), now: Date.parse(`2026-10-03T${hour}:00Z`) });
+  assert.equal(r.state, 'skipped', `${event} at ${hour}`);
   assert.equal(seen.queries.length, 0, 'a skipped run reads nothing');
+  assert.match(logged[0], new RegExp(`workflow_dispatch run.*this is a ${event} run`));
+}
+{
+  // the dispatch run checks at any hour, including the Netlify start time
+  const { seen, fetchImpl } = harness(healthy);
+  const r = await runIngestHealth({ env, fetchImpl, log: silent, now: Date.parse('2026-10-03T13:23:00Z') });
+  assert.equal(r.state, 'healthy');
+  assert.ok(seen.queries.length > 0);
 }
 
 // --- missing credentials: throws so the workflow's follow-up step reports a dead monitor

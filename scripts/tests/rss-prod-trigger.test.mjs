@@ -1,6 +1,7 @@
 // ADO-637: the Netlify scheduled function that dispatches the PROD RSS workflow.
 import assert from 'node:assert/strict';
-import fn, { dispatchRssRun, deployDecision, DISPATCH_URL, TOKEN_ENV, config } from '../../netlify/functions/rss-prod-trigger.mjs';
+import fn, { dispatchRssRun, DISPATCH_URL, config } from '../../netlify/functions/rss-prod-trigger.mjs';
+import { deployDecision, TOKEN_ENV } from '../../netlify/lib/github-dispatch.mjs';
 
 const TOKEN = 'github_pat_TEST_SECRET_VALUE';
 const PROD = { deploy: { context: 'production', published: true } };

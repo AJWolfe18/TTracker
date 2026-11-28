@@ -20,12 +20,12 @@
  *
  * Stories (ADO-602) are different: the Stories agent flags its own log rows (stories_enrichment_log)
  * and there is no "reviewed" state, so an open queue would repeat forever. Instead it is a daily digest:
- * flagged, completed log rows CREATED in a fixed slot that ends 6 hours before the daily check window
- * opens (storiesSlot: yesterday 06:00 UTC to today 06:00 UTC), checked only on the once-a-day run of
- * the RSS health check (scripts/lib/daily-check-window.js). The 6-hour lag means every story in the
- * slot has finished (a story takes minutes) before the digest looks, so each flag is reported exactly
- * once, on the database's own clock. Every flag in the digest is named. A scheduled run that never
- * happens skips its slot. Thin-source notes without the flag never alert.
+ * flagged, completed log rows CREATED in a fixed slot that ends 6 hours before the 12:00 UTC daily slot
+ * boundary (storiesSlot: yesterday 06:00 UTC to today 06:00 UTC), checked only on the once-a-day run of
+ * the RSS health check (scripts/lib/daily-check-window.js). The 6-hour lag means every
+ * story in the slot has finished (a story takes minutes) before the digest looks, so each flag is
+ * reported exactly once, on the database's own clock. Every flag in the digest is named. A daily run
+ * that never happens skips its slot. Thin-source notes without the flag never alert.
  *
  * Usage: node scripts/monitoring/alert-needs-review.js --domain scotus|eo|pardons|stories
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or the SUPABASE_TEST_* names),
@@ -43,15 +43,16 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
-import { isDailyCheckRun, dailySlot } from '../lib/daily-check-window.js';
+import { isDailyCheckRun, dailySlot, dailyCheckSkipNote } from '../lib/daily-check-window.js';
 
 const DEFAULT_WINDOW_HOURS = 168;
 const NEW_HOURS = 26;
 const QUERY_LIMIT = 50;
 // Stories digest: a slot is reported once and never again, so every flag in it must be fetched and named
 const DAILY_QUERY_LIMIT = 500;
-// The slot ends this long before the check window opens. A log row is created when a story starts and
-// turns completed at the end (minutes later), so a slot that ended at the check hour would miss a row
+// The slot ends this long before dailySlot's 12:00 UTC boundary (the daily run starts after it).
+// A log row is created when a story starts and turns completed at the end
+// (minutes later), so a slot that ended at the check hour would miss a row
 // still running when the digest ran, on both days (Codex, PR #190). Known limit: a row that turns
 // completed more than 6h after its slot ends is never reported (the agent treats a run over 30 minutes
 // as dead). The root fix is a DB-set completion time on stories_enrichment_log, which needs a migration.
@@ -209,10 +210,10 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const domainKey = i >= 0 ? argv[i + 1] : null;
   if (!domainKey || !DOMAINS[domainKey]) throw new Error(`--domain must be one of ${Object.keys(DOMAINS).join('|')}`);
   const d = DOMAINS[domainKey];
-  // The daily digest runs inside the 6-hourly health check: only the once-a-day run checks, or a
-  // flag would be posted up to four times (manual runs always check, push runs never do)
-  if (d.daily && !isDailyCheckRun({ env, now })) {
-    log(`[needs-review] ${domainKey}: not the daily check run, skipping`);
+  // The daily digest runs inside the 6-hourly health check: only the once-a-day run checks,
+  // or a flag would be posted up to four times.
+  if (d.daily && !isDailyCheckRun({ env })) {
+    log(`[needs-review] ${domainKey}: not the daily check run (${dailyCheckSkipNote(env)}), skipping`);
     return { flagged: 0, due: false, posted: false };
   }
   const url = env.SUPABASE_URL || env.SUPABASE_TEST_URL;

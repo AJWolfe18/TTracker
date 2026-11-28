@@ -243,11 +243,11 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.equal(dailySlot(Date.parse('2026-10-11T12:00:00Z')).end.getTime(), dailySlot(Date.parse('2026-10-12T17:59:00Z')).start.getTime());
 
   // The Stories slot is dailySlot shifted 6h earlier (yesterday 06:00 to today 06:00 UTC): every story
-  // created in it has finished long before the 12:00-17:59 digest looks (Codex P2, PR #190)
+  // created in it has finished long before the daily digest (after 12:00 UTC) looks (Codex P2, PR #190)
   assert.deepEqual(storiesSlot(Date.parse('2026-10-12T12:30:00Z')), { start: new Date('2026-10-11T06:00:00Z'), end: new Date('2026-10-12T06:00:00Z') });
   assert.equal(storiesSlot(Date.parse('2026-10-11T12:00:00Z')).end.getTime(), storiesSlot(Date.parse('2026-10-12T17:59:00Z')).start.getTime(), 'adjacent slots, no gap');
 
-  const DAILY = Date.parse('2026-10-12T12:30:00Z'); // inside the once-a-day health check window
+  const DAILY = Date.parse('2026-10-12T12:30:00Z'); // after the 12:00 UTC slot boundary
   const at = (iso) => new Date(iso).toISOString();
   // Fake PostgREST that applies the flag, status and created_at filters, so the test proves the query
   // keeps unflagged thin_source rows, failed runs and rows outside the slot out
@@ -274,7 +274,8 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
     return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json', 'Content-Range': `0-${Math.max(rows.length - 1, 0)}/${rows.length}` } });
   };
   const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
-  const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, log: () => {}, now });
+  // The daily run (ADO-639): the workflow_dispatch run the Netlify function starts
+  const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, log: () => {}, now });
 
   // a flagged row alerts with the headline and the agent's note; the unflagged thin_source row, the
   // failed run and the flags outside the slot do not
@@ -301,16 +302,25 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.deepEqual(await run(), { flagged: 0, due: false, posted: false });
   assert.equal(seen.discord.length, 1);
 
-  // once a day: the other 6-hourly runs and push runs do not query at all; a manual run checks
+  // once a day (ADO-639): GitHub's scheduled runs (even a late one inside the old 12:00-17:59 UTC
+  // window), push runs and local runs do not query at all; only a workflow_dispatch run checks
   table = log;
   const queries = seen.queries.length;
-  assert.deepEqual(await run(Date.parse('2026-10-12T06:10:00Z')), { flagged: 0, due: false, posted: false });
-  assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: 'push' }), { flagged: 0, due: false, posted: false });
+  const notDaily = { flagged: 0, due: false, posted: false };
+  assert.deepEqual(await run(Date.parse('2026-10-12T06:10:00Z'), { GITHUB_EVENT_NAME: 'schedule' }), notDaily);
+  assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: 'schedule' }), notDaily, 'a scheduled run in the old window must not post the digest twice');
+  assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: 'push' }), notDaily);
+  assert.deepEqual(await run(DAILY, { GITHUB_EVENT_NAME: undefined }), notDaily, 'a local run without the event does not check');
   assert.equal(seen.queries.length, queries);
-  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { GITHUB_EVENT_NAME: 'workflow_dispatch' })).posted, true);
-  assert.ok(seen.discord.at(-1).embeds[0].description.includes('Day before story'), 'the manual run reported the last complete slot');
+  {
+    const logged = [];
+    await runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'schedule' }, argv: ['--domain', 'stories'], fetchImpl, log: (l) => logged.push(l), now: DAILY });
+    assert.match(logged[0], /not the daily check run.*workflow_dispatch.*this is a schedule run/);
+  }
+  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'))).posted, true);
+  assert.ok(seen.discord.at(-1).embeds[0].description.includes('Day before story'), 'a manual run before 12:00 UTC reported the last complete slot');
   // the ingest health override does not force the Stories digest (no coupling to the RSS monitor)
-  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { INGEST_HEALTH_FORCE: '1' })).due, false);
+  assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'), { GITHUB_EVENT_NAME: 'schedule', INGEST_HEALTH_FORCE: '1' })).due, false);
 
   // a flagged run-level row (no story) still names something
   assert.ok(buildAlert('stories', [{ id: 5, story_id: null, notes: 'n' }]).description.includes('• Log row 5 - n'));
@@ -360,12 +370,14 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   // a capped query never sends a partial digest: it throws, and runCli posts "could not run"
   const capped = async (url, init) => (new URL(url).hostname === 'd.test' ? fetchImpl(url, init)
     : new Response('[]', { status: 200, headers: { 'Content-Range': '0-499/612' } }));
-  await assert.rejects(runNeedsReviewAlert({ env, argv: ['--domain', 'stories'], fetchImpl: capped, log: () => {}, now: DAILY }), /query cap/);
+  await assert.rejects(runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }, argv: ['--domain', 'stories'], fetchImpl: capped, log: () => {}, now: DAILY }), /query cap/);
 
   // wired into the once-a-day RSS health check on main (reads PROD), with a follow-up so a dead digest is never silent
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
   assert.match(wf, /id: stories_review[\s\S]*node scripts\/monitoring\/alert-needs-review\.js --domain stories/);
   assert.match(wf, /steps\.stories_review\.outcome == 'failure'/);
+  // ADO-639: the daily run is a workflow_dispatch run, so the workflow must keep accepting one
+  assert.match(wf, /^on:[\s\S]*^\s+workflow_dispatch:/m);
 }
 
 // --- runCli: a check that cannot run is never silent ----------------------------
