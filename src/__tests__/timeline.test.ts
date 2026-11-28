@@ -265,10 +265,17 @@ describe('buildSourcePath', () => {
 
   it('adds a quoted keyset cursor: strictly older date, or same date + smaller id', () => {
     const p = dec(buildSourcePath('stories', 0, { date: '2026-08-01T10:00:00+00:00', id: 42 }));
+    // The lte bound is implied by the OR (same rows); it lets the planner start
+    // the index scan at the cursor (ADO-642).
     expect(p).toContain(
-      'and=(or(first_seen_at.lt."2026-08-01T10:00:00+00:00",'
+      'and=(first_seen_at.lte."2026-08-01T10:00:00+00:00",'
+      + 'or(first_seen_at.lt."2026-08-01T10:00:00+00:00",'
       + 'and(first_seen_at.eq."2026-08-01T10:00:00+00:00",id.lt."42")))',
     );
+  });
+
+  it('first page has no cursor bound', () => {
+    expect(dec(buildSourcePath('stories', 'main', null))).not.toContain('.lte.');
   });
 
   it('URL-encodes the cursor so timestamp "+" never reads as a space', () => {
@@ -279,7 +286,7 @@ describe('buildSourcePath', () => {
 
   it('combines alarm predicate and cursor under one and=()', () => {
     const p = dec(buildSourcePath('eos', 4, { date: '2026-05-01', id: 'eo_9' }));
-    expect(p).toContain('and=(alarm_level.gte.4,or(date.lt."2026-05-01",and(date.eq."2026-05-01",id.lt."eo_9")))');
+    expect(p).toContain('and=(alarm_level.gte.4,date.lte."2026-05-01",or(date.lt."2026-05-01",and(date.eq."2026-05-01",id.lt."eo_9")))');
   });
 });
 
@@ -1316,7 +1323,7 @@ describe('Did / Said / Analysis chips (ADO-594 S6, PRD §14.5, did_said flag)', 
 
     it('label filter and keyset cursor share one and=()', () => {
       const p = dec(buildSourcePath('stories', 0, { date: '2026-08-01T10:00:00+00:00', id: 42 }, kinds('did')));
-      expect(p).toContain('and=(action_label.in.(said,coverage),or(first_seen_at.lt."2026-08-01T10:00:00+00:00",');
+      expect(p).toContain('and=(action_label.in.(said,coverage),first_seen_at.lte."2026-08-01T10:00:00+00:00",or(first_seen_at.lt."2026-08-01T10:00:00+00:00",');
     });
 
     it('EOs, SCOTUS and pardons ignore the label chips (Did gates them by not fetching them)', () => {

@@ -201,7 +201,8 @@ const SPECS: Record<TimelineSource, SourceSpec> = {
   stories: {
     // v_tracker_stories (migration 112, rewritten in 113) bakes in status=active
     // + enriched and adds front membership + the main_line column (ADO-554) —
-    // a STORED flag since ADO-570, so main_line=is.true is an index-only scan.
+    // precomputed since ADO-570, kept in tracker_main_line since ADO-642, so
+    // main_line=is.true is an index-only walk of idx_stories_tracker_spine.
     table: 'v_tracker_stories',
     select: 'id,primary_headline,first_seen_at,alarm_level,severity,front_name,front_slug',
     base: `first_seen_at=gte.${TERM_START}`,
@@ -400,6 +401,11 @@ export function buildSourcePath(
   const labelFrag = labelled ? storyLabelPredicate(kindsOff) : null;
   if (labelFrag) conditions.push(labelFrag);
   if (cursor) {
+    // The `lte` bound is implied by the OR below, so it never changes the rows.
+    // It is there for the planner: PostgREST's OR is only a filter, but a plain
+    // range is an index condition, so page N starts at the cursor instead of
+    // walking every newer row (ADO-642; PROD's cold cache makes that walk slow).
+    conditions.push(`${s.dateCol}.lte.${quoted(cursor.date)}`);
     conditions.push(
       `or(${s.dateCol}.lt.${quoted(cursor.date)},`
       + `and(${s.dateCol}.eq.${quoted(cursor.date)},id.lt.${quoted(cursor.id)}))`,

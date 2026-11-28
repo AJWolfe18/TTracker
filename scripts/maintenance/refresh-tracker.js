@@ -3,7 +3,9 @@
  * Refresh the Tracker's precomputed data (ADO-570, batched since ADO-638).
  *
  * Calls public.refresh_tracker_derived(p_max_rows) (migration 136), which applies
- * the main-line rule to stories.main_line and recomputes tracker_stats. The
+ * the main-line rule to the stored main line and recomputes tracker_stats. The
+ * stored main line is the tracker_main_line table from migration 138 (ADO-642);
+ * before 138 it was the stories.main_line flag. The
  * homepage reads only those precomputed values, so anything that changes
  * stories / fronts / pins / EOs / SCOTUS / pardons must be followed by this.
  *
