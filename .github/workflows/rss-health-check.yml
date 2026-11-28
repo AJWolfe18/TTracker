@@ -9,17 +9,26 @@ on:
   schedule:
     - cron: '41 */6 * * *'  # Every 6 hours (off-peak minute)
   # ADO-639: the Netlify scheduled function netlify/functions/health-check-trigger.mjs dispatches this
-  # workflow on main once a day at 13:23 UTC. That run (or a manual one) is the only run that does the
-  # two daily checks below; scheduled and push runs skip them.
+  # workflow on main once a day at 13:23 UTC. That run (or a manual one) does the two daily checks below;
+  # push runs skip them, and scheduled runs only offer to do them after 14:00 UTC as a backup (the
+  # "Daily run watchdog" step). Each daily check runs once per day whichever run starts it: it claims the
+  # day in the database first (daily_check_claims, migration 139, ADO-645).
   workflow_dispatch:
+    inputs:
+      # Netlify sends no inputs, so its run is false and obeys the daily claim.
+      force:
+        description: 'Run the daily checks again even if they already ran today (posts the digest again)'
+        type: boolean
+        default: false
 
 jobs:
   preflight:
     runs-on: ubuntu-latest
-    # actions: read lets the daily run watchdog list today's runs of this workflow (gh run list).
     permissions:
       contents: read
-      actions: read
+    env:
+      # Read only by the two daily checks below (ADO-645): the force input, "check again today"
+      DAILY_CHECK_FORCE: ${{ inputs.force && '1' || '' }}
     steps:
       - uses: actions/checkout@v7
       
@@ -71,79 +80,36 @@ jobs:
           SILENCE_HOURS_FRONTS: ${{ vars.SILENCE_HOURS_FRONTS }}
         run: node scripts/monitoring/alert-routine-silence.js
 
-      # ADO-639 review: backup for the Netlify daily start. On the first scheduled run after 14:00 UTC
-      # (GitHub has been starting this workflow around 20:00 UTC), if no workflow_dispatch run of this
-      # workflow happened today, this run does the two daily checks itself (DAILY_CHECK_FALLBACK=1) and
-      # posts a warning, so a Netlify trigger that never fired cannot silently stop them. Later scheduled
-      # runs the same day see the earlier one and do nothing, so the checks never post twice. If the run
-      # list cannot be read, it falls back anyway (a repeat post beats silence).
+      # ADO-639 review + ADO-645: backup for the Netlify daily start. Every scheduled run at or after
+      # 14:00 UTC (GitHub has been starting this workflow around 20:00 UTC) offers to do the two daily
+      # checks (DAILY_CHECK_FALLBACK=1), and the daily claim decides. If today's checks are done or in
+      # progress, they skip. If no run did them, or the run that tried failed or died (claim failed, or
+      # stuck at running for 30 minutes), this run does them. A run's conclusion cannot tell those apart:
+      # the daily steps are continue-on-error, so a run whose check failed still ends in success.
+      # Needs migration 139 on PROD (see its APPLY note).
       - name: Daily run watchdog (PROD, main, scheduled runs only)
         if: always() && github.ref == 'refs/heads/main' && github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           hour=$(date -u +%H)
           if [ "$hour" -lt 14 ]; then
             echo "Before 14:00 UTC: the Netlify daily start (13:23 UTC) may still come. Nothing to do."
             exit 0
           fi
-          today=$(date -u +%Y-%m-%d)
-          list_runs() {
-            gh run list --repo "$GITHUB_REPOSITORY" --workflow rss-health-check.yml --branch main --limit 20 --json databaseId,conclusion "$@"
-          }
-          # A run only counts as "today's daily checks ran" if:
-          # - it started at or after 12:00 UTC: an earlier run reports the PREVIOUS day's slot
-          #   (dailySlot), so a manual run at 10:00 UTC must not stop today's fallback;
-          # - it SUCCEEDED: one that failed or was cancelled before its daily steps (checkout,
-          #   npm ci) did not check. The daily steps are continue-on-error, so a check that alerts
-          #   still leaves the run's conclusion success. Unfinished runs (conclusion "") do NOT
-          #   count: two overlapping runs would each see the other and both skip (Codex, November
-          #   27, 2026). The cost is a possible duplicate digest while runs overlap, never a miss;
-          #   the per-day claim in the database (ADO-645) removes the duplicate.
-          counted='[.[] | select(.conclusion == "success")'
-          if ! dispatched=$(list_runs --event workflow_dispatch --created ">=${today}T12:00:00Z" --jq "$counted] | length") ||
-             ! earlier=$(list_runs --event schedule --created ">=${today}T14:00:00Z" --jq "$counted | select(.databaseId != $GITHUB_RUN_ID)] | length"); then
-            echo "::warning::Could not list today's runs; doing the daily checks on this run to be safe"
-            dispatched=0; earlier=0
-          fi
-          if [ "$dispatched" -gt 0 ]; then
-            echo "A workflow_dispatch run already happened today ($dispatched): the daily checks ran there."
-            exit 0
-          fi
-          if [ "$earlier" -gt 0 ]; then
-            echo "An earlier scheduled run after 14:00 UTC already did the fallback today. Nothing to do."
-            exit 0
-          fi
           echo "DAILY_CHECK_FALLBACK=1" >> "$GITHUB_ENV"
-          echo "::warning::No Netlify daily start today: this scheduled run does the daily checks instead"
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            payload=$(jq -n \
-              --arg link "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-              --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              '{embeds: [{
-                 title: "Daily health check: Netlify start missing",
-                 description: "No Netlify-started health check run happened today (due 13:23 UTC), so GitHub'"'"'s scheduled run did the ingest health check and Stories flag digest instead. Check the health-check-trigger function in Netlify: docs/guides/rss-prod-external-trigger.md.",
-                 color: 16098851,
-                 fields: [{name: "Run", value: "[View Logs](\($link))", inline: true}],
-                 timestamp: $now
-               }]}')
-            if ! curl -fsS -o /dev/null -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"; then
-              echo "::error::Discord webhook failed - the missing Netlify start was not reported"
-            fi
-          else
-            echo "::error::DISCORD_WEBHOOK_URL secret not set - the missing Netlify start was not reported"
-          fi
+          echo "After 14:00 UTC: this run does the daily checks unless another run already did them today (the daily claim decides)."
 
       # ADO-597: daily ingest health (PROD, main only). Alerts when no article stored its text in 24h,
       # when articles land with empty excerpts, or when an active feed has been silent for 7 days.
-      # The script itself only checks on a workflow_dispatch run: the Netlify daily start (13:23 UTC) or a
-      # manual run, so once a day; scheduled and push runs skip. Same continue-on-error + follow-up
+      # The script itself only checks on a workflow_dispatch run (the Netlify daily start at 13:23 UTC, or a
+      # manual run) or on the watchdog's offer, and only the run that claims the day checks: once a day. Same continue-on-error + follow-up
       # Discord pattern as the routine silence check.
+      # ADO-645: both daily steps claim the day first (scripts/lib/daily-check-claim.js); a claim stuck
+      # at "running" is taken over after 30 minutes, so each step must time out well before that.
       - name: Ingest health check (PROD, main only)
         id: ingest_health
         if: always() && github.ref == 'refs/heads/main'
         continue-on-error: true
+        timeout-minutes: 10
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -153,7 +119,7 @@ jobs:
 
       # ADO-602: the Stories agent's own needs_manual_review flags (stories_enrichment_log), PROD, main only.
       # Daily digest of the stories created yesterday 06:00 UTC to today 06:00 UTC, checked on the same
-      # once-a-day workflow_dispatch run as the ingest health check. The script posts its own "could not run" message; a failed
+      # once-a-day run as the ingest health check (same gate, its own claim). The script posts its own "could not run" message; a failed
       # step (crash, npm ci failed, or an alert Discord did not accept) is reported by the follow-up step.
       - name: Stories flagged enrichments (PROD, main only)
         id: stories_review
@@ -165,6 +131,34 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: node scripts/monitoring/alert-needs-review.js --domain stories
         timeout-minutes: 2
+
+      # ADO-645: a daily check that ran on the watchdog's offer (above) and got the day's claim did work
+      # the Netlify run should have done (it never started, or its check did not finish), and says so in
+      # its step output. Normally one ping per day: a later run finds the claim taken and stays quiet (a second backup
+      # run pings again only if it takes over a claim the first backup run failed).
+      - name: Discord alert (daily checks ran from the backup run)
+        if: always() && github.ref == 'refs/heads/main' && (steps.ingest_health.outputs.fallback_ran == 'true' || steps.stories_review.outputs.fallback_ran == 'true')
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          echo "::warning::No Netlify-started run had finished the daily checks: this scheduled run did them instead"
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "::error::DISCORD_WEBHOOK_URL secret not set - the backup run was not reported"
+            exit 0
+          fi
+          payload=$(jq -n \
+            --arg link "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{embeds: [{
+               title: "Daily health check ran from the backup run",
+               description: "GitHub'"'"'s scheduled backup run did the ingest health check and Stories flag digest today: the Netlify start (due 13:23 UTC) never ran, or its check did not finish. Check the health-check-trigger function in Netlify and the log of today'"'"'s workflow_dispatch run, if there is one: docs/guides/rss-prod-external-trigger.md.",
+               color: 16098851,
+               fields: [{name: "Run", value: "[View Logs](\($link))", inline: true}],
+               timestamp: $now
+             }]}')
+          if ! curl -fsS -o /dev/null -H "Content-Type: application/json" -d "$payload" "$DISCORD_WEBHOOK_URL"; then
+            echo "::error::Discord webhook failed - the backup run was not reported"
+          fi
 
       - name: Discord alert (ingest health check could not run)
         if: always() && github.ref == 'refs/heads/main' && steps.ingest_health.outcome == 'failure'

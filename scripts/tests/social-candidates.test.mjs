@@ -7,7 +7,9 @@ assert.deepEqual(TYPES, ['story', 'eo', 'pardon']);
 const since = '2026-08-01T00:00:00Z';
 const s = candidateQuery('story', since);
 assert.ok(s.startsWith('/stories?'));
-for (const must of ['main_line=is.true', 'alarm_level=eq.5', 'status=eq.active', 'summary_neutral=not.is.null', `last_updated_at=gt.${encodeURIComponent(since)}`, 'order=last_updated_at.asc', 'limit=50']) {
+// ADO-642: the live main line (on_main_line), never the frozen stories.main_line column
+assert.ok(!s.includes('&main_line='), 'story query must not filter the frozen main_line column');
+for (const must of ['&on_main_line=is.true', 'alarm_level=eq.5', 'status=eq.active', 'summary_neutral=not.is.null', `last_updated_at=gt.${encodeURIComponent(since)}`, 'order=last_updated_at.asc', 'limit=50']) {
   assert.ok(s.includes(must), `story query missing ${must}`);
 }
 

@@ -21,6 +21,8 @@
  * One Discord message per run listing every problem; a healthy run posts nothing. Runs as a step
  * of the 6-hourly health check on main only (it reads PROD), but checks only on the once-a-day run
  * (scripts/lib/daily-check-window.js), so a known problem is reported once a day, not four times.
+ * That run first claims the day (scripts/lib/daily-check-claim.js, ADO-645): if another run already
+ * checked today, it records a pipeline_skips row and stops.
  *
  * Egress: every read is bounded (limit) and selects only ids, timestamps or source names, never
  * content. Silent-feed check matches on source_name. articles.feed_id (PROD from migration 130,
@@ -32,7 +34,8 @@
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
  *        FEED_SILENT_DAYS (optional), INGEST_HEALTH_FORCE=1 or GITHUB_EVENT_NAME=workflow_dispatch
- *        to check on a local run (scheduled and push-triggered runs never check)
+ *        to check on a local run (scheduled and push-triggered runs never check). INGEST_HEALTH_FORCE=1
+ *        or DAILY_CHECK_FORCE=1 also checks when today's check already ran.
  *
  * Exit codes: 0 when the check ran or was skipped (each failed read is reported in the message).
  * 1 when it could not run at all; the workflow's follow-up step posts that to Discord.
@@ -43,7 +46,8 @@ import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
 import { QUARANTINE_FAILURES } from '../rss/feed-health.js';
 // The once-a-day gate lives in scripts/lib/daily-check-window.js
-import { isDailyCheckRun, dailyCheckSkipNote } from '../lib/daily-check-window.js';
+import { isDailyCheckRun, isForcedRun, dailyCheckSkipNote } from '../lib/daily-check-window.js';
+import { runOncePerDay, claimClient, DAILY_CHECKS } from '../lib/daily-check-claim.js';
 
 const DAY_MS = 24 * 3600000;
 // A feed at or above QUARANTINE_FAILURES is only fetched on its daily retry (ADO-625).
@@ -56,8 +60,11 @@ const out = (line) => process.stdout.write(`${line}\n`);
  * scheduled and push runs never), or always with INGEST_HEALTH_FORCE=1.
  */
 export function shouldCheck({ env = process.env } = {}) {
-  return isDailyCheckRun({ env, force: env.INGEST_HEALTH_FORCE === '1' });
+  return isDailyCheckRun({ env, force: ingestForced(env) });
 }
+
+// INGEST_HEALTH_FORCE=1 or the workflow's force input: check whatever the gate and the claim say
+const ingestForced = (env) => env.INGEST_HEALTH_FORCE === '1' || isForcedRun(env);
 
 /**
  * @param {{recentArticles: boolean, recentWithContent: boolean, emptyExcerptSources: string[],
@@ -94,7 +101,12 @@ export function buildIngestAlert(f) {
   };
 }
 
-export async function runIngestHealth({ env = process.env, fetchImpl = globalThis.fetch, log = out, now = Date.now() } = {}) {
+/**
+ * @param {object} [opts]
+ * @param {object} [opts.supabase] - client for the daily claim and its skip row (tests pass one);
+ *   by default built from the same credentials
+ */
+export async function runIngestHealth({ env = process.env, fetchImpl = globalThis.fetch, log = out, now = Date.now(), supabase = null } = {}) {
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
@@ -102,6 +114,22 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
     log(`[ingest-health] skipped (${dailyCheckSkipNote(env)})`);
     return { state: 'skipped', posted: false };
   }
+  const claimOpts = {
+    supabase: supabase ?? claimClient({ url, key }),
+    check: DAILY_CHECKS.INGEST_HEALTH,
+    env, now, log,
+    force: ingestForced(env),
+  };
+  const result = await runOncePerDay(claimOpts,
+    () => checkIngestHealth({ url, key, env, fetchImpl, log, now }),
+    // Finished only when every read worked and any problem reached Discord. A failed read (Supabase
+    // down) or an undelivered alert leaves the day open, so a later run checks again (Codex P2).
+    (r) => r.findings.readErrors.length === 0 && (r.state !== 'problems' || r.posted));
+  return result ?? { state: 'already_ran', posted: false };
+}
+
+/** The check itself: the reads, one Discord message when something is wrong. */
+async function checkIngestHealth({ url, key, env, fetchImpl, log, now }) {
   const base = `${url.replace(/\/$/, '')}/rest/v1`;
   const get = async (path) => {
     const res = await fetchImpl(`${base}${path}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
@@ -174,6 +202,7 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   runIngestHealth()
-    .then((r) => { out(`[ingest-health] done: ${r.state}`); process.exit(0); })
+    // A problem Discord did not accept fails the step, so the workflow's "could not run" alert fires
+    .then((r) => { out(`[ingest-health] done: ${r.state}`); process.exit(r.state === 'problems' && !r.posted ? 1 : 0); })
     .catch((err) => { console.error(`[ingest-health] could not run: ${err.message}`); process.exit(1); });
 }

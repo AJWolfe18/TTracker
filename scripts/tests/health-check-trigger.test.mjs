@@ -44,11 +44,14 @@ assert.equal(isDailyCheckRun({ env: { GITHUB_EVENT_NAME: 'workflow_dispatch' } }
 assert.equal(isDailyCheckRun({ env: { GITHUB_EVENT_NAME: 'schedule' } }), false);
 assert.equal(isDailyCheckRun({ env: { GITHUB_EVENT_NAME: 'push' } }), false);
 {
-  // the workflow it dispatches accepts workflow_dispatch and declares no inputs (an unknown input is a 422)
+  // the workflow it dispatches accepts workflow_dispatch, and its only input (force, ADO-645) is optional
+  // and off by default: the Netlify call sends no inputs, so its run obeys the daily claim
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
   const on = wf.slice(wf.indexOf('\non:'), wf.indexOf('\njobs:'));
   assert.match(on, /^\s+workflow_dispatch:\s*$/m);
-  assert.ok(!/inputs:/.test(on), 'no inputs on the health check workflow');
+  assert.match(on, /inputs:\s*\n(\s*#[^\n]*\n)*\s+force:\s*\n\s+description:[^\n]+\n\s+type: boolean\s*\n\s+default: false/);
+  assert.ok(!/required: true/.test(on), 'no required input (the Netlify call would get a 422)');
+  assert.equal((on.match(/^\s{6}[a-z_]+:\s*$/gm) || []).length, 1, 'force is the only input');
 }
 
 // --- no token: no request, clear reason
@@ -251,18 +254,42 @@ for (const ctx of [undefined, null, {}, { deploy: null }, { deploy: { context: '
   assert.equal(isDailyCheckRun({ env: { GITHUB_EVENT_NAME: 'schedule', DAILY_CHECK_FALLBACK: '1' } }), true, 'watchdog fallback opens the gate on a scheduled run');
   assert.equal(isDailyCheckRun({ env: { DAILY_CHECK_FALLBACK: '1' } }), true, 'and on a local run');
   assert.equal(isDailyCheckRun({ env: { GITHUB_EVENT_NAME: 'schedule', DAILY_CHECK_FALLBACK: '0' } }), false, 'only the exact value 1 counts');
+  assert.equal(isDailyCheckRun({ env: { DAILY_CHECK_FORCE: '1' } }), true, 'the force input (ADO-645) opens the gate on a local run');
   const { describeFailure } = await import('../../netlify/lib/github-dispatch.mjs');
   assert.equal(describeFailure({ ok: false, status: 401, reason: 'github_rejected' }, 'the RSS run'), 'GitHub did not start the RSS run: 401 github_rejected.');
   assert.equal(describeFailure({ ok: false, reason: 'missing_token' }, 'the RSS run'), 'GitHub did not start the RSS run: missing_token.', 'no status = no double space');
   const unknown = describeFailure({ ok: false, reason: 'unknown_deploy_context' }, 'the RSS Pipeline Health Check');
   assert.match(unknown, /deploy context was not recognized/);
   assert.match(unknown, /GitHub was not called/);
-  // The watchdog step exists, runs only on scheduled main runs, and the job can list runs.
+  // The watchdog step exists and runs only on scheduled main runs.
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');
   assert.match(wf, /name: Daily run watchdog[^\n]*\n\s+if: always\(\) && github\.ref == 'refs\/heads\/main' && github\.event_name == 'schedule'/);
-  assert.match(wf, /DAILY_CHECK_FALLBACK=1/);
-  assert.match(wf, /permissions:\s*\n\s+contents: read\s*\n\s+actions: read/);
   assert.ok(wf.indexOf('Daily run watchdog') < wf.indexOf('- name: Ingest health check'), 'watchdog runs before the daily checks');
+  // ADO-645 review: after 14:00 UTC every scheduled run offers, and the daily claim alone decides. A
+  // run-list rule cannot see a Netlify run whose check failed or died: that run still ends in success
+  // (the daily steps are continue-on-error), so the rule would stop every later fallback that day.
+  const watchdog = wf.slice(wf.indexOf('- name: Daily run watchdog'), wf.indexOf('- name: Ingest health check'));
+  const script = watchdog.replace(/^\s*#.*$/gm, '');
+  assert.match(script, /if \[ "\$hour" -lt 14 \]; then[\s\S]*?exit 0\s*\n\s*fi\s*\n\s*echo "DAILY_CHECK_FALLBACK=1" >> "\$GITHUB_ENV"/, 'after 14:00 the fallback is offered unconditionally');
+  assert.ok(!/gh run list|conclusion/.test(script), 'no run-list heuristic');
+  assert.ok(!/actions: read/.test(wf), 'nothing in the workflow lists runs any more');
+  assert.ok(!/discord|curl/i.test(script), 'the watchdog itself posts nothing');
+  // the ping comes from a check that actually got the day's claim; it must not say Netlify never ran,
+  // since the backup also wins the day when Netlify's own check failed
+  assert.match(wf, /name: Discord alert \(daily checks ran from the backup run\)\s*\n\s+if: always\(\) && github\.ref == 'refs\/heads\/main' && \(steps\.ingest_health\.outputs\.fallback_ran == 'true' \|\| steps\.stories_review\.outputs\.fallback_ran == 'true'\)/);
+  assert.match(wf, /title: "Daily health check ran from the backup run"/);
+  assert.match(wf, /never ran, or its check did not finish/);
+  assert.ok(wf.indexOf('- name: Discord alert (daily checks ran from the backup run)') > wf.indexOf('id: stories_review'), 'pinged after both checks');
+  // the job passes the force input on to both daily steps, which time out well inside the 30-minute
+  // stale-claim takeover
+  const jobEnv = wf.slice(wf.indexOf('  preflight:'), wf.indexOf('    steps:'));
+  assert.match(jobEnv, /\n    env:\n(\s+#.*\n)*\s+DAILY_CHECK_FORCE: \$\{\{ inputs\.force && '1' \|\| '' \}\}\n/, 'job-level force env');
+  for (const id of ['ingest_health', 'stories_review']) {
+    const start = wf.indexOf(`id: ${id}`);
+    const step = wf.slice(start, wf.indexOf('- name:', start));
+    const minutes = Number(/timeout-minutes: (\d+)/.exec(step)?.[1]);
+    assert.ok(minutes > 0 && minutes < 30, `${id} times out before a claim goes stale (${minutes})`);
+  }
 }
 
 console.log('health-check-trigger: all tests passed');

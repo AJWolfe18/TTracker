@@ -1,9 +1,14 @@
 name: SCOTUS Tracker (PROD scheduled)
 
 on:
+  # ADO-644: the Netlify scheduled function netlify/functions/scotus-trigger.mjs dispatches this
+  # workflow on main every day at 19:47 UTC. GitHub's cron below is only a backup now (it has been
+  # starting 5 to 9 hours late); the backup_guard job skips it when the Netlify run already happened.
+  # Due two hours AFTER the Netlify run, so even an on-time cron run finds it (at 18:47 it came first
+  # and both ran). 21:47 is an odd hour: no RSS run (:47 on even hours) at the same minute.
   schedule:
-    # 18:00 UTC = 12:00 CT (standard time) / 13:00 ET (standard time). DST will shift.
-    - cron: "47 18 * * *"
+    - cron: "47 21 * * *"
+  # A dispatch with no inputs (the Netlify trigger) gets skip_fetch=false: a full run.
   workflow_dispatch:
     inputs:
       skip_fetch:
@@ -17,12 +22,104 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ADO-644: a cron run after the Netlify run would post the "Alert flagged enrichments" message twice
+  # in a day. Only a FINISHED workflow_dispatch run in the last 20 hours whose fetch step SUCCEEDED
+  # counts, even if a later step (fronts, refresh) failed the run: its alert already posted. One still
+  # running does not count (its fetch could still fail). Why 20 hours: scripts/tests/scotus-trigger.test.mjs. Fails open: if gh cannot read the runs, or this job
+  # fails, the pipeline runs (scotus_pipeline's condition).
+  backup_guard:
+    name: Backup guard (skip a cron run after the Netlify run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Scheduled runs only: a Netlify or manual run always does the full pipeline
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true'
+    # actions: read lets gh run list see this workflow's recent runs; contents: read is for the
+    # checkout on the skip path.
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run_pipeline: ${{ steps.check.outputs.run_pipeline }}
+    steps:
+      # Why the fetch step and not just the run: a manual run with skip_fetch also succeeds (Codex).
+      - name: Skip this scheduled run if the Netlify run already happened
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Must match the fetch step's name exactly (scripts/tests/scotus-trigger.test.mjs checks)
+          FETCH_STEP: "Fetch cases (CourtListener → Supabase PROD via TEST-named env vars)"
+        run: |
+          since=$(date -u -d '20 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "since=$since" >> "$GITHUB_OUTPUT"
+          fetched=0
+          if ! ids=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow scotus-tracker.yml --branch main \
+                --event workflow_dispatch --created ">=$since" --limit 20 --json databaseId,status \
+                --jq '.[] | select(.status == "completed") | .databaseId'); then
+            echo "::warning::Could not list recent runs; running the full pipeline to be safe"
+            ids=""
+          fi
+          for id in $ids; do
+            if ! step=$(gh run view "$id" --repo "$GITHUB_REPOSITORY" --json jobs \
+                  | jq -r --arg name "$FETCH_STEP" '[.jobs[].steps[]? | select(.name == $name) | .conclusion] | first // ""'); then
+              echo "::warning::Could not read run $id; running the full pipeline to be safe"
+              fetched=0
+              break
+            fi
+            echo "Run $id: fetch step $step"
+            if [ "$step" = "success" ]; then fetched=$((fetched + 1)); fi
+          done
+          echo "fetched=$fetched" >> "$GITHUB_OUTPUT"
+          if [ "$fetched" -gt 0 ]; then
+            echo "A workflow_dispatch run since $since fetched ($fetched): skipping this backup run."
+            echo "run_pipeline=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No workflow_dispatch run since $since fetched: this scheduled run is the backup and does the full pipeline."
+            echo "run_pipeline=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ADO-466: a skip leaves a pipeline_skips row. These steps run on the skip path only, so a backup
+      # run that does the pipeline stays a few seconds. All continue-on-error: if recording fails, the
+      # job still succeeds and the skip stands (a failed guard would make the pipeline run).
+      - name: Checkout (skip path)
+        if: steps.check.outputs.run_pipeline == 'false'
+        continue-on-error: true
+        uses: actions/checkout@v7
+
+      - name: Setup Node (skip path)
+        if: steps.check.outputs.run_pipeline == 'false'
+        continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install deps (skip path)
+        if: steps.check.outputs.run_pipeline == 'false'
+        continue-on-error: true
+        run: npm ci
+
+      - name: Record the skip (pipeline_skips)
+        if: steps.check.outputs.run_pipeline == 'false'
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SINCE: ${{ steps.check.outputs.since }}
+          FETCHED: ${{ steps.check.outputs.fetched }}
+        run: node scripts/scotus/record-backup-skip.js
+
   scotus_pipeline:
     name: SCOTUS pipeline
+    needs: backup_guard
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Kill switch + branch lock
-    if: github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true'
+    # Kill switch + branch lock for every run. A scheduled run also needs the backup guard's yes, or a
+    # guard that did not succeed (it fails open). !cancelled() replaces the default success() check, so
+    # the job still runs when the guard was skipped (Netlify, manual) or failed.
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' && vars.ENABLE_PROD_SCHEDULES == 'true'
+      && (github.event_name != 'schedule' || needs.backup_guard.result != 'success'
+      || needs.backup_guard.outputs.run_pipeline == 'true') }}
     env:
       NODE_ENV: production
     steps:

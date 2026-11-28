@@ -19,14 +19,21 @@ const DAY_MS = 24 * 3600000;
  * Scheduled runs normally do not (a late GitHub run would post a second time), push-triggered runs never
  * do (scripts/rss/**, migrations/**), and a run with no GitHub event (a local run) does not either.
  * DAILY_CHECK_FALLBACK=1 makes any run check. The health check workflow's "Daily run watchdog" step sets
- * it on the first scheduled run after 14:00 UTC when no workflow_dispatch run happened that day, so a
- * Netlify trigger that never fired cannot silently stop the daily checks (ADO-639 review). Set it by
- * hand to run either daily check locally.
+ * it on every scheduled run after 14:00 UTC, so a Netlify trigger that never fired, or a Netlify run
+ * whose check failed, cannot silently stop the daily checks (ADO-639 review, ADO-645). Set it by hand to
+ * run either daily check locally. DAILY_CHECK_FORCE=1 (the workflow's force input) opens the gate too.
+ * Passing this gate is not the end: the check then claims the day (daily-check-claim.js, ADO-645), so
+ * only one run a day actually checks.
  * @param {object} [opts]
  * @param {boolean} [opts.force] - the caller's own override (e.g. INGEST_HEALTH_FORCE=1)
  */
 export function isDailyCheckRun({ env = process.env, force = false } = {}) {
-  return force || env.GITHUB_EVENT_NAME === 'workflow_dispatch' || env.DAILY_CHECK_FALLBACK === '1';
+  return force || env.GITHUB_EVENT_NAME === 'workflow_dispatch' || env.DAILY_CHECK_FALLBACK === '1' || isForcedRun(env);
+}
+
+/** The workflow's force input ("check again even if today's check already ran"). */
+export function isForcedRun(env = process.env) {
+  return env.DAILY_CHECK_FORCE === '1';
 }
 
 /** Why a run skipped its daily check, for the log line. One wording for every daily check. */

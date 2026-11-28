@@ -8,16 +8,17 @@
 
 export const TYPES = Object.freeze(['story', 'eo', 'pardon']);
 
-// Stories read the STORED main_line flag (migration 113) straight off `stories`
-// - v_tracker_stories omits summary_spicy/source_count/last_updated_at, and the
-// stored flag is what the homepage shows, so this is the same main line.
+// Stories are read straight off `stories` (v_tracker_stories omits
+// summary_spicy/source_count/last_updated_at) and filtered on on_main_line, the
+// computed field over tracker_main_line (migration 138): the same main line the
+// homepage shows. Not stories.main_line, which 138 stopped updating.
 export function candidateQuery(type, sinceIso) {
   if (!sinceIso) throw new Error('candidateQuery: sinceIso required');
   const since = encodeURIComponent(sinceIso);
   switch (type) {
     case 'story':
       return `/stories?select=id,primary_headline,summary_spicy,alarm_level,source_count,last_updated_at`
-        + `&main_line=is.true&alarm_level=eq.5&status=eq.active&summary_neutral=not.is.null`
+        + `&on_main_line=is.true&alarm_level=eq.5&status=eq.active&summary_neutral=not.is.null`
         + `&last_updated_at=gt.${since}&order=last_updated_at.asc,id.asc&limit=50`;
     case 'eo':
       return `/executive_orders?select=id,title,spicy_summary,alarm_level,updated_at`

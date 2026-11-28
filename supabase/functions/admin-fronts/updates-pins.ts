@@ -151,7 +151,7 @@ export type PinSource = typeof PIN_SOURCES[number]
 export const PIN_VALUES = ['force_show', 'force_hide']
 export const MAX_PINS = 1000            // same cap as fetchTrackerPins() in src/lib/timeline.ts
 // Mirrors src/lib/timeline.ts: TERM_START bounds every Tracker source, and EO/SCOTUS/pardon
-// rows reach the main line at MAIN_LINE_SOURCE_ALARM (stories use stories.main_line).
+// rows reach the main line at MAIN_LINE_SOURCE_ALARM (stories use tracker_main_line, migration 138).
 export const TERM_START = '2025-01-20'
 export const MAIN_LINE_SOURCE_ALARM = 4
 
@@ -195,7 +195,7 @@ export interface PinItem {
   status?: string | null       // stories
   merged_into_story_id?: number | null
   enriched?: boolean           // stories: summary_neutral set (the publish gate)
-  main_line?: boolean          // stories: the stored flag after the last refresh
+  main_line?: boolean          // stories: on the main line as of the last refresh
 }
 
 /**
