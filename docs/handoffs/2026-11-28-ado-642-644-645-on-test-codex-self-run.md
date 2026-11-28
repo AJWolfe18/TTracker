@@ -52,7 +52,7 @@
 
 ## Findings for later (not fixed; proposed cards)
 - **`npm run verify:prod`** (Josh asked "are the tests actually useful?"): one automated after-deploy check that reads PROD run logs and anon counts and prints PASS/FAIL per shipped card. Pair it with trimming about 15 YAML-text regex asserts in `scotus-trigger.test.mjs` / `health-check-trigger.test.mjs`. $0. Claude recommended its own card.
-- `supabase/config.toml` uses `[inbucket]`, which Supabase CLI v3 rejects ("use [local_smtp]"), so deploys need the v2 CLI. Small fix.
+- `supabase/config.toml` uses `[inbucket]`, which Supabase CLI v3 rejects ("use [local_smtp]"), so deploys need the v2 CLI. Small fix. (Fixed by ADO-648.)
 - `public/supabase-browser-config.js` carries a TEST anon key that TEST now rejects ("Invalid API key"). This is part of the TEST JWT rotation item in memory; `src/lib/supabase.ts` has the working key.
 - `docs/guides/features/rss-pipeline-operations.md` (last changed October 6, 2025) documents the retired job-queue pipeline and a nonexistent `job-queue-worker-atomic.js`.
 - PROD RSS run 46099746883 (November 28, 02:47 UTC) logged no `refresh_tracker_derived` line. Not investigated.
@@ -65,6 +65,7 @@
 - **Supabase CLI** isn't on PATH. Use the npx cache:
   - v3.0.0, for SQL: `%LOCALAPPDATA%\npm-cache\_npx\b96a6bd565c470ce\node_modules\@supabase\cli-windows-x64\bin\supabase.exe`, e.g. `db query --remote=<ref> --read-only "..."` or `--yes -f file.sql`.
   - v2.122.1, for `functions deploy`: `...\_npx\d308456e91a98c64\...`.
+  - **Update (ADO-648):** `config.toml` now uses `[local_smtp]`, so v3 deploys too and v2 is no longer needed. Both versions load the config.
   - Hosted writes need `--yes` (agent mode). Josh's standing rule allows it on TEST only.
   - Auto mode blocks `--remote=osjbulmltfpcoldydexg` (PROD), even read-only.
 - The claude.ai Supabase connector only sees WhiskeyPal Test, not TTracker.
