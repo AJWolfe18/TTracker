@@ -27,7 +27,7 @@
 - Git Bash `TZ=America/Chicago date` silently prints UTC.
 
 ## Findings not fixed (proposed, Josh to approve)
-- Carried from the afternoon handoff, still unapproved: `supabase/config.toml` `[inbucket]` -> `[local_smtp]` (the current CLI cannot deploy without it); PROD has no `feed_compliance_rules` table (decision on ADO-637); national-security / world feeds for Iran; stale git worktrees (`git worktree prune` still hits a permission error on `thirsty-almeida`). "PROD stories never close" was dropped: Josh does not consider it a priority, and migration 135 already fixed the Fronts timeout it caused.
+- Carried from the afternoon handoff, still unapproved: `supabase/config.toml` `[inbucket]` -> `[local_smtp]` (the current CLI cannot deploy without it; fixed by ADO-648); PROD has no `feed_compliance_rules` table (decision on ADO-637); national-security / world feeds for Iran; stale git worktrees (`git worktree prune` still hits a permission error on `thirsty-almeida`). "PROD stories never close" was dropped: Josh does not consider it a priority, and migration 135 already fixed the Fronts timeout it caused.
 
 ## Verification
 - **First automatic Netlify call, 6:47 PM CT November 7: PASSED.** Run 42431339090 (`workflow_dispatch`, started 00:47:07 UTC, success) with no click, so Netlify passes `published: true` to scheduled calls and Codex's caveat is closed.
