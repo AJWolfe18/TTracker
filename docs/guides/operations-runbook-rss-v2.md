@@ -609,38 +609,7 @@ Actions → Test Environment - Daily Tracker → Run workflow → Branch: test �
 
 ## Worker Monitoring
 
-### Check Worker Status (Local/Server)
-```bash
-# Check if worker is running
-ps aux | grep "job-queue-worker"
-
-# View worker logs (last 50 lines)
-tail -n 50 worker-*.log
-
-# Monitor live worker output
-tail -f worker-*.log
-```
-
-### Expected Worker Behavior
-- Processes jobs from `job_queue` table
-- Completes `fetch_feed` jobs in <60s each
-- Completes `story.cluster` jobs in <10s each
-- Completes `story.enrich` jobs in <30s each (OpenAI call)
-
-### Worker Not Processing Jobs
-**Check:**
-1. Worker running: `ps aux | grep job-queue-worker`
-2. Jobs exist: `SELECT COUNT(*) FROM job_queue WHERE status = 'pending'`
-3. Worker errors: `grep ERROR worker-*.log`
-
-**Restart worker:**
-```bash
-# Kill existing worker
-pkill -f job-queue-worker
-
-# Start new worker
-node scripts/job-queue-worker.js > worker-$(date +%Y%m%d-%H%M%S).log 2>&1 &
-```
+The long-running job-queue worker is gone. It was replaced by the inline RSS tracker (`scripts/rss-tracker-supabase.js`, TTRC-266), which runs as a GitHub Actions job, and the worker script was deleted in ADO-643. Nothing processes `job_queue` any more. To run or debug the pipeline, use the GitHub Actions run logs; see `docs/guides/triggering-rss-tracker-test.md`.
 
 ---
 

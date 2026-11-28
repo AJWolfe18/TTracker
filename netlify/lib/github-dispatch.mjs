@@ -1,5 +1,6 @@
 // Shared pieces of the Netlify scheduled functions that start a GitHub workflow with a
-// workflow_dispatch call: rss-prod-trigger (ADO-637) and health-check-trigger (ADO-639).
+// workflow_dispatch call: rss-prod-trigger (ADO-637), health-check-trigger (ADO-639) and
+// scotus-trigger (ADO-644).
 // Lives outside netlify/functions so Netlify does not deploy it as a function of its own; each
 // function's bundle pulls it in through the relative import.
 // Setup + token rules: docs/guides/rss-prod-external-trigger.md
@@ -76,7 +77,7 @@ export function deployDecision(context) {
   return 'unknown';
 }
 
-// The whole scheduled-function handler. Both triggers use it, so they share one set of
+// The whole scheduled-function handler. Every trigger uses it, so they share one set of
 // fail-closed and alert rules.
 //   tag       log prefix, e.g. 'rss-prod-trigger'
 //   dispatch  (token) => dispatchWorkflow(...) result

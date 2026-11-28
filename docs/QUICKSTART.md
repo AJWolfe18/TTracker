@@ -63,17 +63,14 @@ try {
 
 ### RSS Pipeline
 ```
-GitHub Actions (every 2h)
+GitHub Actions (every 2h on PROD, manual on TEST)
   ↓
-Edge Function (rss-enqueue)
-  ↓
-Job Queue (job_queue table)
-  ↓
-Worker (job-queue-worker.js)
-  ├─ fetch_feed → Articles
-  ├─ story.cluster → Group articles
-  └─ story.enrich → AI summaries
+rss-tracker-supabase.js (inline script, TTRC-266)
+  ├─ Fetch all active feeds → Articles
+  ├─ Cluster articles → Stories
+  └─ Enrich stories → AI summaries
 ```
+(The old job-queue worker this replaced was deleted in ADO-643.)
 
 ---
 
@@ -103,8 +100,8 @@ Worker (job-queue-worker.js)
 # Local frontend server
 npm run server
 
-# Job queue worker
-node scripts/job-queue-worker.js
+# Run the RSS tracker on TEST
+gh workflow run "RSS Tracker - TEST" --ref test
 
 # Run QA tests
 npm run qa:smoke
@@ -153,7 +150,7 @@ bash scripts/check-code-review.sh
 ## 7. Key Files
 
 ### Core Architecture
-- `/scripts/job-queue-worker.js` - Job processor (fetch, cluster, enrich)
+- `/scripts/rss-tracker-supabase.js` - Inline RSS tracker (fetch, cluster, enrich)
 - `/supabase/functions/rss-enqueue/` - RSS job creation
 - `/migrations/` - Database schema evolution
 

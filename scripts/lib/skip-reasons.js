@@ -32,8 +32,9 @@ export const PIPELINES = Object.freeze({
   FRONT_ASSIGNMENT:   'front_assignment',   // front assignment agent declined a candidate (ADO-582) or the sweep RPC failed (ADO-581)
   FRONT_UPDATE_DRAFT: 'front_update_draft', // fronts update drafter (ADO-546/Wave 2) — declined to draft an update
   TRACKER_REFRESH:    'tracker_refresh',    // scripts/maintenance/refresh-tracker.js — main_line/tally refresh failed (ADO-570)
-  SCOTUS_FETCH:       'scotus_fetch',       // scripts/scotus/fetch-cases.js — cluster skipped before processing (ADO-493)
+  SCOTUS_FETCH:       'scotus_fetch',       // scripts/scotus/fetch-cases.js — cluster skipped before processing (ADO-493); scripts/scotus/record-backup-skip.js — whole scheduled run skipped by the backup guard (ADO-644)
   LABEL_BACKFILL:     'label_backfill',     // record_action_labels() RPC (migration 125) — backfill label not written, or written but uncertain (ADO-594)
+  DAILY_HEALTH_CHECK: 'daily_health_check', // scripts/lib/daily-check-claim.js — a daily check (ingest health, Stories digest) another run already did today (ADO-645)
 });
 
 export const REASONS = Object.freeze({
@@ -56,6 +57,8 @@ export const REASONS = Object.freeze({
   ALREADY_LABELED:       'already_labeled',       // label backfill: story got an agent or human action label after the page was read; kept (ADO-594)
   STORY_NOT_FOUND:       'story_not_found',       // label backfill: story id no longer exists (merged or deleted) when the page was recorded (ADO-594)
   LABEL_UNCERTAIN:       'label_uncertain',       // label backfill: label written, but the agent was unsure (PRD 14.2 edge case 12); review these first (ADO-594)
+  ALREADY_CLAIMED:       'already_claimed',       // daily check: another run is doing or did this check for the day (daily_check_claims, migration 139); metadata names that run (ADO-645)
+  BACKUP_RUN_SKIPPED:    'backup_run_skipped',    // SCOTUS backup guard: a scheduled run skipped because a finished Netlify-started run fetched in the last 20 hours (ADO-644)
 });
 
 /**

@@ -14,7 +14,7 @@ These legacy methods create jobs in `job_queue` but **do not process them** beca
 |--------|---------------------|
 | `bash scripts/monitoring/trigger-rss.sh` | Creates jobs in queue, but no worker processes them |
 | `curl .../rss-enqueue` Edge Function | Same - creates orphaned jobs |
-| `node scripts/job-queue-worker.js` | Requires manual long-running process (not automated) |
+| The old job-queue worker | Deleted in ADO-643; nothing processes `job_queue` now |
 
 **The new system (TTRC-266) bypasses the job queue entirely.**
 

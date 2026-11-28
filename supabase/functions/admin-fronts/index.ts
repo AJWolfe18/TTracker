@@ -35,11 +35,11 @@
 // tracker_stats use story_event.story_id/event_id only, migrations 113/126), so update writes do
 // not run refresh_tracker_derived(); v_event_stats is a live view.
 // Pins (AC6): tracker_pin rows for any of the four sources; every pin write refreshes the
-// Tracker (stories.main_line is stored). A pin on an item that can never show on the Tracker
+// Tracker (the main line is stored in tracker_main_line). A pin on an item that can never show on the Tracker
 // (closed, merged, unpublished, before the term) is flagged "dead" in pins / pin_set.
 //
 // Every write that changes a front or a membership calls refresh_tracker_derived() afterwards
-// (stories.main_line is a stored column; without it the change waits for the next pipeline run).
+// (the main line is stored in tracker_main_line; without it the change waits for the next pipeline run).
 // A failed refresh does not undo the write: it comes back as refresh.ok = false.
 //
 // Rules (sweep_pattern, sweep_coword, agent_pattern) are compiled by admin_check_front_pattern
@@ -67,7 +67,9 @@ import {
 
 const LIST_FIELDS = 'id,slug,name,tier,lifecycle,publish_state,published_at,alarm_level,sweep_priority,sweep_pattern,agent_pattern,updated_at'
 const FULL_FIELDS = 'id,slug,name,dek,alarm_level,tier,lifecycle,publish_state,published_at,started_at,resolved_at,created_by,sweep_pattern,sweep_coword,sweep_priority,sweep_summary,agent_pattern,agent_definition,created_at,updated_at'
-const STORY_FIELDS = 'id,primary_headline,alarm_level,severity,category,action_label,status,merged_into_story_id,first_seen_at,last_updated_at,main_line'
+// main_line:on_main_line = the on_main_line(stories) computed field (migration 138, reads
+// tracker_main_line) under the JSON key admin.html already uses. stories.main_line is frozen.
+const STORY_FIELDS = 'id,primary_headline,alarm_level,severity,category,action_label,status,merged_into_story_id,first_seen_at,last_updated_at,main_line:on_main_line'
 const PAGE = 50
 const MAX_IDS = 200
 const MAX_FRONTS = 200
@@ -250,7 +252,7 @@ async function describeChunk(supabase: SupabaseClient, source: PinSource, ids: s
     if (!numeric.length) return out
     // "enriched" is a second id-only read so summary text never leaves the database
     const [rows, enriched] = await Promise.all([
-      supabase.from('stories').select('id,primary_headline,status,merged_into_story_id,main_line,first_seen_at,alarm_level,severity').in('id', numeric).limit(numeric.length),
+      supabase.from('stories').select('id,primary_headline,status,merged_into_story_id,main_line:on_main_line,first_seen_at,alarm_level,severity').in('id', numeric).limit(numeric.length),
       supabase.from('stories').select('id').in('id', numeric).not('summary_neutral', 'is', null).limit(numeric.length)
     ])
     if (rows.error) throw new Error(`stories read failed: ${rows.error.message}`)
