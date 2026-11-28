@@ -11,6 +11,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { ENTITY_STOPWORDS } from './scoring.js';
+import { recordSkip, PIPELINES, REASONS } from '../lib/skip-reasons.js';
 
 // Lazy-initialize Supabase client (don't create at module load time)
 let supabase = null;
@@ -213,27 +214,28 @@ async function getEntityBlockCandidates(article) {
 }
 
 /**
- * ANN block: Top-K nearest neighbors by embedding
- * Uses HNSW index for sub-50ms search
+ * ANN block: Top-K nearest neighbors by embedding, via the find_similar_stories
+ * RPC (live definition: migrations/140_find_similar_stories_use_hnsw.sql).
+ * It walks the HNSW centroid index (ADO-635), a few ms per call.
  * @param {object} article - Article with embedding_v1
  * @returns {array} - Stories (60 candidates)
  */
 async function getAnnBlockCandidates(article) {
   if (!article.embedding_v1 || article.embedding_v1.length === 0) return [];
 
-  // pgvector cosine distance operator: <=>
-  // Note: Supabase PostgREST doesn't directly support vector operators yet
-  // We need to use RPC for this
-
   const { data, error } = await getSupabaseClient().rpc('find_similar_stories', {
     query_embedding: article.embedding_v1,
     match_limit: ANN_LIMIT,
-    min_similarity: 0.0  // New parameter from migration 024
+    min_similarity: 0.0
   });
 
   if (error) {
     console.error('[candidate-gen] ANN block error:', error.message);
-    // Fallback: return empty array
+    // The article still clusters on the time/entity/slug blocks, but record the gap (ADO-466 rule)
+    await recordSkip(getSupabaseClient(), {
+      pipeline: PIPELINES.CLUSTERING, reason: REASONS.ANN_LOOKUP_FAILED,
+      entity_type: 'article', entity_id: article.id, metadata: { error: error.message }
+    });
     return [];
   }
 
@@ -267,51 +269,6 @@ async function getSlugBlockCandidates(article) {
 
   return data || [];
 }
-
-// ============================================================================
-// Helper: Create RPC Function (for migration)
-// ============================================================================
-
-/**
- * SQL function for ANN search (add to migration)
- *
- * CREATE OR REPLACE FUNCTION find_similar_stories(
- *   query_embedding vector(1536),
- *   match_limit int DEFAULT 60
- * )
- * RETURNS TABLE (
- *   id bigint,
- *   primary_headline text,
- *   centroid_embedding_v1 vector(1536),
- *   entity_counter jsonb,
- *   top_entities text[],
- *   last_updated_at timestamptz,
- *   primary_source_domain text,
- *   lifecycle_state text,
- *   similarity float
- * )
- * LANGUAGE plpgsql
- * AS $$
- * BEGIN
- *   RETURN QUERY
- *   SELECT
- *     s.id,
- *     s.primary_headline,
- *     s.centroid_embedding_v1,
- *     s.entity_counter,
- *     s.top_entities,
- *     s.last_updated_at,
- *     s.primary_source_domain,
- *     s.lifecycle_state,
- *     1 - (s.centroid_embedding_v1 <=> query_embedding) AS similarity
- *   FROM stories s
- *   WHERE s.centroid_embedding_v1 IS NOT NULL
- *     AND s.lifecycle_state IN ('emerging', 'growing', 'stable', 'stale')
- *   ORDER BY s.centroid_embedding_v1 <=> query_embedding
- *   LIMIT match_limit;
- * END;
- * $$;
- */
 
 // ============================================================================
 // Export

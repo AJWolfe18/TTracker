@@ -36,6 +36,7 @@ export const PIPELINES = Object.freeze({
   SCOTUS_FETCH:       'scotus_fetch',       // scripts/scotus/fetch-cases.js — cluster skipped before processing (ADO-493); scripts/scotus/record-backup-skip.js — whole scheduled run skipped by the backup guard (ADO-644)
   LABEL_BACKFILL:     'label_backfill',     // record_action_labels() RPC (migration 125) — backfill label not written, or written but uncertain (ADO-594)
   DAILY_HEALTH_CHECK: 'daily_health_check', // scripts/lib/daily-check-claim.js — a daily check (ingest health, Stories digest) another run already did today (ADO-645)
+  CLUSTERING:         'clustering',         // scripts/rss/candidate-generation.js — an article's ANN candidate lookup failed (ADO-635)
 });
 
 export const REASONS = Object.freeze({
@@ -61,6 +62,7 @@ export const REASONS = Object.freeze({
   LABEL_UNCERTAIN:       'label_uncertain',       // label backfill: label written, but the agent was unsure (PRD 14.2 edge case 12); review these first (ADO-594)
   ALREADY_CLAIMED:       'already_claimed',       // daily check: another run is doing or did this check for the day (daily_check_claims, migration 139); metadata names that run (ADO-645)
   BACKUP_RUN_SKIPPED:    'backup_run_skipped',    // SCOTUS backup guard: a scheduled run skipped because a finished Netlify-started run fetched in the last 20 hours (ADO-644)
+  ANN_LOOKUP_FAILED:     'ann_lookup_failed',     // find_similar_stories() RPC errored (e.g. statement timeout); the article clustered on the other candidate blocks only (ADO-635)
 });
 
 /**
