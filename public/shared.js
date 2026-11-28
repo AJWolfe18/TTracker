@@ -1,5 +1,6 @@
 // TrumpyTracker Shared Utilities
-// Shared helpers for app.js and eo-app.js
+// Helpers for the old pre-React pages. Those pages were deleted in ADO-643 and
+// no page loads this file now; src/__tests__/shared-track-event.test.ts still tests it.
 
 (function(global) {
   'use strict';
@@ -12,7 +13,7 @@
     document.body.innerHTML = '<div style="padding:20px;color:red;font-family:monospace;background:#fff8f8;border:2px solid red;margin:20px;">' +
       '<h2>⚠️ Configuration Error</h2>' +
       '<p>SUPABASE_CONFIG is missing. Check that supabase-browser-config.js loads before shared.js.</p>' +
-      '<p style="font-size:12px;color:#666;">Script load order must be: supabase-browser-config.js → shared.js → app.js</p></div>';
+      '<p style="font-size:12px;color:#666;">Script load order must be: supabase-browser-config.js → shared.js → page script</p></div>';
     throw new Error('SUPABASE_CONFIG not loaded - check script order in HTML');
   }
 

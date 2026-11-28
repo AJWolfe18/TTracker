@@ -118,8 +118,8 @@ Every 15 minutes (Developer plan):
    }
    ```
 
-4. **Integrate with Job Queue**
-   - Add "scraper" job type to `job-queue-worker.js`
+4. **Integrate with the RSS tracker**
+   - Add scraper handling to the inline RSS tracker (`scripts/rss-tracker-supabase.js`); the job-queue worker this originally targeted was deleted in ADO-643
    - Detect feed_url starting with `scraper://`
    - Route to appropriate scraper function
 

@@ -1,5 +1,5 @@
 // Story Enrichment Prompts
-// Used by enrich-stories-inline.js and job-queue-worker.js
+// Used by enrich-stories-inline.js
 
 // Dynamic year for prompts - use UTC to avoid timezone-related off-by-one day/year issues
 const CURRENT_YEAR = new Date().getUTCFullYear();
