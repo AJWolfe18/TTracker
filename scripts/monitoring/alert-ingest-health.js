@@ -19,8 +19,8 @@
  *                    already silent: catches a dead feed while another feed of the same source produces
  *
  * One Discord message per run listing every problem; a healthy run posts nothing. Runs as a step
- * of the 6-hourly health check on main only (it reads PROD), but checks only on the scheduled run starting 12:00-17:59 UTC
- * (7 AM CT in summer) or a manual run, so a known problem is reported once a day, not four times.
+ * of the 6-hourly health check on main only (it reads PROD), but checks only on the once-a-day run
+ * (scripts/lib/daily-check-window.js), so a known problem is reported once a day, not four times.
  *
  * Egress: every read is bounded (limit) and selects only ids, timestamps or source names, never
  * content. Silent-feed check matches on source_name. articles.feed_id (PROD from migration 130,
@@ -32,7 +32,7 @@
  * Usage: node scripts/monitoring/alert-ingest-health.js
  * Env:   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, DISCORD_WEBHOOK_URL (no URL = no message),
  *        FEED_SILENT_DAYS (optional), INGEST_HEALTH_FORCE=1 or GITHUB_EVENT_NAME=workflow_dispatch
- *        to check outside that window (push-triggered runs never check)
+ *        to check on a local run (scheduled and push-triggered runs never check)
  *
  * Exit codes: 0 when the check ran or was skipped (each failed read is reported in the message).
  * 1 when it could not run at all; the workflow's follow-up step posts that to Discord.
@@ -42,10 +42,9 @@ import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
 import { QUARANTINE_FAILURES } from '../rss/feed-health.js';
-import { CHECK_WINDOW_UTC, isDailyCheckRun } from '../lib/daily-check-window.js';
+// The once-a-day gate lives in scripts/lib/daily-check-window.js
+import { isDailyCheckRun, dailyCheckSkipNote } from '../lib/daily-check-window.js';
 
-// The once-a-day window (12:00-17:59 UTC) lives in scripts/lib/daily-check-window.js
-export { CHECK_WINDOW_UTC };
 const DAY_MS = 24 * 3600000;
 // A feed at or above QUARANTINE_FAILURES is only fetched on its daily retry (ADO-625).
 export { QUARANTINE_FAILURES };
@@ -53,11 +52,11 @@ export { QUARANTINE_FAILURES };
 const out = (line) => process.stdout.write(`${line}\n`);
 
 /**
- * Once a day (isDailyCheckRun: the scheduled run starting 12:00-17:59 UTC, or a manual run; push runs
- * never), or always with INGEST_HEALTH_FORCE=1.
+ * Once a day (isDailyCheckRun: a workflow_dispatch run, i.e. the Netlify daily start or a manual run;
+ * scheduled and push runs never), or always with INGEST_HEALTH_FORCE=1.
  */
-export function shouldCheck({ env = process.env, now = Date.now() } = {}) {
-  return isDailyCheckRun({ env, now, force: env.INGEST_HEALTH_FORCE === '1' });
+export function shouldCheck({ env = process.env } = {}) {
+  return isDailyCheckRun({ env, force: env.INGEST_HEALTH_FORCE === '1' });
 }
 
 /**
@@ -99,8 +98,8 @@ export async function runIngestHealth({ env = process.env, fetchImpl = globalThi
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
-  if (!shouldCheck({ env, now })) {
-    log(`[ingest-health] skipped (checks once a day: the scheduled run starting ${CHECK_WINDOW_UTC[0]}:00-${CHECK_WINDOW_UTC[1] - 1}:59 UTC, or a manual run)`);
+  if (!shouldCheck({ env })) {
+    log(`[ingest-health] skipped (${dailyCheckSkipNote(env)})`);
     return { state: 'skipped', posted: false };
   }
   const base = `${url.replace(/\/$/, '')}/rest/v1`;

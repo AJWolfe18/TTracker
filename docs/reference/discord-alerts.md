@@ -15,7 +15,9 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | Waiting for review (ADO-577) | `monitoring/alert-needs-review.js --domain scotus\|eo\|pardons`, last step of the three fetch workflows | see "Review queue rules" below | amber |
 | Stories agent flagged its copy (ADO-602) | `monitoring/alert-needs-review.js --domain stories`, in RSS Pipeline Health Check (main only; the same once-a-day run as ingest health) | a completed Stories log row with `needs_manual_review = true`, created yesterday 06:00 UTC to today 06:00 UTC; see rule 2b | amber |
 | Routine went silent (ADO-586, ADO-624) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h; SCOTUS, EO, Pardons and Election front older than 30h (SCOTUS and EO count weekday hours only). EO and fronts read `routine_heartbeats` (migration 129), one row per run | red |
-| RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; the scheduled run starting 12:00-17:59 UTC, or a manual run) | no article from the last 24h stored `content`, articles with an empty excerpt, an active feed's source silent for `FEED_SILENT_DAYS` (default 7), feeds failing every fetch (5+ in a row, retried daily), or a working feed whose newest item is older than that window (ADO-625) | amber (red if every read failed) |
+| RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; once a day on the `workflow_dispatch` run the Netlify function `health-check-trigger` starts at 13:23 UTC, or a manual run; GitHub's scheduled and push runs skip, ADO-639) | no article from the last 24h stored `content`, articles with an empty excerpt, an active feed's source silent for `FEED_SILENT_DAYS` (default 7), feeds failing every fetch (5+ in a row, retried daily), or a working feed whose newest item is older than that window (ADO-625) | amber (red if every read failed) |
+| Netlify trigger failed (ADO-637, ADO-639) | `netlify/functions/rss-prod-trigger.mjs` ("RSS PROD trigger (Netlify) failed", every 2 hours until fixed) and `netlify/functions/health-check-trigger.mjs` ("RSS health check trigger (Netlify) failed", daily until fixed), on the published PROD deploy | GitHub did not start the workflow (expired token, wrong scope, GitHub down) or Netlify's deploy context is unknown; status code and a fixed reason only. Fixes: `docs/guides/rss-prod-external-trigger.md` (Troubleshooting) | red |
+| Daily health check: Netlify start missing (ADO-639) | "Daily run watchdog" step in RSS Pipeline Health Check (main, scheduled runs only) | the first scheduled run after 14:00 UTC finds no `workflow_dispatch` run of the health check that day; that run then does the ingest health check and Stories digest itself (`DAILY_CHECK_FALLBACK=1`) | amber |
 | Homepage refresh failed / fell behind (ADO-638) | `maintenance/refresh-tracker.js`, the last step of all five pipeline workflows (RSS PROD + TEST, SCOTUS, Pardons, EO; TEST runs titled [TEST]) | failed: `refresh_tracker_derived` errored, so the homepage main line and counters are stale (says how many stories earlier batches already updated). Fell behind: the 4-minute budget ran out with rows still pending; the next run continues. Also a `pipeline_skips` row (`tracker_refresh` / `refresh_failed` or `refresh_behind`). Repeats every run until fixed | red / amber |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
 
@@ -53,17 +55,21 @@ Discord outage cannot turn a good ingest red. But when an alert that matters is 
 **2b. Stories flags are a daily digest, not a queue.** (ADO-602, October 12, 2026.) The Stories agent
 writes `needs_manual_review` and `notes` on its own `stories_enrichment_log` row (about 10-15% of
 completions). Stories have no reviewed state in admin, so an open queue would repeat forever.
-- Once a day (the RSS health check run starting 12:00-17:59 UTC, which is 7 AM to 12:59 PM CT in
-  summer, or a manual run; push runs never check) the check lists the flagged, completed log rows
-  created in a fixed slot: yesterday 06:00 UTC to today 06:00 UTC (1 AM CT in summer, midnight in winter). The slot ends 6 hours
-  before the check window opens because a log row is created when a story starts and only turns
+- Once a day the check lists the flagged, completed log rows created in a fixed slot: yesterday
+  06:00 UTC to today 06:00 UTC (1 AM CT in summer, midnight in winter). The daily run is the RSS
+  health check's `workflow_dispatch` run that the Netlify function `health-check-trigger` starts at
+  13:23 UTC (7:23 AM CT in winter, 8:23 AM in summer), or a manual run. GitHub's scheduled runs and
+  push runs never check (ADO-639, November 25, 2026): until then the daily run was GitHub's scheduled
+  run starting 12:00-17:59 UTC, and since November 7, 2026 GitHub has started that cron only around
+  07:00 and 20:00 UTC, so no digest ran November 8-24. The slot ends 6 hours before the 12:00 UTC
+  slot boundary because a log row is created when a story starts and only turns
   completed when it finishes: a slot ending at the check hour missed a story still running when the
   digest looked, on both days (Codex, PR #190). Six hours on, every story in the slot has finished
   (one takes minutes), and the bucketing uses only the database clock (`created_at`). Because the
-  slot is fixed rather than "the last N hours", every flag appears in exactly one digest however late
-  in the window GitHub starts the run. A manual run before 12:00 UTC re-reports the slot the previous
-  day's scheduled run covered, which is how a dropped run is recovered (if that run did happen, the
-  manual run repeats its digest).
+  slot is fixed rather than "the last N hours", every flag appears in exactly one digest whenever
+  after 12:00 UTC the daily run starts. A manual run before 12:00 UTC re-reports the slot the
+  previous day's run covered, which is how a dropped run is recovered (if that run did happen, the
+  manual run repeats its digest; so does a second manual run on the same day).
 - Known limit: a story whose log row turns completed more than 6 hours after its slot ends is never
   reported. The agent treats a run over 30 minutes as dead, so this needs a hung run that later
   resumes. The root fix is a database-set completion time on `stories_enrichment_log` (a migration).
@@ -72,8 +78,9 @@ completions). Stories have no reviewed state in admin, so an open queue would re
   Discord's embed, the message says how many flags are left, with the `stories_enrichment_log` filter
   that returns all of the slot's flags. If the query hits its 500-row cap, the check reports that it
   could not run rather than send a partial digest.
-- Known gap: if a day's scheduled run never happens at all (GitHub drops it), that day's slot is
-  skipped. A manual run of the health check on the same day recovers it.
+- Known gap: if a day's daily run never happens at all (the Netlify trigger fails, which posts its
+  own "trigger failed" alert), that day's slot is skipped. A manual run of the health check on the
+  same day recovers it.
 - Only the flag counts. A `thin_source` note without the flag never alerts, and neither do `failed`
   runs (only `completed` rows are read).
 - Nothing flagged in the slot, no message. Could-not-run handling is rule 1, plus a follow-up
@@ -97,4 +104,4 @@ title with `[TEST]` and links the TEST site's admin.
 - `scripts/monitoring/alert-needs-review.js` (queue rules, `isReminderDay`, the Stories daily digest)
 - Tests: `npm run qa:alerts` (`scripts/tests/discord-alerts.test.mjs`), part of `qa:smoke`
 
-_Last updated: October 12, 2026_
+_Last updated: November 25, 2026_
