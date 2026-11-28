@@ -89,4 +89,4 @@
      - 2 unindexed `story_event` foreign keys;
      - dead indexes `idx_stories_hash` and `ix_stories_lifecycle_state`.
   3. `find_similar_stories` is callable by anon.
-  4. Plus the earlier four: verify:prod, config.toml `[inbucket]`, the stale ops guide, and the 02:47 run with no refresh line.
+  4. Plus the earlier four: verify:prod, config.toml `[inbucket]` (fixed by ADO-648), the stale ops guide, and the 02:47 run with no refresh line.
