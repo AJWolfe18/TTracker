@@ -4,8 +4,9 @@
  * Dependency-free on purpose: the cloud routine sandbox has no npm install step. It needs only an
  * object with rpc(fn, args) -> { data, error } (a supabase-js client, or a small fetch adapter).
  *
- * refresh_tracker_derived(p_max_rows) (migration 136) changes at most p_max_rows main_line flags per
- * call and says more_pending when the batch was full. The API cancels a statement after ~8 seconds,
+ * refresh_tracker_derived(p_max_rows) (migration 136) changes at most p_max_rows main-line entries per
+ * call (tracker_main_line rows from migration 138, stories.main_line flags before it) and says
+ * more_pending when the batch was full. The API cancels a statement after ~8 seconds,
  * so a backlog is drained in small calls instead of one long one.
  */
 

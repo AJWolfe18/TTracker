@@ -47,7 +47,8 @@
     "qa:feed-health": "node scripts/tests/feed-health.test.mjs",
     "qa:rss-prod-trigger": "node scripts/tests/rss-prod-trigger.test.mjs",
     "qa:health-check-trigger": "node scripts/tests/health-check-trigger.test.mjs",
-    "qa:tracker-refresh": "node scripts/tests/refresh-tracker.test.mjs && node scripts/tests/refresh-tracker-batches-pglite.test.mjs"
+    "qa:tracker-refresh": "node scripts/tests/refresh-tracker.test.mjs && node scripts/tests/refresh-tracker-batches-pglite.test.mjs && npm run qa:tracker-diff-plan",
+    "qa:tracker-diff-plan": "node scripts/tests/refresh-tracker-diff-plan-pglite.test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
