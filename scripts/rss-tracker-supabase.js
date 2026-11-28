@@ -2,7 +2,7 @@
  * RSS Tracker - Inline Supabase Implementation
  * TTRC-266: Automated RSS fetching, clustering, and enrichment
  *
- * Replaces job-queue-worker.js for RSS automation
+ * Replaced the old job-queue worker for RSS automation
  * Runs via GitHub Actions every 2 hours
  */
 
@@ -194,7 +194,7 @@ export class RSSTracker {
   /**
    * Generate embeddings for articles that don't have them yet.
    * Must run BEFORE clustering so hybrid scoring has embeddings to work with.
-   * Uses same model and storage format as job-queue-worker.js for consistency.
+   * Uses the same model and storage format the old job-queue worker used, for consistency.
    */
   async enrichArticles() {
     try {

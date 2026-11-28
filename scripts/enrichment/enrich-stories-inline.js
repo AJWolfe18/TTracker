@@ -1,6 +1,6 @@
 /*
  * Story enrichment for inline RSS pipeline.
- * SYSTEM_PROMPT imported from ./prompts/stories.js (shared with job-queue-worker.js)
+ * SYSTEM_PROMPT imported from ./prompts/stories.js
  *
  * ADO-270: Updated to use variation pools and alarm_level (0-5)
  * ADO-274: Frame-based variation system with deterministic selection

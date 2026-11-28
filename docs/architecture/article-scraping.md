@@ -487,10 +487,7 @@ scraped_too_short host=www.pbs.org
 
 ### Live Worker Test
 
-```bash
-node scripts/job-queue-worker.js
-# Watch for scraping logs during story.enrich jobs
-```
+The scraper was first wired into the old job-queue worker, which was deleted in ADO-643. No live pipeline imports `scripts/enrichment/scraper.js` now; only the test scripts in References below do.
 
 ### Compare Summary Quality
 
@@ -540,7 +537,7 @@ scraped_too_short  # Count these (fallbacks)
 ## References
 
 - **Scraper Code:** `scripts/enrichment/scraper.js`
-- **Worker Integration:** `scripts/job-queue-worker.js` (line 433)
+- **Worker Integration:** was in the old job-queue worker (deleted, ADO-643)
 - **Test Script:** `scripts/test-scraper-ttrc258.js`
 - **JIRA:** TTRC-258
 - **Handoff:** `docs/handoffs/2025-11-08-ttrc258-testing-complete.md`

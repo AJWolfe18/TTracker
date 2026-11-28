@@ -11,15 +11,15 @@ This document defines UI patterns established in the theme preview implementatio
 ## File Structure
 
 ```
+index.html              # Vite entry (main entry)
+src/                    # React + TypeScript app (pages, components)
 public/
-├── index.html          # Stories page (main entry)
-├── executive-orders.html  # EO page
-├── app.js              # Stories components (React)
-├── eo-app.js           # EO components (React)
-├── shared.js           # Shared utilities
+├── admin.html          # Admin dashboard (standalone vanilla JS)
 ├── themes.css          # CSS variables (light/dark)
-└── supabase-config.js  # Environment-aware config
+└── supabase-browser-config.js  # Environment-aware config
 ```
+
+The old pre-React pages (`executive-orders.html`, `pardons.html`, `app.js`, `eo-app.js`, `pardons-app.js`) were deleted in ADO-643.
 
 ---
 

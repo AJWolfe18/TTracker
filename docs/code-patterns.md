@@ -337,13 +337,12 @@ async function getStory(id: string): Promise<Story | null> {
 
 ### Current Project Structure
 ```
+index.html                  # Vite entry for the React app (src/)
+
 public/
-├── index.html              # Main dashboard
-├── admin.html              # Admin panel
-├── executive-orders.html   # EO tracker
-├── app.js                  # Main app logic
-├── shared.js               # Shared utilities
-└── supabase-browser-config.js  # Supabase client
+├── admin.html              # Admin panel (standalone vanilla JS)
+├── shared.js               # Legacy helpers (no page loads it; kept for its test)
+└── supabase-browser-config.js  # Supabase client config (admin.html)
 
 scripts/
 ├── rss-tracker-supabase.js # Main RSS pipeline

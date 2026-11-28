@@ -143,7 +143,7 @@ const parser = new Parser({
 
 ### Where Enrichment Happens
 
-**Location:** Node.js Worker (`scripts/job-queue-worker.js`), NOT in Supabase Edge Functions
+**Location:** Originally the Node.js job-queue worker, NOT Supabase Edge Functions. That worker was replaced by the inline RSS tracker (`scripts/rss-tracker-supabase.js`, TTRC-266) and deleted in ADO-643. Story enrichment is now done by Claude cloud agents; the inline GPT path in `scripts/enrichment/enrich-stories-inline.js` is off by default (ADO-528). The rationale below is kept from the worker era.
 
 **Why Worker vs Edge Function:**
 - Edge Functions are lightweight HTTP handlers (timeouts, limited dependencies)

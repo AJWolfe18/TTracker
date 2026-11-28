@@ -33,7 +33,7 @@ jobs:
           # - public/supabase-browser-config.js: Browser config with both envs
           # - legacy/: Legacy files not actively used
           # - *-backup*: Backup files not actively used
-          # - dashboard-*.js: Legacy dashboard files (main site uses app.js)
+          # - dashboard-*.js: Legacy dashboard files
           # - data-health-monitor.js: PROD monitoring script (intentional)
           # - batch/: Windows batch files (legacy)
           # - lint-prod-refs.yml: This workflow (contains PROD_REF constant for checking)
