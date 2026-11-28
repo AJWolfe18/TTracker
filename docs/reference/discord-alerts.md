@@ -17,7 +17,7 @@ workflow failure steps, which `curl` the same webhook from YAML.
 | Routine went silent (ADO-586, ADO-624) | `monitoring/alert-routine-silence.js`, in RSS Pipeline Health Check | Judge log older than 12h, Stories log older than 6h; SCOTUS, EO, Pardons and Election front older than 30h (SCOTUS and EO count weekday hours only). EO and fronts read `routine_heartbeats` (migration 129), one row per run | red |
 | RSS ingest health (ADO-597) | `monitoring/alert-ingest-health.js`, in RSS Pipeline Health Check (main only; once a day on the `workflow_dispatch` run the Netlify function `health-check-trigger` starts at 13:23 UTC, or a manual run; GitHub's scheduled and push runs skip, ADO-639) | no article from the last 24h stored `content`, articles with an empty excerpt, an active feed's source silent for `FEED_SILENT_DAYS` (default 7), feeds failing every fetch (5+ in a row, retried daily), or a working feed whose newest item is older than that window (ADO-625) | amber (red if every read failed) |
 | Netlify trigger failed (ADO-637, ADO-639) | `netlify/functions/rss-prod-trigger.mjs` ("RSS PROD trigger (Netlify) failed", every 2 hours until fixed) and `netlify/functions/health-check-trigger.mjs` ("RSS health check trigger (Netlify) failed", daily until fixed), on the published PROD deploy | GitHub did not start the workflow (expired token, wrong scope, GitHub down) or Netlify's deploy context is unknown; status code and a fixed reason only. Fixes: `docs/guides/rss-prod-external-trigger.md` (Troubleshooting) | red |
-| Daily health check: Netlify start missing (ADO-639) | "Daily run watchdog" step in RSS Pipeline Health Check (main, scheduled runs only) | the first scheduled run after 14:00 UTC finds no `workflow_dispatch` run of the health check that day; that run then does the ingest health check and Stories digest itself (`DAILY_CHECK_FALLBACK=1`) | amber |
+| Daily health check ran from the backup run (ADO-639, ADO-645) | "Discord alert (daily checks ran from the backup run)" step in RSS Pipeline Health Check (main, scheduled runs only) | a scheduled run after 14:00 UTC offered to do the daily checks ("Daily run watchdog", `DAILY_CHECK_FALLBACK=1`) and its ingest health check or Stories digest got the day's claim (`daily_check_claims`): the Netlify start never ran, or its check did not finish (claim failed, or stuck at running for 30 minutes). Once per day: a later run finds the claim taken. Not sent when the claim cannot be read | amber |
 | Homepage refresh failed / fell behind (ADO-638) | `maintenance/refresh-tracker.js`, the last step of all five pipeline workflows (RSS PROD + TEST, SCOTUS, Pardons, EO; TEST runs titled [TEST]) | failed: `refresh_tracker_derived` errored, so the homepage main line and counters are stale (says how many stories earlier batches already updated). Fell behind: the 4-minute budget ran out with rows still pending; the next run continues. Also a `pipeline_skips` row (`tracker_refresh` / `refresh_failed` or `refresh_behind`). Repeats every run until fixed | red / amber |
 | Judge uncertain verdicts (ADO-583) | `clustering/execute-judge-verdicts.js` | the Judge left verdicts it was unsure of for the admin Judge tab | amber |
 
@@ -67,9 +67,12 @@ completions). Stories have no reviewed state in admin, so an open queue would re
   digest looked, on both days (Codex, PR #190). Six hours on, every story in the slot has finished
   (one takes minutes), and the bucketing uses only the database clock (`created_at`). Because the
   slot is fixed rather than "the last N hours", every flag appears in exactly one digest whenever
-  after 12:00 UTC the daily run starts. A manual run before 12:00 UTC re-reports the slot the
-  previous day's run covered, which is how a dropped run is recovered (if that run did happen, the
-  manual run repeats its digest; so does a second manual run on the same day).
+  after 12:00 UTC the daily run starts. Each slot is also posted by only one run (ADO-645): the
+  digest claims its day in `daily_check_claims` first, so a second run for the same slot (a late
+  Netlify start after the GitHub fallback, overlapping runs, a second manual click) skips and leaves
+  a `pipeline_skips` row. A run whose digest did not reach Discord leaves the day open for the next
+  run. A manual run before 12:00 UTC belongs to the previous day's slot: it recovers that slot if its
+  run was dropped and skips if it was not. To post a slot again, run the workflow with **force**.
 - Known limit: a story whose log row turns completed more than 6 hours after its slot ends is never
   reported. The agent treats a run over 30 minutes as dead, so this needs a hung run that later
   resumes. The root fix is a database-set completion time on `stories_enrichment_log` (a migration).

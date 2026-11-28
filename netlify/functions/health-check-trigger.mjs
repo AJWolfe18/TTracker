@@ -4,7 +4,8 @@
 //
 // Same rules as rss-prod-trigger.mjs (shared in ../lib/github-dispatch.mjs): same token, only the
 // current published production deploy dispatches, no raw error text or response body is ever logged.
-// The health check workflow has no inputs, so the body is the ref alone (GitHub rejects unknown inputs, 422).
+// The body is the ref alone: the workflow's only input, force (ADO-645), is optional and stays off,
+// so this run obeys the daily claim. GitHub rejects unknown inputs (422), so never send others.
 // Setup + token rules: docs/guides/rss-prod-external-trigger.md
 
 import { dispatchWorkflow, makeTriggerHandler } from '../lib/github-dispatch.mjs';

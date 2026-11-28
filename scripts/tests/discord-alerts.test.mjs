@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { postDiscord, postDiscordReported, summarizeList, COLORS } from '../lib/discord.js';
 import { buildAlert, runNeedsReviewAlert, runCli, DOMAINS, isReminderDay, storiesSlot } from '../monitoring/alert-needs-review.js';
 import { dailySlot } from '../lib/daily-check-window.js';
+import { grantedClaimStub } from './fixtures/granted-claim.mjs';
 
 // --- postDiscord -----------------------------------------------------------
 {
@@ -258,7 +259,9 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
     { id: 42, story_id: 17302, needs_manual_review: true, status: 'completed', notes: 'next slot', created_at: at('2026-10-12T06:10:00Z'), stories: { primary_headline: 'Tomorrow digest story' } },
     { id: 38, story_id: 17298, needs_manual_review: true, status: 'failed', notes: 'run died', created_at: at('2026-10-12T01:00:00Z'), stories: { primary_headline: 'Failed run story' } },
   ];
-  const seen = { queries: [], discord: [] };
+  // `supabase` is the daily claim (ADO-645), always granted: these tests are about the digest
+  const supabase = grantedClaimStub();
+  const seen = { queries: [], discord: [], rpc: supabase.calls };
   let table = log;
   const fetchImpl = async (url, init = {}) => {
     const u = new URL(url);
@@ -275,11 +278,15 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   };
   const env = { SUPABASE_URL: 'https://fake.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k', DISCORD_WEBHOOK_URL: 'https://d.test/h' };
   // The daily run (ADO-639): the workflow_dispatch run the Netlify function starts
-  const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, log: () => {}, now });
+  const run = (now = DAILY, extraEnv = {}) => runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch', ...extraEnv }, argv: ['--domain', 'stories'], fetchImpl, supabase, log: () => {}, now });
 
   // a flagged row alerts with the headline and the agent's note; the unflagged thin_source row, the
   // failed run and the flags outside the slot do not
   assert.deepEqual(await run(), { flagged: 1, due: true, posted: true });
+  // ADO-645: the digest claims its day (the 12:00 UTC boundary date) first and marks it done after
+  assert.deepEqual(seen.rpc.map((c) => [c.fn, c.args.p_check_name, c.args.p_slot_date]),
+    [['claim_daily_check', 'stories_review', '2026-10-12'], ['finish_daily_check', 'stories_review', '2026-10-12']]);
+  assert.equal(seen.rpc[1].args.p_status, 'done');
   const q = seen.queries[0];
   assert.equal(q.searchParams.get('needs_manual_review'), 'eq.true');
   assert.equal(q.searchParams.get('status'), 'eq.completed');
@@ -314,7 +321,7 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   assert.equal(seen.queries.length, queries);
   {
     const logged = [];
-    await runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'schedule' }, argv: ['--domain', 'stories'], fetchImpl, log: (l) => logged.push(l), now: DAILY });
+    await runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'schedule' }, argv: ['--domain', 'stories'], fetchImpl, supabase, log: (l) => logged.push(l), now: DAILY });
     assert.match(logged[0], /not the daily check run.*workflow_dispatch.*this is a schedule run/);
   }
   assert.equal((await run(Date.parse('2026-10-12T06:10:00Z'))).posted, true);
@@ -370,7 +377,7 @@ assert.throws(() => buildAlert('nope', [{}]), /unknown domain/);
   // a capped query never sends a partial digest: it throws, and runCli posts "could not run"
   const capped = async (url, init) => (new URL(url).hostname === 'd.test' ? fetchImpl(url, init)
     : new Response('[]', { status: 200, headers: { 'Content-Range': '0-499/612' } }));
-  await assert.rejects(runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }, argv: ['--domain', 'stories'], fetchImpl: capped, log: () => {}, now: DAILY }), /query cap/);
+  await assert.rejects(runNeedsReviewAlert({ env: { ...env, GITHUB_EVENT_NAME: 'workflow_dispatch' }, argv: ['--domain', 'stories'], fetchImpl: capped, supabase, log: () => {}, now: DAILY }), /query cap/);
 
   // wired into the once-a-day RSS health check on main (reads PROD), with a follow-up so a dead digest is never silent
   const wf = readFileSync(fileURLToPath(new URL('../../.github/workflows/rss-health-check.yml', import.meta.url)), 'utf8');

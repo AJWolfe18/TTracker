@@ -22,7 +22,8 @@
  * and there is no "reviewed" state, so an open queue would repeat forever. Instead it is a daily digest:
  * flagged, completed log rows CREATED in a fixed slot that ends 6 hours before the 12:00 UTC daily slot
  * boundary (storiesSlot: yesterday 06:00 UTC to today 06:00 UTC), checked only on the once-a-day run of
- * the RSS health check (scripts/lib/daily-check-window.js). The 6-hour lag means every
+ * the RSS health check (scripts/lib/daily-check-window.js), and only by the first run to claim that
+ * day (scripts/lib/daily-check-claim.js, ADO-645; DAILY_CHECK_FORCE=1 checks again). The 6-hour lag means every
  * story in the slot has finished (a story takes minutes) before the digest looks, so each flag is
  * reported exactly once, on the database's own clock. Every flag in the digest is named. A daily run
  * that never happens skips its slot. Thin-source notes without the flag never alert.
@@ -44,6 +45,7 @@ import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 import { postDiscord, COLORS } from '../lib/discord.js';
 import { isDailyCheckRun, dailySlot, dailyCheckSkipNote } from '../lib/daily-check-window.js';
+import { runOncePerDay, claimClient, DAILY_CHECKS } from '../lib/daily-check-claim.js';
 
 const DEFAULT_WINDOW_HOURS = 168;
 const NEW_HOURS = 26;
@@ -205,7 +207,12 @@ function contentRangeTotal(header) {
   return m ? Number(m[1]) : null;
 }
 
-export async function runNeedsReviewAlert({ env = process.env, argv = process.argv.slice(2), fetchImpl = globalThis.fetch, log = out, now = Date.now() } = {}) {
+/**
+ * @param {object} [opts]
+ * @param {object} [opts.supabase] - daily digests: client for the daily claim and its skip row (tests
+ *   pass one); by default built from the same credentials
+ */
+export async function runNeedsReviewAlert({ env = process.env, argv = process.argv.slice(2), fetchImpl = globalThis.fetch, log = out, now = Date.now(), supabase = null } = {}) {
   const i = argv.indexOf('--domain');
   const domainKey = i >= 0 ? argv[i + 1] : null;
   if (!domainKey || !DOMAINS[domainKey]) throw new Error(`--domain must be one of ${Object.keys(DOMAINS).join('|')}`);
@@ -219,6 +226,20 @@ export async function runNeedsReviewAlert({ env = process.env, argv = process.ar
   const url = env.SUPABASE_URL || env.SUPABASE_TEST_URL;
   const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_TEST_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
+  const check = () => checkDomain({ domainKey, url, key, env, fetchImpl, log, now });
+  if (!d.daily) return check();
+
+  // Once per day, whichever run gets here first (ADO-645): a second run for the same day stops here
+  const claimOpts = { supabase: supabase ?? claimClient({ url, key }), check: DAILY_CHECKS.STORIES_REVIEW, env, now, log };
+  const result = await runOncePerDay(claimOpts, check,
+    // A digest Discord did not accept is not delivered: leave the day open for a later run
+    (r) => !r.due || r.posted);
+  return result ?? { flagged: 0, due: false, posted: false };
+}
+
+/** Query one domain's flags and post its alert when one is due. */
+async function checkDomain({ domainKey, url, key, env, fetchImpl, log, now }) {
+  const d = DOMAINS[domainKey];
   const hours = Number(env.ALERT_WINDOW_HOURS) > 0 ? Number(env.ALERT_WINDOW_HOURS) : DEFAULT_WINDOW_HOURS;
   const slot = (d.slot || dailySlot)(now);
   const res = await fetchImpl(`${url.replace(/\/$/, '')}/rest/v1${d.path({ slot })}`, {

@@ -371,8 +371,13 @@ Full column contract: PRD §6 (`docs/features/events-tracker/prd.md`).
 
 **RLS:** anon SELECT policy with a **column-level grant on `source`, `entity_id`, `pin` only** — pin existence is public curation data (a force_shown row renders publicly), but `note` is an admin breadcrumb and is NOT anon-readable. Writes service_role only. ADO-547 ships the admin editor.
 
-### `stories.main_line` (column, migration 113 — ADO-570)
-Stored boolean, `NOT NULL DEFAULT false`. Written ONLY by `refresh_tracker_derived()` — never by hand or by the pipeline directly. Backed by partial index `idx_stories_tracker_main_line (first_seen_at DESC, id DESC) INCLUDE (primary_headline, alarm_level, severity) WHERE main_line IS TRUE AND status = 'active' AND summary_neutral IS NOT NULL` so the spine page is an index-only scan. **Predicate is `main_line IS TRUE` on purpose** — PostgREST `is.true` emits `IS TRUE` and the planner will not match a bare-boolean partial predicate; hand-written queries must use `IS TRUE` too.
+### `tracker_main_line` (table, migration 138 — ADO-642)
+One row per story on the Tracker main line: `story_id BIGINT PRIMARY KEY REFERENCES stories(id) ON DELETE CASCADE`. Written ONLY by `refresh_tracker_derived()` (inserts/deletes the differences from `v_tracker_main_line_rule`); it never updates `stories`, so a flip costs a tiny row instead of a full stories row rewrite through every index and trigger. Anon SELECT (explicit grant + RLS policy, read through `v_tracker_stories`); service_role write.
+- **Homepage read:** `v_tracker_stories.main_line` = `EXISTS (tracker_main_line row)`. `main_line=is.true` walks `idx_stories_tracker_spine (first_seen_at DESC, id DESC) INCLUDE (primary_headline, alarm_level, severity) WHERE status = 'active' AND summary_neutral IS NOT NULL` newest first (index-only, no sort). The same index serves the alarm-filter views.
+- **Service-role reads of `stories`:** the computed field `on_main_line(stories)` — `select=...,main_line:on_main_line` or `on_main_line=is.true` (admin-fronts edge function, social drafts). service_role only.
+
+### `stories.main_line` (column, migration 113 — ADO-570; retired by 138)
+**No longer written since migration 138**: frozen at its value when 138 ran; a later migration drops it. Do not read it, use `tracker_main_line` (above). Its partial index `idx_stories_tracker_main_line` was dropped by 138.
 
 ### `tracker_stats` (table, migration 113)
 One row (`id = 1`, CHECK-enforced): `developments`, `alarm5_last30`, `open_fronts`, `refreshed_at`. The masthead tally; replaces 9 `HEAD count=exact` requests per page load. Counts are as of `refreshed_at`. Anon SELECT (explicit grant + RLS policy); service_role write.
@@ -672,6 +677,25 @@ Admin tab ignores all of them (never selects, never writes). Public frontend ren
 
 **RLS:** enabled, no anon/authenticated grant — admin tab reads via `admin-judge-log` edge function (service_role).
 **Writers:** the inline pipeline (`source='inline'`), the admin Judge tab (`'manual'`), and — since prompt v1.2 (ADO-583, September 19, 2026) — the Clustering Judge **executor** (`scripts/clustering/execute-judge-verdicts.js` via `.github/workflows/judge-executor.yml`) on behalf of the Judge agent (`'judge-agent'`); the agent itself no longer writes. Rationale prefixes written by the executor are contractual: `deferred:` (cap / chained merge, retried next run), `failed:` (merge_stories `ok:false`, retried once), `escalated:` (second failure, logged as `uncertain`), `transient:` (HTTP/transport failure - retried, never counts toward escalation), `skipped:` (loser already merged). An executed merge whose survivor/loser the executor flipped (older `first_seen_at` survives) carries the suffix `[executor: survivor/loser flipped - story N is older]`. On a workflow re-run the executor rebuilds "what merged this run" from `story_merge_audit` (by `run_id`), not from this table.
+
+---
+
+### `daily_check_claims`
+**Purpose:** One row per daily health check per day, so each daily check (ingest health, Stories flag digest) runs once a day whichever run of the RSS Pipeline Health Check starts it: the Netlify daily start, the GitHub fallback, or a manual run (ADO-645)
+**Migration:** `139_daily_check_claims.sql`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| check_name | TEXT | `'ingest_health'` or `'stories_review'` (`DAILY_CHECKS` in `scripts/lib/daily-check-claim.js`); CHECK `^[a-z_]{1,40}$`. Primary key with slot_date |
+| slot_date | DATE | UTC date of the 12:00 UTC boundary that ends the day's digest slot (`dailySlot`) |
+| status | TEXT | `running`, `done` or `failed` |
+| run_id | TEXT | Run holding the claim: `<GitHub run id>-<attempt>`, or `local-...` |
+| claimed_at | TIMESTAMPTZ | When the current holder claimed it |
+| finished_at | TIMESTAMPTZ | When it was marked done or failed (NULL while running) |
+| attempts | INTEGER | Runs that have held it; above 1 = a failed or stale claim was taken over, or a forced re-run |
+
+**Functions (service_role only):** `claim_daily_check(p_check_name, p_slot_date, p_run_id, p_force)` claims atomically (`INSERT ... ON CONFLICT DO UPDATE ... WHERE`), taking over a `failed` claim, a `running` claim older than 30 minutes, or any claim when `p_force`; returns `claimed` plus the holder. `finish_daily_check(p_check_name, p_slot_date, p_run_id, p_status)` marks the caller's own running claim `done` or `failed`. A run that loses the claim writes `pipeline_skips` `daily_health_check/already_claimed`.
+**RLS:** enabled, no anon/authenticated access. About 730 rows a year; no cleanup needed.
 
 ---
 
