@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
 **Budget**: <$100/month HARD LIMIT (raised from $50 on November 7, 2026 to fit Supabase Pro)
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
-**Workflow**: Code → local tests → in-session two-pass review → Josh's Codex → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
+**Workflow**: Code → local tests → `/simplify` → in-session two-pass review → Josh's Codex → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
 **Source of Truth**: ADO for status, plans for implementation details only
 **Tools Available**: Supabase MCP, Azure DevOps MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
@@ -56,7 +56,7 @@ docs/features/
 - [ ] Follow plan/todos linearly (don't jump around)
 - [ ] Validate with subagent BEFORE marking todos complete
 - [ ] Check MCP tools before claiming "I can't"
-- [ ] **Run two-pass code review** on any non-trivial change:
+- [ ] **Run `/simplify` first** (human-readable code, Josh November 27, 2026), re-run tests, then **run two-pass code review** on any non-trivial change:
   1. `Task(feature-dev:code-reviewer)` — pattern compliance, bugs, security
   2. `Agent(superpowers:code-reviewer)` — production readiness, architecture, requirements alignment
   - Fix Critical/Important findings before proceeding
@@ -122,10 +122,11 @@ docs/features/
 **For TEST (normal work):**
 1. Always work on `test` branch
 2. Fix + local tests (unit, PGlite, `npm run qa:smoke`) - these touch nothing shared
-3. In-session two-pass code review (see "During Work"; `/code-review medium` or higher counts), fix real findings
-4. Hand Josh the Codex brief and WAIT for his results; fix and re-run Codex if needed
-5. Only then: commit + push to `test` (auto-deploys to Netlify TEST), apply TEST migrations, deploy TEST edge functions
-6. **Why this order (November 7, 2026):** pushing first was left over from when Codex reviewed PRs on GitHub (retired August 25, 2026). Codex now runs locally on unpushed code, and TEST's database, edge functions and site are shared, so an unreviewed push can break TEST (it did: ADO-547 moves, November 7)
+3. Run `/simplify` on the change and re-run the tests (Josh, November 27, 2026: "I want this to be human readable code"). Every non-trivial change, same skip list as the review
+4. In-session two-pass code review (see "During Work"; `/code-review medium` or higher counts), fix real findings
+5. Hand Josh the Codex brief and WAIT for his results; fix and re-run Codex if needed
+6. Only then: commit + push to `test` (auto-deploys to Netlify TEST), apply TEST migrations, deploy TEST edge functions
+7. **Why this order (November 7, 2026):** pushing first was left over from when Codex reviewed PRs on GitHub (retired August 25, 2026). Codex now runs locally on unpushed code, and TEST's database, edge functions and site are shared, so an unreviewed push can break TEST (it did: ADO-547 moves, November 7)
 
 **For PROD (deployments only):**
 1. Create deployment branch from `main`
@@ -502,7 +503,7 @@ gh run watch
 
 ### Fetch SCOTUS Cases (CourtListener API)
 Use the `scotus-fetch` skill (`.claude/skills/scotus-fetch/SKILL.md`) — commands, dry-run/resume flags, and gotchas (`is_public` default, sync state, rate limits).
-**Note:** `scotus-fetch`/`scotus-review` may be disabled locally via `skillOverrides` in `.claude/settings.local.json` — remove those entries to re-enable when SCOTUS work resumes (the SKILL.md is still readable as a doc either way).
+**Note:** the SCOTUS pipeline is LIVE (PROD `scotus-tracker.yml` fetches daily; the Claude SCOTUS routine enriches on weekdays). Only the local `/scotus-fetch` and `/scotus-review` helper skills may be switched off via `skillOverrides` in `.claude/settings.local.json`, which says nothing about whether SCOTUS work is active.
 
 ## Feature-Dev Plugin Usage
 

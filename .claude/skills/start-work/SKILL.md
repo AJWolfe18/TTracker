@@ -53,6 +53,7 @@ As a senior dev and QA reviewer:
 ### 5. If No Issues - Setup Workflow
 Create a TodoList with full workflow:
 - [ ] Implementation tasks (from the prompt)
+- [ ] Run `/simplify` on the change (human-readable code), then re-run tests
 - [ ] Run two-pass code review: `Task(feature-dev:code-reviewer)` then `Agent(superpowers:code-reviewer)`
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
 - [ ] Josh's Codex review: hand him the brief and WAIT; fix findings (before any push, TEST migration or TEST deploy)
