@@ -69,3 +69,23 @@
   - Auto mode blocks `--remote=osjbulmltfpcoldydexg` (PROD), even read-only.
 - The claude.ai Supabase connector only sees WhiskeyPal Test, not TTracker.
 - The Bash tool collapses `\\` in heredocs. Write JS containing regex backslashes with the Write/Edit tools.
+
+## Afternoon update (PROD shipped, ADO-635 started)
+- **FIRST-UP now:** ADO-635. `migrations/140_find_similar_stories_use_hnsw.sql` is drafted but **uncommitted and unreviewed**. Next: /simplify, code review, then `npm run codex:review`; then apply on TEST, then PROD (it only replaces one function, so any time). Then check ANN timeouts = 0 across 6 PROD runs. Root cause, PROD timings (21 s to 7 ms) and recall (99.8% top-60, 10/10 best match) are on the card.
+- **PROD shipped (PR #204, cf86dfe, 19:30 UTC):**
+  - Claude applied 139, 137 and 138 with the Supabase CLI on Josh's go. 138 verify: 4,490 = 4,490 rows.
+  - The refresh dropped from 5.7 s to 60 ms.
+  - admin-fronts deployed to PROD; all 3 Netlify triggers answer 403.
+  - ADO-643 Closed. 642/644/645 stay in Testing until their PROD checks: refresh under 2 s on 6 runs, the SCOTUS dispatch near 19:47 UTC on 3 days, one daily-claim per day.
+- **Deploy-branch gotchas:**
+  - main tracks a few `node_modules` files, so the junction trick links packages one by one (PowerShell `New-Item -ItemType Junction`), then deletes only those junctions.
+  - The social drafts (ADO-572) and the workflow-docs commit 7bffa5c stay test-only.
+- **Proposed cards (not created; Josh to OK):**
+  1. Move `centroid_embedding_v1` into its own table. Ordinary stories updates cost 0.4-0.7 s, about 11 hours in total, because each one inserts into the HNSW index.
+  2. Supabase advisor housekeeping:
+     - duplicate SELECT policies on `executive_orders` and `political_entries`;
+     - `pending_submissions` RLS initplan;
+     - 2 unindexed `story_event` foreign keys;
+     - dead indexes `idx_stories_hash` and `ix_stories_lifecycle_state`.
+  3. `find_similar_stories` is callable by anon.
+  4. Plus the earlier four: verify:prod, config.toml `[inbucket]`, the stale ops guide, and the 02:47 run with no refresh line.
