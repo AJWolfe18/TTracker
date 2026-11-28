@@ -56,7 +56,7 @@ Create a TodoList with full workflow:
 - [ ] Run `/simplify` on the change (human-readable code), then re-run tests
 - [ ] Run two-pass code review: `Task(feature-dev:code-reviewer)` then `Agent(superpowers:code-reviewer)`
 - [ ] Run QA tests: `npm run qa:smoke` or relevant suite
-- [ ] Josh's Codex review: hand him the brief and WAIT; fix findings (before any push, TEST migration or TEST deploy)
+- [ ] Codex review: write the brief, run `npm run codex:review -- <brief.md>` yourself, fix findings and re-run until clean (before any push, TEST migration or TEST deploy)
 - [ ] Commit changes
 - [ ] **AC verification before ANY state change**: Before moving the ADO ticket to ANY new state (Active→Testing, Testing→Ready for Prod, etc.), fetch the story's acceptance criteria via the `ado` skill. Verify EVERY AC bullet as MET/NOT MET against the actual code/output. Do NOT advance any story with unmet AC — either fix the gap or document it on the card. This is a HARD GATE — no exceptions.
 - [ ] Update ADO (move to appropriate state only after AC verification passes)

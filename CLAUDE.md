@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Environment**: TEST branch (Supabase TEST DB) | PROD = main branch (protected, PR-only)
 **Budget**: <$100/month HARD LIMIT (raised from $50 on November 7, 2026 to fit Supabase Pro)
 **Critical**: ALWAYS work on `test` branch | NEVER `git push origin main` (blocked)
-**Workflow**: Code → local tests → `/simplify` → in-session two-pass review → Josh's Codex → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
+**Workflow**: Code → local tests → `/simplify` → in-session two-pass review → local Codex (Claude runs it: `npm run codex:review -- <brief.md>`) → `/end-work` (saves memory, commits + pushes to `test`, then TEST migrations/deploys, updates ADO). Codex comes BEFORE anything shared (TEST included).
 **Source of Truth**: ADO for status, plans for implementation details only
 **Tools Available**: Supabase MCP, Azure DevOps MCP, Memory MCP (3-tier: global + project HOT + project DEEP — see `docs/memory-policy.md`)
 **Owner**: Josh (non-dev PM) - Wants business impact, single recommendations, cost clarity
@@ -124,7 +124,7 @@ docs/features/
 2. Fix + local tests (unit, PGlite, `npm run qa:smoke`) - these touch nothing shared
 3. Run `/simplify` on the change and re-run the tests (Josh, November 27, 2026: "I want this to be human readable code"). Every non-trivial change, same skip list as the review
 4. In-session two-pass code review (see "During Work"; `/code-review medium` or higher counts), fix real findings
-5. Hand Josh the Codex brief and WAIT for his results; fix and re-run Codex if needed
+5. Write the Codex brief and run it yourself: `npm run codex:review -- <brief.md>` (Josh, November 28, 2026: he prefers Claude runs it; it uses his Codex app login, read-only, on the working tree). Fix findings and re-run until clean, then report the results to Josh
 6. Only then: commit + push to `test` (auto-deploys to Netlify TEST), apply TEST migrations, deploy TEST edge functions
 7. **Why this order (November 7, 2026):** pushing first was left over from when Codex reviewed PRs on GitHub (retired August 25, 2026). Codex now runs locally on unpushed code, and TEST's database, edge functions and site are shared, so an unreviewed push can break TEST (it did: ADO-547 moves, November 7)
 
@@ -134,7 +134,7 @@ docs/features/
 3. Cherry-pick tested commits from `test`
 4. Push deployment branch
 5. Create PR to `main` via `gh pr create`
-6. **Review is done locally BEFORE the PR** (two-pass review + Josh runs Codex locally). GitHub `@codex review` was retired August 25, 2026 — do NOT comment it on PRs
+6. **Review is done locally BEFORE the PR** (two-pass review + local Codex via `npm run codex:review -- <brief.md>`). GitHub `@codex review` was retired August 25, 2026 — do NOT comment it on PRs
 7. Merge PR (auto-deploys to trumpytracker.com)
 
 ### ❌ What will break:
@@ -192,12 +192,12 @@ docs/features/
 7. **State cost implications** - Always mention $ impact for new features
 
 8. **Follow PR workflow** - See `/docs/guides/pr-workflow.md` for full PR process
-   - **PR code review is LOCAL:** two-pass review in-session + Josh runs Codex locally (guidelines in `AGENTS.md`)
+   - **PR code review is LOCAL:** two-pass review in-session + local Codex, run by Claude with `npm run codex:review -- <brief.md>` (guidelines in `AGENTS.md`)
    - GitHub `@codex review` comments were retired August 25, 2026 — never post them
 
 9. **Use TodoWrite for workflow tracking** - Include full workflow items (code + validation + ADO + handoff) in todos
 
-10. **All code review is local** - the GPT-4o API review workflow was removed (no OpenAI credits) and GitHub `@codex review` was retired August 25, 2026. Review = in-session two-pass + Josh's local Codex. Nothing reviews PRs on GitHub anymore
+10. **All code review is local** - the GPT-4o API review workflow was removed (no OpenAI credits) and GitHub `@codex review` was retired August 25, 2026. Review = in-session two-pass + local Codex (`npm run codex:review -- <brief.md>`). Nothing reviews PRs on GitHub anymore
 
 11. **🚨 DATABASE EGRESS: Minimize data transfer from Supabase**
    - Supabase free tier = 5GB/month egress. Overages cost $0.09/GB

@@ -77,8 +77,8 @@ Before any state change:
 - Verify EVERY AC bullet as MET/NOT MET
 - Do NOT advance with unmet AC
 
-### 4b. Josh's Codex (BEFORE the push)
-- For any non-trivial code, migration or edge-function change: hand Josh a Codex brief (commit range or files, what to check) and WAIT for his results. Fix findings and re-run until clean.
+### 4b. Codex review, run by Claude (BEFORE the push)
+- For any non-trivial code, migration or edge-function change: write a Codex brief (files, what to check, accepted gaps; it must open with "run git status first and stop if you cannot see the working tree") and run it yourself with `npm run codex:review -- <brief.md>` (Josh, November 28, 2026). Fix findings and re-run until clean, and tell Josh the result.
 - Pushing to `test` deploys the TEST site, and TEST migrations / edge functions are shared, so none of that happens before Codex (CLAUDE.md "For TEST", November 7, 2026).
 - Skip only for docs-only or trivial changes.
 

@@ -51,7 +51,8 @@
     "qa:scotus-trigger": "node scripts/tests/scotus-trigger.test.mjs",
     "qa:daily-check-claims": "node scripts/tests/daily-check-claims-pglite.test.mjs",
     "qa:tracker-diff-plan": "node scripts/tests/refresh-tracker-diff-plan-pglite.test.mjs",
-    "qa:tracker-main-line": "node scripts/tests/tracker-main-line-table-pglite.test.mjs"
+    "qa:tracker-main-line": "node scripts/tests/tracker-main-line-table-pglite.test.mjs",
+    "codex:review": "node scripts/dev/codex-review.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",

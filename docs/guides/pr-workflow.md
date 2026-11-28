@@ -36,7 +36,7 @@ git checkout test
 
 # 2. Make changes; run local tests (unit, PGlite, npm run qa:smoke) - nothing shared yet
 
-# 3. Review BEFORE anything shared: in-session /code-review medium, then Josh's local Codex
+# 3. Review BEFORE anything shared: in-session /code-review medium, then local Codex (npm run codex:review)
 #    (see section 3). Fix findings and re-review until clean.
 
 # 4. Only then commit and push to test, apply TEST migrations, deploy TEST edge functions
@@ -68,7 +68,7 @@ Nothing reviews PRs on GitHub anymore:
 
 Review happens **before the change is pushed to `test`** (and so before any PR):
 1. **In-session two-pass review** by Claude Code: pattern compliance and bugs, then production readiness. State the level run (medium or higher for non-trivial work).
-2. **Josh runs Codex locally** on the unpushed change (Claude hands him a brief and waits). Codex reads `AGENTS.md` at the repo root for the P0/P1/P2 rules.
+2. **Local Codex** on the unpushed change: Claude writes a brief and runs `npm run codex:review -- <brief.md>` (the Codex desktop app's bundled CLI, Josh's login, read-only; Josh, November 28, 2026). Codex reads `AGENTS.md` at the repo root for the P0/P1/P2 rules.
 
 Fix P0 and P1 findings, re-run the review, and only then push to `test` and touch the TEST database or edge functions. A PR to `main` carries only reviewed commits.
 
